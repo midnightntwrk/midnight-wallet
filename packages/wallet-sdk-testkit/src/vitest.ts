@@ -15,12 +15,12 @@ import { type WalletTestEnvironment } from './types.js';
 import { logger } from './logger.js';
 
 /**
- * Registers `beforeAll`/`afterAll` hooks that build a {@link WalletTestEnvironment} from `factory`
- * and tear it down after the suite. Returns an accessor for use inside tests.
+ * Registers `beforeAll`/`afterAll` hooks that build a {@link WalletTestEnvironment} from `factory` and tear it down
+ * after the suite. Returns an accessor for use inside tests.
  *
- * Replaces the old `useTestContainersFixture()`, but the environment is now whatever the factory
- * returns — e.g. `createRemoteEnvironment({ network: 'devnet', proverUrl })` (no Docker) or
- * `createTestContainersEnvironment({ network: 'undeployed' })` (from the `/testcontainers` entry).
+ * Replaces the old `useTestContainersFixture()`, but the environment is now whatever the factory returns — e.g.
+ * `createRemoteEnvironment({ network: 'devnet', proverUrl })` (no Docker) or `createTestContainersEnvironment({
+ * network: 'undeployed' })` (from the `/testcontainers` entry).
  */
 export const useWalletTestEnvironment = (
   factory: () => Promise<WalletTestEnvironment> | WalletTestEnvironment,
@@ -47,9 +47,8 @@ export const useWalletTestEnvironment = (
 };
 
 /**
- * Installs a `beforeEach` hook that logs detailed failure information on each failed attempt of a
- * retried test. Mirrors the old `setup-retry-logging.ts` setup file; call once per suite (or wire
- * it into a vitest `setupFiles` entry).
+ * Installs a `beforeEach` hook that logs detailed failure information on each failed attempt of a retried test. Mirrors
+ * the old `setup-retry-logging.ts` setup file; call once per suite (or wire it into a vitest `setupFiles` entry).
  */
 export const installRetryLogging = (): void => {
   beforeEach(() => {

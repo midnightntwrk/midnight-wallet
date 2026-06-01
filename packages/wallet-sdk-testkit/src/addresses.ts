@@ -18,8 +18,8 @@ import { type MidnightNetwork } from './types.js';
 /**
  * Asserts the bech32m network prefix of `address` matches `expectedNetwork`.
  *
- * Replaces the old `TestContainersFixture.network` static read — the expected network is now an
- * explicit argument (typically `env.network`).
+ * Replaces the old `TestContainersFixture.network` static read — the expected network is now an explicit argument
+ * (typically `env.network`).
  */
 export function validateNetworkInAddress(address: string, expectedNetwork: MidnightNetwork): void {
   const parsed = MidnightBech32m.parse(address);

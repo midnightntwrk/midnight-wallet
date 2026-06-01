@@ -25,9 +25,8 @@ import {
 export type RemoteNetworkPreset = Omit<ResolvedEndpoints, 'proverUrl'>;
 
 /**
- * Endpoint presets lifted verbatim from the old `TestContainersFixture` getters. The proof
- * server is intentionally absent — there is no public prover, so every remote environment must
- * be told where to find one.
+ * Endpoint presets lifted verbatim from the old `TestContainersFixture` getters. The proof server is intentionally
+ * absent — there is no public prover, so every remote environment must be told where to find one.
  */
 export const NETWORK_PRESETS: Record<RemoteNetwork, RemoteNetworkPreset> = {
   devnet: {
@@ -58,10 +57,10 @@ export const NETWORK_PRESETS: Record<RemoteNetwork, RemoteNetworkPreset> = {
 };
 
 /**
- * Builds a {@link WalletTestEnvironment} from already-resolved endpoints. Shared by the remote
- * factory below and the testcontainers factory (which resolves endpoints from mapped ports first).
- * The two `get*Config` builders are byte-for-byte the behaviour of the old fixture, except the
- * URLs come from `endpoints` instead of `process.env` / container introspection.
+ * Builds a {@link WalletTestEnvironment} from already-resolved endpoints. Shared by the remote factory below and the
+ * testcontainers factory (which resolves endpoints from mapped ports first). The two `get*Config` builders are
+ * byte-for-byte the behaviour of the old fixture, except the URLs come from `endpoints` instead of `process.env` /
+ * container introspection.
  */
 export const makeEnvironment = (
   network: MidnightNetwork,
@@ -104,8 +103,8 @@ export interface RemoteEnvironmentConfig {
   /** Proof-server base URL. Required — there is no public prover. */
   proverUrl: string;
   /**
-   * Optional endpoint overrides. Use this to point at an internal indexer/node (e.g. a monitoring
-   * deployment that proxies the public ones) without abandoning the preset for the rest.
+   * Optional endpoint overrides. Use this to point at an internal indexer/node (e.g. a monitoring deployment that
+   * proxies the public ones) without abandoning the preset for the rest.
    */
   endpoints?: Partial<Omit<ResolvedEndpoints, 'proverUrl'>>;
 }
@@ -113,9 +112,9 @@ export interface RemoteEnvironmentConfig {
 /**
  * Creates a no-Docker environment pointed at an already-running network.
  *
- * This is the path downstream consumers (e.g. sentinel monitoring) use: supply a prover URL and a
- * network preset, get back the same `WalletTestEnvironment` the local testcontainers stack
- * produces — with no testcontainers dependency loaded and no `process.env` patching required.
+ * This is the path downstream consumers (e.g. sentinel monitoring) use: supply a prover URL and a network preset, get
+ * back the same `WalletTestEnvironment` the local testcontainers stack produces — with no testcontainers dependency
+ * loaded and no `process.env` patching required.
  */
 export const createRemoteEnvironment = (config: RemoteEnvironmentConfig): WalletTestEnvironment => {
   const preset = NETWORK_PRESETS[config.network];

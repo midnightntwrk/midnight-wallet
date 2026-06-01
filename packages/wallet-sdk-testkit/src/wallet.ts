@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
+
 import * as rx from 'rxjs';
 import { existsSync } from 'node:fs';
 import * as fsAsync from 'node:fs/promises';
@@ -45,10 +45,9 @@ export interface ProvideWalletOptions {
   /** Hex seed used to derive the three sub-wallet keys. */
   seed: string;
   /**
-   * Directory used to persist/restore serialized wallet state across runs. When omitted, the wallet
-   * is always built from scratch and nothing is read or written (replaces the old `SYNC_CACHE` env
-   * var, which `exit(1)`-ed when unset). Explicitly allows `undefined` for pass-through under
-   * `exactOptionalPropertyTypes`.
+   * Directory used to persist/restore serialized wallet state across runs. When omitted, the wallet is always built
+   * from scratch and nothing is read or written (replaces the old `SYNC_CACHE` env var, which `exit(1)`-ed when unset).
+   * Explicitly allows `undefined` for pass-through under `exactOptionalPropertyTypes`.
    */
   syncCacheDir?: string | undefined;
   /** Filename suffix for the three serialized state files. Required when `syncCacheDir` is set. */
@@ -143,9 +142,8 @@ const restoreDustWallet = async (
 /**
  * Builds a fully-started {@link WalletFacade} (shielded + unshielded + dust) for the given seed.
  *
- * If `syncCacheDir`/`filename` are provided, attempts to restore serialized state from disk and
- * verify it syncs; otherwise (or on any restore failure) builds from scratch via
- * {@link initWalletWithSeed}.
+ * If `syncCacheDir`/`filename` are provided, attempts to restore serialized state from disk and verify it syncs;
+ * otherwise (or on any restore failure) builds from scratch via {@link initWalletWithSeed}.
  */
 export const provideWallet = async (env: WalletTestEnvironment, options: ProvideWalletOptions): Promise<WalletInit> => {
   const { seed, syncCacheDir, filename } = options;

@@ -60,9 +60,9 @@ export interface TokenTransferWallets {
 }
 
 /**
- * Registers the shared two-wallet `beforeEach`/`afterEach` used by every token-transfer test and
- * returns accessors. Call once inside a `describe`. Both the healthcheck scenario below and the
- * upstream-only token-transfer tests reuse this so the sender/receiver selection lives in one place.
+ * Registers the shared two-wallet `beforeEach`/`afterEach` used by every token-transfer test and returns accessors.
+ * Call once inside a `describe`. Both the healthcheck scenario below and the upstream-only token-transfer tests reuse
+ * this so the sender/receiver selection lives in one place.
  */
 export function useTokenTransferWallets({
   getEnv,
@@ -134,9 +134,10 @@ export function useTokenTransferWallets({
 }
 
 /**
- * Registers the single `@healthcheck`-tagged token-transfer test under a `describe('Token transfer')`
- * block. This is the only token-transfer test shipped in the testkit; downstream monitoring selects
- * it with `vitest run -t @healthcheck`.
+ * Registers the single `@healthcheck`-tagged token-transfer test under a `describe('Token transfer')` block. This is
+ * the only token-transfer test shipped in the testkit; downstream monitoring selects it with `vitest run -t
+ *
+ * @healthcheck`.
  */
 export function registerTokenTransferHealthchecks(deps: TokenTransferScenarioDeps): void {
   describe('Token transfer', () => {
@@ -162,9 +163,7 @@ export function registerTokenTransferHealthchecks(deps: TokenTransferScenarioDep
         logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
         logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
         logger.info(`Wallet 1 available dust: ${initialDustBalance}`);
-        logger.info(
-          `Wallet 1 shielded address: ${getShieldedAddress(networkId, senderInitialState.shielded.address)}`,
-        );
+        logger.info(`Wallet 1 shielded address: ${getShieldedAddress(networkId, senderInitialState.shielded.address)}`);
         logger.info(`Wallet 1 available shielded coins: ${senderInitialState.shielded.availableCoins.length}`);
         logger.info(inspect(senderInitialState.shielded.availableCoins, { depth: null }));
         logger.info(`Wallet 1 available unshielded coins: ${senderInitialState.unshielded.availableCoins.length}`);

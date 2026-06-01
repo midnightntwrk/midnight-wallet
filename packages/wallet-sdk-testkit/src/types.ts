@@ -23,10 +23,9 @@ export type MidnightNetwork = 'undeployed' | 'qanet' | 'devnet' | 'preview' | 'p
 export type RemoteNetwork = Exclude<MidnightNetwork, 'undeployed'>;
 
 /**
- * The fully-resolved set of service endpoints a wallet needs. This is the single source of
- * truth that replaces the env-var + container-port resolution previously baked into
- * `TestContainersFixture`. Callers either let an environment factory resolve these or supply
- * them directly.
+ * The fully-resolved set of service endpoints a wallet needs. This is the single source of truth that replaces the
+ * env-var + container-port resolution previously baked into `TestContainersFixture`. Callers either let an environment
+ * factory resolve these or supply them directly.
  */
 export interface ResolvedEndpoints {
   readonly networkId: NetworkId.NetworkId;
@@ -45,10 +44,10 @@ export type WalletConfiguration = DefaultV1Configuration & DefaultSubmissionConf
 export type DustWalletConfiguration = DefaultDustV1Configuration;
 
 /**
- * A provisioned wallet test environment. Produced by {@link createRemoteEnvironment} (no Docker)
- * or `createTestContainersEnvironment` (from the `/testcontainers` entry point). Replaces the
- * old `TestContainersFixture` class — the wallet-config builders are identical, but the endpoints
- * are injected rather than read from `process.env` / mapped container ports.
+ * A provisioned wallet test environment. Produced by {@link createRemoteEnvironment} (no Docker) or
+ * `createTestContainersEnvironment` (from the `/testcontainers` entry point). Replaces the old `TestContainersFixture`
+ * class — the wallet-config builders are identical, but the endpoints are injected rather than read from `process.env`
+ * / mapped container ports.
  */
 export interface WalletTestEnvironment {
   readonly network: MidnightNetwork;

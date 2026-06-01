@@ -53,11 +53,10 @@ const resolveUndeployedEndpoints = (env: StartedDockerComposeEnvironment, uid: s
 /**
  * Spins up the local docker-compose stack and returns a {@link WalletTestEnvironment}.
  *
- * - `undeployed`: full local stack (proof-server + node + indexer), endpoints resolved from mapped
- *   ports.
- * - remote networks: a local proof-server only, combined with the public indexer/node preset. This
- *   is the case the downstream `PROOF_SERVER_URL` patch used to bypass; downstream consumers should
- *   instead use `createRemoteEnvironment` with an explicit `proverUrl` and skip Docker entirely.
+ * - `undeployed`: full local stack (proof-server + node + indexer), endpoints resolved from mapped ports.
+ * - Remote networks: a local proof-server only, combined with the public indexer/node preset. This is the case the
+ *   downstream `PROOF_SERVER_URL` patch used to bypass; downstream consumers should instead use
+ *   `createRemoteEnvironment` with an explicit `proverUrl` and skip Docker entirely.
  */
 export const createTestContainersEnvironment = async (
   config: TestContainersEnvironmentConfig,

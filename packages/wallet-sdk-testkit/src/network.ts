@@ -25,8 +25,8 @@ const fetchBlockHeight = async (indexerHttpUrl: string): Promise<number> => {
 };
 
 /**
- * Waits for the blockchain to produce at least one new block by polling the indexer for the current
- * block height. Resolves as soon as the height increases from its initial value.
+ * Waits for the blockchain to produce at least one new block by polling the indexer for the current block height.
+ * Resolves as soon as the height increases from its initial value.
  */
 export const waitForBlockAdvancement = async (indexerHttpUrl: string, timeoutMs = 60_000): Promise<void> => {
   const initialHeight = await fetchBlockHeight(indexerHttpUrl);

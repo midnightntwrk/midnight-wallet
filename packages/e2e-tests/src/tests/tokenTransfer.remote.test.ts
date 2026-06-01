@@ -30,7 +30,10 @@ import {
   logger,
 } from '@midnight-ntwrk/wallet-sdk-testkit';
 import { createTestContainersEnvironment } from '@midnight-ntwrk/wallet-sdk-testkit/testcontainers';
-import { registerTokenTransferHealthchecks, useTokenTransferWallets } from '@midnight-ntwrk/wallet-sdk-testkit/scenarios';
+import {
+  registerTokenTransferHealthchecks,
+  useTokenTransferWallets,
+} from '@midnight-ntwrk/wallet-sdk-testkit/scenarios';
 
 const getEnv = useWalletTestEnvironment(() =>
   createTestContainersEnvironment({ network: process.env['NETWORK'] as MidnightNetwork }),
