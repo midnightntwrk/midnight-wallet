@@ -117,6 +117,9 @@ export interface RemoteEnvironmentConfig {
  * loaded and no `process.env` patching required.
  */
 export const createRemoteEnvironment = (config: RemoteEnvironmentConfig): WalletTestEnvironment => {
+  if (!config.proverUrl) {
+    throw new Error('createRemoteEnvironment: `proverUrl` is required (there is no public proof server).');
+  }
   const preset = NETWORK_PRESETS[config.network];
   const endpoints: ResolvedEndpoints = {
     networkId: config.endpoints?.networkId ?? preset.networkId,

@@ -11,19 +11,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Main entry point. Environment-agnostic harness: types, remote environment provisioning, wallet
-// bootstrapping, sync waiters, tx-history assertions, address/seed helpers, and vitest glue.
+// Full entry point. Re-exports the vitest-free core (environment, wallet, seeds, network, logging)
+// plus the vitest-coupled helpers (assertions, sync waiters, address validation, suite glue).
+// Importing this pulls in `vitest`; non-test consumers should import from
+// `@midnight-ntwrk/wallet-sdk-testkit/core` instead.
 //
 // The Docker-backed environment lives at `@midnight-ntwrk/wallet-sdk-testkit/testcontainers` so it
 // (and the `testcontainers` peer dependency) is only loaded when actually needed.
-export * from './types.js';
-export * from './logger.js';
-export * from './environment.js';
-export * from './network.js';
-export * from './seeds.js';
-export * from './primitives.js';
+export * from './core.js';
+
+// vitest-coupled (each imports from 'vitest' at module load):
 export * from './addresses.js';
 export * from './state-waiters.js';
 export * from './tx-history-asserts.js';
-export * from './wallet.js';
 export * from './vitest.js';
