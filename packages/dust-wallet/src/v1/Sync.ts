@@ -32,7 +32,6 @@ import {
   type DustNullifier,
   type DustSecretKey,
   DustStateChanges,
-  type QualifiedDustOutput,
   type TransactionHash,
 } from '@midnight-ntwrk/ledger-v8';
 import {
@@ -205,7 +204,6 @@ export const makeDefaultSyncService = (
   };
 };
 
-const blockCacheRef = { value: HashMap.empty<number, BlockData>() };
 export const Trigger = Symbol('SyncTrigger');
 
 export const makeEventLessSyncService =
@@ -264,39 +262,6 @@ export const makeEventLessSyncService =
       );
     };
 
-    const getEndIndexes = (
-      blockData: BlockData,
-    ): Effect.Effect<
-      { maxCommitmentTreeIndex: number; maxGeneratingTreeIndex: number; lastBlockWithTxsTime: Date },
-      WalletError
-    > =>
-      Effect.gen(function* () {
-        if (blockData.height === 0) {
-          return { maxCommitmentTreeIndex: 84, maxGeneratingTreeIndex: 84, lastBlockWithTxsTime: blockData.timestamp };
-        }
-
-        const regularTxs = blockData.transactions.filter((tx) => tx.__typename === 'RegularTransaction');
-
-        if (regularTxs.length > 0) {
-          return {
-            maxCommitmentTreeIndex: Math.max(...regularTxs.map((tx) => tx.dustCommitmentEndIndex)) - 1,
-            maxGeneratingTreeIndex: Math.max(...regularTxs.map((tx) => tx.dustGenerationEndIndex)) - 1,
-            lastBlockWithTxsTime: blockData.timestamp,
-          };
-        }
-
-        const prevBlock = blockData.height - 1;
-        const cached = HashMap.get(blockCacheRef.value, prevBlock);
-        if (Option.isSome(cached)) {
-          return yield* getEndIndexes(cached.value);
-        }
-
-        console.log('going one block back:', prevBlock);
-        const prevBlockData = yield* defaultSyncService.blockData(prevBlock);
-        blockCacheRef.value = HashMap.set(blockCacheRef.value, prevBlock, prevBlockData);
-        return yield* getEndIndexes(prevBlockData);
-      });
-
     const getUnsyncedNullifiers = (
       newGenerations: ReadonlyArray<NewDustGeneration>,
       stateNullifiers: ReadonlyArray<DustNullifier>,
@@ -311,10 +276,6 @@ export const makeEventLessSyncService =
       console.log('syncing for: ', state.publicKey.addressHex);
       return Effect.gen(function* () {
         const blockData = yield* defaultSyncService.blockData();
-        blockCacheRef.value = HashMap.set(blockCacheRef.value, blockData.height, blockData);
-        // TODO: this will come as part of the blockData response
-        // TODO: use `blockData.timestamp` instead of lastBlockWithTxsTime
-        const { lastBlockWithTxsTime } = yield* getEndIndexes(blockData);
         const maxCommitmentTreeIndex = blockData.dustCommitmentEndIndex - 1;
         const maxGeneratingTreeIndex = blockData.dustGenerationEndIndex - 1;
         const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree;
@@ -412,9 +373,7 @@ export const makeEventLessSyncService =
           spentUtxos: finalSpentUtxos,
           newUtxos: finalUtxos,
           collapsedCommitments,
-          // TODO: pass the whole block and verify the roots after applying the txs
-          lastBlockTime: lastBlockWithTxsTime,
-          // lastBlockTime: blockData.timestamp,
+          lastBlockTimestamp: blockData.timestamp,
         };
       });
     };
@@ -652,7 +611,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
   return {
     applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
       console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
-      const { dustGenerations, spentUtxos, newUtxos, collapsedCommitments, lastBlockTime } = update;
+      const { dustGenerations, spentUtxos, newUtxos, collapsedCommitments, lastBlockTimestamp } = update;
 
       const dustGenTreeUpdates = dustGenerations.rawUpdates
         .filter((u) => u.__typename === 'DustGenerationsItem' || u.__typename === 'DustGenerationsProgress')
@@ -700,8 +659,8 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         );
       });
 
-      updatedWallet.state.syncTime = lastBlockTime;
-      updatedWallet = { ...updatedWallet, state: updatedWallet.state.processTtls(lastBlockTime) };
+      updatedWallet.state.syncTime = lastBlockTimestamp;
+      updatedWallet = { ...updatedWallet, state: updatedWallet.state.processTtls(lastBlockTimestamp) };
 
       return [updatedWallet, { changes, protocolVersion: Number(state.protocolVersion) }];
     },

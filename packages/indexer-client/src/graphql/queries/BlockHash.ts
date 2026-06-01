@@ -25,26 +25,6 @@ export const BlockHash = Query.make(
         zswapEndIndex
         dustCommitmentEndIndex
         dustGenerationEndIndex
-        transactions {
-          __typename
-          ... on RegularTransaction {
-            zswapStartIndex
-            zswapEndIndex
-            dustGenerationStartIndex
-            dustGenerationEndIndex
-            dustCommitmentStartIndex
-            dustCommitmentEndIndex
-            dustLedgerEvents {
-              id
-              raw
-              maxId
-              protocolVersion
-            }
-            transactionResult {
-              status
-            }
-          }
-        }
       }
     }
   `),

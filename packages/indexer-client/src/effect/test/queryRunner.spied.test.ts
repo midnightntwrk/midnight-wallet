@@ -33,7 +33,6 @@ describe('QueryRunner', () => {
           zswapEndIndex: 1,
           dustCommitmentEndIndex: 1,
           dustGenerationEndIndex: 1,
-          transactions: [],
         },
       };
 

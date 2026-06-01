@@ -12,7 +12,7 @@
 // limitations under the License.
 import { describe, test, expect } from 'vitest';
 import * as rx from 'rxjs';
-import { Effect, Stream, Queue } from 'effect';
+import { Effect, Stream, Queue, Array as Arr } from 'effect';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
@@ -81,6 +81,15 @@ describe('Projections-based synchronisation model', () => {
     await receiverNew.wallet.stop();
   }, 20_000);
 
+  const dustStatesEqual = (state1: ledger.DustLocalState, state2: ledger.DustLocalState) =>
+    state1.commitmentTreeRoot() === state2.commitmentTreeRoot() &&
+    state1.generatingTreeRoot() === state2.generatingTreeRoot() &&
+    Arr.differenceWith<ledger.QualifiedDustOutput>(
+      (utxo1, utxo2) =>
+        JSON.stringify(utxo1, (_, v) => (typeof v === 'bigint' ? v.toString() : v)) ===
+        JSON.stringify(utxo2, (_, v) => (typeof v === 'bigint' ? v.toString() : v)),
+    )(state1.utxos, state2.utxos).length === 0;
+
   const sendAndRegisterNightUtxos = async () => {
     Effect.runSync(Queue.offer(triggerFundedQueue, Trigger));
     Effect.runSync(Queue.offer(triggerReceiverQueue, Trigger));
@@ -125,20 +134,24 @@ describe('Projections-based synchronisation model', () => {
         ],
       },
     ];
-    const fundedStatesEqual = initialState.dust.state.state.toString() === initialStateOld.dust.state.state.toString();
+    const fundedStatesEqual = dustStatesEqual(initialState.dust.state.state, initialStateOld.dust.state.state);
     console.log('dust states equal for "funded" wallets', fundedStatesEqual);
     if (!fundedStatesEqual) {
       console.log('funded dust state1 new', initialState.dust.state.state.toString());
       console.log('funded dust state1 old', initialStateOld.dust.state.state.toString());
     }
+    expect(fundedStatesEqual).toBe(true);
 
-    const receiverStatesEqual =
-      receiverInitialState.dust.state.state.toString() === receiverinitialStateNew.dust.state.state.toString();
+    const receiverStatesEqual = dustStatesEqual(
+      receiverInitialState.dust.state.state,
+      receiverinitialStateNew.dust.state.state,
+    );
     console.log('dust states equal for "receiver" wallets', receiverStatesEqual);
     if (!receiverStatesEqual) {
       console.log('receiver dust state1 new', receiverinitialStateNew.dust.state.state.toString());
       console.log('receiver dust state1 old', receiverInitialState.dust.state.state.toString());
     }
+    expect(receiverStatesEqual).toBe(true);
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
     const ttl = new Date(Date.now() + 30 * 60 * 1000);

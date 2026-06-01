@@ -482,35 +482,8 @@ export type DustProjectionsUpdate = {
   newUtxos: DustUtxoMap;
   spentUtxos: DustUtxoMap;
   collapsedCommitments: CollapsedMerkleTree[];
-  lastBlockTime: Date;
+  lastBlockTimestamp: Date;
 };
-
-const BlockTransactionSchema = Schema.Union(
-  Schema.Struct({
-    __typename: Schema.Literal('SystemTransaction'),
-  }),
-  Schema.Struct({
-    __typename: Schema.Literal('RegularTransaction'),
-    zswapStartIndex: Schema.Number,
-    zswapEndIndex: Schema.Number,
-    dustGenerationStartIndex: Schema.Number,
-    dustGenerationEndIndex: Schema.Number,
-    dustCommitmentStartIndex: Schema.Number,
-    dustCommitmentEndIndex: Schema.Number,
-    dustLedgerEvents: Schema.Array(TransactionEvent),
-    transactionResult: Schema.Struct({
-      segments: Schema.optional(
-        Schema.Array(
-          Schema.Struct({
-            id: Schema.Number,
-            success: Schema.Boolean,
-          }),
-        ),
-      ),
-      status: Schema.String,
-    }),
-  }),
-);
 
 export const WireBlockDataSchema = Schema.Struct({
   height: Schema.Number,
@@ -520,7 +493,6 @@ export const WireBlockDataSchema = Schema.Struct({
   zswapEndIndex: Schema.Number,
   dustCommitmentEndIndex: Schema.Number,
   dustGenerationEndIndex: Schema.Number,
-  transactions: Schema.Array(BlockTransactionSchema),
 });
 
 export const BlockDataSchema = Schema.transform(
@@ -534,7 +506,6 @@ export const BlockDataSchema = Schema.transform(
       zswapEndIndex: Schema.Number,
       dustCommitmentEndIndex: Schema.Number,
       dustGenerationEndIndex: Schema.Number,
-      transactions: Schema.Array(BlockTransactionSchema),
     }),
   ),
   {
