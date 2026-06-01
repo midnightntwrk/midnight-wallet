@@ -12,7 +12,6 @@
 // limitations under the License.
 export * as ArrayOps from './ArrayOps.js';
 export * as BlobOps from './BlobOps.js';
-export * as ClockOps from './ClockOps.js';
 export * as DateOps from './DateOps.js';
 export * as EitherOps from './EitherOps.js';
 export * as Fluent from './Fluent.js';
@@ -22,3 +21,4 @@ export * as ObservableOps from './ObservableOps.js';
 export * as Poly from './polyFunction.js';
 export * as RecordOps from './RecordOps.js';
 export * as SafeBigInt from './SafeBigInt.js';
+export * as Clock from './Clock.js';

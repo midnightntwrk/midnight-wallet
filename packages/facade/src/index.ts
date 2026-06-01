@@ -41,7 +41,7 @@ import {
 import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type UnshieldedWalletState, UnshieldedSectionSchema } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustSectionSchema, mergeDustSections } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ClockOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { Clock } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { Array as Arr, pipe, Schema } from 'effect';
@@ -220,16 +220,16 @@ export class FacadeState {
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 /**
- * A clock abstraction for obtaining the current time. By default, the facade uses the system clock. For testing with a
- * simulator, inject a custom clock (e.g., one backed by the simulator's time).
+ * Clock abstraction for obtaining the current time. By default, the facade uses the system clock
+ * ({@link Clock.systemClock}); for testing with a simulator, inject a custom clock (e.g. one backed by the simulator's
+ * time).
  *
- * Re-exported from `@midnight-ntwrk/wallet-sdk-utilities` so it can be shared with lower-level packages (e.g.
- * dust-wallet) without a circular dependency.
+ * Re-exported from `@midnight-ntwrk/wallet-sdk-utilities` as a namespace so the type is `Clock.Clock` and the default
+ * is `Clock.systemClock`. Forwarding the same symbol — rather than re-declaring its members individually — keeps the
+ * umbrella `wallet-sdk` package's star-exports unambiguous and lets lower-level packages (e.g. dust-wallet) share it
+ * without a circular dependency.
  */
-export type Clock = ClockOps.Clock;
-
-/** Default clock using real system time. */
-export const systemClock: Clock = ClockOps.systemClock;
+export { Clock };
 
 /**
  * The Terms and Conditions returned by the indexer, containing a URL for display and a SHA-256 hash for content
@@ -272,7 +272,7 @@ type MaybePromise<T> = T | Promise<T>;
 export type InitParams<TConfig extends DefaultConfiguration> = {
   configuration: TConfig;
   /** Optional factory for the clock abstraction. Defaults to system clock (`() => new Date()`). */
-  clock?: (config: TConfig) => MaybePromise<Clock>;
+  clock?: (config: TConfig) => MaybePromise<Clock.Clock>;
   submissionService?: (config: TConfig) => MaybePromise<SubmissionService<ledger.FinalizedTransaction>>;
   pendingTransactionsService?: (
     config: TConfig,
@@ -364,7 +364,7 @@ export class WalletFacade {
    * - `pendingTransactionsService` - needs to implement {@link PendingTransactionsService} for a
    *   {@link ledger.FinalizedTransaction} to keep track of pending transactions, default uses in-memory implementation
    * - `provingService` - needs to implement {@link ProvingService} to prove it, default uses proving server
-   * - `clock` - needs to implement {@link Clock} for getting current time, default uses system clock
+   * - `clock` - needs to implement {@link Clock.Clock} for getting current time, default uses system clock
    */
   static async init<TConfig extends DefaultConfiguration>(initParams: InitParams<TConfig>): Promise<WalletFacade> {
     const submissionService = await Promise.resolve(
@@ -385,7 +385,9 @@ export class WalletFacade {
     const shielded = await Promise.resolve(initParams.shielded(initParams.configuration));
     const unshielded = await Promise.resolve(initParams.unshielded(initParams.configuration));
     const dust = await Promise.resolve(initParams.dust(initParams.configuration));
-    const clock = await Promise.resolve(initParams.clock ? initParams.clock(initParams.configuration) : systemClock);
+    const clock = await Promise.resolve(
+      initParams.clock ? initParams.clock(initParams.configuration) : Clock.systemClock,
+    );
     return new WalletFacade(
       shielded,
       unshielded,
@@ -405,7 +407,7 @@ export class WalletFacade {
   readonly pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>;
   readonly provingService: ProvingService<UnboundTransaction>;
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>;
-  readonly clock: Clock;
+  readonly clock: Clock.Clock;
   #pendingSubscription: Subscription;
 
   /**
@@ -422,7 +424,7 @@ export class WalletFacade {
     pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>,
     provingService: ProvingService<UnboundTransaction>,
     txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
-    clock: Clock = systemClock,
+    clock: Clock.Clock = Clock.systemClock,
   ) {
     this.shielded = shieldedWallet;
     this.unshielded = unshieldedWallet;

@@ -23,7 +23,7 @@ import { type ProtocolState, ProtocolVersion, type SyncProgress } from '@midnigh
 import { type DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { type ClockOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type Clock } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './v1/CoinsAndBalances.js';
@@ -182,7 +182,7 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
    * @param nightUtxos - UTxOs to project generation for; same set passed to `registerNightUtxosForDustGeneration`.
    *   Already-registered UTxOs are ignored. Must be non-empty.
    * @param requiredAmount - Threshold to wait for, as a Dust amount. Resolves immediately if `<= 0n`.
-   * @param clock - Source of current time, read on every tick. Required, and a {@link ClockOps.Clock} rather than a
+   * @param clock - Source of current time, read on every tick. Required, and a {@link Clock.Clock} rather than a
    *   snapshot `Date` like the other methods' `currentTime`: the projection only advances because the time is re-read
    *   each tick, and callers must inject their own clock so simulator-driven tests respect simulator time.
    * @param opts.timeoutMs - Deadline, in ms from subscription, for `requiredAmount` to be reached; rejects if it is
@@ -194,7 +194,7 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
   waitForGeneratedDust(
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     requiredAmount: bigint,
-    clock: ClockOps.Clock,
+    clock: Clock.Clock,
     opts?: { timeoutMs?: number },
   ): Promise<void>;
 
@@ -428,7 +428,7 @@ export function CustomDustWallet<
     async waitForGeneratedDust(
       nightUtxos: ReadonlyArray<UtxoWithMeta>,
       requiredAmount: bigint,
-      clock: ClockOps.Clock,
+      clock: Clock.Clock,
       opts?: { timeoutMs?: number },
     ): Promise<void> {
       if (nightUtxos.length === 0) {
