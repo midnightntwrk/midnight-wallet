@@ -218,87 +218,6 @@ export const DustGenerationsSubscriptionSchema = Schema.Union(
 
 export type DustGenerationsSubscription = Schema.Schema.Type<typeof DustGenerationsSubscriptionSchema>;
 
-export const DustNullifierTransactionSubscriptionSchema = Schema.Struct({
-  nullifier: Schema.String,
-  commitment: Schema.String,
-  transactionId: Schema.Number,
-  transactionHash: Schema.String,
-  blockHeight: Schema.Number,
-  blockHash: Schema.String,
-});
-
-export type DustNullifierTransactionsSubscription = Schema.Schema.Type<
-  typeof DustNullifierTransactionSubscriptionSchema
->;
-
-export type DustGenerationsSyncUpdate = {
-  rawUpdates: DustGenerationsSubscription[];
-  newGenerations: NewDustGeneration[];
-  generationDtimeUpdates: DustGenerationDtimUpdate[];
-  lastUpdateIndex: number | undefined;
-};
-export const DustGenerationsSyncUpdate = {
-  create: (
-    rawUpdates: DustGenerationsSubscription[],
-    secretKey: DustSecretKey,
-    publicKey: PublicKey,
-  ): DustGenerationsSyncUpdate => {
-    const { addressHex: dustAddressHex, publicKey: dustPublicKey } = publicKey;
-    const newGenerations = rawUpdates
-      .filter((u) => u.__typename === 'DustGenerationsItem')
-      .filter((u) => u.owner === dustAddressHex)
-      .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
-      .map((u) => {
-        const qdo = {
-          initialValue: BigInt(u.initialValue),
-          owner: dustPublicKey,
-          nonce: dustFirstNonce(u.backingNight, dustPublicKey),
-          seq: 0,
-          ctime: u.ctime,
-          backingNight: u.backingNight,
-          mtIndex: BigInt(u.commitmentMtIndex),
-        };
-        return {
-          dustNullifier: dustNullifier(qdo, secretKey),
-          genInfo: {
-            value: BigInt(u.value),
-            owner: dustPublicKey,
-            nonce: u.backingNight,
-            dtime: undefined,
-          },
-          generationMtIndex: u.generationMtIndex,
-          qdo,
-          transactionId: u.transactionId,
-          transactionHash: u.transactionHash,
-        };
-      });
-
-    console.log(
-      'generationDtimeUpdates',
-      dustAddressHex,
-      rawUpdates.filter((u) => u.__typename === 'DustGenerationDtimeUpdateItem'),
-    );
-
-    const generationDtimeUpdates = rawUpdates
-      .filter((u) => u.__typename === 'DustGenerationDtimeUpdateItem')
-      .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
-      .map(({ __typename, ...rest }) => rest);
-
-    const lastUpdateIndex = rawUpdates
-      .filter((u) => u.__typename === 'DustGenerationsProgress')
-      .map((u) => u.highestIndex)
-      .toSorted()
-      .at(-1);
-
-    return {
-      rawUpdates,
-      newGenerations,
-      generationDtimeUpdates,
-      lastUpdateIndex,
-    };
-  },
-};
-
 const LedgerParametersSchema = Schema.declare(
   (input: unknown): input is LedgerParameters => input instanceof LedgerParameters,
 ).annotations({
@@ -361,6 +280,120 @@ const HexedEvent: Schema.Schema<LedgerEvent, string> = pipe(
   Schema.compose(LedgerEventFromUInt8Array),
 );
 
+export const TransactionEvent = Schema.Struct({
+  id: Schema.Number,
+  raw: HexedEvent,
+  maxId: Schema.Number,
+  protocolVersion: Schema.Number,
+});
+
+export type DustSpendProcessedEvent = {
+  tag: 'dustSpendProcessed';
+  commitment: DustCommitment;
+  commitmentIndex: bigint;
+  nullifier: DustNullifier;
+  vFee: bigint;
+  declaredTime: Date;
+  blockTime: Date;
+};
+
+const NullifierBlockInfoSchema = Schema.Struct({
+  ledgerParameters: HexedLedgerParameters,
+});
+
+const NullifierSystemTransactionSchema = Schema.Struct({
+  __typename: Schema.Literal('SystemTransaction'),
+  block: NullifierBlockInfoSchema,
+});
+
+const NullifierRegularTransactionSchema = Schema.Struct({
+  __typename: Schema.Literal('RegularTransaction'),
+  block: NullifierBlockInfoSchema,
+  id: Schema.Number,
+  hash: Schema.String,
+  dustLedgerEvents: Schema.Array(TransactionEvent),
+  zswapLedgerEvents: Schema.Array(TransactionEvent),
+});
+export type NullifierRegularTransaction = Schema.Schema.Type<typeof NullifierRegularTransactionSchema>;
+
+const NullifierTransactionSchema = Schema.Union(NullifierSystemTransactionSchema, NullifierRegularTransactionSchema);
+
+export const DustNullifierTransactionSubscriptionSchema = Schema.Struct({
+  nullifier: Schema.String,
+  commitment: Schema.String,
+  transactionId: Schema.Number,
+  transactionHash: Schema.String,
+  blockHeight: Schema.Number,
+  blockHash: Schema.String,
+  transaction: NullifierTransactionSchema,
+});
+
+export type DustNullifierTransactionsSubscription = Schema.Schema.Type<
+  typeof DustNullifierTransactionSubscriptionSchema
+>;
+
+export type DustGenerationsSyncUpdate = {
+  rawUpdates: DustGenerationsSubscription[];
+  newGenerations: NewDustGeneration[];
+  generationDtimeUpdates: DustGenerationDtimUpdate[];
+  lastUpdateIndex: number | undefined;
+};
+export const DustGenerationsSyncUpdate = {
+  create: (
+    rawUpdates: DustGenerationsSubscription[],
+    secretKey: DustSecretKey,
+    publicKey: PublicKey,
+  ): DustGenerationsSyncUpdate => {
+    const { addressHex: dustAddressHex, publicKey: dustPublicKey } = publicKey;
+    const newGenerations = rawUpdates
+      .filter((u) => u.__typename === 'DustGenerationsItem')
+      .filter((u) => u.owner === dustAddressHex)
+      .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
+      .map((u) => {
+        const qdo = {
+          initialValue: BigInt(u.initialValue),
+          owner: dustPublicKey,
+          nonce: dustFirstNonce(u.backingNight, dustPublicKey),
+          seq: 0,
+          ctime: u.ctime,
+          backingNight: u.backingNight,
+          mtIndex: BigInt(u.commitmentMtIndex),
+        };
+        return {
+          dustNullifier: dustNullifier(qdo, secretKey),
+          genInfo: {
+            value: BigInt(u.value),
+            owner: dustPublicKey,
+            nonce: u.backingNight,
+            dtime: undefined,
+          },
+          generationMtIndex: u.generationMtIndex,
+          qdo,
+          transactionId: u.transactionId,
+          transactionHash: u.transactionHash,
+        };
+      });
+
+    const generationDtimeUpdates = rawUpdates
+      .filter((u) => u.__typename === 'DustGenerationDtimeUpdateItem')
+      .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
+      .map(({ __typename, ...rest }) => rest);
+
+    const lastUpdateIndex = rawUpdates
+      .filter((u) => u.__typename === 'DustGenerationsProgress')
+      .map((u) => u.highestIndex)
+      .toSorted()
+      .at(-1);
+
+    return {
+      rawUpdates,
+      newGenerations,
+      generationDtimeUpdates,
+      lastUpdateIndex,
+    };
+  },
+};
+
 export const SyncEventsUpdateSchema = Schema.Struct({
   id: Schema.Number,
   raw: HexedEvent,
@@ -382,71 +415,6 @@ export const WalletSyncUpdate = {
       timestamp,
     };
   },
-};
-
-export const TransactionEvent = Schema.Struct({
-  id: Schema.Number,
-  raw: HexedEvent,
-  maxId: Schema.Number,
-  protocolVersion: Schema.Number,
-});
-
-export const WireTransactionEventsUpdateSchema = Schema.Struct({
-  __typename: Schema.Literal('RegularTransaction'),
-  block: Schema.Struct({
-    ledgerParameters: HexedLedgerParameters,
-  }),
-  id: Schema.Number,
-  hash: Schema.String,
-  dustLedgerEvents: Schema.Array(TransactionEvent),
-  zswapLedgerEvents: Schema.Array(TransactionEvent),
-});
-
-export const TransactionEventsUpdateSchema = Schema.transform(
-  WireTransactionEventsUpdateSchema,
-  Schema.typeSchema(
-    Schema.Struct({
-      type: Schema.Literal('TransactionEvents'),
-      block: Schema.Struct({
-        ledgerParameters: HexedLedgerParameters,
-      }),
-      id: Schema.Number,
-      hash: Schema.String,
-      dustLedgerEvents: Schema.Array(TransactionEvent),
-      zswapLedgerEvents: Schema.Array(TransactionEvent),
-    }),
-  ),
-  {
-    strict: true,
-    decode: ({ id, block, hash, dustLedgerEvents, zswapLedgerEvents }) => ({
-      type: 'TransactionEvents' as const,
-      id,
-      block,
-      hash,
-      dustLedgerEvents,
-      zswapLedgerEvents,
-    }),
-    encode: ({ id, block, hash, dustLedgerEvents, zswapLedgerEvents }) => ({
-      __typename: 'RegularTransaction' as const,
-      id,
-      block,
-      hash,
-      dustLedgerEvents,
-      zswapLedgerEvents,
-    }),
-  },
-);
-
-export type TransactionEventsUpdate = Schema.Schema.Type<typeof TransactionEventsUpdateSchema>;
-
-export type DustSpendProcessedEvent = {
-  tag: 'dustSpendProcessed';
-  commitment: DustCommitment;
-  commitmentIndex: bigint;
-  nullifier: DustNullifier;
-  vFee: bigint;
-  declaredTime: Date;
-  blockTime: Date;
 };
 
 export type DustUtxoMap = HashMap.HashMap<

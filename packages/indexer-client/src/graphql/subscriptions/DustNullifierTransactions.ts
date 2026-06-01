@@ -24,6 +24,28 @@ export const DustNullifierTransactions = Subscription.make(
         transactionHash
         blockHeight
         blockHash
+        transaction {
+          __typename
+          block {
+            ledgerParameters
+          }
+          ... on RegularTransaction {
+            id
+            hash
+            dustLedgerEvents {
+              id
+              raw
+              maxId
+              protocolVersion
+            }
+            zswapLedgerEvents {
+              id
+              raw
+              maxId
+              protocolVersion
+            }
+          }
+        }
       }
     }
   `),
