@@ -1244,6 +1244,6 @@ export class WalletFacade {
 
   async getAllFromTxHistory(): Promise<WalletEntry[]> {
     const all = await this.#txHistoryStorage.getAll();
-    return all.filter((entry): entry is WalletEntry => isFinalizedWalletEntry(entry) || isPendingWalletEntry(entry));
+    return [...all];
   }
 }
