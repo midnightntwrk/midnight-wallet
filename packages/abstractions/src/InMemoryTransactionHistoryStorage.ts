@@ -61,7 +61,7 @@ export class InMemoryTransactionHistoryStorage<
     const { finalizedBlock, ...rest } = input;
     const entry = { ...rest, lifecycle: { status: 'finalized', finalizedBlock } } as unknown as T;
     await this.#upsert(entry);
-    this.#clearPendingByIdentifiers((rest as { identifiers?: readonly string[] }).identifiers ?? [], entry.hash);
+    this.#clearPendingByIdentifiers(entry.identifiers, entry.hash);
   }
 
   async gotRejected(input: RejectedEntryInput<T>): Promise<void> {
@@ -115,17 +115,13 @@ export class InMemoryTransactionHistoryStorage<
   #clearPendingByIdentifiers(identifiers: readonly string[], newHash: TransactionHash): void {
     if (identifiers.length === 0) return;
     const provided = new Set<string>(identifiers);
-    const match = [...this.#storage.values()].find((entry) => {
-      const ids = (entry as { identifiers?: readonly string[] }).identifiers;
-      const lifecycle = (entry as { lifecycle?: { status?: string } }).lifecycle;
-      return (
-        Array.isArray(ids) &&
-        ids.length > 0 &&
-        ids.every((id: string) => provided.has(id)) &&
-        lifecycle?.status === 'pending' &&
-        entry.hash !== newHash
-      );
-    });
+    const match = [...this.#storage.values()].find(
+      (entry) =>
+        entry.identifiers.length > 0 &&
+        entry.identifiers.every((id) => provided.has(id)) &&
+        entry.lifecycle.status === 'pending' &&
+        entry.hash !== newHash,
+    );
     if (match) {
       this.#storage.delete(match.hash);
     }
