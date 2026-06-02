@@ -82,7 +82,11 @@ import {
 import { hashMapGroupBy, nullifierToHex, uniqueArray } from './Utils.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
-  updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
+  updates: (
+    state: TState,
+    auxData: TStartAux,
+    onProgress?: (progress: number) => void,
+  ) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
   blockData: (height?: number) => Effect.Effect<BlockData, WalletError>;
 }
 
@@ -159,6 +163,7 @@ export const makeDefaultSyncService = (
     updates: (
       state: CoreWallet,
       secretKey: DustSecretKey,
+      onProgress?: (progress: number) => void,
     ): Stream.Stream<WalletSyncUpdate, WalletError, Scope.Scope> => {
       const batchSize = config.batchUpdates?.size ?? 10;
       const batchTimeout = Duration.millis(config.batchUpdates?.timeout ?? 1);
@@ -252,6 +257,7 @@ export const makeEventLessSyncService =
     const doSync = (
       state: CoreWallet,
       secretKey: DustSecretKey,
+      onProgress?: (progress: number) => void,
     ): Effect.Effect<DustProjectionsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
       console.log('syncing for: ', state.publicKey.addressHex);
       return Effect.gen(function* () {
@@ -271,6 +277,7 @@ export const makeEventLessSyncService =
         );
         console.log('dust generations received', rawGenerations.length);
         const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
+        onProgress?.(10);
 
         // combine new nullifiers with those in the state
         const unsyncedNullifiers = dustGenerationUpdates.newGenerations
@@ -343,11 +350,15 @@ export const makeEventLessSyncService =
           return yield* Effect.fail(new OtherWalletError({ message: 'Spotted stale utxo' }));
         }
 
+        onProgress?.(90);
+
         const collapsedCommitments = yield* loadCollapsedCommitments(
           Number(lastSyncedCommitmentIndex),
           maxCommitmentTreeIndex,
           finalUtxos,
         );
+
+        onProgress?.(100);
 
         return {
           dustGenerations: dustGenerationUpdates,
@@ -363,10 +374,11 @@ export const makeEventLessSyncService =
       updates: (
         state: CoreWallet,
         secretKey: DustSecretKey,
+        onProgress?: (progress: number) => void,
       ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope> =>
         pipe(
           trigger,
-          Stream.mapEffect(() => doSync(state, secretKey)),
+          Stream.mapEffect(() => doSync(state, secretKey, onProgress)),
           Stream.provideSomeLayer(Layer.merge(indexerSyncService.connectionLayer(), indexerSyncService.queryClient())),
         ),
       blockData: (): Effect.Effect<BlockData, WalletError> => defaultSyncService.blockData(),
@@ -695,7 +707,7 @@ export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, SimulatorSyncUpdate> => {
   return {
-    updates: (_state: CoreWallet, secretKey: DustSecretKey) => {
+    updates: (_state: CoreWallet, secretKey: DustSecretKey, onProgress?: (progress: number) => void) => {
       // Get the initial state immediately to ensure we process the genesis block.
       // Then subscribe to state$ for subsequent changes, but deduplicate by block number
       // to avoid processing the same block twice.
