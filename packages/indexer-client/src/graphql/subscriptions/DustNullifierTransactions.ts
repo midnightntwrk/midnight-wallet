@@ -16,10 +16,10 @@ import { gql } from '../generated/index.js';
 export const DustNullifierTransactions = Subscription.make(
   'DustNullifierTransactions',
   gql(`
-    subscription DustNullifierTransactions($nullifierPrefixes: [HexEncoded!]!, $fromBlock: Int, $toBlock: Int) {
-      dustNullifierTransactions(nullifierPrefixes: $nullifierPrefixes, fromBlock: $fromBlock, toBlock: $toBlock) {
-        nullifier
-        commitment
+    subscription DustNullifierTransactions($nullifierLeBytesPrefixes: [HexEncoded!]!, $fromBlock: Int, $toBlock: Int) {
+      dustNullifierTransactions(nullifierLeBytesPrefixes: $nullifierLeBytesPrefixes, fromBlock: $fromBlock, toBlock: $toBlock) {
+        nullifierLeBytes
+        commitmentLeBytes
         transactionId
         transactionHash
         blockHeight

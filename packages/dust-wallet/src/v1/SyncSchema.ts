@@ -319,8 +319,8 @@ export type NullifierRegularTransaction = Schema.Schema.Type<typeof NullifierReg
 const NullifierTransactionSchema = Schema.Union(NullifierSystemTransactionSchema, NullifierRegularTransactionSchema);
 
 export const DustNullifierTransactionSubscriptionSchema = Schema.Struct({
-  nullifier: Schema.String,
-  commitment: Schema.String,
+  nullifierLeBytes: Schema.String,
+  commitmentLeBytes: Schema.String,
   transactionId: Schema.Number,
   transactionHash: Schema.String,
   blockHeight: Schema.Number,

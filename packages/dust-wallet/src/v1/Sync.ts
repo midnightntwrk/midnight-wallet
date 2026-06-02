@@ -494,7 +494,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
 
       return pipe(
         DustNullifierTransactions.run({
-          nullifierPrefixes: [...hexedNullifiers].map((n) => n.substring(0, prefixLength)),
+          nullifierLeBytesPrefixes: [...hexedNullifiers].map((n) => n.substring(0, prefixLength)),
           fromBlock: 0,
           toBlock,
         }),
@@ -507,7 +507,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
             EitherOps.toEffect,
           );
         }),
-        Stream.filter((record) => HashSet.has(hexedNullifiers, record.nullifier)),
+        Stream.filter((record) => HashSet.has(hexedNullifiers, record.nullifierLeBytes)),
         Stream.mapError((error) => new SyncWalletError(error)),
       );
     },
