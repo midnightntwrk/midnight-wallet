@@ -249,13 +249,6 @@ export const makeEventLessSyncService =
       );
     };
 
-    const getUnsyncedNullifiers = (
-      newGenerations: ReadonlyArray<NewDustGeneration>,
-      stateNullifiers: ReadonlyArray<DustNullifier>,
-    ) => {
-      return newGenerations.map((n) => n.dustNullifier).concat(stateNullifiers);
-    };
-
     const doSync = (
       state: CoreWallet,
       secretKey: DustSecretKey,
@@ -279,9 +272,10 @@ export const makeEventLessSyncService =
         console.log('dust generations received', rawGenerations.length);
         const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
 
-        const unsyncedNullifiers = getUnsyncedNullifiers(dustGenerationUpdates.newGenerations, [
-          ...state.state.nullifiers.keys(),
-        ]);
+        // combine new nullifiers with those in the state
+        const unsyncedNullifiers = dustGenerationUpdates.newGenerations
+          .map((n) => n.dustNullifier)
+          .concat([...state.state.nullifiers.keys()]);
 
         // track new utxos to calculate the successor utxo when the nullifier is spent
         const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
@@ -630,7 +624,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
   };
 };
 
-const createUtxoUpdatesForSpend = (
+const createUtxoUpdatesFromSpend = (
   wallet: CoreWallet,
   secretKey: DustSecretKey,
   knownUtxos: Readonly<DustUtxoMap>,
@@ -691,7 +685,7 @@ const createDustUtxoUpdates = (
       ),
     ),
     Arr.map(({ transaction, dustSpend }) =>
-      createUtxoUpdatesForSpend(wallet, secretKey, knownUtxos, generationDtimeUpdates, transaction, dustSpend),
+      createUtxoUpdatesFromSpend(wallet, secretKey, knownUtxos, generationDtimeUpdates, transaction, dustSpend),
     ),
     Effect.all,
     Effect.map(Arr.flatten),
@@ -741,7 +735,6 @@ export const makeSimulatorSyncService = (
           zswapEndIndex: 1, //lastBlock.zswapEndIndex, // TODO: implement
           dustCommitmentEndIndex: 1, //lastBlock.dustCommitmentEndIndex,
           dustGenerationEndIndex: 1, //,
-          transactions: [], // TODO: add txs from lastBlock.transactions
         };
       });
     },
