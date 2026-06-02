@@ -1,5 +1,36 @@
 # @midnight-ntwrk/wallet-sdk
 
+## 1.1.0
+
+### Minor Changes
+
+- db8db9c: Barrel-export every non-ignored wallet-sdk package. Adds `indexer-client`, `node-client`, `prover-client`,
+  `runtime`, and `utilities` as new subpath entry points (each matching their package folder name), and surfaces every
+  nested subpath those packages already expose (`/v1`, `/effect`, `/abstractions`, `/balancer`, `/pendingTransactions`,
+  `/proving`, `/simulation`, `/submission`, `/networking`, `/types`, `/testing`). The main entry point now also
+  re-exports `prover-client` and `utilities` flat, plus namespaced `Capabilities`, `IndexerClient`, `NodeClient`, and
+  `Runtime` (namespaced to avoid name collisions with other packages). Legacy `/proving` and `/testing` aliases remain
+  for backwards compatibility.
+
+### Patch Changes
+
+- Updated dependencies [0fd0062]
+- Updated dependencies [6e187fe]
+- Updated dependencies [8004393]
+- Updated dependencies [7452e96]
+- Updated dependencies [25f58b4]
+  - @midnight-ntwrk/wallet-sdk-dust-wallet@4.1.0
+  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@3.1.0
+  - @midnight-ntwrk/wallet-sdk-utilities@1.2.0
+  - @midnight-ntwrk/wallet-sdk-facade@4.0.1
+  - @midnight-ntwrk/wallet-sdk-address-format@3.1.2
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.3.1
+  - @midnight-ntwrk/wallet-sdk-node-client@1.1.2
+  - @midnight-ntwrk/wallet-sdk-prover-client@1.2.2
+  - @midnight-ntwrk/wallet-sdk-shielded@3.0.1
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.2
+  - @midnight-ntwrk/wallet-sdk-runtime@1.0.4
+
 ## 1.0.0
 
 ### Major Changes

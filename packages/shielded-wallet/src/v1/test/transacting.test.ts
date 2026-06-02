@@ -260,9 +260,10 @@ describe('V1 Wallet Transacting', () => {
       const transactionValueGuaranteed = shieldedValue(1);
       const guaranteedOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueGuaranteed });
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1996 });
-      const tx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, guaranteedOffer);
-      // workaround, as Transaction.fromParts does not accept fallible offers with specific segments
-      tx.fallibleOffer = new Map([[1996, fallibleOffer]]);
+      const tx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, guaranteedOffer).addZswapOffer(
+        { tag: 'specific', value: 1996 },
+        fallibleOffer,
+      );
 
       return Effect.gen(function* () {
         const [balancingTransaction] = EitherOps.getOrThrowLeft(

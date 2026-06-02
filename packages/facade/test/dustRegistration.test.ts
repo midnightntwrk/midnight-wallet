@@ -241,6 +241,83 @@ describe('Dust Registration', () => {
     expect(nightBalanceAfterRegistration).toEqual(nightBalanceBeforeRegistration);
   });
 
+  it('books Night UTxOs at build time so a concurrent overlapping call fails fast', async () => {
+    await Promise.all([senderFacade.waitForSyncedState(), receiverFacade.waitForSyncedState()]);
+
+    const unshieldedReceiverAddress = await receiverFacade.unshielded.getAddress();
+
+    // Small prelude transfer — we never submit the registration, so the receiver just needs *some*
+    // Night UTxOs to attempt to register, not enough to generate dust to pay a real fee.
+    const transferTxRecipe = await senderFacade.transferTransaction(
+      [
+        {
+          type: 'unshielded',
+          outputs: [
+            {
+              amount: tokenValue(1_000_000n),
+              receiverAddress: unshieldedReceiverAddress,
+              type: ledger.unshieldedToken().raw,
+            },
+          ],
+        },
+      ],
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
+      },
+      { ttl: new Date(Date.now() + 30 * 60 * 1000) },
+    );
+    const signedTransfer = await senderFacade.signRecipe(transferTxRecipe, (payload) =>
+      unshieldedSenderKeystore.signData(payload),
+    );
+    const finalizedTransfer = await senderFacade.finalizeRecipe(signedTransfer);
+    await senderFacade.submitTransaction(finalizedTransfer);
+
+    const stateWithUnregisteredNight = await rx.firstValueFrom(
+      receiverFacade
+        .state()
+        .pipe(
+          rx.filter(
+            (s) =>
+              s.isSynced &&
+              s.unshielded.availableCoins.some(
+                (c) => c.meta.registeredForDustGeneration === false && c.utxo.type === ledger.nativeToken().raw,
+              ),
+          ),
+        ),
+    );
+
+    const nightUtxos = stateWithUnregisteredNight.unshielded.availableCoins.filter(
+      (c) => c.meta.registeredForDustGeneration === false && c.utxo.type === ledger.nativeToken().raw,
+    );
+
+    // First call: build a registration recipe without submitting it.
+    await receiverFacade.registerNightUtxosForDustGeneration(
+      nightUtxos,
+      unshieldedReceiverKeystore.getPublicKey(),
+      (payload) => unshieldedReceiverKeystore.signData(payload),
+    );
+
+    // Booking contract: the just-registered UTxOs must no longer appear as available
+    // before any on-chain submission has happened.
+    const stateAfterRegistration = await rx.firstValueFrom(receiverFacade.state());
+    const registeredHashes = new Set(nightUtxos.map((c) => `${c.utxo.intentHash}#${c.utxo.outputNo}`));
+    const stillAvailable = stateAfterRegistration.unshielded.availableCoins.filter((c) =>
+      registeredHashes.has(`${c.utxo.intentHash}#${c.utxo.outputNo}`),
+    );
+    expect(stillAvailable).toHaveLength(0);
+
+    // Fail-fast contract: a second call that wants the same UTxOs must reject at build time,
+    // not at submission time.
+    await expect(
+      receiverFacade.registerNightUtxosForDustGeneration(
+        nightUtxos,
+        unshieldedReceiverKeystore.getPublicKey(),
+        (payload) => unshieldedReceiverKeystore.signData(payload),
+      ),
+    ).rejects.toThrow();
+  });
+
   it('allows to transfer all Night utxos held and then use them for a registration', async () => {
     const NIGHT = ledger.nativeToken().raw;
     const senderInitialState = await rx.firstValueFrom(
