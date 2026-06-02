@@ -219,9 +219,28 @@ export const desiredInputArbitrary: fc.Arbitrary<DesiredInput> = fc.oneof(
 // Transaction Verification Helpers
 // ============================================================================
 
-/** Deserializes a finalized transaction from hex string. */
+/**
+ * Deserializes a finalized transaction from hex string.
+ *
+ * Tries strict `(signature, proof, binding)` markers first (production form). On failure, falls back to `(signature,
+ * no-proof, no-binding)` so simulator-produced (proof-erased) transactions can be inspected by tests. The returned
+ * shape is cast to `FinalizedTransaction` because the verification helpers below only touch the runtime properties
+ * (`intents`, segments, `dustActions`) which exist regardless of proof/binding state.
+ */
 export function deserializeTransaction(txHex: string): ledger.FinalizedTransaction {
-  return ledger.Transaction.deserialize('signature', 'proof', 'binding', Buffer.from(txHex, 'hex'));
+  const bytes = Buffer.from(txHex, 'hex');
+  try {
+    return ledger.Transaction.deserialize('signature', 'proof', 'binding', bytes);
+  } catch {
+    // Type cast required because: proof-erased transactions have a narrower type, but verification helpers below
+    // only access runtime properties that exist in both shapes.
+    return ledger.Transaction.deserialize(
+      'signature',
+      'no-proof',
+      'no-binding',
+      bytes,
+    ) as unknown as ledger.FinalizedTransaction;
+  }
 }
 
 /** Gets all segment IDs in a transaction (always includes guaranteed section 0). */

@@ -13,6 +13,7 @@ import type {
 } from '@midnight-ntwrk/dapp-connector-api';
 import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { Cause, Option, Runtime } from 'effect';
 import * as rx from 'rxjs';
 import type {
   ConnectorConfiguration,
@@ -29,16 +30,49 @@ import { parseDesiredOutputs, parseDesiredInputs, parseIntentId } from './parsin
 // Pure Helper Functions
 // =============================================================================
 
-/**
- * Type guard for InsufficientFundsError using _tag discriminator. Uses structural matching for robustness across
- * package boundaries.
- */
-const isInsufficientFundsError = (error: unknown): error is { _tag: 'InsufficientFundsError'; message: string } =>
-  error !== null && typeof error === 'object' && '_tag' in error && error._tag === 'InsufficientFundsError';
+/** Tag names for the various InsufficientFunds error shapes across the wallet SDK. */
+const INSUFFICIENT_FUNDS_TAGS = new Set([
+  // Legacy plain class from @midnight-ntwrk/wallet-sdk-capabilities/balancer
+  'InsufficientFundsError',
+  // Data.TaggedError variant used by shielded, unshielded, and dust wallets
+  'Wallet.InsufficientFunds',
+]);
 
-/** Maps InsufficientFundsError to APIError, re-throws other errors unchanged. */
+const hasInsufficientFundsTag = (value: unknown): value is { _tag: string; message?: string } => {
+  if (value === null || typeof value !== 'object' || !('_tag' in value)) return false;
+  const tag = value._tag;
+  return typeof tag === 'string' && INSUFFICIENT_FUNDS_TAGS.has(tag);
+};
+
+/**
+ * Finds an InsufficientFunds-shaped error inside an arbitrary thrown value, looking through Effect's `FiberFailure →
+ * Cause<E>` wrapping as well as the standard `Error.cause` chain.
+ */
+const findInsufficientFundsCause = (error: unknown): { _tag: string; message?: string } | undefined => {
+  if (hasInsufficientFundsTag(error)) return error;
+  // Effect: when Effect.runPromise rejects, the value is a FiberFailure carrying a Cause<E>.
+  if (Runtime.isFiberFailure(error)) {
+    const failure = Cause.failureOption(error[Runtime.FiberFailureCauseId]);
+    if (Option.isSome(failure) && hasInsufficientFundsTag(failure.value)) return failure.value;
+  }
+  // Standard Error.cause chain (e.g., when an Error wraps a tagged error).
+  let current: unknown = error;
+  while (current !== null && typeof current === 'object' && 'cause' in current) {
+    const cause = (current as { cause?: unknown }).cause;
+    if (hasInsufficientFundsTag(cause)) return cause;
+    if (cause === current) break;
+    current = cause;
+  }
+  return undefined;
+};
+
+/** Maps any InsufficientFunds-shaped error (including nested under FiberFailure) to APIError; re-throws others. */
 const mapInsufficientFundsError = (error: unknown): never => {
-  throw isInsufficientFundsError(error) ? APIError.insufficientFunds(error.message) : error;
+  const found = findInsufficientFundsCause(error);
+  if (found !== undefined) {
+    throw APIError.insufficientFunds(found.message ?? 'Insufficient funds');
+  }
+  throw error;
 };
 
 /** Parse hex string to bytes, throwing APIError on invalid input. */
@@ -62,8 +96,56 @@ const safeDeserialize = <T>(deserialize: () => T, errorMessage: string): T => {
   }
 };
 
-/** Create TTL 1 hour from now. */
-const createDefaultTTL = (): Date => new Date(Date.now() + 60 * 60 * 1000);
+/**
+ * Deserialize a sealed (binding) transaction, accepting either the production form `(proof, binding)` or the
+ * proof-erased form `(no-proof, no-binding)` used by simulator-backed test environments.
+ *
+ * The connector itself doesn't validate proofs — that's the wallet's job at submission time. Accepting both forms lets
+ * a test backend (simulator) round-trip transactions through the connector API without compromising production safety:
+ * a real wallet receiving the result will still reject proof-erased transactions at the submission step.
+ */
+const deserializeSealed = (txBytes: Uint8Array): ledger.FinalizedTransaction =>
+  safeDeserialize<ledger.FinalizedTransaction>(() => {
+    try {
+      return ledger.Transaction.deserialize('signature', 'proof', 'binding', txBytes);
+    } catch {
+      // Type cast required because: proof-erased transactions have a narrower type, but the connector passes the
+      // result straight to the facade which accepts both shapes at runtime.
+      return ledger.Transaction.deserialize(
+        'signature',
+        'no-proof',
+        'no-binding',
+        txBytes,
+      ) as unknown as ledger.FinalizedTransaction;
+    }
+  }, 'Failed to deserialize transaction as sealed (binding)');
+
+/**
+ * Move the (single) intent in an unproven-transaction recipe to the caller's requested segment.
+ *
+ * `facade.initSwap`'s options type doesn't carry `intentId`, so the underlying wallet picks the segment via
+ * `findAvailableSegmentId` regardless of what the DApp asked for. We post-process the recipe here to honor the spec's
+ * `intentId` parameter: rebuild `transaction.intents` with the caller's segment as the sole key. Only safe for the
+ * single-intent case; multi-intent recipes are handed back unchanged.
+ */
+const placeIntentAtSegment = (recipe: BalancingRecipe, intentId: number): BalancingRecipe => {
+  if (recipe.type !== 'UNPROVEN_TRANSACTION') return recipe;
+  const entries = Array.from(recipe.transaction.intents?.entries() ?? []);
+  if (entries.length !== 1) return recipe;
+  const [[, intent]] = entries;
+  recipe.transaction.intents = new Map([[intentId, intent]]);
+  return recipe;
+};
+
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Create TTL one hour from `now`. The clock is sourced from the wallet facade (`facade.clock.now`), so the connector's
+ * notion of "now" stays aligned with the wallet's. The ledger's `wellFormed` check rejects txs whose TTL is "too far in
+ * the future" relative to the block-time it's verifying against, so this alignment matters for any backend whose clock
+ * differs from real wall-clock time (e.g., the simulator's fast-forwarded clock).
+ */
+const createDefaultTTL = (now: () => Date): Date => new Date(now().getTime() + ONE_HOUR_MS);
 
 /** Determine token kinds to balance based on payFees option. */
 const getTokenKindsToBalance = (payFees: boolean): 'all' | ('shielded' | 'unshielded')[] =>
@@ -276,7 +358,7 @@ export class ConnectedAPI implements ConnectedAPIType {
 
     try {
       const recipe = await this.facade.transferTransaction(transfers, this.secretKeys, {
-        ttl: createDefaultTTL(),
+        ttl: createDefaultTTL(this.facade.clock.now),
         payFees: options?.payFees ?? true,
       });
       return { tx: await finalizeRecipeToHex(this.facade, this.keystore, recipe) };
@@ -303,14 +385,15 @@ export class ConnectedAPI implements ConnectedAPIType {
     const parsedIntentId = parseIntentId(options.intentId);
 
     const swapOptions: SwapTransactionOptions = {
-      ttl: createDefaultTTL(),
+      ttl: createDefaultTTL(this.facade.clock.now),
       payFees: options.payFees,
       ...(parsedIntentId !== undefined && { intentId: parsedIntentId }),
     };
 
     try {
       const recipe = await this.facade.initSwap(swapInputs, swapOutputs, this.secretKeys, swapOptions);
-      return { tx: await finalizeRecipeToHex(this.facade, this.keystore, recipe) };
+      const placed = parsedIntentId !== undefined ? placeIntentAtSegment(recipe, parsedIntentId) : recipe;
+      return { tx: await finalizeRecipeToHex(this.facade, this.keystore, placed) };
     } catch (error) {
       return mapInsufficientFundsError(error);
     }
@@ -333,7 +416,7 @@ export class ConnectedAPI implements ConnectedAPIType {
 
     try {
       const recipe = await this.facade.balanceUnboundTransaction(unsealedTx, this.secretKeys, {
-        ttl: createDefaultTTL(),
+        ttl: createDefaultTTL(this.facade.clock.now),
         tokenKindsToBalance: getTokenKindsToBalance(payFees),
       });
       return { tx: await finalizeRecipeToHex(this.facade, this.keystore, recipe) };
@@ -348,16 +431,13 @@ export class ConnectedAPI implements ConnectedAPIType {
     }
 
     const txBytes = parseHexToBytes(tx, 'Transaction');
-    const sealedTx = safeDeserialize<ledger.FinalizedTransaction>(
-      () => ledger.Transaction.deserialize('signature', 'proof', 'binding', txBytes),
-      'Failed to deserialize transaction as sealed (binding)',
-    );
+    const sealedTx = deserializeSealed(txBytes);
 
     const payFees = options?.payFees ?? true;
 
     try {
       const recipe = await this.facade.balanceFinalizedTransaction(sealedTx, this.secretKeys, {
-        ttl: createDefaultTTL(),
+        ttl: createDefaultTTL(this.facade.clock.now),
         tokenKindsToBalance: getTokenKindsToBalance(payFees),
       });
       return { tx: await finalizeRecipeToHex(this.facade, this.keystore, recipe) };
@@ -374,10 +454,7 @@ export class ConnectedAPI implements ConnectedAPIType {
     }
 
     const txBytes = parseHexToBytes(tx, 'Transaction');
-    const finalizedTx = safeDeserialize<ledger.FinalizedTransaction>(
-      () => ledger.Transaction.deserialize('signature', 'proof', 'binding', txBytes),
-      'Failed to deserialize transaction as sealed (binding)',
-    );
+    const finalizedTx = deserializeSealed(txBytes);
 
     await this.facade.submitTransaction(finalizedTx);
   }

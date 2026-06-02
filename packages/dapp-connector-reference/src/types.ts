@@ -196,6 +196,14 @@ export interface WalletFacadeView {
   readonly dust: DustWalletView;
 
   /**
+   * Clock used by the facade. The connector reads this for time-dependent operations (notably default TTLs on
+   * `makeTransfer` / `makeIntent` / `balanceUnsealedTransaction` / `balanceSealedTransaction`), so its notion of "now"
+   * stays aligned with the underlying wallet. Production wallets pass the system clock; simulator-backed test setups
+   * pass a simulator clock so TTLs validate against simulator time.
+   */
+  readonly clock: { readonly now: () => Date };
+
+  /**
    * Transaction history service. Optional because the current WalletFacade doesn't provide this API (see critical gaps
    * documentation below).
    */

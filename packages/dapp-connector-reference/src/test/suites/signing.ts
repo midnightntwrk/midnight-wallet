@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { ErrorCodes } from '../../errors.js';
 import type { ConnectedAPITestContext } from '../context.js';
+import { containsString } from './_matchers.js';
 
 /** Run data signing tests against the provided context. */
 export const runSigningTests = (context: ConnectedAPITestContext): void => {
@@ -43,7 +44,7 @@ export const runSigningTests = (context: ConnectedAPITestContext): void => {
       try {
         await expect(api.signData('not-valid-hex!', { encoding: 'hex', keyType: 'unshielded' })).rejects.toMatchObject({
           code: ErrorCodes.InvalidRequest,
-          message: expect.stringContaining('hex') as unknown as string,
+          message: containsString('hex'),
         });
       } finally {
         await disconnect();
@@ -100,7 +101,7 @@ export const runSigningTests = (context: ConnectedAPITestContext): void => {
           api.signData('!!!invalid!!!', { encoding: 'base64', keyType: 'unshielded' }),
         ).rejects.toMatchObject({
           code: ErrorCodes.InvalidRequest,
-          message: expect.stringContaining('base64') as unknown as string,
+          message: containsString('base64'),
         });
       } finally {
         await disconnect();

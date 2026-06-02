@@ -9,7 +9,14 @@
 
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { type FacadeState, WalletFacade, type Clock } from '@midnight-ntwrk/wallet-sdk-facade';
+import {
+  type FacadeState,
+  WalletFacade,
+  WalletEntrySchema,
+  mergeWalletEntries,
+  type WalletEntry,
+  type Clock,
+} from '@midnight-ntwrk/wallet-sdk-facade';
 import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   Sync as ShieldedSync,
@@ -28,12 +35,13 @@ import {
   PublicKey,
   type UnshieldedWalletAPI,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { NoOpTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   Sync as UnshieldedSync,
   V1Builder as UnshieldedV1Builder,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet/v1';
 import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
+import type { SubmitTransactionMethod, SubmissionEvent } from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
 import {
   makeSimulatorProvingServiceEffect,
   type ProvingService,
@@ -48,12 +56,17 @@ import type { SubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities'
 import { Effect, Exit, Scope } from 'effect';
 import * as rx from 'rxjs';
 
+import { createHash } from 'node:crypto';
+
 import type { WalletKeystore } from '../types.js';
 import type {
   DappConnectorTestContext,
   CreateConnectedAPIOptions,
   ConnectedAPIInstance,
+  MultiWalletSetup,
   TestEnvironment,
+  WalletInitSpec,
+  WalletInstance,
 } from './context.js';
 import { Connector, createMockProvingProviderFactory } from '../index.js';
 import type {
@@ -64,7 +77,13 @@ import type {
   WalletFacadeView,
 } from '../types.js';
 import type { TxStatus } from '@midnight-ntwrk/dapp-connector-api';
-import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
+import {
+  MidnightBech32m,
+  ShieldedAddress,
+  ShieldedCoinPublicKey,
+  ShieldedEncryptionPublicKey,
+  UnshieldedAddress,
+} from '@midnight-ntwrk/wallet-sdk-address-format';
 import { defaultConnectorMetadataArbitrary, randomValue } from '../testing.js';
 import {
   testShieldedWithKeys,
@@ -144,24 +163,66 @@ const simulatorClock = (simulator: Simulator): Clock => ({
 const createSimulatorProvingService = (): ProvingService<UnboundTransaction> => {
   const effectService = makeSimulatorProvingServiceEffect();
   return {
-    prove: (tx: ledger.UnprovenTransaction) =>
-      // Type cast required because: simulator proving returns ProofErasedTransaction but facade expects UnboundTransaction — compatible at runtime
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return
-      effectService.prove(tx).pipe(Effect.runPromise) as any,
+    // The simulator's proving service erases proofs, so it returns Promise<ProofErasedTransaction>. The facade's
+    // ProvingService is parameterised over UnboundTransaction. The two share enough runtime structure for downstream
+    // signing/finalisation to work, so we coerce through `unknown` — explicit and narrow.
+    prove: (tx: ledger.UnprovenTransaction): Promise<UnboundTransaction> =>
+      effectService.prove(tx).pipe(Effect.runPromise) as unknown as Promise<UnboundTransaction>,
   };
 };
 
-const createSimulatorSubmissionService = (simulator: Simulator): SubmissionService<ledger.FinalizedTransaction> => {
+const createSimulatorSubmissionService = (
+  simulator: Simulator,
+  txHistoryStorage: InMemoryTransactionHistoryStorage<WalletEntry>,
+): SubmissionService<ledger.FinalizedTransaction> => {
+  // `Simulator.submitTransaction` is typed `(tx: ProofErasedTransaction) => …`, but the generic
+  // `SubmissionService<FinalizedTransaction>` wiring upstream hands us `Transaction<S, Proof, Binding>` values
+  // (`FinalizedTransaction`). At runtime the simulator-backed facade only ever produces transactions whose proofs and
+  // bindings were erased by `createSimulatorProvingService` above — so the value really is a `ProofErasedTransaction`,
+  // and the simulator's wellFormed/apply paths don't read fields that distinguish the two. TypeScript can't express
+  // "the same `Transaction` instance with different phantom type parameters", so we coerce through `unknown`.
+  const adaptedSimulator = {
+    submitTransaction: (tx: ledger.FinalizedTransaction): Effect.Effect<void, Error> =>
+      simulator.submitTransaction(tx as unknown as ledger.ProofErasedTransaction).pipe(Effect.asVoid),
+    getLatestState: () => simulator.getLatestState(),
+  };
   const effectService = Submission.makeSimulatorSubmissionService<ledger.FinalizedTransaction>('InBlock')({
-    // Type cast required because: simulator uses internal transaction types, compatible at runtime
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
-    simulator: simulator as any,
+    simulator: adaptedSimulator,
   });
+
+  // The simulator-backed sync capabilities don't write to txHistoryStorage on update (only the indexer-backed default
+  // sync does — see unshielded-wallet/src/v1/Sync.ts:135). To make history queries work end-to-end in the simulator
+  // setup, we upsert a minimal WalletEntry here after each successful submission. The entry uses the tx's last
+  // identifier as the hash (matching what `facade.submitTransaction` returns).
+  const upsertHistoryEntry = async (tx: ledger.FinalizedTransaction): Promise<void> => {
+    const identifiers = tx.identifiers();
+    if (identifiers.length === 0) return;
+    // The connector view's `getHistory` (see createTransactionHistoryView below) returns `entry.hash` as the txHash.
+    // The spec says txHash must be a 64-char hex string. `tx.identifiers().at(-1)` is the segment identifier (also hex
+    // but not necessarily 64 chars); the actual tx hash comes from serializing the tx and hashing it. The simulator
+    // doesn't expose tx hashes directly, so we compute one here that matches the spec's format.
+    const txHash = createHash('sha256').update(Buffer.from(tx.serialize())).digest('hex');
+    const entry: WalletEntry = {
+      hash: txHash,
+      protocolVersion: 0,
+      status: 'SUCCESS' as const,
+      identifiers,
+      timestamp: new Date(),
+    };
+    await txHistoryStorage.upsert(entry);
+  };
+
+  const submitWithHistory = async (
+    transaction: ledger.FinalizedTransaction,
+    waitForStatus: SubmissionEvent['_tag'] = 'InBlock',
+  ): Promise<SubmissionEvent> => {
+    const result = await effectService.submitTransaction(transaction, waitForStatus).pipe(Effect.runPromise);
+    await upsertHistoryEntry(transaction);
+    return result;
+  };
+
   return {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    submitTransaction: ((tx: ledger.FinalizedTransaction, waitFor?: 'Submitted' | 'InBlock' | 'Finalized') =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      effectService.submitTransaction(tx, waitFor ?? 'InBlock').pipe(Effect.runPromise)) as any,
+    submitTransaction: submitWithHistory as SubmitTransactionMethod<ledger.FinalizedTransaction>,
     close: () => effectService.close().pipe(Effect.runPromise),
   };
 };
@@ -172,11 +233,18 @@ type SimulatorWalletFactories = {
   createUnshieldedWallet: (keystore: ReturnType<typeof createKeystore>) => UnshieldedWalletAPI;
 };
 
-const createSimulatorWalletFactories = (config: SimulatorConfig): SimulatorWalletFactories => {
+// Per-wallet history storage: a single instance shared across shielded/unshielded/dust sub-wallets and the facade, so
+// all three writers update the same store and the facade reads back everything. This mirrors the canonical wiring used
+// in wallet-integration-tests/e2e-tests (see walletInit.ts:134 — "Single shared tx-history storage so all three
+// sub-wallets and the facade read/write the same instance").
+const createSimulatorWalletFactories = (
+  config: SimulatorConfig,
+  txHistoryStorage: InMemoryTransactionHistoryStorage<WalletEntry>,
+): SimulatorWalletFactories => {
   const ShieldedWalletFactory = CustomShieldedWallet(
     {
       ...config,
-      txHistoryStorage: new NoOpTransactionHistoryStorage(),
+      txHistoryStorage,
       indexerClientConnection: { indexerHttpUrl: 'http://unused:0' },
     },
     new ShieldedV1Builder()
@@ -191,7 +259,11 @@ const createSimulatorWalletFactories = (config: SimulatorConfig): SimulatorWalle
   );
 
   const DustWalletFactory = CustomDustWallet(
-    config,
+    {
+      ...config,
+      txHistoryStorage,
+      indexerClientConnection: { indexerHttpUrl: 'http://unused:0' },
+    },
     new DustV1Builder()
       .withDefaultTransactionType()
       .withSync(DustSyncService.makeSimulatorSyncService, DustSyncService.makeSimulatorSyncCapability)
@@ -204,7 +276,7 @@ const createSimulatorWalletFactories = (config: SimulatorConfig): SimulatorWalle
   );
 
   const UnshieldedWalletFactory = CustomUnshieldedWallet(
-    { ...config, txHistoryStorage: new NoOpTransactionHistoryStorage() },
+    { ...config, txHistoryStorage },
     new UnshieldedV1Builder()
       .withSync(UnshieldedSync.makeSimulatorSyncService, UnshieldedSync.makeSimulatorSyncCapability)
       .withSerializationDefaults()
@@ -225,11 +297,12 @@ const createSimulatorWalletFactories = (config: SimulatorConfig): SimulatorWalle
 const makeSimulatorFacade = (
   config: SimulatorConfig,
   keys: WalletKeys,
-  factories: SimulatorWalletFactories,
 ): Effect.Effect<WalletFacade, never, Scope.Scope> => {
   const dustParameters = ledger.LedgerParameters.initialParameters().dust;
   const provingService = createSimulatorProvingService();
-  const submissionService = createSimulatorSubmissionService(config.simulator);
+  const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
+  const submissionService = createSimulatorSubmissionService(config.simulator, txHistoryStorage);
+  const factories = createSimulatorWalletFactories(config, txHistoryStorage);
 
   return Effect.acquireRelease(
     Effect.promise(async () => {
@@ -238,7 +311,7 @@ const makeSimulatorFacade = (
           ...config,
           indexerClientConnection: { indexerHttpUrl: 'http://unused' },
           relayURL: new URL('ws://unused'),
-          txHistoryStorage: new NoOpTransactionHistoryStorage(),
+          txHistoryStorage,
         },
         shielded: () => factories.createShieldedWallet(keys.shieldedKeys),
         unshielded: () => factories.createUnshieldedWallet(keys.unshieldedKeystore),
@@ -358,8 +431,7 @@ export const initSimulatorEnv = async (): Promise<SimulatorEnv> => {
       networkId: NETWORK_ID,
       costParameters: { feeBlocksMargin: 5 },
     };
-    const factories = createSimulatorWalletFactories(simulatorConfig);
-    const fcd = yield* makeSimulatorFacade(simulatorConfig, keys, factories);
+    const fcd = yield* makeSimulatorFacade(simulatorConfig, keys);
 
     // Wait for wallet to sync genesis funds
     yield* waitForShieldedCoins(fcd);
@@ -430,19 +502,226 @@ const createTransactionHistoryView = (facade: WalletFacade): TransactionHistoryS
   },
 });
 
-const facadeAsView = (facade: WalletFacade): WalletFacadeView => {
-  const transactionHistory = createTransactionHistoryView(facade);
-  // Type cast required because: WalletFacade.submitTransaction returns Promise<string>
-  // (tx hash) but WalletFacadeView expects Promise<void> — structurally compatible
-  // since the return value is ignored by the connector.
-  const baseView = facade as unknown as WalletFacadeView;
-  return new Proxy(baseView, {
-    get: (target, prop, receiver) =>
-      // Type cast required because: Reflect.get returns `any` by spec; structurally we
-      // return the same shape Proxy expects.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      prop === 'transactionHistory' ? transactionHistory : Reflect.get(target, prop, receiver),
+// Adapt the full WalletFacade to the narrower WalletFacadeView the connector consumes.
+//
+// Two differences need bridging:
+//
+// 1. WalletFacade.submitTransaction returns Promise<TransactionIdentifier>; WalletFacadeView.submitTransaction returns
+//    Promise<void>. We discard the identifier — the connector never reads it.
+// 2. WalletFacade has no `transactionHistory` field; the connector reads `transactionHistory` for getTransactions. We
+//    plug in our simulator-backed view.
+//
+// All other fields/methods (shielded, unshielded, dust, transferTransaction, initSwap, signRecipe, finalizeRecipe,
+// balanceUnboundTransaction, balanceFinalizedTransaction) are structurally compatible — we forward them via bound
+// references. Building this object explicitly (rather than casting through `unknown`) keeps the view's contract
+// type-checked at every property.
+const facadeAsView = (facade: WalletFacade): WalletFacadeView => ({
+  shielded: facade.shielded,
+  unshielded: facade.unshielded,
+  dust: facade.dust,
+  clock: facade.clock,
+  transactionHistory: createTransactionHistoryView(facade),
+  transferTransaction: (outputs, secretKeys, options) => facade.transferTransaction(outputs, secretKeys, options),
+  initSwap: (desiredInputs, desiredOutputs, secretKeys, options) =>
+    facade.initSwap(desiredInputs, desiredOutputs, secretKeys, options),
+  signRecipe: (recipe, signSegment) => facade.signRecipe(recipe, signSegment),
+  finalizeRecipe: (recipe) => facade.finalizeRecipe(recipe),
+  balanceUnboundTransaction: (tx, secretKeys, options) => facade.balanceUnboundTransaction(tx, secretKeys, options),
+  balanceFinalizedTransaction: (tx, secretKeys, options) => facade.balanceFinalizedTransaction(tx, secretKeys, options),
+  // Discard the returned TransactionIdentifier — the connector consumes a void-returning submit.
+  submitTransaction: async (tx) => {
+    await facade.submitTransaction(tx);
+  },
+});
+
+// =============================================================================
+// Multi-wallet setup (controllable per-wallet funding)
+// =============================================================================
+
+/** Deterministic 32-byte hex seed derived from a wallet name. Stable across runs. */
+const walletSeedFromName = (name: string): string => createHash('sha256').update(`wallet:${name}`).digest('hex');
+
+const deriveShieldedAddressString = (keys: WalletKeys, networkId: string): string => {
+  const coinPublicKey = new ShieldedCoinPublicKey(Buffer.from(keys.shieldedKeys.coinPublicKey, 'hex'));
+  const encryptionPublicKey = new ShieldedEncryptionPublicKey(
+    Buffer.from(keys.shieldedKeys.encryptionPublicKey, 'hex'),
+  );
+  return MidnightBech32m.encode(networkId, new ShieldedAddress(coinPublicKey, encryptionPublicKey)).asString();
+};
+
+const deriveUnshieldedAddressString = (keys: WalletKeys, networkId: string): string => {
+  return MidnightBech32m.encode(
+    networkId,
+    new UnshieldedAddress(Buffer.from(keys.signatureVerifyingKey, 'hex')),
+  ).asString();
+};
+
+/**
+ * Create a fresh simulator with the requested wallets pre-funded. Each wallet has its own HD keys derived
+ * deterministically from its name, its own facade against the shared simulator, and a connected API.
+ *
+ * Wallets funded with Night get their UTXOs registered for Dust generation and time advanced 10k blocks so Dust
+ * accumulates before the function resolves. Wallets without Night will have zero Dust (use them for payFees=false
+ * scenarios).
+ */
+const setupSimulatorWallets = async <K extends string>(
+  spec: Readonly<Record<K, WalletInitSpec>>,
+): Promise<MultiWalletSetup<K>> => {
+  const names = Object.keys(spec) as K[];
+  if (names.length === 0) throw new Error('setupWallets: spec must contain at least one wallet');
+
+  const walletsKeys = new Map<K, WalletKeys>(
+    names.map((name) => [name, deriveWalletKeys(walletSeedFromName(name), NETWORK_ID)]),
+  );
+
+  // Amounts in the spec are in "tokens" (whole units); the simulator's underlying mints take raw subunits with
+  // 6 decimals, matching how the rest of the SDK's simulator tests use the value. Each scalar entry mints a single
+  // UTXO; an array of bigints mints one UTXO per entry.
+  const normalizeAmounts = (v: bigint | readonly bigint[] | undefined): bigint[] =>
+    v === undefined ? [] : Array.isArray(v) ? (v as bigint[]) : [v as bigint];
+
+  const mints: GenesisMint[] = names.flatMap((name) => {
+    const keys = walletsKeys.get(name)!;
+    const initSpec = spec[name];
+    const shielded: GenesisMint[] = Object.entries(initSpec.shielded ?? {}).flatMap(([tokenType, amounts]) =>
+      normalizeAmounts(amounts)
+        .filter((a) => a > 0n)
+        .map((amount) => ({
+          type: 'shielded' as const,
+          tokenType,
+          amount: tokenValue(amount),
+          recipient: keys.shieldedKeys,
+        })),
+    );
+    const unshielded: GenesisMint[] = Object.entries(initSpec.unshielded ?? {}).flatMap(([tokenType, amounts]) =>
+      normalizeAmounts(amounts)
+        .filter((a) => a > 0n)
+        .map((amount) => ({
+          type: 'unshielded' as const,
+          tokenType,
+          amount: tokenValue(amount),
+          recipient: keys.userAddress,
+          verifyingKey: keys.signatureVerifyingKey,
+        })),
+    );
+    return [...shielded, ...unshielded];
   });
+
+  if (mints.length === 0) {
+    throw new Error(
+      'setupWallets: at least one wallet must have non-zero funding (Simulator requires non-empty mints)',
+    );
+  }
+
+  const genesisMints = mints as [GenesisMint, ...GenesisMint[]];
+
+  const scope = Effect.runSync(Scope.make());
+
+  // Pure predicates over the spec — computed once, then used as gates for the side-effecting phases below.
+  const anyAmountPositive = (v: bigint | readonly bigint[] | undefined): boolean =>
+    v === undefined ? false : Array.isArray(v) ? (v as bigint[]).some((x) => x > 0n) : (v as bigint) > 0n;
+  const hasShielded = (name: K): boolean => Object.values(spec[name].shielded ?? {}).some(anyAmountPositive);
+  const hasNight = (name: K): boolean => anyAmountPositive(spec[name].unshielded?.[NIGHT_TOKEN_TYPE]);
+  const anyNight = names.some(hasNight);
+
+  const facadesByName = await Effect.gen(function* () {
+    const sim = yield* Simulator.init({ genesisMints, blockProducer: immediateBlockProducer() });
+    const simulatorConfig: SimulatorConfig = {
+      simulator: sim,
+      networkId: NETWORK_ID,
+      costParameters: { feeBlocksMargin: 5 },
+    };
+
+    const facadePairs = yield* Effect.forEach(names, (name) =>
+      Effect.map(makeSimulatorFacade(simulatorConfig, walletsKeys.get(name)!), (fcd): [K, WalletFacade] => [name, fcd]),
+    );
+    const built = new Map<K, WalletFacade>(facadePairs);
+
+    // Per-wallet sync wait, then (if any wallet received Night) Night→Dust registration.
+    // We fast-forward once at the end (not per wallet) so each block-advance is shared.
+    yield* Effect.forEach(names, (name) => {
+      const fcd = built.get(name)!;
+      return Effect.gen(function* () {
+        if (hasShielded(name)) yield* waitForShieldedCoins(fcd);
+        if (hasNight(name)) yield* waitForUnshieldedBalance(fcd, NIGHT_TOKEN_TYPE, 1n);
+      });
+    });
+
+    if (anyNight) {
+      // Single fast-forward to accumulate Dust generation potential across all wallets that received Night.
+      yield* sim.fastForward(10_000n);
+
+      yield* Effect.forEach(names.filter(hasNight), (name) =>
+        Effect.gen(function* () {
+          const keys = walletsKeys.get(name)!;
+          const fcd = built.get(name)!;
+
+          const state: FacadeState = yield* Effect.promise(() =>
+            rx.firstValueFrom(fcd.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0))),
+          );
+          const nightUtxos = state.unshielded.availableCoins.filter(
+            (coin) => coin.utxo.type === NIGHT_TOKEN_TYPE && coin.meta.registeredForDustGeneration === false,
+          );
+          if (nightUtxos.length === 0) return;
+
+          const recipe = yield* Effect.promise(() =>
+            fcd.registerNightUtxosForDustGeneration(nightUtxos, keys.signatureVerifyingKey, (payload) =>
+              keys.unshieldedKeystore.signData(payload),
+            ),
+          );
+          const finalized = yield* Effect.promise(() => fcd.finalizeRecipe(recipe));
+          yield* Effect.promise(() => fcd.submitTransaction(finalized));
+          yield* waitForDustAvailable(fcd);
+        }),
+      );
+    }
+
+    return built;
+  }).pipe(Effect.provideService(Scope.Scope, scope), Effect.runPromise);
+
+  // Build per-wallet Connector + ConnectedAPI. Sequential (preserves original ordering and side-effect ordering).
+  const entries: ReadonlyArray<[K, WalletInstance]> = await names.reduce<Promise<ReadonlyArray<[K, WalletInstance]>>>(
+    async (accP, name) => {
+      const acc = await accP;
+      const keys = walletsKeys.get(name)!;
+      const fcd = facadesByName.get(name)!;
+      const facadeView = facadeAsView(fcd);
+      const keystore: WalletKeystore = new SimulatorWalletKeystore(keys);
+      const metadata = randomValue(defaultConnectorMetadataArbitrary);
+      const connector = new Connector(metadata, facadeView, keystore, defaultConnectorConfig);
+      const api = await connector.connect(NETWORK_ID_STRING);
+
+      const shieldedAddress = deriveShieldedAddressString(keys, NETWORK_ID_STRING);
+      const unshieldedAddress = deriveUnshieldedAddressString(keys, NETWORK_ID_STRING);
+      const dustAddress = (await api.getDustAddress()).dustAddress;
+
+      const entry: [K, WalletInstance] = [
+        name,
+        {
+          api,
+          disconnect: () => api.disconnect(),
+          addresses: { shielded: shieldedAddress, unshielded: unshieldedAddress, dust: dustAddress },
+        },
+      ];
+      return [...acc, entry];
+    },
+    Promise.resolve([] as ReadonlyArray<[K, WalletInstance]>),
+  );
+
+  const wallets = Object.fromEntries(entries) as Record<K, WalletInstance>;
+
+  return {
+    wallets,
+    disconnect: async () => {
+      await Promise.all(entries.map(([, w]) => w.disconnect()));
+      await Scope.close(scope, Exit.void).pipe(Effect.runPromise);
+    },
+    tokenTypes: {
+      shielded: SHIELDED_TOKEN_TYPE,
+      alternate: ALTERNATE_TOKEN_TYPE,
+      night: NIGHT_TOKEN_TYPE,
+    },
+  };
 };
 
 // =============================================================================
@@ -488,12 +767,12 @@ const staticEnvironment: TestEnvironment = {
   tokenTypes: {
     standard: SHIELDED_TOKEN_TYPE,
     alternate: ALTERNATE_TOKEN_TYPE,
+    night: NIGHT_TOKEN_TYPE,
   },
 
   // buildSealedTransaction/serializeTransaction intentionally omitted:
-  // the simulator proving service erases proofs, so mock-built sealed
-  // transactions cannot round-trip through strict (proof, binding)
-  // deserialization. Tests that need them skip when these are undefined.
+  // the simulator's connector tests don't yet emit mock sealed transactions; tests that need them skip when these
+  // are undefined.
 };
 
 /**
@@ -525,15 +804,14 @@ export const createSimulatorContext = (getEnv: () => SimulatorEnv): DappConnecto
       const connector = new Connector(metadata, facade, env.keystore, connConfig);
       const api = await connector.connect(networkId);
 
-      // Type assertion: internal disconnect() not part of public WalletConnectedAPI
-      const internalApi = api as unknown as { disconnect(): Promise<void> };
-
       return {
         api,
-        disconnect: () => internalApi.disconnect(),
+        disconnect: () => api.disconnect(),
         networkId,
       };
     },
+
+    setupWallets: setupSimulatorWallets,
   };
 
   return context;

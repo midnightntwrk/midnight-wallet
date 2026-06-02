@@ -43,10 +43,14 @@ export interface TestEnvironment {
     readonly unshielded2: UnshieldedAddressWithKeys;
   };
 
-  /** Standard token types for testing (64-char hex strings) */
+  /** Token types valid in this test environment (64-char hex strings). */
   readonly tokenTypes: {
+    /** A canonical shielded token type the environment supports. */
     readonly standard: string;
+    /** A second shielded token type distinct from `standard`, for multi-token tests. */
     readonly alternate: string;
+    /** The Night token type (native unshielded), used for funding Night and (via generation) Dust. */
+    readonly night: string;
   };
 
   /**
@@ -73,6 +77,59 @@ export interface ConnectedAPIInstance {
   readonly disconnect: () => Promise<void>;
   /** The network ID this API is connected to */
   readonly networkId: string;
+}
+
+/**
+ * Per-wallet initialization spec used by `setupWallets`. Amounts are in "tokens" (whole units); the simulator backend
+ * applies its 6-decimal multiplier internally.
+ *
+ * A scalar `bigint` mints a single genesis UTXO of that size. An array of bigints mints one UTXO per entry, which is
+ * what tests want when they need to perform multiple consecutive transfers against the same wallet without each one
+ * locking the only available UTXO as pending (coin selection picks a fresh UTXO each time).
+ *
+ * Dust cannot be funded directly — it generates from Night UTXOs over time. To get a wallet with Dust, fund it with
+ * Night via `unshielded`; the simulator backend registers Night UTXOs for Dust generation and advances time so Dust
+ * accumulates before `setupWallets` resolves.
+ */
+export interface WalletInitSpec {
+  /** Shielded token genesis amounts, keyed by token type (64-char hex). Scalar = 1 UTXO; array = N UTXOs. */
+  readonly shielded?: Readonly<Record<string, bigint | readonly bigint[]>>;
+  /** Unshielded token genesis amounts, keyed by token type. Use the native token type for Night. */
+  readonly unshielded?: Readonly<Record<string, bigint | readonly bigint[]>>;
+}
+
+/** One wallet inside a `MultiWalletSetup`. */
+export interface WalletInstance {
+  /** Connected API for this wallet. */
+  readonly api: ConnectedAPI;
+  /** Disconnect this wallet. */
+  readonly disconnect: () => Promise<void>;
+  /** Pre-encoded Bech32m addresses for this wallet. */
+  readonly addresses: {
+    readonly shielded: string;
+    readonly unshielded: string;
+    readonly dust: string;
+  };
+}
+
+/**
+ * Setup containing multiple named wallets, each with its own connected API and pre-funded balances.
+ *
+ * Created by `context.setupWallets({...})`. Tests that need controllable funding (or recipient verification) should
+ * gate on `context.setupWallets !== undefined` and use this; implementations without simulator-like state injection
+ * will skip those tests.
+ */
+export interface MultiWalletSetup<K extends string> {
+  /** Map of wallet name → instance, keyed by the names from the spec passed to `setupWallets`. */
+  readonly wallets: Readonly<Record<K, WalletInstance>>;
+  /** Disconnect all wallets and tear down the setup. */
+  readonly disconnect: () => Promise<void>;
+  /** Token types valid in this setup (the same the surrounding context exposes via `environment.tokenTypes`). */
+  readonly tokenTypes: {
+    readonly shielded: string;
+    readonly alternate: string;
+    readonly night: string;
+  };
 }
 
 /**
@@ -115,6 +172,21 @@ export interface DappConnectorTestContext {
    * For reference implementation tests, this is typically an empty object. For browser tests, this would be globalThis.
    */
   readonly installTarget: { midnight?: Record<string, InitialAPI> };
+
+  /**
+   * Create multiple named wallets with controllable genesis balances.
+   *
+   * Optional — only implementations that can pre-fund wallets (e.g., the simulator) provide this. Tests that need
+   * controllable balances or multi-wallet scenarios (transfer recipient verification, insufficient-funds errors, swap
+   * intents) should gate on `setupWallets !== undefined` and skip otherwise.
+   *
+   * The returned wallets share a single underlying ledger, so transfers between them work and addresses are reachable
+   * from any wallet's API.
+   *
+   * @param spec - Map of wallet name → initialization spec
+   * @returns A `MultiWalletSetup` whose `disconnect()` tears down all wallets and any underlying simulator
+   */
+  readonly setupWallets?: <K extends string>(spec: Readonly<Record<K, WalletInitSpec>>) => Promise<MultiWalletSetup<K>>;
 }
 
 /**
@@ -139,4 +211,10 @@ export type TransactionTestContext = Pick<
 export type BalancingTestContext = Pick<
   DappConnectorTestContext,
   'implementationName' | 'createConnectedAPI' | 'environment'
+>;
+
+/** Helper type for tests that need controllable multi-wallet setup. Tests skip when `setupWallets` is undefined. */
+export type MultiWalletTestContext = Pick<
+  DappConnectorTestContext,
+  'implementationName' | 'environment' | 'setupWallets'
 >;
