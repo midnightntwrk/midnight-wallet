@@ -15,6 +15,5 @@ export * from './Disconnect.js';
 export * from './BlockHash.js';
 export * from './DustCommitmentMerkleTreeUpdate.js';
 export * from './FetchTermsAndConditions.js';
-export * from './TransactionEvents.js';
 export * from './TransactionStatus.js';
 export * from './TransactionHistoryDetail.js';
