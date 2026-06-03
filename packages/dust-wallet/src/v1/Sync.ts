@@ -352,7 +352,7 @@ export const makeEventLessSyncService =
           const rawGenerations = yield* pipe(
             indexerSyncService.subscribeDustGenerations(
               state.publicKey.address,
-              Number(state.progress.appliedIndex),
+              Number(state.progress.highestIndex),
               maxGeneratingTreeIndex,
             ),
             Stream.runCollect,
@@ -634,8 +634,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
         return [
           CoreWallet.updateProgress(state, {
-            highestIndex: BigInt(update.progress),
-            highestRelevantWalletIndex: 100n,
+            appliedIndex: BigInt(update.progress),
             isConnected: true,
           }),
           { changes: [], protocolVersion: Number(state.protocolVersion) },
@@ -662,7 +661,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
 
       if (dustGenerations.lastUpdateIndex !== undefined) {
         updatedWallet = CoreWallet.updateProgress(updatedWallet, {
-          appliedIndex: BigInt(dustGenerations.lastUpdateIndex),
+          highestIndex: BigInt(dustGenerations.lastUpdateIndex),
           highestRelevantWalletIndex: BigInt(dustGenerations.lastUpdateIndex),
           isConnected: true,
         });
