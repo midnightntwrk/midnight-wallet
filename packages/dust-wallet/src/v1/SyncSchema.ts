@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, HashMap, ParseResult, pipe, Schema } from 'effect';
+import { Data, Effect, HashMap, ParseResult, pipe, Schema } from 'effect';
 import {
   type DustSecretKey,
   Event as LedgerEvent,
@@ -445,13 +445,20 @@ export const DustUtxoMap = {
     ),
 };
 
-export type DustProjectionsUpdate = {
-  dustGenerations: DustGenerationsSyncUpdate;
-  newUtxos: DustUtxoMap;
-  spentUtxos: DustUtxoMap;
-  collapsedCommitments: CollapsedMerkleTree[];
-  lastBlockTimestamp: Date;
-};
+export type DustProjectionsUpdate = Data.TaggedEnum<{
+  ProgressUpdate: { readonly progress: number };
+  StateUpdate: {
+    readonly dustGenerations: DustGenerationsSyncUpdate;
+    readonly newUtxos: DustUtxoMap;
+    readonly spentUtxos: DustUtxoMap;
+    readonly collapsedCommitments: CollapsedMerkleTree[];
+    readonly lastBlockTimestamp: Date;
+  };
+}>;
+const DustProjectionsUpdate = Data.taggedEnum<DustProjectionsUpdate>();
+export const isState = DustProjectionsUpdate.$is('StateUpdate');
+export const isProgressUpdate = DustProjectionsUpdate.$is('ProgressUpdate');
+export const { $match: match, StateUpdate, ProgressUpdate } = DustProjectionsUpdate;
 
 export const WireBlockDataSchema = Schema.Struct({
   height: Schema.Number,

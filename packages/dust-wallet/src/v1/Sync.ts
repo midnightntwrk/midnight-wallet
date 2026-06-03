@@ -24,6 +24,7 @@ import {
   Stream,
   Duration,
   Chunk,
+  Ref,
   Schedule,
 } from 'effect';
 import {
@@ -76,17 +77,15 @@ import {
   BlockDataSchema,
   type BlockData,
   type DustGenerationDtimUpdate,
-  type NewDustGeneration,
   type NullifierRegularTransaction,
+  ProgressUpdate,
+  StateUpdate,
+  isProgressUpdate,
 } from './SyncSchema.js';
 import { hashMapGroupBy, nullifierToHex, uniqueArray } from './Utils.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
-  updates: (
-    state: TState,
-    auxData: TStartAux,
-    onProgress?: (progress: number) => void,
-  ) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
+  updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
   blockData: (height?: number) => Effect.Effect<BlockData, WalletError>;
 }
 
@@ -163,7 +162,6 @@ export const makeDefaultSyncService = (
     updates: (
       state: CoreWallet,
       secretKey: DustSecretKey,
-      onProgress?: (progress: number) => void,
     ): Stream.Stream<WalletSyncUpdate, WalletError, Scope.Scope> => {
       const batchSize = config.batchUpdates?.size ?? 10;
       const batchTimeout = Duration.millis(config.batchUpdates?.timeout ?? 1);
@@ -207,6 +205,77 @@ export const makeDefaultSyncService = (
 };
 
 export const Trigger = Symbol('SyncTrigger');
+
+const accumulateUtxoUpdates = (
+  updates: DustUtxoUpdate[],
+  initialUtxos: DustUtxoMap,
+  initialSpentUtxos: DustUtxoMap,
+): { nextUtxos: DustUtxoMap; nextSpentUtxos: DustUtxoMap } =>
+  updates.reduce(
+    ({ nextUtxos, nextSpentUtxos }, update) => {
+      const entry = {
+        qdo: update.qdo,
+        transactionId: update.transactionId,
+        transactionHash: update.transactionHash,
+        genInfo: update.genInfo,
+      };
+      return update.isSpent
+        ? { nextUtxos, nextSpentUtxos: HashMap.set(nextSpentUtxos, update.dustNullifier, entry) }
+        : { nextUtxos: HashMap.set(nextUtxos, update.dustNullifier, entry), nextSpentUtxos };
+    },
+    { nextUtxos: initialUtxos, nextSpentUtxos: initialSpentUtxos },
+  );
+
+const resolveNullifierSpends = (
+  indexerSyncService: IndexerSyncService,
+  state: CoreWallet,
+  secretKey: DustSecretKey,
+  dustGenerationUpdates: DustGenerationsSyncUpdate,
+  blockData: BlockData,
+  initialNullifiers: DustNullifier[],
+  initialNewUtxos: DustUtxoMap,
+): Effect.Effect<readonly [DustUtxoMap, DustUtxoMap], WalletError, Scope.Scope | SubscriptionClient> =>
+  pipe(
+    Stream.unfoldEffect(
+      [initialNullifiers, initialNewUtxos, HashMap.empty() as DustUtxoMap] as const,
+      ([nullifiersToCheck, newUtxos, spentUtxos]) => {
+        if (nullifiersToCheck.length === 0) {
+          return Effect.succeed(Option.none());
+        }
+        return Effect.gen(function* () {
+          const nullifierTransactions = yield* pipe(
+            indexerSyncService.subscribeDustNullifierTransactions(
+              nullifiersToCheck as Arr.NonEmptyArray<DustNullifier>,
+              blockData.height,
+            ),
+            Stream.runCollect,
+            Effect.map(Chunk.toArray),
+          );
+          const dustUtxoUpdates = yield* createDustUtxoUpdates(
+            state,
+            nullifierTransactions,
+            secretKey,
+            newUtxos,
+            dustGenerationUpdates.generationDtimeUpdates,
+          );
+          const { nextUtxos, nextSpentUtxos } = accumulateUtxoUpdates(dustUtxoUpdates, newUtxos, spentUtxos);
+          const nextNullifiers = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
+          return Option.some([
+            [nextUtxos, nextSpentUtxos] as const,
+            [nextNullifiers, nextUtxos, nextSpentUtxos] as const,
+          ]);
+        });
+      },
+    ),
+    Stream.runCollect,
+    Effect.map(Chunk.toArray),
+    Effect.map((results) =>
+      pipe(
+        Arr.last(results),
+        Option.getOrElse(() => [initialNewUtxos, HashMap.empty()] as const),
+      ),
+    ),
+  );
 
 export const makeEventLessSyncService =
   (trigger: Stream.Stream<typeof Trigger>) =>
@@ -257,128 +326,95 @@ export const makeEventLessSyncService =
     const doSync = (
       state: CoreWallet,
       secretKey: DustSecretKey,
-      onProgress?: (progress: number) => void,
-    ): Effect.Effect<DustProjectionsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
-      console.log('syncing for: ', state.publicKey.addressHex);
-      return Effect.gen(function* () {
-        const blockData = yield* defaultSyncService.blockData();
-        const maxCommitmentTreeIndex = blockData.dustCommitmentEndIndex - 1;
-        const maxGeneratingTreeIndex = blockData.dustGenerationEndIndex - 1;
-        const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree;
+    ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
+      console.log('syncing for:', state.publicKey.addressHex, 'last sync:', state.state.syncTime);
+      return Stream.asyncEffect((emit) =>
+        Effect.gen(function* () {
+          const blockData = yield* defaultSyncService.blockData();
+          const maxCommitmentTreeIndex = blockData.dustCommitmentEndIndex - 1;
+          const maxGeneratingTreeIndex = blockData.dustGenerationEndIndex - 1;
+          const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree;
 
-        const rawGenerations = yield* pipe(
-          indexerSyncService.subscribeDustGenerations(
-            state.publicKey.address,
-            Number(state.progress.appliedIndex),
-            maxGeneratingTreeIndex,
-          ),
-          Stream.runCollect,
-          Effect.map(Chunk.toArray),
-        );
-        console.log('dust generations received', rawGenerations.length);
-        const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
-        onProgress?.(10);
-
-        // combine new nullifiers with those in the state
-        const unsyncedNullifiers = dustGenerationUpdates.newGenerations
-          .map((n) => n.dustNullifier)
-          .concat([...state.state.nullifiers.keys()]);
-
-        // track new utxos to calculate the successor utxo when the nullifier is spent
-        const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
-
-        const [finalUtxos, finalSpentUtxos] = yield* pipe(
-          Stream.unfoldEffect(
-            [unsyncedNullifiers, initialNewUtxos, HashMap.empty() as DustUtxoMap] as const,
-            ([nullifiersToCheck, newUtxos, spentUtxos]) => {
-              if (nullifiersToCheck.length === 0) {
-                return Effect.succeed(Option.none());
-              }
-              return Effect.gen(function* () {
-                const nullifierTransactions = yield* pipe(
-                  indexerSyncService.subscribeDustNullifierTransactions(
-                    nullifiersToCheck as Arr.NonEmptyArray<DustNullifier>,
-                    blockData.height,
-                  ),
-                  Stream.runCollect,
-                  Effect.map(Chunk.toArray),
-                );
-                const dustUtxoUpdates = yield* createDustUtxoUpdates(
-                  state,
-                  nullifierTransactions,
-                  secretKey,
-                  newUtxos,
-                  dustGenerationUpdates.generationDtimeUpdates,
-                );
-                const { nextUtxos, nextSpentUtxos } = dustUtxoUpdates.reduce(
-                  ({ nextUtxos, nextSpentUtxos }, update) => {
-                    const entry = {
-                      qdo: update.qdo,
-                      transactionId: update.transactionId,
-                      transactionHash: update.transactionHash,
-                      genInfo: update.genInfo,
-                    };
-                    return update.isSpent
-                      ? {
-                          nextUtxos,
-                          nextSpentUtxos: HashMap.set(nextSpentUtxos, update.dustNullifier, entry),
-                        }
-                      : { nextUtxos: HashMap.set(nextUtxos, update.dustNullifier, entry), nextSpentUtxos };
-                  },
-                  { nextUtxos: newUtxos, nextSpentUtxos: spentUtxos },
-                );
-                const nextNullifiers = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
-                return Option.some([
-                  [nextUtxos, nextSpentUtxos] as const,
-                  [nextNullifiers, nextUtxos, nextSpentUtxos] as const,
-                ]);
-              });
-            },
-          ),
-          Stream.runCollect,
-          Effect.map(Chunk.toArray),
-          Effect.map((results) =>
-            pipe(
-              Arr.last(results),
-              Option.getOrElse(() => [initialNewUtxos, HashMap.empty()] as const),
+          const rawGenerations = yield* pipe(
+            indexerSyncService.subscribeDustGenerations(
+              state.publicKey.address,
+              Number(state.progress.appliedIndex),
+              maxGeneratingTreeIndex,
             ),
-          ),
-        );
+            Stream.runCollect,
+            Effect.map(Chunk.toArray),
+          );
+          const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
 
-        // sanity check
-        if ([...finalUtxos].some((u) => u[1].qdo.mtIndex < lastSyncedCommitmentIndex)) {
-          return yield* Effect.fail(new OtherWalletError({ message: 'Spotted stale utxo' }));
-        }
+          yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 10 })));
 
-        onProgress?.(90);
+          const initialNullifiers = dustGenerationUpdates.newGenerations
+            .map((n) => n.dustNullifier)
+            .concat([...state.state.nullifiers.keys()]);
+          const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
 
-        const collapsedCommitments = yield* loadCollapsedCommitments(
-          Number(lastSyncedCommitmentIndex),
-          maxCommitmentTreeIndex,
-          finalUtxos,
-        );
+          const [finalUtxos, finalSpentUtxos] = yield* resolveNullifierSpends(
+            indexerSyncService,
+            state,
+            secretKey,
+            dustGenerationUpdates,
+            blockData,
+            initialNullifiers,
+            initialNewUtxos,
+          );
 
-        onProgress?.(100);
+          if ([...finalUtxos].some((u) => u[1].qdo.mtIndex < lastSyncedCommitmentIndex)) {
+            return yield* Effect.fail(new OtherWalletError({ message: 'Spotted stale utxo' }));
+          }
 
-        return {
-          dustGenerations: dustGenerationUpdates,
-          spentUtxos: finalSpentUtxos,
-          newUtxos: finalUtxos,
-          collapsedCommitments,
-          lastBlockTimestamp: blockData.timestamp,
-        };
-      });
+          yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 90 })));
+
+          const collapsedCommitments = yield* loadCollapsedCommitments(
+            Number(lastSyncedCommitmentIndex),
+            maxCommitmentTreeIndex,
+            finalUtxos,
+          );
+
+          console.log('Sync completed successfully for:', state.publicKey.addressHex);
+          yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 100 })));
+          yield* Effect.promise(() =>
+            emit.single(
+              StateUpdate({
+                dustGenerations: dustGenerationUpdates,
+                spentUtxos: finalSpentUtxos,
+                newUtxos: finalUtxos,
+                collapsedCommitments,
+                lastBlockTimestamp: blockData.timestamp,
+              }),
+            ),
+          );
+        }),
+      );
     };
 
     return {
       updates: (
         state: CoreWallet,
         secretKey: DustSecretKey,
-        onProgress?: (progress: number) => void,
       ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope> =>
         pipe(
-          trigger,
-          Stream.mapEffect(() => doSync(state, secretKey, onProgress)),
+          Ref.make(false),
+          Effect.map((busyRef) =>
+            trigger.pipe(
+              // Filter out incoming events if the lock is active (drops them)
+              Stream.filterEffect(() => Ref.modify(busyRef, (busy) => (busy ? [false, true] : [true, false]))),
+              // Process the allowed event
+              Stream.flatMap(
+                (_) =>
+                  doSync(state, secretKey).pipe(
+                    // Release the lock when this specific inner task finishes
+                    Stream.ensuring(Ref.set(busyRef, false)),
+                  ),
+                { concurrency: 1 },
+              ),
+            ),
+          ),
+          Stream.unwrap,
           Stream.provideSomeLayer(Layer.merge(indexerSyncService.connectionLayer(), indexerSyncService.queryClient())),
         ),
       blockData: (): Effect.Effect<BlockData, WalletError> => defaultSyncService.blockData(),
@@ -580,6 +616,11 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
   return {
     applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
       console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
+      if (isProgressUpdate(update)) {
+        // TODO: do smth
+        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
+      }
+
       const { dustGenerations, spentUtxos, newUtxos, collapsedCommitments, lastBlockTimestamp } = update;
 
       const dustGenTreeUpdates = dustGenerations.rawUpdates
@@ -707,7 +748,7 @@ export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, SimulatorSyncUpdate> => {
   return {
-    updates: (_state: CoreWallet, secretKey: DustSecretKey, onProgress?: (progress: number) => void) => {
+    updates: (_state: CoreWallet, secretKey: DustSecretKey) => {
       // Get the initial state immediately to ensure we process the genesis block.
       // Then subscribe to state$ for subsequent changes, but deduplicate by block number
       // to avoid processing the same block twice.
