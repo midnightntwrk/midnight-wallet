@@ -267,6 +267,70 @@ const loadCollapsedCommitments = (
   );
 };
 
+const resolveNullifierSpends = (
+  initialNullifiers: DustNullifier[],
+  initialNewUtxos: DustUtxoMap,
+  state: CoreWallet,
+  secretKey: DustSecretKey,
+  blockData: BlockData,
+  dustGenerationUpdates: DustGenerationsSyncUpdate,
+  indexerSyncService: IndexerSyncService,
+  emit: {
+    single: (update: DustProjectionsUpdate) => Promise<void>;
+  },
+): Effect.Effect<readonly [DustUtxoMap, DustUtxoMap], WalletError, Scope.Scope | SubscriptionClient> => {
+  return pipe(
+    Stream.unfoldEffect(
+      [initialNullifiers, initialNewUtxos, HashMap.empty() as DustUtxoMap, 1] as readonly [
+        DustNullifier[],
+        DustUtxoMap,
+        DustUtxoMap,
+        number,
+      ],
+      ([nullifiersToCheck, newUtxos, spentUtxos, generationLevel]) => {
+        if (nullifiersToCheck.length === 0) {
+          return Effect.succeed(Option.none());
+        }
+        return Effect.gen(function* () {
+          const nullifierTransactions = yield* pipe(
+            indexerSyncService.subscribeDustNullifierTransactions(
+              nullifiersToCheck as Arr.NonEmptyArray<DustNullifier>,
+              blockData.height,
+            ),
+            Stream.runCollect,
+            Effect.map(Chunk.toArray),
+          );
+
+          yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 10 * generationLevel })));
+
+          const dustUtxoUpdates = yield* createDustUtxoUpdates(
+            state,
+            nullifierTransactions,
+            secretKey,
+            newUtxos,
+            dustGenerationUpdates.generationDtimeUpdates,
+          );
+          const { nextUtxos, nextSpentUtxos } = accumulateUtxoUpdates(dustUtxoUpdates, newUtxos, spentUtxos);
+          const nextNullifiers = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
+          const nextGenerationLevel = generationLevel + 1;
+          return Option.some([
+            [nextUtxos, nextSpentUtxos] as const,
+            [nextNullifiers, nextUtxos, nextSpentUtxos, nextGenerationLevel] as const,
+          ]);
+        });
+      },
+    ),
+    Stream.runCollect,
+    Effect.map(Chunk.toArray),
+    Effect.map((results) =>
+      pipe(
+        Arr.last(results),
+        Option.getOrElse(() => [initialNewUtxos, HashMap.empty()] as const),
+      ),
+    ),
+  );
+};
+
 export const makeEventLessSyncService =
   (trigger: Stream.Stream<typeof Trigger>) =>
   (config: DefaultSyncConfiguration): SyncService<CoreWallet, DustSecretKey, DustProjectionsUpdate> => {
@@ -303,55 +367,15 @@ export const makeEventLessSyncService =
             .concat([...state.state.nullifiers.keys()]);
           const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
 
-          const [finalUtxos, finalSpentUtxos] = yield* pipe(
-            Stream.unfoldEffect(
-              [initialNullifiers, initialNewUtxos, HashMap.empty() as DustUtxoMap, 1] as readonly [
-                DustNullifier[],
-                DustUtxoMap,
-                DustUtxoMap,
-                number,
-              ],
-              ([nullifiersToCheck, newUtxos, spentUtxos, generationLevel]) => {
-                if (nullifiersToCheck.length === 0) {
-                  return Effect.succeed(Option.none());
-                }
-                return Effect.gen(function* () {
-                  const nullifierTransactions = yield* pipe(
-                    indexerSyncService.subscribeDustNullifierTransactions(
-                      nullifiersToCheck as Arr.NonEmptyArray<DustNullifier>,
-                      blockData.height,
-                    ),
-                    Stream.runCollect,
-                    Effect.map(Chunk.toArray),
-                  );
-
-                  yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 10 * generationLevel })));
-
-                  const dustUtxoUpdates = yield* createDustUtxoUpdates(
-                    state,
-                    nullifierTransactions,
-                    secretKey,
-                    newUtxos,
-                    dustGenerationUpdates.generationDtimeUpdates,
-                  );
-                  const { nextUtxos, nextSpentUtxos } = accumulateUtxoUpdates(dustUtxoUpdates, newUtxos, spentUtxos);
-                  const nextNullifiers = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
-                  const nextGenerationLevel = generationLevel + 1;
-                  return Option.some([
-                    [nextUtxos, nextSpentUtxos] as const,
-                    [nextNullifiers, nextUtxos, nextSpentUtxos, nextGenerationLevel] as const,
-                  ]);
-                });
-              },
-            ),
-            Stream.runCollect,
-            Effect.map(Chunk.toArray),
-            Effect.map((results) =>
-              pipe(
-                Arr.last(results),
-                Option.getOrElse(() => [initialNewUtxos, HashMap.empty()] as const),
-              ),
-            ),
+          const [finalUtxos, finalSpentUtxos] = yield* resolveNullifierSpends(
+            initialNullifiers,
+            initialNewUtxos,
+            state,
+            secretKey,
+            blockData,
+            dustGenerationUpdates,
+            indexerSyncService,
+            emit,
           );
 
           if ([...finalUtxos].some((u) => u[1].qdo.mtIndex < lastSyncedCommitmentIndex)) {
@@ -606,9 +630,9 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
 export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustProjectionsUpdate, ChangesResult> => {
   return {
     applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
-      console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
       if (isProgressUpdate(update)) {
         // TODO: do smth
+        console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
         return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
 
