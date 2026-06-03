@@ -97,6 +97,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>;
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
+  syncLock
 
   constructor(
     scope: Scope.Scope,
@@ -132,13 +133,26 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       Stream.runScoped(Sink.drain),
       Effect.forkScoped,
       Effect.provideService(Scope.Scope, this.#scope),
+      /*Stream.retry(
+        pipe(
+          Schedule.exponential(Duration.seconds(1), 2),
+          Schedule.map((delay) => {
+            const maxDelay = Duration.minutes(2);
+            const jitter = Duration.millis(Math.floor(Math.random() * 1000));
+            const delayWithJitter = Duration.toMillis(delay) + Duration.toMillis(jitter);
+
+            return Duration.millis(Math.min(delayWithJitter, Duration.toMillis(maxDelay)));
+          }),
+        ),
+      ),*/
     );
   }
 
   startSync(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
     return pipe(
+      try acquire lock 
       SubscriptionRef.get(this.#context.stateRef),
-      Stream.fromEffect,
+      Stream.fromEffect(),
       Stream.flatMap((state) => this.#v1Context.syncService.updates(state, startAux)),
       Stream.mapEffect((update) =>
         SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
@@ -175,18 +189,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         ),
       ),
       Stream.tapError((error) => Console.error(error)),
-      /*Stream.retry(
-        pipe(
-          Schedule.exponential(Duration.seconds(1), 2),
-          Schedule.map((delay) => {
-            const maxDelay = Duration.minutes(2);
-            const jitter = Duration.millis(Math.floor(Math.random() * 1000));
-            const delayWithJitter = Duration.toMillis(delay) + Duration.toMillis(jitter);
-
-            return Duration.millis(Math.min(delayWithJitter, Duration.toMillis(maxDelay)));
-          }),
-        ),
-      ),*/
+      
     );
   }
 

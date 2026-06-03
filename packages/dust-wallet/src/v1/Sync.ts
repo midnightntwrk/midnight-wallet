@@ -85,7 +85,7 @@ import {
 import { hashMapGroupBy, nullifierToHex, uniqueArray } from './Utils.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
-  updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
+  updates: (state: Effect<TState>, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
   blockData: (height?: number) => Effect.Effect<BlockData, WalletError>;
 }
 

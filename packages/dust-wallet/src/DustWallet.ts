@@ -267,6 +267,10 @@ export function CustomDustWallet<
       return this.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(secretKey) }).pipe(Effect.runPromise);
     }
 
+    syncStep(secretKey: TStartAux): Promise<void> {
+      return this.runtime.dispatch({ [V1Tag]: (v1) => v1.sync(secretKey) }).pipe(Stream.runDrain, Effect.runPromise);
+    }
+
     async createDustGenerationTransaction(
       currentTime: Date | undefined,
       ttl: Date,
