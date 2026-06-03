@@ -631,9 +631,15 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
   return {
     applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
       if (isProgressUpdate(update)) {
-        // TODO: do smth
         console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
-        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
+        return [
+          CoreWallet.updateProgress(state, {
+            highestIndex: BigInt(update.progress),
+            highestRelevantWalletIndex: 100n,
+            isConnected: true,
+          }),
+          { changes: [], protocolVersion: Number(state.protocolVersion) },
+        ];
       }
 
       const { dustGenerations, spentUtxos, newUtxos, collapsedCommitments, lastBlockTimestamp } = update;
