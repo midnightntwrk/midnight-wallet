@@ -678,12 +678,12 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
       const changes: DustStateChanges[] = transactionIds.map((txId) => {
         const received = Option.getOrElse(HashMap.get(groupedNewUtxos, txId), () => []);
         const spent = Option.getOrElse(HashMap.get(groupedSpentUtxos, txId), () => []);
-        const txHash = received.at(0)?.transactionHash || spent.at(0)?.transactionHash;
+        const txHash = (received.at(0)?.transactionHash || spent.at(0)?.transactionHash)!;
         console.log(
           `Processing transaction ${txHash} with ${received.length} received and ${spent.length} spent UTXOs`,
         );
         return new DustStateChanges(
-          txHash!,
+          txHash,
           received.map(({ qdo }) => qdo),
           spent.map(({ qdo }) => qdo),
         );
