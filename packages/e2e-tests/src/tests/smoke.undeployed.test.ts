@@ -178,8 +178,10 @@ describe('Smoke tests', () => {
       senderUnshieldedEntries.forEach((entry) => utils.expectValidUnshieldedTxHistoryEntry(entry));
 
       const receiverTxEntry = await receiver.wallet.queryTxHistoryByHash(txHash);
-      expect(receiverTxEntry).toBeDefined();
-      utils.expectReceiverUnshieldedTxHistory(receiverTxEntry!, outputValue);
+      if (receiverTxEntry === undefined || !isFinalizedWalletEntry(receiverTxEntry)) {
+        throw new Error(`Expected finalized tx history entry for ${txHash}`);
+      }
+      utils.expectReceiverUnshieldedTxHistory(receiverTxEntry, outputValue);
 
       // Verify shielded transaction history
       const senderShieldedEntries = senderConfirmed.filter((e) => e.shielded !== undefined);

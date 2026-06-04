@@ -1221,11 +1221,8 @@ export class WalletFacade {
     ]);
   }
 
-  async queryTxHistoryByHash(
-    hash: TransactionHistoryStorage.TransactionHash,
-  ): Promise<FinalizedWalletEntry | undefined> {
-    const raw = await this.#txHistoryStorage.get(hash);
-    return raw && isFinalizedWalletEntry(raw) ? raw : undefined;
+  async queryTxHistoryByHash(hash: TransactionHistoryStorage.TransactionHash): Promise<WalletEntry | undefined> {
+    return this.#txHistoryStorage.get(hash);
   }
 
   async getAllFromTxHistory(): Promise<WalletEntry[]> {

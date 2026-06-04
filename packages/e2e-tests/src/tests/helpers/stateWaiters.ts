@@ -18,6 +18,7 @@ import { type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { type UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import {
   type WalletFacade,
+  type WalletEntry,
   type FinalizedWalletEntry,
   isPendingWalletEntry,
   isFinalizedWalletEntry,
@@ -144,7 +145,7 @@ export const waitForTxInHistory = async (
   ready?: (entry: FinalizedWalletEntry) => boolean,
 ) => {
   const isReady = ready ?? (() => true);
-  const describeSections = (e: FinalizedWalletEntry): string =>
+  const describeSections = (e: WalletEntry): string =>
     (['shielded', 'unshielded', 'dust'] as const).filter((k) => e[k] !== undefined).join(',');
   let pollsSinceDump = 0;
   const txEntry = await rx.firstValueFrom(
@@ -157,12 +158,14 @@ export const waitForTxInHistory = async (
           );
           return entry;
         }
-        const notReady = entry === undefined || !isReady(entry);
+        const notReady = entry === undefined || !(isFinalizedWalletEntry(entry) && isReady(entry));
         const needsDump = notReady && pollsSinceDump >= 20;
         if (entry === undefined) {
           logger.info(`Waiting for tx ${txHash} in history: not found yet`);
         } else {
-          logger.info(`Waiting for tx ${txHash} in history: found, status=${entry.status}, ready=${isReady(entry)}`);
+          logger.info(
+            `Waiting for tx ${txHash} in history: found, status=${entry.status}, ready=${isFinalizedWalletEntry(entry) && isReady(entry)}`,
+          );
         }
         if (needsDump) {
           const all = await wallet.getAllFromTxHistory();
@@ -196,12 +199,16 @@ export const waitForTxInHistory = async (
         return entry;
       }),
       rx.filter(
-        (entry): entry is FinalizedWalletEntry => entry !== undefined && (entry.status !== 'SUCCESS' || isReady(entry)),
+        (entry): entry is WalletEntry =>
+          entry !== undefined && (entry.status !== 'SUCCESS' || (isFinalizedWalletEntry(entry) && isReady(entry))),
       ),
     ),
   );
   expect(txEntry).toBeDefined();
   expect(txEntry.hash).toBe(txHash);
   expect(txEntry.status).toBe('SUCCESS');
+  if (!isFinalizedWalletEntry(txEntry)) {
+    throw new Error(`Expected finalized entry for ${txHash}, got lifecycle '${txEntry.lifecycle.status}'`);
+  }
   return txEntry;
 };
