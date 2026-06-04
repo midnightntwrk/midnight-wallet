@@ -50,8 +50,8 @@ const createUnbalancedTx = (recipientKeys: ledger.ZswapSecretKeys, amount = 100n
 };
 
 /** Create Night-compatible signing keys from a numeric seed index. */
-const createNightKeys = (seed: number) => {
-  const signingKey: ledger.SigningKey = { tag: 'schnorr', value: Buffer.alloc(32, seed).toString('hex') };
+const createNightKeys = (seed: number, kind: ledger.SignatureKind = 'schnorr') => {
+  const signingKey: ledger.SigningKey = { tag: kind, value: Buffer.alloc(32, seed).toString('hex') };
   const verifyingKey = ledger.signatureVerifyingKey(signingKey);
   const userAddress = ledger.addressFromKey(verifyingKey);
   return { verifyingKey, userAddress };
@@ -237,6 +237,37 @@ describe('Unified Simulator', () => {
         const utxos = Array.from(state.ledger.utxo.filter(recipientAddress));
         const nightUtxo = utxos.find((utxo) => utxo.type === nightTokenType);
         expect(nightUtxo).toBeDefined();
+        expect(nightUtxo?.value).toBe(nightAmount);
+      }).pipe(Effect.scoped, Effect.runPromise);
+    });
+
+    it('supports Night genesis mints with an ECDSA verifying key', async () => {
+      return Effect.gen(function* () {
+        const nightAmount = 1_000_000n;
+        const { verifyingKey, userAddress: recipientAddress } = createNightKeys(42, 'ecdsa');
+
+        const simulator = yield* Simulator.init({
+          genesisMints: [
+            {
+              type: 'unshielded',
+              tokenType: ledger.nativeToken().raw,
+              amount: nightAmount,
+              recipient: recipientAddress,
+              verifyingKey,
+            },
+          ],
+        });
+
+        const state = yield* simulator.getLatestState();
+        const lastBlock = getLastBlock(state);
+        if (lastBlock === undefined) throw new Error('lastBlock should be defined');
+
+        expect(lastBlock.transactions.length).toBe(1);
+        expect(lastBlock.transactions[0]?.result.type).toBe('success');
+
+        const nightTokenType = ledger.nativeToken().raw;
+        const utxos = Array.from(state.ledger.utxo.filter(recipientAddress));
+        const nightUtxo = utxos.find((utxo) => utxo.type === nightTokenType);
         expect(nightUtxo?.value).toBe(nightAmount);
       }).pipe(Effect.scoped, Effect.runPromise);
     });
@@ -507,6 +538,19 @@ describe('Unified Simulator', () => {
         expect(lastBlock.hash).toMatch(/^[0-9a-f]{64}$/);
         expect(lastBlock.transactions.length).toBeGreaterThan(0);
         expect(getCurrentBlockNumber(newState)).toBe(lastBlock.number);
+      }).pipe(Effect.scoped, Effect.runPromise);
+    });
+
+    it('distributes Night tokens with an ECDSA verifying key', async () => {
+      return Effect.gen(function* () {
+        const simulator = yield* Simulator.init({ networkId: NetworkId.NetworkId.Undeployed });
+        const { verifyingKey } = createNightKeys(1, 'ecdsa');
+
+        yield* simulator.rewardNight(verifyingKey, 1000n);
+
+        const lastBlock = getLastBlock(yield* simulator.getLatestState());
+        expect(lastBlock).toBeDefined();
+        expect(lastBlock.transactions.length).toBeGreaterThan(0);
       }).pipe(Effect.scoped, Effect.runPromise);
     });
   });
