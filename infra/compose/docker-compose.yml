@@ -1,6 +1,6 @@
 services:
   indexer:
-    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.0.0'
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.3.2-rc.1'
     container_name: indexer_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
@@ -12,6 +12,8 @@ services:
       RUST_LOG: 'indexer=debug,chain_indexer=debug,indexer_api=debug,wallet_indexer=debug,indexer_common=debug,fastrace_opentelemetry=off,info'
       APP__INFRA__NODE__URL: 'ws://node:9944'
       APP__INFRA__SECRET: '${APP_INFRA_SECRET}'
+      APP__INFRA__SPO_NODE__URL: 'ws://node:9944'
+      APP__INFRA__SPO_NODE__BLOCKFROST_ID: 'e2e-test-dummy'
 
     healthcheck:
       test: ['CMD-SHELL', 'cat /var/run/indexer-standalone/running']
@@ -23,7 +25,7 @@ services:
       node:
         condition: service_healthy
   node:
-    image: 'ghcr.io/midnight-ntwrk/midnight-node:0.22.0'
+    image: 'ghcr.io/midnight-ntwrk/midnight-node:1.0.0-rc.8'
     container_name: node_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
