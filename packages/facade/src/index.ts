@@ -57,7 +57,7 @@ import {
   type PendingTransactionsService,
   PendingTransactionsServiceImpl,
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { finalizedTransactionTrait } from './transaction.js';
+import { finalizedTransactionTrait, txHistoryHash } from './transaction.js';
 import {
   type DustAddress,
   type ShieldedAddress,
@@ -140,39 +140,27 @@ export function mergeWalletEntries(existing: WalletEntry, incoming: WalletEntry)
 }
 
 /**
- * Storage key for a tx we're about to submit. The TypeScript type promises the tx is signed + proven + bound, so
- * `transactionHash()` should succeed — but ledger-v8's phantom type parameters can't witness the actual WASM-side state
- * (the handle may have been consumed, or the caller may have cast through the type system), so we catch and return
- * `undefined` rather than fabricate a key under an arbitrary identifier. A caller that gets `undefined` should skip
- * writing the pending entry: papering over the type-contract violation here would hide a real upstream bug.
+ * Storage key for a tx we're about to submit (record as pending). The hash comes from {@link txHistoryHash}, which the
+ * revert side uses too — so a tx keyed here while pending resolves to the same key when later confirmed or reverted.
  */
 const submitTxHistoryKey = (
   tx: ledger.FinalizedTransaction,
-): { readonly hash: string; readonly identifiers: readonly string[] } | undefined => {
-  try {
-    return { hash: tx.transactionHash().toString(), identifiers: tx.identifiers() };
-  } catch {
-    return undefined;
-  }
-};
+): { readonly hash: string; readonly identifiers: readonly string[] } => ({
+  hash: txHistoryHash(tx),
+  identifiers: tx.identifiers(),
+});
 
 /**
- * Storage key for a tx we're about to revert. Unlike submission, the input is `AnyTransaction` and may legitimately not
- * be hashable — the union includes `UnprovenTransaction`, `ProofErasedTransaction`, and pre-binding variants whose
- * chain hash doesn't exist yet. When `transactionHash()` throws (or the tx never reached a hashable state), we fall
- * back to `identifiers[0]`, which is the same key the pending entry was inserted under by the corresponding
- * `gotPending` path. Returns `undefined` only when the tx has no identifiers at all (nothing to revert).
+ * Storage key for a tx we're about to revert (record as rejected). Shares {@link txHistoryHash} with the submit side so
+ * the rejected entry lands on the pending entry in place. Returns `undefined` only when the tx has no identifiers at
+ * all (nothing to revert).
  */
 const revertTxHistoryKey = (
   tx: AnyTransaction,
 ): { readonly hash: string; readonly identifiers: readonly string[] } | undefined => {
   const identifiers = tx.identifiers();
   if (identifiers.length === 0) return undefined;
-  try {
-    return { hash: tx.transactionHash().toString(), identifiers };
-  } catch {
-    return { hash: identifiers[0], identifiers };
-  }
+  return { hash: txHistoryHash(tx), identifiers };
 };
 
 type TokenKind = 'dust' | 'shielded' | 'unshielded';
@@ -672,9 +660,7 @@ export class WalletFacade {
       // Insert before awaiting submission so the entry exists while the tx is in flight — the per-wallet sync
       // handlers' gotFinalized call clears the pending entry on confirmation.
       const key = submitTxHistoryKey(tx);
-      if (key !== undefined) {
-        await this.#txHistoryStorage.gotPending({ ...key, submittedAt: this.clock.now() });
-      }
+      await this.#txHistoryStorage.gotPending({ ...key, submittedAt: this.clock.now() });
       await this.submissionService.submitTransaction(tx, 'Finalized');
 
       return identifiers.at(-1)!;

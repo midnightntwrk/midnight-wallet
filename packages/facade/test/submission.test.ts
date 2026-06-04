@@ -82,6 +82,7 @@ describe('Facade submission', () => {
   });
 
   it('reverts transaction, which failed submission', async () => {
+    const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
     const config = {
       networkId: NetworkId.NetworkId.Undeployed,
       relayURL: new URL('http://localhost:9944'),
@@ -92,7 +93,7 @@ describe('Facade submission', () => {
       costParameters: {
         feeBlocksMargin: 0,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+      txHistoryStorage,
     };
     const seed = crypto.randomBytes(32);
     const shielded = ShieldedWallet(config).startWithSeed(seed);
@@ -135,5 +136,72 @@ describe('Facade submission', () => {
     expect(spiedUnshieldedRevert).toHaveBeenCalled();
     expect(spiedDustRevert).toHaveBeenCalled();
     expect(submissionResult).toBe('failed');
+
+    // The pending entry written at submit time and the rejected entry written on revert share one key (both go through
+    // `txHistoryHash`), so the failed submission leaves a single entry transitioned in place — not an orphan pair.
+    const entries = await txHistoryStorage.getAll();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].hash).toBe(transaction.transactionHash().toString());
+    expect(entries[0].lifecycle.status).toBe('rejected');
+  });
+
+  it('pairs submit and revert for a non-hashable (proof-erased) tx, transitioning the entry in place', async () => {
+    const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
+    const config = {
+      networkId: NetworkId.NetworkId.Undeployed,
+      relayURL: new URL('http://localhost:9944'),
+      indexerClientConnection: {
+        indexerHttpUrl: 'http://localhost:8080',
+      },
+      provingServerUrl: new URL('http://localhost:6300'),
+      costParameters: {
+        feeBlocksMargin: 0,
+      },
+      txHistoryStorage,
+    };
+    const seed = crypto.randomBytes(32);
+    const shielded = ShieldedWallet(config).startWithSeed(seed);
+    const unshielded = UnshieldedWallet(config).startWithPublicKey(
+      PublicKey.fromKeyStore(createKeystore(seed, config.networkId)),
+    );
+    const dust = DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
+    const fakeSubmission = new (class implements SubmissionService<ledger.FinalizedTransaction> {
+      submitTransaction = () => Promise.reject(new Error('Submission failed'));
+      close = () => Promise.resolve();
+    })();
+
+    const facade: WalletFacade = await WalletFacade.init({
+      configuration: config,
+      shielded: () => shielded,
+      unshielded: () => unshielded,
+      dust: () => dust,
+      submissionService: () => fakeSubmission,
+    });
+
+    // The simulator submits proof-erased transactions, whose `transactionHash()` throws — so the key falls back to the
+    // serialized bytes. The runtime tx type is erased exactly as the simulator submission service does (helpers.ts),
+    // which the static `FinalizedTransaction` type can't express.
+    const proofErased = ledger.Transaction.fromParts(
+      config.networkId,
+      undefined,
+      undefined,
+      ledger.Intent.new(new Date(Date.now() + 10_000)),
+    ).eraseProofs();
+    expect(() => proofErased.transactionHash()).toThrow();
+    const transaction = proofErased as unknown as ledger.FinalizedTransaction;
+
+    // Submission fails, so submitTransaction writes the pending entry and then reverts — both keyed off the same
+    // serialized-bytes hash, so the result is a single entry transitioned in place rather than an orphan pending +
+    // orphan rejected pair.
+    const submissionResult = await facade.submitTransaction(transaction).then(
+      () => 'succeeded',
+      () => 'failed',
+    );
+    expect(submissionResult).toBe('failed');
+
+    const entries = await txHistoryStorage.getAll();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].hash).toBe(Buffer.from(proofErased.serialize()).toString('hex'));
+    expect(entries[0].lifecycle.status).toBe('rejected');
   });
 });
