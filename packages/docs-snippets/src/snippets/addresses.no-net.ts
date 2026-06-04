@@ -20,7 +20,7 @@ import {
   mainnet,
   type NetworkId,
 } from '@midnight-ntwrk/wallet-sdk';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 
 const networkId: NetworkId.NetworkId = 'undeployed';
 
@@ -30,7 +30,10 @@ const shieldedSeed = Buffer.from('a33865674c03ca1f6c4eb3f6b56625dce0accc96d2ca52
 const dustSeed = Buffer.from('cab391b2eaaf459bd7ef54c461e7fc4e2377afb12fbdd532b0d63b0f48803534', 'hex');
 
 const unshieldedAddress = new UnshieldedAddress(
-  Buffer.from(ledger.addressFromKey(ledger.signatureVerifyingKey(unshieldedSecretKey.toString('hex'))), 'hex'),
+  Buffer.from(
+    ledger.addressFromKey(ledger.signatureVerifyingKey({ tag: 'schnorr', value: unshieldedSecretKey.toString('hex') })),
+    'hex',
+  ),
 );
 const unshieldedAddressBech32m = MidnightBech32m.encode(networkId, unshieldedAddress).toString();
 const unshieldedAddressParsed: UnshieldedAddress = MidnightBech32m.parse(unshieldedAddressBech32m).decode(

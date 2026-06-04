@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import type * as ledger from '@midnight-ntwrk/ledger-v9';
 import { Effect, type Either, Scope, type Types } from 'effect';
 import { WalletSeed, type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
@@ -280,7 +280,14 @@ export class V1Builder<
       migrateState(_previousState) {
         const seed = WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001');
 
-        return Effect.succeed(CoreWallet.init(PublicKey.fromKeyStore(createKeystore(seed, networkId)), networkId));
+        return Effect.succeed(
+          CoreWallet.init(
+            PublicKey.fromKeyStore(
+              createKeystore({ kind: 'schnorr', secret: seed }, networkId),
+            ),
+            networkId,
+          ),
+        );
       },
 
       deserializeState: (serialized: TSerialized): Either.Either<CoreWallet, WalletError> => {

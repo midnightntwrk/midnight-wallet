@@ -15,7 +15,7 @@ import * as rx from 'rxjs';
 import { existsSync } from 'node:fs';
 import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import {
   InMemoryTransactionHistoryStorage,
   type TransactionHistoryStorage,
@@ -82,7 +82,10 @@ const restoreUnshieldedWallet = async (
   try {
     const serialized = await readIfExists(path);
     if (serialized) {
-      const keyStore = createKeystore(getUnshieldedSeed(seed), fixture.getNetworkId());
+      const keyStore = createKeystore(
+      { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
+      fixture.getNetworkId(),
+    );
       const wallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
@@ -147,7 +150,10 @@ export const provideWallet = async (
 
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
-  const unshieldedKeystore = createKeystore(getUnshieldedSeed(seed), fixture.getNetworkId());
+  const unshieldedKeystore = createKeystore(
+      { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
+      fixture.getNetworkId(),
+    );
 
   const readIfExists = async (p: string): Promise<string | undefined> => {
     try {
@@ -250,7 +256,10 @@ export const initWalletWithSeed = async (seed: string, fixture: TestContainersFi
   const walletConfig = fixture.getWalletConfig();
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
-  const unshieldedKeystore = createKeystore(getUnshieldedSeed(seed), fixture.getNetworkId());
+  const unshieldedKeystore = createKeystore(
+      { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
+      fixture.getNetworkId(),
+    );
 
   const facade: WalletFacade = await WalletFacade.init({
     configuration: {

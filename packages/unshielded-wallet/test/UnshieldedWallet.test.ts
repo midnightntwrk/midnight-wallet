@@ -48,7 +48,10 @@ describe('UnshieldedWallet', () => {
 
   it('should build', async () => {
     const config = createWalletConfig(indexerPort);
-    const keystore = createKeystore(unshieldedSeed, config.networkId);
+    const keystore = createKeystore(
+      { kind: 'schnorr', secret: unshieldedSeed },
+      config.networkId,
+    );
 
     const unshieldedWallet = UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(keystore));
 
@@ -74,7 +77,10 @@ describe('UnshieldedWallet', () => {
     const initialConfig = createWalletConfig(indexerPort, {
       txHistoryStorage: new NoOpTransactionHistoryStorage(),
     });
-    const keystore = createKeystore(unshieldedSeed, initialConfig.networkId);
+    const keystore = createKeystore(
+      { kind: 'schnorr', secret: unshieldedSeed },
+      initialConfig.networkId,
+    );
     const initialWallet = UnshieldedWallet(initialConfig).startWithPublicKey(PublicKey.fromKeyStore(keystore));
 
     await initialWallet.start();
@@ -90,7 +96,10 @@ describe('UnshieldedWallet', () => {
 
   it('should restore from serialized state', async () => {
     const initialConfig = createWalletConfig(indexerPort);
-    const keystore = createKeystore(unshieldedSeed, initialConfig.networkId);
+    const keystore = createKeystore(
+      { kind: 'schnorr', secret: unshieldedSeed },
+      initialConfig.networkId,
+    );
     const initialWallet = UnshieldedWallet(initialConfig).startWithPublicKey(PublicKey.fromKeyStore(keystore));
 
     await initialWallet.start();

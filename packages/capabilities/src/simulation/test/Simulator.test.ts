@@ -17,7 +17,7 @@
  * These tests verify the core functionality of the Simulator from the capabilities package.
  */
 
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
@@ -51,8 +51,8 @@ const createUnbalancedTx = (recipientKeys: ledger.ZswapSecretKeys, amount = 100n
 
 /** Create Night-compatible signing keys from a numeric seed index. */
 const createNightKeys = (seed: number) => {
-  const secretKeyHex = Buffer.alloc(32, seed).toString('hex');
-  const verifyingKey = ledger.signatureVerifyingKey(secretKeyHex);
+  const signingKey: ledger.SigningKey = { tag: 'schnorr', value: Buffer.alloc(32, seed).toString('hex') };
+  const verifyingKey = ledger.signatureVerifyingKey(signingKey);
   const userAddress = ledger.addressFromKey(verifyingKey);
   return { verifyingKey, userAddress };
 };

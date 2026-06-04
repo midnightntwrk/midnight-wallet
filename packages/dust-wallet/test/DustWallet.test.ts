@@ -19,7 +19,7 @@ import {
   Transaction,
   UnshieldedOffer,
   type UserAddress,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnight-ntwrk/ledger-v9';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
@@ -189,7 +189,7 @@ describe('DustWallet', () => {
   beforeEach(async () =>
     Effect.gen(function* () {
       const dustSeed = getDustSeed(SEED);
-      keyStore = createUnshieldedKeystore(dustSeed);
+      keyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: dustSeed });
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
       const scope = yield* Scope.make();
 
@@ -341,7 +341,7 @@ describe('DustWallet', () => {
   it('should allow spending Dust', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
-      const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
+      const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey().value);
       const walletAddress = keyStore.getAddress();
       const awardTokens = 150_000_000_000n;
 
@@ -375,7 +375,7 @@ describe('DustWallet', () => {
       const sendToken = nightTokens.find((val) => val.value === awardTokens);
       expect(sendToken).toBeDefined();
 
-      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobKeyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed(SEED_BOB) });
       const bobAddress = bobKeyStore.getAddress();
 
       const inputs = [
@@ -518,7 +518,7 @@ describe('DustWallet', () => {
       const sendToken = nightTokens.find((val) => val.value === awardTokens);
       expect(sendToken).toBeDefined();
 
-      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobKeyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed(SEED_BOB) });
       const bobAddress = bobKeyStore.getAddress();
 
       const inputs = [
@@ -648,7 +648,7 @@ describe('DustWallet', () => {
       const ttl = DateOps.addSeconds(currentTime, 1);
 
       // build a transfer transaction that requires dust for fees
-      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobKeyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed(SEED_BOB) });
       const bobAddress = bobKeyStore.getAddress();
       const nightTokens = getNightTokens(simulatorState, walletAddress);
       const sendToken = nightTokens[0];
@@ -710,7 +710,7 @@ describe('DustWallet', () => {
       const currentTime = getCurrentTime(simulatorState);
       const ttl = DateOps.addSeconds(currentTime, 1);
 
-      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobKeyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed(SEED_BOB) });
       const bobAddress = bobKeyStore.getAddress();
       const nightTokens = getNightTokens(simulatorState, walletAddress);
       expect(nightTokens.length).toBe(2);
@@ -789,7 +789,7 @@ describe('DustWallet', () => {
       const currentTime = getCurrentTime(simulatorState);
       const ttl = DateOps.addSeconds(currentTime, 1);
 
-      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobKeyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed(SEED_BOB) });
       const bobAddress = bobKeyStore.getAddress();
       const nightTokens = getNightTokens(simulatorState, walletAddress);
 

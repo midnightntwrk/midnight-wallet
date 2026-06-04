@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
@@ -67,8 +67,14 @@ describe('Swaps', () => {
   const dustWalletASeed = getDustSeed(walletASeed);
   const dustWalletBSeed = getDustSeed(walletBSeed);
 
-  const unshieldedWalletAKeystore = createKeystore(unshieldedWalletASeed, NetworkId.NetworkId.Undeployed);
-  const unshieldedWalletBKeystore = createKeystore(unshieldedWalletBSeed, NetworkId.NetworkId.Undeployed);
+  const unshieldedWalletAKeystore = createKeystore(
+    { kind: 'schnorr', secret: unshieldedWalletASeed },
+    NetworkId.NetworkId.Undeployed,
+  );
+  const unshieldedWalletBKeystore = createKeystore(
+    { kind: 'schnorr', secret: unshieldedWalletBSeed },
+    NetworkId.NetworkId.Undeployed,
+  );
 
   let startedEnvironment: StartedDockerComposeEnvironment;
   let configuration: DefaultConfiguration;

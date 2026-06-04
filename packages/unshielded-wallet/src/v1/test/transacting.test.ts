@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
@@ -70,7 +70,11 @@ const walletAndTransfersArbitrary = (): fc.Arbitrary<{
   wallet: CoreWallet;
   outputs: Record<ledger.RawTokenType, ReadonlyArray<TokenTransfer>>;
 }> => {
-  const keystore = createKeystore(Buffer.from(ledger.sampleSigningKey(), 'hex'), NetworkId.NetworkId.Undeployed);
+  const sample = ledger.sampleSigningKey();
+  const keystore = createKeystore(
+    { kind: sample.tag, secret: Buffer.from(sample.value, 'hex') },
+    NetworkId.NetworkId.Undeployed,
+  );
   const ownerPK = PublicKey.fromKeyStore(keystore);
   return fc
     .record({
@@ -304,7 +308,11 @@ describe('Unshielded wallet transacting', () => {
 
   describe('rotateUtxos', () => {
     const buildWalletWithNightUtxos = (count: number): { wallet: CoreWallet; utxos: ReadonlyArray<UtxoWithMeta> } => {
-      const keystore = createKeystore(Buffer.from(ledger.sampleSigningKey(), 'hex'), NetworkId.NetworkId.Undeployed);
+      const sample = ledger.sampleSigningKey();
+      const keystore = createKeystore(
+        { kind: sample.tag, secret: Buffer.from(sample.value, 'hex') },
+        NetworkId.NetworkId.Undeployed,
+      );
       const ownerPK = PublicKey.fromKeyStore(keystore);
       const utxos: ReadonlyArray<UtxoWithMeta> = pipe(
         Arr.range(0, count - 1),

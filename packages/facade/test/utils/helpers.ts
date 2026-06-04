@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { WalletFacade, type Clock } from '../../src/index.js';
 import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
@@ -29,6 +29,7 @@ import {
   CustomUnshieldedWallet,
   createKeystore,
   PublicKey,
+  type UnshieldedSecretKey,
   type UnshieldedWalletAPI,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { NoOpTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -248,10 +249,16 @@ export const deriveWalletKeys = (hexSeed: string, networkId: NetworkId.NetworkId
   const dustSeed = getDustSeed(hexSeed);
   const unshieldedSeed = getUnshieldedSeed(hexSeed);
 
+  const unshieldedSecretKey: UnshieldedSecretKey = { kind: 'schnorr', secret: unshieldedSeed };
+  const ledgerSigningKey: ledger.SigningKey = {
+    tag: unshieldedSecretKey.kind,
+    value: Buffer.from(unshieldedSecretKey.secret).toString('hex'),
+  };
+
   const shieldedKeys = ledger.ZswapSecretKeys.fromSeed(shieldedSeed);
   const dustKey = ledger.DustSecretKey.fromSeed(dustSeed);
-  const unshieldedKeystore = createKeystore(unshieldedSeed, networkId);
-  const signatureVerifyingKey = ledger.signatureVerifyingKey(Buffer.from(unshieldedSeed).toString('hex'));
+  const unshieldedKeystore = createKeystore(unshieldedSecretKey, networkId);
+  const signatureVerifyingKey = ledger.signatureVerifyingKey(ledgerSigningKey);
   const userAddress = ledger.addressFromKey(signatureVerifyingKey);
 
   return { shieldedKeys, dustKey, unshieldedKeystore, signatureVerifyingKey, userAddress };

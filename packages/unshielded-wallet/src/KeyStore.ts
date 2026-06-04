@@ -14,12 +14,19 @@ import { UnshieldedAddress, type MidnightBech32m } from '@midnight-ntwrk/wallet-
 import {
   addressFromKey,
   type Signature,
+  type SignatureKind,
   type SignatureVerifyingKey,
   signData,
+  type SigningKey as LedgerSigningKey,
   type UserAddress,
   signatureVerifyingKey,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnight-ntwrk/ledger-v9';
 import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+
+export type UnshieldedSecretKey = {
+  kind: SignatureKind;
+  secret: Uint8Array<ArrayBufferLike>;
+};
 
 export type PublicKey = {
   publicKey: SignatureVerifyingKey;
@@ -46,11 +53,16 @@ export interface UnshieldedKeystore {
 }
 
 export const createKeystore = (
-  secretKey: Uint8Array<ArrayBufferLike>,
+  secretKey: UnshieldedSecretKey,
   networkId: NetworkId.NetworkId,
 ): UnshieldedKeystore => {
+  const ledgerSigningKey: LedgerSigningKey = {
+    tag: secretKey.kind,
+    value: Buffer.from(secretKey.secret).toString('hex'),
+  };
+
   const keystore: UnshieldedKeystore = {
-    getSecretKey: () => Buffer.from(secretKey),
+    getSecretKey: () => Buffer.from(secretKey.secret),
 
     getBech32Address: () => {
       const address = keystore.getAddress();
@@ -58,11 +70,11 @@ export const createKeystore = (
       return UnshieldedAddress.codec.encode(networkId, new UnshieldedAddress(addressBuffer));
     },
 
-    getPublicKey: () => signatureVerifyingKey(keystore.getSecretKey().toString('hex')),
+    getPublicKey: () => signatureVerifyingKey(ledgerSigningKey),
 
     getAddress: () => addressFromKey(keystore.getPublicKey()),
 
-    signData: (data: Uint8Array) => signData(keystore.getSecretKey().toString('hex'), data),
+    signData: (data: Uint8Array) => signData(ledgerSigningKey, data),
   };
 
   return keystore;

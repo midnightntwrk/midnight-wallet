@@ -40,7 +40,7 @@ const configuration = {
 
 // Create a keystore from a random unshielded seed
 const seed = randomBytes(32);
-const keystore = createKeystore(seed, configuration.networkId);
+const keystore = createKeystore({ kind: 'schnorr', secret: seed }, configuration.networkId);
 
 // Create and start the wallet
 const unshieldedWallet = UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(keystore));

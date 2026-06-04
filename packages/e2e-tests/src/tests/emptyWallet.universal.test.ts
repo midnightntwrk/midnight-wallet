@@ -18,7 +18,7 @@ import { ShieldedWallet, type ShieldedWalletClass } from '@midnight-ntwrk/wallet
 import * as KeyManagement from '@cardano-sdk/key-management';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as utils from './utils.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { type NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,
@@ -56,7 +56,10 @@ describe('Fresh wallet with empty state', () => {
     logger.info(`Network id: ${networkId}`);
     expect(fixture).toBeDefined();
     const walletConfig = fixture.getWalletConfig();
-    const unshieldedKeystore = createKeystore(utils.getUnshieldedSeed(walletSeed), networkId);
+    const unshieldedKeystore = createKeystore(
+      { kind: 'schnorr', secret: utils.getUnshieldedSeed(walletSeed) },
+      networkId,
+    );
 
     Dust = DustWallet({ ...walletConfig, ...fixture.getDustWalletConfig() });
     Wallet = ShieldedWallet(walletConfig);

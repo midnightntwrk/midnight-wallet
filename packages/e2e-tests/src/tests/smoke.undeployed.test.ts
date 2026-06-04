@@ -15,7 +15,7 @@
 import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
@@ -64,7 +64,7 @@ describe('Smoke tests', () => {
 
       const balance = 250000000000000n;
       const unshieldedFundedKeyStore = createKeystore(
-        utils.getUnshieldedSeed(seedFunded),
+        { kind: 'schnorr', secret: utils.getUnshieldedSeed(seedFunded) },
         NetworkId.NetworkId.Undeployed,
       );
       await utils.waitForBlockAdvancement(fixture.getIndexerUri());
@@ -238,7 +238,10 @@ describe('Smoke tests', () => {
     async () => {
       fixture = getFixture();
       const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
-      const unshieldedKeyStore = createKeystore(utils.getUnshieldedSeed(seedFunded), fixture.getNetworkId());
+      const unshieldedKeyStore = createKeystore(
+        { kind: 'schnorr', secret: utils.getUnshieldedSeed(seedFunded) },
+        fixture.getNetworkId(),
+      );
       const initialWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
