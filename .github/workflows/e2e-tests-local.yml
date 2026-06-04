@@ -34,7 +34,7 @@ jobs:
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@9fe7774c8f8ebfade96f0a62aa10f3882309d517
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121
         with:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
