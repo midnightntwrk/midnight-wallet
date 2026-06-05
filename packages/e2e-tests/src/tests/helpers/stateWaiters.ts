@@ -116,7 +116,7 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
 
         return {
           state,
-          txFound: txInHistory !== undefined,
+          txFound: txInHistory !== undefined && isFinalizedWalletEntry(txInHistory),
         };
       }),
       rx.filter(({ state, txFound }) => txFound && state.isSynced && state.dust.availableCoins.length > 0),
