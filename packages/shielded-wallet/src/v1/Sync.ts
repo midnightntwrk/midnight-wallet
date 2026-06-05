@@ -44,6 +44,10 @@ export type IndexerClientConnection = {
   indexerHttpUrl: string;
   indexerWsUrl?: string;
   keepAlive?: number;
+  /** Cap on the in-flight event queue between the WebSocket push and the apply loop. Default: 1000. */
+  bufferSize?: number;
+  /** In-flight count at which the disposed WS subscription is reopened. Default: 500. */
+  resumeThreshold?: number;
 };
 
 export type BatchUpdatesConfig = {
@@ -216,9 +220,20 @@ export const makeEventsSyncService = (
       const batchSize = config.batchUpdates?.size ?? 10;
       const batchTimeout = Duration.millis(config.batchUpdates?.timeout ?? 1);
       const batchSpacing = config.batchUpdates?.spacing ?? 4;
+      const bufferSize = config.indexerClientConnection.bufferSize ?? 1000;
 
       const eventsStream = pipe(
-        ZswapEvents.run({ id: Number(appliedIndex) }),
+        // Backpressure caps the in-flight queue between the WS push and the
+        // apply loop. Without it the JS heap grows linearly with catch-up
+        // depth, since `Stream.asyncPush({ bufferSize: 'unbounded' })`
+        // buffers every event the indexer pushes regardless of apply rate.
+        ZswapEvents.runWithBackpressure({
+          bufferSize,
+          resumeThreshold: config.indexerClientConnection.resumeThreshold ?? 500,
+          from: appliedIndex,
+          variables: (cursor) => ({ id: Number(cursor) }),
+          key: (r) => BigInt(r.zswapLedgerEvents.id),
+        }),
         Stream.provideLayer(
           WsSubscriptionClient.layer({ url: indexerWsUrl, keepAlive: config.indexerClientConnection.keepAlive }),
         ),
@@ -251,20 +266,8 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
       }
 
       const lastUpdate = wrappedUpdate.updates.at(-1)!;
-      const nextIndex = BigInt(lastUpdate.id);
       const highestRelevantWalletIndex = BigInt(lastUpdate.maxId);
-      // in case the nextIndex is less than or equal to the appliedIndex
-      // just update highestRelevantWalletIndex
-      if (nextIndex <= state.progress.appliedIndex) {
-        return [
-          CoreWallet.updateProgress(state, {
-            highestRelevantWalletIndex,
-            isConnected: true,
-          }),
-          { changes: [], protocolVersion: lastUpdate.protocolVersion },
-        ];
-      }
-
+      const nextIndex = BigInt(lastUpdate.id);
       const [newState, newChanges] = CoreWallet.replayEventsWithChanges(
         state,
         wrappedUpdate.secretKeys,

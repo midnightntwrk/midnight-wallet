@@ -76,6 +76,10 @@ export type IndexerClientConnection = {
   indexerHttpUrl: string;
   indexerWsUrl?: string;
   keepAlive?: number;
+  /** Cap on the in-flight event queue between the WebSocket push and the apply loop. Default: 1000. */
+  bufferSize?: number;
+  /** In-flight count at which the disposed WS subscription is reopened. Default: 500. */
+  resumeThreshold?: number;
 };
 
 export type BatchUpdatesConfig = {
@@ -136,20 +140,15 @@ const LedgerEventSchema = Schema.declare(
 
 const LedgerEventFromUInt8Array: Schema.Schema<LedgerEvent, Uint8Array> = Schema.asSchema(
   Schema.transformOrFail(Uint8ArraySchema, LedgerEventSchema, {
-    encode: (e) => {
-      return Effect.try({
+    encode: (e) =>
+      Effect.try({
         try: () => e.serialize(),
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not serialize Ledger Event');
-        },
-      });
-    },
+        catch: (err) => new ParseResult.Unexpected(err, 'Could not serialize Ledger Event'),
+      }),
     decode: (bytes) =>
       Effect.try({
         try: () => LedgerEvent.deserialize(bytes),
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not deserialize Ledger Event');
-        },
+        catch: (err) => new ParseResult.Unexpected(err, 'Could not deserialize Ledger Event'),
       }),
   }),
 );
@@ -273,10 +272,20 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       state: CoreWallet,
     ): Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient> {
       const { appliedIndex } = state.progress;
+      const bufferSize = config.indexerClientConnection.bufferSize ?? 1000;
+      const resumeThreshold = config.indexerClientConnection.resumeThreshold ?? 500;
 
       return pipe(
-        DustLedgerEvents.run({
-          id: Number(appliedIndex),
+        // Backpressure caps the in-flight queue between the WS push and the
+        // apply loop. Without it the JS heap grows linearly with catch-up
+        // depth, since `Stream.asyncPush({ bufferSize: 'unbounded' })`
+        // buffers every event the indexer pushes regardless of apply rate.
+        DustLedgerEvents.runWithBackpressure({
+          bufferSize,
+          resumeThreshold,
+          from: appliedIndex,
+          variables: (cursor) => ({ id: Number(cursor) }),
+          key: (r) => BigInt(r.dustLedgerEvents.id),
         }),
         Stream.mapEffect((subscription) =>
           pipe(
@@ -301,20 +310,9 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
         return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
 
-      const lastUpdate = updates.at(-1)!;
-      const nextIndex = BigInt(lastUpdate.id);
-      const highestRelevantWalletIndex = BigInt(lastUpdate.maxId);
-
-      // in case the nextIndex is less than or equal to the current appliedIndex
-      // just update highestRelevantWalletIndex
-      if (nextIndex <= state.progress.appliedIndex) {
-        return [
-          CoreWallet.updateProgress(state, { highestRelevantWalletIndex, isConnected: true }),
-          { changes: [], protocolVersion: Number(state.protocolVersion) },
-        ];
-      }
-
-      const events = updates.map((u) => u.raw).filter((event) => event !== null);
+      const highestRelevantWalletIndex = BigInt(updates.at(-1)!.maxId);
+      const nextIndex = BigInt(updates.at(-1)!.id);
+      const events = updates.map((u) => u.raw);
 
       const [newState, changes] = CoreWallet.applyEventsWithChanges(state, secretKey, events, wrappedUpdate.timestamp);
 

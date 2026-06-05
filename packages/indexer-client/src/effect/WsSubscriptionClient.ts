@@ -15,12 +15,17 @@ import { createClient, type Client, type SubscribePayload } from 'graphql-ws';
 import { type GraphQLError, print } from 'graphql';
 import { SubscriptionClient } from './SubscriptionClient.js';
 import { type Query } from './Query.js';
+import { withBackpressure, type Source } from './Backpressure.js';
 import {
   type InvalidProtocolSchemeError,
   WsURL,
   ClientError,
   ServerError,
 } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+
+// ============================================================================
+// Error classification
+// ============================================================================
 
 // graphql-ws delivers a subscription sink error as one of: `Error`, `CloseEvent`,
 // or `readonly GraphQLError[]` (per its Sink docs). Only the array form should
@@ -30,6 +35,15 @@ const isGraphQLErrorArray = (err: unknown): err is readonly GraphQLError[] => {
   const first: unknown = err[0];
   return typeof first === 'object' && first !== null && 'message' in first && typeof first.message === 'string';
 };
+
+const toClientOrServerError = (err: unknown): ClientError | ServerError =>
+  isGraphQLErrorArray(err)
+    ? new ClientError({ message: err.map((e) => e.message).join('; '), cause: err })
+    : new ServerError({ message: String(err) });
+
+// ============================================================================
+// Layer / class
+// ============================================================================
 
 export const layer: (
   config: SubscriptionClient.ServerConfig,
@@ -100,5 +114,30 @@ class WebSocketSubscriptionClientImpl implements Context.Tag.Service<Subscriptio
         ),
       { bufferSize: 'unbounded' },
     );
+  }
+
+  subscribeWithBackpressure<R, V, T extends Query.Document<R, V> = Query.Document<R, V>>(
+    document: T,
+    options: SubscriptionClient.BackpressureOptions<Query.Result<T>, V>,
+  ): Stream.Stream<Query.Result<T>, ClientError | ServerError> {
+    type Item = Query.Result<T>;
+    const client = this.client;
+
+    // Adapt graphql-ws's Sink callbacks to the generic Source contract; the
+    // backpressure/lifecycle logic lives in `withBackpressure`.
+    const source: Source<Item, V, ClientError | ServerError> = ({ variables, onItem, onError, onComplete }) =>
+      client.subscribe<Item>(
+        { query: print(document), variables: variables as SubscribePayload['variables'] },
+        {
+          next: (data) => {
+            if (data.errors) onError(toClientOrServerError(data.errors));
+            else onItem(data.data!);
+          },
+          error: (err) => onError(toClientOrServerError(err)),
+          complete: onComplete,
+        },
+      );
+
+    return withBackpressure(source, options);
   }
 }
