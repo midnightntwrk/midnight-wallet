@@ -176,9 +176,12 @@ export const waitForTxInHistory = async (
     rx.merge(wallet.state().pipe(rx.filter((state) => state.isSynced)), rx.interval(500)).pipe(
       rx.mergeMap(async () => {
         const entry = await wallet.queryTxHistoryByHash(txHash);
-        if (entry !== undefined && entry.status !== 'SUCCESS') {
+        // A pending entry (status === undefined) means the tx was submitted but not yet finalized — keep waiting.
+        // Only a *terminal* non-SUCCESS entry (a finalized failure or a rejected entry) should abort the wait so the
+        // caller's assertion can report it.
+        if (entry !== undefined && !isPendingWalletEntry(entry) && entry.status !== 'SUCCESS') {
           logger.info(
-            `Waiting for tx ${txHash} in history: found, status=${entry.status}, sections=[${describeSections(entry)}] — non-SUCCESS, aborting wait`,
+            `Waiting for tx ${txHash} in history: found, status=${entry.status}, sections=[${describeSections(entry)}] — terminal non-SUCCESS, aborting wait`,
           );
           return entry;
         }
@@ -224,7 +227,9 @@ export const waitForTxInHistory = async (
       }),
       rx.filter(
         (entry): entry is WalletEntry =>
-          entry !== undefined && (entry.status !== 'SUCCESS' || (isFinalizedWalletEntry(entry) && isReady(entry))),
+          entry !== undefined &&
+          ((!isPendingWalletEntry(entry) && entry.status !== 'SUCCESS') ||
+            (isFinalizedWalletEntry(entry) && isReady(entry))),
       ),
     ),
   );
