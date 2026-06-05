@@ -259,8 +259,6 @@ describe('Smoke tests', () => {
       }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
       await initialWallet.start();
       logger.info(`Waiting to sync...`);
-      // TODO IAN - Check if this is correct
-      await initialWallet.start();
       await utils.waitForSyncUnshielded(initialWallet);
 
       // Verify tx history has unshielded entries before serialization
