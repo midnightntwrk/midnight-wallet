@@ -18,7 +18,13 @@ import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
+import {
+  type DefaultConfiguration,
+  WalletEntrySchema,
+  WalletFacade,
+  isPendingWalletEntry,
+  mergeWalletEntries,
+} from '../src/index.js';
 
 describe('Facade submission', () => {
   it('is gracefully closed when wallet is stopped', async () => {
@@ -203,5 +209,47 @@ describe('Facade submission', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].hash).toBe(Buffer.from(proofErased.serialize()).toString('hex'));
     expect(entries[0].lifecycle.status).toBe('rejected');
+  });
+});
+
+describe('Facade transaction history reads return entries regardless of lifecycle', () => {
+  // Regression: queryTxHistoryByHash / getAllFromTxHistory once filtered to finalized entries, hiding pending ones
+  // (commits e40e65de, d19f99e0). A submitted-but-not-yet-confirmed tx must be retrievable as pending — the docker
+  // e2e tests all wait until finalized, so they would not catch reintroduction of a finalized-only filter.
+  it('returns a pending entry via queryTxHistoryByHash and getAllFromTxHistory', async () => {
+    const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
+    const config = {
+      networkId: NetworkId.NetworkId.Undeployed,
+      relayURL: new URL('http://localhost:9944'),
+      indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
+      provingServerUrl: new URL('http://localhost:6300'),
+      costParameters: { feeBlocksMargin: 0 },
+      txHistoryStorage,
+    };
+    const seed = crypto.randomBytes(32);
+    const fakeSubmission = new (class implements SubmissionService<ledger.FinalizedTransaction> {
+      submitTransaction = () => Promise.reject(new Error('not used in this test'));
+      close = () => Promise.resolve();
+    })();
+    const facade: WalletFacade = await WalletFacade.init({
+      configuration: config,
+      shielded: (c) => ShieldedWallet(c).startWithSeed(seed),
+      unshielded: (c) =>
+        UnshieldedWallet(c).startWithPublicKey(PublicKey.fromKeyStore(createKeystore(seed, c.networkId))),
+      dust: (c) => DustWallet(c).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust),
+      submissionService: () => fakeSubmission,
+    });
+
+    // The facade shares this storage instance, so a pending entry written here is what the reads must surface.
+    await txHistoryStorage.gotPending({ hash: 'pending-tx', identifiers: ['id-1'], submittedAt: new Date(0) });
+
+    const entry = await facade.queryTxHistoryByHash('pending-tx');
+    expect(entry).toBeDefined();
+    expect(isPendingWalletEntry(entry!)).toBe(true);
+    expect(entry!.hash).toBe('pending-tx');
+
+    const all = await facade.getAllFromTxHistory();
+    expect(all).toHaveLength(1);
+    expect(isPendingWalletEntry(all[0])).toBe(true);
   });
 });

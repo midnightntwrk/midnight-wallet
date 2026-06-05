@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, it, expect } from 'vitest';
-import { type FinalizedWalletEntry, mergeWalletEntries } from '../src/index.js';
+import { type FinalizedWalletEntry, type WalletEntry, mergeWalletEntries } from '../src/index.js';
 
 const shieldedCoin = (type: string, nonce: string, value: bigint, mtIndex: bigint) => ({
   type,
@@ -45,6 +45,14 @@ const baseEntry = (hash: string, overrides: Partial<FinalizedWalletEntry> = {}):
     status: 'finalized',
     finalizedBlock: { hash: 'block-hash', height: 0, timestamp: new Date(0) },
   },
+  ...overrides,
+});
+
+const pendingEntry = (hash: string, overrides: Partial<WalletEntry> = {}): WalletEntry => ({
+  hash,
+  identifiers: [],
+  protocolVersion: 1,
+  lifecycle: { status: 'pending', submittedAt: new Date(0) },
   ...overrides,
 });
 
@@ -261,5 +269,46 @@ describe('mergeWalletEntries does not lose information', () => {
     expect(merged.shielded).toEqual({ receivedCoins: [coin], spentCoins: [] });
     expect(merged.unshielded).toEqual({ id: 1, createdUtxos: [utxo], spentUtxos: [] });
     expect(merged.dust).toEqual({ receivedUtxos: [dust], spentUtxos: [] });
+  });
+
+  it('should overwrite (not union) the unshielded section when both entries have one', () => {
+    // Unlike shielded/dust (which union + dedup), unshielded sections merge by overwrite: an unshielded update always
+    // carries the complete UTxO set for the tx, so the incoming section fully replaces the existing one.
+    const utxoA = unshieldedUtxo(50n, 'owner-1', 'night', 'intent-1', 0);
+    const utxoB = unshieldedUtxo(70n, 'owner-2', 'night', 'intent-2', 1);
+
+    const existing = baseEntry('tx1', {
+      unshielded: { id: 1, createdUtxos: [utxoA], spentUtxos: [] },
+    });
+
+    const incoming = baseEntry('tx1', {
+      unshielded: { id: 2, createdUtxos: [utxoB], spentUtxos: [] },
+    });
+
+    const merged = mergeWalletEntries(existing, incoming);
+
+    expect(merged.unshielded).toEqual({ id: 2, createdUtxos: [utxoB], spentUtxos: [] });
+  });
+});
+
+describe('mergeWalletEntries records lifecycle transitions (incoming wins)', () => {
+  it('should transition a pending entry to finalized when its finalized counterpart arrives', () => {
+    const existing = pendingEntry('tx1');
+    const incoming = baseEntry('tx1'); // finalized
+
+    const merged = mergeWalletEntries(existing, incoming);
+
+    expect(merged.lifecycle.status).toBe('finalized');
+  });
+
+  it('should let the incoming lifecycle win unconditionally (even pending over an existing finalized)', () => {
+    // The rule is purely "incoming wins" — it does not rank lifecycles. This documents that raw behaviour; in practice
+    // a finalized entry is never re-written as pending.
+    const existing = baseEntry('tx1'); // finalized
+    const incoming = pendingEntry('tx1');
+
+    const merged = mergeWalletEntries(existing, incoming);
+
+    expect(merged.lifecycle.status).toBe('pending');
   });
 });
