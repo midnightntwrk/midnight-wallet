@@ -140,11 +140,9 @@ describe('Token transfer', () => {
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
       logger.info('Transaction hash: ' + txHash);
-      const senderTxEntry = await utils.waitForTxInHistory(
-        txHash,
-        sender.wallet,
-        (entry) => entry.shielded !== undefined,
-      );
+      const senderTxEntry = await utils.waitForTxInHistory(txHash, sender.wallet, {
+        ready: (entry) => entry.shielded !== undefined,
+      });
       utils.expectSenderShieldedTxHistory(senderTxEntry);
       const finalState = await sender.wallet.waitForSyncedState();
       const senderFinalShieldedBalance1 = finalState.shielded.balances[nativeToken1Raw];
@@ -170,11 +168,9 @@ describe('Token transfer', () => {
       expect(finalState.unshielded.pendingCoins.length).toBe(0);
       expect(finalState.unshielded.totalCoins.length).toBeLessThanOrEqual(initialState.shielded.totalCoins.length);
 
-      const receiverTxEntry = await utils.waitForTxInHistory(
-        txHash,
-        receiver.wallet,
-        (entry) => entry.shielded !== undefined,
-      );
+      const receiverTxEntry = await utils.waitForTxInHistory(txHash, receiver.wallet, {
+        ready: (entry) => entry.shielded !== undefined,
+      });
       utils.expectReceiverShieldedTxHistory(receiverTxEntry, outputValue);
       const finalState2 = await receiver.wallet.waitForSyncedState();
       const receiverFinalShieldedBalance1 = finalState2.shielded.balances[nativeToken1Raw];
