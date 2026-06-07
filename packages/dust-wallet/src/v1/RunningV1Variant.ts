@@ -10,7 +10,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, SubscriptionRef, Stream, pipe, Scope, Sink, Console, Duration, Schedule, Array as Arr } from 'effect';
+import {
+  Effect,
+  SubscriptionRef,
+  Stream,
+  pipe,
+  Scope,
+  Sink,
+  Console,
+  Duration,
+  Schedule,
+  Array as Arr,
+  Ref,
+} from 'effect';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import {
   type DustSecretKey,
@@ -97,7 +109,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>;
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
-  syncLock
+  #syncLock: Ref.Ref<boolean>;
 
   constructor(
     scope: Scope.Scope,
@@ -107,6 +119,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     this.#scope = scope;
     this.#context = context;
     this.#v1Context = v1Context;
+    this.#syncLock = Effect.runSync(Ref.make(false));
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
         context.stateRef.changes.pipe(
@@ -130,10 +143,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
 
   startSyncInBackground(startAux: TStartAux): Effect.Effect<void> {
     return this.startSync(startAux).pipe(
-      Stream.runScoped(Sink.drain),
-      Effect.forkScoped,
-      Effect.provideService(Scope.Scope, this.#scope),
-      /*Stream.retry(
+      Stream.retry(
         pipe(
           Schedule.exponential(Duration.seconds(1), 2),
           Schedule.map((delay) => {
@@ -144,52 +154,73 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
             return Duration.millis(Math.min(delayWithJitter, Duration.toMillis(maxDelay)));
           }),
         ),
-      ),*/
+      ),
+      Stream.runScoped(Sink.drain),
+      Effect.forkScoped,
+      Effect.provideService(Scope.Scope, this.#scope),
     );
+  }
+
+  sync(startAux: TStartAux): Effect.Effect<void, WalletError> {
+    return this.startSync(startAux).pipe(Stream.runScoped(Sink.drain), Effect.scoped);
   }
 
   startSync(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
     return pipe(
-      try acquire lock 
-      SubscriptionRef.get(this.#context.stateRef),
-      Stream.fromEffect(),
-      Stream.flatMap((state) => this.#v1Context.syncService.updates(state, startAux)),
-      Stream.mapEffect((update) =>
-        SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
-          Effect.try({
-            try: () => {
-              const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(state, update);
-              return [changesResult, newState] as const;
-            },
-            catch: (err) =>
-              new OtherWalletError({
-                message: 'Error while applying sync update',
-                cause: err,
+      Ref.get(this.#syncLock),
+      Effect.flatMap((isLocked) => {
+        if (isLocked) {
+          return Effect.succeed(false);
+        }
+        return Ref.set(this.#syncLock, true).pipe(Effect.as(true));
+      }),
+      Stream.fromEffect,
+      Stream.flatMap((acquired) => {
+        if (!acquired) {
+          return Stream.empty;
+        }
+        return pipe(
+          SubscriptionRef.get(this.#context.stateRef),
+          Stream.fromEffect,
+          Stream.flatMap((state) => this.#v1Context.syncService.updates(state, startAux)),
+          Stream.mapEffect((update) =>
+            SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
+              Effect.try({
+                try: () => {
+                  const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(state, update);
+                  return [changesResult, newState] as const;
+                },
+                catch: (err) =>
+                  new OtherWalletError({
+                    message: 'Error while applying sync update',
+                    cause: err,
+                  }),
               }),
-          }),
-        ).pipe(
-          Effect.flatMap(({ changes, protocolVersion }) =>
-            pipe(
-              Effect.forEach(
-                changes,
-                (change) =>
-                  pipe(
-                    this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
-                    Effect.flatMap((metadata) =>
-                      this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
-                    ),
-                    Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+            ).pipe(
+              Effect.flatMap(({ changes, protocolVersion }) =>
+                pipe(
+                  Effect.forEach(
+                    changes,
+                    (change) =>
+                      pipe(
+                        this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
+                        Effect.flatMap((metadata) =>
+                          this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                        ),
+                        Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+                      ),
+                    { discard: true, concurrency: 'unbounded' },
                   ),
-                { discard: true, concurrency: 'unbounded' },
+                  Effect.forkScoped,
+                ),
               ),
-              Effect.forkScoped,
+              Effect.provideService(Scope.Scope, this.#scope),
             ),
           ),
-          Effect.provideService(Scope.Scope, this.#scope),
-        ),
-      ),
-      Stream.tapError((error) => Console.error(error)),
-      
+          Stream.tapError((error) => Console.error(error)),
+          Stream.ensuring(Ref.set(this.#syncLock, false)),
+        );
+      }),
     );
   }
 

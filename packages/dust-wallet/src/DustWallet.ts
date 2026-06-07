@@ -117,6 +117,8 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
 
   start(secretKey: TStartAux): Promise<void>;
 
+  stepSync(secretKey: TStartAux): Promise<void>;
+
   createDustGenerationTransaction(
     currentTime: Date | undefined,
     ttl: Date,
@@ -267,8 +269,8 @@ export function CustomDustWallet<
       return this.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(secretKey) }).pipe(Effect.runPromise);
     }
 
-    syncStep(secretKey: TStartAux): Promise<void> {
-      return this.runtime.dispatch({ [V1Tag]: (v1) => v1.sync(secretKey) }).pipe(Stream.runDrain, Effect.runPromise);
+    stepSync(secretKey: TStartAux): Promise<void> {
+      return this.runtime.dispatch({ [V1Tag]: (v1) => v1.sync(secretKey) }).pipe(Effect.runPromise);
     }
 
     async createDustGenerationTransaction(

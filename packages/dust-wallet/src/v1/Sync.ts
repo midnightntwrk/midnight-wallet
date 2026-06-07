@@ -24,7 +24,6 @@ import {
   Stream,
   Duration,
   Chunk,
-  Ref,
   Schedule,
 } from 'effect';
 import {
@@ -85,7 +84,7 @@ import {
 import { hashMapGroupBy, nullifierToHex, uniqueArray } from './Utils.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
-  updates: (state: Effect<TState>, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
+  updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
   blockData: (height?: number) => Effect.Effect<BlockData, WalletError>;
 }
 
@@ -203,8 +202,6 @@ export const makeDefaultSyncService = (
     },
   };
 };
-
-export const Trigger = Symbol('SyncTrigger');
 
 const accumulateUtxoUpdates = (
   updates: DustUtxoUpdate[],
@@ -331,110 +328,95 @@ const resolveNullifierSpends = (
   );
 };
 
-export const makeEventLessSyncService =
-  (trigger: Stream.Stream<typeof Trigger>) =>
-  (config: DefaultSyncConfiguration): SyncService<CoreWallet, DustSecretKey, DustProjectionsUpdate> => {
-    const defaultSyncService = makeDefaultSyncService(config);
-    const indexerSyncService = makeIndexerSyncService(config);
+export const makeEventLessSyncService = (
+  config: DefaultSyncConfiguration,
+): SyncService<CoreWallet, DustSecretKey, DustProjectionsUpdate> => {
+  const defaultSyncService = makeDefaultSyncService(config);
+  const indexerSyncService = makeIndexerSyncService(config);
 
-    const doSync = (
+  const doSync = (
+    state: CoreWallet,
+    secretKey: DustSecretKey,
+  ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
+    return Stream.asyncEffect((emit) =>
+      Effect.gen(function* () {
+        const blockData = yield* defaultSyncService.blockData();
+        const maxCommitmentTreeIndex = blockData.dustCommitmentEndIndex - 1;
+        const maxGeneratingTreeIndex = blockData.dustGenerationEndIndex - 1;
+        const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree - 1n;
+        const lastSyncedGenerationIndex = state.state.generatingTreeFirstFree - 1n;
+
+        const rawGenerations = yield* pipe(
+          indexerSyncService.subscribeDustGenerations(
+            state.publicKey.address,
+            Number(lastSyncedGenerationIndex),
+            maxGeneratingTreeIndex,
+          ),
+          Stream.runCollect,
+          Effect.map(Chunk.toArray),
+        );
+        const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
+
+        yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 10 })));
+
+        const initialNullifiers = dustGenerationUpdates.newGenerations
+          .map((n) => n.dustNullifier)
+          .concat([...state.state.nullifiers.keys()]);
+        const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
+
+        const [finalUtxos, finalSpentUtxos] = yield* resolveNullifierSpends(
+          initialNullifiers,
+          initialNewUtxos,
+          state,
+          secretKey,
+          blockData,
+          dustGenerationUpdates,
+          indexerSyncService,
+          emit,
+        );
+
+        if ([...finalUtxos].some((u) => u[1].qdo.mtIndex <= lastSyncedCommitmentIndex)) {
+          return yield* Effect.fail(new OtherWalletError({ message: 'Spotted stale utxo' }));
+        }
+
+        yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 90 })));
+
+        const collapsedCommitments = yield* loadCollapsedCommitments(
+          Math.max(0, Number(lastSyncedCommitmentIndex)),
+          maxCommitmentTreeIndex,
+          finalUtxos,
+          indexerSyncService,
+        );
+
+        yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 100 })));
+        yield* Effect.promise(() =>
+          emit.single(
+            StateUpdate({
+              dustGenerations: dustGenerationUpdates,
+              spentUtxos: finalSpentUtxos,
+              newUtxos: finalUtxos,
+              collapsedCommitments,
+              lastBlockTimestamp: blockData.timestamp,
+            }),
+          ),
+        );
+        yield* Effect.promise(() => emit.end());
+      }),
+    );
+  };
+
+  return {
+    updates: (
       state: CoreWallet,
       secretKey: DustSecretKey,
-    ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
-      console.log('syncing for:', state.publicKey.addressHex, 'last sync:', state.state.syncTime);
-      return Stream.asyncEffect((emit) =>
-        Effect.gen(function* () {
-          const blockData = yield* defaultSyncService.blockData();
-          const maxCommitmentTreeIndex = blockData.dustCommitmentEndIndex - 1;
-          const maxGeneratingTreeIndex = blockData.dustGenerationEndIndex - 1;
-          const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree;
-
-          const rawGenerations = yield* pipe(
-            indexerSyncService.subscribeDustGenerations(
-              state.publicKey.address,
-              Number(state.progress.highestIndex),
-              maxGeneratingTreeIndex,
-            ),
-            Stream.runCollect,
-            Effect.map(Chunk.toArray),
-          );
-          const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
-
-          yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 10 })));
-
-          const initialNullifiers = dustGenerationUpdates.newGenerations
-            .map((n) => n.dustNullifier)
-            .concat([...state.state.nullifiers.keys()]);
-          const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
-
-          const [finalUtxos, finalSpentUtxos] = yield* resolveNullifierSpends(
-            initialNullifiers,
-            initialNewUtxos,
-            state,
-            secretKey,
-            blockData,
-            dustGenerationUpdates,
-            indexerSyncService,
-            emit,
-          );
-
-          if ([...finalUtxos].some((u) => u[1].qdo.mtIndex < lastSyncedCommitmentIndex)) {
-            return yield* Effect.fail(new OtherWalletError({ message: 'Spotted stale utxo' }));
-          }
-
-          yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 90 })));
-
-          const collapsedCommitments = yield* loadCollapsedCommitments(
-            Number(lastSyncedCommitmentIndex),
-            maxCommitmentTreeIndex,
-            finalUtxos,
-            indexerSyncService,
-          );
-
-          yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 100 })));
-          yield* Effect.promise(() =>
-            emit.single(
-              StateUpdate({
-                dustGenerations: dustGenerationUpdates,
-                spentUtxos: finalSpentUtxos,
-                newUtxos: finalUtxos,
-                collapsedCommitments,
-                lastBlockTimestamp: blockData.timestamp,
-              }),
-            ),
-          );
-        }),
-      );
-    };
-
-    return {
-      updates: (
-        state: CoreWallet,
-        secretKey: DustSecretKey,
-      ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope> =>
-        pipe(
-          Ref.make(false),
-          Effect.map((busyRef) =>
-            trigger.pipe(
-              // Filter out incoming events if the lock is active (drops them)
-              Stream.filterEffect(() => Ref.modify(busyRef, (busy) => (busy ? [false, true] : [true, false]))),
-              // Process the allowed event
-              Stream.flatMap(
-                (_) =>
-                  doSync(state, secretKey).pipe(
-                    // Release the lock when this specific inner task finishes
-                    Stream.ensuring(Ref.set(busyRef, false)),
-                  ),
-                { concurrency: 1 },
-              ),
-            ),
-          ),
-          Stream.unwrap,
-          Stream.provideSomeLayer(Layer.merge(indexerSyncService.connectionLayer(), indexerSyncService.queryClient())),
-        ),
-      blockData: (): Effect.Effect<BlockData, WalletError> => defaultSyncService.blockData(),
-    };
+    ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope> =>
+      pipe(
+        doSync(state, secretKey),
+        Stream.provideSomeLayer(Layer.merge(indexerSyncService.connectionLayer(), indexerSyncService.queryClient())),
+      ),
+    blockData: (): Effect.Effect<BlockData, WalletError> => defaultSyncService.blockData(),
   };
+};
 
 export type IndexerSyncService = {
   connectionLayer: () => Layer.Layer<SubscriptionClient, WalletError, Scope.Scope>;
@@ -443,7 +425,7 @@ export type IndexerSyncService = {
   ) => Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   subscribeDustGenerations: (
     dustAddress: string,
-    startIndex: number,
+    lastAppliedIndex: number,
     endIndex: number,
   ) => Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   subscribeDustNullifierTransactions: (
@@ -506,26 +488,17 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
     },
     subscribeDustGenerations(
       dustAddress: string,
-      startIndex: number,
+      lastAppliedIndex: number,
       endIndex: number,
     ): Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
-      console.log(
-        'Subscribing to dust generations for address:',
-        dustAddress,
-        'from index:',
-        startIndex,
-        'to index:',
-        endIndex,
-      );
-
-      if (endIndex < 0) {
+      if (endIndex < 0 || lastAppliedIndex === endIndex) {
         return Stream.empty;
       }
 
       return pipe(
         DustGenerationEvents.run({
           dustAddress,
-          startIndex,
+          startIndex: lastAppliedIndex + 1,
           endIndex,
         }),
         Stream.mapEffect((subscription) => {
@@ -634,7 +607,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
         return [
           CoreWallet.updateProgress(state, {
-            appliedIndex: BigInt(update.progress),
+            highestIndex: BigInt(update.progress), // we use the `highestIndex` to track the local progress
             isConnected: true,
           }),
           { changes: [], protocolVersion: Number(state.protocolVersion) },
@@ -661,7 +634,8 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
 
       if (dustGenerations.lastUpdateIndex !== undefined) {
         updatedWallet = CoreWallet.updateProgress(updatedWallet, {
-          highestIndex: BigInt(dustGenerations.lastUpdateIndex),
+          appliedIndex: BigInt(dustGenerations.lastUpdateIndex),
+          highestIndex: 0n, // reset the local progress
           highestRelevantWalletIndex: BigInt(dustGenerations.lastUpdateIndex),
           isConnected: true,
         });
