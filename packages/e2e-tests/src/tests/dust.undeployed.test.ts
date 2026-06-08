@@ -233,7 +233,7 @@ describe('Dust tests', () => {
       const dustDeregistrationTxid = await receiver.wallet.submitTransaction(finalizedDustTx);
       logger.info(`Dust de-registration tx id: ${dustDeregistrationTxid}`);
 
-      const walletStateAfterDeregister = await receiver.wallet.waitForSyncedState();
+      await receiver.wallet.waitForSyncedState();
 
       const finalDustBalance = await rx.firstValueFrom(
         receiver.wallet.state().pipe(
@@ -248,7 +248,13 @@ describe('Dust tests', () => {
 
       expect(finalDustBalance).toBe(0n);
 
-      const finalWalletNightBalance = walletStateAfterDeregister.unshielded.balances[unshieldedTokenRaw];
+      const walletStateAfterNightRestored = await utils.waitForStateAfterDustDeregistration(
+        receiver.wallet,
+        finalizedDustTx,
+        unshieldedTokenRaw,
+      );
+
+      const finalWalletNightBalance = walletStateAfterNightRestored.unshielded.balances[unshieldedTokenRaw];
       expect(finalWalletNightBalance).toBe(initialNightBalance);
     },
     timeout,

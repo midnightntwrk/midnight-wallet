@@ -30,7 +30,7 @@ import {
   type TokenTransfer,
 } from '../Transacting.js';
 import { UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
-import { InsufficientFundsError, SpendUtxoError } from '../WalletError.js';
+import { InsufficientFundsError, SpendUtxoError, TransactingError } from '../WalletError.js';
 
 const NIGHT = ledger.nativeToken().raw;
 const tokenA = ledger.sampleRawTokenType();
@@ -474,6 +474,16 @@ describe('Unshielded wallet transacting', () => {
       // rotateUtxos has already booked.
       expect(HashMap.size(restoredState.state.availableUtxos)).toBe(utxos.length);
       expect(HashMap.size(restoredState.state.pendingUtxos)).toBe(0);
+    });
+
+    it('fails when no UTxOs are provided in either section', () => {
+      const { wallet } = buildWalletWithNightUtxos(1);
+
+      const error = transacting
+        .rotateUtxos(wallet, [], [], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowRight);
+
+      expect(error).toBeInstanceOf(TransactingError);
     });
   });
 });
