@@ -232,7 +232,8 @@ export const makeEventsSyncService = (
       const batchSize = config.batchUpdates?.size ?? 10;
       const batchTimeout = Duration.millis(config.batchUpdates?.timeout ?? 1);
       const batchSpacing = config.batchUpdates?.spacing ?? 4;
-      const bufferSize = config.indexerClientConnection.bufferSize ?? 1000;
+      const bufferSize = config.indexerClientConnection.bufferSize ?? 10000;
+      const resumeThreshold = config.indexerClientConnection.resumeThreshold ?? 100;
 
       const eventsStream = pipe(
         // Backpressure caps the in-flight queue between the WS push and the
@@ -241,7 +242,7 @@ export const makeEventsSyncService = (
         // buffers every event the indexer pushes regardless of apply rate.
         ZswapEvents.runWithBackpressure({
           bufferSize,
-          resumeThreshold: config.indexerClientConnection.resumeThreshold ?? 500,
+          resumeThreshold,
           from: resumeFrom,
           // `resumeFrom < 0n` means a fresh wallet: send no `id` so the indexer streams from the very
           // start, rather than relying on `id: 0` sorting below the first real event id.

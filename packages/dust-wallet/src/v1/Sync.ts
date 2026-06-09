@@ -272,8 +272,8 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       state: CoreWallet,
     ): Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient> {
       const { appliedIndex } = state.progress;
-      const bufferSize = config.indexerClientConnection.bufferSize ?? 1000;
-      const resumeThreshold = config.indexerClientConnection.resumeThreshold ?? 500;
+      const bufferSize = config.indexerClientConnection.bufferSize ?? 10000;
+      const resumeThreshold = config.indexerClientConnection.resumeThreshold ?? 100;
 
       // The boundary is load-bearing, not waste: this subscription emits only events (no tip/progress
       // sentinel), and `isConnected`/the tip (`maxId`) are set only when an event is received. So the
