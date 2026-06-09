@@ -116,7 +116,7 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
         return Effect.gen(function* () {
           const changesStream = yield* currentStateRef.changes.pipe(
             Stream.mapEffect((value) => EitherOps.toEffect(value)),
-            Stream.share({ capacity: 'unbounded', replay: 1 }),
+            Stream.share({ capacity: 1, strategy: 'sliding' }),
           );
           const runtime = {
             stateChanges: changesStream,
