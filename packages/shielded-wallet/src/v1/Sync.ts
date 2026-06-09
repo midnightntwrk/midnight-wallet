@@ -217,6 +217,18 @@ export const makeEventsSyncService = (
       const indexerWsUrl = indexerWsUrlResult.right;
       const appliedIndex = state.progress?.appliedIndex ?? 0n;
 
+      // The boundary is load-bearing, not waste: this subscription emits only events (no tip/progress
+      // sentinel), and `isConnected`/the tip (`maxId`) are set only when an event is received. So the
+      // cursor must stay `<= appliedIndex` — never `appliedIndex + 1`. Requesting one event later would
+      // deliver nothing to a wallet already at the tip, so `applyUpdate` would never run and sync would
+      // hang.
+      //
+      // A fresh wallet has `appliedIndex === 0n` (the "nothing applied yet" sentinel), so `resumeFrom`
+      // is `-1n` and the `variables` mapping below opens the subscription with no `id` — the indexer
+      // streams from the very start. A restored wallet has `appliedIndex >= 1`, so `resumeFrom` is
+      // `appliedIndex - 1` and the inclusive cursor re-delivers the boundary event.
+      const resumeFrom = appliedIndex - 1n;
+
       const batchSize = config.batchUpdates?.size ?? 10;
       const batchTimeout = Duration.millis(config.batchUpdates?.timeout ?? 1);
       const batchSpacing = config.batchUpdates?.spacing ?? 4;
@@ -230,8 +242,10 @@ export const makeEventsSyncService = (
         ZswapEvents.runWithBackpressure({
           bufferSize,
           resumeThreshold: config.indexerClientConnection.resumeThreshold ?? 500,
-          from: appliedIndex,
-          variables: (cursor) => ({ id: Number(cursor) }),
+          from: resumeFrom,
+          // `resumeFrom < 0n` means a fresh wallet: send no `id` so the indexer streams from the very
+          // start, rather than relying on `id: 0` sorting below the first real event id.
+          variables: (cursor) => ({ id: cursor < 0n ? null : Number(cursor) }),
           key: (r) => BigInt(r.zswapLedgerEvents.id),
         }),
         Stream.provideLayer(
@@ -265,18 +279,30 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
         return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
 
+      // The subscription resumes at the last-applied index and its cursor is inclusive, so the
+      // boundary event (id === appliedIndex) is re-delivered. Replaying it would re-insert
+      // commitments already in the zswap state ("non-linear insertion" error), so only events
+      // strictly after the applied index are replayed. The boundary is still used (below) to
+      // refresh the tip and mark the wallet connected — that is how an already-caught-up wallet
+      // learns it is synced when no new events exist.
+      const appliedIndex = state.progress?.appliedIndex ?? 0n;
+      const freshUpdates = wrappedUpdate.updates.filter((u) => BigInt(u.id) > appliedIndex);
+
       const lastUpdate = wrappedUpdate.updates.at(-1)!;
       const highestRelevantWalletIndex = BigInt(lastUpdate.maxId);
-      const nextIndex = BigInt(lastUpdate.id);
-      const [newState, newChanges] = CoreWallet.replayEventsWithChanges(
-        state,
-        wrappedUpdate.secretKeys,
-        wrappedUpdate.updates.map((u) => u.event),
-      );
+
+      const [newState, newChanges]: [CoreWallet, ledger.ZswapStateChanges[]] =
+        freshUpdates.length === 0
+          ? [state, []]
+          : CoreWallet.replayEventsWithChanges(
+              state,
+              wrappedUpdate.secretKeys,
+              freshUpdates.map((u) => u.event),
+            );
 
       const updatedState = CoreWallet.updateProgress(newState, {
         highestRelevantWalletIndex,
-        appliedIndex: nextIndex,
+        appliedIndex: freshUpdates.length === 0 ? appliedIndex : BigInt(freshUpdates.at(-1)!.id),
         isConnected: true,
       });
 

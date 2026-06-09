@@ -275,6 +275,18 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       const bufferSize = config.indexerClientConnection.bufferSize ?? 1000;
       const resumeThreshold = config.indexerClientConnection.resumeThreshold ?? 500;
 
+      // The boundary is load-bearing, not waste: this subscription emits only events (no tip/progress
+      // sentinel), and `isConnected`/the tip (`maxId`) are set only when an event is received. So the
+      // cursor must stay `<= appliedIndex` — never `appliedIndex + 1`. Requesting one event later would
+      // deliver nothing to a wallet already at the tip, so `applyUpdate` would never run and sync would
+      // hang.
+      //
+      // A fresh wallet has `appliedIndex === 0n` (the "nothing applied yet" sentinel), so `resumeFrom`
+      // is `-1n` and the `variables` mapping below opens the subscription with no `id` — the indexer
+      // streams from the very start. A restored wallet has `appliedIndex >= 1`, so `resumeFrom` is
+      // `appliedIndex - 1` and the inclusive cursor re-delivers the boundary event.
+      const resumeFrom = appliedIndex - 1n;
+
       return pipe(
         // Backpressure caps the in-flight queue between the WS push and the
         // apply loop. Without it the JS heap grows linearly with catch-up
@@ -283,8 +295,10 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
         DustLedgerEvents.runWithBackpressure({
           bufferSize,
           resumeThreshold,
-          from: appliedIndex,
-          variables: (cursor) => ({ id: Number(cursor) }),
+          from: resumeFrom,
+          // `resumeFrom < 0n` means a fresh wallet: send no `id` so the indexer streams from the very
+          // start, rather than relying on `id: 0` sorting below the first real event id.
+          variables: (cursor) => ({ id: cursor < 0n ? null : Number(cursor) }),
           key: (r) => BigInt(r.dustLedgerEvents.id),
         }),
         Stream.mapEffect((subscription) =>
@@ -310,14 +324,23 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
         return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
 
-      const highestRelevantWalletIndex = BigInt(updates.at(-1)!.maxId);
-      const nextIndex = BigInt(updates.at(-1)!.id);
-      const events = updates.map((u) => u.raw);
+      const appliedIndex = state.progress.appliedIndex;
+      const freshUpdates = updates.filter((u) => BigInt(u.id) > appliedIndex);
 
-      const [newState, changes] = CoreWallet.applyEventsWithChanges(state, secretKey, events, wrappedUpdate.timestamp);
+      const highestRelevantWalletIndex = BigInt(updates.at(-1)!.maxId);
+
+      const [newState, changes]: [CoreWallet, DustStateChanges[]] =
+        freshUpdates.length === 0
+          ? [state, []]
+          : CoreWallet.applyEventsWithChanges(
+              state,
+              secretKey,
+              freshUpdates.map((u) => u.raw),
+              wrappedUpdate.timestamp,
+            );
 
       const updatedState = CoreWallet.updateProgress(newState, {
-        appliedIndex: nextIndex,
+        appliedIndex: freshUpdates.length === 0 ? appliedIndex : BigInt(freshUpdates.at(-1)!.id),
         highestRelevantWalletIndex,
         isConnected: true,
       });

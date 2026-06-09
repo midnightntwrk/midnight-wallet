@@ -34,7 +34,19 @@ describe('Backpressure state machine', () => {
       expect(next.inFlight).toBe(1);
     });
 
-    it('drops items whose key equals lastKey (inclusive-cursor dedup)', () => {
+    it('drops the item at `from` on the initial session (exclusive watermark)', () => {
+      // The watermark seeds from `from`, so the item whose key equals `from` is treated as
+      // already-seen. A caller that wants the item at its logical cursor emitted seeds `from` one
+      // below it (e.g. a wallet passes `appliedIndex - 1` to still receive the boundary event).
+      const before = initialBPState(5n);
+      const [decision, next] = decideItem(before, 5n, 0, 1000);
+      expect(decision.emit).toBe(false);
+      expect(next).toBe(before);
+    });
+
+    it('drops a re-delivered boundary equal to lastKey (inclusive-cursor dedup)', () => {
+      // An inclusive resume cursor re-delivers the last-emitted key; the exclusive watermark drops
+      // it so it is not emitted twice.
       const before = state({ lastKey: 5n, inFlight: 0 });
       const [decision, next] = decideItem(before, 5n, 0, 1000);
       expect(decision.emit).toBe(false);

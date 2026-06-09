@@ -35,9 +35,13 @@ import { Effect, Stream, type StreamEmit, Ref } from 'effect';
  * {@link bufferSize} is reached the underlying source is disposed; when the consumer drains back down to
  * {@link resumeThreshold} a fresh subscription is opened with `variables(cursor)` for the running cursor.
  *
- * Emitted items are guaranteed strictly monotonic by {@link key}: anything with a key `<= from` (initially) or `<=
- * last-emitted key` is dropped silently. That is what makes this safe over sources with an inclusive resume cursor —
- * without it, the first item after a resume duplicates the last one emitted before the pause.
+ * Emitted items are guaranteed strictly monotonic by {@link key}. Dedup uses a single exclusive watermark: any item with
+ * a key `<= watermark` is dropped, and each emitted key advances the watermark. The watermark seeds from {@link from},
+ * so the item _at_ `from` is treated as already-seen and dropped. This is what makes resume safe over an inclusive
+ * cursor: the boundary item a resume re-delivers has a key equal to the watermark and is dropped — without it, the
+ * first item after a resume would duplicate the last one emitted before the pause. A caller that needs the item at its
+ * logical cursor emitted (e.g. to let an already-caught-up consumer observe its tip) passes `from` one below that
+ * cursor.
  *
  * The cursor is the single source of truth for both initial open and resume — no separate "initial variables" field;
  * `variables(from)` opens the first subscription, `variables(key(lastItem))` opens every subsequent one.
@@ -121,7 +125,14 @@ export const initialBPState = (from: bigint): BPState => ({
   terminal: false,
 });
 
-/** @internal Decide what to do with an item arriving on `onItem`. */
+/**
+ * @internal Decide what to do with an item arriving on `onItem`.
+ *
+ * The watermark is exclusive throughout: an item is dropped iff its key is `<= lastKey`, and each emitted key advances
+ * the watermark. The watermark seeds from `from`, so the item at `from` itself is treated as already-seen and dropped —
+ * a caller that wants the item at its logical cursor emitted seeds `from` one below it. The same exclusive rule drops
+ * the boundary item an inclusive-cursor resume re-delivers (its key equals `lastKey`).
+ */
 export const decideItem = (
   s: BPState,
   k: bigint,
