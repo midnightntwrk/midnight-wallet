@@ -203,6 +203,7 @@ export const makeDefaultSyncService = (
   };
 };
 
+// map provided utxos by nullifier putting them into 2 separate maps (spent and unspent)
 const accumulateUtxoUpdates = (
   updates: DustUtxoUpdate[],
   initialUtxos: DustUtxoMap,
@@ -269,7 +270,7 @@ const resolveNullifierSpends = (
   initialNewUtxos: DustUtxoMap,
   state: CoreWallet,
   secretKey: DustSecretKey,
-  blockData: BlockData,
+  latestBlock: BlockData,
   dustGenerationUpdates: DustGenerationsSyncUpdate,
   indexerSyncService: IndexerSyncService,
   emit: {
@@ -278,13 +279,8 @@ const resolveNullifierSpends = (
 ): Effect.Effect<readonly [DustUtxoMap, DustUtxoMap], WalletError, Scope.Scope | SubscriptionClient> => {
   return pipe(
     Stream.unfoldEffect(
-      [initialNullifiers, initialNewUtxos, HashMap.empty() as DustUtxoMap, 1] as readonly [
-        DustNullifier[],
-        DustUtxoMap,
-        DustUtxoMap,
-        number,
-      ],
-      ([nullifiersToCheck, newUtxos, spentUtxos, generationLevel]) => {
+      [initialNullifiers, initialNewUtxos, HashMap.empty() as DustUtxoMap] as const,
+      ([nullifiersToCheck, newUtxos, spentUtxos]) => {
         if (nullifiersToCheck.length === 0) {
           return Effect.succeed(Option.none());
         }
@@ -292,13 +288,11 @@ const resolveNullifierSpends = (
           const nullifierTransactions = yield* pipe(
             indexerSyncService.subscribeDustNullifierTransactions(
               nullifiersToCheck as Arr.NonEmptyArray<DustNullifier>,
-              blockData.height,
+              latestBlock.height,
             ),
             Stream.runCollect,
             Effect.map(Chunk.toArray),
           );
-
-          yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 10 * generationLevel })));
 
           const dustUtxoUpdates = yield* createDustUtxoUpdates(
             state,
@@ -307,12 +301,20 @@ const resolveNullifierSpends = (
             newUtxos,
             dustGenerationUpdates.generationDtimeUpdates,
           );
+
+          const freshUtxos = dustUtxoUpdates.filter((u) => !u.isSpent);
+          if (freshUtxos.length > 0) {
+            const mtIndicesSum = freshUtxos.reduce((partialSum, a) => partialSum + a.qdo.mtIndex, 0n);
+            const maxCommitmentIndex = latestBlock.dustCommitmentEndIndex - 1;
+            const progress = (0.8 * Number(mtIndicesSum)) / (freshUtxos.length * maxCommitmentIndex);
+            yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: progress * 100 + 10 })));
+          }
+
           const { nextUtxos, nextSpentUtxos } = accumulateUtxoUpdates(dustUtxoUpdates, newUtxos, spentUtxos);
-          const nextNullifiers = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
-          const nextGenerationLevel = generationLevel + 1;
+          const nextNullifiersToCheck = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
           return Option.some([
             [nextUtxos, nextSpentUtxos] as const,
-            [nextNullifiers, nextUtxos, nextSpentUtxos, nextGenerationLevel] as const,
+            [nextNullifiersToCheck, nextUtxos, nextSpentUtxos] as const,
           ]);
         });
       },
@@ -381,6 +383,7 @@ export const makeEventLessSyncService = (
 
         yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 90 })));
 
+        // lastSyncedCommitmentIndex out of maxCommitmentTreeIndex
         const collapsedCommitments = yield* loadCollapsedCommitments(
           Math.max(0, Number(lastSyncedCommitmentIndex)),
           maxCommitmentTreeIndex,
@@ -607,7 +610,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
         return [
           CoreWallet.updateProgress(state, {
-            highestIndex: BigInt(update.progress), // we use the `highestIndex` to track the local progress
+            highestIndex: BigInt(Math.floor(update.progress)), // we use the `highestIndex` to track the local progress
             isConnected: true,
           }),
           { changes: [], protocolVersion: Number(state.protocolVersion) },
@@ -693,8 +696,8 @@ const createUtxoUpdatesFromSpend = (
     const dtimeUpdate = generationDtimeUpdates.find((upd) => upd.nightUtxoHash === genInfo.nonce);
     const updatedGenInfo = dtimeUpdate !== undefined ? { ...genInfo, dtime: dtimeUpdate.newDtime } : genInfo;
     const txMeta = { transactionId: transaction.id, transactionHash: transaction.hash, genInfo: updatedGenInfo };
-    const spentUpdate: DustUtxoUpdate = { dustNullifier: nullifier, qdo, isSpent: true, ...txMeta };
-    const newUtxo = successorDustUtxo(
+    const spentUtxoUpdate: DustUtxoUpdate = { dustNullifier: nullifier, qdo, isSpent: true, ...txMeta };
+    const successorUtxo = successorDustUtxo(
       qdo,
       declaredTime,
       vFee,
@@ -704,12 +707,12 @@ const createUtxoUpdatesFromSpend = (
       transaction.block.ledgerParameters.dust,
     );
     const newUtxoUpdate: DustUtxoUpdate = {
-      dustNullifier: dustNullifier(newUtxo, secretKey),
-      qdo: newUtxo,
+      dustNullifier: dustNullifier(successorUtxo, secretKey),
+      qdo: successorUtxo,
       isSpent: false,
       ...txMeta,
     };
-    return [spentUpdate, newUtxoUpdate];
+    return [spentUtxoUpdate, newUtxoUpdate];
   });
 
 const createDustUtxoUpdates = (
