@@ -6,7 +6,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test-e2e": "NODE_OPTIONS='--experimental-vm-modules --experimental-specifier-resolution=node --max-old-space-size=8192' vitest run",
+    "test-e2e": "NODE_OPTIONS='--experimental-vm-modules --experimental-specifier-resolution=node --max-old-space-size=16384 --heapsnapshot-near-heap-limit=1' vitest run",
     "test-undeployed": "docker compose -f ../../infra/compose/docker-compose-dynamic.yml pull && yarn test-e2e --project undeployed",
     "test-remote": "docker compose -f ../../infra/compose/docker-compose-remote-dynamic.yml pull && yarn test-e2e --project remote",
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
@@ -23,6 +23,7 @@
     "@midnight-ntwrk/wallet-sdk-facade": "workspace:^",
     "@midnight-ntwrk/wallet-sdk-hd": "workspace:^",
     "@midnight-ntwrk/wallet-sdk-shielded": "workspace:^",
+    "@midnight-ntwrk/wallet-sdk-testkit": "workspace:^",
     "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:^",
     "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.4",
     "@types/node": "^25.3.0",
