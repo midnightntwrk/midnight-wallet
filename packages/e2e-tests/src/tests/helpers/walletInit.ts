@@ -82,10 +82,7 @@ const restoreUnshieldedWallet = async (
   try {
     const serialized = await readIfExists(path);
     if (serialized) {
-      const keyStore = createKeystore(
-      { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
-      fixture.getNetworkId(),
-    );
+      const keyStore = createKeystore({ kind: 'schnorr', secret: getUnshieldedSeed(seed) }, fixture.getNetworkId());
       const wallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
@@ -151,9 +148,9 @@ export const provideWallet = async (
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
   const unshieldedKeystore = createKeystore(
-      { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
-      fixture.getNetworkId(),
-    );
+    { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
+    fixture.getNetworkId(),
+  );
 
   const readIfExists = async (p: string): Promise<string | undefined> => {
     try {
@@ -257,9 +254,9 @@ export const initWalletWithSeed = async (seed: string, fixture: TestContainersFi
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
   const unshieldedKeystore = createKeystore(
-      { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
-      fixture.getNetworkId(),
-    );
+    { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
+    fixture.getNetworkId(),
+  );
 
   const facade: WalletFacade = await WalletFacade.init({
     configuration: {

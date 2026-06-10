@@ -51,10 +51,7 @@ describe('Wallet Facade handling pending transactions', () => {
     const shieldedSeed = getShieldedSeed(seed);
     const unshieldedSeed = getUnshieldedSeed(seed);
     const dustSeed = getDustSeed(seed);
-    const unshieldedKeystore = createKeystore(
-      { kind: 'schnorr', secret: unshieldedSeed },
-      configuration.networkId,
-    );
+    const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: unshieldedSeed }, configuration.networkId);
     shielded = ShieldedWallet(configuration).startWithSeed(shieldedSeed);
     unshielded = UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
     dust = DustWallet(configuration).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust);

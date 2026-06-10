@@ -52,10 +52,7 @@ export interface UnshieldedKeystore {
   signData(data: Uint8Array): Signature;
 }
 
-export const createKeystore = (
-  secretKey: UnshieldedSecretKey,
-  networkId: NetworkId.NetworkId,
-): UnshieldedKeystore => {
+export const createKeystore = (secretKey: UnshieldedSecretKey, networkId: NetworkId.NetworkId): UnshieldedKeystore => {
   const ledgerSigningKey: LedgerSigningKey = {
     tag: secretKey.kind,
     value: Buffer.from(secretKey.secret).toString('hex'),

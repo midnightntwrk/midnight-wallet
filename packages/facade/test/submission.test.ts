@@ -61,7 +61,9 @@ describe('Facade submission', () => {
       },
       unshielded: (config) => {
         const mockedUnshielded = vi.mockObject(
-          UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId))),
+          UnshieldedWallet(config).startWithPublicKey(
+            PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
+          ),
         );
         mockedUnshielded.start.mockResolvedValue(undefined);
         return mockedUnshielded;
