@@ -44,6 +44,46 @@ Did user spent all the Night? true
 ]
 `;
 
+exports[`Snippet outputs > with network > should output the correct result for 'ecdsa-initialization' 1`] = `
+[
+  "ECDSA verifying key: {
+  tag: 'ecdsa',
+  value: '02948f9a220c28f52e08d374d2b148c66da54004f5ff50afa9e3601a6eec746cf5'
+}
+ECDSA unshielded address: mn_addr_undeployed1ewteh8ewja0n7drrkf4kr0c6r9zrh9an3qdxjd497yssert0q54s0p5gsl
+Synced state:
+{
+  unshielded: {
+    balances: {},
+    availableCoins: [],
+    pendingCoins: [],
+    totalCoins: [],
+    progress: {
+      appliedId: 0n,
+      highestTransactionId: 0n,
+      isConnected: true,
+      isStrictlyComplete: [Function: isStrictlyComplete],
+      isCompleteWithin: [Function: isCompleteWithin]
+    },
+    address: UnshieldedAddress {
+      data: Buffer(32) [Uint8Array] [
+        203, 151, 155, 159,  46, 151,  95, 63,
+         52,  99, 178, 107,  97, 191,  26, 25,
+         68,  59, 151, 179, 136,  26, 105, 54,
+        165, 241,  33,  12, 141, 111,   5, 43
+      ],
+      [Symbol(MidnightBech32m)]: Bech32mCodec {
+        type: 'addr',
+        dataToBytes: [Function (anonymous)],
+        dataFromBytes: [Function (anonymous)]
+      }
+    }
+  }
+}
+",
+]
+`;
+
 exports[`Snippet outputs > with network > should output the correct result for 'initialization' 1`] = `
 [
   "Synced state:
