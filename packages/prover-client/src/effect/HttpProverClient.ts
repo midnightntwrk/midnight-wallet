@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Chunk, type Context, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
-import { FetchHttpClient, HttpClient, HttpClientRequest, type HttpClientResponse } from '@effect/platform';
+import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from '@effect/platform';
 import { ProverClient } from './ProverClient.js';
 import {
   ClientError,
@@ -86,7 +86,15 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
 
     const proveTxRequest = pipe(
       Effect.succeed(payload),
-      Effect.map((body) => HttpClientRequest.post(url).pipe(HttpClientRequest.bodyUint8Array(body))),
+      Effect.map((body) =>
+        HttpClientRequest.post(url).pipe(
+          // A raw body must be used instead of `bodyUint8Array` so that no explicit `content-length`
+          // header is attached: `fetch` derives the length from the body itself, and an explicit
+          // header is rejected as malformed by undici >= 8.2.0 when it is installed as the global
+          // dispatcher (e.g. transitively via testcontainers or @effect/platform-node).
+          HttpClientRequest.setBody(HttpBody.raw(body, { contentType: 'application/octet-stream' })),
+        ),
+      ),
       Effect.flatMap(HttpClient.execute),
       Effect.flatMap((response: HttpClientResponse.HttpClientResponse) =>
         Effect.gen(function* () {
