@@ -118,6 +118,30 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
     ),
   );
 
+/** Waits for a dust deregistration transaction to settle and the consolidated Night output to re-sync. */
+export const waitForStateAfterDustDeregistration = (
+  wallet: WalletFacade,
+  finalizedTx: ledger.FinalizedTransaction,
+  unshieldedTokenRaw: ledger.RawTokenType,
+) =>
+  rx.firstValueFrom(
+    wallet.state().pipe(
+      rx.mergeMap(async (state) => {
+        const txInHistory = await wallet.queryTxHistoryByHash(finalizedTx.transactionHash());
+
+        return {
+          state,
+          txFound: txInHistory !== undefined,
+        };
+      }),
+      rx.filter(
+        ({ state, txFound }) =>
+          txFound && state.isSynced && state.unshielded.balances[unshieldedTokenRaw] !== undefined,
+      ),
+      rx.map(({ state }) => state),
+    ),
+  );
+
 export const waitForRegisteredTokens = (wallet: WalletFacade) =>
   rx.firstValueFrom(
     wallet.state().pipe(
