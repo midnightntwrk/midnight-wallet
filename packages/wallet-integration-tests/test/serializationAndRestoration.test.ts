@@ -171,10 +171,7 @@ describe('Wallet serialization and restoration', () => {
 
   it('should restore unshielded wallet from serialized transaction history', async () => {
     const unshieldedSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-    const keystore = createKeystore(
-      { kind: 'schnorr', secret: unshieldedSeed },
-      unshieldedConfiguration.networkId,
-    );
+    const keystore = createKeystore({ kind: 'schnorr', secret: unshieldedSeed }, unshieldedConfiguration.networkId);
 
     const initialWallet = UnshieldedWallet(unshieldedConfiguration).startWithPublicKey(
       PublicKey.fromKeyStore(keystore),

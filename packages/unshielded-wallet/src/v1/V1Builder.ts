@@ -282,9 +282,7 @@ export class V1Builder<
 
         return Effect.succeed(
           CoreWallet.init(
-            PublicKey.fromKeyStore(
-              createKeystore({ kind: 'schnorr', secret: seed }, networkId),
-            ),
+            PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, networkId)),
             networkId,
           ),
         );

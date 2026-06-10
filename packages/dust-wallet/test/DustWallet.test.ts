@@ -16,6 +16,7 @@ import {
   LedgerParameters,
   nativeToken,
   type ProofErasedTransaction,
+  type SignatureVerifyingKey,
   Transaction,
   UnshieldedOffer,
   type UserAddress,
@@ -115,7 +116,11 @@ describe('DustWallet', () => {
   let submissionService: Submission.SubmissionServiceEffect<ProofErasedTransaction>;
   const provingService = makeSimulatorProvingServiceEffect();
 
-  const registerNightTokens = (wallet: RunningWallet, nightTokens: Array<UtxoWithMeta>, nightVerifyingKey: string) => {
+  const registerNightTokens = (
+    wallet: RunningWallet,
+    nightTokens: Array<UtxoWithMeta>,
+    nightVerifyingKey: SignatureVerifyingKey,
+  ) => {
     return Effect.gen(function* () {
       const lastState = yield* SubscriptionRef.get(stateRef);
       const simulatorState = yield* simulator.getLatestState();
@@ -147,7 +152,7 @@ describe('DustWallet', () => {
   const deregisterNightTokens = (
     wallet: RunningWallet,
     nightTokens: Array<UtxoWithMeta>,
-    nightVerifyingKey: string,
+    nightVerifyingKey: SignatureVerifyingKey,
     dustSecretKey: DustSecretKey,
   ) => {
     return Effect.gen(function* () {
@@ -272,7 +277,7 @@ describe('DustWallet', () => {
 
       latestState = yield* SubscriptionRef.get(stateRef);
       const newWalletBalance = walletVariant.coinsAndBalances.getWalletBalance(latestState, toTxTime(3));
-      expect(newWalletBalance).toBe(2_001_445_580_863_630n);
+      expect(newWalletBalance).toBe(2_001_297_005_461_389n);
     }).pipe(Effect.runPromise);
   });
 
@@ -341,7 +346,7 @@ describe('DustWallet', () => {
   it('should allow spending Dust', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
-      const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey().value);
+      const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
       const walletAddress = keyStore.getAddress();
       const awardTokens = 150_000_000_000n;
 
