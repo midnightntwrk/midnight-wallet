@@ -782,9 +782,9 @@ export const makeSimulatorSyncService = (
           height: Number(lastBlock.number),
           ledgerParameters: state.ledger.parameters,
           timestamp: state.currentTime,
-          zswapEndIndex: 1, //lastBlock.zswapEndIndex, // TODO: implement
-          dustCommitmentEndIndex: 1, //lastBlock.dustCommitmentEndIndex,
-          dustGenerationEndIndex: 1, //,
+          zswapEndIndex: 1, // NOTE: not implemented
+          dustCommitmentEndIndex: 1, // NOTE: not implemented
+          dustGenerationEndIndex: 1, // NOTE: not implemented
         };
       });
     },
