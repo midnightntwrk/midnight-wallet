@@ -20,13 +20,13 @@ Where:
 - `role` follows table below
 - `index` follows BIP-44 recommendations
 
-| Role name            | Value | Description                                             |
-| -------------------- | ----- | ------------------------------------------------------- |
-| Night External chain | 0     | Night is Midnight's main token of value, Follows BIP-44 |
-| Night Internal chain | 1     | as above                                                |
-| Dust                 | 2     | Dust is needed to pay fees on Midnight                  |
-| Zswap                | 3     | Zswap is a sub-protocol for shielded native tokens      |
-| Metadata             | 4     | Keys for signing metadata                               |
+| Role name            | Value | Description                                                  |
+| -------------------- | ----- | ------------------------------------------------------------ |
+| Night External chain | 0     | Night is Midnight's main token of value, Follows BIP-44      |
+| Night Internal chain | 1     | as above                                                     |
+| Dust                 | 2     | Dust is needed to pay fees on Midnight                       |
+| Zswap                | 3     | Zswap is a sub-protocol for shielded native tokens           |
+| ECDSA Unshielded     | 4     | ECDSA keys for unshielded tokens (disjoint from roles 0 / 1) |
 
 ## How to derive the keys?
 

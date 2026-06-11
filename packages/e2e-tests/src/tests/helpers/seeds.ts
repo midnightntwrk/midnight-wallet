@@ -12,6 +12,8 @@
 // limitations under the License.
 import { HDWallet, Roles, type Role } from '@midnight-ntwrk/wallet-sdk-hd';
 
+type UnshieldedSeedRole = typeof Roles.NightExternal | typeof Roles.EcdsaUnshielded;
+
 const deriveKey = (seed: string, role: Role): Uint8Array<ArrayBufferLike> => {
   const seedBuffer = Buffer.from(seed, 'hex');
   const hdWalletResult = HDWallet.fromSeed(seedBuffer);
@@ -32,6 +34,9 @@ const deriveKey = (seed: string, role: Role): Uint8Array<ArrayBufferLike> => {
 
 export const getShieldedSeed = (seed: string): Uint8Array => Buffer.from(deriveKey(seed, Roles.Zswap));
 
-export const getUnshieldedSeed = (seed: string): Uint8Array<ArrayBufferLike> => deriveKey(seed, Roles.NightExternal);
+export const getUnshieldedSeed = (
+  seed: string,
+  role: UnshieldedSeedRole = Roles.NightExternal,
+): Uint8Array<ArrayBufferLike> => deriveKey(seed, role);
 
 export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => deriveKey(seed, Roles.Dust);

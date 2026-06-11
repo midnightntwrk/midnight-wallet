@@ -67,7 +67,12 @@ export const getShieldedSeed = (seed: string): Uint8Array => {
   return Buffer.from(derivationResult.key);
 };
 
-export const getUnshieldedSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
+type UnshieldedSeedRole = typeof Roles.NightExternal | typeof Roles.EcdsaUnshielded;
+
+export const getUnshieldedSeed = (
+  seed: string,
+  role: UnshieldedSeedRole = Roles.NightExternal,
+): Uint8Array<ArrayBufferLike> => {
   const seedBuffer = Buffer.from(seed, 'hex');
   const hdWalletResult = HDWallet.fromSeed(seedBuffer);
 
@@ -76,7 +81,7 @@ export const getUnshieldedSeed = (seed: string): Uint8Array<ArrayBufferLike> => 
     hdWallet: HDWallet;
   };
 
-  const derivationResult = hdWallet.selectAccount(0).selectRole(Roles.NightExternal).deriveKeyAt(0);
+  const derivationResult = hdWallet.selectAccount(0).selectRole(role).deriveKeyAt(0);
 
   if (derivationResult.type === 'keyOutOfBounds') {
     throw new Error('Key derivation out of bounds');
@@ -244,12 +249,18 @@ export type WalletKeys = {
 };
 
 /** Derives all wallet keys from a hex seed. */
-export const deriveWalletKeys = (hexSeed: string, networkId: NetworkId.NetworkId): WalletKeys => {
+export const deriveWalletKeys = (
+  hexSeed: string,
+  networkId: NetworkId.NetworkId,
+  signatureKind: ledger.SignatureKind = 'schnorr',
+): WalletKeys => {
+  const unshieldedRole: UnshieldedSeedRole = signatureKind === 'ecdsa' ? Roles.EcdsaUnshielded : Roles.NightExternal;
+
   const shieldedSeed = getShieldedSeed(hexSeed);
   const dustSeed = getDustSeed(hexSeed);
-  const unshieldedSeed = getUnshieldedSeed(hexSeed);
+  const unshieldedSeed = getUnshieldedSeed(hexSeed, unshieldedRole);
 
-  const unshieldedSecretKey: UnshieldedSecretKey = { kind: 'schnorr', secret: unshieldedSeed };
+  const unshieldedSecretKey: UnshieldedSecretKey = { kind: signatureKind, secret: unshieldedSeed };
   const ledgerSigningKey: ledger.SigningKey = {
     tag: unshieldedSecretKey.kind,
     value: Buffer.from(unshieldedSecretKey.secret).toString('hex'),

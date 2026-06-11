@@ -107,6 +107,21 @@ describe('HD Wallet', () => {
     );
   });
 
+  it('derives disjoint scalars for NightExternal vs EcdsaUnshielded from the same master seed', () => {
+    const seed = generateRandomSeed();
+    const result = HDWallet.fromSeed(seed);
+    if (result.type === 'seedError') throw new Error('seed setup failed');
+
+    const account = result.hdWallet.selectAccount(0);
+    const schnorr = account.selectRole(Roles.NightExternal).deriveKeyAt(0);
+    const ecdsa = account.selectRole(Roles.EcdsaUnshielded).deriveKeyAt(0);
+
+    if (schnorr.type !== 'keyDerived' || ecdsa.type !== 'keyDerived') {
+      throw new Error('expected both derivations to succeed');
+    }
+    expect(Buffer.from(schnorr.key).toString('hex')).not.toEqual(Buffer.from(ecdsa.key).toString('hex'));
+  });
+
   it('Roundtrip from seed to mnemonic and back should give the same seed', () => {
     fc.assert(
       fc.property(arbStrength, (strength) => {
