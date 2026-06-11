@@ -21,6 +21,7 @@ import {
   generateRandomSeed,
   HDWallet,
   joinMnemonicWords,
+  type Role,
   Roles,
   validateMnemonic,
 } from '../src/index.js';
@@ -120,6 +121,58 @@ describe('HD Wallet', () => {
       throw new Error('expected both derivations to succeed');
     }
     expect(Buffer.from(schnorr.key).toString('hex')).not.toEqual(Buffer.from(ecdsa.key).toString('hex'));
+  });
+
+  describe('out-of-bounds derivation returns keyOutOfBounds instead of throwing', () => {
+    const hdWallet = (() => {
+      const result = HDWallet.fromSeed(
+        Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
+      );
+      if (result.type !== 'seedOk') throw new Error('seed setup failed');
+      return result.hdWallet;
+    })();
+
+    // BIP32 non-hardened child indices are integers in [0, 2^31)
+    const invalidIndexArb = fc.oneof(
+      fc.integer({ min: 2 ** 31, max: Number.MAX_SAFE_INTEGER }),
+      fc.integer({ min: Number.MIN_SAFE_INTEGER, max: -1 }),
+      fc.constantFrom(Number.NaN, 0.5, 1.5, Math.PI, Number.POSITIVE_INFINITY),
+    );
+
+    it('deriveKeyAt returns keyOutOfBounds for an invalid index', () => {
+      fc.assert(
+        fc.property(invalidIndexArb, (index) => {
+          const result = hdWallet.selectAccount(0).selectRole(Roles.NightExternal).deriveKeyAt(index);
+          expect(result).toEqual({ type: 'keyOutOfBounds' });
+        }),
+      );
+    });
+
+    it('deriveKeyAt returns keyOutOfBounds for an out-of-bounds account', () => {
+      fc.assert(
+        fc.property(invalidIndexArb, (account) => {
+          const result = hdWallet.selectAccount(account).selectRole(Roles.NightExternal).deriveKeyAt(0);
+          expect(result).toEqual({ type: 'keyOutOfBounds' });
+        }),
+      );
+    });
+
+    it('deriveKeyAt returns keyOutOfBounds for an invalid role smuggled past the type system', () => {
+      // Type cast required because: reproducing an untyped JS caller passing a missing
+      // Roles entry, which resolves to undefined at runtime
+      const role = undefined as unknown as Role;
+      const result = hdWallet.selectAccount(0).selectRole(role).deriveKeyAt(0);
+      expect(result).toEqual({ type: 'keyOutOfBounds' });
+    });
+
+    it('deriveKeysAt reports every requested role as out of bounds for an invalid index', () => {
+      const roles = [Roles.Zswap, Roles.Metadata, Roles.Dust] as const;
+      const result = hdWallet
+        .selectAccount(0)
+        .selectRoles(roles)
+        .deriveKeysAt(2 ** 31);
+      expect(result).toEqual({ type: 'keyOutOfBounds', roles: [Roles.Zswap, Roles.Metadata, Roles.Dust] });
+    });
   });
 
   it('Roundtrip from seed to mnemonic and back should give the same seed', () => {
