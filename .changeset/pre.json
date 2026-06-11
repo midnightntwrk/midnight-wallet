@@ -21,5 +21,14 @@
     "@midnight-ntwrk/wallet-integration-tests": "0.0.1",
     "@midnight-ntwrk/wallet-sdk": "1.1.0"
   },
-  "changesets": []
+  "changesets": [
+    "ci-v2-deployments",
+    "ecdsa-unshielded-role",
+    "fix-dust-registration-fee-undercoverage",
+    "fix-prover-client-content-length",
+    "hd-out-of-bounds-derivation",
+    "khaki-needles-throw",
+    "migrate-to-ledger-v9",
+    "vast-dragons-watch"
+  ]
 }

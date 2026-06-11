@@ -1,5 +1,38 @@
 # @midnight-ntwrk/wallet-sdk-dust-wallet
 
+## 5.0.0-beta.0
+
+### Major Changes
+
+- ce4cd19: Migrate from `@midnight-ntwrk/ledger-v8` to `@midnight-ntwrk/ledger-v9`.
+
+  Ledger v9 changes `SigningKey`, `SignatureVerifyingKey`, and `Signature` from plain strings (implicitly schnorr) to
+  tagged objects (`{ tag: 'schnorr' | 'ecdsa', value }`), adding ecdsa support alongside schnorr. Consequences for SDK
+  users:
+  - `createKeystore` now takes an `UnshieldedSecretKey` (`{ kind: 'schnorr' | 'ecdsa', secret }`) instead of a raw
+    `Uint8Array` seed, and `UnshieldedKeystore.getPublicKey()` / `PublicKey.publicKey` return the tagged
+    `SignatureVerifyingKey`.
+  - Serialized unshielded wallet state now stores the verifying key together with its signature kind. Snapshots produced
+    with the v8-based SDK (plain-string key) still deserialize and default to `schnorr`.
+  - Own-input extraction (used by transaction revert) compares verifying keys structurally, and dust
+    generation/registration signing wraps signatures in the v9 `SignatureEnabled` marker.
+
+  Consumers must resolve `@midnight-ntwrk/ledger-v9` instead of `@midnight-ntwrk/ledger-v8`.
+
+### Minor Changes
+
+- dff5706: Fix a race in `WalletFacade.registerNightUtxosForDustGeneration` where the registration's `allow_fee_payment`
+  could be below its own fee, causing the chain to reject submission with `BalanceCheckOverspend`. The wallet now
+  estimates the fee at build time, reverts the booking, and throws before submission. Adds
+  `WalletFacade.waitForGeneratedDust(utxos, requiredAmount, opts?)` so callers can defer registration until enough dust
+  has accrued — pair with `estimateRegistration` to pick the threshold.
+
+### Patch Changes
+
+- Updated dependencies [ce4cd19]
+  - @midnight-ntwrk/wallet-sdk-address-format@4.0.0-beta.0
+  - @midnight-ntwrk/wallet-sdk-capabilities@4.0.0-beta.0
+
 ## 4.1.0
 
 ### Minor Changes

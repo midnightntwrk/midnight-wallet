@@ -1,5 +1,19 @@
 # @midnight-ntwrk/wallet-sdk-hd
 
+## 3.1.0-beta.0
+
+### Minor Changes
+
+- ce4cd19: Repurpose HD derivation role 4 (previously the unused Metadata role) as `Roles.EcdsaUnshielded`. Keys for
+  ECDSA unshielded operations are derived under their own role, so the secret scalar is never shared with the schnorr
+  roles (0/1) of the same account.
+
+### Patch Changes
+
+- e0097fc: `deriveKeyAt`/`deriveKeysAt` now return `keyOutOfBounds` for invalid BIP32 path components (non-integer,
+  negative, or `>= 2^31` account/role/index values) instead of leaking the underlying `invalid child index` error thrown
+  by `@scure/bip32`.
+
 ## 3.0.2
 
 ### Patch Changes
