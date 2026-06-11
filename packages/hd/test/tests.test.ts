@@ -166,12 +166,12 @@ describe('HD Wallet', () => {
     });
 
     it('deriveKeysAt reports every requested role as out of bounds for an invalid index', () => {
-      const roles = [Roles.Zswap, Roles.Metadata, Roles.Dust] as const;
+      const roles = [Roles.Zswap, Roles.NightExternal, Roles.Dust] as const;
       const result = hdWallet
         .selectAccount(0)
         .selectRoles(roles)
         .deriveKeysAt(2 ** 31);
-      expect(result).toEqual({ type: 'keyOutOfBounds', roles: [Roles.Zswap, Roles.Metadata, Roles.Dust] });
+      expect(result).toEqual({ type: 'keyOutOfBounds', roles: [Roles.Zswap, Roles.NightExternal, Roles.Dust] });
     });
   });
 
