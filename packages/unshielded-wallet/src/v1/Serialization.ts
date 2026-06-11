@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Either, pipe, Schema } from 'effect';
+import { type SignatureKind } from '@midnight-ntwrk/ledger-v9';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -26,6 +27,25 @@ export type DefaultSerializationConfiguration = {
 };
 
 export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, string> => {
+  // Annotated with the ledger type so this fails to typecheck if SignatureKind gains or loses members
+  const SignatureKindSchema: Schema.Schema<SignatureKind> = Schema.Literal('schnorr', 'ecdsa');
+
+  const SignatureVerifyingKeySchema = Schema.Struct({
+    tag: SignatureKindSchema,
+    value: Schema.String,
+  });
+
+  // Legacy (ledger-v8) snapshots stored the verifying key as a plain string, which was implicitly schnorr
+  const LegacySignatureVerifyingKeySchema = Schema.transform(
+    Schema.String,
+    Schema.typeSchema(SignatureVerifyingKeySchema),
+    {
+      strict: true,
+      decode: (value) => ({ tag: 'schnorr' as const, value }),
+      encode: ({ value }) => value,
+    },
+  );
+
   const UtxoWithMetaSchema = Schema.Struct({
     utxo: Schema.Struct({
       value: Schema.BigInt,
@@ -42,7 +62,8 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
 
   const SnapshotSchema = Schema.Struct({
     publicKey: Schema.Struct({
-      publicKey: Schema.String,
+      // Tagged form first so encoding always writes the tag; the legacy member only matches string inputs on decode
+      publicKey: Schema.Union(SignatureVerifyingKeySchema, LegacySignatureVerifyingKeySchema),
       addressHex: Schema.String,
       address: Schema.String,
     }),

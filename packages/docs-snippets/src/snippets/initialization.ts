@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import {
   type DefaultConfiguration,
   DustWallet,
@@ -68,7 +68,10 @@ const initWalletWithSeed = async (seed: Buffer) => {
 
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(derivationResult.keys[Roles.Zswap]);
   const dustSecretKey = ledger.DustSecretKey.fromSeed(derivationResult.keys[Roles.Dust]);
-  const unshieldedKeystore = createKeystore(derivationResult.keys[Roles.NightExternal], configuration.networkId);
+  const unshieldedKeystore = createKeystore(
+    { kind: 'schnorr', secret: derivationResult.keys[Roles.NightExternal] },
+    configuration.networkId,
+  );
 
   const wallet: WalletFacade = await WalletFacade.init({
     configuration,

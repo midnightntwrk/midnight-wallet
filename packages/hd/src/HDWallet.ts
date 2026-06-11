@@ -19,7 +19,7 @@ export const Roles = {
   NightInternal: 1,
   Dust: 2,
   Zswap: 3,
-  Metadata: 4,
+  EcdsaUnshielded: 4,
 } as const;
 
 export type Role = ValueOf<typeof Roles>;

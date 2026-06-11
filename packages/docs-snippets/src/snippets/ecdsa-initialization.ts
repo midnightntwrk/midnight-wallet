@@ -25,12 +25,12 @@ import {
   UnshieldedWallet,
   mergeWalletEntries,
 } from '@midnight-ntwrk/wallet-sdk';
-import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk/capabilities';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
 
 const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
 const NODE_PORT = Number.parseInt(process.env['NODE_PORT'] ?? '9944', 10);
+const PROOF_SERVER_PORT = Number.parseInt(process.env['PROOF_SERVER_PORT'] ?? '6300', 10);
 const INDEXER_HTTP_URL = `http://localhost:${INDEXER_PORT}/api/v4/graphql`;
 const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
@@ -40,6 +40,7 @@ const configuration: DefaultConfiguration = {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
+  provingServerUrl: new URL(`http://localhost:${PROOF_SERVER_PORT}`),
   indexerClientConnection: {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
@@ -47,16 +48,18 @@ const configuration: DefaultConfiguration = {
   txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
 };
 
-const initWalletWithSeed = async (seed: Buffer) => {
+const initEcdsaWalletWithSeed = async (seed: Buffer) => {
   const hdWallet = HDWallet.fromSeed(seed);
 
   if (hdWallet.type !== 'seedOk') {
     throw new Error('Failed to initialize HDWallet');
   }
 
+  // ECDSA unshielded keys live under their own HD role (4), so the scalar is
+  // never shared with the Schnorr roles (0/1) derived from the same account.
   const derivationResult = hdWallet.hdWallet
     .selectAccount(0)
-    .selectRoles([Roles.Zswap, Roles.NightExternal, Roles.Dust])
+    .selectRoles([Roles.Zswap, Roles.EcdsaUnshielded, Roles.Dust])
     .deriveKeysAt(0);
 
   if (derivationResult.type !== 'keysDerived') {
@@ -67,8 +70,11 @@ const initWalletWithSeed = async (seed: Buffer) => {
 
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(derivationResult.keys[Roles.Zswap]);
   const dustSecretKey = ledger.DustSecretKey.fromSeed(derivationResult.keys[Roles.Dust]);
+  // The keystore kind selects the signature scheme; an ECDSA key hashes to a
+  // different address than a Schnorr key, so UTXOs owned by this wallet can
+  // only ever be spent with ECDSA signatures.
   const unshieldedKeystore = createKeystore(
-    { kind: 'schnorr', secret: derivationResult.keys[Roles.NightExternal] },
+    { kind: 'ecdsa', secret: derivationResult.keys[Roles.EcdsaUnshielded] },
     configuration.networkId,
   );
 
@@ -78,7 +84,6 @@ const initWalletWithSeed = async (seed: Buffer) => {
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
     dust: (config) =>
       DustWallet(config).startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust),
-    provingService: () => makeWasmProvingService(),
   });
 
   await wallet.start(shieldedSecretKeys, dustSecretKey);
@@ -86,23 +91,17 @@ const initWalletWithSeed = async (seed: Buffer) => {
   return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
 };
 
-const { wallet } = await initWalletWithSeed(
+const { wallet, unshieldedKeystore } = await initEcdsaWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
 );
+
+console.log('ECDSA verifying key:', unshieldedKeystore.getPublicKey());
+console.log('ECDSA unshielded address:', unshieldedKeystore.getBech32Address().asString());
+
 const syncedState = await wallet.waitForSyncedState();
 console.log('Synced state:');
 console.dir(
   {
-    shielded: pick(syncedState.shielded, [
-      'balances',
-      'availableCoins',
-      'pendingCoins',
-      'totalCoins',
-      'progress',
-      'coinPublicKey',
-      'encryptionPublicKey',
-      'address',
-    ]),
     unshielded: pick(syncedState.unshielded, [
       'balances',
       'availableCoins',
@@ -111,7 +110,6 @@ console.dir(
       'progress',
       'address',
     ]),
-    dust: pick(syncedState.dust, ['totalCoins', 'availableCoins', 'pendingCoins', 'progress', 'publicKey', 'address']),
   },
   { depth: null },
 );

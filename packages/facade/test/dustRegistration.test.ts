@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -66,7 +66,10 @@ describe('Dust Registration', () => {
   const shieldedSenderSeed = getShieldedSeed(SENDER_SEED);
   const unshieldedSenderSeed = getUnshieldedSeed(SENDER_SEED);
   const dustSenderSeed = getDustSeed(SENDER_SEED);
-  const unshieldedSenderKeystore = createKeystore(unshieldedSenderSeed, NetworkId.NetworkId.Undeployed);
+  const unshieldedSenderKeystore = createKeystore(
+    { kind: 'schnorr', secret: unshieldedSenderSeed },
+    NetworkId.NetworkId.Undeployed,
+  );
 
   let startedEnvironment: StartedDockerComposeEnvironment;
   let configuration: DefaultConfiguration;
@@ -111,7 +114,10 @@ describe('Dust Registration', () => {
     shieldedReceiverSeed = getShieldedSeed(RECEIVER_SEED);
     unshieldedReceiverSeed = getUnshieldedSeed(RECEIVER_SEED);
     dustReceiverSeed = getDustSeed(RECEIVER_SEED);
-    unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);
+    unshieldedReceiverKeystore = createKeystore(
+      { kind: 'schnorr', secret: unshieldedReceiverSeed },
+      NetworkId.NetworkId.Undeployed,
+    );
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
 
     senderFacade = await WalletFacade.init({

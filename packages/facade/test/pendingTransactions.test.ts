@@ -18,7 +18,7 @@ import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wa
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
 import { PendingTransactions } from '@midnight-ntwrk/wallet-sdk-capabilities/pendingTransactions';
@@ -51,7 +51,7 @@ describe('Wallet Facade handling pending transactions', () => {
     const shieldedSeed = getShieldedSeed(seed);
     const unshieldedSeed = getUnshieldedSeed(seed);
     const dustSeed = getDustSeed(seed);
-    const unshieldedKeystore = createKeystore(unshieldedSeed, configuration.networkId);
+    const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: unshieldedSeed }, configuration.networkId);
     shielded = ShieldedWallet(configuration).startWithSeed(shieldedSeed);
     unshielded = UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
     dust = DustWallet(configuration).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust);

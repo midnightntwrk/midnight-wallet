@@ -12,7 +12,8 @@
 // limitations under the License.
 import { Either, type Option, pipe, Array as Arr, Iterable as IterableOps } from 'effect';
 import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import type * as ledger from '@midnight-ntwrk/ledger-v9';
+import { addressFromKey, SignatureEnabled } from '@midnight-ntwrk/ledger-v9';
 import { TransactingError, type WalletError } from './WalletError.js';
 
 /** Unbound transaction type. This is a transaction that has no signatures and is not bound yet. */
@@ -151,7 +152,7 @@ export const TransactionOps: TransactionOps = {
   ): Either.Either<ledger.UnshieldedOffer<ledger.SignatureEnabled>, WalletError> {
     return pipe(
       offer.inputs,
-      Arr.map((_, i) => offer.signatures.at(i) ?? signature),
+      Arr.map((_, i) => offer.signatures.at(i) ?? new SignatureEnabled(signature)),
       (signatures) =>
         Either.try({
           try: () => offer.addSignatures(signatures),
@@ -171,6 +172,11 @@ export const TransactionOps: TransactionOps = {
     signatureVerifyingKey: ledger.SignatureVerifyingKey,
   ): ledger.Utxo[] {
     const segments = TransactionOps.getSegments(transaction);
+    const ownerAddress = addressFromKey(signatureVerifyingKey);
+    const isOwn = (input: ledger.UtxoSpend): boolean =>
+      input.owner.tag === signatureVerifyingKey.tag && input.owner.value === signatureVerifyingKey.value;
+    // Intent inputs are UtxoSpends owned by a verifying key; a Utxo is owned by the derived address
+    const toUtxo = (input: ledger.UtxoSpend): ledger.Utxo => ({ ...input, owner: ownerAddress });
 
     return pipe(
       segments,
@@ -184,14 +190,14 @@ export const TransactionOps: TransactionOps = {
         const { guaranteedUnshieldedOffer, fallibleUnshieldedOffer } = intent;
 
         const ownedInputsfromGuaranteedSection = guaranteedUnshieldedOffer?.inputs
-          ? guaranteedUnshieldedOffer.inputs.filter((input) => input.owner === signatureVerifyingKey)
+          ? guaranteedUnshieldedOffer.inputs.filter(isOwn)
           : [];
 
         const ownedInputsfromFallibleSection = fallibleUnshieldedOffer
-          ? fallibleUnshieldedOffer.inputs.filter((input) => input.owner === signatureVerifyingKey)
+          ? fallibleUnshieldedOffer.inputs.filter(isOwn)
           : [];
 
-        return [...ownedInputsfromGuaranteedSection, ...ownedInputsfromFallibleSection];
+        return [...ownedInputsfromGuaranteedSection, ...ownedInputsfromFallibleSection].map(toUtxo);
       }),
     );
   },

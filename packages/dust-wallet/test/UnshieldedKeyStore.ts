@@ -15,11 +15,18 @@
 import {
   addressFromKey,
   type Signature,
+  type SignatureKind,
   type SignatureVerifyingKey,
   signData,
+  type SigningKey as LedgerSigningKey,
   type UserAddress,
   signatureVerifyingKey,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnight-ntwrk/ledger-v9';
+
+export type UnshieldedSecretKey = {
+  kind: SignatureKind;
+  secret: Uint8Array<ArrayBufferLike>;
+};
 
 export interface UnshieldedKeystore {
   getSecretKey(): Buffer;
@@ -28,15 +35,20 @@ export interface UnshieldedKeystore {
   signData(data: Uint8Array): Signature;
 }
 
-export const createUnshieldedKeystore = (dustSeed: Uint8Array<ArrayBufferLike>): UnshieldedKeystore => {
-  const keystore: UnshieldedKeystore = {
-    getSecretKey: () => Buffer.from(dustSeed),
+export const createUnshieldedKeystore = (secretKey: UnshieldedSecretKey): UnshieldedKeystore => {
+  const ledgerSigningKey: LedgerSigningKey = {
+    tag: secretKey.kind,
+    value: Buffer.from(secretKey.secret).toString('hex'),
+  };
 
-    getPublicKey: () => signatureVerifyingKey(keystore.getSecretKey().toString('hex')),
+  const keystore: UnshieldedKeystore = {
+    getSecretKey: () => Buffer.from(secretKey.secret),
+
+    getPublicKey: () => signatureVerifyingKey(ledgerSigningKey),
 
     getAddress: () => addressFromKey(keystore.getPublicKey()),
 
-    signData: (data: Uint8Array) => signData(keystore.getSecretKey().toString('hex'), data),
+    signData: (data: Uint8Array) => signData(ledgerSigningKey, data),
   };
 
   return keystore;

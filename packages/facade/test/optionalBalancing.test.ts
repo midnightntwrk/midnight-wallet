@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
@@ -73,7 +73,10 @@ describe('Optional Balancing', () => {
   const unshieldedSeed = getUnshieldedSeed(WALLET_SEED);
   const dustSeed = getDustSeed(WALLET_SEED);
 
-  const unshieldedKeystore = createKeystore(unshieldedSeed, NetworkId.NetworkId.Undeployed);
+  const unshieldedKeystore = createKeystore(
+    { kind: 'schnorr', secret: unshieldedSeed },
+    NetworkId.NetworkId.Undeployed,
+  );
 
   let startedEnvironment: StartedDockerComposeEnvironment;
   let configuration: DefaultConfiguration;

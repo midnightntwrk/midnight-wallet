@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { WalletFacade, type Clock } from '../../src/index.js';
 import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
@@ -29,6 +29,7 @@ import {
   CustomUnshieldedWallet,
   createKeystore,
   PublicKey,
+  type UnshieldedSecretKey,
   type UnshieldedWalletAPI,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { NoOpTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -66,7 +67,12 @@ export const getShieldedSeed = (seed: string): Uint8Array => {
   return Buffer.from(derivationResult.key);
 };
 
-export const getUnshieldedSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
+type UnshieldedSeedRole = typeof Roles.NightExternal | typeof Roles.EcdsaUnshielded;
+
+export const getUnshieldedSeed = (
+  seed: string,
+  role: UnshieldedSeedRole = Roles.NightExternal,
+): Uint8Array<ArrayBufferLike> => {
   const seedBuffer = Buffer.from(seed, 'hex');
   const hdWalletResult = HDWallet.fromSeed(seedBuffer);
 
@@ -75,7 +81,7 @@ export const getUnshieldedSeed = (seed: string): Uint8Array<ArrayBufferLike> => 
     hdWallet: HDWallet;
   };
 
-  const derivationResult = hdWallet.selectAccount(0).selectRole(Roles.NightExternal).deriveKeyAt(0);
+  const derivationResult = hdWallet.selectAccount(0).selectRole(role).deriveKeyAt(0);
 
   if (derivationResult.type === 'keyOutOfBounds') {
     throw new Error('Key derivation out of bounds');
@@ -243,15 +249,27 @@ export type WalletKeys = {
 };
 
 /** Derives all wallet keys from a hex seed. */
-export const deriveWalletKeys = (hexSeed: string, networkId: NetworkId.NetworkId): WalletKeys => {
+export const deriveWalletKeys = (
+  hexSeed: string,
+  networkId: NetworkId.NetworkId,
+  signatureKind: ledger.SignatureKind = 'schnorr',
+): WalletKeys => {
+  const unshieldedRole: UnshieldedSeedRole = signatureKind === 'ecdsa' ? Roles.EcdsaUnshielded : Roles.NightExternal;
+
   const shieldedSeed = getShieldedSeed(hexSeed);
   const dustSeed = getDustSeed(hexSeed);
-  const unshieldedSeed = getUnshieldedSeed(hexSeed);
+  const unshieldedSeed = getUnshieldedSeed(hexSeed, unshieldedRole);
+
+  const unshieldedSecretKey: UnshieldedSecretKey = { kind: signatureKind, secret: unshieldedSeed };
+  const ledgerSigningKey: ledger.SigningKey = {
+    tag: unshieldedSecretKey.kind,
+    value: Buffer.from(unshieldedSecretKey.secret).toString('hex'),
+  };
 
   const shieldedKeys = ledger.ZswapSecretKeys.fromSeed(shieldedSeed);
   const dustKey = ledger.DustSecretKey.fromSeed(dustSeed);
-  const unshieldedKeystore = createKeystore(unshieldedSeed, networkId);
-  const signatureVerifyingKey = ledger.signatureVerifyingKey(Buffer.from(unshieldedSeed).toString('hex'));
+  const unshieldedKeystore = createKeystore(unshieldedSecretKey, networkId);
+  const signatureVerifyingKey = ledger.signatureVerifyingKey(ledgerSigningKey);
   const userAddress = ledger.addressFromKey(signatureVerifyingKey);
 
   return { shieldedKeys, dustKey, unshieldedKeystore, signatureVerifyingKey, userAddress };

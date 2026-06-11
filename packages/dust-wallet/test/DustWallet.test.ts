@@ -16,10 +16,11 @@ import {
   LedgerParameters,
   nativeToken,
   type ProofErasedTransaction,
+  type SignatureVerifyingKey,
   Transaction,
   UnshieldedOffer,
   type UserAddress,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnight-ntwrk/ledger-v9';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
@@ -115,7 +116,11 @@ describe('DustWallet', () => {
   let submissionService: Submission.SubmissionServiceEffect<ProofErasedTransaction>;
   const provingService = makeSimulatorProvingServiceEffect();
 
-  const registerNightTokens = (wallet: RunningWallet, nightTokens: Array<UtxoWithMeta>, nightVerifyingKey: string) => {
+  const registerNightTokens = (
+    wallet: RunningWallet,
+    nightTokens: Array<UtxoWithMeta>,
+    nightVerifyingKey: SignatureVerifyingKey,
+  ) => {
     return Effect.gen(function* () {
       const lastState = yield* SubscriptionRef.get(stateRef);
       const simulatorState = yield* simulator.getLatestState();
@@ -147,7 +152,7 @@ describe('DustWallet', () => {
   const deregisterNightTokens = (
     wallet: RunningWallet,
     nightTokens: Array<UtxoWithMeta>,
-    nightVerifyingKey: string,
+    nightVerifyingKey: SignatureVerifyingKey,
     dustSecretKey: DustSecretKey,
   ) => {
     return Effect.gen(function* () {
@@ -189,7 +194,7 @@ describe('DustWallet', () => {
   beforeEach(async () =>
     Effect.gen(function* () {
       const dustSeed = getDustSeed(SEED);
-      keyStore = createUnshieldedKeystore(dustSeed);
+      keyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: dustSeed });
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
       const scope = yield* Scope.make();
 
@@ -272,7 +277,7 @@ describe('DustWallet', () => {
 
       latestState = yield* SubscriptionRef.get(stateRef);
       const newWalletBalance = walletVariant.coinsAndBalances.getWalletBalance(latestState, toTxTime(3));
-      expect(newWalletBalance).toBe(2_001_445_580_863_630n);
+      expect(newWalletBalance).toBe(2_001_297_005_461_389n);
     }).pipe(Effect.runPromise);
   });
 
@@ -375,7 +380,7 @@ describe('DustWallet', () => {
       const sendToken = nightTokens.find((val) => val.value === awardTokens);
       expect(sendToken).toBeDefined();
 
-      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobKeyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed(SEED_BOB) });
       const bobAddress = bobKeyStore.getAddress();
 
       const inputs = [
@@ -518,7 +523,7 @@ describe('DustWallet', () => {
       const sendToken = nightTokens.find((val) => val.value === awardTokens);
       expect(sendToken).toBeDefined();
 
-      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobKeyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed(SEED_BOB) });
       const bobAddress = bobKeyStore.getAddress();
 
       const inputs = [
@@ -648,7 +653,7 @@ describe('DustWallet', () => {
       const ttl = DateOps.addSeconds(currentTime, 1);
 
       // build a transfer transaction that requires dust for fees
-      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobKeyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed(SEED_BOB) });
       const bobAddress = bobKeyStore.getAddress();
       const nightTokens = getNightTokens(simulatorState, walletAddress);
       const sendToken = nightTokens[0];
@@ -710,7 +715,7 @@ describe('DustWallet', () => {
       const currentTime = getCurrentTime(simulatorState);
       const ttl = DateOps.addSeconds(currentTime, 1);
 
-      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobKeyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed(SEED_BOB) });
       const bobAddress = bobKeyStore.getAddress();
       const nightTokens = getNightTokens(simulatorState, walletAddress);
       expect(nightTokens.length).toBe(2);
@@ -789,7 +794,7 @@ describe('DustWallet', () => {
       const currentTime = getCurrentTime(simulatorState);
       const ttl = DateOps.addSeconds(currentTime, 1);
 
-      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobKeyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed(SEED_BOB) });
       const bobAddress = bobKeyStore.getAddress();
       const nightTokens = getNightTokens(simulatorState, walletAddress);
 

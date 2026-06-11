@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import { vi } from 'vitest';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import {
   Effect,
   Stream,

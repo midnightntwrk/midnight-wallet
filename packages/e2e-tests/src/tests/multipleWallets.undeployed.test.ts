@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { firstValueFrom } from 'rxjs';
 import { logger } from './logger.js';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
@@ -55,7 +55,7 @@ describe('Syncing', () => {
 
     async function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
       for (let i = 0; i < seeds.length; i++) {
-        unshieldedKeystores[i] = createKeystore(seeds[i], fixture.getNetworkId());
+        unshieldedKeystores[i] = createKeystore({ kind: 'schnorr', secret: seeds[i] }, fixture.getNetworkId());
         shieldedWallets[i] = Wallet.startWithSeed(seeds[i]);
         dustWallets[i] = Dust.startWithSeed(seeds[i], dustParameters);
       }
