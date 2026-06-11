@@ -1,0 +1,25 @@
+{
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "@midnight-ntwrk/wallet-test-website": "1.0.0-beta.0",
+    "@midnight-ntwrk/wallet-sdk-abstractions": "2.1.0",
+    "@midnight-ntwrk/wallet-sdk-address-format": "3.1.2",
+    "@midnight-ntwrk/wallet-sdk-capabilities": "3.3.1",
+    "@midnight-ntwrk/wallet-sdk-docs-snippets": "1.0.0-beta.1",
+    "@midnight-ntwrk/wallet-sdk-dust-wallet": "4.1.0",
+    "@midnight/wallet-e2e-tests": "0.0.1",
+    "@midnight-ntwrk/wallet-sdk-facade": "4.0.1",
+    "@midnight-ntwrk/wallet-sdk-hd": "3.0.2",
+    "@midnight-ntwrk/wallet-sdk-indexer-client": "1.2.2",
+    "@midnight-ntwrk/wallet-sdk-node-client": "1.1.2",
+    "@midnight-ntwrk/wallet-sdk-prover-client": "1.2.2",
+    "@midnight-ntwrk/wallet-sdk-runtime": "1.0.4",
+    "@midnight-ntwrk/wallet-sdk-shielded": "3.0.1",
+    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "3.1.0",
+    "@midnight-ntwrk/wallet-sdk-utilities": "1.2.0",
+    "@midnight-ntwrk/wallet-integration-tests": "0.0.1",
+    "@midnight-ntwrk/wallet-sdk": "1.1.0"
+  },
+  "changesets": []
+}
