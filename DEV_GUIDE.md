@@ -95,9 +95,9 @@ will return as soon as the release workflow runs again.
 Since June 2026 the SDK is developed on **two release lines**, because the 2.x line migrates from
 `@midnight-ntwrk/ledger-v8` to `@midnight-ntwrk/ledger-v9` (a breaking change):
 
-| Branch | Line | Ledger | Publishes as                                          |
-| ------ | ---- | ------ | ----------------------------------------------------- |
-| `main` | 1.x  | v8     | `latest` dist-tag, canaries under `canary`             |
+| Branch | Line | Ledger | Publishes as                                                   |
+| ------ | ---- | ------ | -------------------------------------------------------------- |
+| `main` | 1.x  | v8     | `latest` dist-tag, canaries under `canary`                     |
 | `v2`   | 2.x  | v9     | `beta` dist-tag (pre-release mode), canaries under `canary-v2` |
 
 How the `v2` line works:
@@ -113,17 +113,17 @@ How the `v2` line works:
 
 Execute these steps **in order** when the v2 line is ready to replace 1.x as the primary release:
 
-1. **Cut a `v1` maintenance branch first**, from the last 1.x commit on `main` — _before_ merging `v2` into `main`.
-   On that branch:
+1. **Cut a `v1` maintenance branch first**, from the last 1.x commit on `main` — _before_ merging `v2` into `main`. On
+   that branch:
    - Add `v1` to the branch lists in `.github/workflows/cd.yml` and `check-changeset.yml`.
    - Set `baseBranch: "v1"` in `.changeset/config.json`.
    - ⚠️ **Change the publish step to use an explicit dist-tag** (e.g. `yarn changeset publish --tag v1`).
-     `changeset publish` tags `latest` by default — without this, a 1.x backport patch would steal the `latest`
-     dist-tag from 2.x.
+     `changeset publish` tags `latest` by default — without this, a 1.x backport patch would steal the `latest` dist-tag
+     from 2.x.
 2. **Exit pre-release mode on `v2`**: run `yarn changeset pre exit` and commit the removed `.changeset/pre.json`.
 3. **Merge `v2` into `main`.** The release PR on `main` then versions the real majors (e.g. `@midnight-ntwrk/wallet-sdk`
-   → `2.0.0`) and publishing it tags them `latest`. When resolving conflicts, `main`'s `.changeset/config.json` must
-   end up with `baseBranch: "main"`.
+   → `2.0.0`) and publishing it tags them `latest`. When resolving conflicts, `main`'s `.changeset/config.json` must end
+   up with `baseBranch: "main"`.
 4. **Retire the `v2` branch**: remove it from the workflow branch lists (or delete the branch) so it no longer
    publishes.
 5. **Sanity-check dist-tags** on the registry afterwards: `latest` → 2.x, `v1` → last 1.x, and the `beta` tag points at
