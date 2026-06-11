@@ -1,12 +1,12 @@
 ---
-'@midnight-ntwrk/wallet-sdk-address-format': minor
-'@midnight-ntwrk/wallet-sdk-capabilities': minor
-'@midnight-ntwrk/wallet-sdk-dust-wallet': minor
-'@midnight-ntwrk/wallet-sdk-facade': minor
-'@midnight-ntwrk/wallet-sdk-node-client': minor
-'@midnight-ntwrk/wallet-sdk-prover-client': minor
-'@midnight-ntwrk/wallet-sdk-shielded': minor
-'@midnight-ntwrk/wallet-sdk-unshielded-wallet': minor
+'@midnight-ntwrk/wallet-sdk': major
+'@midnight-ntwrk/wallet-sdk-address-format': major
+'@midnight-ntwrk/wallet-sdk-capabilities': major
+'@midnight-ntwrk/wallet-sdk-dust-wallet': major
+'@midnight-ntwrk/wallet-sdk-facade': major
+'@midnight-ntwrk/wallet-sdk-prover-client': major
+'@midnight-ntwrk/wallet-sdk-shielded': major
+'@midnight-ntwrk/wallet-sdk-unshielded-wallet': major
 ---
 
 Migrate from `@midnight-ntwrk/ledger-v8` to `@midnight-ntwrk/ledger-v9`.
