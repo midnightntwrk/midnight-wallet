@@ -10,6 +10,7 @@ on:
   push:
     branches:
       - main
+      - v2
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
@@ -141,8 +142,13 @@ jobs:
           # Build AFTER snapshot versions are applied
           yarn dist:publish
 
-          # Publish under dist-tag "canary"
-          yarn changeset publish --tag canary
+          # Publish under a branch-specific dist-tag: "canary" on main, "canary-<branch>" elsewhere
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            CANARY_TAG="canary"
+          else
+            CANARY_TAG="canary-${{ github.ref_name }}"
+          fi
+          yarn changeset publish --tag "$CANARY_TAG"
 
       - name: Cleanup (always)
         if: always()
