@@ -32,6 +32,7 @@ import {
   type UnshieldedWalletAPI,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { NoOpTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type WalletEntry } from '../../src/index.js';
 import {
   Sync as UnshieldedSync,
   V1Builder as UnshieldedV1Builder,
@@ -184,7 +185,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
   const ShieldedWalletFactory = CustomShieldedWallet(
     {
       ...config,
-      txHistoryStorage: new NoOpTransactionHistoryStorage(),
+      txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>(),
       indexerClientConnection: { indexerHttpUrl: 'http://unused:0' },
     },
     new ShieldedV1Builder()
@@ -214,7 +215,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
 
   // Unshielded wallet: all defaults except sync (uses simulator sync)
   const UnshieldedWalletFactory = CustomUnshieldedWallet(
-    { ...config, txHistoryStorage: new NoOpTransactionHistoryStorage() },
+    { ...config, txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>() },
     new UnshieldedV1Builder()
       .withSync(UnshieldedSync.makeSimulatorSyncService, UnshieldedSync.makeSimulatorSyncCapability)
       .withSerializationDefaults()
@@ -280,7 +281,7 @@ export const makeSimulatorFacade = (
           // Dummy values - not used in simulation mode
           indexerClientConnection: { indexerHttpUrl: 'http://unused' },
           relayURL: new URL('ws://unused'),
-          txHistoryStorage: new NoOpTransactionHistoryStorage(),
+          txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>(),
         },
         shielded: () => factories.createShieldedWallet(keys.shieldedKeys),
         unshielded: () => factories.createUnshieldedWallet(keys.unshieldedKeystore),

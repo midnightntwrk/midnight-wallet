@@ -83,6 +83,8 @@ export const UnshieldedTransactionSchema = Schema.Data(
     protocolVersion: Schema.Number,
     identifiers: Schema.optional(Schema.Array(Schema.String)),
     block: Schema.Struct({
+      hash: Schema.String,
+      height: Schema.Number,
       timestamp: DateFromMillis,
     }),
     fees: Schema.optional(
