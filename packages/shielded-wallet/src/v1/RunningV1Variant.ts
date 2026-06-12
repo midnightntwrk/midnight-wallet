@@ -146,21 +146,27 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
           }),
         ).pipe(
           Effect.flatMap(({ changes, protocolVersion }) =>
-            pipe(
-              Effect.forEach(
-                changes,
-                (change) =>
-                  pipe(
-                    this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
-                    Effect.flatMap((metadata) =>
-                      this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
-                    ),
-                    Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+            // Skip the tx-history fork entirely when there are no changes.
+            // Forking unconditionally allocates a fiber per apply call (one
+            // for every batch the sync emits, even the all-progress ones),
+            // which adds up fast during catch-up.
+            changes.length === 0
+              ? Effect.void
+              : pipe(
+                  Effect.forEach(
+                    changes,
+                    (change) =>
+                      pipe(
+                        this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
+                        Effect.flatMap((metadata) =>
+                          this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                        ),
+                        Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+                      ),
+                    { discard: true, concurrency: 'unbounded' },
                   ),
-                { discard: true, concurrency: 'unbounded' },
-              ),
-              Effect.forkScoped,
-            ),
+                  Effect.forkScoped,
+                ),
           ),
           Effect.provideService(Scope.Scope, this.#scope),
         ),
