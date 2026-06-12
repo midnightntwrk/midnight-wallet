@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Chunk, Equivalence } from 'effect';
 import { type Observable, type OperatorFunction, reduce } from 'rxjs';
 
@@ -77,10 +77,8 @@ export const isOrderedSubsequenceOf = <T>(
  *
  * @internal
  */
-export const protocolStateEquals: Equivalence.Equivalence<ProtocolState.ProtocolState<unknown>> = Equivalence.struct({
-  version: Equivalence.strict(),
-  state: Equivalence.strict(),
-});
+export const protocolStateEquals: Equivalence.Equivalence<ProtocolState.ProtocolState<unknown>> =
+  ProtocolState.getEquivalence(Equivalence.strict());
 
 export const isRange = (values: Chunk.Chunk<number>): boolean => {
   const firstDropped = Chunk.drop(values, 1);
