@@ -23,8 +23,8 @@ export type ProtocolState<TState> = Readonly<{ version: ProtocolVersion.Protocol
 export const state = <TState>(ps: ProtocolState<TState>): TState => ps.state;
 
 /**
- * Derives an {@link Equivalence.Equivalence} for {@link ProtocolState} values from an equivalence of the
- * underlying state. Versions are compared strictly.
+ * Derives an {@link Equivalence.Equivalence} for {@link ProtocolState} values from an equivalence of the underlying
+ * state. Versions are compared strictly.
  *
  * @param stateEquivalence The equivalence used to compare the `state` field.
  * @returns An equivalence over `ProtocolState<TState>`.
