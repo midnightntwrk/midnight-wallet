@@ -1,5 +1,20 @@
 # @midnight-ntwrk/wallet-sdk-dust-wallet
 
+## 4.2.0
+
+### Minor Changes
+
+- dff5706: Fix a race in `WalletFacade.registerNightUtxosForDustGeneration` where the registration's `allow_fee_payment`
+  could be below its own fee, causing the chain to reject submission with `BalanceCheckOverspend`. The wallet now
+  estimates the fee at build time, reverts the booking, and throws before submission. Adds
+  `WalletFacade.waitForGeneratedDust(utxos, requiredAmount, opts?)` so callers can defer registration until enough dust
+  has accrued — pair with `estimateRegistration` to pick the threshold.
+
+### Patch Changes
+
+- Updated dependencies [0b41e11]
+  - @midnight-ntwrk/wallet-sdk-runtime@1.0.5
+
 ## 4.1.0
 
 ### Minor Changes
