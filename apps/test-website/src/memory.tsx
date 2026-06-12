@@ -16,7 +16,7 @@
 // IMPORTANT: wasm-monitor must be the FIRST import so its monkey-patch on
 // WebAssembly is installed before the ledger wasm modules are instantiated
 // (which happens during wallet-sdk import resolution via ./wallet.js).
-import './wasm-monitor.js';
+import './utils/wasm-monitor.js';
 import {
   downloadMemLog,
   formatMB,
@@ -27,7 +27,7 @@ import {
   startMemMonitor,
   subscribeMemLog,
   type SyncSnapshot,
-} from './mem-monitor.js';
+} from './utils/mem-monitor.js';
 import * as Wallet from './wallet.js';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
