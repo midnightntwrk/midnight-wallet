@@ -76,9 +76,9 @@ export type IndexerClientConnection = {
   indexerHttpUrl: string;
   indexerWsUrl?: string;
   keepAlive?: number;
-  /** Cap on the in-flight event queue between the WebSocket push and the apply loop. Default: 1000. */
+  /** Cap on the in-flight event queue between the WebSocket push and the apply loop. Default: 10000. */
   bufferSize?: number;
-  /** In-flight count at which the disposed WS subscription is reopened. Default: 500. */
+  /** In-flight count at which the disposed WS subscription is reopened. Default: 100. */
   resumeThreshold?: number;
 };
 
