@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Chunk } from 'effect';
+import { Chunk, Equivalence } from 'effect';
 import { type Observable, type OperatorFunction, reduce } from 'rxjs';
 
 /**
@@ -59,7 +59,7 @@ export const reduceToChunk = <T>(): OperatorFunction<T, Chunk.Chunk<T>> =>
 export const isOrderedSubsequenceOf = <T>(
   received: readonly T[],
   expected: readonly T[],
-  equals: (a: T, b: T) => boolean,
+  equals: Equivalence.Equivalence<T>,
 ): boolean => {
   const searchEnd = received.reduce((searchFrom: number, value) => {
     if (searchFrom < 0) {
@@ -77,8 +77,10 @@ export const isOrderedSubsequenceOf = <T>(
  *
  * @internal
  */
-export const protocolStateEquals = <T>(a: ProtocolState.ProtocolState<T>, b: ProtocolState.ProtocolState<T>): boolean =>
-  a.version === b.version && a.state === b.state;
+export const protocolStateEquals: Equivalence.Equivalence<ProtocolState.ProtocolState<unknown>> = Equivalence.struct({
+  version: Equivalence.strict(),
+  state: Equivalence.strict(),
+});
 
 export const isRange = (values: Chunk.Chunk<number>): boolean => {
   const firstDropped = Chunk.drop(values, 1);
