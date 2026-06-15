@@ -12,6 +12,7 @@
 // limitations under the License.
 import { type Stream, Context } from 'effect';
 import type { Query } from './Query.js';
+import type { BackpressureOptions as BackpressureOptionsImpl } from './Backpressure.js';
 import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 
 export class SubscriptionClient extends Context.Tag('@midnight-ntwrk/indexer-client#SubscriptionClient')<
@@ -25,10 +26,21 @@ export declare namespace SubscriptionClient {
     readonly keepAlive?: number | undefined;
   }
 
+  /**
+   * Options for {@link Service.subscribeWithBackpressure}. Canonical definition lives in
+   * {@link ./Backpressure.BackpressureOptions} — re-exported here for ergonomic access through the namespace.
+   */
+  type BackpressureOptions<R, V> = BackpressureOptionsImpl<R, V>;
+
   interface Service {
     subscribe<R, V, T extends Query.Document<R, V> = Query.Document<R, V>>(
       document: T,
       variables: V,
+    ): Stream.Stream<Query.Result<T>, ClientError | ServerError>;
+
+    subscribeWithBackpressure<R, V, T extends Query.Document<R, V> = Query.Document<R, V>>(
+      document: T,
+      options: BackpressureOptions<Query.Result<T>, V>,
     ): Stream.Stream<Query.Result<T>, ClientError | ServerError>;
   }
 }
