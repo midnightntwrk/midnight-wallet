@@ -29,6 +29,7 @@ import {
   type UnboundTransactionBalanceResult,
   type UnprovenTransactionBalanceResult,
 } from './Transacting.js';
+import { type UtxoWithMeta } from './UnshieldedState.js';
 import { type UnboundTransaction } from './TransactionOps.js';
 import { type WalletError } from './WalletError.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
@@ -179,6 +180,27 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
         this.#v1Context.transactingCapability.makeTransfer(state, outputs, ttl),
+        EitherOps.toEffect,
+        Effect.map(({ transaction, newState }) => [transaction, newState]),
+      );
+    });
+  }
+
+  rotateUtxos(
+    guaranteedUtxos: ReadonlyArray<UtxoWithMeta>,
+    fallibleUtxos: ReadonlyArray<UtxoWithMeta>,
+    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    ttl: Date,
+  ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
+    return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
+      return pipe(
+        this.#v1Context.transactingCapability.rotateUtxos(
+          state,
+          guaranteedUtxos,
+          fallibleUtxos,
+          nightVerifyingKey,
+          ttl,
+        ),
         EitherOps.toEffect,
         Effect.map(({ transaction, newState }) => [transaction, newState]),
       );

@@ -1,6 +1,6 @@
 services:
   proof-server:
-    image: 'ghcr.io/midnight-ntwrk/proof-server:8.0.3'
+    image: 'ghcr.io/midnight-ntwrk/proof-server:8.1.0'
     container_name: proof-server_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
@@ -19,7 +19,7 @@ services:
       start_period: 10s
 
   indexer:
-    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.0.0'
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.3.2'
     container_name: indexer_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
@@ -32,18 +32,20 @@ services:
       APP__INFRA__NODE__URL: 'ws://node:9944'
       APP__APPLICATION__NETWORK_ID: 'undeployed'
       APP__INFRA__SECRET: '${APP_INFRA_SECRET}'
+      APP__INFRA__SPO_NODE__URL: 'ws://node:9944'
+      APP__INFRA__SPO_NODE__BLOCKFROST_ID: 'e2e-test-dummy'
 
     healthcheck:
-      test: ['CMD-SHELL', 'cat /var/run/indexer-standalone/running']
-      interval: 60s
+      test: ['CMD-SHELL', 'curl -fs http://localhost:8088/ready']
+      interval: 5s
       timeout: 5s
-      retries: 3
+      retries: 36
       start_period: 60s
     depends_on:
       node:
         condition: service_healthy
   node:
-    image: 'ghcr.io/midnight-ntwrk/midnight-node:0.22.0'
+    image: 'ghcr.io/midnight-ntwrk/midnight-node:1.0.0'
     container_name: node_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
@@ -56,10 +58,15 @@ services:
     volumes:
       - node-data:/data
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:9944/health']
+      test:
+        - 'CMD-SHELL'
+        - >
+          curl -fs -H 'Content-Type: application/json' -d
+          '{"id":1,"jsonrpc":"2.0","method":"chain_getBlockHash","params":[1]}' http://localhost:9944 | grep -q
+          '"result":"0x'
       interval: 2s
       timeout: 5s
-      retries: 5
+      retries: 30
       start_period: 5s
     environment:
       CFG_PRESET: 'dev'

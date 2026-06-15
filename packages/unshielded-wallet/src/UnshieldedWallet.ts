@@ -128,6 +128,19 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
 
   transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<ledger.UnprovenTransaction>;
 
+  /**
+   * Books a caller-supplied set of Night UTxOs and returns an unproven transaction that moves them back to the same
+   * owner, split between the guaranteed (segment 0) and fallible (segment 1) sections of a single intent. Booking moves
+   * the UTxOs from available to pending so a concurrent build call cannot reuse them. The fallible section is available
+   * for callers that want to attach further actions (e.g. a Dust registration) at segment 1.
+   */
+  rotateUtxos(
+    guaranteedUtxos: readonly UtxoWithMeta[],
+    fallibleUtxos: readonly UtxoWithMeta[],
+    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    ttl: Date,
+  ): Promise<ledger.UnprovenTransaction>;
+
   initSwap(
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: readonly TokenTransfer[],
@@ -266,6 +279,19 @@ export function CustomUnshieldedWallet<
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.transferTransaction(outputs, ttl),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    rotateUtxos(
+      guaranteedUtxos: readonly UtxoWithMeta[],
+      fallibleUtxos: readonly UtxoWithMeta[],
+      nightVerifyingKey: ledger.SignatureVerifyingKey,
+      ttl: Date,
+    ): Promise<ledger.UnprovenTransaction> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.rotateUtxos(guaranteedUtxos, fallibleUtxos, nightVerifyingKey, ttl),
         })
         .pipe(Effect.runPromise);
     }

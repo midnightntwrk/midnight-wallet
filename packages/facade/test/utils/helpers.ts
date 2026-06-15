@@ -112,7 +112,7 @@ export const sleep = (secs: number): Promise<void> => {
 export const waitForDustGenerated = (seconds: number = 10): Promise<void> => sleep(seconds);
 
 /** Creates a clock backed by the simulator's current time. Reads time synchronously from the simulator's state ref. */
-export const simulatorClock = (simulator: Simulator): Clock => ({
+export const simulatorClock = (simulator: Simulator): Clock.Clock => ({
   now: () => Effect.runSync(simulator.query((s) => s.currentTime)),
 });
 
