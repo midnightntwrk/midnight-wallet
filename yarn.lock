@@ -2363,6 +2363,11 @@ __metadata:
     effect: "npm:^3.19.19"
     tar-stream: "npm:3.2.0"
     tsx: "npm:4.21.0"
+  peerDependencies:
+    "@midnight-ntwrk/ledger-v8": ^8.1.0
+  peerDependenciesMeta:
+    "@midnight-ntwrk/ledger-v8":
+      optional: true
   languageName: unknown
   linkType: soft
 
