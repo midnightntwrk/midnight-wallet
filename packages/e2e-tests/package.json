@@ -43,6 +43,6 @@
     "typescript-eslint": "8.56.1",
     "vitest": "4.1.5",
     "vitest-ctrf-json-reporter": "0.0.3",
-    "ws": "^8.19.0"
+    "ws": "8.21.0"
   }
 }
