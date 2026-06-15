@@ -133,6 +133,27 @@ jobs:
           SHORT_SHA=$(git rev-parse --short=7 HEAD)
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
 
+          # Force changeset to rewrite internal dependents' ranges during the
+          # snapshot. Internal sibling deps use caret ranges (see #399); a
+          # "-canary" prerelease does not satisfy a caret range, so without this
+          # those ranges are left untouched and yarn resolves the sibling from
+          # the published registry instead of the workspace, building against a
+          # stale package. "updateInternalDependents: always" makes changeset
+          # pin every internal range to the snapshot version so siblings resolve
+          # to the workspace. Applied only here (this checkout is discarded by
+          # the Cleanup step) so the regular release flow is unaffected.
+          # See https://github.com/changesets/changesets/blob/main/docs/experimental-options.md
+          node -e '
+            const fs = require("fs");
+            const path = ".changeset/config.json";
+            const config = JSON.parse(fs.readFileSync(path, "utf8"));
+            config.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH = {
+              ...config.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH,
+              updateInternalDependents: "always",
+            };
+            fs.writeFileSync(path, JSON.stringify(config, null, 2) + "\n");
+          '
+
           # Apply snapshot versions
           yarn changeset version --snapshot canary.${TIMESTAMP}-${SHORT_SHA}
 
