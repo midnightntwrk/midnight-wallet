@@ -374,4 +374,52 @@ describe('Wallet subscription', () => {
       );
     });
   });
+
+  describe('initial subscription cursor', () => {
+    // Open one subscription against a recording stub and return the variables it was opened with. The
+    // stub yields nothing, so the surrounding pipeline drains immediately.
+    const cursorFor = async (
+      state: CoreWallet,
+      secretKeys: ledger.ZswapSecretKeys,
+    ): Promise<ZswapEventsSubscriptionVariables | undefined> => {
+      const recorded: { value?: ZswapEventsSubscriptionVariables } = {};
+      const recordingFn = (variables: ZswapEventsSubscriptionVariables) => {
+        recorded.value = variables;
+        return Stream.empty as Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient>;
+      };
+
+      const syncService = makeEventsSyncService({
+        indexerClientConnection: {
+          indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+          indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+        },
+      });
+
+      await syncService
+        .updates(state, secretKeys)
+        .pipe(Stream.runDrain, Effect.provideService(ZswapEvents.tag, recordingFn), Effect.scoped, Effect.runPromise);
+
+      return recorded.value;
+    };
+
+    it('omits the id (null) for a fresh wallet so the indexer streams from the very start', async () => {
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const state = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
+
+      const variables = await cursorFor(state, secretKeys);
+
+      expect(variables).toEqual({ id: null });
+    });
+
+    it('requests one below the applied index for a restored wallet so the boundary event is re-delivered', async () => {
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const state = CoreWallet.updateProgress(CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed), {
+        appliedIndex: 5n,
+      });
+
+      const variables = await cursorFor(state, secretKeys);
+
+      expect(variables).toEqual({ id: 4 });
+    });
+  });
 });
