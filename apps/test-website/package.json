@@ -42,6 +42,6 @@
     "@types/lodash-es": "4.17.12",
     "vite": "7.3.5",
     "vite-plugin-node-polyfills": "0.28.0",
-    "vite-plugin-wasm": "3.5.0"
+    "vite-plugin-wasm": "3.6.0"
   }
 }
