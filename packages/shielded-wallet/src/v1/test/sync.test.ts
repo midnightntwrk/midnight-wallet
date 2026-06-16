@@ -135,10 +135,10 @@ const createMockSubscriptionFn = (
           // Use TestClock.sleep when in test clock context, otherwise use Effect.sleep
           return useTestClock ? TestClock.sleep(delay) : Effect.sleep(delay);
         }),
-      ) as Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient>;
+      );
     }
 
-    return baseStream as Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient>;
+    return baseStream;
   };
 };
 
