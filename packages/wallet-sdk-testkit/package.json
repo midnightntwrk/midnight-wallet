@@ -69,7 +69,7 @@
     "rimraf": "^6.1.3",
     "testcontainers": "^11.12.0",
     "typescript": "^5.9.3",
-    "vitest": "4.1.5"
+    "vitest": "4.1.8"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",

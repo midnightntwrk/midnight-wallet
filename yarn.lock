@@ -2617,7 +2617,7 @@ __metadata:
     rxjs: "npm:^7.8.2"
     testcontainers: "npm:^11.12.0"
     typescript: "npm:^5.9.3"
-    vitest: "npm:4.1.5"
+    vitest: "npm:4.1.8"
   peerDependencies:
     "@midnight-ntwrk/wallet-sdk-utilities": "workspace:^"
     testcontainers: ^11.12.0
