@@ -93,7 +93,7 @@ will return as soon as the release workflow runs again.
 ## Release Lines: `main` (1.x) and `v2`
 
 Since June 2026 the SDK is developed on **two release lines**, because the 2.x line migrates from
-`@midnight-ntwrk/ledger-v8` to `@midnight-ntwrk/ledger-v9` (a breaking change):
+`@midnight-ntwrk/ledger-v8` to `@midnightntwrk/ledger-v9` (a breaking change):
 
 | Branch | Line | Ledger | Publishes as                                                   |
 | ------ | ---- | ------ | -------------------------------------------------------------- |
