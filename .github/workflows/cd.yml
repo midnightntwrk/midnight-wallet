@@ -4,6 +4,13 @@ env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
   MIDNIGHTCI_GPG_PRIVATE_KEY: ${{ secrets.MIDNIGHTCI_GPG_PRIVATE_KEY }}
+  # NPM publish auth uses npm Trusted Publishing (OIDC) — no long-lived
+  # NPM_TOKEN secret. Each publishable package must have a Trusted
+  # Publisher configured on npmjs pointing to:
+  #   repo: <owner>/<this-repo>
+  #   workflow: .github/workflows/cd.yml
+  #   environment: npm-publish-stable (release) or npm-publish-canary
+  # Docs: https://docs.npmjs.com/trusted-publishers
 
 on:
   workflow_dispatch:
@@ -22,10 +29,14 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest-8-core-x64
+    # Human gate: this environment must require reviewer approval before
+    # the job can run. Configure required reviewers in repo
+    # Settings → Environments → npm-publish-stable.
+    environment: npm-publish-stable
     permissions:
       contents: write
       pull-requests: write
-      packages: write
+      id-token: write # for npm Trusted Publishing (OIDC) + provenance
 
     concurrency:
       group: release-${{ github.ref_name }}
@@ -39,16 +50,21 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
-          # This is required for the npm publish step
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: 'https://npm.pkg.github.com'
+          registry-url: 'https://registry.npmjs.org'
           scope: '@midnight-ntwrk'
+
+      # Node 22 LTS ships npm 10; Trusted Publishing requires npm 11.5.1+.
+      - name: Upgrade npm to a Trusted Publishing-capable version
+        run: npm install -g npm@latest
 
       - name: Enable corepack
         run: corepack enable
 
-      - name: Configure yarn
+      - name: Configure yarn (install-time auth for GH Packages)
         run: |
+          # Upstream @midnight-ntwrk deps (ledger-v8, wallet-api, zkir-v2, etc.)
+          # still live on GH Packages, so install needs that token. Publish
+          # uses npm CLI with Trusted Publishing — no yarn-side npm token.
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
       - name: Import GPG key
@@ -82,15 +98,22 @@ jobs:
 
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          # No NODE_AUTH_TOKEN: `yarn changeset:publish` shells out to
+          # `npm publish --provenance` (via scripts/publish.mjs), and npm
+          # authenticates via OIDC against the Trusted Publisher
+          # configured on npmjs for this repo + workflow + environment.
 
   canary:
     name: Canary (snapshot publish)
     runs-on: ubuntu-latest-8-core-x64
     needs: [release]
+    # Canary uses a separate environment so the npmjs Trusted Publisher
+    # config can be scoped per release type; no required reviewers here
+    # (canary should publish automatically on every main push).
+    environment: npm-publish-canary
     permissions:
-      packages: write
       contents: read
+      id-token: write # for npm Trusted Publishing (OIDC) + provenance
     concurrency:
       group: canary-${{ github.ref_name }}
       cancel-in-progress: false
@@ -103,14 +126,16 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: 'https://npm.pkg.github.com'
+          registry-url: 'https://registry.npmjs.org'
           scope: '@midnight-ntwrk'
+
+      - name: Upgrade npm to a Trusted Publishing-capable version
+        run: npm install -g npm@latest
 
       - name: Enable corepack
         run: corepack enable
 
-      - name: Configure yarn
+      - name: Configure yarn (install-time auth for GH Packages)
         run: |
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
@@ -119,7 +144,6 @@ jobs:
 
       - name: Snapshot version + publish canary
         env:
-          NODE_AUTH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
         run: |
           set -euo pipefail
@@ -163,13 +187,15 @@ jobs:
           # Build AFTER snapshot versions are applied
           yarn dist:publish
 
-          # Publish under a branch-specific dist-tag: "canary" on main, "canary-<branch>" elsewhere
+          # Publish under a branch-specific dist-tag: "canary" on main,
+          # "canary-<branch>" elsewhere. Uses the npm CLI (OIDC + provenance)
+          # via scripts/publish.mjs, which forwards --tag to `npm publish`.
           if [ "${{ github.ref_name }}" = "main" ]; then
             CANARY_TAG="canary"
           else
             CANARY_TAG="canary-${{ github.ref_name }}"
           fi
-          yarn changeset publish --tag "$CANARY_TAG"
+          node scripts/publish.mjs --tag "$CANARY_TAG"
 
       - name: Cleanup (always)
         if: always()

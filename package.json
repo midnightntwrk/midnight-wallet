@@ -73,7 +73,7 @@
     "dist": "turbo run dist",
     "watch": "turbo watch dist",
     "dist:publish": "turbo run dist:publish",
-    "changeset:publish": "yarn dist:publish && yarn changeset publish",
+    "changeset:publish": "yarn dist:publish && node scripts/publish.mjs && yarn changeset tag",
     "changeset:version": "yarn changeset version && yarn install --mode=update-lockfile",
     "changeset:check": "yarn changeset status --verbose",
     "clean": "turbo run clean"
