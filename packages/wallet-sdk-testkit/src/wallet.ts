@@ -95,10 +95,7 @@ const restoreUnshieldedWallet = async (
   try {
     const serialized = await readIfExists(path);
     if (serialized) {
-      const keyStore = createKeystore(
-        { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
-        env.endpoints.networkId,
-      );
+      const keyStore = createKeystore({ kind: 'schnorr', secret: getUnshieldedSeed(seed) }, env.endpoints.networkId);
       const wallet = UnshieldedWallet({
         networkId: env.endpoints.networkId,
         indexerClientConnection: {
