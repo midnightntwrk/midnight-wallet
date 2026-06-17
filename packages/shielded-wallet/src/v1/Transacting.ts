@@ -379,7 +379,7 @@ export class TransactingCapabilityImplementation<
     imbalances: TransactionImbalances,
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
     targetImbalances: Imbalances,
-  ): Either.Either<{ offer: ledger.ZswapOffer<ledger.PreProof>; newState: CoreWallet }, WalletError> {
+  ): Either.Either<{ offer: ledger.ZswapOffer<ledger.PreProof> | undefined; newState: CoreWallet }, WalletError> {
     return Either.gen(this, function* () {
       const balanceRecipe = yield* Either.try({
         try: () =>
@@ -411,12 +411,13 @@ export class TransactingCapabilityImplementation<
         },
       });
 
-      return yield* pipe(
+      // An empty recipe (e.g. the guaranteed section is already balanced) yields no offer.
+      // Treat that as "nothing to add" rather than a failure, mirroring the fallible section.
+      return pipe(
         this.#prepareOffer(secretKeys, state, balanceRecipe, 0),
-        Either.fromOption(() => {
-          return new OtherWalletError({
-            message: 'Could not create a valid guaranteed offer',
-          });
+        Option.match({
+          onNone: () => ({ offer: undefined, newState: state }),
+          onSome: (result) => result,
         }),
       );
     });
