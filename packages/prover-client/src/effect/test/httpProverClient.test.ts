@@ -62,7 +62,7 @@ describe('HttpProverClient', () => {
 
     const proofServerPort = () => proofServerContainer?.getMappedPort(PROOF_SERVER_PORT) ?? PROOF_SERVER_PORT;
 
-    const shieldedTokenType = shieldedToken() as { raw: string; tag: 'shielded' };
+    const shieldedTokenType = shieldedToken();
     const makeValidTransaction = (spendCoinAmount: bigint) => {
       const spendCoin = createShieldedCoinInfo(shieldedTokenType.raw, spendCoinAmount);
       const cpk = sampleCoinPublicKey();
