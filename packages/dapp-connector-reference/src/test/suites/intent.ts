@@ -58,10 +58,32 @@ export const runIntentTests = (context: DappConnectorTestContext): void => {
   });
 
   describe('input handling', () => {
-    // SKIP: SDK gap — `facade.initSwap` gates each kind's path on `xxxInputs !== undefined`, so a cross-kind swap
-    // (shielded input + unshielded output, or vice versa) silently drops the side that lacks inputs. Surfacing the
-    // unshielded outputs requires extending the wallet — `unshielded.initSwap`'s implementation throws "Could not
-    // create a valid guaranteed offer" when called with empty inputs but non-empty outputs.
+    // SKIPPED — pending SDK bug: cross-kind intents silently drop the kind that has no inputs.
+    //
+    // Spec expectation: a swap intent declaring 100 shielded standard IN and 50 unshielded alternate OUT is a valid
+    // intent. The unshielded side is the user's *request*, to be satisfied by a counterparty when intents are merged.
+    //
+    // Actual behaviour today: the unshielded output is silently dropped. The returned transaction's intent carries no
+    // `guaranteedUnshieldedOffer` and no `fallibleUnshieldedOffer` — only a dust fee spend. Caller has no signal that
+    // anything went wrong. The assertion above on `imbalances.unshielded` and `containsUnshieldedOutputs` both fail.
+    //
+    // Root cause (confirmed by a standalone throwaway probe — `UnshieldedOffer.new([], outputs, [])` constructs and
+    // round-trips through Intent serialisation just fine, so this is a wallet bug, not a ledger constraint):
+    //
+    //   1. `packages/facade/src/index.ts:905-908` gates the unshielded path on `unshieldedInputs !== undefined`. With
+    //      no unshielded inputs requested, `parseDesiredInputs` returns `undefined` for that side, so
+    //      `this.unshielded.initSwap(...)` is never called and the outputs disappear.
+    //
+    //   2. Even if (1) is fixed by passing `unshieldedInputs = {}`,
+    //      `packages/unshielded-wallet/src/v1/Transacting.ts:284` `initSwap` builds `targetImbalances` only from
+    //      `desiredInputs`. The resulting tx then reaches `dust.balanceTransactions` at facade index.ts:916, which
+    //      observes a −N imbalance on the output token kind and fails with `InsufficientFundsError` — the fee balancer
+    //      treats the user-declared swap imbalance as a deficit to source rather than as the intent's whole point.
+    //
+    // Fix needed (both must land):
+    //   (a) drop the `&& xxxInputs !== undefined` gates in `facade.initSwap`;
+    //   (b) make `dust.balanceTransactions` (or its caller) balance only the fee-token imbalance, preserving the
+    //       user-declared swap imbalance through to the intent-merge step.
     it.skip('should create swap with shielded input and unshielded output', async () => {
       const setupWallets = context.setupWallets;
       if (setupWallets === undefined) return;
@@ -108,7 +130,36 @@ export const runIntentTests = (context: DappConnectorTestContext): void => {
       }
     });
 
-    // SKIP: same cross-kind SDK gap as above.
+    // SKIPPED — pending SDK bug: cross-kind intents silently drop the kind that has no inputs (mirror of the test
+    // above; same family of bugs but the shielded-side failure mode differs).
+    //
+    // Spec expectation: a swap intent declaring 100 unshielded alternate IN and 50 shielded alternate OUT is valid.
+    //
+    // Actual behaviour today: the shielded output is silently dropped. The returned transaction ends up with two
+    // intent segments — one for the user's unshielded path (converted to a self-balanced no-op transfer since the
+    // wallet insists on producing a balanced offer), one for the dust fee — both with empty imbalances. The
+    // `imbalances.shielded` assertion above fails because the shielded side never appeared.
+    //
+    // Root cause:
+    //
+    //   1. `packages/facade/src/index.ts:900-903` gates the shielded path on `shieldedInputs !== undefined`; with no
+    //      shielded inputs requested, `this.shielded.initSwap(...)` is never called.
+    //
+    //   2. If (1) is fixed by passing `shieldedInputs = {}`, the wallet refuses for a different reason than the
+    //      unshielded mirror does. `packages/shielded-wallet/src/v1/Transacting.ts:208` `initSwap` *does* build the
+    //      output offer via `#processDesiredOutputsPossiblyEmpty` (line 233 — empty inputs are tolerated on the output
+    //      side). But it then calls `#balanceGuaranteedSection` with empty initial AND target imbalances, which
+    //      reaches `#prepareOffer` (line 271) with an empty recipe. `Arr.match.onEmpty` at line 292 returns
+    //      `Option.none`; the caller at lines 414-419 throws `"Could not create a valid guaranteed offer"`. The
+    //      wallet refuses to produce an empty balancing offer to merge with the user's output.
+    //
+    // Fix needed (both must land):
+    //   (a) drop the `&& xxxInputs !== undefined` gates in `facade.initSwap`;
+    //   (b) when `shielded.initSwap` sees empty initial+target imbalances, skip `#balanceGuaranteedSection` and
+    //       return `outputsParseResult.unprovenTxToBalance` directly (or change `#prepareOffer` to return an empty
+    //       `ZswapOffer` instead of `Option.none` when both inputs and outputs are empty). Plus the same fee-balancer
+    //       fix from the test above (the shielded output produces an unshielded-side imbalance once it's been merged
+    //       with the unshielded input side).
     it.skip('should create swap with unshielded input and shielded output', async () => {
       const setupWallets = context.setupWallets;
       if (setupWallets === undefined) return;
@@ -365,8 +416,10 @@ export const runIntentTests = (context: DappConnectorTestContext): void => {
   });
 
   describe('imbalance verification', () => {
-    // SKIP: same cross-kind SDK gap — the test asserts both shielded and unshielded imbalances, but the unshielded
-    // side silently disappears via `facade.initSwap`'s `unshieldedInputs !== undefined` check.
+    // SKIPPED — same SDK bug as `should create swap with shielded input and unshielded output` (cross-kind drop).
+    // This test exercises the same flow but asserts the *imbalance shape* directly. With the unshielded output
+    // silently dropped (see the breakdown on that test for the full file:line chain), the unshielded entry of
+    // `verification.imbalances` is empty and the `toEqual` comparison fails.
     it.skip('should create exact imbalances matching desired inputs/outputs', async () => {
       const setupWallets = context.setupWallets;
       if (setupWallets === undefined) return;
@@ -431,12 +484,19 @@ export const runIntentTests = (context: DappConnectorTestContext): void => {
       }),
     );
 
-    // Constrained to avoid two patterns the underlying SDK can't process today:
-    //   1. empty inputs (`facade.initSwap` throws `Unexpected transaction state` when no kind's input path runs);
-    //   2. cross-kind layouts (e.g. shielded inputs with unshielded outputs) — see `should create swap with shielded
-    //      input and unshielded output` for the standalone case. The facade gates each kind's path on the inputs
-    //      side and drops outputs of the other kind silently.
-    // The property tests exercise the same-kind / both-kinds case which is the contract the wallet currently honors.
+    // Property-test arbitrary is constrained to same-kind / both-kinds layouts because of two independent SDK bugs.
+    // Each is also filed as its own `it.skip` test above; the filter exists so that the remaining property tests can
+    // run honestly until the SDK is fixed.
+    //
+    //   1. Empty `inputs` arrays — `facade.initSwap` throws `'Unexpected transaction state'`
+    //      (`packages/facade/src/index.ts:913`) because with no inputs at all both `hasShieldedPart` and
+    //      `hasUnshieldedPart` are false, even though an intent with outputs-only is perfectly valid per spec.
+    //
+    //   2. Cross-kind layouts (inputs of one kind, outputs of another) — see the three `it.skip` tests above. The
+    //      kind without inputs is silently dropped by the facade gate at `facade.initSwap:900-908`; even if the gate
+    //      is removed, the wallet's `initSwap` plus the dust fee balancer refuse to preserve the declared imbalance.
+    //
+    // Once both are fixed in the SDK, drop this filter so the arbitrary covers the full intent-shape space.
     const inputsOutputsArbitrary = fc
       .tuple(
         fc.array(desiredInputArbitrary, { minLength: 1, maxLength: 3 }),
@@ -477,13 +537,38 @@ export const runIntentTests = (context: DappConnectorTestContext): void => {
       );
     });
 
-    // SKIP: the assertion `toEqual([segmentId])` is too strict for the property-generated cases. The wallet creates
-    // the user's intent at segment 1 (which the connector relocates to `segmentId`), but for unshielded inputs with
-    // `payFees: true` the dust fee balancer additionally creates a separate intent at the next available segment,
-    // yielding e.g. `[segmentId, 2]`. The placement contract holds — the *user's* intent is at the requested segment —
-    // but expressing that in a property test without a way to distinguish wallet-added fee intents from user intents
-    // is awkward. The two non-property tests above (`intentId is 1`, `intentId is arbitrary`) cover the placement
-    // contract for the contract-relevant cases.
+    // SKIPPED — pending SDK bug: `intentId` is not honoured by the wallet, and the connector's workaround is
+    // incomplete. This property test catches the regression correctly; the assertion is right and the failure is
+    // real.
+    //
+    // Spec expectation: `makeIntent` places the user's intent at the segment specified by `intentId`. The property
+    // iterates over arbitrary `segmentId` and asserts the resulting intent map's keys equal `[segmentId]` — i.e., a
+    // single intent, at the requested segment.
+    //
+    // Actual behaviour today, in two layers:
+    //
+    //   1. `packages/facade/src/index.ts:866` `initSwap` does not accept `intentId` (the connector passes it in
+    //      `swapOptions` at `ConnectedAPI.ts:387-394`, but the facade signature drops it on the floor).
+    //      `packages/unshielded-wallet/src/v1/Transacting.ts:284` `initSwap` builds an `Intent.new(ttl)` and hands it
+    //      to `Transaction.fromParts(...)`, which places it at the default segment (typically 1). For unshielded
+    //      inputs that need balancing, an additional fee-balancing intent is added at another segment by the dust
+    //      balancer path (see also the `findAvailableSegmentId` use at line 210, called from the balanceTransaction
+    //      path; the TODO at line 211 notes "ledger 8.1.0 will be able to set the segment id when constructing the
+    //      tx" — same family of root cause).
+    //
+    //   2. The connector tries to compensate in `ConnectedAPI.placeIntentAtSegment` (`ConnectedAPI.ts:131`), but
+    //      that helper only handles the single-intent case: when `entries.length !== 1` it returns the recipe
+    //      UNCHANGED. So for `payFees=true` with unshielded inputs (and any other path that adds a fee intent), the
+    //      connector relocation is a silent no-op and the user's intent stays at segment 1 instead of `segmentId`.
+    //
+    // Note: the two non-property tests above (`intentId is 1`, `intentId is arbitrary`) happen to pass only because
+    // their specific wallet setup (shielded input + unshielded-output that gets silently dropped per the cross-kind
+    // bug above) produces a single-intent recipe. They are not exhaustive evidence the placement contract holds.
+    //
+    // Fix needed: thread `intentId` through `facade.initSwap` → `unshielded.initSwap` / `shielded.initSwap`, so the
+    // wallet places the user's intent at the requested segment from the start. Fee balancing then picks any *other*
+    // available segment via `findAvailableSegmentId`. The connector's `placeIntentAtSegment` helper can be deleted
+    // once the wallet honours `intentId`.
     it.skip('should place intent in exact segment specified by numeric intentId', async () => {
       const setupWallets = context.setupWallets;
       if (setupWallets === undefined) return;

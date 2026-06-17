@@ -210,21 +210,16 @@ no `any`, no new `as unknown as ...` casts. 240/240 tests passing, lint and type
 
 **Other Phase 13 sub-items — capability flags removed (replaced with targeted `it.skip` markers):**
 
-- `intentIdPlacementSupported`: removed. The SDK ignores the caller's intentId at the facade/wallet boundary, BUT the
-  connector can absorb this. New `placeIntentAtSegment(recipe, intentId)` helper in `ConnectedAPI.ts` post-processes
-  `recipe.transaction.intents` to move the wallet's chosen segment (typically segment 1) to the caller's requested
-  segment, leaving any wallet-added fee intents untouched. The two non-property tests
-  (`intentId is 1`, `intentId is arbitrary value`) pass via this. The property test (`should place intent in exact
-  segment specified by numeric intentId`) is `it.skip` because its strict `toEqual([segmentId])` assertion doesn't
-  account for fee intents that the wallet adds at additional segments — the placement contract holds, the assertion
-  shape just doesn't match generated multi-intent cases. Comment in `intent.ts` documents this.
-- `crossKindIntentSupported`: removed. Genuine SDK gap — the wallet's `unshielded.initSwap` calls
-  `ledger.UnshieldedOffer.new(inputs=[], outputs=[…], [])` and the ledger rejects offers without inputs ("Could not
-  create a valid guaranteed offer"). Three tests touching cross-kind layouts (`should create swap with shielded input
-  and unshielded output`, `should create swap with unshielded input and shielded output`, `should create exact
-  imbalances matching desired inputs/outputs`) are `it.skip` with comments pointing at the upstream gap. The
-  property arbitraries in the property-test block were tightened to `minLength: 1` on inputs and a filter requiring
-  each output's kind to be present in inputs — same-kind / both-kinds coverage stays intact.
+- `intentIdPlacementSupported`: removed. The SDK ignores the caller's `intentId` at the facade/wallet boundary; the
+  connector's `placeIntentAtSegment` helper (`ConnectedAPI.ts:131`) attempts to compensate by post-processing the
+  recipe. The two non-property tests (`intentId is 1`, `intentId is arbitrary value`) pass via this. The property
+  test (`should place intent in exact segment specified by numeric intentId`) is `it.skip` and the assertion is
+  correct — see the rewritten skip comment for the full root-cause chain.
+- `crossKindIntentSupported`: removed. Three tests touching cross-kind layouts (`should create swap with shielded
+  input and unshielded output`, `should create swap with unshielded input and shielded output`, `should create exact
+  imbalances matching desired inputs/outputs`) are `it.skip` pointing at the SDK gap. Property arbitraries were
+  tightened to `minLength: 1` on inputs and a filter requiring each output's kind to be present in inputs —
+  same-kind / both-kinds coverage stays intact.
 
 **Capability flags after Phase 13:** **none.** `TestEnvironment` no longer carries any implementation-specific
 escape hatches. The conformance suite expresses what the spec says; per-implementation gaps live as `it.skip` markers
@@ -232,6 +227,38 @@ with pointers to the upstream fix needed.
 
 **Final state:** 240/240 tests passing (4 skipped — one per genuine gap), lint and typecheck clean, no
 `eslint-disable` added, no `any`, no new `as unknown as` casts.
+
+### Phase 13.1: Cross-kind investigation (corrects Phase 13's attribution)
+
+Re-investigation triggered by "this should just work" intuition on cross-kind. A standalone throwaway probe walked the
+ledger, facade, and wallet layers to localise where the gap actually lives. Headline corrections to the Phase 13
+narrative:
+
+- **Phase 13 attributed the cross-kind gap to a ledger constraint** (`UnshieldedOffer.new` rejecting empty inputs).
+  **This is wrong.** The Rust ledger (`midnight-ledger/ledger-wasm/src/unshielded.rs:76`) has no input-count check;
+  `UnshieldedOffer.new([], [output], [])` constructs cleanly and round-trips through `Intent` and `Transaction`
+  serialisation. The error message Phase 13 quoted ("Could not create a valid guaranteed offer") originates in
+  `shielded-wallet/src/v1/Transacting.ts:417`, not the ledger.
+- **The gap is in two SDK layers**:
+  1. Facade gates `shielded.initSwap` / `unshielded.initSwap` on `xxxInputs !== undefined`
+     (`facade/src/index.ts:900-908`), so the missing-input-kind side is silently dropped. The current behaviour is no
+     error and no signal — wrong but not noisy.
+  2. Even bypassing the gate by normalising `{}`:
+     - Shielded side fails because `#prepareOffer` returns `Option.none` for a fully-empty recipe
+       (`shielded-wallet/src/v1/Transacting.ts:292`), and the caller maps that to the misleading error message above.
+     - Unshielded side fails because `dust.balanceTransactions` (`facade/src/index.ts:916`) treats the user-declared
+       cross-kind imbalance as a deficit to source NIGHT for, rather than as an intent imbalance to preserve. Result:
+       `InsufficientFundsError`.
+- **`intentIdPlacementSupported` re-assessment**: Phase 13 said "the placement contract holds — the property test
+  assertion shape just doesn't match". This is wrong. The connector's `placeIntentAtSegment` returns the recipe
+  UNCHANGED when `entries.length !== 1`, so for any flow that adds a fee intent the user's intent stays at the
+  wallet-chosen segment (usually 1) instead of `intentId`. The property test correctly catches this; the two
+  non-property tests pass only because their particular setup happens to produce a single-intent recipe.
+
+Skip comments on all four `it.skip` tests and the property-test filter in `suites/intent.ts` have been rewritten with
+the corrected root-cause analysis and file:line pointers — they're sized to be copy-pasted into bug tickets.
+
+No code changes here — Phase 13.1 is investigation only, captured for the record before the bug tickets get filed.
 
 ### Phase 14: Real Proving Integration (was Phase 10 in earlier plan)
 
