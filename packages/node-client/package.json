@@ -41,11 +41,11 @@
     "effect": "^3.19.19"
   },
   "peerDependencies": {
-    "@midnight-ntwrk/ledger-v8": "^8.1.0",
+    "@midnight-ntwrk/ledger-v9": "0.1.0-alpha.1",
     "@midnight-ntwrk/wallet-sdk-prover-client": "^1.2.2"
   },
   "peerDependenciesMeta": {
-    "@midnight-ntwrk/ledger-v8": {
+    "@midnight-ntwrk/ledger-v9": {
       "optional": true
     },
     "@midnight-ntwrk/wallet-sdk-prover-client": {
