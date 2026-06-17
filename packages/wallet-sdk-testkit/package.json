@@ -37,7 +37,7 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/ledger-v8": "^8.1.0",
+    "@midnight-ntwrk/ledger-v9": "0.1.0-alpha.1",
     "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:^",
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:^",
     "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:^",

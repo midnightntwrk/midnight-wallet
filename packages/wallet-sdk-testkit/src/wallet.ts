@@ -14,7 +14,7 @@
 import * as rx from 'rxjs';
 import { existsSync } from 'node:fs';
 import * as fsAsync from 'node:fs/promises';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v9';
 import {
   InMemoryTransactionHistoryStorage,
   type TransactionHistoryStorage,
@@ -95,7 +95,10 @@ const restoreUnshieldedWallet = async (
   try {
     const serialized = await readIfExists(path);
     if (serialized) {
-      const keyStore = createKeystore(getUnshieldedSeed(seed), env.endpoints.networkId);
+      const keyStore = createKeystore(
+        { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
+        env.endpoints.networkId,
+      );
       const wallet = UnshieldedWallet({
         networkId: env.endpoints.networkId,
         indexerClientConnection: {
@@ -163,7 +166,10 @@ export const provideWallet = async (env: WalletTestEnvironment, options: Provide
 
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
-  const unshieldedKeystore = createKeystore(getUnshieldedSeed(seed), env.endpoints.networkId);
+  const unshieldedKeystore = createKeystore(
+    { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
+    env.endpoints.networkId,
+  );
 
   const readIfExists = async (p: string): Promise<string | undefined> => {
     try {
@@ -262,7 +268,10 @@ export const initWalletWithSeed = async (env: WalletTestEnvironment, seed: strin
   const walletConfig = env.getWalletConfig();
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
-  const unshieldedKeystore = createKeystore(getUnshieldedSeed(seed), env.endpoints.networkId);
+  const unshieldedKeystore = createKeystore(
+    { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
+    env.endpoints.networkId,
+  );
 
   const facade: WalletFacade = await WalletFacade.init({
     configuration: {
