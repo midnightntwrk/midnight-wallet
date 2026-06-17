@@ -40,6 +40,8 @@ describe('ECDSA MPC signer integration (#402 §7)', () => {
   it('ECDSA-MPC-01: a signature assembled from the threshold shares verifies and authorizes', async () => {
     const coordinator = FakeMpcCoordinator.fromSecret(secret, PARTIES);
 
+    // NOTE: this fake is t-of-t (all parties must participate); a true t-of-n
+    // "enough-but-not-all" success path is not modelled here.
     const signature = await coordinator.requestSignature(payload, coordinator.allParticipants());
 
     expect(signature.tag).toBe('ecdsa');

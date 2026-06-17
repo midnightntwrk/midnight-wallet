@@ -157,19 +157,23 @@ describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
     });
   });
 
+  // An unshielded address is derived from its key, so its scheme is the key's
+  // scheme; MM-03/MM-04 (address + signature) and MM-05 (key + signature, both
+  // directions) reduce to the same key-vs-signature check — the two cases below
+  // are those two directions and jointly satisfy all three IDs.
   describe('signature provision: signature must share the key scheme (MM-03, MM-04, MM-05)', () => {
     it.each([
       {
-        id: 'ECDSA-MM-03/05',
-        title: 'ECDSA key + Schnorr signature',
+        id: 'ECDSA-MM-03 (= MM-05)',
+        title: 'ECDSA key/address + Schnorr signature',
         key: ecdsaKey,
         sig: schnorrSig,
         expected: 'ecdsa',
         supplied: 'schnorr',
       },
       {
-        id: 'ECDSA-MM-04/05',
-        title: 'Schnorr key + ECDSA signature',
+        id: 'ECDSA-MM-04 (= MM-05 inverse)',
+        title: 'Schnorr key/address + ECDSA signature',
         key: schnorrKey,
         sig: ecdsaSig,
         expected: 'schnorr',
@@ -272,6 +276,33 @@ describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
     ])('accepts a well-formed $id key (positive control)', async ({ key }) => {
       const { assertKeyTagConsistency } = await loadGuards();
       expect(Either.isRight(assertKeyTagConsistency(key))).toBe(true);
+    });
+  });
+
+  describe('no key material in errors (S-04)', () => {
+    it('ECDSA-S-04 mismatch errors name schemes but never leak key or secret bytes', async () => {
+      const { assertSignatureMatchesKey, assertKeyAddressConsistency } = await loadGuards();
+      const forbidden = [
+        Buffer.from(secret).toString('hex'),
+        ecdsaKey.value,
+        schnorrKey.value,
+        schnorrSig.value,
+        ecdsaSig.value,
+      ];
+
+      const sigResult = assertSignatureMatchesKey(ecdsaKey, schnorrSig);
+      const addrResult = assertKeyAddressConsistency(splicedPublicKey(ecdsa, schnorr));
+      expect(Either.isLeft(sigResult)).toBe(true);
+      expect(Either.isLeft(addrResult)).toBe(true);
+
+      const messages = [
+        Either.isLeft(sigResult) ? (sigResult.left as { message: string }).message : '',
+        Either.isLeft(addrResult) ? (addrResult.left as { message: string }).message : '',
+      ];
+      messages.forEach((message) => {
+        expect(message.length).toBeGreaterThan(0);
+        forbidden.forEach((fragment) => expect(message).not.toContain(fragment));
+      });
     });
   });
 });

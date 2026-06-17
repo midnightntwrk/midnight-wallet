@@ -99,6 +99,30 @@ describe('signing rejects a scheme mismatch (ECDSA-MM-03/04/05/07/08)', () => {
       expect(error.expected).toBe('ecdsa'); // the input owner's scheme
       expect(error.supplied).toBe('schnorr'); // the supplied signature's scheme
     }
+
+    // ECDSA-MM-07: the mismatch is caught before the signature is attached, so the
+    // transaction carries no partial signature (nothing is left in a submittable state).
+    const attachedSignatures = Array.from(transaction.intents?.values() ?? []).flatMap((intent) => [
+      ...(intent.guaranteedUnshieldedOffer?.signatures ?? []),
+      ...(intent.fallibleUnshieldedOffer?.signatures ?? []),
+    ]);
+    expect(attachedSignatures).toHaveLength(0);
+  });
+
+  it('rejects a Schnorr signature for an ECDSA-owned UNBOUND transaction too', async () => {
+    // Exercise the signUnboundTransaction path explicitly (shares the internal
+    // signer, but the public entry point is distinct from signUnprovenTransaction).
+    const unbound = await ecdsaOwnedTransaction().prove(
+      { prove: () => Promise.resolve(Buffer.from([42])), check: () => Promise.resolve([]) },
+      ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
+    );
+
+    const result = transacting.signUnboundTransaction(unbound, (data) => schnorrKeystore.signData(data));
+
+    expect(Either.isLeft(result)).toBe(true);
+    if (Either.isLeft(result)) {
+      expect((result.left as unknown as { _tag: string })._tag).toBe('Wallet.SchemeMismatch');
+    }
   });
 
   it('accepts the matching ECDSA signature for the same transaction (positive control)', () => {

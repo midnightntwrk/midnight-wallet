@@ -26,6 +26,19 @@
 //     `fixtures.schnorr.signature` is null and we verify via the oracle on
 //     every run instead. (This corrects the original backlog assumption that a
 //     Schnorr `signData` golden vector — ECDSA-BC-01 — could be byte-frozen.)
+//
+// Plan corrections encoded by these vectors:
+//   • Derivation path (KD-01): the ECDSA vector uses HD role `EcdsaUnshielded`
+//     (role 4, from ledger-v9 migration #455). This is the CURRENT path, not a
+//     MIP-frozen one — if the MIP fixes a different path the ECDSA vectors must
+//     be regenerated; a vector diff there is expected, not a regression.
+//   • Address scheme (AD-01/AD-02): a Midnight address does NOT carry a scheme
+//     tag or prefix — it is a plain hash. Schemes are distinguished by
+//     domain-separated derivation (the ECDSA and Schnorr addresses simply
+//     differ), and the scheme tag lives on the KEY (`{tag,value}`), not the
+//     address. The tests below assert the address is derivable from the key and
+//     that the two schemes' addresses are disjoint — not that the address
+//     self-identifies its scheme.
 import { readFileSync } from 'node:fs';
 import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { HDWallet, type Role, Roles } from '@midnight-ntwrk/wallet-sdk-hd';

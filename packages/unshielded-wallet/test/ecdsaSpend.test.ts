@@ -153,4 +153,32 @@ describe('Phase 2 — mixed wallets coexist with no cross-talk (ECDSA-SPEND-04)'
     expect(verifyWithOracle(schnorrWallet.publicKey.publicKey, data, ecdsaSignature)).toBe(false);
     expect(verifyWithOracle(ecdsaWallet.publicKey.publicKey, data, schnorrSignature)).toBe(false);
   });
+
+  it('both wallets authorize their own real spends concurrently without interference', async () => {
+    // Build a transfer for each wallet, then authorize both concurrently. The
+    // capability signs synchronously and is stateless, so interleaving them must
+    // not bleed scheme/state across the two sessions.
+    const ecdsaTransfer = buildTransfer(keystores.ecdsa);
+    const schnorrTransfer = buildTransfer(keystores.schnorr);
+
+    const [ecdsaSigned, schnorrSigned] = await Promise.all([
+      Promise.resolve(transacting.signUnprovenTransaction(ecdsaTransfer, (data) => keystores.ecdsa.signData(data))),
+      Promise.resolve(transacting.signUnprovenTransaction(schnorrTransfer, (data) => keystores.schnorr.signData(data))),
+    ]);
+
+    expect(Either.isRight(ecdsaSigned)).toBe(true);
+    expect(Either.isRight(schnorrSigned)).toBe(true);
+
+    // Cross-signing must still be rejected: the ECDSA transfer cannot be authorized by Schnorr, and vice versa.
+    expect(
+      Either.isLeft(
+        transacting.signUnprovenTransaction(buildTransfer(keystores.ecdsa), (d) => keystores.schnorr.signData(d)),
+      ),
+    ).toBe(true);
+    expect(
+      Either.isLeft(
+        transacting.signUnprovenTransaction(buildTransfer(keystores.schnorr), (d) => keystores.ecdsa.signData(d)),
+      ),
+    ).toBe(true);
+  });
 });
