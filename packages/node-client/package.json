@@ -41,14 +41,14 @@
     "effect": "^3.19.19"
   },
   "peerDependencies": {
-    "@midnight-ntwrk/ledger-v9": "0.1.0-alpha.1",
-    "@midnight-ntwrk/wallet-sdk-prover-client": "^1.2.2"
+    "@midnight-ntwrk/wallet-sdk-prover-client": "^1.2.2",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.2"
   },
   "peerDependenciesMeta": {
-    "@midnight-ntwrk/ledger-v9": {
+    "@midnight-ntwrk/wallet-sdk-prover-client": {
       "optional": true
     },
-    "@midnight-ntwrk/wallet-sdk-prover-client": {
+    "@midnightntwrk/ledger-v9": {
       "optional": true
     }
   },
@@ -60,8 +60,8 @@
     "@effect/rpc": "0.75.1",
     "@effect/sql": "0.51.1",
     "@effect/workflow": "0.18.2",
-    "@midnight-ntwrk/ledger-v9": "0.1.0-alpha.1",
     "@midnight-ntwrk/wallet-sdk-prover-client": "^1.2.2",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.2",
     "@types/tar-stream": "3.1.4",
     "tar-stream": "3.2.0",
     "tsx": "4.22.4"

@@ -16,7 +16,6 @@
   },
   "devDependencies": {
     "@cardano-sdk/key-management": "0.29.13",
-    "@midnight-ntwrk/ledger-v9": "0.1.0-alpha.1",
     "@midnight-ntwrk/midnight-js-network-id": "^3.1.0",
     "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
@@ -26,6 +25,7 @@
     "@midnight-ntwrk/wallet-sdk-testkit": "workspace:^",
     "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:^",
     "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.4",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.2",
     "@types/node": "25.9.3",
     "@types/ws": "8.18.1",
     "@vitest/runner": "4.1.8",

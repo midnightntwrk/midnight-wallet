@@ -18,7 +18,7 @@ import {
   type Signature,
   type SignatureVerifyingKey,
   type UnprovenTransaction,
-} from '@midnight-ntwrk/ledger-v9';
+} from '@midnightntwrk/ledger-v9';
 import { type ProtocolState, ProtocolVersion, type SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { type DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';

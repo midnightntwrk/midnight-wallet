@@ -18,7 +18,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { inspect } from 'node:util';
 import * as rx from 'rxjs';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { type WalletTestEnvironment } from '../types.js';
 import { provideWallet, saveState, type WalletInit } from '../wallet.js';
 import { logger } from '../logger.js';

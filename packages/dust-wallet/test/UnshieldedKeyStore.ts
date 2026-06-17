@@ -21,7 +21,7 @@ import {
   type SigningKey as LedgerSigningKey,
   type UserAddress,
   signatureVerifyingKey,
-} from '@midnight-ntwrk/ledger-v9';
+} from '@midnightntwrk/ledger-v9';
 
 export type UnshieldedSecretKey = {
   kind: SignatureKind;

@@ -19,7 +19,7 @@ import {
   type SignatureVerifyingKey,
   type FinalizedTransaction,
   type UnprovenTransaction,
-} from '@midnight-ntwrk/ledger-v9';
+} from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';

@@ -13,7 +13,7 @@
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';
-import type * as ledger from '@midnight-ntwrk/ledger-v9';
+import type * as ledger from '@midnightntwrk/ledger-v9';
 import { type FacadeState } from '@midnight-ntwrk/wallet-sdk';
 
 const alice = await initWalletWithSeed(

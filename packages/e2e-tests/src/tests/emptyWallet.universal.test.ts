@@ -18,7 +18,7 @@ import { ShieldedWallet, type ShieldedWalletClass } from '@midnight-ntwrk/wallet
 import * as KeyManagement from '@cardano-sdk/key-management';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as utils from './utils.js';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { type NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,

@@ -20,7 +20,7 @@ import {
   type SigningKey as LedgerSigningKey,
   type UserAddress,
   signatureVerifyingKey,
-} from '@midnight-ntwrk/ledger-v9';
+} from '@midnightntwrk/ledger-v9';
 import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 export type UnshieldedSecretKey = {

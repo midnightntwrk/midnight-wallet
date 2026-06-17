@@ -20,7 +20,7 @@ import {
   Transaction,
   UnshieldedOffer,
   type UserAddress,
-} from '@midnight-ntwrk/ledger-v9';
+} from '@midnightntwrk/ledger-v9';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';

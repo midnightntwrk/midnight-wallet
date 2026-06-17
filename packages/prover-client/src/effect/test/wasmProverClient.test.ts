@@ -20,7 +20,7 @@ import {
   Transaction,
   ZswapOffer,
   ZswapOutput,
-} from '@midnight-ntwrk/ledger-v9';
+} from '@midnightntwrk/ledger-v9';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as WasmProver from '../WasmProver.js';

@@ -26,7 +26,7 @@
  *
  * In both cases the booked Night UTxOs must return to `availableCoins`.
  */
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   Simulator,

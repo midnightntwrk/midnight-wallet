@@ -16,7 +16,7 @@ import {
   type ShieldedWalletState,
 } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { UnshieldedWallet, createKeystore, PublicKey } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { type DefaultV1Configuration as UnshieldedV1Configuration } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet/v1';
 import { randomUUID } from 'node:crypto';

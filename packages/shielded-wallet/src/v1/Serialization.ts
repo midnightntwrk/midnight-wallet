@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import { WalletError } from './WalletError.js';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
