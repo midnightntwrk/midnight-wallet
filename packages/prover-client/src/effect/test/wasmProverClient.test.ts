@@ -30,7 +30,7 @@ const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
 const wasmConfig = { keyMaterialProvider: WasmProver.makeDefaultKeyMaterialProvider() };
 
 describe('WasmProver', () => {
-  const shieldedTokenType = shieldedToken() as { raw: string; tag: 'shielded' };
+  const shieldedTokenType = shieldedToken();
   const makeValidTransaction = (spendCoinAmount: bigint) => {
     const spendCoin = createShieldedCoinInfo(shieldedTokenType.raw, spendCoinAmount);
     const cpk = sampleCoinPublicKey();

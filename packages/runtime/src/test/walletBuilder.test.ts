@@ -23,7 +23,13 @@ import {
   type WalletLike,
 } from '../abstractions/index.js';
 import { type Runtime } from '../Runtime.js';
-import { isRange, reduceToChunk, toProtocolStateArray } from '../testing/utils.js';
+import {
+  isOrderedSubsequenceOf,
+  isRange,
+  protocolStateEquals,
+  reduceToChunk,
+  toProtocolStateArray,
+} from '../testing/utils.js';
 import {
   type NumericRange,
   NumericRangeBuilder,
@@ -77,14 +83,21 @@ describe('Wallet Builder', () => {
 
     expect(wallet).toBeDefined();
 
-    const state = wallet.rawState.pipe(rx.take(3)); // We expect two values.
-    const receivedStates = await toProtocolStateArray(state);
-
-    expect(receivedStates).toEqual([
+    // Latest-value semantics: intermediate states may be skipped, but order is preserved and the
+    // stream converges on the terminal state.
+    const fullStateSequence = [
       { version: ProtocolVersion.MinSupportedVersion, state: 0 },
       { version: ProtocolVersion.MinSupportedVersion, state: 0 },
       { version: ProtocolVersion.MinSupportedVersion, state: 1 },
-    ]);
+    ];
+    const receivedStates = await toProtocolStateArray(
+      wallet.rawState.pipe(rx.takeWhile(({ state }: ProtocolState.ProtocolState<number>) => state !== 1, true)),
+    );
+
+    expect(receivedStates.at(-1)).toEqual({ version: ProtocolVersion.MinSupportedVersion, state: 1 });
+    expect(receivedStates).toSatisfy((received: typeof receivedStates) =>
+      isOrderedSubsequenceOf(received, fullStateSequence, protocolStateEquals),
+    );
   });
 
   it('should support multiple variant implementations through state migration', async () => {
@@ -107,10 +120,9 @@ describe('Wallet Builder', () => {
 
     expect(wallet).toBeDefined();
 
-    const state = wallet.rawState.pipe(rx.take(6)); // We expect five values.
-    const receivedStates = await toProtocolStateArray(state);
-
-    expect(receivedStates).toEqual([
+    // Latest-value semantics: intermediate states may be skipped, but order is preserved and the
+    // stream converges on the terminal state.
+    const fullStateSequence = [
       { version: ProtocolVersion.MinSupportedVersion, state: 0 },
       { version: ProtocolVersion.MinSupportedVersion, state: 0 },
       { version: ProtocolVersion.MinSupportedVersion, state: 1 },
@@ -118,7 +130,15 @@ describe('Wallet Builder', () => {
       { version: ProtocolVersion.ProtocolVersion(100n), state: 4 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 6 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 8 },
-    ]);
+    ];
+    const receivedStates = await toProtocolStateArray(
+      wallet.rawState.pipe(rx.takeWhile(({ state }: ProtocolState.ProtocolState<number>) => state !== 8, true)),
+    );
+
+    expect(receivedStates.at(-1)).toEqual({ version: ProtocolVersion.ProtocolVersion(100n), state: 8 });
+    expect(receivedStates).toSatisfy((received: typeof receivedStates) =>
+      isOrderedSubsequenceOf(received, fullStateSequence, protocolStateEquals),
+    );
   });
 
   it('should support three sequential variant migrations', async () => {
@@ -165,10 +185,10 @@ describe('Wallet Builder', () => {
     // V1 (NumericRange): migrateState(null) → 0, emits State(0), State(1), then Next()
     // V2 (inline):       migrateState(1) → 2,    emits State(2), State(3), then Next()
     // V3 (Multiplier):   migrateState(3) → 4,    emits State(4*2=8), State(5*2=10), State(6*2=12)
-    const state = wallet.rawState.pipe(rx.take(8));
-    const receivedStates = await toProtocolStateArray(state);
-
-    expect(receivedStates).toEqual([
+    //
+    // Latest-value semantics: intermediate states may be skipped, but order is preserved and the
+    // stream converges on the terminal state.
+    const fullStateSequence = [
       { version: ProtocolVersion.MinSupportedVersion, state: 0 },
       { version: ProtocolVersion.MinSupportedVersion, state: 0 },
       { version: ProtocolVersion.MinSupportedVersion, state: 1 },
@@ -177,7 +197,15 @@ describe('Wallet Builder', () => {
       { version: ProtocolVersion.ProtocolVersion(100n), state: 8 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 10 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 12 },
-    ]);
+    ];
+    const receivedStates = await toProtocolStateArray(
+      wallet.rawState.pipe(rx.takeWhile(({ state }: ProtocolState.ProtocolState<number>) => state !== 12, true)),
+    );
+
+    expect(receivedStates.at(-1)).toEqual({ version: ProtocolVersion.ProtocolVersion(100n), state: 12 });
+    expect(receivedStates).toSatisfy((received: typeof receivedStates) =>
+      isOrderedSubsequenceOf(received, fullStateSequence, protocolStateEquals),
+    );
   });
 
   it('should stop variant once stop is called', async () => {

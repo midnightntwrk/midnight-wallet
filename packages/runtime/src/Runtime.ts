@@ -111,26 +111,32 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
         Effect.forkScoped,
       );
     }),
-    Effect.flatMap(
-      ({ currentStateRef, progressRef, currentVariantRef }): Effect.Effect<Runtime<Variants>, never, Scope.Scope> => {
-        return Effect.gen(function* () {
-          const changesStream = yield* currentStateRef.changes.pipe(
-            Stream.mapEffect((value) => EitherOps.toEffect(value)),
-            Stream.share({ capacity: 'unbounded', replay: 1 }),
-          );
-          const runtime = {
-            stateChanges: changesStream,
-            progress: progressRef.get,
-            currentVariant: currentVariantRef.get,
-            dispatch: <TResult, E = never>(
-              impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, Effect.Effect<TResult, E>>,
-            ): Effect.Effect<TResult, WalletRuntimeError | E> => dispatch(runtime, impl),
-          };
+    Effect.map(({ currentStateRef, progressRef, currentVariantRef }): Runtime<Variants> => {
+      // Latest-value semantics with bounded memory: each subscriber gets the current state on
+      // subscription (SubscriptionRef.changes emits it atomically with subsequent changes) and
+      // may skip intermediate states when it lags behind the producer — the sliding buffer of
+      // capacity 1 keeps only the latest state, so past state instances (which hold wasm
+      // resources) can be released.
+      //
+      // Deliberately NOT Stream.share with `replay`: Effect's PubSub replay buffer (up to and
+      // including effect 3.21.3) appends every published value to a shared linked list, and a
+      // subscription's ReplayWindowImpl never releases its head node after the replay window is
+      // exhausted — any long-lived subscriber pins every state published during its lifetime.
+      const changesStream = currentStateRef.changes.pipe(
+        Stream.mapEffect((value) => EitherOps.toEffect(value)),
+        Stream.buffer({ capacity: 1, strategy: 'sliding' }),
+      );
+      const runtime: Runtime<Variants> = {
+        stateChanges: changesStream,
+        progress: progressRef.get,
+        currentVariant: currentVariantRef.get,
+        dispatch: <TResult, E = never>(
+          impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, Effect.Effect<TResult, E>>,
+        ): Effect.Effect<TResult, WalletRuntimeError | E> => dispatch(runtime, impl),
+      };
 
-          return runtime;
-        });
-      },
-    ),
+      return runtime;
+    }),
   );
 };
 
@@ -186,7 +192,7 @@ const initVariant = <Variants extends Variant.AnyVersionedVariantArray, TTag ext
     //These casts are terrible, but they allow to call the initHeadVariant
     return yield* initHeadVariant({
       variants: theRest as Variants,
-      state: init.state as unknown as Variant.StateOf<HList.Head<Variants>>,
+      state: init.state,
       initProtocolVersion: undefined,
     });
   });

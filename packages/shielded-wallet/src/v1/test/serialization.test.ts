@@ -29,7 +29,7 @@ const tokenTypeArbitrary = (maxSize: number) => {
   const types = Array(number).map(() => ledger.sampleRawTokenType());
   const tokenTypeArbitrary = fc.constantFrom(...types);
 
-  const nativeTokenTypeArbitrary = fc.constant((ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw);
+  const nativeTokenTypeArbitrary = fc.constant(ledger.shieldedToken().raw);
   return fc.oneof({ weight: 1, arbitrary: nativeTokenTypeArbitrary }, { weight: 1, arbitrary: tokenTypeArbitrary });
 };
 const secretKeysArbitrary: fc.Arbitrary<ledger.ZswapSecretKeys> = fc

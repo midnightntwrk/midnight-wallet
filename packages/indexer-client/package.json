@@ -35,10 +35,10 @@
     "graphql-ws": "^6.0.7"
   },
   "devDependencies": {
-    "@graphql-codegen/cli": "7.0.0",
-    "@graphql-codegen/client-preset": "6.0.0",
-    "@graphql-codegen/typescript": "6.0.0",
-    "@graphql-codegen/typescript-operations": "6.0.0"
+    "@graphql-codegen/cli": "7.1.2",
+    "@graphql-codegen/client-preset": "6.0.1",
+    "@graphql-codegen/typescript": "6.0.2",
+    "@graphql-codegen/typescript-operations": "6.0.3"
   },
   "scripts": {
     "gql:codegen": "graphql-codegen --clean --config codegen.ts",

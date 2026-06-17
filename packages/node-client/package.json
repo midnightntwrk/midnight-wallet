@@ -40,6 +40,18 @@
     "bn.js": "^5.2.3",
     "effect": "^3.19.19"
   },
+  "peerDependencies": {
+    "@midnight-ntwrk/ledger-v8": "^8.1.0",
+    "@midnight-ntwrk/wallet-sdk-prover-client": "^1.2.2"
+  },
+  "peerDependenciesMeta": {
+    "@midnight-ntwrk/ledger-v8": {
+      "optional": true
+    },
+    "@midnight-ntwrk/wallet-sdk-prover-client": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@effect/cluster": "0.59.0",
     "@effect/experimental": "0.60.0",
@@ -52,7 +64,7 @@
     "@midnight-ntwrk/wallet-sdk-prover-client": "^1.2.2",
     "@types/tar-stream": "3.1.4",
     "tar-stream": "3.2.0",
-    "tsx": "4.21.0"
+    "tsx": "4.22.4"
   },
   "scripts": {
     "typecheck-script": "tsc -b ./tsconfig.script.json --noEmit",

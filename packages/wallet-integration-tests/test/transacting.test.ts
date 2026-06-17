@@ -64,7 +64,7 @@ const sampleValue = <T>(arbitrary: fc.Arbitrary<T>): T => {
   return arbitrary.generate(random, undefined).value;
 };
 
-const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw;
+const shieldedTokenType = ledger.shieldedToken().raw;
 
 /**
  * These tests need to be fairly high-level to examine interfaces and observable behaviors given already built wallet.
@@ -258,7 +258,7 @@ describe.skip('Wallet transacting', () => {
           v1
             .transferTransaction(walletKeys, [
               {
-                type: (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw,
+                type: ledger.shieldedToken().raw,
                 amount: 42n,
                 receiverAddress: getShieldedAddress(receiverState),
               },
