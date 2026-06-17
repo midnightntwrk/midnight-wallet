@@ -51,7 +51,7 @@ import {
 
 vi.setConfig({ testTimeout: 30_000 }); // Fast tests - no real proving or network
 
-const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw;
+const shieldedTokenType = ledger.shieldedToken().raw;
 const NETWORK_ID = NetworkId.NetworkId.Undeployed;
 
 const SENDER_SEED = '0000000000000000000000000000000000000000000000000000000000000001';

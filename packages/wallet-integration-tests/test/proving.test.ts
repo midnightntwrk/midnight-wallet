@@ -30,7 +30,7 @@ const PROOF_SERVER_PORT: number = 6300;
 
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
-const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw;
+const shieldedTokenType = ledger.shieldedToken().raw;
 
 const makeTransaction = () => {
   const seed = Buffer.alloc(32, 0);
