@@ -32,6 +32,7 @@ import {
   type DustNullifier,
   type DustSecretKey,
   DustStateChanges,
+  type DustLocalState,
 } from '@midnight-ntwrk/ledger-v8';
 import {
   DustGenerationEvents,
@@ -268,7 +269,7 @@ const loadCollapsedCommitments = (
 const resolveNullifierSpends = (
   initialNullifiers: DustNullifier[],
   initialNewUtxos: DustUtxoMap,
-  state: CoreWallet,
+  dustState: DustLocalState,
   secretKey: DustSecretKey,
   latestBlock: BlockData,
   dustGenerationUpdates: DustGenerationsSyncUpdate,
@@ -276,7 +277,11 @@ const resolveNullifierSpends = (
   emit: {
     single: (update: DustProjectionsUpdate) => Promise<void>;
   },
-): Effect.Effect<readonly [DustUtxoMap, DustUtxoMap], WalletError, Scope.Scope | SubscriptionClient> => {
+): Effect.Effect<
+  { nextUtxos: DustUtxoMap; nextSpentUtxos: DustUtxoMap },
+  WalletError,
+  Scope.Scope | SubscriptionClient
+> => {
   return pipe(
     Stream.unfoldEffect(
       [initialNullifiers, initialNewUtxos, HashMap.empty() as DustUtxoMap] as const,
@@ -295,7 +300,7 @@ const resolveNullifierSpends = (
           );
 
           const dustUtxoUpdates = yield* createDustUtxoUpdates(
-            state,
+            dustState,
             nullifierTransactions,
             secretKey,
             newUtxos,
@@ -313,7 +318,7 @@ const resolveNullifierSpends = (
           const { nextUtxos, nextSpentUtxos } = accumulateUtxoUpdates(dustUtxoUpdates, newUtxos, spentUtxos);
           const nextNullifiersToCheck = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
           return Option.some([
-            [nextUtxos, nextSpentUtxos] as const,
+            { nextUtxos, nextSpentUtxos },
             [nextNullifiersToCheck, nextUtxos, nextSpentUtxos] as const,
           ]);
         });
@@ -324,7 +329,7 @@ const resolveNullifierSpends = (
     Effect.map((results) =>
       pipe(
         Arr.last(results),
-        Option.getOrElse(() => [initialNewUtxos, HashMap.empty()] as const),
+        Option.getOrElse(() => ({ nextUtxos: initialNewUtxos, nextSpentUtxos: HashMap.empty() })),
       ),
     ),
   );
@@ -366,10 +371,10 @@ export const makeEventLessSyncService = (
           .concat([...state.state.nullifiers.keys()]);
         const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
 
-        const [finalUtxos, finalSpentUtxos] = yield* resolveNullifierSpends(
+        const { nextUtxos: finalUtxos, nextSpentUtxos: finalSpentUtxos } = yield* resolveNullifierSpends(
           initialNullifiers,
           initialNewUtxos,
-          state,
+          state.state,
           secretKey,
           blockData,
           dustGenerationUpdates,
@@ -607,7 +612,6 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
   return {
     applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
       if (isProgressUpdate(update)) {
-        console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
         return [
           CoreWallet.updateProgress(state, {
             highestIndex: BigInt(Math.floor(update.progress)), // we use the `highestIndex` to track the local progress
@@ -675,7 +679,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
 };
 
 const createUtxoUpdatesFromSpend = (
-  wallet: CoreWallet,
+  dustState: DustLocalState,
   secretKey: DustSecretKey,
   knownUtxos: Readonly<DustUtxoMap>,
   generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
@@ -685,11 +689,11 @@ const createUtxoUpdatesFromSpend = (
   Effect.gen(function* () {
     const { nullifier, vFee, commitmentIndex, declaredTime } = dustSpend;
     const knownUtxo = Option.getOrUndefined(HashMap.get(knownUtxos, nullifier));
-    const qdo = knownUtxo?.qdo ?? wallet.state.findUtxoByNullifier(nullifier);
+    const qdo = knownUtxo?.qdo ?? dustState.findUtxoByNullifier(nullifier);
     if (!qdo) {
       return yield* new SyncWalletError({ message: `Failed to find qdo by nullifier: ${nullifier}` });
     }
-    const genInfo = knownUtxo?.genInfo ?? wallet.state.generationInfo(qdo);
+    const genInfo = knownUtxo?.genInfo ?? dustState.generationInfo(qdo);
     if (!genInfo) {
       return yield* new SyncWalletError({ message: `Failed to find generation info for: ${qdo.backingNight}` });
     }
@@ -716,7 +720,7 @@ const createUtxoUpdatesFromSpend = (
   });
 
 const createDustUtxoUpdates = (
-  wallet: CoreWallet,
+  dustState: DustLocalState,
   nullifierTransactions: ReadonlyArray<DustNullifierTransactionsSubscription>,
   secretKey: DustSecretKey,
   knownUtxos: Readonly<DustUtxoMap>,
@@ -735,7 +739,7 @@ const createDustUtxoUpdates = (
       ),
     ),
     Arr.map(({ transaction, dustSpend }) =>
-      createUtxoUpdatesFromSpend(wallet, secretKey, knownUtxos, generationDtimeUpdates, transaction, dustSpend),
+      createUtxoUpdatesFromSpend(dustState, secretKey, knownUtxos, generationDtimeUpdates, transaction, dustSpend),
     ),
     Effect.all,
     Effect.map(Arr.flatten),

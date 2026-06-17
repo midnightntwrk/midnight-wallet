@@ -62,7 +62,6 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
 const SnapshotSchema = Schema.Struct({
   publicKey: Schema.Struct({
     publicKey: Schema.BigInt,
-    addressHex: Schema.String,
     address: Schema.String,
   }),
   state: HexedState,

@@ -39,7 +39,6 @@ import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 export type PublicKey = {
   publicKey: DustPublicKey;
-  addressHex: string;
   address: string;
 };
 
@@ -47,7 +46,6 @@ export const PublicKey = {
   fromSecretKey: (secretKey: DustSecretKey, networkId: NetworkId): PublicKey => {
     return {
       publicKey: secretKey.publicKey,
-      addressHex: new DustAddress(secretKey.publicKey).hexString,
       address: DustAddress.encodePublicKey(networkId, secretKey.publicKey),
     };
   },
