@@ -86,7 +86,7 @@ WebAssembly.instantiate = (async (source: WebAssembly.Module | BufferSource, imp
   // Type cast required because: WebAssembly.instantiate has incompatible
   // overloads (BufferSource vs Module) that a single passthrough call site
   // cannot satisfy without selecting one of them.
-  const result = await origInstantiate(source as WebAssembly.Module, imports);
+  const result = await origInstantiate(source, imports);
   track('instance' in result ? result.instance : result);
   return result;
   // Type cast required because: the overloaded signature of

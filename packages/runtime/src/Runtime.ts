@@ -192,7 +192,7 @@ const initVariant = <Variants extends Variant.AnyVersionedVariantArray, TTag ext
     //These casts are terrible, but they allow to call the initHeadVariant
     return yield* initHeadVariant({
       variants: theRest as Variants,
-      state: init.state as unknown as Variant.StateOf<HList.Head<Variants>>,
+      state: init.state,
       initProtocolVersion: undefined,
     });
   });

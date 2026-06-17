@@ -226,10 +226,9 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
   );
 
   return {
-    createShieldedWallet: (keys) => ShieldedWalletFactory.startWithSecretKeys(keys) as unknown as ShieldedWalletAPI,
-    createDustWallet: (key, params) => DustWalletFactory.startWithSecretKey(key, params) as unknown as DustWalletAPI,
-    createUnshieldedWallet: (keystore) =>
-      UnshieldedWalletFactory.startWithPublicKey(PublicKey.fromKeyStore(keystore)) as unknown as UnshieldedWalletAPI,
+    createShieldedWallet: (keys) => ShieldedWalletFactory.startWithSecretKeys(keys),
+    createDustWallet: (key, params) => DustWalletFactory.startWithSecretKey(key, params),
+    createUnshieldedWallet: (keystore) => UnshieldedWalletFactory.startWithPublicKey(PublicKey.fromKeyStore(keystore)),
   };
 };
 
