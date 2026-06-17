@@ -382,10 +382,6 @@ export const makeEventLessSyncService = (
           emit,
         );
 
-        if ([...finalUtxos].some((u) => u[1].qdo.mtIndex <= lastSyncedCommitmentIndex)) {
-          return yield* Effect.fail(new OtherWalletError({ message: 'Spotted stale utxo' }));
-        }
-
         yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 90 })));
 
         // lastSyncedCommitmentIndex out of maxCommitmentTreeIndex
