@@ -35,6 +35,7 @@ import {
   makeDefaultTransactingCapability,
 } from '../src/v1/Transacting.js';
 import { TransactionOps } from '../src/v1/TransactionOps.js';
+import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js';
 import { UnshieldedState, UtxoWithMeta } from '../src/v1/UnshieldedState.js';
 import { verifyWithOracle } from './ecdsaOracle.js';
 
@@ -180,5 +181,75 @@ describe('Phase 2 — mixed wallets coexist with no cross-talk (ECDSA-SPEND-04)'
         transacting.signUnprovenTransaction(buildTransfer(keystores.schnorr), (d) => keystores.ecdsa.signData(d)),
       ),
     ).toBe(true);
+  });
+});
+
+describe('Phase 2 — ECDSA signs a multi-offer transaction (guaranteed + fallible)', () => {
+  it('attaches a verifying ECDSA signature to both the guaranteed and fallible offers', () => {
+    const ownerPK = PublicKey.fromKeyStore(keystores.ecdsa);
+    const utxos = [0, 1].map(
+      (i) =>
+        new UtxoWithMeta({
+          utxo: {
+            value: 1_000n + BigInt(i),
+            owner: ownerPK.addressHex,
+            type: NIGHT,
+            intentHash: ledger.sampleIntentHash(),
+            outputNo: i,
+          },
+          meta: { ctime: new Date(0), registeredForDustGeneration: false },
+        }),
+    );
+    const wallet = CoreWallet.restore(
+      UnshieldedState.restore(utxos, []),
+      ownerPK,
+      { appliedId: 0n, highestTransactionId: 0n },
+      ProtocolVersion.ProtocolVersion(1n),
+      networkId,
+    );
+
+    // A rotate transaction places one UTxO in the guaranteed offer and the rest
+    // in the fallible offer of a single intent.
+    const { transaction } = transacting
+      .rotateUtxos(wallet, utxos.slice(0, 1), utxos.slice(1), wallet.publicKey.publicKey, ttl)
+      .pipe(Either.getOrThrow);
+    const intent = Array.from(transaction.intents?.values() ?? [])[0];
+    expect(intent?.guaranteedUnshieldedOffer).toBeDefined();
+    expect(intent?.fallibleUnshieldedOffer).toBeDefined();
+
+    // Every signable segment's ECDSA signature verifies independently...
+    const segments = TransactionOps.getSegments(transaction);
+    const allVerify = segments.map((segment) => {
+      const data = TransactionOps.getSignatureData(transaction, segment).pipe(Either.getOrThrow);
+      return verifyWithOracle(wallet.publicKey.publicKey, data, keystores.ecdsa.signData(data));
+    });
+    expect(allVerify.every(Boolean)).toBe(true);
+
+    // ...and signing attaches a signature to BOTH offers.
+    const signed = transacting.signUnprovenTransaction(transaction, (data) => keystores.ecdsa.signData(data));
+    expect(Either.isRight(signed)).toBe(true);
+    if (Either.isRight(signed)) {
+      const signedIntent = Array.from(signed.right.intents?.values() ?? [])[0];
+      expect(signedIntent?.guaranteedUnshieldedOffer?.signatures.length ?? 0).toBeGreaterThan(0);
+      expect(signedIntent?.fallibleUnshieldedOffer?.signatures.length ?? 0).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('Phase 2 — ECDSA wallet survives serialize → restore and can still authorize', () => {
+  it('restores an ECDSA wallet from a snapshot and authorizes a spend with it', () => {
+    const capability = makeDefaultV1SerializationCapability();
+    const original = walletWithNight(keystores.ecdsa);
+
+    const restored = capability.deserialize(capability.serialize(original)).pipe(Either.getOrThrow);
+    expect(restored.publicKey.publicKey.tag).toBe('ecdsa');
+    expect(restored.publicKey).toEqual(original.publicKey);
+
+    // The restored ECDSA wallet builds and authorizes a spend with its ECDSA keystore.
+    const { transaction } = transacting
+      .makeTransfer(restored, [{ amount: 100n, type: NIGHT, receiverAddress: recipient }], ttl)
+      .pipe(Either.getOrThrow);
+    const signed = transacting.signUnprovenTransaction(transaction, (data) => keystores.ecdsa.signData(data));
+    expect(Either.isRight(signed)).toBe(true);
   });
 });
