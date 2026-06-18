@@ -17,6 +17,15 @@ env:
 
 on:
   workflow_dispatch:
+    inputs:
+      bootstrap-primary-scope:
+        description: >-
+          One-time migration bootstrap. Publishes the @midnightntwrk scope with a token (provenance disabled) to seed
+          the new package names on npmjs. A trusted publisher can only be attached to a package that already exists, so
+          OIDC cannot perform the first publish. Run once, attach the trusted publishers on npmjs, then leave this off
+          so publishes use OIDC.
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -272,3 +281,57 @@ jobs:
         run: |
           git reset --hard
           git clean -fd
+
+  # One-time migration bootstrap (manual dispatch only, opt-in checkbox). The
+  # first publish of each new @midnightntwrk package cannot use OIDC — a trusted
+  # publisher can only be attached to a package that already exists on npmjs. So
+  # this job seeds the new package names by publishing the current versions
+  # under the `latest` dist-tag with the MIDNIGHTBOT token (scripts/publish.mjs
+  # sees it as NPM_PRIMARY_TOKEN and skips provenance). After running once and
+  # attaching trusted publishers on npmjs, this job and its dispatch input can
+  # be removed and publishing reverts to OIDC.
+  bootstrap-primary-scope:
+    name: Bootstrap @midnightntwrk (one-time, token)
+    if: ${{ inputs.bootstrap-primary-scope }}
+    runs-on: ubuntu-latest-8-core-x64
+    # Reuse the stable environment so the bootstrap publish goes through the
+    # same reviewer gate; token auth ignores the per-environment OIDC publisher.
+    environment: npm-publish-stable
+    permissions:
+      contents: read
+    concurrency:
+      group: bootstrap-primary-scope-${{ github.ref_name }}
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: 'yarn.lock'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@midnightntwrk'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Configure yarn (install-time auth for GH Packages)
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build
+        run: yarn dist:publish
+
+      - name: Publish both scopes with tokens (seed @midnightntwrk under latest)
+        run: node scripts/publish.mjs
+        env:
+          # Token-publish the primary @midnightntwrk scope (provenance disabled)
+          # to create the package names; the @midnight-ntwrk alias uses the
+          # legacy token as usual. Both are token publishes here — no OIDC.
+          NPM_PRIMARY_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+          NPM_LEGACY_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}

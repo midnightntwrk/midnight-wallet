@@ -7,6 +7,13 @@
 //      scope is already `@midnightntwrk`. No token: npm authenticates via
 //      OIDC against the trusted publisher configured on npmjs.
 //
+//      Bootstrap exception: a trusted publisher can only be attached to a
+//      package that already exists on npmjs, so OIDC cannot perform the FIRST
+//      publish of a new package name. When NPM_PRIMARY_TOKEN is set, the
+//      primary scope is published with that token instead (provenance off) to
+//      seed the new names. Run once, attach the trusted publishers on npmjs,
+//      then drop NPM_PRIMARY_TOKEN so subsequent publishes use OIDC.
+//
 //   2. Alias — `@midnight-ntwrk/*`, transitional, so existing consumers of
 //      the dashed scope keep resolving during the migration window. The
 //      package is staged in a temp dir with its name, internal SDK deps, and
@@ -72,8 +79,14 @@ if (publishable.length === 0) {
 }
 
 const legacyToken = process.env.NPM_LEGACY_TOKEN;
+// Bootstrap-only: when set, the primary @midnightntwrk scope is published with
+// this token instead of via OIDC (provenance off). See the header note.
+const primaryToken = process.env.NPM_PRIMARY_TOKEN;
 console.log(`Publishing ${publishable.length} package(s)${values.tag ? ` (dist-tag: ${values.tag})` : ''}:`);
 publishable.forEach((ws) => console.log(`  - ${ws.pkg.name}@${ws.pkg.version} (+ alias ${toAlias(ws.pkg.name)})`));
+if (primaryToken) {
+  console.log('\n⚠ NPM_PRIMARY_TOKEN set — publishing @midnightntwrk with a token (bootstrap, no provenance).');
+}
 if (!legacyToken) {
   console.log('\n⚠ NPM_LEGACY_TOKEN not set — skipping the @midnight-ntwrk alias publish.');
 }
@@ -150,8 +163,11 @@ const publishAlias = (ws) => {
   }
 };
 
-// Publish the primary @midnightntwrk scope via OIDC + provenance. NODE_AUTH_TOKEN
-// is blanked so npm falls back to Trusted Publishing instead of token auth.
+// Publish the primary @midnightntwrk scope. Normally via OIDC + provenance,
+// with NODE_AUTH_TOKEN blanked so npm performs the Trusted Publishing token
+// exchange instead of using the setup-node .npmrc placeholder token. During
+// the migration bootstrap (NPM_PRIMARY_TOKEN set), publishes with that token
+// and no provenance, to seed new package names that OIDC cannot create.
 const publishPrimary = (ws) => {
   const { name, version } = ws.pkg;
   if (isAlreadyPublished(name, version)) {
@@ -159,12 +175,13 @@ const publishPrimary = (ws) => {
     return { name, version, status: 'skipped' };
   }
 
-  console.log(`\nPublishing ${name}@${version} (OIDC + provenance)...`);
+  const provenanceArgs = primaryToken ? [] : ['--provenance'];
+  console.log(`\nPublishing ${name}@${version} (${primaryToken ? 'token bootstrap' : 'OIDC + provenance'})...`);
   try {
-    execFileSync('npm', ['publish', '--provenance', '--access', 'public', ...tagArgs], {
+    execFileSync('npm', ['publish', ...provenanceArgs, '--access', 'public', ...tagArgs], {
       cwd: ws.location,
       stdio: 'inherit',
-      env: { ...process.env, NODE_AUTH_TOKEN: '' },
+      env: { ...process.env, NODE_AUTH_TOKEN: primaryToken ?? '' },
     });
     return { name, version, status: 'published' };
   } catch (err) {
