@@ -24,9 +24,9 @@ import {
   type SignatureKind,
   type SignatureVerifyingKey,
 } from '@midnight-ntwrk/ledger-v9';
-import { Either } from 'effect';
+import { Either, pipe } from 'effect';
 import type { PublicKey } from './KeyStore.js';
-import { SchemeMismatchError } from './v1/WalletError.js';
+import { OtherWalletError, SchemeMismatchError, type WalletError } from './v1/WalletError.js';
 
 const otherScheme = (kind: SignatureKind): SignatureKind => (kind === 'schnorr' ? 'ecdsa' : 'schnorr');
 
@@ -46,24 +46,41 @@ const schemeForVerifyingKeyHexLength = (length: number): SignatureKind | undefin
  * bundled with an `ecdsa` key (or the inverse) is rejected at wallet construction.
  *
  * @param publicKey - The keystore-derived public key bundle to validate.
- * @returns `Right(publicKey)` when the address matches the key; otherwise `Left(SchemeMismatchError)` tagged `at:
- *   'construction'`.
+ * @returns `Right(publicKey)` when the address matches the key; `Left(SchemeMismatchError)` tagged `at: 'construction'`
+ *   when it does not; or `Left(OtherWalletError)` when the key cannot be decoded at all.
  */
-export const assertKeyAddressConsistency = (publicKey: PublicKey): Either.Either<PublicKey, SchemeMismatchError> => {
-  if (addressFromKey(publicKey.publicKey) === publicKey.addressHex) {
-    return Either.right(publicKey);
-  }
-  const supplied = publicKey.publicKey.tag;
-  const expected = otherScheme(supplied);
-  return Either.left(
-    new SchemeMismatchError({
-      at: 'construction',
-      expected,
-      supplied,
-      message: `Unshielded address does not match its verifying key: the address is derived under the ${expected} scheme but the supplied key is ${supplied}. Signature schemes must not be mixed.`,
+export const assertKeyAddressConsistency = (publicKey: PublicKey): Either.Either<PublicKey, WalletError> =>
+  pipe(
+    // Deriving the address exercises the ledger's key decoder. A value that cleared the length/tag check but is not a
+    // valid curve point throws inside the wasm; wrap it so this guard (run on the deserialization trust boundary) fails
+    // closed with a typed error instead of letting a wasm trap escape.
+    Either.try({
+      try: () => addressFromKey(publicKey.publicKey),
+      catch: (cause) =>
+        new OtherWalletError({
+          message: `Unshielded verifying key could not be decoded as a ${publicKey.publicKey.tag} key.`,
+          cause,
+        }),
+    }),
+    Either.flatMap((derivedAddress) => {
+      if (derivedAddress === publicKey.addressHex) {
+        return Either.right(publicKey);
+      }
+      // An unshielded address is a scheme-less 32-byte hash, so its own scheme cannot be read back from it. A mismatch
+      // is therefore reported as the cross-scheme mix this guard exists to catch: `supplied` is the key's actual scheme
+      // and `expected` is the other scheme the address must have been derived under.
+      const supplied = publicKey.publicKey.tag;
+      const expected = otherScheme(supplied);
+      return Either.left(
+        new SchemeMismatchError({
+          at: 'construction',
+          expected,
+          supplied,
+          message: `Unshielded address does not match its verifying key: the address is derived under the ${expected} scheme but the supplied key is ${supplied}. Signature schemes must not be mixed.`,
+        }),
+      );
     }),
   );
-};
 
 /**
  * Asserts that a supplied signature shares the scheme of the verifying key it will be checked against. Used at

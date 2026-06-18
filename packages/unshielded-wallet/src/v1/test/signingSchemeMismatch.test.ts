@@ -32,6 +32,7 @@ import {
   makeDefaultTransactingCapability,
 } from '../Transacting.js';
 import { UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
+import { SchemeMismatchError } from '../WalletError.js';
 
 const NIGHT = ledger.nativeToken().raw;
 const networkId = NetworkId.NetworkId.Undeployed;
@@ -93,11 +94,12 @@ describe('signing rejects a scheme mismatch (ECDSA-MM-03/04/05/07/08)', () => {
 
     expect(Either.isLeft(result)).toBe(true);
     if (Either.isLeft(result)) {
-      const error = result.left as unknown as { _tag: string; at: string; expected: string; supplied: string };
-      expect(error._tag).toBe('Wallet.SchemeMismatch');
-      expect(error.at).toBe('signature-provision');
-      expect(error.expected).toBe('ecdsa'); // the input owner's scheme
-      expect(error.supplied).toBe('schnorr'); // the supplied signature's scheme
+      expect(result.left).toBeInstanceOf(SchemeMismatchError);
+      if (result.left instanceof SchemeMismatchError) {
+        expect(result.left.at).toBe('signature-provision');
+        expect(result.left.expected).toBe('ecdsa'); // the input owner's scheme
+        expect(result.left.supplied).toBe('schnorr'); // the supplied signature's scheme
+      }
     }
 
     // ECDSA-MM-07: the mismatch is caught before the signature is attached, so the
@@ -121,7 +123,7 @@ describe('signing rejects a scheme mismatch (ECDSA-MM-03/04/05/07/08)', () => {
 
     expect(Either.isLeft(result)).toBe(true);
     if (Either.isLeft(result)) {
-      expect((result.left as unknown as { _tag: string })._tag).toBe('Wallet.SchemeMismatch');
+      expect(result.left).toBeInstanceOf(SchemeMismatchError);
     }
   });
 

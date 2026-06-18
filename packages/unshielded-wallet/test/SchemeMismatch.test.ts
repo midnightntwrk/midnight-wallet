@@ -20,58 +20,24 @@
 // EARLY (at construction or signature provision) with a clear, typed error —
 // never silently coerced, and never deferred to network submission.
 //
-// ─────────────────────────────────────────────────────────────────────────────
-// STATUS: RED scaffold (TDD). The scheme DISCRIMINATOR already exists on v2 —
-// ledger-v9 keys/signatures are tagged `{ tag: SignatureKind, value }`, and
-// `createKeystore({ kind, secret })` produces real scheme-tagged material. What
-// does NOT yet exist is the wallet-side REJECTION of mismatched combinations.
-// This file imports a PROPOSED guard module that an implementer must create to
-// turn the matrix green. Per CLAUDE.md TDD: the test is the specification —
-// review/ratify the contract below before implementing, and do not weaken these
-// assertions to fit the implementation.
-//
-// ── Proposed contract: `packages/unshielded-wallet/src/SchemeConsistency.ts` ──
-//
-//   import { Data, Either } from 'effect';
-//   import { addressFromKey, type Signature, type SignatureVerifyingKey,
-//            type SignatureKind } from '@midnight-ntwrk/ledger-v9';
-//   import type { PublicKey } from './KeyStore.js';
-//
-//   // Add to the WalletError union in src/v1/WalletError.ts.
-//   export class SchemeMismatchError extends Data.TaggedError('Wallet.SchemeMismatch')<{
-//     message: string;                       // names BOTH the expected and supplied scheme
-//     expected: SignatureKind;
-//     supplied: SignatureKind;
-//     at: 'construction' | 'signature-provision' | 'deserialization';
-//   }> {}
-//
-//   // MM-01/02 — the stored address must be derivable from the stored key.
-//   // Left when addressFromKey(publicKey.publicKey) !== publicKey.addressHex.
-//   export const assertKeyAddressConsistency:
-//     (publicKey: PublicKey) => Either.Either<PublicKey, SchemeMismatchError>;
-//
-//   // MM-03/04/05 — a supplied signature must share the key's scheme tag.
-//   // Left when key.tag !== signature.tag.
-//   export const assertSignatureMatchesKey:
-//     (key: SignatureVerifyingKey, signature: Signature) => Either.Either<Signature, SchemeMismatchError>;
-//
-//   // MM-09 — a tagged key's encoding length must match its tag
-//   // (schnorr = 32-byte x-only / 64 hex; ecdsa = 33-byte SEC1 / 66 hex).
-//   export const assertKeyTagConsistency:
-//     (key: SignatureVerifyingKey) => Either.Either<SignatureVerifyingKey, SchemeMismatchError>;
-//
-// Wire these in: `assertKeyAddressConsistency` from CoreWallet.init/restore;
-// `assertSignatureMatchesKey` inside signUnprovenTransaction/signUnboundTransaction
-// (before the signature is attached); `assertKeyTagConsistency` on the deserialize
-// path. Until the module exists, every guard-backed case below fails on a dynamic
-// import — which IS the expected red reason.
-// ─────────────────────────────────────────────────────────────────────────────
+// The guards under test live in `src/SchemeConsistency.ts`:
+//   - assertKeyAddressConsistency — the stored address must derive from the stored key (MM-01/02);
+//   - assertSignatureMatchesKey   — a supplied signature must share the key's scheme tag (MM-03/04/05);
+//   - assertKeyTagConsistency     — a tagged key's encoding length must match its tag (MM-09).
+// They are wired into signUnprovenTransaction/signUnboundTransaction (before a signature is attached)
+// and onto the deserialization path; this suite exercises them directly.
 
 import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, type PublicKey, type UnshieldedKeystore } from '../src/KeyStore.js';
+import {
+  assertKeyAddressConsistency,
+  assertKeyTagConsistency,
+  assertSignatureMatchesKey,
+} from '../src/SchemeConsistency.js';
+import { SchemeMismatchError } from '../src/v1/WalletError.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -102,33 +68,15 @@ const splicedPublicKey = (keyFrom: UnshieldedKeystore, addressFrom: UnshieldedKe
   address: addressFrom.getBech32Address().asString(),
 });
 
-// The proposed guard module does not exist yet. It is loaded through a
-// dynamically-built specifier so the suite TYPE-CHECKS and RUNS today: the
-// real-ledger anchor cases pass, while every guard-backed case fails at runtime
-// with a clear "Cannot find module ../src/SchemeConsistency.js" — the TDD red
-// that names exactly what to implement. (A static
-// `import('../src/SchemeConsistency.js')` would instead abort the whole package
-// typecheck with TS2307 before any assertion runs.)
-type SchemeGuards = {
-  assertKeyAddressConsistency: (publicKey: PublicKey) => Either.Either<PublicKey, unknown>;
-  assertSignatureMatchesKey: (
-    key: ledger.SignatureVerifyingKey,
-    signature: ledger.Signature,
-  ) => Either.Either<ledger.Signature, unknown>;
-  assertKeyTagConsistency: (key: ledger.SignatureVerifyingKey) => Either.Either<ledger.SignatureVerifyingKey, unknown>;
-};
-// Typed as `string` (not a literal) so TypeScript does not attempt to resolve it.
-const GUARDS_MODULE: string = '../src/SchemeConsistency.js';
-const loadGuards = (): Promise<SchemeGuards> => import(/* @vite-ignore */ GUARDS_MODULE) as Promise<SchemeGuards>;
-
-const expectSchemeMismatch = (left: unknown, at: 'construction' | 'signature-provision' | 'deserialization'): void => {
-  // Structural assertion against the Data.TaggedError contract (avoids a static
-  // import of a not-yet-existing type while still pinning the exact shape).
-  const err = left as { _tag?: string; at?: string; expected?: string; supplied?: string; message?: string };
-  expect(err._tag).toBe('Wallet.SchemeMismatch');
-  expect(err.at).toBe(at);
+const expectSchemeMismatch = (left: unknown, at: SchemeMismatchError['at']): void => {
+  expect(left).toBeInstanceOf(SchemeMismatchError);
+  if (!(left instanceof SchemeMismatchError)) {
+    return;
+  }
+  expect(left._tag).toBe('Wallet.SchemeMismatch');
+  expect(left.at).toBe(at);
   // expected/supplied are exactly the two schemes (order asserted per-case where known).
-  expect([err.expected, err.supplied].sort()).toEqual(['ecdsa', 'schnorr']);
+  expect([left.expected, left.supplied].sort()).toEqual(['ecdsa', 'schnorr']);
 };
 
 describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
@@ -136,8 +84,7 @@ describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
     it.each([
       { id: 'ECDSA-MM-01', title: 'Schnorr address + ECDSA key', keyFrom: ecdsa, addressFrom: schnorr },
       { id: 'ECDSA-MM-02', title: 'ECDSA address + Schnorr key', keyFrom: schnorr, addressFrom: ecdsa },
-    ])('$id rejects "$title" at construction', async ({ keyFrom, addressFrom }) => {
-      const { assertKeyAddressConsistency } = await loadGuards();
+    ])('$id rejects "$title" at construction', ({ keyFrom, addressFrom }) => {
       const result = assertKeyAddressConsistency(splicedPublicKey(keyFrom, addressFrom));
 
       expect(Either.isLeft(result)).toBe(true);
@@ -149,8 +96,7 @@ describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
     it.each([
       { id: 'schnorr', keystore: schnorr },
       { id: 'ecdsa', keystore: ecdsa },
-    ])('accepts a self-consistent $id PublicKey (positive control)', async ({ keystore }) => {
-      const { assertKeyAddressConsistency } = await loadGuards();
+    ])('accepts a self-consistent $id PublicKey (positive control)', ({ keystore }) => {
       const result = assertKeyAddressConsistency(publicKeyOf(keystore));
 
       expect(Either.isRight(result)).toBe(true);
@@ -179,24 +125,21 @@ describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
         expected: 'schnorr',
         supplied: 'ecdsa',
       },
-    ])('$id rejects "$title" at signature provision', async ({ key, sig, expected, supplied }) => {
-      const { assertSignatureMatchesKey } = await loadGuards();
+    ])('$id rejects "$title" at signature provision', ({ key, sig, expected, supplied }) => {
       const result = assertSignatureMatchesKey(key, sig);
 
       expect(Either.isLeft(result)).toBe(true);
       if (Either.isLeft(result)) {
         expectSchemeMismatch(result.left, 'signature-provision');
-        const err = result.left as { expected: string; supplied: string };
-        expect(err.expected).toBe(expected); // exactly the key's scheme
-        expect(err.supplied).toBe(supplied); // exactly the signature's scheme
+        expect(result.left.expected).toBe(expected); // exactly the key's scheme
+        expect(result.left.supplied).toBe(supplied); // exactly the signature's scheme
       }
     });
 
     it.each([
       { id: 'schnorr', key: schnorrKey, sig: schnorrSig },
       { id: 'ecdsa', key: ecdsaKey, sig: ecdsaSig },
-    ])('accepts a matching $id key+signature (positive control)', async ({ key, sig }) => {
-      const { assertSignatureMatchesKey } = await loadGuards();
+    ])('accepts a matching $id key+signature (positive control)', ({ key, sig }) => {
       const result = assertSignatureMatchesKey(key, sig);
 
       expect(Either.isRight(result)).toBe(true);
@@ -208,29 +151,24 @@ describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
   });
 
   describe('error quality (MM-06)', () => {
-    it('ECDSA-MM-06 names both the expected and supplied scheme in the message', async () => {
-      const { assertSignatureMatchesKey } = await loadGuards();
+    it('ECDSA-MM-06 names both the expected and supplied scheme in the message', () => {
       const result = assertSignatureMatchesKey(ecdsaKey, schnorrSig);
 
       expect(Either.isLeft(result)).toBe(true);
       if (Either.isLeft(result)) {
-        const { message } = result.left as { message: string };
-        expect(message).toMatch(/ecdsa/i);
-        expect(message).toMatch(/schnorr/i);
+        expect(result.left.message).toMatch(/ecdsa/i);
+        expect(result.left.message).toMatch(/schnorr/i);
       }
     });
   });
 
   describe('no silent coercion / no fallback (MM-07, MM-08)', () => {
-    it('ECDSA-MM-08 a mismatch is never silently coerced to a Right', async () => {
-      const { assertSignatureMatchesKey } = await loadGuards();
-
+    it('ECDSA-MM-08 a mismatch is never silently coerced to a Right', () => {
       expect(Either.isLeft(assertSignatureMatchesKey(ecdsaKey, schnorrSig))).toBe(true);
       expect(Either.isLeft(assertSignatureMatchesKey(schnorrKey, ecdsaSig))).toBe(true);
     });
 
-    it('ECDSA-MM-07 the guard is pure & synchronous — the mismatch is decidable before any submission', async () => {
-      const { assertSignatureMatchesKey } = await loadGuards();
+    it('ECDSA-MM-07 the guard is pure & synchronous — the mismatch is decidable before any submission', () => {
       // Returns an Either rather than throwing or performing I/O: a signing
       // pipeline threading through it short-circuits before building/submitting.
       const result = assertSignatureMatchesKey(ecdsaKey, schnorrSig);
@@ -260,8 +198,7 @@ describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
         title: 'schnorr tag with ecdsa-length value',
         key: { tag: 'schnorr' as const, value: ecdsaKey.value },
       },
-    ])('$id rejects "$title" (tag↔encoding length must agree)', async ({ key }) => {
-      const { assertKeyTagConsistency } = await loadGuards();
+    ])('$id rejects "$title" (tag↔encoding length must agree)', ({ key }) => {
       const result = assertKeyTagConsistency(key);
 
       expect(Either.isLeft(result)).toBe(true);
@@ -273,15 +210,13 @@ describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
     it.each([
       { id: 'schnorr', key: schnorrKey },
       { id: 'ecdsa', key: ecdsaKey },
-    ])('accepts a well-formed $id key (positive control)', async ({ key }) => {
-      const { assertKeyTagConsistency } = await loadGuards();
+    ])('accepts a well-formed $id key (positive control)', ({ key }) => {
       expect(Either.isRight(assertKeyTagConsistency(key))).toBe(true);
     });
   });
 
   describe('no key material in errors (S-04)', () => {
-    it('ECDSA-S-04 mismatch errors name schemes but never leak key or secret bytes', async () => {
-      const { assertSignatureMatchesKey, assertKeyAddressConsistency } = await loadGuards();
+    it('ECDSA-S-04 mismatch errors name schemes but never leak key or secret bytes', () => {
       const forbidden = [
         Buffer.from(secret).toString('hex'),
         ecdsaKey.value,
@@ -296,8 +231,8 @@ describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
       expect(Either.isLeft(addrResult)).toBe(true);
 
       const messages = [
-        Either.isLeft(sigResult) ? (sigResult.left as { message: string }).message : '',
-        Either.isLeft(addrResult) ? (addrResult.left as { message: string }).message : '',
+        Either.isLeft(sigResult) ? sigResult.left.message : '',
+        Either.isLeft(addrResult) && addrResult.left instanceof SchemeMismatchError ? addrResult.left.message : '',
       ];
       messages.forEach((message) => {
         expect(message.length).toBeGreaterThan(0);

@@ -230,8 +230,9 @@ describe('Phase 2 — ECDSA signs a multi-offer transaction (guaranteed + fallib
     expect(Either.isRight(signed)).toBe(true);
     if (Either.isRight(signed)) {
       const signedIntent = Array.from(signed.right.intents?.values() ?? [])[0];
-      expect(signedIntent?.guaranteedUnshieldedOffer?.signatures.length ?? 0).toBeGreaterThan(0);
-      expect(signedIntent?.fallibleUnshieldedOffer?.signatures.length ?? 0).toBeGreaterThan(0);
+      // Exactly one signature per offer — one input owner in each (1 guaranteed + 1 fallible UTxO).
+      expect(signedIntent?.guaranteedUnshieldedOffer?.signatures.length ?? 0).toBe(1);
+      expect(signedIntent?.fallibleUnshieldedOffer?.signatures.length ?? 0).toBe(1);
     }
   });
 });

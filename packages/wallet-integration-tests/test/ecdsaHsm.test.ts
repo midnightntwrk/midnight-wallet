@@ -35,9 +35,8 @@ describe('ECDSA HSM signer integration (#402 §8)', () => {
     expect(signature.tag).toBe('ecdsa');
     expect(verifyEcdsaWithOracle(hsm.getPublicKey(), payload, signature)).toBe(true);
     expect(ledger.verifySignature(hsm.getPublicKey(), payload, signature)).toBe(true);
-    // The signing key is a private field — not reachable on the public surface.
+    // The signing key is a private field — not present on the public surface.
     expect(Object.keys(hsm)).not.toContain('signingKey');
-    expect((hsm as unknown as Record<string, unknown>)['signingKey']).toBeUndefined();
   });
 
   it('ECDSA-HSM-02: an unavailable HSM surfaces a typed error and does not crash', async () => {

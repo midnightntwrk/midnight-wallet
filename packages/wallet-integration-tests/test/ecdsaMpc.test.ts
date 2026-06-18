@@ -37,7 +37,7 @@ const payload = new TextEncoder().encode('authorize unshielded spend');
 const PARTIES = 3;
 
 describe('ECDSA MPC signer integration (#402 §7)', () => {
-  it('ECDSA-MPC-01: a signature assembled from the threshold shares verifies and authorizes', async () => {
+  it('ECDSA-MPC-01: a signature assembled from the threshold shares verifies under the group key', async () => {
     const coordinator = FakeMpcCoordinator.fromSecret(secret, PARTIES);
 
     // NOTE: this fake is t-of-t (all parties must participate); a true t-of-n
