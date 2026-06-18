@@ -24,7 +24,7 @@
 //   node scripts/publish.mjs --tag canary # publish under `canary` dist-tag
 
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -33,6 +33,20 @@ const SOURCE_SCOPE = '@midnightntwrk/wallet-sdk';
 const ALIAS_SCOPE = '@midnight-ntwrk/wallet-sdk';
 
 const toAlias = (s) => s.split(SOURCE_SCOPE).join(ALIAS_SCOPE);
+
+// Migration banner prepended to the alias (dashed) package README so the
+// notice is visible on npmjs. `primaryName` is the @midnightntwrk target.
+const migrationBanner = (primaryName) =>
+  [
+    '> [!IMPORTANT]',
+    `> **This package has moved.** The \`@midnight-ntwrk\` scope is published only`,
+    `> during the migration window and will stop receiving updates. Please migrate to`,
+    `> [\`${primaryName}\`](https://www.npmjs.com/package/${primaryName}).`,
+    '',
+    '---',
+    '',
+    '',
+  ].join('\n');
 
 const { values } = parseArgs({
   options: { tag: { type: 'string' } },
@@ -114,6 +128,13 @@ const publishAlias = (ws) => {
     const pkgPath = join(stage, 'package.json');
     writeFileSync(pkgPath, toAlias(readFileSync(pkgPath, 'utf8')));
     rewriteScopeInTree(join(stage, 'dist'));
+
+    // Rewrite the README body to the dashed scope (so examples match the
+    // installed package) and prepend a migration banner pointing at the
+    // @midnightntwrk target. npm ships README.md even when `files` omits it.
+    const readmePath = join(stage, 'README.md');
+    const readmeBody = existsSync(readmePath) ? toAlias(readFileSync(readmePath, 'utf8')) : '';
+    writeFileSync(readmePath, migrationBanner(ws.pkg.name) + readmeBody);
 
     console.log(`\nPublishing ${aliasName}@${ws.pkg.version} (alias, token auth)...`);
     execFileSync('npm', ['publish', '--access', 'public', ...tagArgs], {
