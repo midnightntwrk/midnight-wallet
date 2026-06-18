@@ -174,6 +174,14 @@ const publishPrimary = (ws) => {
 
 const results = publishable.flatMap((ws) => {
   const primary = publishPrimary(ws);
+  // Only mirror to the dashed alias once the primary scope is in good shape
+  // (published or already present). If the primary publish failed, skip the
+  // alias so the transitional scope never leads the @midnightntwrk one.
+  if (primary.status === 'failed') {
+    const aliasName = toAlias(ws.pkg.name);
+    console.error(`Skip alias ${aliasName}@${ws.pkg.version}: primary publish failed.`);
+    return [primary];
+  }
   const alias = legacyToken ? [publishAlias(ws)] : [];
   return [primary, ...alias];
 });

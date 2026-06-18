@@ -22,10 +22,6 @@ on:
       - main
       - v2
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
-
 permissions: {}
 
 jobs:
@@ -133,7 +129,7 @@ jobs:
 
       # Node 22 LTS ships npm 10; Trusted Publishing requires npm 11.5.1+.
       - name: Upgrade npm to a Trusted Publishing-capable version
-        run: npm install -g npm@latest
+        run: npm install -g npm@^11.17.0
 
       - name: Enable corepack
         run: corepack enable
