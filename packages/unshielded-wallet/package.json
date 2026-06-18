@@ -13,7 +13,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
+    "url": "git+https://github.com/midnightntwrk/midnight-wallet.git",
+    "directory": "packages/unshielded-wallet"
   },
   "files": [
     "dist/"
