@@ -12,7 +12,7 @@
 // limitations under the License.
 import type { Signature, SignatureVerifyingKey } from '@midnight-ntwrk/ledger-v9';
 import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256 } from '@noble/hashes/sha2';
 
 const toBytes = (hex: string): Uint8Array => Uint8Array.from(Buffer.from(hex, 'hex'));
 

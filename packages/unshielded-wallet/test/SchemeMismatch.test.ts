@@ -76,7 +76,7 @@ const expectSchemeMismatch = (left: unknown, at: SchemeMismatchError['at']): voi
   expect(left._tag).toBe('Wallet.SchemeMismatch');
   expect(left.at).toBe(at);
   // expected/supplied are exactly the two schemes (order asserted per-case where known).
-  expect([left.expected, left.supplied].sort()).toEqual(['ecdsa', 'schnorr']);
+  expect([left.expected, left.supplied].sort((a, b) => a.localeCompare(b))).toEqual(['ecdsa', 'schnorr']);
 };
 
 describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
@@ -230,14 +230,16 @@ describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
       expect(Either.isLeft(sigResult)).toBe(true);
       expect(Either.isLeft(addrResult)).toBe(true);
 
-      const messages = [
-        Either.isLeft(sigResult) ? sigResult.left.message : '',
-        Either.isLeft(addrResult) && addrResult.left instanceof SchemeMismatchError ? addrResult.left.message : '',
-      ];
-      messages.forEach((message) => {
-        expect(message.length).toBeGreaterThan(0);
+      const assertNamesNoSecrets = (message: string): void => {
+        expect(message).not.toHaveLength(0);
         forbidden.forEach((fragment) => expect(message).not.toContain(fragment));
-      });
+      };
+      if (Either.isLeft(sigResult)) {
+        assertNamesNoSecrets(sigResult.left.message);
+      }
+      if (Either.isLeft(addrResult) && addrResult.left instanceof SchemeMismatchError) {
+        assertNamesNoSecrets(addrResult.left.message);
+      }
     });
   });
 });

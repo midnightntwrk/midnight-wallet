@@ -34,12 +34,15 @@ const otherScheme = (kind: SignatureKind): SignatureKind => (kind === 'schnorr' 
 // 32-byte x-only (64 hex); ecdsa keys are 33-byte SEC1-compressed (66 hex).
 const VERIFYING_KEY_HEX_LENGTH: Record<SignatureKind, number> = { schnorr: 64, ecdsa: 66 };
 
-const schemeForVerifyingKeyHexLength = (length: number): SignatureKind | undefined =>
-  length === VERIFYING_KEY_HEX_LENGTH.schnorr
-    ? 'schnorr'
-    : length === VERIFYING_KEY_HEX_LENGTH.ecdsa
-      ? 'ecdsa'
-      : undefined;
+const schemeForVerifyingKeyHexLength = (length: number): SignatureKind | undefined => {
+  if (length === VERIFYING_KEY_HEX_LENGTH.schnorr) {
+    return 'schnorr';
+  }
+  if (length === VERIFYING_KEY_HEX_LENGTH.ecdsa) {
+    return 'ecdsa';
+  }
+  return undefined;
+};
 
 /**
  * Asserts that a {@link PublicKey}'s stored address was derived from its stored verifying key. A `schnorr` address
@@ -62,7 +65,7 @@ export const assertKeyAddressConsistency = (publicKey: PublicKey): Either.Either
           cause,
         }),
     }),
-    Either.flatMap((derivedAddress) => {
+    Either.flatMap((derivedAddress): Either.Either<PublicKey, WalletError> => {
       if (derivedAddress === publicKey.addressHex) {
         return Either.right(publicKey);
       }

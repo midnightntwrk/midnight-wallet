@@ -19,10 +19,10 @@
 // real MPC/HSM product is explicitly out of scope.
 import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { sha256 } from '@noble/hashes/sha256';
+import { sha256 } from '@noble/hashes/sha2';
 import { randomBytes } from 'node:crypto';
 
-const ORDER = secp256k1.CURVE.n;
+const ORDER = secp256k1.Point.Fn.ORDER;
 const fromHex = (hex: string): Uint8Array => Uint8Array.from(Buffer.from(hex, 'hex'));
 const scalarToHex = (scalar: bigint): string => scalar.toString(16).padStart(64, '0');
 const bytesToScalar = (bytes: Uint8Array): bigint => BigInt(`0x${Buffer.from(bytes).toString('hex')}`);
@@ -126,10 +126,12 @@ export class FakeMpcCoordinator {
   }
 
   #contribute(party: MpcParticipant, timeoutMs: number): Promise<bigint> {
-    const share = this.#shares[party.index];
-    if (share === undefined) {
+    // Bounds-check the index (rather than `share === undefined`, which the element type rules out) so an unknown party
+    // is still rejected without an always-false comparison.
+    if (party.index < 0 || party.index >= this.#shares.length) {
       return Promise.reject(new Error(`Unknown MPC party ${party.index}`));
     }
+    const share = this.#shares[party.index];
     if (party.delayMs === undefined) {
       return Promise.resolve(share);
     }
