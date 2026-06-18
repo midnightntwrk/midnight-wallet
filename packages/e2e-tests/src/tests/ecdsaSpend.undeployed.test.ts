@@ -33,7 +33,14 @@ import { logger } from './logger.js';
 describe('ECDSA unshielded spend (undeployed)', () => {
   const getFixture = useTestContainersFixture();
   const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
-  const ecdsaSeed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
+  // fundAndRegisterEcdsaWallet asserts clean-wallet invariants: the funded UTxOs are the wallet's
+  // only Night and are all unregistered. Every test in this file shares one persistent devnet, so
+  // the tests must NOT share an ECDSA address — otherwise the second test inherits the first's
+  // registered coins and those invariants no longer hold (the funding wait snapshots a still-
+  // settling registered leftover and the unregistered filter yields zero). Give each test its own
+  // ECDSA seed so it always starts from an empty, fully unregistered wallet.
+  const ecdsaSpendSeed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
+  const ecdsaMismatchSeed = '42ea72a851a1b6ca65ce29e2143d6bc85401fce387af78fb0256d07a5629ac5c';
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const fundingAmount = utils.tNightAmount(1000n);
   const spendAmount = utils.tNightAmount(100n);
@@ -41,23 +48,24 @@ describe('ECDSA unshielded spend (undeployed)', () => {
 
   let fixture: TestContainersFixture;
   let funded: utils.WalletInit;
-  let ecdsa: utils.WalletInit;
+  // Created per test (with a per-test seed); tracked here only so afterEach can stop it.
+  let activeEcdsa: utils.WalletInit | undefined;
 
   beforeEach(async () => {
     fixture = getFixture();
     funded = await utils.initWalletWithSeed(seedFunded, fixture); // genesis (schnorr)
-    ecdsa = await utils.initWalletWithSeed(ecdsaSeed, fixture, 'ecdsa'); // spends authorized by ECDSA
-    logger.info('Funded (schnorr) and ECDSA wallets started');
+    activeEcdsa = undefined;
+    logger.info('Funded (schnorr) wallet started');
   });
 
   afterEach(async () => {
     await funded.wallet.stop();
-    await ecdsa.wallet.stop();
+    await activeEcdsa?.wallet.stop();
   }, 20_000);
 
   // Fund the ECDSA wallet with Night from genesis and register it for Dust so it
   // can pay fees. The registration is itself an ECDSA-authorized unshielded tx.
-  const fundAndRegisterEcdsaWallet = async (): Promise<void> => {
+  const fundAndRegisterEcdsaWallet = async (ecdsa: utils.WalletInit): Promise<void> => {
     await funded.wallet.waitForSyncedState();
     const ecdsaInitial = await ecdsa.wallet.waitForSyncedState();
     const ecdsaInitialCoins = ecdsaInitial.unshielded.availableCoins.length;
@@ -108,10 +116,16 @@ describe('ECDSA unshielded spend (undeployed)', () => {
   test(
     'ECDSA-SPEND-01/02: an ECDSA wallet spends Night, authorized by its ECDSA key',
     async () => {
-      await fundAndRegisterEcdsaWallet();
+      const ecdsa = (activeEcdsa = await utils.initWalletWithSeed(ecdsaSpendSeed, fixture, 'ecdsa'));
+      logger.info('ECDSA (spend) wallet started');
+      await fundAndRegisterEcdsaWallet(ecdsa);
 
-      // Wait for enough Dust to cover the spend's fee.
-      await rx.firstValueFrom(ecdsa.wallet.state().pipe(rx.filter((s) => s.dust.balance(new Date()) > 0n)));
+      // Wait for enough Dust to cover the spend's fee. A bare `> 0n` is not enough: the wallet
+      // begins generating Dust the moment registration confirms, so `> 0n` passes almost
+      // immediately with far too little to balance the spend, and transferTransaction then fails
+      // with "Insufficient Funds: could not balance dust". Mirror the sibling Dust spend tests and
+      // wait for the established "enough to transact" threshold (> 7 * 10^14).
+      await utils.waitForDustBalance(ecdsa.wallet);
 
       const fundedState = await funded.wallet.waitForSyncedState();
       const initial = await ecdsa.wallet.waitForSyncedState();
@@ -151,11 +165,20 @@ describe('ECDSA unshielded spend (undeployed)', () => {
   test(
     'ECDSA-MM-07: a Schnorr signature for the ECDSA wallet is rejected before submission',
     async () => {
-      await fundAndRegisterEcdsaWallet();
+      const ecdsa = (activeEcdsa = await utils.initWalletWithSeed(ecdsaMismatchSeed, fixture, 'ecdsa'));
+      logger.info('ECDSA (mismatch) wallet started');
+      await fundAndRegisterEcdsaWallet(ecdsa);
+
+      // Build the spend recipe under the same healthy-Dust precondition as the spend test above.
+      // transferTransaction balances its fee in Dust; doing so against barely-generated Dust leaves
+      // the fee-convergence loop unable to settle (observed as a long spin ending in a ledger-wasm
+      // "unreachable" panic in dust Transacting). Wait for the established threshold so the recipe
+      // build is well-behaved and signRecipe is what rejects the scheme mismatch.
+      await utils.waitForDustBalance(ecdsa.wallet);
 
       // A schnorr keystore over the same seed — the wrong scheme for this wallet.
       const wrongSchemeKeystore = createKeystore(
-        { kind: 'schnorr', secret: utils.getUnshieldedSeed(ecdsaSeed) },
+        { kind: 'schnorr', secret: utils.getUnshieldedSeed(ecdsaMismatchSeed) },
         fixture.getNetworkId(),
       );
       const fundedState = await funded.wallet.waitForSyncedState();
