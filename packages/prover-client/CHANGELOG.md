@@ -1,4 +1,4 @@
-# @midnight-ntwrk/wallet-sdk-prover-client
+# @midnightntwrk/wallet-sdk-prover-client
 
 ## 1.2.2
 
@@ -8,11 +8,11 @@
   `unshielded-wallet`, and `shielded-wallet` are refactored to use the new ledger 8.1.0 builder API
   (`Transaction.addIntent`, `Transaction.addZswapOffer`) instead of post-construction field mutation on
   `Transaction.fromParts(...)`. No public API changes; consumers must resolve `@midnight-ntwrk/ledger-v8` to `>=8.1.0`.
-- 25f58b4: Widen ranges for internal `@midnight-ntwrk/wallet-sdk-*` dependencies from exact versions to caret ranges so
+- 25f58b4: Widen ranges for internal `@midnightntwrk/wallet-sdk-*` dependencies from exact versions to caret ranges so
   consumers can dedupe shared sibling packages into a single installed copy.
 - Updated dependencies [6e187fe]
 - Updated dependencies [7452e96]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.2.0
+  - @midnightntwrk/wallet-sdk-utilities@1.2.0
 
 ## 1.2.1
 
@@ -24,7 +24,7 @@
   shared storage.
 - Updated dependencies [0db3290]
 - Updated dependencies [7f82432]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.1
+  - @midnightntwrk/wallet-sdk-utilities@1.1.1
 
 ## 1.2.0
 
@@ -36,7 +36,7 @@
 
 - Updated dependencies [ea55591]
 - Updated dependencies [aa7b1f4]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0
+  - @midnightntwrk/wallet-sdk-utilities@1.1.0
 
 ## 1.2.0-rc.0
 
@@ -48,7 +48,7 @@
 
 - Updated dependencies [ea55591]
 - Updated dependencies [aa7b1f4]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0-rc.0
+  - @midnightntwrk/wallet-sdk-utilities@1.1.0-rc.0
 
 ## 1.1.0
 
@@ -80,21 +80,21 @@
 
 - Updated dependencies [55380e5]
 - Updated dependencies [330867f]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1
 
 ## 1.1.0-rc.3
 
 ### Patch Changes
 
 - Updated dependencies [55380e5]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1-rc.1
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1-rc.1
 
 ## 1.1.0-rc.2
 
 ### Patch Changes
 
 - Updated dependencies [0f29d01]
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-abstractions@2.0.0-rc.1
 
 ## 1.1.0-rc.1
 
@@ -113,8 +113,8 @@
 
 - Updated dependencies [3843720]
 - Updated dependencies [330867f]
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.0
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-abstractions@2.0.0-rc.0
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1-rc.0
 
 ## 1.1.0-rc.0
 
@@ -163,8 +163,8 @@
 - Updated dependencies [bcef7d8]
 - Updated dependencies [fb55d52]
 - Updated dependencies [fb55d52]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0
 
 ## 1.0.0-beta.14
 
@@ -176,7 +176,7 @@
   - Update `midnight-node` Docker image from `0.20.0-rc.1` to `0.20.0-rc.6`
 
 - Updated dependencies [f7aac06]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.11
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.11
 
 ## 1.0.0-beta.13
 
@@ -184,7 +184,7 @@
 
 - 8b8d708: chore: update ledger to version 7.0.0-rc.1
 - Updated dependencies [8b8d708]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.10
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.10
 
 ## 1.0.0-beta.12
 
@@ -194,8 +194,8 @@
 - bcef7d8: Allow TX creation with no own outputs
 - Updated dependencies [dae514d]
 - Updated dependencies [bcef7d8]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.9
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.10
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.9
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.10
 
 ## 1.0.0-beta.11
 
@@ -204,7 +204,7 @@
 - aef8d4b: Performance improvement: Shielded and Dust wallet now send events in batches of 50 or after 10 seconds if
   total events has not reached 50
 - Updated dependencies [aef8d4b]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.8
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.8
 
 ## 1.0.0-beta.10
 
@@ -217,7 +217,7 @@
 ### Patch Changes
 
 - Updated dependencies [a06ccf3]
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.9
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.9
 
 ## 1.0.0-beta.8
 
@@ -228,8 +228,8 @@
 - Updated dependencies [976628a]
 - Updated dependencies [1db4280]
 - Updated dependencies [646c8df]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.7
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.8
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.7
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.8
 
 ## 1.0.0-beta.7
 
@@ -237,8 +237,8 @@
 
 - 2a0d132: chore: force re-release after workspace failure
 - Updated dependencies [2a0d132]
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.7
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.6
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.7
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.6
 
 ## 1.0.0-beta.6
 
@@ -246,5 +246,5 @@
 
 - ae22baf: chore: initialize baseline release after introducing Changesets
 - Updated dependencies [ae22baf]
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.6
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.5
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.6
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.5

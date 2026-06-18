@@ -1,5 +1,5 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-abstractions",
+  "name": "@midnightntwrk/wallet-sdk-abstractions",
   "description": "Domain-specific abstractions for the wallet SDK",
   "version": "2.1.0",
   "type": "module",

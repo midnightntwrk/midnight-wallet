@@ -1,5 +1,5 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-shielded",
+  "name": "@midnightntwrk/wallet-sdk-shielded",
   "version": "3.0.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -30,12 +30,12 @@
   },
   "dependencies": {
     "@midnight-ntwrk/ledger-v8": "^8.1.0",
-    "@midnight-ntwrk/wallet-sdk-abstractions": "^2.1.0",
-    "@midnight-ntwrk/wallet-sdk-address-format": "^3.1.2",
-    "@midnight-ntwrk/wallet-sdk-capabilities": "^3.3.1",
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "^1.2.2",
-    "@midnight-ntwrk/wallet-sdk-runtime": "^1.0.4",
-    "@midnight-ntwrk/wallet-sdk-utilities": "^1.2.0",
+    "@midnightntwrk/wallet-sdk-abstractions": "^2.1.0",
+    "@midnightntwrk/wallet-sdk-address-format": "^3.1.2",
+    "@midnightntwrk/wallet-sdk-capabilities": "^3.3.1",
+    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.2",
+    "@midnightntwrk/wallet-sdk-runtime": "^1.0.4",
+    "@midnightntwrk/wallet-sdk-utilities": "^1.2.0",
     "effect": "^3.19.19",
     "rxjs": "^7.8.2"
   },

@@ -14,15 +14,15 @@ import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
-} from '@midnight-ntwrk/wallet-sdk-address-format';
-import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
+} from '@midnightntwrk/wallet-sdk-address-format';
+import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Array as Arr, Effect, Iterable, Order, pipe, Record } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
-import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
+import { makeSimulatorProvingServiceEffect } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { CoreWallet } from '../CoreWallet.js';
 import {
   type DefaultTransactingConfiguration,
@@ -31,7 +31,7 @@ import {
   type TokenTransfer,
 } from '../Transacting.js';
 import { getNonDustImbalance } from '../../test/testUtils.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { OtherWalletError } from '../WalletError.js';
 import { Either } from 'effect';
 

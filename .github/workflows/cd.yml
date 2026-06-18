@@ -4,12 +4,15 @@ env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
   MIDNIGHTCI_GPG_PRIVATE_KEY: ${{ secrets.MIDNIGHTCI_GPG_PRIVATE_KEY }}
-  # NPM publish auth uses npm Trusted Publishing (OIDC) — no long-lived
-  # NPM_TOKEN secret. Each publishable package must have a Trusted
-  # Publisher configured on npmjs pointing to:
-  #   repo: <owner>/<this-repo>
-  #   workflow: .github/workflows/cd.yml
-  #   environment: npm-publish-stable (release) or npm-publish-canary
+  # Packages publish to npmjs under TWO scopes during the org migration:
+  #   • @midnightntwrk/* (primary) via npm Trusted Publishing (OIDC) — no
+  #     long-lived token. Each package needs a Trusted Publisher on npmjs:
+  #       repo: <owner>/<this-repo>
+  #       workflow: .github/workflows/cd.yml
+  #       environment: npm-publish-stable (release) or npm-publish-canary
+  #   • @midnight-ntwrk/* (transitional alias) authenticated with the legacy
+  #     MIDNIGHTCI_PACKAGES_WRITE token, surfaced to scripts/publish.mjs as
+  #     NPM_LEGACY_TOKEN. Drop this once consumers have moved to the new scope.
   # Docs: https://docs.npmjs.com/trusted-publishers
 
 on:
@@ -51,7 +54,7 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
           registry-url: 'https://registry.npmjs.org'
-          scope: '@midnight-ntwrk'
+          scope: '@midnightntwrk'
 
       # Node 22 LTS ships npm 10; Trusted Publishing requires npm 11.5.1+.
       - name: Upgrade npm to a Trusted Publishing-capable version
@@ -98,10 +101,15 @@ jobs:
 
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
-          # No NODE_AUTH_TOKEN: `yarn changeset:publish` shells out to
-          # `npm publish --provenance` (via scripts/publish.mjs), and npm
-          # authenticates via OIDC against the Trusted Publisher
-          # configured on npmjs for this repo + workflow + environment.
+          # The primary @midnightntwrk publish uses no NODE_AUTH_TOKEN:
+          # `scripts/publish.mjs` runs `npm publish --provenance`, which
+          # authenticates via OIDC against the Trusted Publisher configured
+          # on npmjs for this repo + workflow + environment.
+          #
+          # NPM_LEGACY_TOKEN authenticates the transitional @midnight-ntwrk
+          # alias publish (dashed scope) during the org migration. The script
+          # applies it only to that publish; the primary stays OIDC-only.
+          NPM_LEGACY_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
 
   canary:
     name: Canary (snapshot publish)
@@ -127,7 +135,7 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
           registry-url: 'https://registry.npmjs.org'
-          scope: '@midnight-ntwrk'
+          scope: '@midnightntwrk'
 
       - name: Upgrade npm to a Trusted Publishing-capable version
         run: npm install -g npm@latest
@@ -145,6 +153,9 @@ jobs:
       - name: Snapshot version + publish canary
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          # Authenticates the transitional @midnight-ntwrk alias publish; the
+          # primary @midnightntwrk publish stays OIDC-only (see release job).
+          NPM_LEGACY_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
         run: |
           set -euo pipefail
 

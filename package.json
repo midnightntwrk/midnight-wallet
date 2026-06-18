@@ -1,6 +1,6 @@
 {
   "packageManager": "yarn@4.17.0",
-  "name": "@midnight-ntwrk/wallet-sdk-monorepo",
+  "name": "@midnightntwrk/wallet-sdk-monorepo",
   "type": "module",
   "private": true,
   "workspaces": [

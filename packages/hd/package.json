@@ -1,5 +1,5 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-hd",
+  "name": "@midnightntwrk/wallet-sdk-hd",
   "version": "3.0.2",
   "type": "module",
   "main": "./dist/index.js",

@@ -1,5 +1,5 @@
 ---
-'@midnight-ntwrk/wallet-sdk-runtime': patch
+'@midnightntwrk/wallet-sdk-runtime': patch
 ---
 
 Replace the shared unbounded-with-replay runtime state-changes stream with per-subscriber

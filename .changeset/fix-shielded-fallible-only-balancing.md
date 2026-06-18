@@ -1,5 +1,5 @@
 ---
-'@midnight-ntwrk/wallet-sdk-shielded': patch
+'@midnightntwrk/wallet-sdk-shielded': patch
 ---
 
 Fix `balanceTransaction` failing with "Could not create a valid guaranteed offer" when a

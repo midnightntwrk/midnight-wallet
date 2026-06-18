@@ -1,14 +1,14 @@
-# @midnight-ntwrk/wallet-sdk-runtime
+# @midnightntwrk/wallet-sdk-runtime
 
 ## 1.0.4
 
 ### Patch Changes
 
-- 25f58b4: Widen ranges for internal `@midnight-ntwrk/wallet-sdk-*` dependencies from exact versions to caret ranges so
+- 25f58b4: Widen ranges for internal `@midnightntwrk/wallet-sdk-*` dependencies from exact versions to caret ranges so
   consumers can dedupe shared sibling packages into a single installed copy.
 - Updated dependencies [6e187fe]
 - Updated dependencies [7452e96]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.2.0
+  - @midnightntwrk/wallet-sdk-utilities@1.2.0
 
 ## 1.0.3
 
@@ -20,8 +20,8 @@
 - Updated dependencies [c1ae369]
 - Updated dependencies [0db3290]
 - Updated dependencies [7f82432]
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.1.0
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.1
+  - @midnightntwrk/wallet-sdk-abstractions@2.1.0
+  - @midnightntwrk/wallet-sdk-utilities@1.1.1
 
 ## 1.0.2
 
@@ -29,7 +29,7 @@
 
 - Updated dependencies [ea55591]
 - Updated dependencies [aa7b1f4]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0
+  - @midnightntwrk/wallet-sdk-utilities@1.1.0
 
 ## 1.0.2-rc.0
 
@@ -37,7 +37,7 @@
 
 - Updated dependencies [ea55591]
 - Updated dependencies [aa7b1f4]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0-rc.0
+  - @midnightntwrk/wallet-sdk-utilities@1.1.0-rc.0
 
 ## 1.0.1
 
@@ -47,22 +47,22 @@
 - Updated dependencies [0f29d01]
 - Updated dependencies [55380e5]
 - Updated dependencies [330867f]
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1
+  - @midnightntwrk/wallet-sdk-abstractions@2.0.0
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1
 
 ## 1.0.1-rc.2
 
 ### Patch Changes
 
 - Updated dependencies [55380e5]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1-rc.1
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1-rc.1
 
 ## 1.0.1-rc.1
 
 ### Patch Changes
 
 - Updated dependencies [0f29d01]
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-abstractions@2.0.0-rc.1
 
 ## 1.0.1-rc.0
 
@@ -70,8 +70,8 @@
 
 - Updated dependencies [3843720]
 - Updated dependencies [330867f]
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.0
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-abstractions@2.0.0-rc.0
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1-rc.0
 
 ## 1.0.0
 
@@ -91,22 +91,22 @@
 - Updated dependencies [bcef7d8]
 - Updated dependencies [fb55d52]
 - Updated dependencies [fb55d52]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0
 
 ## 1.0.0-beta.12
 
 ### Patch Changes
 
 - Updated dependencies [f7aac06]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.11
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.11
 
 ## 1.0.0-beta.11
 
 ### Patch Changes
 
 - Updated dependencies [8b8d708]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.10
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.10
 
 ## 1.0.0-beta.10
 
@@ -115,22 +115,22 @@
 - bcef7d8: Allow TX creation with no own outputs
 - Updated dependencies [dae514d]
 - Updated dependencies [bcef7d8]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.9
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.10
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.9
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.10
 
 ## 1.0.0-beta.9
 
 ### Patch Changes
 
 - Updated dependencies [aef8d4b]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.8
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.8
 
 ## 1.0.0-beta.8
 
 ### Patch Changes
 
 - Updated dependencies [a06ccf3]
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.9
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.9
 
 ## 1.0.0-beta.7
 
@@ -139,8 +139,8 @@
 - Updated dependencies [976628a]
 - Updated dependencies [1db4280]
 - Updated dependencies [646c8df]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.7
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.8
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.7
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.8
 
 ## 1.0.0-beta.6
 
@@ -148,8 +148,8 @@
 
 - 2a0d132: chore: force re-release after workspace failure
 - Updated dependencies [2a0d132]
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.7
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.6
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.7
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.6
 
 ## 1.0.0-beta.5
 
@@ -157,5 +157,5 @@
 
 - ae22baf: chore: initialize baseline release after introducing Changesets
 - Updated dependencies [ae22baf]
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.6
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.5
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.6
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.5

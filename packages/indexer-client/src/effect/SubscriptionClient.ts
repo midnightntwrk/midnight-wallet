@@ -13,7 +13,7 @@
 import { type Stream, Context } from 'effect';
 import type { Query } from './Query.js';
 import type { BackpressureOptions as BackpressureOptionsImpl } from './Backpressure.js';
-import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 
 export class SubscriptionClient extends Context.Tag('@midnight-ntwrk/indexer-client#SubscriptionClient')<
   SubscriptionClient,

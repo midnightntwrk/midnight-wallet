@@ -1,4 +1,4 @@
-# @midnight-ntwrk/wallet-sdk-address-format
+# @midnightntwrk/wallet-sdk-address-format
 
 ## 3.1.2
 

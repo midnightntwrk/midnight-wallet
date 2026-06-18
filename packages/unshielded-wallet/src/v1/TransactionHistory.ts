@@ -10,10 +10,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Schema } from 'effect';
 import { type UnshieldedUpdate } from './SyncSchema.js';
-import { SafeBigInt } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { SafeBigInt } from '@midnightntwrk/wallet-sdk-utilities';
 import { TransactionHistoryError } from './WalletError.js';
 
 const UtxoSchema = Schema.Struct({

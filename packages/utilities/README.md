@@ -1,11 +1,11 @@
-# @midnight-ntwrk/wallet-sdk-utilities
+# @midnightntwrk/wallet-sdk-utilities
 
 Domain-agnostic utilities for the Midnight Wallet SDK.
 
 ## Installation
 
 ```bash
-npm install @midnight-ntwrk/wallet-sdk-utilities
+npm install @midnightntwrk/wallet-sdk-utilities
 ```
 
 ## Overview
@@ -39,7 +39,7 @@ import {
   ObservableOps, // RxJS Observable utilities
   Poly, // Polymorphic function helpers
   RecordOps, // Object/Record utilities
-} from '@midnight-ntwrk/wallet-sdk-utilities';
+} from '@midnightntwrk/wallet-sdk-utilities';
 ```
 
 ### Networking Submodule (`/networking`)
@@ -47,7 +47,7 @@ import {
 Network-related utilities:
 
 ```typescript
-import { ... } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { ... } from '@midnightntwrk/wallet-sdk-utilities/networking';
 ```
 
 ### Types Submodule (`/types`)
@@ -55,7 +55,7 @@ import { ... } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 Common type definitions:
 
 ```typescript
-import { ... } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { ... } from '@midnightntwrk/wallet-sdk-utilities/types';
 ```
 
 ### Testing Submodule (`/testing`)
@@ -63,7 +63,7 @@ import { ... } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 Testing utilities and helpers:
 
 ```typescript
-import { ... } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { ... } from '@midnightntwrk/wallet-sdk-utilities/testing';
 ```
 
 ## Usage Examples
@@ -71,7 +71,7 @@ import { ... } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 ### Observable Operations
 
 ```typescript
-import { ObservableOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { ObservableOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 // Convert Effect streams to RxJS Observables
 const observable = ObservableOps.fromStream(effectStream);
@@ -80,7 +80,7 @@ const observable = ObservableOps.fromStream(effectStream);
 ### Array Operations
 
 ```typescript
-import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 // Various array manipulation utilities
 ```

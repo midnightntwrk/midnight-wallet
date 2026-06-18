@@ -33,7 +33,7 @@ Where:
 Below you can find an example on how to derive keys from a random seed:
 
 ```typescript
-import { generateRandomSeed, HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
+import { generateRandomSeed, HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
 
 const seed = generateRandomSeed();
 const generatedWallet = HDWallet.fromSeed(seed);

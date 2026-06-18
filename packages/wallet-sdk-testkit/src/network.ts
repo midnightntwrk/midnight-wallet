@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { BlockHash } from '@midnight-ntwrk/wallet-sdk-indexer-client';
-import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
+import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { logger } from './logger.js';
 
 export const sleep = (secs: number): Promise<void> => {

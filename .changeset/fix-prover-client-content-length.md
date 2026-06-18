@@ -1,5 +1,5 @@
 ---
-'@midnight-ntwrk/wallet-sdk-prover-client': patch
+'@midnightntwrk/wallet-sdk-prover-client': patch
 ---
 
 Fix proof-server requests failing with `invalid content-length header` when undici >= 8.2.0 is

@@ -1,5 +1,5 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-docs-snippets",
+  "name": "@midnightntwrk/wallet-sdk-docs-snippets",
   "description": "Documentation snippets for the wallet SDK",
   "version": "1.0.0-beta.1",
   "type": "module",
@@ -27,7 +27,7 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk": "workspace:*",
+    "@midnightntwrk/wallet-sdk": "workspace:*",
     "buffer": "^6.0.3",
     "lodash-es": "^4.17.23"
   },

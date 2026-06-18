@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, vi, it, expect, afterAll, beforeAll } from 'vitest';
-import { TestTransactions } from '@midnight-ntwrk/wallet-sdk-node-client/testing';
-import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { TestTransactions } from '@midnightntwrk/wallet-sdk-node-client/testing';
+import { TestContainers } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { Chunk, Effect, Option, pipe, Stream, Console, Exit, Scope } from 'effect';
 import { makeDefaultSubmissionServiceEffect } from '../submissionService.js';
-import { PolkadotNodeClient } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
+import { PolkadotNodeClient } from '@midnightntwrk/wallet-sdk-node-client/effect';
 import { NodeContext } from '@effect/platform-node';
 import { type StartedTestContainer } from 'testcontainers';
 

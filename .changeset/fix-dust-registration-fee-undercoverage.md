@@ -1,6 +1,6 @@
 ---
-'@midnight-ntwrk/wallet-sdk-dust-wallet': minor
-'@midnight-ntwrk/wallet-sdk-facade': minor
+'@midnightntwrk/wallet-sdk-dust-wallet': minor
+'@midnightntwrk/wallet-sdk-facade': minor
 ---
 
 Fix a race in `WalletFacade.registerNightUtxosForDustGeneration` where the registration's

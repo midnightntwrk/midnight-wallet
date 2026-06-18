@@ -1,4 +1,4 @@
-# @midnight-ntwrk/wallet-sdk
+# @midnightntwrk/wallet-sdk
 
 ## 1.1.0
 
@@ -19,17 +19,17 @@
 - Updated dependencies [8004393]
 - Updated dependencies [7452e96]
 - Updated dependencies [25f58b4]
-  - @midnight-ntwrk/wallet-sdk-dust-wallet@4.1.0
-  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@3.1.0
-  - @midnight-ntwrk/wallet-sdk-utilities@1.2.0
-  - @midnight-ntwrk/wallet-sdk-facade@4.0.1
-  - @midnight-ntwrk/wallet-sdk-address-format@3.1.2
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.3.1
-  - @midnight-ntwrk/wallet-sdk-node-client@1.1.2
-  - @midnight-ntwrk/wallet-sdk-prover-client@1.2.2
-  - @midnight-ntwrk/wallet-sdk-shielded@3.0.1
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.2
-  - @midnight-ntwrk/wallet-sdk-runtime@1.0.4
+  - @midnightntwrk/wallet-sdk-dust-wallet@4.1.0
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@3.1.0
+  - @midnightntwrk/wallet-sdk-utilities@1.2.0
+  - @midnightntwrk/wallet-sdk-facade@4.0.1
+  - @midnightntwrk/wallet-sdk-address-format@3.1.2
+  - @midnightntwrk/wallet-sdk-capabilities@3.3.1
+  - @midnightntwrk/wallet-sdk-node-client@1.1.2
+  - @midnightntwrk/wallet-sdk-prover-client@1.2.2
+  - @midnightntwrk/wallet-sdk-shielded@3.0.1
+  - @midnightntwrk/wallet-sdk-indexer-client@1.2.2
+  - @midnightntwrk/wallet-sdk-runtime@1.0.4
 
 ## 1.0.0
 
@@ -55,12 +55,12 @@
 - Updated dependencies [0529e6a]
 - Updated dependencies [7f82432]
 - Updated dependencies [aaa0bf1]
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.3.0
-  - @midnight-ntwrk/wallet-sdk-facade@4.0.0
-  - @midnight-ntwrk/wallet-sdk-dust-wallet@4.0.0
-  - @midnight-ntwrk/wallet-sdk-shielded@3.0.0
-  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@3.0.0
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.1.0
-  - @midnight-ntwrk/wallet-sdk-address-format@3.1.1
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.1
-  - @midnight-ntwrk/wallet-sdk-hd@3.0.2
+  - @midnightntwrk/wallet-sdk-capabilities@3.3.0
+  - @midnightntwrk/wallet-sdk-facade@4.0.0
+  - @midnightntwrk/wallet-sdk-dust-wallet@4.0.0
+  - @midnightntwrk/wallet-sdk-shielded@3.0.0
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@3.0.0
+  - @midnightntwrk/wallet-sdk-abstractions@2.1.0
+  - @midnightntwrk/wallet-sdk-address-format@3.1.1
+  - @midnightntwrk/wallet-sdk-utilities@1.1.1
+  - @midnightntwrk/wallet-sdk-hd@3.0.2

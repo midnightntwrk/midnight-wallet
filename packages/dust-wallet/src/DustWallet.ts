@@ -19,11 +19,11 @@ import {
   type SignatureVerifyingKey,
   type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v8';
-import { type ProtocolState, ProtocolVersion, type SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { type DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
-import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { type Clock } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type ProtocolState, ProtocolVersion, type SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
+import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { type Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './v1/CoinsAndBalances.js';
