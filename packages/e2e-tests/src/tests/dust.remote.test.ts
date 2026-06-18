@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Thin shim: the dust scenario bodies live in @midnight-ntwrk/wallet-sdk-testkit. This file only
+// Thin shim: the dust scenario bodies live in @midnightntwrk/wallet-sdk-testkit. This file only
 // wires the testcontainers environment + seeds and registers the suite.
-import { type MidnightNetwork, useWalletTestEnvironment } from '@midnight-ntwrk/wallet-sdk-testkit';
-import { createTestContainersEnvironment } from '@midnight-ntwrk/wallet-sdk-testkit/testcontainers';
-import { registerDustHealthchecks } from '@midnight-ntwrk/wallet-sdk-testkit/scenarios';
+import { type MidnightNetwork, useWalletTestEnvironment } from '@midnightntwrk/wallet-sdk-testkit';
+import { createTestContainersEnvironment } from '@midnightntwrk/wallet-sdk-testkit/testcontainers';
+import { registerDustHealthchecks } from '@midnightntwrk/wallet-sdk-testkit/scenarios';
 
 const getEnv = useWalletTestEnvironment(() =>
   createTestContainersEnvironment({ network: process.env['NETWORK'] as MidnightNetwork }),

@@ -95,7 +95,7 @@ yarn
 yarn dist
 
 # Build specific package
-yarn dist --filter=@midnight-ntwrk/wallet-sdk-facade
+yarn dist --filter=@midnightntwrk/wallet-sdk-facade
 
 # Build and watch for changes
 yarn watch
@@ -104,10 +104,10 @@ yarn watch
 yarn test
 
 # Run tests for specific package
-yarn test --filter=@midnight-ntwrk/wallet-sdk-unshielded-wallet
+yarn test --filter=@midnightntwrk/wallet-sdk-unshielded-wallet
 
 # Run specific test file
-yarn test --filter=@midnight-ntwrk/wallet-sdk-unshielded-wallet -- test/UnshieldedWallet.test.ts
+yarn test --filter=@midnightntwrk/wallet-sdk-unshielded-wallet -- test/UnshieldedWallet.test.ts
 
 # Full CI verification (typecheck, lint, tests)
 yarn verify

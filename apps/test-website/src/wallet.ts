@@ -26,7 +26,7 @@ import {
   type UnshieldedKeystore,
   UnshieldedWallet,
   mergeWalletEntries,
-} from '@midnight-ntwrk/wallet-sdk';
+} from '@midnightntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
 
 const PROOF_SERVER_PORT = Number.parseInt(globalThis.process?.env?.['PROOF_SERVER_PORT'] ?? '6300', 10);

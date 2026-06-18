@@ -11,8 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { expect } from 'vitest';
-import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { MidnightBech32m, ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { MidnightBech32m, ShieldedAddress, UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { type MidnightNetwork } from './types.js';
 
 /**

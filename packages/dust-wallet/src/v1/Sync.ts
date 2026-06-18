@@ -29,23 +29,23 @@ import {
   Event as LedgerEvent,
   LedgerParameters,
 } from '@midnight-ntwrk/ledger-v8';
-import { BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { BlockHash, DustLedgerEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
   HttpQueryClient,
   ConnectionHelper,
   type SubscriptionClient,
   type QueryClient,
-} from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { type URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+} from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { EitherOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { type URLError, WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { OtherWalletError, SyncWalletError, type WalletError } from './WalletError.js';
 import {
   type Simulator,
   type SimulatorState,
   getBlockEventsFrom,
   getLastBlock,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
+} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from './types/ledger.js';
 import { Uint8ArraySchema } from './Serialization.js';

@@ -11,9 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, Either, Exit, Option, Scope, Stream, SubscriptionRef, SynchronizedRef } from 'effect';
-import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { StateChange, type Variant, VersionChangeType, WalletRuntimeError } from './abstractions/index.js';
-import { EitherOps, HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { EitherOps, HList, Poly } from '@midnightntwrk/wallet-sdk-utilities';
 
 /** The {@link Runtime} service type. */
 export interface Runtime<Variants extends Variant.AnyVersionedVariantArray> {

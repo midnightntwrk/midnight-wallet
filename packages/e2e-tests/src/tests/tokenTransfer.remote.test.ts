@@ -11,14 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// The `@healthcheck` token-transfer test is single-sourced in @midnight-ntwrk/wallet-sdk-testkit
+// The `@healthcheck` token-transfer test is single-sourced in @midnightntwrk/wallet-sdk-testkit
 // (shared with downstream monitoring). The remaining, upstream-only token-transfer tests live here
 // and reuse the testkit's shared two-wallet setup via `useTokenTransferWallets`.
 import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { inspect } from 'node:util';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import {
   type MidnightNetwork,
   useWalletTestEnvironment,
@@ -28,12 +28,12 @@ import {
   waitForTxInHistory,
   expectSenderShieldedTxHistory,
   logger,
-} from '@midnight-ntwrk/wallet-sdk-testkit';
-import { createTestContainersEnvironment } from '@midnight-ntwrk/wallet-sdk-testkit/testcontainers';
+} from '@midnightntwrk/wallet-sdk-testkit';
+import { createTestContainersEnvironment } from '@midnightntwrk/wallet-sdk-testkit/testcontainers';
 import {
   registerTokenTransferHealthchecks,
   useTokenTransferWallets,
-} from '@midnight-ntwrk/wallet-sdk-testkit/scenarios';
+} from '@midnightntwrk/wallet-sdk-testkit/scenarios';
 
 const getEnv = useWalletTestEnvironment(() =>
   createTestContainersEnvironment({ network: process.env['NETWORK'] as MidnightNetwork }),

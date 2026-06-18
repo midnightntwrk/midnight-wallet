@@ -13,7 +13,7 @@
 import { Context, Effect, Option, Stream } from 'effect';
 import * as SubmissionEvent from './SubmissionEvent.js';
 import * as NodeClientError from './NodeClientError.js';
-import { type SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export type Genesis = { readonly transactions: readonly SerializedTransaction.SerializedTransaction[] };
 

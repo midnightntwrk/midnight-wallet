@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { HDWallet, Roles, type Role } from '@midnight-ntwrk/wallet-sdk-hd';
+import { HDWallet, Roles, type Role } from '@midnightntwrk/wallet-sdk-hd';
 
 const deriveKey = (seed: string, role: Role): Uint8Array<ArrayBufferLike> => {
   const seedBuffer = Buffer.from(seed, 'hex');

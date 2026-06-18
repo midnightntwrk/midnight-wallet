@@ -1,5 +1,5 @@
 ---
-'@midnight-ntwrk/wallet-sdk-hd': patch
+'@midnightntwrk/wallet-sdk-hd': patch
 ---
 
 `deriveKeyAt`/`deriveKeysAt` now return `keyOutOfBounds` for invalid BIP32 path components (non-integer, negative, or

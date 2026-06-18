@@ -20,6 +20,8 @@ You can install the required package globally by running "npm install -g adr-log
 - [ADR-0005](0005-using-tsc-to-build-projects.md) - Use TSC to build projects
 - [ADR-0006](0006-structure-for-flexibility-and-robustness.md) - Structure for flexibility and robustness with Variants,
   Builders and Facades
+- [ADR-0007](0007-npmjs-trusted-publishing-and-scope-rename.md) - npmjs Trusted Publishing and scope rename to
+  `@midnightntwrk`
 
 <!-- adrlogstop -->
 

@@ -4,6 +4,16 @@ env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
   MIDNIGHTCI_GPG_PRIVATE_KEY: ${{ secrets.MIDNIGHTCI_GPG_PRIVATE_KEY }}
+  # Packages publish to npmjs under TWO scopes during the org migration:
+  #   • @midnightntwrk/* (primary) via npm Trusted Publishing (OIDC) — no
+  #     long-lived token. Each package needs a Trusted Publisher on npmjs:
+  #       repo: <owner>/<this-repo>
+  #       workflow: .github/workflows/cd.yml
+  #       environment: npm-publish-stable (publish-stable) or npm-publish-canary
+  #   • @midnight-ntwrk/* (transitional alias) authenticated with the legacy
+  #     MIDNIGHTCI_PACKAGES_WRITE token, surfaced to scripts/publish.mjs as
+  #     NPM_LEGACY_TOKEN. Drop this once consumers have moved to the new scope.
+  # Docs: https://docs.npmjs.com/trusted-publishers
 
 on:
   workflow_dispatch:
@@ -12,23 +22,26 @@ on:
       - main
       - v2
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
-
 permissions: {}
 
 jobs:
-  release:
-    name: Release
+  # Manages the changesets "Version Packages" PR. Ungated, so the release PR
+  # is created/updated automatically on every push — the human gate lives on
+  # the downstream publish-stable job (and on merging the release PR itself).
+  version:
+    name: Version (release PR)
     runs-on: ubuntu-latest-8-core-x64
     permissions:
       contents: write
       pull-requests: write
-      packages: write
-
+    outputs:
+      # 'false' only on the push that merges the release PR (no changesets
+      # left) — the signal publish-stable uses to publish. Every other PR
+      # carries a changeset (enforced by changeset:check), so this stays
+      # 'true' until a real release lands and never triggers a spurious gate.
+      hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
     concurrency:
-      group: release-${{ github.ref_name }}
+      group: version-${{ github.ref_name }}
       cancel-in-progress: false
 
     steps:
@@ -39,15 +52,89 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
-          # This is required for the npm publish step
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@midnight-ntwrk'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@midnightntwrk'
 
       - name: Enable corepack
         run: corepack enable
 
-      - name: Configure yarn
+      - name: Configure yarn (install-time auth for GH Packages)
+        run: |
+          # Upstream @midnight-ntwrk deps (ledger-v8, wallet-api, zkir-v2, etc.)
+          # still live on GH Packages, so install needs that token.
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Import GPG key
+        id: gpg
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd #v7.0.0
+        with:
+          gpg_private_key: ${{ env.MIDNIGHTCI_GPG_PRIVATE_KEY }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
+      - name: Configure GIT signing
+        run: |
+          git config user.name  "MidnightCI"
+          git config user.email "midnight-automation+midnightci@iohk.io"
+          git config user.signingkey "${{ steps.gpg.outputs.fingerprint }}"
+          git config commit.gpgsign true
+          git config tag.gpgSign true
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Create / update Release Pull Request
+        id: changesets
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          title: 'chore: release'
+          version: yarn changeset:version
+          # No `publish` here — publishing is the gated publish-stable job.
+          setupGitUser: false
+        env:
+          GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+  # Publishes stable packages (primary @midnightntwrk + @midnight-ntwrk alias).
+  # Runs only on the push that merged the release PR (no changesets left) and
+  # is gated by the npm-publish-stable environment. Independent of canary, so
+  # snapshot publishing is never blocked by this gate.
+  publish-stable:
+    name: Publish (stable)
+    needs: [version]
+    if: needs.version.outputs.hasChangesets == 'false'
+    runs-on: ubuntu-latest-8-core-x64
+    # Human gate: this environment must require reviewer approval before the
+    # job can run. Configure required reviewers in repo
+    # Settings → Environments → npm-publish-stable.
+    environment: npm-publish-stable
+    permissions:
+      contents: write # push release git tags
+      id-token: write # npm Trusted Publishing (OIDC) + provenance
+    concurrency:
+      group: publish-stable-${{ github.ref_name }}
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          token: ${{ env.MIDNIGHT_GH_TOKEN }} # so the release-tag push is authenticated
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: 'yarn.lock'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@midnightntwrk'
+
+      # Node 22 LTS ships npm 10; Trusted Publishing requires npm 11.5.1+.
+      - name: Upgrade npm to a Trusted Publishing-capable version
+        run: npm install -g npm@^11.17.0
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Configure yarn (install-time auth for GH Packages)
         run: |
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
@@ -68,29 +155,32 @@ jobs:
           git config tag.gpgSign true
 
       - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build, publish (both scopes), and tag
         run: |
-          yarn install --immutable
-
-      - name: Create Release Pull Request / Publish
-        id: changesets
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
-        with:
-          title: 'chore: release'
-          version: yarn changeset:version
-          publish: yarn changeset:publish
-          setupGitUser: false
-
+          yarn changeset:publish
+          git push origin --tags
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          # Primary @midnightntwrk publishes via OIDC — scripts/publish.mjs
+          # blanks NODE_AUTH_TOKEN so npm uses Trusted Publishing + provenance.
+          # NPM_LEGACY_TOKEN authenticates the transitional @midnight-ntwrk
+          # alias publish only; the primary stays OIDC-only.
+          NPM_LEGACY_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
 
   canary:
     name: Canary (snapshot publish)
     runs-on: ubuntu-latest-8-core-x64
-    needs: [release]
+    # Intentionally independent of the stable jobs: canary must publish
+    # automatically on every main push, so it must not be gated by (or depend
+    # on) the reviewer-gated publish-stable job. Its own environment exists
+    # only to scope the npmjs Trusted Publisher per release type — no required
+    # reviewers here.
+    environment: npm-publish-canary
     permissions:
-      packages: write
       contents: read
+      id-token: write # for npm Trusted Publishing (OIDC) + provenance
     concurrency:
       group: canary-${{ github.ref_name }}
       cancel-in-progress: false
@@ -103,14 +193,16 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@midnight-ntwrk'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@midnightntwrk'
+
+      - name: Upgrade npm to a Trusted Publishing-capable version
+        run: npm install -g npm@latest
 
       - name: Enable corepack
         run: corepack enable
 
-      - name: Configure yarn
+      - name: Configure yarn (install-time auth for GH Packages)
         run: |
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
@@ -119,8 +211,10 @@ jobs:
 
       - name: Snapshot version + publish canary
         env:
-          NODE_AUTH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          # Authenticates the transitional @midnight-ntwrk alias publish; the
+          # primary @midnightntwrk publish stays OIDC-only (see release job).
+          NPM_LEGACY_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
         run: |
           set -euo pipefail
 
@@ -163,13 +257,15 @@ jobs:
           # Build AFTER snapshot versions are applied
           yarn dist:publish
 
-          # Publish under a branch-specific dist-tag: "canary" on main, "canary-<branch>" elsewhere
+          # Publish under a branch-specific dist-tag: "canary" on main,
+          # "canary-<branch>" elsewhere. Uses the npm CLI (OIDC + provenance)
+          # via scripts/publish.mjs, which forwards --tag to `npm publish`.
           if [ "${{ github.ref_name }}" = "main" ]; then
             CANARY_TAG="canary"
           else
             CANARY_TAG="canary-${{ github.ref_name }}"
           fi
-          yarn changeset publish --tag "$CANARY_TAG"
+          node scripts/publish.mjs --tag "$CANARY_TAG"
 
       - name: Cleanup (always)
         if: always()

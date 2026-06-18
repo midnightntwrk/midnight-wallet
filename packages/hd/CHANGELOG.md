@@ -1,4 +1,4 @@
-# @midnight-ntwrk/wallet-sdk-hd
+# @midnightntwrk/wallet-sdk-hd
 
 ## 3.0.2
 

@@ -11,4 +11,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export * from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+export * from '@midnightntwrk/wallet-sdk-indexer-client/effect';

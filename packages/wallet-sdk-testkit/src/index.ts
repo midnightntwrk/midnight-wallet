@@ -14,9 +14,9 @@
 // Full entry point. Re-exports the vitest-free core (environment, wallet, seeds, network, logging)
 // plus the vitest-coupled helpers (assertions, sync waiters, address validation, suite glue).
 // Importing this pulls in `vitest`; non-test consumers should import from
-// `@midnight-ntwrk/wallet-sdk-testkit/core` instead.
+// `@midnightntwrk/wallet-sdk-testkit/core` instead.
 //
-// The Docker-backed environment lives at `@midnight-ntwrk/wallet-sdk-testkit/testcontainers` so it
+// The Docker-backed environment lives at `@midnightntwrk/wallet-sdk-testkit/testcontainers` so it
 // (and the `testcontainers` peer dependency) is only loaded when actually needed.
 export * from './core.js';
 

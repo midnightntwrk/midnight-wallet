@@ -31,7 +31,7 @@ import * as SubmissionEvent from './SubmissionEvent.js';
 import * as NodeClientError from './NodeClientError.js';
 import BN from 'bn.js';
 import { u8aToHex } from '@polkadot/util';
-import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export type Config = {
   nodeURL: URL;

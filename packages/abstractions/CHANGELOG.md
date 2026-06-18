@@ -1,4 +1,4 @@
-# @midnight-ntwrk/wallet-sdk-abstractions
+# @midnightntwrk/wallet-sdk-abstractions
 
 ## 2.1.0
 

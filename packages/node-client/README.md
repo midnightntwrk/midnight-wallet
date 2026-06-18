@@ -1,11 +1,11 @@
-# @midnight-ntwrk/wallet-sdk-node-client
+# @midnightntwrk/wallet-sdk-node-client
 
 Client for communicating with the Midnight blockchain node.
 
 ## Installation
 
 ```bash
-npm install @midnight-ntwrk/wallet-sdk-node-client
+npm install @midnightntwrk/wallet-sdk-node-client
 ```
 
 ## Overview
@@ -22,7 +22,7 @@ This package provides a client for interacting with the Midnight blockchain node
 ### Basic Usage
 
 ```typescript
-import { PolkadotNodeClient, makeConfig } from '@midnight-ntwrk/wallet-sdk-node-client';
+import { PolkadotNodeClient, makeConfig } from '@midnightntwrk/wallet-sdk-node-client';
 
 // Initialize the client
 const config = makeConfig({ endpoint: 'ws://localhost:9944' });
@@ -72,7 +72,7 @@ events$.subscribe({
 Effect.ts-based implementation for functional programming patterns:
 
 ```typescript
-import { NodeClient, PolkadotNodeClient } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
+import { NodeClient, PolkadotNodeClient } from '@midnightntwrk/wallet-sdk-node-client/effect';
 ```
 
 ### Testing Submodule (`/testing`)
@@ -80,7 +80,7 @@ import { NodeClient, PolkadotNodeClient } from '@midnight-ntwrk/wallet-sdk-node-
 Testing utilities and mocks:
 
 ```typescript
-import { ... } from '@midnight-ntwrk/wallet-sdk-node-client/testing';
+import { ... } from '@midnightntwrk/wallet-sdk-node-client/testing';
 ```
 
 ## License

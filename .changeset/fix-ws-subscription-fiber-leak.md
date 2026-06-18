@@ -1,5 +1,5 @@
 ---
-'@midnight-ntwrk/wallet-sdk-indexer-client': patch
+'@midnightntwrk/wallet-sdk-indexer-client': patch
 ---
 
 Fix a fiber/memory leak in the WebSocket subscription stream. At the indexer's sustained

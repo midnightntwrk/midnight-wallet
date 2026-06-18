@@ -10,15 +10,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
+import { WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import {
   InMemoryTransactionHistoryStorage,
   NetworkId,
   ProtocolState,
   ProtocolVersion,
-} from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
-import { type Variant, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+} from '@midnightntwrk/wallet-sdk-abstractions';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
+import { type Variant, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type DefaultV1Configuration,
@@ -26,9 +26,9 @@ import {
   V1Builder,
   type CoreWallet,
   V1Tag,
-} from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+} from '@midnightntwrk/wallet-sdk-shielded/v1';
 import { randomUUID } from 'node:crypto';
-import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 

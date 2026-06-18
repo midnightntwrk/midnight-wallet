@@ -10,11 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
-import { type DefaultProvingConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
-import { type DefaultSubmissionConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { type DefaultProvingConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import { type DefaultSubmissionConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/submission';
 
 /** Networks a wallet test environment can target. */
 export type MidnightNetwork = 'undeployed' | 'qanet' | 'devnet' | 'preview' | 'preprod';

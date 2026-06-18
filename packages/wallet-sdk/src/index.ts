@@ -11,17 +11,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export * from '@midnight-ntwrk/wallet-sdk-abstractions';
-export * from '@midnight-ntwrk/wallet-sdk-address-format';
-export * from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-export * from '@midnight-ntwrk/wallet-sdk-facade';
-export * from '@midnight-ntwrk/wallet-sdk-hd';
-export * from '@midnight-ntwrk/wallet-sdk-prover-client';
-export * from '@midnight-ntwrk/wallet-sdk-shielded';
-export * from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-export * from '@midnight-ntwrk/wallet-sdk-utilities';
+export * from '@midnightntwrk/wallet-sdk-abstractions';
+export * from '@midnightntwrk/wallet-sdk-address-format';
+export * from '@midnightntwrk/wallet-sdk-dust-wallet';
+export * from '@midnightntwrk/wallet-sdk-facade';
+export * from '@midnightntwrk/wallet-sdk-hd';
+export * from '@midnightntwrk/wallet-sdk-prover-client';
+export * from '@midnightntwrk/wallet-sdk-shielded';
+export * from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+export * from '@midnightntwrk/wallet-sdk-utilities';
 
-export * as Capabilities from '@midnight-ntwrk/wallet-sdk-capabilities';
-export * as IndexerClient from '@midnight-ntwrk/wallet-sdk-indexer-client';
-export * as NodeClient from '@midnight-ntwrk/wallet-sdk-node-client';
-export * as Runtime from '@midnight-ntwrk/wallet-sdk-runtime';
+export * as Capabilities from '@midnightntwrk/wallet-sdk-capabilities';
+export * as IndexerClient from '@midnightntwrk/wallet-sdk-indexer-client';
+export * as NodeClient from '@midnightntwrk/wallet-sdk-node-client';
+export * as Runtime from '@midnightntwrk/wallet-sdk-runtime';
