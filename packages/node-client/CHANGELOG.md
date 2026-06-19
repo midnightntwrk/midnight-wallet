@@ -1,5 +1,14 @@
 # @midnightntwrk/wallet-sdk-node-client
 
+## 1.1.3
+
+### Patch Changes
+
+- 81ae094: Declare `@midnight-ntwrk/ledger-v8` and `@midnightntwrk/wallet-sdk-prover-client` as optional peer
+  dependencies. They are used at runtime by the `./testing` export, so consumers of that export need them installed.
+- Updated dependencies [7111b55]
+  - @midnightntwrk/wallet-sdk-prover-client@1.2.3
+
 ## 1.1.2
 
 ### Patch Changes

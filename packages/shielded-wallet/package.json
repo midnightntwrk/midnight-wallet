@@ -1,6 +1,6 @@
 {
   "name": "@midnightntwrk/wallet-sdk-shielded",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -34,8 +34,8 @@
     "@midnightntwrk/wallet-sdk-abstractions": "^2.1.0",
     "@midnightntwrk/wallet-sdk-address-format": "^3.1.2",
     "@midnightntwrk/wallet-sdk-capabilities": "^3.3.1",
-    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.2",
-    "@midnightntwrk/wallet-sdk-runtime": "^1.0.4",
+    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.3",
+    "@midnightntwrk/wallet-sdk-runtime": "^1.0.5",
     "@midnightntwrk/wallet-sdk-utilities": "^1.2.0",
     "effect": "^3.19.19",
     "rxjs": "^7.8.2"

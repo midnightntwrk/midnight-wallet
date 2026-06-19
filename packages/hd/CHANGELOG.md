@@ -1,5 +1,13 @@
 # @midnightntwrk/wallet-sdk-hd
 
+## 3.0.3
+
+### Patch Changes
+
+- e0097fc: `deriveKeyAt`/`deriveKeysAt` now return `keyOutOfBounds` for invalid BIP32 path components (non-integer,
+  negative, or `>= 2^31` account/role/index values) instead of leaking the underlying `invalid child index` error thrown
+  by `@scure/bip32`.
+
 ## 3.0.2
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # @midnightntwrk/wallet-sdk-shielded
 
+## 3.0.2
+
+### Patch Changes
+
+- 54a9c4d: Fix `balanceTransaction` failing with "Could not create a valid guaranteed offer" when a transaction's only
+  imbalance is in a fallible segment. The guaranteed section is now skipped when it is already balanced, instead of
+  attempting to build an empty guaranteed offer.
+- Updated dependencies [417d042]
+- Updated dependencies [0b41e11]
+  - @midnightntwrk/wallet-sdk-indexer-client@1.2.3
+  - @midnightntwrk/wallet-sdk-runtime@1.0.5
+
 ## 3.0.1
 
 ### Patch Changes
