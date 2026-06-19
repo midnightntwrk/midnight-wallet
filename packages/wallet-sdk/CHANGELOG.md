@@ -1,5 +1,32 @@
 # @midnightntwrk/wallet-sdk
 
+## 1.2.0
+
+### Minor Changes
+
+- a4e049d: Republish the barrel package to track the latest sibling versions shipped in this release (facade,
+  dust-wallet, shielded, indexer-client, prover-client, node-client, runtime, hd, and the new testkit). No API changes
+  to the barrel itself — the version bump keeps the `@midnightntwrk/wallet-sdk` release line aligned with the underlying
+  packages it re-exports.
+
+### Patch Changes
+
+- Updated dependencies [dff5706]
+- Updated dependencies [7111b55]
+- Updated dependencies [54a9c4d]
+- Updated dependencies [417d042]
+- Updated dependencies [e0097fc]
+- Updated dependencies [81ae094]
+- Updated dependencies [0b41e11]
+  - @midnightntwrk/wallet-sdk-dust-wallet@4.2.0
+  - @midnightntwrk/wallet-sdk-facade@4.1.0
+  - @midnightntwrk/wallet-sdk-prover-client@1.2.3
+  - @midnightntwrk/wallet-sdk-shielded@3.0.2
+  - @midnightntwrk/wallet-sdk-indexer-client@1.2.3
+  - @midnightntwrk/wallet-sdk-hd@3.0.3
+  - @midnightntwrk/wallet-sdk-node-client@1.1.3
+  - @midnightntwrk/wallet-sdk-runtime@1.0.5
+
 ## 1.1.0
 
 ### Minor Changes

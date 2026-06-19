@@ -1,7 +1,7 @@
 {
   "name": "@midnightntwrk/wallet-sdk-testkit",
   "description": "Reusable wallet-SDK test harness: environment provisioning, wallet bootstrapping, sync waiters and tx-history assertions",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",

@@ -1,6 +1,6 @@
 {
   "name": "@midnightntwrk/wallet-sdk-facade",
-  "version": "4.0.1",
+  "version": "4.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -30,14 +30,14 @@
     "@midnightntwrk/wallet-sdk-abstractions": "^2.1.0",
     "@midnightntwrk/wallet-sdk-address-format": "^3.1.2",
     "@midnightntwrk/wallet-sdk-capabilities": "^3.3.1",
-    "@midnightntwrk/wallet-sdk-dust-wallet": "^4.1.0",
-    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.2",
-    "@midnightntwrk/wallet-sdk-shielded": "^3.0.1",
+    "@midnightntwrk/wallet-sdk-dust-wallet": "^4.2.0",
+    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.3",
+    "@midnightntwrk/wallet-sdk-shielded": "^3.0.2",
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "^3.1.0",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@midnightntwrk/wallet-sdk-hd": "^3.0.2",
+    "@midnightntwrk/wallet-sdk-hd": "^3.0.3",
     "@midnightntwrk/wallet-sdk-utilities": "^1.2.0"
   },
   "scripts": {
