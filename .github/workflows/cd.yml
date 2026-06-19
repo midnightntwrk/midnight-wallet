@@ -286,7 +286,7 @@ jobs:
   # first publish of each new @midnightntwrk package cannot use OIDC — a trusted
   # publisher can only be attached to a package that already exists on npmjs. So
   # this job seeds the new package names by publishing the current versions
-  # under the `latest` dist-tag with the MIDNIGHTBOT token (scripts/publish.mjs
+  # under the `latest` dist-tag with the MIDNIGHTCI npmjs token (publish.mjs
   # sees it as NPM_PRIMARY_TOKEN and skips provenance). After running once and
   # attaching trusted publishers on npmjs, this job and its dispatch input can
   # be removed and publishing reverts to OIDC.
@@ -333,5 +333,5 @@ jobs:
           # Token-publish the primary @midnightntwrk scope (provenance disabled)
           # to create the package names; the @midnight-ntwrk alias uses the
           # legacy token as usual. Both are token publishes here — no OIDC.
-          NPM_PRIMARY_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+          NPM_PRIMARY_TOKEN: ${{ secrets.MIDNIGHTCI_NPMJS_TOKEN }}
           NPM_LEGACY_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
