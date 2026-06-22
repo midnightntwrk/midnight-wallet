@@ -230,7 +230,7 @@ jobs:
           echo "packages=$packages" >> "$GITHUB_OUTPUT"
 
   test-integration:
-    name: 'Integration: ${{ matrix.package }}'
+    name: 'Integration Tests: ${{ matrix.package }}'
     needs: [discover-integration]
     runs-on: ubuntu-latest-8-core-x64
     strategy:
@@ -304,13 +304,36 @@ jobs:
         uses: mikepenz/action-junit-report@3a81627bfac62268172037048872e8ebd4207e6d # v6
         if: success() || failure()
         with:
-          check_name: 'Integration: ${{ matrix.package }}'
+          check_name: 'Integration Tests: ${{ matrix.package }}'
           report_paths: |
             **/test-report*.xml
 
+  # Single aggregate gate over the whole integration matrix. Gives one
+  # "Integration Tests" status check (good for branch protection and a clean
+  # summary line) while the per-package "Integration Tests: <pkg>" checks remain
+  # for detail. `if: always()` so it still reports when a package fails;
+  # needs.*.result is "success" only if every matrix job succeeded.
+  integration-tests:
+    name: Integration Tests
+    needs: [test-integration]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check integration matrix result
+        run: |
+          result='${{ needs.test-integration.result }}'
+          echo "Integration matrix result: ${result}"
+          if [ "${result}" != "success" ]; then
+            echo "::error::One or more integration test packages did not pass."
+            exit 1
+          fi
+          echo "All integration test packages passed."
+
   e2e-smoke:
     name: Smoke E2E
-    needs: [test-unit]
+    # Gate e2e behind integration: if integration is broken there's no point
+    # spending an e2e runner. Pipeline is unit → discover → integration → e2e.
+    needs: [integration-tests]
     runs-on: ubuntu-latest-8-core-x64
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -369,7 +392,8 @@ jobs:
 
   build-publish:
     name: Build for Publishing
-    needs: [test-integration, e2e-smoke]
+    # The aggregate gate covers the whole integration matrix; e2e runs after it.
+    needs: [integration-tests, e2e-smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
