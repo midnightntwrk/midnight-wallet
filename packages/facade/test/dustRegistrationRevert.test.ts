@@ -27,12 +27,8 @@
  * In both cases the booked Night UTxOs must return to `availableCoins`.
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import {
-  Simulator,
-  immediateBlockProducer,
-  type GenesisMint,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';

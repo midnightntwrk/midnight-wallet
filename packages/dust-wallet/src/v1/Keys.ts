@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type DustPublicKey } from '@midnightntwrk/ledger-v9';
-import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { type CoreWallet } from './CoreWallet.js';
 
 export type KeysCapability<TState> = {

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Record, Array, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';

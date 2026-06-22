@@ -16,8 +16,8 @@ import {
   type NodeClientError,
   PolkadotNodeClient,
   SubmissionEvent as SubmissionEventImported,
-} from '@midnight-ntwrk/wallet-sdk-node-client/effect';
-import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+} from '@midnightntwrk/wallet-sdk-node-client/effect';
+import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type FinalizedTransaction } from '@midnightntwrk/ledger-v9';
 import { type SimulatorState, getLastBlock } from '../simulation/Simulator.js';
 

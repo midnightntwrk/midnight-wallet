@@ -18,7 +18,7 @@ import {
   type Signaturish,
   type Transaction,
 } from '@midnightntwrk/ledger-v9';
-import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
+import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
 import { pipe, Iterable as Iter, Number as Num } from 'effect';
 
 export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => {

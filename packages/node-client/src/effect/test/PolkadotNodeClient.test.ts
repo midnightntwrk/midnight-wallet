@@ -17,9 +17,9 @@ import * as SubmissionEvent from '../SubmissionEvent.js';
 import { type StartedTestContainer, Wait } from 'testcontainers';
 import { Array as EArray, Chunk, Effect, Either, Exit, Order, pipe, Random, Scope, Stream } from 'effect';
 import { TestTransactions } from '../../testing/index.js';
-import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { TestContainers } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { NodeContext } from '@effect/platform-node';
-import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 
 const clientLayer = (nodePort: number) =>
   PolkadotNodeClient.layer({

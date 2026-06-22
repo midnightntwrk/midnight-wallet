@@ -37,14 +37,14 @@ import {
 import { PendingTransactionsServiceEffectImpl } from '../pendingTransactionsService.js';
 import * as PendingTransactions from '../pendingTransactions.js';
 import * as fc from 'fast-check';
-import { type Query, QueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+import { type Query, QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import {
   type TransactionResult,
   TransactionStatus,
   type TransactionStatusQuery,
   type TransactionStatusQueryVariables,
-} from '@midnight-ntwrk/wallet-sdk-indexer-client';
-import { ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+} from '@midnightntwrk/wallet-sdk-indexer-client';
+import { ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 
 fc.configureGlobal({ numRuns: 5 });
 

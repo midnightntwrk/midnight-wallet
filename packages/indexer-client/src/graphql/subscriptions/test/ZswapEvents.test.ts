@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Effect, Stream } from 'effect';
 import { randomUUID } from 'node:crypto';
-import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { DockerComposeEnvironment, Wait, type StartedDockerComposeEnvironment } from 'testcontainers';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WsSubscriptionClient } from '../../../effect/index.js';

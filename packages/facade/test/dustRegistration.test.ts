@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
@@ -20,13 +20,13 @@ import { type Observable } from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForDustGenerated } from './utils/helpers.js';
-import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import {
   createKeystore,
   UnshieldedWallet,
   PublicKey,
   type UnshieldedKeystore,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import {
   type CombinedTokenTransfer,
@@ -36,9 +36,9 @@ import {
   WalletFacade,
   mergeWalletEntries,
 } from '../src/index.js';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ArrayOps, DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { ArrayOps, DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 

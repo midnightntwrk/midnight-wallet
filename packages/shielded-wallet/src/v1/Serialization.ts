@@ -14,7 +14,7 @@ import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import { WalletError } from './WalletError.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { CoreWallet } from './CoreWallet.js';
-import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;

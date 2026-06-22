@@ -25,7 +25,7 @@ import {
   UnshieldedWallet,
   type UnshieldedKeystore,
   mergeWalletEntries,
-} from '@midnight-ntwrk/wallet-sdk';
+} from '@midnightntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
 
 const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);

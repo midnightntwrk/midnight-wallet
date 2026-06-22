@@ -13,7 +13,7 @@
 import { type CoreWallet } from './CoreWallet.js';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 import { pipe } from 'effect';
-import { RecordOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { RecordOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { UnshieldedState, type UtxoWithMeta } from './UnshieldedState.js';
 
 export type Balances = Record<ledger.RawTokenType, bigint>;

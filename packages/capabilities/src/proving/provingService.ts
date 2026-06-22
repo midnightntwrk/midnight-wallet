@@ -12,12 +12,12 @@
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
 import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
-import { HttpProverClient, WasmProver } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
+import { HttpProverClient, WasmProver } from '@midnightntwrk/wallet-sdk-prover-client/effect';
 import {
   ClientError,
   type InvalidProtocolSchemeError,
   ServerError,
-} from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+} from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Data, Effect, pipe } from 'effect';
 
 export class ProvingError extends Data.TaggedError('Wallet.Proving')<{

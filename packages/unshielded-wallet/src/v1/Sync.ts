@@ -17,13 +17,13 @@ import {
   type Simulator,
   type SimulatorState,
   getCurrentBlockNumber,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
-import { UnshieldedTransactions } from '@midnight-ntwrk/wallet-sdk-indexer-client';
-import { WsSubscriptionClient, ConnectionHelper } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { UnshieldedTransactions } from '@midnightntwrk/wallet-sdk-indexer-client';
+import { WsSubscriptionClient, ConnectionHelper } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, type WalletError } from './WalletError.js';
-import { WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
-import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type WalletSyncUpdate, WalletSyncUpdateSchema } from './SyncSchema.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
 

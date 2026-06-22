@@ -11,41 +11,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
+import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
 import { WalletFacade, type Clock } from '../../src/index.js';
-import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   Sync as ShieldedSync,
   TransactionHistory as ShieldedTransactionHistory,
   V1Builder as ShieldedV1Builder,
-} from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { CustomDustWallet, type DustWalletAPI } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+} from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { CustomDustWallet, type DustWalletAPI } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import {
   SyncService as DustSyncService,
   TransactionHistory as DustTransactionHistory,
   V1Builder as DustV1Builder,
-} from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+} from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import {
   CustomUnshieldedWallet,
   createKeystore,
   PublicKey,
   type UnshieldedSecretKey,
   type UnshieldedWalletAPI,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { NoOpTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   Sync as UnshieldedSync,
   V1Builder as UnshieldedV1Builder,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet/v1';
-import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import {
   makeSimulatorProvingServiceEffect,
   type ProvingService,
   type UnboundTransaction,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
-import { type Simulator } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
-import type { SubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
+} from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import { type Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { Effect, type Scope } from 'effect';
 import * as rx from 'rxjs';
 

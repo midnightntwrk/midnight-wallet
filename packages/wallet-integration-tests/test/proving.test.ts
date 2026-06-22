@@ -16,16 +16,16 @@ import {
   fromProvingProvider,
   makeServerProvingServiceEffect,
   ProvingError,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
-import { HttpProverClient, WasmProver } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+} from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import { HttpProverClient, WasmProver } from '@midnightntwrk/wallet-sdk-prover-client/effect';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { Effect, Either, Schedule, Duration, type Scope, pipe } from 'effect';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
 import { getNonDustImbalance } from './utils.js';
 
-const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:9.0.0-rc.1';
+const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:9.0.0-alpha.1';
 const PROOF_SERVER_PORT: number = 6300;
 
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });

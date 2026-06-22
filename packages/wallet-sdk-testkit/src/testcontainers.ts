@@ -11,13 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Docker-backed environment provisioning. Kept behind the `@midnight-ntwrk/wallet-sdk-testkit/
+// Docker-backed environment provisioning. Kept behind the `@midnightntwrk/wallet-sdk-testkit/
 // testcontainers` entry point so consumers that only target remote networks never load
-// `testcontainers` or `@midnight-ntwrk/wallet-sdk-utilities` (both declared as optional peers).
+// `testcontainers` or `@midnightntwrk/wallet-sdk-utilities` (both declared as optional peers).
 import { randomUUID } from 'node:crypto';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { type MidnightNetwork, type ResolvedEndpoints, type WalletTestEnvironment } from './types.js';
 import { NETWORK_PRESETS, makeEnvironment } from './environment.js';
 import { sleep } from './network.js';

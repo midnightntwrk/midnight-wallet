@@ -18,7 +18,7 @@
  */
 
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import {

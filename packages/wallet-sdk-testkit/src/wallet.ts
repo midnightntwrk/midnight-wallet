@@ -18,17 +18,17 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   InMemoryTransactionHistoryStorage,
   type TransactionHistoryStorage,
-} from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { ShieldedWallet, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { WalletFacade, WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
+} from '@midnightntwrk/wallet-sdk-abstractions';
+import { ShieldedWallet, type ShieldedWalletClass } from '@midnightntwrk/wallet-sdk-shielded';
+import { WalletFacade, WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import {
   createKeystore,
   PublicKey,
   type UnshieldedKeystore,
   UnshieldedWallet,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { type WalletTestEnvironment } from './types.js';
 import { logger } from './logger.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed } from './seeds.js';

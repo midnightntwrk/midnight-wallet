@@ -11,4 +11,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export * from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+export * from '@midnightntwrk/wallet-sdk-dust-wallet/v1';

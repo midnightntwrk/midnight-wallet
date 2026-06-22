@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { Imbalances } from '@midnightntwrk/wallet-sdk-capabilities';
 import { type TransactionImbalances } from './TransactionImbalances.js';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 
