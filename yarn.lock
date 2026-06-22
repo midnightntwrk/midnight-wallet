@@ -2481,6 +2481,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-shielded": "npm:^3.0.2"
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "npm:^3.1.0"
     "@midnightntwrk/wallet-sdk-utilities": "npm:^1.2.0"
+    effect: "npm:^3.19.19"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
