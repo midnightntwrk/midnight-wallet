@@ -152,10 +152,94 @@ jobs:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
 
-  tests:
-    name: Tests
+  test-unit:
+    name: Unit Tests
     needs: [general-checks]
-    runs-on: ubuntu-latest-16-core-x64
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        id: setup-node
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Restore turbo cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: build-artifacts-${{ github.run_id }}
+          path: .
+
+      # Fast gate: pure unit tests only. No Docker pull, no infra.
+      - name: Run unit tests
+        run: yarn test:unit
+
+      - name: Publish Unit Test Report
+        uses: mikepenz/action-junit-report@3a81627bfac62268172037048872e8ebd4207e6d # v6
+        if: success() || failure()
+        with:
+          check_name: 'Unit Test Results Wallet SDK'
+          report_paths: |
+            **/test-report*.xml
+
+  discover-integration:
+    name: Discover Integration Test Files
+    needs: [test-unit]
+    runs-on: ubuntu-latest
+    outputs:
+      files: ${{ steps.find.outputs.files }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Find integration test files
+        id: find
+        # Emit a JSON array of every integration test file, excluding dist and the e2e-tests package.
+        run: |
+          files=$(find packages -name '*.integration.test.ts' \
+                    -not -path '*/dist/*' -not -path 'packages/e2e-tests/*' \
+                  | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "Discovered integration files: $files"
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+
+  test-integration:
+    name: 'Integration: ${{ matrix.test-file }}'
+    needs: [discover-integration]
+    runs-on: ubuntu-latest-8-core-x64
+    strategy:
+      # A failing file must not cancel the rest; each file is fully isolated.
+      fail-fast: false
+      # Each file runs on its own runner with its own Docker stack, so this is a
+      # speed/cost knob, not a contention risk. Set to 1 for strictly serial.
+      max-parallel: 6
+      matrix:
+        test-file: ${{ fromJson(needs.discover-integration.outputs.files) }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
@@ -207,24 +291,86 @@ jobs:
       - name: Pre-pull Docker images
         run: docker compose -f infra/compose/docker-compose-dynamic.yml pull
 
-      - name: Run tests
-        run: yarn test
+      # Run exactly the one integration file, in its own package (correct cwd via turbo --filter).
+      - name: Run integration test file
+        env:
+          WALLET_TEST_FILE: ${{ matrix.test-file }}
+        run: |
+          pkg_dir="$(echo "$WALLET_TEST_FILE" | cut -d/ -f1-2)"
+          base="$(basename "$WALLET_TEST_FILE")"
+          echo "Running ${base} in ${pkg_dir}"
+          yarn turbo run test:integration --filter="./${pkg_dir}" -- "${base}"
+
+      - name: Publish Integration Test Report
+        uses: mikepenz/action-junit-report@3a81627bfac62268172037048872e8ebd4207e6d # v6
+        if: success() || failure()
+        with:
+          check_name: 'Integration: ${{ matrix.test-file }}'
+          report_paths: |
+            **/test-report*.xml
+
+  e2e-smoke:
+    name: Smoke E2E
+    needs: [test-unit]
+    runs-on: ubuntu-latest-8-core-x64
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        id: setup-node
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
+
+      - name: Log in to GitHub Container registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: 'https://ghcr.io'
+          username: ${{ env.MIDNIGHT_GH_USER }}
+          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Restore turbo cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: build-artifacts-${{ github.run_id }}
+          path: .
+
+      - name: Pre-pull Docker images
+        run: docker compose -f infra/compose/docker-compose-dynamic.yml pull
 
       - name: Run smoke e2e tests
         run: |
           yarn dlx turbo test-undeployed -- -t @smoke
 
-      - name: Publish Test Report
-        uses: mikepenz/action-junit-report@3a81627bfac62268172037048872e8ebd4207e6d # v6
-        if: success() || failure()
-        with:
-          check_name: 'Test Results Wallet SDK'
-          report_paths: |
-            **/test-report*.xml
-
   build-publish:
     name: Build for Publishing
-    needs: [tests]
+    needs: [test-integration, e2e-smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3

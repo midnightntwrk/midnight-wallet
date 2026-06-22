@@ -35,6 +35,8 @@
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit --passWithNoTests",
+    "test:integration": "vitest run --project integration --passWithNoTests",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",

@@ -100,8 +100,14 @@ yarn dist --filter=@midnightntwrk/wallet-sdk-facade
 # Build and watch for changes
 yarn watch
 
-# Run all unit tests
+# Run the full suite (unit + integration)
 yarn test
+
+# Run ONLY unit tests (pure, no Docker/network — fast, runs anywhere)
+yarn test:unit
+
+# Run ONLY integration tests (require Docker/testcontainers)
+yarn test:integration
 
 # Run tests for specific package
 yarn test --filter=@midnightntwrk/wallet-sdk-unshielded-wallet
@@ -276,6 +282,28 @@ Uses Effect library with `SubscriptionRef` for BLoC-like state management:
 ## Testing
 
 Tests use Vitest with workspace configuration. Each package has its own `vitest.config.ts`.
+
+### Unit vs Integration Tests
+
+Tests are split by **filename suffix** so each type can run independently:
+
+- **Unit tests** — `*.test.ts`. Pure: no Docker, no network, no external services. Use in-memory `Simulator`, injected
+  fakes, or `vi.fn`. Must run anywhere with zero setup.
+- **Integration tests** — `*.integration.test.ts`. Require infra (Docker/testcontainers, indexer, node, prover).
+
+**When adding a test, pick the suffix by whether it needs live infra to pass.** Do not mix both kinds in one file — if a
+file would need both, split it (see `BlockHash.test.ts` / `BlockHash.integration.test.ts` in `indexer-client`).
+
+Selection is wired per package via two Vitest projects (`unit` / `integration`) declared in each `vitest.config.ts`. The
+`unit` project must `exclude` the `**/*.integration.test.ts` glob (the default `**/*.test.ts` would otherwise match
+integration files); the `integration` project `include`s only that glob. Commands:
+
+- `yarn test` — full suite (both projects).
+- `yarn test:unit` — unit only (fast gate; no Docker).
+- `yarn test:integration` — integration only.
+
+In CI, unit tests run as a fast early gate; integration tests run as a **matrix with one file per job** (own runner +
+own Docker stack) so no two files contend for infra.
 
 ### Test-Driven Development (MANDATORY)
 
