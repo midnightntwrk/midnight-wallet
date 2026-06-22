@@ -20,7 +20,7 @@ import {
   mainnet,
   type NetworkId,
 } from '@midnightntwrk/wallet-sdk';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 
 const networkId: NetworkId.NetworkId = 'undeployed';
 

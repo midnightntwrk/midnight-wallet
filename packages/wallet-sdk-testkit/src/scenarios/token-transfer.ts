@@ -18,7 +18,7 @@
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { inspect } from 'node:util';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { type WalletTestEnvironment } from '../types.js';

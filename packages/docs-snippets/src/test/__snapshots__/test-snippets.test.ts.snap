@@ -50,7 +50,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
   tag: 'ecdsa',
   value: '02948f9a220c28f52e08d374d2b148c66da54004f5ff50afa9e3601a6eec746cf5'
 }
-ECDSA unshielded address: mn_addr_undeployed1ewteh8ewja0n7drrkf4kr0c6r9zrh9an3qdxjd497yssert0q54s0p5gsl
+ECDSA unshielded address: mn_addr_undeployed183vvkddegcrnk76dmjzku65ganhvtq8qp7ux6ac4atzxqjmjvnfqhkveyd
 Synced state:
 {
   unshielded: {
@@ -67,10 +67,10 @@ Synced state:
     },
     address: UnshieldedAddress {
       data: Buffer(32) [Uint8Array] [
-        203, 151, 155, 159,  46, 151,  95, 63,
-         52,  99, 178, 107,  97, 191,  26, 25,
-         68,  59, 151, 179, 136,  26, 105, 54,
-        165, 241,  33,  12, 141, 111,   5, 43
+         60,  88, 203,  53, 185,  70,   7,  59,
+        123,  77, 220, 133, 110, 106, 136, 236,
+        238, 197, 128, 224,  15, 184, 109, 119,
+         21, 234, 196,  96,  75, 114, 100, 210
       ],
       [Symbol(MidnightBech32m)]: Bech32mCodec {
         type: 'addr',

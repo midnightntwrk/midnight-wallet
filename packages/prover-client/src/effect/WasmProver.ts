@@ -13,7 +13,7 @@
 import Worker from 'web-worker';
 import { type Context, Effect, Layer, Schema, pipe } from 'effect';
 import { type InvalidProtocolSchemeError, ClientError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import type * as ledger from '@midnight-ntwrk/ledger-v9';
+import type * as ledger from '@midnightntwrk/ledger-v9';
 import { type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
 import { ProverClient } from './ProverClient.js';
 

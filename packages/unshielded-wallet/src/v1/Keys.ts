@@ -12,7 +12,7 @@
 // limitations under the License.
 import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import type { CoreWallet } from './CoreWallet.js';
-import { type SignatureVerifyingKey } from '@midnight-ntwrk/ledger-v9';
+import { type SignatureVerifyingKey } from '@midnightntwrk/ledger-v9';
 
 export type KeysCapability<TState> = {
   getPublicKey(state: TState): SignatureVerifyingKey;

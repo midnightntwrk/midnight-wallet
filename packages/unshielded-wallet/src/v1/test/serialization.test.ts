@@ -12,7 +12,7 @@
 // limitations under the License.
 import { describe, expect, it } from 'vitest';
 import { Either } from 'effect';
-import { type SignatureVerifyingKey } from '@midnight-ntwrk/ledger-v9';
+import { type SignatureVerifyingKey } from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { CoreWallet } from '../CoreWallet.js';

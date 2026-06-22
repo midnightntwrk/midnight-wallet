@@ -12,7 +12,7 @@
 // limitations under the License.
 import { initWalletWithSeed } from '../utils.ts';
 import * as rx from 'rxjs';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { Buffer } from 'buffer';
 import { generateRandomSeed } from '@midnightntwrk/wallet-sdk';
 

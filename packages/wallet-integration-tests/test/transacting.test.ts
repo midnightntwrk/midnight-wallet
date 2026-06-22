@@ -35,7 +35,7 @@ import {
   V1Tag,
   type Transacting,
 } from '@midnightntwrk/wallet-sdk-shielded/v1';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { Effect, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { randomUUID } from 'node:crypto';

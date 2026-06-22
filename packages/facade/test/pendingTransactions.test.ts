@@ -18,7 +18,7 @@ import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wal
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';

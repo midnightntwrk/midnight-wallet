@@ -15,7 +15,7 @@ import * as rx from 'rxjs';
 import { existsSync } from 'node:fs';
 import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   InMemoryTransactionHistoryStorage,
   type TransactionHistoryStorage,

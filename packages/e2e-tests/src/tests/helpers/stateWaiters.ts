@@ -13,7 +13,7 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import * as rx from 'rxjs';
 import { expect } from 'vitest';
-import type * as ledger from '@midnight-ntwrk/ledger-v9';
+import type * as ledger from '@midnightntwrk/ledger-v9';
 import { type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
 import { type UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { type WalletFacade, type WalletEntry } from '@midnightntwrk/wallet-sdk-facade';

@@ -12,7 +12,7 @@
 // limitations under the License.
 import { firstValueFrom } from 'rxjs';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { exit } from 'node:process';

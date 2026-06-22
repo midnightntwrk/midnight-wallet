@@ -22,7 +22,7 @@ import {
   type Signaturish,
   type Transaction,
   type Event,
-} from '@midnight-ntwrk/ledger-v9';
+} from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Array as Arr, Option, pipe } from 'effect';
