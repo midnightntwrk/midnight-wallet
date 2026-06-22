@@ -210,36 +210,38 @@ jobs:
             **/test-report*.xml
 
   discover-integration:
-    name: Discover Integration Test Files
+    name: Discover Integration Packages
     needs: [test-unit]
     runs-on: ubuntu-latest
     outputs:
-      files: ${{ steps.find.outputs.files }}
+      packages: ${{ steps.find.outputs.packages }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - name: Find integration test files
+      - name: Find packages with integration tests
         id: find
-        # Emit a JSON array of every integration test file, excluding dist and the e2e-tests package.
+        # Emit a JSON array of every package that contains integration tests,
+        # excluding dist and the e2e-tests package.
         run: |
-          files=$(find packages -name '*.integration.test.ts' \
-                    -not -path '*/dist/*' -not -path 'packages/e2e-tests/*' \
-                  | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "Discovered integration files: $files"
-          echo "files=$files" >> "$GITHUB_OUTPUT"
+          packages=$(find packages -name '*.integration.test.ts' \
+                       -not -path '*/dist/*' -not -path 'packages/e2e-tests/*' \
+                     | cut -d/ -f2 | sort -u | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "Discovered integration packages: $packages"
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
 
   test-integration:
-    name: 'Integration: ${{ matrix.test-file }}'
+    name: 'Integration: ${{ matrix.package }}'
     needs: [discover-integration]
     runs-on: ubuntu-latest-8-core-x64
     strategy:
-      # A failing file must not cancel the rest; each file is fully isolated.
+      # A failing package must not cancel the rest; each package job is isolated.
       fail-fast: false
-      # Each file runs on its own runner with its own Docker stack, so this is a
-      # speed/cost knob, not a contention risk. Set to 1 for strictly serial.
+      # Each package runs on its own runner. Files *within* a package run serially
+      # (--no-file-parallelism in the run step) so only one Docker stack is ever up
+      # at a time — no infra contention. This is a speed/cost knob across packages.
       max-parallel: 6
       matrix:
-        test-file: ${{ fromJson(needs.discover-integration.outputs.files) }}
+        package: ${{ fromJson(needs.discover-integration.outputs.packages) }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
@@ -291,21 +293,18 @@ jobs:
       - name: Pre-pull Docker images
         run: docker compose -f infra/compose/docker-compose-dynamic.yml pull
 
-      # Run exactly the one integration file, in its own package (correct cwd via turbo --filter).
-      - name: Run integration test file
-        env:
-          WALLET_TEST_FILE: ${{ matrix.test-file }}
+      # Run all integration tests for this package. --no-file-parallelism forces
+      # Vitest to run the files one at a time, so only one Docker stack is up at once.
+      - name: Run integration tests
         run: |
-          pkg_dir="$(echo "$WALLET_TEST_FILE" | cut -d/ -f1-2)"
-          base="$(basename "$WALLET_TEST_FILE")"
-          echo "Running ${base} in ${pkg_dir}"
-          yarn turbo run test:integration --filter="./${pkg_dir}" -- "${base}"
+          echo "Running integration tests for packages/${{ matrix.package }}"
+          yarn turbo run test:integration --filter="./packages/${{ matrix.package }}" -- --no-file-parallelism
 
       - name: Publish Integration Test Report
         uses: mikepenz/action-junit-report@3a81627bfac62268172037048872e8ebd4207e6d # v6
         if: success() || failure()
         with:
-          check_name: 'Integration: ${{ matrix.test-file }}'
+          check_name: 'Integration: ${{ matrix.package }}'
           report_paths: |
             **/test-report*.xml
 
