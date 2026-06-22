@@ -47,8 +47,8 @@ import {
   ZswapOutput,
   type ZswapSecretKeys,
 } from '@midnight-ntwrk/ledger-v9';
-import { DateOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { DateOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 
 import {
   addToMempool,

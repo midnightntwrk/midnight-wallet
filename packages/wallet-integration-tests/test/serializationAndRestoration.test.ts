@@ -14,21 +14,21 @@ import {
   ShieldedWallet,
   type ShieldedWalletClass,
   type ShieldedWalletState,
-} from '@midnight-ntwrk/wallet-sdk-shielded';
-import { UnshieldedWallet, createKeystore, PublicKey } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+} from '@midnightntwrk/wallet-sdk-shielded';
+import { UnshieldedWallet, createKeystore, PublicKey } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { type DefaultV1Configuration as UnshieldedV1Configuration } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet/v1';
+import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { type DefaultV1Configuration as UnshieldedV1Configuration } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
-import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
 import { firstValueFrom } from 'rxjs';
 import * as rx from 'rxjs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed } from './utils.js';
-import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 

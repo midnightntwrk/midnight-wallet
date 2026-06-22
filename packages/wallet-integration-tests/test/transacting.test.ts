@@ -15,15 +15,15 @@ import {
   NetworkId,
   ProtocolState,
   ProtocolVersion,
-} from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
+} from '@midnightntwrk/wallet-sdk-abstractions';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
-} from '@midnight-ntwrk/wallet-sdk-address-format';
-import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
-import { type Variant, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+} from '@midnightntwrk/wallet-sdk-address-format';
+import { WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
+import { type Variant, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import {
   type CoinsAndBalances,
   type DefaultRunningV1,
@@ -34,14 +34,14 @@ import {
   CoreWallet,
   V1Tag,
   type Transacting,
-} from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+} from '@midnightntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { Effect, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import prand from 'pure-rand';
-import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
 import {
@@ -49,8 +49,8 @@ import {
   type DefaultProvingConfiguration,
   type ProvingServiceEffect,
   type UnboundTransaction,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
-import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
+} from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { outputsArbitrary, recipientArbitrary, swapParamsArbitrary } from '../src/arbitraries.js';
 import { getShieldedSeed } from './utils.js';

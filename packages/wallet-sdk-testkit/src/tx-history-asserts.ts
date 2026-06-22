@@ -12,7 +12,7 @@
 // limitations under the License.
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { expect } from 'vitest';
-import { type WalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type WalletEntry } from '@midnightntwrk/wallet-sdk-facade';
 
 function expectValidUnshieldedUtxoFields(utxo: NonNullable<WalletEntry['unshielded']>['createdUtxos'][number]) {
   expect(typeof utxo.value).toBe('bigint');

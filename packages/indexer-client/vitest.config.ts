@@ -39,7 +39,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@midnight-ntwrk/wallet-sdk-indexer-client/effect': fileURLToPath(
+      '@midnightntwrk/wallet-sdk-indexer-client/effect': fileURLToPath(
         new URL('../indexer-client/src/effect.ts', import.meta.url),
       ),
     },

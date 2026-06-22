@@ -11,8 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { logger } from '../logger.js';
-import { BlockHash } from '@midnight-ntwrk/wallet-sdk-indexer-client';
-import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
+import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 
 export type MidnightNetwork = 'undeployed' | 'qanet' | 'devnet' | 'preview' | 'preprod';
 

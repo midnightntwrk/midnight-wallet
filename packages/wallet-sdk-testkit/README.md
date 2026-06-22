@@ -1,4 +1,4 @@
-# @midnight-ntwrk/wallet-sdk-testkit
+# @midnightntwrk/wallet-sdk-testkit
 
 Reusable wallet-SDK test harness, extracted from `packages/e2e-tests`. Provides environment provisioning, wallet
 bootstrapping, sync waiters, and tx-history assertions as a published package so downstream consumers (e.g. monitoring /
@@ -10,7 +10,7 @@ files.
 | Area                 | Exports                                                                                                       |
 | -------------------- | ------------------------------------------------------------------------------------------------------------- |
 | Environment          | `createRemoteEnvironment`, `NETWORK_PRESETS`, `makeEnvironment`, `WalletTestEnvironment`, `ResolvedEndpoints` |
-| Environment (Docker) | `createTestContainersEnvironment` — from `@midnight-ntwrk/wallet-sdk-testkit/testcontainers`                  |
+| Environment (Docker) | `createTestContainersEnvironment` — from `@midnightntwrk/wallet-sdk-testkit/testcontainers`                   |
 | Wallet               | `provideWallet`, `initWalletWithSeed`, `saveState`, `WalletInit`                                              |
 | Seeds                | `getShieldedSeed`, `getUnshieldedSeed`, `getDustSeed`                                                         |
 | Sync waiters         | `waitForSyncUnshielded`, `waitForDustBalance`, `waitForTxInHistory`, …                                        |
@@ -35,7 +35,7 @@ import {
   useWalletTestEnvironment,
   provideWallet,
   waitForDustBalance,
-} from '@midnight-ntwrk/wallet-sdk-testkit';
+} from '@midnightntwrk/wallet-sdk-testkit';
 
 const getEnv = useWalletTestEnvironment(() =>
   createRemoteEnvironment({
@@ -55,8 +55,8 @@ test('wallet reaches a dust balance', async () => {
 ## Usage — local stack via testcontainers
 
 ```ts
-import { useWalletTestEnvironment } from '@midnight-ntwrk/wallet-sdk-testkit';
-import { createTestContainersEnvironment } from '@midnight-ntwrk/wallet-sdk-testkit/testcontainers';
+import { useWalletTestEnvironment } from '@midnightntwrk/wallet-sdk-testkit';
+import { createTestContainersEnvironment } from '@midnightntwrk/wallet-sdk-testkit/testcontainers';
 
 const getEnv = useWalletTestEnvironment(() => createTestContainersEnvironment({ network: 'undeployed' }));
 ```
@@ -64,5 +64,5 @@ const getEnv = useWalletTestEnvironment(() => createTestContainersEnvironment({ 
 ## Peer dependencies
 
 - `vitest` — required (assertions and the environment hooks use it).
-- `testcontainers` and `@midnight-ntwrk/wallet-sdk-utilities` — optional; only needed for the `/testcontainers` entry
+- `testcontainers` and `@midnightntwrk/wallet-sdk-utilities` — optional; only needed for the `/testcontainers` entry
   point.

@@ -16,7 +16,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v9';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
-import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 
 /** Tests performing a token transfer */
 

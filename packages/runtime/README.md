@@ -1,11 +1,11 @@
-# @midnight-ntwrk/wallet-sdk-runtime
+# @midnightntwrk/wallet-sdk-runtime
 
 Runtime infrastructure for Midnight wallet variants.
 
 ## Installation
 
 ```bash
-npm install @midnight-ntwrk/wallet-sdk-runtime
+npm install @midnightntwrk/wallet-sdk-runtime
 ```
 
 ## Overview
@@ -29,7 +29,7 @@ Wallet SDK. It includes:
 Runtime abstractions for extending wallet functionality:
 
 ```typescript
-import { ... } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { ... } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 ```
 
 ## License

@@ -14,15 +14,15 @@ import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
-} from '@midnight-ntwrk/wallet-sdk-address-format';
-import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
+} from '@midnightntwrk/wallet-sdk-address-format';
+import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
 import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { Array as Arr, Effect, Iterable, Order, pipe, Record } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
-import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
+import { makeSimulatorProvingServiceEffect } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { CoreWallet } from '../CoreWallet.js';
 import {
   type DefaultTransactingConfiguration,
@@ -31,7 +31,7 @@ import {
   type TokenTransfer,
 } from '../Transacting.js';
 import { getNonDustImbalance } from '../../test/testUtils.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { OtherWalletError } from '../WalletError.js';
 import { Either } from 'effect';
 
@@ -288,6 +288,46 @@ describe('V1 Wallet Transacting', () => {
 
         // check that the final transaction is balanced correctly
         expect(provenTransaction.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
+      }).pipe(Effect.runPromise);
+    });
+
+    it('balances a transaction whose only imbalance is in the fallible section', () => {
+      const wallets = prepareWallets({
+        A: {
+          keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)),
+          coins: [shieldedValue(1), shieldedValue(2), shieldedValue(3)],
+        },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+      });
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+      const proving = makeSimulatorProvingServiceEffect();
+      const transactionValueFallible = shieldedValue(2);
+      // No guaranteed offer: segment 0 is already balanced, only segment 7593 is imbalanced.
+      const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 7593 });
+      const tx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, undefined, fallibleOffer);
+
+      return Effect.gen(function* () {
+        const [balancingTransaction] = EitherOps.getOrThrowLeft(
+          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx),
+        );
+
+        expect(balancingTransaction).toBeDefined();
+
+        const balancedTransaction = tx.merge(balancingTransaction!);
+
+        const provenTransaction = yield* proving.prove(balancedTransaction);
+
+        // check that the fallible section of the balancing transaction is correct
+        expect(
+          balancingTransaction!.fallibleOffer
+            ?.entries()
+            .map(([_, delta]) => delta.deltas.get(rawShieldedTokenType) ?? 0n)
+            .reduce((acc, curr) => acc + curr, 0n),
+        ).toEqual(transactionValueFallible);
+
+        // check that the final transaction is balanced in both segments
+        expect(getNonDustImbalance(provenTransaction.imbalances(0), rawShieldedTokenType)).toBe(0n);
+        expect(getNonDustImbalance(provenTransaction.imbalances(1), rawShieldedTokenType)).toBe(0n);
       }).pipe(Effect.runPromise);
     });
 

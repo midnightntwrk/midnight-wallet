@@ -10,7 +10,7 @@
   "ignore": [
     "@midnight/wallet-e2e-tests",
     "@midnight-ntwrk/wallet-integration-tests",
-    "@midnight-ntwrk/wallet-sdk-docs-snippets",
+    "@midnightntwrk/wallet-sdk-docs-snippets",
     "@midnight-ntwrk/wallet-test-website"
   ],
   "snapshot": {

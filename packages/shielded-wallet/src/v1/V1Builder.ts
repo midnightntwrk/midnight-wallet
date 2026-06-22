@@ -12,12 +12,12 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { Effect, type Either, Scope, type Types } from 'effect';
-import { WalletSeed, type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { WalletSeed, type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type Variant,
   type VariantBuilder,
   type WalletRuntimeError,
-} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+} from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
 import { makeDefaultV1SerializationCapability, type SerializationCapability } from './Serialization.js';
 import {
@@ -39,14 +39,14 @@ import {
 import { type WalletError } from './WalletError.js';
 import { type CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
-import { type CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { type CoinSelection, chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
 import { CoreWallet, PublicKeys } from './CoreWallet.js';
 import {
   type DefaultTransactionHistoryConfiguration,
   makeDefaultTransactionHistoryService,
   type TransactionHistoryService,
 } from './TransactionHistory.js';
-import { type Expect, type Equal, type ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { type Expect, type Equal, type ItemType } from '@midnightntwrk/wallet-sdk-utilities/types';
 
 export type BaseV1Configuration = {
   networkId: NetworkId.NetworkId;

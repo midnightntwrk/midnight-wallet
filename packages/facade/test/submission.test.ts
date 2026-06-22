@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { type SubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
+import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import * as crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';

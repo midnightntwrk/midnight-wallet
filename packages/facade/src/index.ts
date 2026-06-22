@@ -15,50 +15,50 @@ import {
   type DefaultSubmissionConfiguration,
   makeDefaultSubmissionService,
   type SubmissionService,
-} from '@midnight-ntwrk/wallet-sdk-capabilities';
+} from '@midnightntwrk/wallet-sdk-capabilities';
 import {
   type DefaultProvingConfiguration,
   makeDefaultProvingService,
   type ProvingService,
   type UnboundTransaction,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
+} from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import {
   type DefaultDustConfiguration,
   type DustWalletAPI,
   type DustWalletState,
-} from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+} from '@midnightntwrk/wallet-sdk-dust-wallet';
 import {
   type AnyTransaction,
   type CoinsAndBalances as DustCoinsAndBalances,
-} from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+} from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import {
   type DefaultShieldedConfiguration,
   type ShieldedWalletAPI,
   type ShieldedWalletState,
   ShieldedSectionSchema,
   mergeShieldedSections,
-} from '@midnight-ntwrk/wallet-sdk-shielded';
-import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { type UnshieldedWalletState, UnshieldedSectionSchema } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustSectionSchema, mergeDustSections } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { Clock } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
-import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+} from '@midnightntwrk/wallet-sdk-shielded';
+import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { type UnshieldedWalletState, UnshieldedSectionSchema } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { DustSectionSchema, mergeDustSections } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
+import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
+import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { Array as Arr, pipe, Schema } from 'effect';
-import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { combineLatest, map, type Observable, firstValueFrom, type Subscription, concatMap } from 'rxjs';
 import {
   type DefaultPendingTransactionsServiceConfiguration,
   PendingTransactions,
   type PendingTransactionsService,
   PendingTransactionsServiceImpl,
-} from '@midnight-ntwrk/wallet-sdk-capabilities';
+} from '@midnightntwrk/wallet-sdk-capabilities';
 import { finalizedTransactionTrait } from './transaction.js';
 import {
   type DustAddress,
   type ShieldedAddress,
   type UnshieldedAddress,
-} from '@midnight-ntwrk/wallet-sdk-address-format';
+} from '@midnightntwrk/wallet-sdk-address-format';
 
 /**
  * Full entry schema for transaction history — common fields + all wallet sections. Pass this to
@@ -224,8 +224,8 @@ const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
  * ({@link Clock.systemClock}); for testing with a simulator, inject a custom clock (e.g. one backed by the simulator's
  * time).
  *
- * Re-exported from `@midnight-ntwrk/wallet-sdk-utilities` as a namespace so the type is `Clock.Clock` and the default
- * is `Clock.systemClock`. Forwarding the same symbol — rather than re-declaring its members individually — keeps the
+ * Re-exported from `@midnightntwrk/wallet-sdk-utilities` as a namespace so the type is `Clock.Clock` and the default is
+ * `Clock.systemClock`. Forwarding the same symbol — rather than re-declaring its members individually — keeps the
  * umbrella `wallet-sdk` package's star-exports unambiguous and lets lower-level packages (e.g. dust-wallet) share it
  * without a circular dependency.
  */

@@ -12,10 +12,10 @@
 // limitations under the License.
 
 import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { ArrayOps, DateOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
+import { ArrayOps, DateOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Array as Arr, HashMap, pipe, Record as Rec } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';

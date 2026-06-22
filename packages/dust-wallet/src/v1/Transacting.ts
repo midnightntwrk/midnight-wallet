@@ -32,9 +32,9 @@ import {
   type LedgerParameters,
   nativeToken,
 } from '@midnight-ntwrk/ledger-v9';
-import { type DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { OtherWalletError, TransactingError, type WalletError, InsufficientFundsError } from './WalletError.js';
-import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { CoreWallet } from './CoreWallet.js';
 import { type AnyTransaction, type Dust, type NetworkId, type TotalCostParameters } from './types/index.js';
 import {
@@ -49,7 +49,7 @@ import {
   getBalanceRecipe,
   Imbalances as CapImbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
-} from '@midnight-ntwrk/wallet-sdk-capabilities';
+} from '@midnightntwrk/wallet-sdk-capabilities';
 
 /**
  * Result of splitting Night UTxOs into the guaranteed/fallible sections of a Dust registration or deregistration

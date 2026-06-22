@@ -11,8 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { type CoinRecipe } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type CoinRecipe } from '@midnightntwrk/wallet-sdk-capabilities';
+import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { pipe, Array as Arr, Order } from 'effect';
 import { type CoreWallet } from './CoreWallet.js';
 import { type KeysCapability } from './Keys.js';

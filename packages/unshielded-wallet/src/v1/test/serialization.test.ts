@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest';
 import { Either } from 'effect';
 import { type SignatureVerifyingKey } from '@midnight-ntwrk/ledger-v9';
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { UnshieldedState } from '../UnshieldedState.js';

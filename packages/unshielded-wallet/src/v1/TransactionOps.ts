@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Either, type Option, pipe, Array as Arr, Iterable as IterableOps } from 'effect';
-import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { Imbalances } from '@midnightntwrk/wallet-sdk-capabilities';
 import type * as ledger from '@midnight-ntwrk/ledger-v9';
 import { addressFromKey, SignatureEnabled } from '@midnight-ntwrk/ledger-v9';
 import { TransactingError, type WalletError } from './WalletError.js';

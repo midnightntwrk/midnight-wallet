@@ -13,7 +13,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Effect, Option } from 'effect';
 import { randomUUID } from 'node:crypto';
-import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { DockerComposeEnvironment, Wait, type StartedDockerComposeEnvironment } from 'testcontainers';
 import { type Mock, afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { HttpQueryClient } from '../../../effect/index.js';

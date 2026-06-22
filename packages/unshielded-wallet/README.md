@@ -1,11 +1,11 @@
-# @midnight-ntwrk/wallet-sdk-unshielded-wallet
+# @midnightntwrk/wallet-sdk-unshielded-wallet
 
 Manages unshielded tokens on the Midnight network.
 
 ## Installation
 
 ```bash
-npm install @midnight-ntwrk/wallet-sdk-unshielded-wallet
+npm install @midnightntwrk/wallet-sdk-unshielded-wallet
 ```
 
 ## Overview
@@ -24,8 +24,8 @@ Unlike shielded transactions, unshielded operations do not use zero-knowledge pr
 ### Starting the Wallet
 
 ```typescript
-import { UnshieldedWallet, createKeystore, PublicKey } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { UnshieldedWallet, createKeystore, PublicKey } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { randomBytes } from 'node:crypto';
 
 // Configuration for the wallet

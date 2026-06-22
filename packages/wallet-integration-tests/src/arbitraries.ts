@@ -14,12 +14,12 @@ import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
-} from '@midnight-ntwrk/wallet-sdk-address-format';
+} from '@midnightntwrk/wallet-sdk-address-format';
 import * as ledger from '@midnight-ntwrk/ledger-v9';
 import * as fc from 'fast-check';
 import { Record } from 'effect';
 
-import { type Transacting } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { type Transacting } from '@midnightntwrk/wallet-sdk-shielded/v1';
 type TokenTransfer = Transacting.TokenTransfer;
 
 export const recipientArbitrary = fc

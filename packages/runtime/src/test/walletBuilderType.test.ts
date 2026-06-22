@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type CanAssign, type Equal, type Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { type CanAssign, type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { type VariantBuilder } from '../abstractions/index.js';
 import { type WalletBuilder } from '../WalletBuilder.js';
 import {

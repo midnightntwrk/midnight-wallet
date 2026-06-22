@@ -14,7 +14,7 @@ import { Either, pipe, Schema } from 'effect';
 import { type SignatureKind } from '@midnight-ntwrk/ledger-v9';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
-import { type NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { UnshieldedState } from './UnshieldedState.js';
 
 export type SerializationCapability<TWallet, TSerialized> = {

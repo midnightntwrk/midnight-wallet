@@ -19,7 +19,7 @@ import {
   ShieldedCoinPublicKey,
   mainnet,
   type NetworkId,
-} from '@midnight-ntwrk/wallet-sdk';
+} from '@midnightntwrk/wallet-sdk';
 import * as ledger from '@midnight-ntwrk/ledger-v9';
 
 const networkId: NetworkId.NetworkId = 'undeployed';
