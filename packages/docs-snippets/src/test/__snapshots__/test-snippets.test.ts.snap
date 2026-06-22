@@ -72,7 +72,7 @@ Synced state:
         238, 197, 128, 224,  15, 184, 109, 119,
          21, 234, 196,  96,  75, 114, 100, 210
       ],
-      Symbol(MidnightBech32m): Bech32mCodec {
+      [Symbol(MidnightBech32m)]: Bech32mCodec {
         type: 'addr',
         dataToBytes: [Function (anonymous)],
         dataFromBytes: [Function (anonymous)]
