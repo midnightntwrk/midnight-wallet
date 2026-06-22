@@ -163,7 +163,8 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           scope: '@midnightntwrk'
 
-      # Node 22 LTS ships npm 10; Trusted Publishing requires npm 11.5.1+.
+      # Trusted Publishing requires npm 11.5.1+; pin a known-good npm regardless
+      # of the version bundled with the Node release pinned in .nvmrc.
       - name: Upgrade npm to a Trusted Publishing-capable version
         run: npm install -g npm@^11.17.0
 

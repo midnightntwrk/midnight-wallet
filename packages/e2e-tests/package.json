@@ -24,7 +24,7 @@
     "@midnightntwrk/wallet-sdk-shielded": "workspace:^",
     "@midnightntwrk/wallet-sdk-testkit": "workspace:^",
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "workspace:^",
-    "@types/node": "25.9.3",
+    "@types/node": "24.13.2",
     "@vitest/ui": "4.1.8",
     "eslint": "10.4.1",
     "pino": "10.3.1",

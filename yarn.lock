@@ -2339,7 +2339,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-runtime": "npm:^1.0.5"
     "@midnightntwrk/wallet-sdk-shielded": "npm:^3.0.2"
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "npm:^3.1.0"
-    "@types/node": "npm:^25.3.0"
+    "@types/node": "npm:^24.13.2"
     effect: "npm:^3.19.19"
     pure-rand: "npm:^7.0.1"
     rxjs: "npm:^7.8.2"
@@ -2385,7 +2385,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-shielded": "workspace:^"
     "@midnightntwrk/wallet-sdk-testkit": "workspace:^"
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "workspace:^"
-    "@types/node": "npm:25.9.3"
+    "@types/node": "npm:24.13.2"
     "@vitest/ui": "npm:4.1.8"
     eslint: "npm:10.4.1"
     pino: "npm:10.3.1"
@@ -2519,8 +2519,8 @@ __metadata:
     "@effect/language-service": "npm:0.86.2"
     "@eslint/compat": "npm:2.1.0"
     "@eslint/js": "npm:10.0.1"
-    "@tsconfig/node22": "npm:22.0.5"
-    "@types/node": "npm:25.9.3"
+    "@tsconfig/node24": "npm:24.0.4"
+    "@types/node": "npm:24.13.2"
     "@vitest/coverage-v8": "npm:4.1.8"
     "@vitest/runner": "npm:4.1.8"
     "@vitest/ui": "npm:4.1.8"
@@ -3836,10 +3836,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tsconfig/node22@npm:22.0.5":
-  version: 22.0.5
-  resolution: "@tsconfig/node22@npm:22.0.5"
-  checksum: 10c0/c64b1d51e1556da9212463799f5096289d2cc8561eaed10cd0a0a36c25790b4c6bed30c0f846afccf8da75b5750326fa281216a908c2b67ead7b55adaf3eda22
+"@tsconfig/node24@npm:24.0.4":
+  version: 24.0.4
+  resolution: "@tsconfig/node24@npm:24.0.4"
+  checksum: 10c0/9c5d4173204c6935c45d3ff0584fd423bd7d8bc3f6b246e646320ae584e4226b34ea1c66ec67cd16769c73e7e80f4cc562287b0acaa4ec81aa482463972ff83f
   languageName: node
   linkType: hard
 
@@ -4008,12 +4008,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:*, @types/node@npm:25.9.3, @types/node@npm:^25.3.0":
+"@types/node@npm:*":
   version: 25.9.3
   resolution: "@types/node@npm:25.9.3"
   dependencies:
     undici-types: "npm:>=7.24.0 <7.24.7"
   checksum: 10c0/72d3aece9d42c2c641bcd3f3cb2dc2828b4bd384dfcbd910c404b8859a68bd69d50c4769ce7defd4ff5e049768e23e615f09407ea2cbbb5f44b90d75a7c6b8ca
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:24.13.2, @types/node@npm:^24.13.2":
+  version: 24.13.2
+  resolution: "@types/node@npm:24.13.2"
+  dependencies:
+    undici-types: "npm:~7.18.0"
+  checksum: 10c0/d7d48a88a4feb0a6aac3cbfaf9ef3b12752b4b09447f88dd0b4c77c03b281e3d4330fe6982a99aedcd63fc16c7540a0c248b91eb2abb0b3edd884d7fe684e9ea
   languageName: node
   linkType: hard
 
@@ -10585,6 +10594,13 @@ __metadata:
   version: 5.26.5
   resolution: "undici-types@npm:5.26.5"
   checksum: 10c0/bb673d7876c2d411b6eb6c560e0c571eef4a01c1c19925175d16e3a30c4c428181fb8d7ae802a261f283e4166a0ac435e2f505743aa9e45d893f9a3df017b501
+  languageName: node
+  linkType: hard
+
+"undici-types@npm:~7.18.0":
+  version: 7.18.2
+  resolution: "undici-types@npm:7.18.2"
+  checksum: 10c0/85a79189113a238959d7a647368e4f7c5559c3a404ebdb8fc4488145ce9426fcd82252a844a302798dfc0e37e6fb178ff481ed03bc4caf634c5757d9ef43521d
   languageName: node
   linkType: hard
 
