@@ -2318,13 +2318,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/ledger-v8@npm:^8.1.0":
-  version: 8.1.0
-  resolution: "@midnight-ntwrk/ledger-v8@npm:8.1.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fledger-v8%2F8.1.0%2Fc42ed442b6c8c79e28ca5fc13a8764f31eab2f73"
-  checksum: 10c0/12a8b58678dbed60e7280ef1b3f16b465aa93d6fd4d0e1cbbb82730db941999c4354af5ffdfd1048b770afb497792e91cac0317962815dfc7c5471e581a96c40
-  languageName: node
-  linkType: hard
-
 "@midnight-ntwrk/ledger-v9@npm:0.1.0-alpha.1":
   version: 0.1.0-alpha.1
   resolution: "@midnight-ntwrk/ledger-v9@npm:0.1.0-alpha.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fledger-v9%2F0.1.0-alpha.1%2Fa5533dc1678f37cdb57e586f85b5b4e885e80622"
@@ -2701,7 +2694,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-testkit@workspace:packages/wallet-sdk-testkit"
   dependencies:
-    "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
+    "@midnight-ntwrk/ledger-v9": "npm:0.1.0-alpha.1"
     "@midnightntwrk/wallet-sdk-abstractions": "workspace:^"
     "@midnightntwrk/wallet-sdk-address-format": "workspace:^"
     "@midnightntwrk/wallet-sdk-capabilities": "workspace:^"

@@ -7,6 +7,7 @@
 '@midnightntwrk/wallet-sdk-node-client': major
 '@midnightntwrk/wallet-sdk-prover-client': major
 '@midnightntwrk/wallet-sdk-shielded': major
+'@midnightntwrk/wallet-sdk-testkit': minor
 '@midnightntwrk/wallet-sdk-unshielded-wallet': major
 ---
 
