@@ -6,6 +6,14 @@
 
 Technical Story: migrate CD off GitHub Packages and onto the `@midnightntwrk` npm org.
 
+> **Update (2026-06-22):** Trusted Publishing was subsequently configured on npmjs for the dashed `@midnight-ntwrk`
+> scope too, so the transitional alias now publishes via **OIDC + `--provenance`** as well — the token-based alias auth
+> (`NPM_LEGACY_TOKEN`) and the one-time bootstrap job have been removed, and both scopes now publish identically and
+> tokenlessly. The "Auth differs per scope" specifics and the related negative consequences below are kept for history
+> but no longer reflect the implementation. CD topology is now three jobs — `version` (ungated, manages the release PR),
+> `publish-stable` (gated, runs when the release PR merges), and `canary` (snapshot). Canary publishes only when there
+> are pending package-bumping changesets and snapshots **all** publishable packages as one coherent set from the commit.
+
 ## Context and Problem Statement
 
 The Wallet SDK has historically published under the `@midnight-ntwrk` scope to GitHub Packages, authenticated with a
