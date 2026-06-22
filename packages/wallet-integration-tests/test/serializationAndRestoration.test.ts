@@ -10,11 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import {
-  ShieldedWallet,
-  type ShieldedWalletClass,
-  type ShieldedWalletState,
-} from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, type ShieldedWalletClass, type ShieldedWalletState } from '@midnightntwrk/wallet-sdk-shielded';
 import { UnshieldedWallet, createKeystore, PublicKey } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-shielded/v1';

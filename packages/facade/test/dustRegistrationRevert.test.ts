@@ -28,11 +28,7 @@
  */
 import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import {
-  Simulator,
-  immediateBlockProducer,
-  type GenesisMint,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';

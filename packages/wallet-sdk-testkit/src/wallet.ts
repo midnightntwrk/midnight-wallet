@@ -163,7 +163,10 @@ export const provideWallet = async (env: WalletTestEnvironment, options: Provide
 
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
-  const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: getUnshieldedSeed(seed) }, env.endpoints.networkId);
+  const unshieldedKeystore = createKeystore(
+    { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
+    env.endpoints.networkId,
+  );
 
   const readIfExists = async (p: string): Promise<string | undefined> => {
     try {
@@ -262,7 +265,10 @@ export const initWalletWithSeed = async (env: WalletTestEnvironment, seed: strin
   const walletConfig = env.getWalletConfig();
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
-  const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: getUnshieldedSeed(seed) }, env.endpoints.networkId);
+  const unshieldedKeystore = createKeystore(
+    { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
+    env.endpoints.networkId,
+  );
 
   const facade: WalletFacade = await WalletFacade.init({
     configuration: {
