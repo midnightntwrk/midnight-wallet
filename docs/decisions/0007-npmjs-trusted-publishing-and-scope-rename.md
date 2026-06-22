@@ -2,115 +2,91 @@
 
 - Status: accepted
 - Deciders: Agron Murtezi, SRE team
-- Date: 2026-06-18
+- Date: 2026-06-18 (updated 2026-06-22)
 
 Technical Story: migrate CD off GitHub Packages and onto the `@midnightntwrk` npm org.
 
 ## Context and Problem Statement
 
-The Wallet SDK has historically published under the `@midnight-ntwrk` scope to GitHub Packages, authenticated with a
-long-lived PAT. Two things need to change at once:
+The Wallet SDK historically published under the `@midnight-ntwrk` scope to GitHub Packages, authenticated with a
+long-lived PAT. Two things needed to change at once:
 
 - **Registry & auth:** move to npmjs with [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) so
   publishes are tokenless and carry provenance attestations, gated behind environments with human review for stable
   releases.
-- **Scope:** the new npm org is `midnightntwrk` (no dash), so packages must publish under `@midnightntwrk/*` rather than
+- **Scope:** the new npm org is `midnightntwrk` (no dash), so packages publish under `@midnightntwrk/*` rather than
   `@midnight-ntwrk/*`.
 
-A hard cut-over would break every existing consumer that depends on `@midnight-ntwrk/*`. How do we change registry,
-auth, and scope without breaking downstream consumers, and without standing up throwaway infrastructure for a temporary
-state?
+A hard cut-over would break every existing consumer of `@midnight-ntwrk/*`, so the dashed scope is kept alive as a
+transitional alias during the migration window.
 
-## Decision Drivers
+## Decision
 
-- Do not break existing consumers of `@midnight-ntwrk/*` during the migration window.
-- Prefer tokenless, attestable publishing (OIDC + provenance) for the canonical packages.
-- Keep the build graph and developer workflow stable — a scope rename must not destabilise local dev or CI.
-- Avoid building the monorepo twice or shipping non-identical bytes under the two scopes.
-- Keep the transitional machinery cheap to remove, since it is temporary by design.
-- Upstream `@midnight-ntwrk/*` dependencies (`ledger-v8`, `wallet-api`, `zkir-v2`, `midnight-js-network-id`) are not
-  ours and continue to live on GitHub Packages — they must remain dashed everywhere.
+Dual-publish both scopes from npmjs, with `@midnightntwrk` canonical in source and `@midnight-ntwrk` generated at
+publish time. Both scopes publish via OIDC + provenance — there are no long-lived publish tokens.
 
-## Considered Options
+### Scopes
 
-1. **Hard cut-over** to `@midnightntwrk` only.
-2. **Dual-publish** both scopes during a migration window, with `@midnightntwrk` as the canonical scope in source and
-   `@midnight-ntwrk` generated as a transitional alias.
-3. **Dual-publish with the alias as the source scope** — keep `@midnight-ntwrk` in source and generate `@midnightntwrk`
-   at publish time.
+- **Source tree uses `@midnightntwrk`.** Package names, internal SDK dependency ranges, source imports, changesets, and
+  the lockfile are all on the dashless scope.
+- **`@midnight-ntwrk` is a publish-time alias.** `scripts/publish.mjs` stages a copy of each package in a temp dir and
+  rewrites the name, internal SDK deps, and compiled `dist/**` import specifiers back to the dashed scope, then
+  publishes it. The working tree stays pristine (so `changeset tag` tags the canonical scope). The alias README carries
+  a migration banner pointing at the `@midnightntwrk` equivalent.
+- **Both scopes publish via OIDC + `npm publish --provenance`** — no token in the environment, so npm performs the
+  Trusted Publishing token exchange. Each package, **under both scopes**, needs a Trusted Publisher configured on npmjs:
+  - repo: `<owner>/<this-repo>`
+  - workflow: `.github/workflows/cd.yml`
+  - environment: `npm-publish-stable` or `npm-publish-canary`
+- **Upstream dashed dependencies** (`ledger-v8`, `wallet-api`, `zkir-v2`, `midnight-js-network-id`) are not ours and
+  remain on GitHub Packages — install-time auth uses a read PAT; they stay dashed everywhere.
 
-For the dual-publish mechanics, two sub-questions:
+### CD topology and publishing scenarios
 
-- **Where the alias rename lives:** publish-time-only (leave source on `@midnight-ntwrk`) vs. rename the source tree to
-  `@midnightntwrk` and rewrite back to dashed at publish time.
-- **Job topology:** one job publishing both scopes vs. a separate job per scope.
+`.github/workflows/cd.yml` runs three jobs on every push to `main`/`v2`:
 
-## Decision Outcome
+- **`version`** (ungated) — runs `changesets/action` to create/update the "Version Packages" PR, then resolves a single
+  `mode` output the publish jobs gate on. `mode` is derived from two internal signals: `hasChangesets` (any changeset
+  files present, from the action) and `hasReleases` (any pending changeset actually bumps a package, via
+  `changeset status --output`). It is `stable` when no changesets remain, `canary` when a package-bumping changeset is
+  pending, and `none` otherwise.
+- **`publish-stable`** (gated by the `npm-publish-stable` environment, with required reviewers) — `needs: [version]`,
+  runs when `mode == 'stable'`. Publishes canonical versions of both scopes and pushes git tags.
+- **`canary`** (environment `npm-publish-canary`, no required reviewers) — `needs: [version]`, runs when
+  `mode == 'canary'`. Publishes a snapshot of both scopes under the `canary` dist-tag.
 
-Chosen: **option 2 — dual-publish with `@midnightntwrk` canonical in source**, with these specifics:
+A single `mode` output drives both publish jobs, so a push triggers **exactly one** publishing scenario, or neither
+(`mode == 'stable'` wins whenever no changesets remain, which also implies `hasReleases` is `false`, so the two can
+never collide):
 
-- **Source tree uses `@midnightntwrk`.** The rename touches package names, internal SDK dependency ranges, ~172 source
-  import references, changesets, and the lockfile. Upstream dashed deps are left untouched.
-- **The `@midnight-ntwrk` alias is generated at publish time.** `scripts/publish.mjs` stages a copy of each package in a
-  temp dir and rewrites the name, internal SDK deps, and compiled `dist/**` import specifiers back to the dashed scope.
-  The working tree stays pristine (so `changeset tag` tags the canonical scope).
-- **Auth differs per scope.** Primary `@midnightntwrk` publishes via OIDC with `npm publish --provenance` (no token).
-  The alias publishes with the legacy `MIDNIGHTCI_PACKAGES_WRITE` token (surfaced as `NPM_LEGACY_TOKEN`), without
-  provenance — token publishes cannot emit OIDC attestations. The script blanks `NODE_AUTH_TOKEN` for the primary
-  publish so npm falls back to OIDC.
-- **One job per release type publishes both scopes.** The two CD jobs (`release` stable + gated, `canary` snapshot) each
-  invoke the single dual-publishing script. Both scopes ship from the same checkout and the same built `dist/`.
-- **The alias README carries a migration banner** pointing consumers at the `@midnightntwrk` equivalent.
+| Push                           | `hasChangesets` | `hasReleases` | `mode`   | Result                       |
+| ------------------------------ | --------------- | ------------- | -------- | ---------------------------- |
+| "Version Packages" PR merged   | `false`         | `false`       | `stable` | `publish-stable` → canonical |
+| Pending package-bumping change | `true`          | `true`        | `canary` | `canary` → snapshot          |
+| Docs/CI-only (empty changeset) | `true`          | `false`       | `none`   | neither                      |
 
-The alias is removed (script branch + `NPM_LEGACY_TOKEN` + token rotation) once consumers have migrated.
+### Canary publishes all packages as one coherent set
 
-### Positive Consequences
+`changeset version --snapshot` only versions packages named in a changeset (plus their dependents), which would leave
+the `canary` dist-tag inconsistent across packages. Before snapshotting, the canary job runs
+`scripts/write-canary-changeset.mjs`, which writes a temporary changeset patch-bumping **every** publishable package, so
+the whole SDK at `@canary` is a coherent set from a single commit. Real pending changesets are kept, so their
+minor/major bumps still win. As defence-in-depth, `scripts/publish.mjs` skips any package whose version lacks a snapshot
+prerelease (`-`) when publishing under a `--tag`, so a canonical version can never reach a `canary*` tag.
+
+## Consequences
 
 - Existing `@midnight-ntwrk` consumers keep resolving throughout the migration.
-- Canonical `@midnightntwrk` packages are tokenless and provenance-attested.
+- Both scopes are tokenless and provenance-attested; there is no long-lived publish token to rotate or leak.
 - Identical content under both scopes is guaranteed by a single build per run.
-- The transitional code is isolated to `publish.mjs` and a single workflow env var, so teardown is a small, reviewable
-  change.
+- Stable releases require human approval (the `npm-publish-stable` environment); canary never blocks on approval.
+- The scope rename was a large mechanical diff, and `publish.mjs` carries temp-dir staging + dist-specifier rewriting
+  for the duration of the migration window.
 
-### Negative Consequences
-
-- The scope rename is a large mechanical diff.
-- `publish.mjs` carries non-trivial logic (temp-dir staging, dist-specifier rewriting) for the duration of the window.
-- The alias publish has no provenance.
-- The job that runs OIDC also has the legacy token present in its environment (mitigated: the token is never _used_ for
-  the primary publish — `NODE_AUTH_TOKEN` is blanked there).
-
-## Pros and Cons of the Options
-
-### Hard cut-over
-
-- Good, because simplest possible publish flow.
-- Bad, because it immediately breaks every `@midnight-ntwrk` consumer — unacceptable.
-
-### Dual-publish, `@midnightntwrk` canonical in source (chosen)
-
-- Good, because the canonical scope is the one that gets OIDC + provenance and the one developers see everywhere.
-- Good, because the dashed alias is purely a publish-time artifact, easy to delete later.
-- Bad, because it requires a large source rename and dist-specifier rewriting for the alias.
-
-### Dual-publish, `@midnight-ntwrk` canonical in source
-
-- Good, because no source rename — smallest diff.
-- Bad, because the canonical scope going forward (`@midnightntwrk`) would be the _rewritten_ one, so provenance/source
-  identity would lag the scope we actually want to be primary.
-
-### Job topology: one job vs. separate jobs
-
-One job per release type was chosen.
-
-- Good (one job), because the monorepo builds once and both scopes ship identical bytes; the canary job's snapshot
-  versioning is computed a single time.
-- Good (one job), because idempotent skip-on-already-published makes whole-run retries safe.
-- Bad (one job), because the OIDC job also has the legacy token in its environment.
-- Separate jobs would isolate the token but require building twice or passing build artifacts between jobs, and would
-  duplicate the canary snapshot setup — not worth it for a temporary alias.
+The alias is removed (the alias branch in `scripts/publish.mjs` + the migration banner) once consumers have migrated to
+`@midnightntwrk`.
 
 ## Links
 
 - [npm Trusted Publishers](https://docs.npmjs.com/trusted-publishers)
-- Implemented by `scripts/publish.mjs` and `.github/workflows/cd.yml`
+- Implemented by `scripts/publish.mjs`, `scripts/write-canary-changeset.mjs`, and `.github/workflows/cd.yml`

@@ -1,28 +1,24 @@
 #!/usr/bin/env node
-// Publishes non-private workspace packages to npmjs under TWO scopes during
-// the org migration from `@midnight-ntwrk` to `@midnightntwrk`:
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Publishes non-private workspace packages to npmjs under TWO scopes during the
+// org migration from `@midnight-ntwrk` to `@midnightntwrk`, both via npm Trusted
+// Publishing (OIDC) + `--provenance` (no tokens):
 //
-//   1. Primary — `@midnightntwrk/*` via npm Trusted Publishing (OIDC) +
-//      `--provenance`. Published as-is from the workspace, since the source
-//      scope is already `@midnightntwrk`. No token: npm authenticates via
-//      OIDC against the trusted publisher configured on npmjs.
-//
-//      Bootstrap exception: a trusted publisher can only be attached to a
-//      package that already exists on npmjs, so OIDC cannot perform the FIRST
-//      publish of a new package name. When NPM_PRIMARY_TOKEN is set, the
-//      primary scope is published with that token instead (provenance off) to
-//      seed the new names. Run once, attach the trusted publishers on npmjs,
-//      then drop NPM_PRIMARY_TOKEN so subsequent publishes use OIDC.
-//
-//   2. Alias — `@midnight-ntwrk/*`, transitional, so existing consumers of
-//      the dashed scope keep resolving during the migration window. The
-//      package is staged in a temp dir with its name, internal SDK deps, and
-//      compiled `dist/**` import specifiers rewritten back to the dashed
-//      scope, then published with the legacy npm token (NPM_LEGACY_TOKEN).
-//      No provenance — token publishes cannot emit OIDC attestations.
-//
-// The alias publish is skipped (with a warning) when NPM_LEGACY_TOKEN is
-// absent, so local runs and the OIDC-only path still work.
+//   1. Primary `@midnightntwrk/*` — published as-is from the workspace.
+//   2. Alias `@midnight-ntwrk/*` — transitional, so dashed-scope consumers keep
+//      resolving; staged in a temp dir with the scope rewritten, then published.
 //
 // Versions already on the registry are skipped so re-runs are idempotent.
 //
@@ -78,18 +74,8 @@ if (publishable.length === 0) {
   process.exit(0);
 }
 
-const legacyToken = process.env.NPM_LEGACY_TOKEN;
-// Bootstrap-only: when set, the primary @midnightntwrk scope is published with
-// this token instead of via OIDC (provenance off). See the header note.
-const primaryToken = process.env.NPM_PRIMARY_TOKEN;
 console.log(`Publishing ${publishable.length} package(s)${values.tag ? ` (dist-tag: ${values.tag})` : ''}:`);
 publishable.forEach((ws) => console.log(`  - ${ws.pkg.name}@${ws.pkg.version} (+ alias ${toAlias(ws.pkg.name)})`));
-if (primaryToken) {
-  console.log('\n⚠ NPM_PRIMARY_TOKEN set — publishing @midnightntwrk with a token (bootstrap, no provenance).');
-}
-if (!legacyToken) {
-  console.log('\n⚠ NPM_LEGACY_TOKEN not set — skipping the @midnight-ntwrk alias publish.');
-}
 
 const isAlreadyPublished = (name, version) => {
   try {
@@ -121,8 +107,8 @@ const rewriteScopeInTree = (dir) => {
   });
 };
 
-// Stage a dashed-scope copy of the package in a temp dir and publish it with
-// the legacy token. Returns the publish status.
+// Stage a dashed-scope copy of the package in a temp dir and publish it via
+// OIDC + provenance. Returns the publish status.
 const publishAlias = (ws) => {
   const aliasName = toAlias(ws.pkg.name);
   if (isAlreadyPublished(aliasName, ws.pkg.version)) {
@@ -149,11 +135,10 @@ const publishAlias = (ws) => {
     const readmeBody = existsSync(readmePath) ? toAlias(readFileSync(readmePath, 'utf8')) : '';
     writeFileSync(readmePath, migrationBanner(ws.pkg.name) + readmeBody);
 
-    console.log(`\nPublishing ${aliasName}@${ws.pkg.version} (alias, token auth)...`);
-    execFileSync('npm', ['publish', '--access', 'public', ...tagArgs], {
+    console.log(`\nPublishing ${aliasName}@${ws.pkg.version} (alias, OIDC + provenance)...`);
+    execFileSync('npm', ['publish', '--provenance', '--access', 'public', ...tagArgs], {
       cwd: stage,
       stdio: 'inherit',
-      env: { ...process.env, NODE_AUTH_TOKEN: legacyToken },
     });
     return { name: aliasName, version: ws.pkg.version, status: 'published' };
   } catch (err) {
@@ -163,11 +148,7 @@ const publishAlias = (ws) => {
   }
 };
 
-// Publish the primary @midnightntwrk scope. Normally via OIDC + provenance,
-// with NODE_AUTH_TOKEN blanked so npm performs the Trusted Publishing token
-// exchange instead of using the setup-node .npmrc placeholder token. During
-// the migration bootstrap (NPM_PRIMARY_TOKEN set), publishes with that token
-// and no provenance, to seed new package names that OIDC cannot create.
+// Publish the primary @midnightntwrk scope via OIDC + provenance.
 const publishPrimary = (ws) => {
   const { name, version } = ws.pkg;
   if (isAlreadyPublished(name, version)) {
@@ -175,13 +156,11 @@ const publishPrimary = (ws) => {
     return { name, version, status: 'skipped' };
   }
 
-  const provenanceArgs = primaryToken ? [] : ['--provenance'];
-  console.log(`\nPublishing ${name}@${version} (${primaryToken ? 'token bootstrap' : 'OIDC + provenance'})...`);
+  console.log(`\nPublishing ${name}@${version} (OIDC + provenance)...`);
   try {
-    execFileSync('npm', ['publish', ...provenanceArgs, '--access', 'public', ...tagArgs], {
+    execFileSync('npm', ['publish', '--provenance', '--access', 'public', ...tagArgs], {
       cwd: ws.location,
       stdio: 'inherit',
-      env: { ...process.env, NODE_AUTH_TOKEN: primaryToken ?? '' },
     });
     return { name, version, status: 'published' };
   } catch (err) {
@@ -190,6 +169,14 @@ const publishPrimary = (ws) => {
 };
 
 const results = publishable.flatMap((ws) => {
+  // In prerelease/canary mode (--tag set), only publish packages that received
+  // a snapshot version. A snapshot version always carries a semver prerelease
+  // "-"; a canonical version (no "-") must never be published under a canary
+  // dist-tag. Stable publishes pass no --tag, so this never affects releases.
+  if (values.tag && !ws.pkg.version.includes('-')) {
+    console.log(`Skip ${ws.pkg.name}@${ws.pkg.version}: no snapshot version for --tag ${values.tag}.`);
+    return [];
+  }
   const primary = publishPrimary(ws);
   // Only mirror to the dashed alias once the primary scope is in good shape
   // (published or already present). If the primary publish failed, skip the
@@ -199,8 +186,7 @@ const results = publishable.flatMap((ws) => {
     console.error(`Skip alias ${aliasName}@${ws.pkg.version}: primary publish failed.`);
     return [primary];
   }
-  const alias = legacyToken ? [publishAlias(ws)] : [];
-  return [primary, ...alias];
+  return [primary, publishAlias(ws)];
 });
 
 const counts = results.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] ?? 0) + 1 }), {});
