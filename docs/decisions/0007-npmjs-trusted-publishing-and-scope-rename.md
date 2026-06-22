@@ -45,21 +45,25 @@ publish time. Both scopes publish via OIDC + provenance — there are no long-li
 
 `.github/workflows/cd.yml` runs three jobs on every push to `main`/`v2`:
 
-- **`version`** (ungated) — runs `changesets/action` to create/update the "Version Packages" PR. Exposes two outputs the
-  publish jobs gate on: `hasChangesets` (any changeset files present) and `hasReleases` (any pending changeset actually
-  bumps a package, via `changeset status --output`).
+- **`version`** (ungated) — runs `changesets/action` to create/update the "Version Packages" PR, then resolves a single
+  `mode` output the publish jobs gate on. `mode` is derived from two internal signals: `hasChangesets` (any changeset
+  files present, from the action) and `hasReleases` (any pending changeset actually bumps a package, via
+  `changeset status --output`). It is `stable` when no changesets remain, `canary` when a package-bumping changeset is
+  pending, and `none` otherwise.
 - **`publish-stable`** (gated by the `npm-publish-stable` environment, with required reviewers) — `needs: [version]`,
-  runs when `hasChangesets == 'false'`. Publishes canonical versions of both scopes and pushes git tags.
+  runs when `mode == 'stable'`. Publishes canonical versions of both scopes and pushes git tags.
 - **`canary`** (environment `npm-publish-canary`, no required reviewers) — `needs: [version]`, runs when
-  `hasReleases == 'true'`. Publishes a snapshot of both scopes under the `canary` dist-tag.
+  `mode == 'canary'`. Publishes a snapshot of both scopes under the `canary` dist-tag.
 
-The two `if` conditions are mutually exclusive, so a push triggers **exactly one** publishing scenario, or neither:
+A single `mode` output drives both publish jobs, so a push triggers **exactly one** publishing scenario, or neither
+(`mode == 'stable'` wins whenever no changesets remain, which also implies `hasReleases` is `false`, so the two can
+never collide):
 
-| Push                           | `hasChangesets` | `hasReleases` | Result                       |
-| ------------------------------ | --------------- | ------------- | ---------------------------- |
-| "Version Packages" PR merged   | `false`         | `false`       | `publish-stable` → canonical |
-| Pending package-bumping change | `true`          | `true`        | `canary` → snapshot          |
-| Docs/CI-only (empty changeset) | `true`          | `false`       | neither                      |
+| Push                           | `hasChangesets` | `hasReleases` | `mode`   | Result                       |
+| ------------------------------ | --------------- | ------------- | -------- | ---------------------------- |
+| "Version Packages" PR merged   | `false`         | `false`       | `stable` | `publish-stable` → canonical |
+| Pending package-bumping change | `true`          | `true`        | `canary` | `canary` → snapshot          |
+| Docs/CI-only (empty changeset) | `true`          | `false`       | `none`   | neither                      |
 
 ### Canary publishes all packages as one coherent set
 

@@ -24,15 +24,14 @@ jobs:
       contents: write
       pull-requests: write
     outputs:
-      # 'false' only on the push that merges the release PR (no changesets
-      # left) — the signal publish-stable uses to publish. Every other PR
-      # carries a changeset (enforced by changeset:check), so this stays
-      # 'true' until a real release lands and never triggers a spurious gate.
-      hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
-      # 'true' when at least one pending changeset actually bumps a package —
-      # the signal canary uses to publish. Empty (docs/CI) changesets bump
-      # nothing, so this is 'false' for them and canary correctly skips.
-      hasReleases: ${{ steps.releases.outputs.hasReleases }}
+      # Single publish-mode signal the downstream jobs gate on, so at most one
+      # can ever fire. Resolved by the "Resolve publish mode" step from two
+      # internal signals (hasChangesets from changesets/action, hasReleases from
+      # the detect step below):
+      #   'stable' → release PR merged: no changesets left → publish canonical
+      #   'canary' → pending package-bumping changeset(s) → publish snapshot
+      #   'none'   → docs/CI-only (empty changeset): publish nothing
+      mode: ${{ steps.mode.outputs.mode }}
     concurrency:
       group: version-${{ github.ref_name }}
       cancel-in-progress: false
@@ -40,13 +39,13 @@ jobs:
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
+      # No registry-url/scope here: this job only opens the release PR, it never
+      # runs `npm publish` (those are set on the publish-stable/canary jobs).
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
-          registry-url: 'https://registry.npmjs.org'
-          scope: '@midnightntwrk'
 
       - name: Enable corepack
         run: corepack enable
@@ -80,7 +79,7 @@ jobs:
       # changesets in the workspace. `releases` in the status JSON lists only
       # packages that would actually be bumped (empty changesets contribute
       # nothing), so its length is the precise "is there a real change to
-      # snapshot" signal canary gates on.
+      # snapshot" signal that resolves `mode` to 'canary'.
       - name: Detect package-bumping changesets
         id: releases
         run: |
@@ -113,6 +112,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
 
+      # Collapse the two signals into one mutually-exclusive mode (see the
+      # `mode` job output above). hasChangesets == 'false' wins as 'stable':
+      # when the release PR merges there are no changesets left, so hasReleases
+      # is 'false' too and there is no ambiguity.
+      - name: Resolve publish mode
+        id: mode
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.changesets.outputs.hasChangesets }}" = "false" ]; then
+            MODE=stable
+          elif [ "${{ steps.releases.outputs.hasReleases }}" = "true" ]; then
+            MODE=canary
+          else
+            MODE=none
+          fi
+          echo "Resolved publish mode: ${MODE}"
+          echo "mode=${MODE}" >> "$GITHUB_OUTPUT"
+
   # Publishes stable packages (primary @midnightntwrk + @midnight-ntwrk alias).
   # Runs only on the push that merged the release PR (no changesets left) and
   # is gated by the npm-publish-stable environment. Independent of canary, so
@@ -120,7 +137,7 @@ jobs:
   publish-stable:
     name: Publish (stable)
     needs: [version]
-    if: needs.version.outputs.hasChangesets == 'false'
+    if: needs.version.outputs.mode == 'stable'
     runs-on: ubuntu-latest-8-core-x64
     # Human gate: this environment must require reviewer approval before the
     # job can run. Configure required reviewers in repo
@@ -188,10 +205,10 @@ jobs:
     name: Canary (snapshot publish)
     needs: [version]
     # Publish a snapshot only when there are pending package-bumping changesets
-    # (real unreleased changes). Mutually exclusive with publish-stable, which
-    # runs on hasChangesets == 'false'. `version` is ungated, so this dependency
-    # adds no reviewer gate — it just provides the signal.
-    if: needs.version.outputs.hasReleases == 'true'
+    # (real unreleased changes). Mutually exclusive with publish-stable by
+    # construction (see the `mode` output). `version` is ungated, so this
+    # dependency adds no reviewer gate — it just provides the signal.
+    if: needs.version.outputs.mode == 'canary'
     runs-on: ubuntu-latest-8-core-x64
     # Canary has its own environment only to scope the npmjs Trusted Publisher
     # per release type — no required reviewers here, so snapshot publishing is
@@ -216,7 +233,7 @@ jobs:
           scope: '@midnightntwrk'
 
       - name: Upgrade npm to a Trusted Publishing-capable version
-        run: npm install -g npm@latest
+        run: npm install -g npm@^11.17.0
 
       - name: Enable corepack
         run: corepack enable
