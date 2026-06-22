@@ -167,13 +167,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
 
   startSync(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
     return pipe(
-      Ref.get(this.#syncLock),
-      Effect.flatMap((isLocked) => {
-        if (isLocked) {
-          return Effect.succeed(false);
-        }
-        return Ref.set(this.#syncLock, true).pipe(Effect.as(true));
-      }),
+      Ref.modify(this.#syncLock, (isLocked) => [!isLocked, true] as const),
       Stream.fromEffect,
       Stream.flatMap((acquired) => {
         if (!acquired) {
