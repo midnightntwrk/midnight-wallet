@@ -11,7 +11,7 @@ env:
   #       workflow: .github/workflows/cd.yml
   #       environment: npm-publish-stable (publish-stable) or npm-publish-canary
   #   • @midnight-ntwrk/* (transitional alias) authenticated with the dashed
-  #     org's npmjs token MIDNIGHTCI_NPM_TOKEN, surfaced to scripts/publish.mjs
+  #     org's npmjs token MIDNIGHTCI_NPMJS_TOKEN, surfaced to scripts/publish.mjs
   #     as NPM_LEGACY_TOKEN. Drop this once consumers have moved to the new scope.
   # Docs: https://docs.npmjs.com/trusted-publishers
 
@@ -176,7 +176,7 @@ jobs:
           # blanks NODE_AUTH_TOKEN so npm uses Trusted Publishing + provenance.
           # NPM_LEGACY_TOKEN authenticates the transitional @midnight-ntwrk
           # alias publish only; the primary stays OIDC-only.
-          NPM_LEGACY_TOKEN: ${{ secrets.MIDNIGHTCI_NPM_TOKEN }}
+          NPM_LEGACY_TOKEN: ${{ secrets.MIDNIGHTCI_NPMJS_TOKEN }}
 
   canary:
     name: Canary (snapshot publish)
@@ -223,7 +223,7 @@ jobs:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
           # Authenticates the transitional @midnight-ntwrk alias publish; the
           # primary @midnightntwrk publish stays OIDC-only (see release job).
-          NPM_LEGACY_TOKEN: ${{ secrets.MIDNIGHTCI_NPM_TOKEN }}
+          NPM_LEGACY_TOKEN: ${{ secrets.MIDNIGHTCI_NPMJS_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -334,4 +334,4 @@ jobs:
           # to create the package names; the @midnight-ntwrk alias uses the
           # legacy token as usual. Both are token publishes here — no OIDC.
           NPM_PRIMARY_TOKEN: ${{ secrets.MIDNIGHTCI_NPMJS_TOKEN }}
-          NPM_LEGACY_TOKEN: ${{ secrets.MIDNIGHTCI_NPM_TOKEN }}
+          NPM_LEGACY_TOKEN: ${{ secrets.MIDNIGHTCI_NPMJS_TOKEN }}
