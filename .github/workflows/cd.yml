@@ -52,7 +52,7 @@ jobs:
 
       - name: Configure yarn (install-time auth for GH Packages)
         run: |
-          # Upstream @midnight-ntwrk deps (ledger-v8, wallet-api, zkir-v2, etc.)
+          # Upstream @midnight-ntwrk deps (ledger-v8, zkir-v2, etc.)
           # still live on GH Packages, so install needs that token.
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
