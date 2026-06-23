@@ -130,10 +130,10 @@ export const UnshieldedUpdateSchema = Schema.transform(
   {
     strict: true,
     decode: (wire) => {
-      const isSystemTransaction = wire.transaction.type === 'SystemTransaction';
+      const isStatusImplicitlySuccess = ['SystemTransaction', 'BridgeClaimTransaction'].includes(wire.transaction.type);
       return {
         ...wire,
-        status: isSystemTransaction ? 'SUCCESS' : wire.transaction.transactionResult!.status,
+        status: isStatusImplicitlySuccess ? 'SUCCESS' : wire.transaction.transactionResult!.status,
       };
     },
     encode: ({ status: _status, ...rest }) => rest,
