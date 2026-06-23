@@ -68,9 +68,9 @@
   },
   "devDependencies": {
     "@midnightntwrk/wallet-sdk-utilities": "workspace:^",
-    "rimraf": "^6.1.3",
-    "testcontainers": "^11.12.0",
-    "typescript": "^5.9.3",
+    "rimraf": "6.1.3",
+    "testcontainers": "11.14.0",
+    "typescript": "5.9.3",
     "vitest": "4.1.8"
   },
   "scripts": {
