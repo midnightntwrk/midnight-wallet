@@ -79,7 +79,7 @@ export const UnshieldedTransactionSchema = Schema.Data(
   Schema.Struct({
     id: Schema.Number,
     hash: Schema.String,
-    type: Schema.Literal('RegularTransaction', 'SystemTransaction'),
+    type: Schema.Literal('RegularTransaction', 'SystemTransaction', 'BridgeClaimTransaction'),
     protocolVersion: Schema.Number,
     identifiers: Schema.optional(Schema.Array(Schema.String)),
     block: Schema.Struct({
