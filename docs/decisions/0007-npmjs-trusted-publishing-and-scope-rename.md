@@ -38,8 +38,8 @@ publish time. Both scopes publish via OIDC + provenance — there are no long-li
   - repo: `<owner>/<this-repo>`
   - workflow: `.github/workflows/cd.yml`
   - environment: `npm-publish-stable` or `npm-publish-canary`
-- **Upstream dashed dependencies** (`ledger-v8`, `zkir-v2`) are not ours and
-  remain on GitHub Packages — install-time auth uses a read PAT; they stay dashed everywhere.
+- **Upstream dashed dependencies** (`ledger-v8`, `zkir-v2`) are not ours and remain on GitHub Packages — install-time
+  auth uses a read PAT; they stay dashed everywhere.
 
 ### CD topology and publishing scenarios
 
