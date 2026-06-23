@@ -52,7 +52,7 @@ jobs:
 
       - name: Configure yarn (install-time auth for GH Packages)
         run: |
-          # Upstream @midnight-ntwrk deps (ledger-v8, wallet-api, zkir-v2, etc.)
+          # Upstream @midnight-ntwrk deps (ledger-v8, zkir-v2, etc.)
           # still live on GH Packages, so install needs that token.
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
@@ -163,10 +163,6 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           scope: '@midnightntwrk'
 
-      # Node 22 LTS ships npm 10; Trusted Publishing requires npm 11.5.1+.
-      - name: Upgrade npm to a Trusted Publishing-capable version
-        run: npm install -g npm@^11.17.0
-
       - name: Enable corepack
         run: corepack enable
 
@@ -231,9 +227,6 @@ jobs:
           cache-dependency-path: 'yarn.lock'
           registry-url: 'https://registry.npmjs.org'
           scope: '@midnightntwrk'
-
-      - name: Upgrade npm to a Trusted Publishing-capable version
-        run: npm install -g npm@^11.17.0
 
       - name: Enable corepack
         run: corepack enable
