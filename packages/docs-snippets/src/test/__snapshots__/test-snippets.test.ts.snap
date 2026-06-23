@@ -281,7 +281,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           139,  42,  58, 189, 249, 113,  91, 112
         ]
       },
-      [Symbol(MidnightBech32m)]: Bech32mCodec {
+      Symbol(MidnightBech32m): Bech32mCodec {
         type: 'shield-addr',
         dataToBytes: [Function (anonymous)],
         dataFromBytes: [Function (anonymous)]
@@ -441,7 +441,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
         203, 172, 199,  91, 134, 130,   2, 151,
          93, 111,  25, 190, 175,  55,  40,  75
       ],
-      [Symbol(MidnightBech32m)]: Bech32mCodec {
+      Symbol(MidnightBech32m): Bech32mCodec {
         type: 'addr',
         dataToBytes: [Function (anonymous)],
         dataFromBytes: [Function (anonymous)]
@@ -626,7 +626,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
     publicKey: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
     address: DustAddress {
       data: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-      [Symbol(MidnightBech32m)]: Bech32mCodec {
+      Symbol(MidnightBech32m): Bech32mCodec {
         type: 'dust',
         dataToBytes: [Function (anonymous)],
         dataFromBytes: [Function (anonymous)]
@@ -877,7 +877,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           139,  42,  58, 189, 249, 113,  91, 112
         ]
       },
-      [Symbol(MidnightBech32m)]: Bech32mCodec {
+      Symbol(MidnightBech32m): Bech32mCodec {
         type: 'shield-addr',
         dataToBytes: [Function (anonymous)],
         dataFromBytes: [Function (anonymous)]
@@ -1037,7 +1037,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
         203, 172, 199,  91, 134, 130,   2, 151,
          93, 111,  25, 190, 175,  55,  40,  75
       ],
-      [Symbol(MidnightBech32m)]: Bech32mCodec {
+      Symbol(MidnightBech32m): Bech32mCodec {
         type: 'addr',
         dataToBytes: [Function (anonymous)],
         dataFromBytes: [Function (anonymous)]
@@ -1222,7 +1222,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
     publicKey: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
     address: DustAddress {
       data: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-      [Symbol(MidnightBech32m)]: Bech32mCodec {
+      Symbol(MidnightBech32m): Bech32mCodec {
         type: 'dust',
         dataToBytes: [Function (anonymous)],
         dataFromBytes: [Function (anonymous)]
