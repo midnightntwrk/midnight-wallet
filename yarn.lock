@@ -2634,10 +2634,10 @@ __metadata:
     "@midnightntwrk/wallet-sdk-utilities": "workspace:^"
     pino: "npm:^10.3.1"
     pino-pretty: "npm:^13.1.3"
-    rimraf: "npm:^6.1.3"
+    rimraf: "npm:6.1.3"
     rxjs: "npm:^7.8.2"
-    testcontainers: "npm:^11.12.0"
-    typescript: "npm:^5.9.3"
+    testcontainers: "npm:11.14.0"
+    typescript: "npm:5.9.3"
     vitest: "npm:4.1.8"
   peerDependencies:
     "@midnightntwrk/wallet-sdk-utilities": "workspace:^"
@@ -9465,7 +9465,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rimraf@npm:6.1.3, rimraf@npm:^6.1.3":
+"rimraf@npm:6.1.3":
   version: 6.1.3
   resolution: "rimraf@npm:6.1.3"
   dependencies:
@@ -10253,7 +10253,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"testcontainers@npm:11.14.0, testcontainers@npm:^11.12.0":
+"testcontainers@npm:11.14.0":
   version: 11.14.0
   resolution: "testcontainers@npm:11.14.0"
   dependencies:
@@ -10528,7 +10528,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:5.9.3, typescript@npm:^5.9.3":
+"typescript@npm:5.9.3":
   version: 5.9.3
   resolution: "typescript@npm:5.9.3"
   bin:
@@ -10538,7 +10538,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>, typescript@patch:typescript@npm%3A^5.9.3#optional!builtin<compat/typescript>":
+"typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>":
   version: 5.9.3
   resolution: "typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"
   bin:
