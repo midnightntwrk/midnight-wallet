@@ -32,15 +32,13 @@
     "@graphql-typed-document-node/core": "^3.2.0",
     "@midnightntwrk/wallet-sdk-utilities": "^1.2.0",
     "effect": "^3.19.19",
-    "graphql": "^16.13.0",
+    "graphql": "^17.0.0",
     "graphql-http": "^1.22.4",
     "graphql-ws": "^6.0.7"
   },
   "devDependencies": {
     "@graphql-codegen/cli": "7.1.2",
-    "@graphql-codegen/client-preset": "6.0.1",
-    "@graphql-codegen/typescript": "6.0.2",
-    "@graphql-codegen/typescript-operations": "6.0.3"
+    "@graphql-codegen/client-preset": "6.0.1"
   },
   "scripts": {
     "gql:codegen": "graphql-codegen --clean --config codegen.ts",
