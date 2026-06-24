@@ -209,135 +209,22 @@ jobs:
           report_paths: |
             **/test-report*.xml
 
-  discover-integration:
-    name: Discover Integration Test Files
-    needs: [test-unit]
-    runs-on: ubuntu-latest
-    outputs:
-      files: ${{ steps.find.outputs.files }}
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - name: Find integration test files
-        id: find
-        # Emit a JSON array of every integration test file, excluding dist and the
-        # e2e-tests package. Each file becomes its own matrix job (own runner + own
-        # Docker stack), so wall-clock is the slowest single file, not the sum —
-        # and it stays the same no matter how files are distributed across packages.
-        run: |
-          files=$(find packages -name '*.integration.test.ts' \
-                    -not -path '*/dist/*' -not -path 'packages/e2e-tests/*' \
-                  | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "Discovered integration files: $files"
-          echo "files=$files" >> "$GITHUB_OUTPUT"
-
-  test-integration:
-    name: 'Integration Tests: ${{ matrix.test-file }}'
-    needs: [discover-integration]
-    runs-on: ubuntu-latest-8-core-x64
-    strategy:
-      # A failing file must not cancel the rest; each file is fully isolated.
-      fail-fast: false
-      # Each file runs on its own runner with its own Docker stack, so this is a
-      # speed/cost knob, not a contention risk. Set to 1 for strictly serial.
-      max-parallel: 6
-      matrix:
-        test-file: ${{ fromJson(needs.discover-integration.outputs.files) }}
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        id: setup-node
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'yarn'
-          cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
-
-      - name: Enable corepack
-        run: corepack enable
-
-      - name: Check tool versions
-        run: |
-          node --version
-          corepack --version
-          yarn --version
-
-      - name: Log in to GitHub Container registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
-        with:
-          registry: 'https://ghcr.io'
-          username: ${{ env.MIDNIGHT_GH_USER }}
-          password: ${{ env.MIDNIGHT_GH_TOKEN }}
-
-      - name: Configure yarn
-        run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
-
-      - name: Install dependencies
-        run: yarn install --immutable
-
-      - name: Restore turbo cache
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
-          restore-keys: |
-            turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: build-artifacts-${{ github.run_id }}
-          path: .
-
-      - name: Pre-pull Docker images
-        run: docker compose -f infra/compose/docker-compose-dynamic.yml pull
-
-      # Run exactly the one integration file, in its own package (correct cwd via turbo --filter).
-      - name: Run integration test file
-        env:
-          WALLET_TEST_FILE: ${{ matrix.test-file }}
-        run: |
-          pkg_dir="$(echo "$WALLET_TEST_FILE" | cut -d/ -f1-2)"
-          base="$(basename "$WALLET_TEST_FILE")"
-          echo "Running ${base} in ${pkg_dir}"
-          yarn turbo run test:integration --filter="./${pkg_dir}" -- "${base}"
-
-      - name: Publish Integration Test Report
-        uses: mikepenz/action-junit-report@d9f48fc87bc235f7e214acf696ca5abc0a986f16 # v6
-        if: success() || failure()
-        with:
-          check_name: 'Integration Tests: ${{ matrix.test-file }}'
-          report_paths: |
-            **/test-report*.xml
-
-  # Single aggregate gate over the whole integration matrix. Gives one
-  # "Integration Tests" status check (good for branch protection and a clean
-  # summary line) while the per-package "Integration Tests: <pkg>" checks remain
-  # for detail. `if: always()` so it still reports when a package fails;
-  # needs.*.result is "success" only if every matrix job succeeded.
-  integration-tests:
+  # The per-file integration matrix lives in a reusable workflow and is invoked
+  # here as a single job. GitHub nests the matrix jobs under this one caller in
+  # the checks UI (many parallel runners, one tidy collapsible check), and this
+  # job's status is the aggregate gate — green only if every file passed.
+  # secrets: inherit passes APP_INFRA_SECRET and the GH tokens to the called workflow.
+  integration:
     name: Integration Tests
-    needs: [test-integration]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check integration matrix result
-        run: |
-          result='${{ needs.test-integration.result }}'
-          echo "Integration matrix result: ${result}"
-          if [ "${result}" != "success" ]; then
-            echo "::error::One or more integration test packages did not pass."
-            exit 1
-          fi
-          echo "All integration test packages passed."
+    needs: [test-unit]
+    uses: ./.github/workflows/integration.yml
+    secrets: inherit
 
   e2e-smoke:
     name: Smoke E2E
     # Gate e2e behind integration: if integration is broken there's no point
-    # spending an e2e runner. Pipeline is unit → discover → integration → e2e.
-    needs: [integration-tests]
+    # spending an e2e runner. Pipeline is unit → integration → e2e.
+    needs: [integration]
     runs-on: ubuntu-latest-8-core-x64
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -401,7 +288,7 @@ jobs:
   build-publish:
     name: Build for Publishing
     # The aggregate gate covers the whole integration matrix; e2e runs after it.
-    needs: [integration-tests, e2e-smoke]
+    needs: [integration, e2e-smoke]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

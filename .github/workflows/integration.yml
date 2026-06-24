@@ -1,0 +1,122 @@
+name: Integration
+
+# Reusable workflow: discovers every *.integration.test.ts file and runs each
+# as its own matrix job (own runner + own Docker stack). It is called as a single
+# job from ci.yml (`uses: ./.github/workflows/integration.yml`), so GitHub nests
+# all the per-file matrix jobs under that one caller job in the checks UI — many
+# parallel runners, one tidy collapsible check. The caller job's status is the
+# aggregate gate: green only if every file passed.
+on:
+  workflow_call:
+
+env:
+  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
+  NETWORK: undeployed
+  DEPLOYMENT: local
+  APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
+
+permissions: {}
+
+jobs:
+  discover-integration:
+    name: Discover Integration Test Files
+    runs-on: ubuntu-latest
+    outputs:
+      files: ${{ steps.find.outputs.files }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Find integration test files
+        id: find
+        # Emit a JSON array of every integration test file, excluding dist and the
+        # e2e-tests package. Each file becomes its own matrix job (own runner + own
+        # Docker stack), so wall-clock is the slowest single file, not the sum —
+        # and it stays the same no matter how files are distributed across packages.
+        run: |
+          files=$(find packages -name '*.integration.test.ts' \
+                    -not -path '*/dist/*' -not -path 'packages/e2e-tests/*' \
+                  | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "Discovered integration files: $files"
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+
+  test-integration:
+    name: 'Integration Tests: ${{ matrix.test-file }}'
+    needs: [discover-integration]
+    runs-on: ubuntu-latest-8-core-x64
+    strategy:
+      # A failing file must not cancel the rest; each file is fully isolated.
+      fail-fast: false
+      # Each file runs on its own runner with its own Docker stack, so this is a
+      # speed/cost knob, not a contention risk. Set to 1 for strictly serial.
+      max-parallel: 6
+      matrix:
+        test-file: ${{ fromJson(needs.discover-integration.outputs.files) }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        id: setup-node
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
+
+      - name: Log in to GitHub Container registry
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          registry: 'https://ghcr.io'
+          username: ${{ env.MIDNIGHT_GH_USER }}
+          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Restore turbo cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: build-artifacts-${{ github.run_id }}
+          path: .
+
+      - name: Pre-pull Docker images
+        run: docker compose -f infra/compose/docker-compose-dynamic.yml pull
+
+      # Run exactly the one integration file, in its own package (correct cwd via turbo --filter).
+      - name: Run integration test file
+        env:
+          WALLET_TEST_FILE: ${{ matrix.test-file }}
+        run: |
+          pkg_dir="$(echo "$WALLET_TEST_FILE" | cut -d/ -f1-2)"
+          base="$(basename "$WALLET_TEST_FILE")"
+          echo "Running ${base} in ${pkg_dir}"
+          yarn turbo run test:integration --filter="./${pkg_dir}" -- "${base}"
+
+      - name: Publish Integration Test Report
+        uses: mikepenz/action-junit-report@d9f48fc87bc235f7e214acf696ca5abc0a986f16 # v6
+        if: success() || failure()
+        with:
+          check_name: 'Integration Tests: ${{ matrix.test-file }}'
+          report_paths: |
+            **/test-report*.xml
