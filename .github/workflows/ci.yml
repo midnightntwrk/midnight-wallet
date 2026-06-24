@@ -295,10 +295,30 @@ jobs:
         run: |
           yarn dlx turbo test-undeployed -- -t @smoke
 
+  # Single aggregate gate over all test stages. Produces the "Tests" status check
+  # that branch protection requires (the old combined job was also named "Tests"),
+  # and stays stable as integration files come and go. `if: always()` so it reports
+  # a definitive pass/fail even when a stage fails.
+  tests:
+    name: Tests
+    needs: [test-unit, integration, e2e-smoke]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate test results
+        run: |
+          echo "unit=${{ needs.test-unit.result }} integration=${{ needs.integration.result }} e2e=${{ needs.e2e-smoke.result }}"
+          if [ "${{ needs.test-unit.result }}" != "success" ] || \
+             [ "${{ needs.integration.result }}" != "success" ] || \
+             [ "${{ needs.e2e-smoke.result }}" != "success" ]; then
+            echo "::error::One or more test stages did not pass."
+            exit 1
+          fi
+          echo "All test stages passed."
+
   build-publish:
     name: Build for Publishing
-    # The aggregate gate covers the whole integration matrix; e2e runs after it.
-    needs: [test-unit, integration, e2e-smoke]
+    needs: [tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
