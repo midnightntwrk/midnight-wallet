@@ -11,8 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
-import type * as ledger from '@midnight-ntwrk/ledger-v9';
-import { type LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import type * as ledger from '@midnightntwrk/ledger-v9';
+import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 export const WalletError = {
   other(err: unknown): WalletError {

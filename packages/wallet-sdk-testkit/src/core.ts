@@ -12,7 +12,7 @@
 // limitations under the License.
 //
 // Vitest-free harness: types, environment provisioning, wallet bootstrapping, seeds, network
-// helpers, and logging. Import from `@midnight-ntwrk/wallet-sdk-testkit/core` in non-test contexts
+// helpers, and logging. Import from `@midnightntwrk/wallet-sdk-testkit/core` in non-test contexts
 // (e.g. standalone diagnostic scripts) to avoid transitively loading `vitest`, which the root
 // entry's assertion / sync-waiter / suite-glue helpers require.
 export * from './types.js';

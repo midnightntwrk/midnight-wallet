@@ -10,10 +10,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { describe, expect, it } from 'vitest';
 import {
   chooseCoin,

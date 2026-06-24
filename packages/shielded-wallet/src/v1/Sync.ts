@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { Chunk, Duration, Effect, Either, ParseResult, pipe, Schedule, Schema, type Scope, Stream } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import {
@@ -19,13 +19,13 @@ import {
   type SimulatorState,
   getLastBlock,
   getBlockEventsFrom,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
-import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
-import { ConnectionHelper, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { ZswapEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
+import { ConnectionHelper, WsSubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, type WalletError } from './WalletError.js';
-import { WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
-import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;

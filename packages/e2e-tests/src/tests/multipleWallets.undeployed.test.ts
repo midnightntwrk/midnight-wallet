@@ -10,20 +10,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { firstValueFrom } from 'rxjs';
 import { logger } from './logger.js';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import { getShieldedSeed } from './utils.js';
-import { ShieldedWallet, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ShieldedWallet, type ShieldedWalletClass } from '@midnightntwrk/wallet-sdk-shielded';
+import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,
   PublicKey,
   type UnshieldedKeystore,
   UnshieldedWallet,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { WalletFacade, WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { WalletFacade, WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import { DustWallet } from '../../../dust-wallet/dist/DustWallet.js';
 
 /** Syncing tests */

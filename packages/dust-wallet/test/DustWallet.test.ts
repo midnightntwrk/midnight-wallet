@@ -20,13 +20,13 @@ import {
   Transaction,
   UnshieldedOffer,
   type UserAddress,
-} from '@midnight-ntwrk/ledger-v9';
-import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
-import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+} from '@midnightntwrk/ledger-v9';
+import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { makeSimulatorProvingServiceEffect } from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { beforeEach, describe, it } from '@vitest/runner';
 import { Effect, Scope, Stream, SubscriptionRef } from 'effect';
-import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
+import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 
 import { expect, vi } from 'vitest';
 import {
@@ -43,13 +43,13 @@ import {
   getCurrentBlockNumber,
   getLastBlock,
   getLastBlockResults,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
+} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { makeSimulatorSyncCapability, makeSimulatorSyncService, type SimulatorSyncUpdate } from '../src/v1/Sync.js';
 import {
   DustTransactionHistoryEntrySchema,
   makeSimulatorTransactionHistoryService,
 } from '../src/v1/TransactionHistory.js';
-import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { createUnshieldedKeystore, type UnshieldedKeystore } from './UnshieldedKeyStore.js';
 import { getDustSeed, sumUtxos } from './utils.js';
 

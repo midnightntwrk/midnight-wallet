@@ -1,6 +1,6 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-facade",
-  "version": "4.0.1",
+  "name": "@midnightntwrk/wallet-sdk-facade",
+  "version": "4.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -8,14 +8,16 @@
   "author": "Midnight Foundation",
   "license": "Apache-2.0",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "files": [
     "dist/"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
+    "url": "git+https://github.com/midnightntwrk/midnight-wallet.git",
+    "directory": "packages/facade"
   },
   "exports": {
     ".": {
@@ -24,19 +26,20 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/ledger-v9": "0.1.0-alpha.1",
-    "@midnight-ntwrk/wallet-sdk-abstractions": "^2.1.0",
-    "@midnight-ntwrk/wallet-sdk-address-format": "^3.1.2",
-    "@midnight-ntwrk/wallet-sdk-capabilities": "^3.3.1",
-    "@midnight-ntwrk/wallet-sdk-dust-wallet": "^4.1.0",
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "^1.2.2",
-    "@midnight-ntwrk/wallet-sdk-shielded": "^3.0.1",
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "^3.1.0",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.2",
+    "@midnightntwrk/wallet-sdk-abstractions": "^2.1.0",
+    "@midnightntwrk/wallet-sdk-address-format": "^3.1.2",
+    "@midnightntwrk/wallet-sdk-capabilities": "^3.3.1",
+    "@midnightntwrk/wallet-sdk-dust-wallet": "^4.2.0",
+    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.3",
+    "@midnightntwrk/wallet-sdk-shielded": "^3.0.2",
+    "@midnightntwrk/wallet-sdk-unshielded-wallet": "^3.1.0",
+    "effect": "^3.19.19",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@midnight-ntwrk/wallet-sdk-hd": "^3.0.2",
-    "@midnight-ntwrk/wallet-sdk-utilities": "^1.2.0"
+    "@midnightntwrk/wallet-sdk-hd": "^3.0.3",
+    "@midnightntwrk/wallet-sdk-utilities": "^1.2.0"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",

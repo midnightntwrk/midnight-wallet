@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type BaseV1Configuration,
   type DefaultV1Configuration,
@@ -20,7 +20,7 @@ import {
   CoreWallet,
   type UnboundTransaction,
 } from './v1/index.js';
-import type * as ledger from '@midnight-ntwrk/ledger-v9';
+import type * as ledger from '@midnightntwrk/ledger-v9';
 import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type SerializationCapability } from './v1/Serialization.js';
@@ -35,11 +35,11 @@ import {
 } from './v1/Transacting.js';
 import { type WalletSyncUpdate } from './v1/SyncSchema.js';
 import { type UtxoWithMeta } from './v1/UnshieldedState.js';
-import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
+import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import { type PublicKey } from './KeyStore.js';
 import { type SyncProgress } from './v1/SyncProgress.js';
-import { type UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 
 export type UnshieldedWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, TSerialized>;

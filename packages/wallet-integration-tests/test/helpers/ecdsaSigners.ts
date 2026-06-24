@@ -17,7 +17,7 @@
 // for the wallet's verifying key" — and the orchestration semantics around it
 // (threshold, timeout, availability, auth). The cryptographic correctness of a
 // real MPC/HSM product is explicitly out of scope.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha2';
 import { randomBytes } from 'node:crypto';

@@ -3,10 +3,10 @@
 // Provenance for ecdsaVectors.json. Values come from the real ledger-v9 +
 // wallet-sdk-hd pipeline and are cross-checked against the @noble/curves oracle.
 import { writeFileSync } from 'node:fs';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
+import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { secp256k1, schnorr } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha2';
 

@@ -10,11 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { makeSimulatorProvingServiceEffect } from '../provingService.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 
 const getNonDustImbalance = (imbalances: Map<ledger.TokenType, bigint>, rawTokenType: ledger.RawTokenType): bigint => {
   const [, value] = Array.from(imbalances.entries()).find(([t, value]) =>

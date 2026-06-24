@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { type Role, type AccountKey, HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { type Role, type AccountKey, HDWallet, Roles } from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 
 function deriveRoleKey(accountKey: AccountKey, role: Role, addressIndex: number = 0): Buffer {
@@ -45,7 +45,7 @@ function deriveAllKeys(seed: Uint8Array) {
   };
 }
 
-const seed = Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'); // or generateRandomSeed() from @midnight-ntwrk/wallet-sdk-hd
+const seed = Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'); // or generateRandomSeed() from @midnightntwrk/wallet-sdk-hd
 const derivedKeys = deriveAllKeys(seed);
 seed.fill(0);
 

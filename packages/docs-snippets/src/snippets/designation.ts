@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // #region setup
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';
-import { generateRandomSeed } from '@midnight-ntwrk/wallet-sdk';
+import { generateRandomSeed } from '@midnightntwrk/wallet-sdk';
 
 const sender = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),

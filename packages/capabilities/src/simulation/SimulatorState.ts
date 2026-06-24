@@ -31,9 +31,9 @@ import {
   type ZswapSecretKeys,
   type UserAddress,
   type SignatureVerifyingKey,
-} from '@midnight-ntwrk/ledger-v9';
-import { DateOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+} from '@midnightntwrk/ledger-v9';
+import { DateOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 
 // =============================================================================
 // Types

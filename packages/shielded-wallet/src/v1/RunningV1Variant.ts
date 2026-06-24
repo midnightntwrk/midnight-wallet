@@ -10,23 +10,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import type * as ledger from '@midnight-ntwrk/ledger-v9';
+import type * as ledger from '@midnightntwrk/ledger-v9';
 import { Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type WalletRuntimeError,
   type Variant,
   StateChange,
   VersionChangeType,
-} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+} from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type SerializationCapability } from './Serialization.js';
 import { type ChangesResult, type EventsSyncUpdate, type SyncCapability, type SyncService } from './Sync.js';
 import { type TransactingCapability, type TokenTransfer, type BalancingResult } from './Transacting.js';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
-import { type CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { type CoinSelection } from '@midnightntwrk/wallet-sdk-capabilities';
 import { type CoreWallet } from './CoreWallet.js';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 

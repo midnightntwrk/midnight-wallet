@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, Option, pipe, Array as Arr } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { InsufficientFundsError, OtherWalletError, TransactingError, type WalletError } from './WalletError.js';
@@ -22,12 +22,12 @@ import {
   getBalanceRecipe,
   Imbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
-} from '@midnight-ntwrk/wallet-sdk-capabilities';
+} from '@midnightntwrk/wallet-sdk-capabilities';
 import { TransactionOps, type UnboundTransaction, type IntentOf } from './TransactionOps.js';
 import { assertSignatureMatchesKey } from '../SchemeConsistency.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
-import { type UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 
 const GUARANTEED_SEGMENT = 0;
 

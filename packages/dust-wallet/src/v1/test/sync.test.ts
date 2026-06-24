@@ -10,15 +10,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { DustSecretKey, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { DustSecretKey, LedgerParameters } from '@midnightntwrk/ledger-v9';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { DustLedgerEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import type {
   DustLedgerEventsSubscription,
   DustLedgerEventsSubscriptionVariables,
-} from '@midnight-ntwrk/wallet-sdk-indexer-client';
-import { type SubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+} from '@midnightntwrk/wallet-sdk-indexer-client';
+import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Effect, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';

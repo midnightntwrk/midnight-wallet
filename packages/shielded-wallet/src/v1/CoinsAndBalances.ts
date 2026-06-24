@@ -11,9 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type CoreWallet } from './CoreWallet.js';
-import type * as ledger from '@midnight-ntwrk/ledger-v9';
+import type * as ledger from '@midnightntwrk/ledger-v9';
 import { pipe, Array } from 'effect';
-import { RecordOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { RecordOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 export type AvailableCoin = {
   coin: ledger.QualifiedShieldedCoinInfo;

@@ -1,6 +1,6 @@
 {
   "packageManager": "yarn@4.17.0",
-  "name": "@midnight-ntwrk/wallet-sdk-monorepo",
+  "name": "@midnightntwrk/wallet-sdk-monorepo",
   "type": "module",
   "private": true,
   "workspaces": [
@@ -12,8 +12,8 @@
     "@effect/language-service": "0.86.2",
     "@eslint/compat": "2.1.0",
     "@eslint/js": "10.0.1",
-    "@tsconfig/node22": "22.0.5",
-    "@types/node": "25.9.3",
+    "@tsconfig/node24": "24.0.4",
+    "@types/node": "24.13.2",
     "@vitest/coverage-v8": "4.1.8",
     "@vitest/runner": "4.1.8",
     "@vitest/ui": "4.1.8",
@@ -73,7 +73,7 @@
     "dist": "turbo run dist",
     "watch": "turbo watch dist",
     "dist:publish": "turbo run dist:publish",
-    "changeset:publish": "yarn dist:publish && yarn changeset publish",
+    "changeset:publish": "yarn dist:publish && node scripts/publish.mjs && yarn changeset tag",
     "changeset:version": "yarn changeset version && yarn install --mode=update-lockfile",
     "changeset:check": "yarn changeset status --verbose",
     "clean": "turbo run clean"

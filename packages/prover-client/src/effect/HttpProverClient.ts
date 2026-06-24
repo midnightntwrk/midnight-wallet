@@ -18,9 +18,9 @@ import {
   HttpURL,
   type InvalidProtocolSchemeError,
   ServerError,
-} from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { BlobOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+} from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { BlobOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
+import * as ledger from '@midnightntwrk/ledger-v9';
 
 const PROVE_TX_PATH = '/prove';
 const CHECK_TX_PATH = '/check';

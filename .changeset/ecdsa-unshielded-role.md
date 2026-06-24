@@ -1,5 +1,5 @@
 ---
-'@midnight-ntwrk/wallet-sdk-hd': minor
+'@midnightntwrk/wallet-sdk-hd': minor
 ---
 
 Repurpose HD derivation role 4 (previously the unused Metadata role) as `Roles.EcdsaUnshielded`. Keys for ECDSA

@@ -23,7 +23,7 @@
 // in requires either pre-signing each segment's data and returning the cached
 // signature synchronously, or an async-capable signer pathway in the SDK. The
 // signature produced here is exactly what such a pathway must feed in.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { describe, expect, it } from 'vitest';
 import {
   FakeMpcCoordinator,

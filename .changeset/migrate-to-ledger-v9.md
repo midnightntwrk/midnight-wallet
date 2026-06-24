@@ -1,16 +1,17 @@
 ---
-'@midnight-ntwrk/wallet-sdk': major
-'@midnight-ntwrk/wallet-sdk-address-format': major
-'@midnight-ntwrk/wallet-sdk-capabilities': major
-'@midnight-ntwrk/wallet-sdk-dust-wallet': major
-'@midnight-ntwrk/wallet-sdk-facade': major
-'@midnight-ntwrk/wallet-sdk-node-client': major
-'@midnight-ntwrk/wallet-sdk-prover-client': major
-'@midnight-ntwrk/wallet-sdk-shielded': major
-'@midnight-ntwrk/wallet-sdk-unshielded-wallet': major
+'@midnightntwrk/wallet-sdk': major
+'@midnightntwrk/wallet-sdk-address-format': major
+'@midnightntwrk/wallet-sdk-capabilities': major
+'@midnightntwrk/wallet-sdk-dust-wallet': major
+'@midnightntwrk/wallet-sdk-facade': major
+'@midnightntwrk/wallet-sdk-node-client': major
+'@midnightntwrk/wallet-sdk-prover-client': major
+'@midnightntwrk/wallet-sdk-shielded': major
+'@midnightntwrk/wallet-sdk-testkit': minor
+'@midnightntwrk/wallet-sdk-unshielded-wallet': major
 ---
 
-Migrate from `@midnight-ntwrk/ledger-v8` to `@midnight-ntwrk/ledger-v9`.
+Migrate from `@midnight-ntwrk/ledger-v8` to `@midnightntwrk/ledger-v9`.
 
 Ledger v9 changes `SigningKey`, `SignatureVerifyingKey`, and `Signature` from plain strings
 (implicitly schnorr) to tagged objects (`{ tag: 'schnorr' | 'ecdsa', value }`), adding ecdsa
@@ -25,4 +26,4 @@ support alongside schnorr. Consequences for SDK users:
 - Own-input extraction (used by transaction revert) compares verifying keys structurally, and
   dust generation/registration signing wraps signatures in the v9 `SignatureEnabled` marker.
 
-Consumers must resolve `@midnight-ntwrk/ledger-v9` instead of `@midnight-ntwrk/ledger-v8`.
+Consumers must resolve `@midnightntwrk/ledger-v9` instead of `@midnight-ntwrk/ledger-v8`.

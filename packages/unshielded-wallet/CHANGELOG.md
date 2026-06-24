@@ -1,4 +1,4 @@
-# @midnight-ntwrk/wallet-sdk-unshielded-wallet
+# @midnightntwrk/wallet-sdk-unshielded-wallet
 
 ## 3.1.0
 
@@ -16,16 +16,16 @@
   `unshielded-wallet`, and `shielded-wallet` are refactored to use the new ledger 8.1.0 builder API
   (`Transaction.addIntent`, `Transaction.addZswapOffer`) instead of post-construction field mutation on
   `Transaction.fromParts(...)`. No public API changes; consumers must resolve `@midnight-ntwrk/ledger-v8` to `>=8.1.0`.
-- 25f58b4: Widen ranges for internal `@midnight-ntwrk/wallet-sdk-*` dependencies from exact versions to caret ranges so
+- 25f58b4: Widen ranges for internal `@midnightntwrk/wallet-sdk-*` dependencies from exact versions to caret ranges so
   consumers can dedupe shared sibling packages into a single installed copy.
 - Updated dependencies [6e187fe]
 - Updated dependencies [7452e96]
 - Updated dependencies [25f58b4]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.2.0
-  - @midnight-ntwrk/wallet-sdk-address-format@3.1.2
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.3.1
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.2
-  - @midnight-ntwrk/wallet-sdk-runtime@1.0.4
+  - @midnightntwrk/wallet-sdk-utilities@1.2.0
+  - @midnightntwrk/wallet-sdk-address-format@3.1.2
+  - @midnightntwrk/wallet-sdk-capabilities@3.3.1
+  - @midnightntwrk/wallet-sdk-indexer-client@1.2.2
+  - @midnightntwrk/wallet-sdk-runtime@1.0.4
 
 ## 3.0.0
 
@@ -59,12 +59,12 @@
 - Updated dependencies [c1ae369]
 - Updated dependencies [0db3290]
 - Updated dependencies [7f82432]
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.3.0
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.1
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.1.0
-  - @midnight-ntwrk/wallet-sdk-address-format@3.1.1
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.1
-  - @midnight-ntwrk/wallet-sdk-runtime@1.0.3
+  - @midnightntwrk/wallet-sdk-capabilities@3.3.0
+  - @midnightntwrk/wallet-sdk-indexer-client@1.2.1
+  - @midnightntwrk/wallet-sdk-abstractions@2.1.0
+  - @midnightntwrk/wallet-sdk-address-format@3.1.1
+  - @midnightntwrk/wallet-sdk-utilities@1.1.1
+  - @midnightntwrk/wallet-sdk-runtime@1.0.3
 
 ## 2.1.0
 
@@ -77,11 +77,11 @@
 - Updated dependencies [9d71d25]
 - Updated dependencies [ea55591]
 - Updated dependencies [aa7b1f4]
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.0
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0
-  - @midnight-ntwrk/wallet-sdk-address-format@3.1.0
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.2.0
-  - @midnight-ntwrk/wallet-sdk-runtime@1.0.2
+  - @midnightntwrk/wallet-sdk-indexer-client@1.2.0
+  - @midnightntwrk/wallet-sdk-utilities@1.1.0
+  - @midnightntwrk/wallet-sdk-address-format@3.1.0
+  - @midnightntwrk/wallet-sdk-capabilities@3.2.0
+  - @midnightntwrk/wallet-sdk-runtime@1.0.2
 
 ## 2.1.0-rc.0
 
@@ -94,18 +94,18 @@
 - Updated dependencies [9d71d25]
 - Updated dependencies [ea55591]
 - Updated dependencies [aa7b1f4]
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.0-rc.0
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0-rc.0
-  - @midnight-ntwrk/wallet-sdk-address-format@3.1.0-rc.0
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.2.0-rc.0
-  - @midnight-ntwrk/wallet-sdk-runtime@1.0.2-rc.0
+  - @midnightntwrk/wallet-sdk-indexer-client@1.2.0-rc.0
+  - @midnightntwrk/wallet-sdk-utilities@1.1.0-rc.0
+  - @midnightntwrk/wallet-sdk-address-format@3.1.0-rc.0
+  - @midnightntwrk/wallet-sdk-capabilities@3.2.0-rc.0
+  - @midnightntwrk/wallet-sdk-runtime@1.0.2-rc.0
 
 ## 2.0.0
 
 ### Major Changes
 
 - f52d01d: - expose functions for reverting pending coins (booked for a pending transaction) from a provided transaction
-  - extract submission into `@midnight-ntwrk/wallet-sdk-capabilities` package as a standalone service and integrate it
+  - extract submission into `@midnightntwrk/wallet-sdk-capabilities` package as a standalone service and integrate it
     into the `WalletFacade`
   - make `WalletFacade` revert transaction upon submission failure
   - change initialization of `WalletFacade` to a static async method `WalletFacade.init` taking a configuration object.
@@ -192,12 +192,12 @@
 - Updated dependencies [0f29d01]
 - Updated dependencies [55380e5]
 - Updated dependencies [330867f]
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.1.0
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0
-  - @midnight-ntwrk/wallet-sdk-address-format@3.0.1
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1
-  - @midnight-ntwrk/wallet-sdk-runtime@1.0.1
+  - @midnightntwrk/wallet-sdk-capabilities@3.1.0
+  - @midnightntwrk/wallet-sdk-abstractions@2.0.0
+  - @midnightntwrk/wallet-sdk-indexer-client@1.1.0
+  - @midnightntwrk/wallet-sdk-address-format@3.0.1
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1
+  - @midnightntwrk/wallet-sdk-runtime@1.0.1
 
 ## 2.0.0-rc.4
 
@@ -207,15 +207,15 @@
   in all wallet packages. The value is forwarded to the underlying `graphql-ws` client and defaults to `15_000` ms when
   not provided.
 - Updated dependencies [dd004db]
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0-rc.4
+  - @midnightntwrk/wallet-sdk-indexer-client@1.1.0-rc.4
 
 ## 2.0.0-rc.3
 
 ### Patch Changes
 
 - Updated dependencies [55380e5]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1-rc.1
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0-rc.3
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1-rc.1
+  - @midnightntwrk/wallet-sdk-indexer-client@1.1.0-rc.3
 
 ## 2.0.0-rc.2
 
@@ -242,9 +242,9 @@
     (superseded by the shared `SyncProgress`)
 - Updated dependencies [d3422bc]
 - Updated dependencies [0f29d01]
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.1.0-rc.2
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.1
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0-rc.2
+  - @midnightntwrk/wallet-sdk-capabilities@3.1.0-rc.2
+  - @midnightntwrk/wallet-sdk-abstractions@2.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-indexer-client@1.1.0-rc.2
 
 ## 2.0.0-rc.1
 
@@ -252,17 +252,17 @@
 
 - Updated dependencies [3843720]
 - Updated dependencies [330867f]
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.0
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1-rc.0
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0-rc.1
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.1.0-rc.1
+  - @midnightntwrk/wallet-sdk-abstractions@2.0.0-rc.0
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-indexer-client@1.1.0-rc.1
+  - @midnightntwrk/wallet-sdk-capabilities@3.1.0-rc.1
 
 ## 2.0.0-rc.0
 
 ### Major Changes
 
 - f52d01d: - expose functions for reverting pending coins (booked for a pending transaction) from a provided transaction
-  - extract submission into `@midnight-ntwrk/wallet-sdk-capabilities` package as a standalone service and integrate it
+  - extract submission into `@midnightntwrk/wallet-sdk-capabilities` package as a standalone service and integrate it
     into the `WalletFacade`
   - make `WalletFacade` revert transaction upon submission failure
   - change initialization of `WalletFacade` to a static async method `WalletFacade.init` taking a configuration object.
@@ -319,8 +319,8 @@
 
 - Updated dependencies [f52d01d]
 - Updated dependencies [f52d01d]
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.1.0-rc.0
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0-rc.0
+  - @midnightntwrk/wallet-sdk-capabilities@3.1.0-rc.0
+  - @midnightntwrk/wallet-sdk-indexer-client@1.1.0-rc.0
 
 ## 1.0.0
 
@@ -377,12 +377,12 @@
 - Updated dependencies [fb55d52]
 - Updated dependencies [fb55d52]
 - Updated dependencies [b9865cf]
-  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0
-  - @midnight-ntwrk/wallet-sdk-hd@3.0.0
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0
+  - @midnightntwrk/wallet-sdk-address-format@3.0.0
+  - @midnightntwrk/wallet-sdk-capabilities@3.0.0
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0
+  - @midnightntwrk/wallet-sdk-hd@3.0.0
+  - @midnightntwrk/wallet-sdk-indexer-client@1.0.0
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0
 
 ## 1.0.0-beta.19
 
@@ -412,10 +412,10 @@
 
 - 446331c: feat: adds tx revert option to unshielded wallet
 - Updated dependencies [f7aac06]
-  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.12
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.12
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.11
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.17
+  - @midnightntwrk/wallet-sdk-address-format@3.0.0-beta.12
+  - @midnightntwrk/wallet-sdk-capabilities@3.0.0-beta.12
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.11
+  - @midnightntwrk/wallet-sdk-indexer-client@1.0.0-beta.17
 
 ## 1.0.0-beta.18
 
@@ -430,10 +430,10 @@
 
 - 8b8d708: chore: update ledger to version 7.0.0-rc.1
 - Updated dependencies [8b8d708]
-  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.11
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.11
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.10
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.16
+  - @midnightntwrk/wallet-sdk-address-format@3.0.0-beta.11
+  - @midnightntwrk/wallet-sdk-capabilities@3.0.0-beta.11
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.10
+  - @midnightntwrk/wallet-sdk-indexer-client@1.0.0-beta.16
 
 ## 1.0.0-beta.16
 
@@ -444,12 +444,12 @@
 - Updated dependencies [94a39ef]
 - Updated dependencies [dae514d]
 - Updated dependencies [bcef7d8]
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.15
-  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.10
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.10
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.9
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.10
-  - @midnight-ntwrk/wallet-sdk-hd@3.0.0-beta.8
+  - @midnightntwrk/wallet-sdk-indexer-client@1.0.0-beta.15
+  - @midnightntwrk/wallet-sdk-address-format@3.0.0-beta.10
+  - @midnightntwrk/wallet-sdk-capabilities@3.0.0-beta.10
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.9
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.10
+  - @midnightntwrk/wallet-sdk-hd@3.0.0-beta.8
 
 ## 1.0.0-beta.15
 
@@ -458,8 +458,8 @@
 - aef8d4b: Performance improvement: Shielded and Dust wallet now send events in batches of 50 or after 10 seconds if
   total events has not reached 50
 - Updated dependencies [aef8d4b]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.8
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.14
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.8
+  - @midnightntwrk/wallet-sdk-indexer-client@1.0.0-beta.14
 
 ## 1.0.0-beta.14
 
@@ -468,7 +468,7 @@
 - 283ff55: fix: unshielded state update bug
 - b9865cf: feat: rewrite unshielded wallet runtime
 - Updated dependencies [b9865cf]
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.13
+  - @midnightntwrk/wallet-sdk-indexer-client@1.0.0-beta.13
 
 ## 1.0.0-beta.13
 
@@ -477,9 +477,9 @@
 - 3f14055: chore: bump ledger to version 6.1.0-alpha.6
 - Updated dependencies [3f14055]
 - Updated dependencies [2c4a115]
-  - @midnight-ntwrk/wallet-sdk-unshielded-state@1.0.0-beta.11
-  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.9
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.9
+  - @midnightntwrk/wallet-sdk-unshielded-state@1.0.0-beta.11
+  - @midnightntwrk/wallet-sdk-address-format@3.0.0-beta.9
+  - @midnightntwrk/wallet-sdk-capabilities@3.0.0-beta.9
 
 ## 1.0.0-beta.12
 
@@ -487,11 +487,11 @@
 
 - Updated dependencies [fb55d52]
 - Updated dependencies [a06ccf3]
-  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.8
-  - @midnight-ntwrk/wallet-sdk-hd@3.0.0-beta.7
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.9
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.8
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.12
+  - @midnightntwrk/wallet-sdk-address-format@3.0.0-beta.8
+  - @midnightntwrk/wallet-sdk-hd@3.0.0-beta.7
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.9
+  - @midnightntwrk/wallet-sdk-capabilities@3.0.0-beta.8
+  - @midnightntwrk/wallet-sdk-indexer-client@1.0.0-beta.12
 
 ## 1.0.0-beta.11
 
@@ -501,12 +501,12 @@
 - Updated dependencies [976628a]
 - Updated dependencies [1db4280]
 - Updated dependencies [646c8df]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.7
-  - @midnight-ntwrk/wallet-sdk-unshielded-state@1.0.0-beta.10
-  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.7
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.11
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.8
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.7
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.7
+  - @midnightntwrk/wallet-sdk-unshielded-state@1.0.0-beta.10
+  - @midnightntwrk/wallet-sdk-address-format@3.0.0-beta.7
+  - @midnightntwrk/wallet-sdk-indexer-client@1.0.0-beta.11
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.8
+  - @midnightntwrk/wallet-sdk-capabilities@3.0.0-beta.7
 
 ## 1.0.0-beta.10
 
@@ -514,13 +514,13 @@
 
 - 2a0d132: chore: force re-release after workspace failure
 - Updated dependencies [2a0d132]
-  - @midnight-ntwrk/wallet-sdk-unshielded-state@1.0.0-beta.9
-  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.6
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.10
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.7
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.6
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.6
-  - @midnight-ntwrk/wallet-sdk-hd@3.0.0-beta.6
+  - @midnightntwrk/wallet-sdk-unshielded-state@1.0.0-beta.9
+  - @midnightntwrk/wallet-sdk-address-format@3.0.0-beta.6
+  - @midnightntwrk/wallet-sdk-indexer-client@1.0.0-beta.10
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.7
+  - @midnightntwrk/wallet-sdk-capabilities@3.0.0-beta.6
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.6
+  - @midnightntwrk/wallet-sdk-hd@3.0.0-beta.6
 
 ## 1.0.0-beta.9
 
@@ -528,10 +528,10 @@
 
 - ae22baf: chore: initialize baseline release after introducing Changesets
 - Updated dependencies [ae22baf]
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.6
-  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.5
-  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.5
-  - @midnight-ntwrk/wallet-sdk-hd@3.0.0-beta.5
-  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.9
-  - @midnight-ntwrk/wallet-sdk-unshielded-state@1.0.0-beta.8
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.5
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.6
+  - @midnightntwrk/wallet-sdk-address-format@3.0.0-beta.5
+  - @midnightntwrk/wallet-sdk-capabilities@3.0.0-beta.5
+  - @midnightntwrk/wallet-sdk-hd@3.0.0-beta.5
+  - @midnightntwrk/wallet-sdk-indexer-client@1.0.0-beta.9
+  - @midnightntwrk/wallet-sdk-unshielded-state@1.0.0-beta.8
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.5

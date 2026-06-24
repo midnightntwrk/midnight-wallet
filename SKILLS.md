@@ -43,10 +43,10 @@ Run tests for a specific package or all packages.
 yarn test
 
 # Specific package
-yarn test --filter=@midnight-ntwrk/wallet-sdk-{package}
+yarn test --filter=@midnightntwrk/wallet-sdk-{package}
 
 # Specific file
-yarn test --filter=@midnight-ntwrk/wallet-sdk-{package} -- test/{file}
+yarn test --filter=@midnightntwrk/wallet-sdk-{package} -- test/{file}
 ```
 
 ## /build
@@ -63,7 +63,7 @@ Build packages.
 ```bash
 yarn dist
 # or
-yarn dist --filter=@midnight-ntwrk/wallet-sdk-{package}
+yarn dist --filter=@midnightntwrk/wallet-sdk-{package}
 ```
 
 ## /verify

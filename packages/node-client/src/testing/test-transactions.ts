@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type Error, FileSystem } from '@effect/platform';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
-import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
+import { HttpProverClient, ProverClient } from '@midnightntwrk/wallet-sdk-prover-client/effect';
+import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { TestContainers } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { Duration, Effect, Encoding, DateTime, ParseResult, pipe, Random, Schema, Stream, Option } from 'effect';
 import { type Scope } from 'effect/Scope';
 import { type StartedNetwork, type StartedTestContainer, Wait } from 'testcontainers';

@@ -16,10 +16,10 @@ import {
   fromProvingProvider,
   makeServerProvingServiceEffect,
   ProvingError,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
-import { HttpProverClient, WasmProver } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+} from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import { HttpProverClient, WasmProver } from '@midnightntwrk/wallet-sdk-prover-client/effect';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { Effect, Either, Schedule, Duration, type Scope, pipe } from 'effect';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';

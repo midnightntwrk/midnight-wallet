@@ -17,7 +17,7 @@ import {
   sampleRawTokenType,
   type ShieldedCoinInfo,
   shieldedToken,
-} from '@midnight-ntwrk/ledger-v9';
+} from '@midnightntwrk/ledger-v9';
 import * as fc from 'fast-check';
 import { describe, expect, test } from 'vitest';
 import {

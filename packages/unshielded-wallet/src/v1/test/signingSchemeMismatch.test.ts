@@ -16,10 +16,10 @@
 // are owned by an ECDSA key cannot be signed with a Schnorr segment, and the
 // failure surfaces as a typed SchemeMismatchError with no partially-signed
 // transaction escaping toward the network.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
+import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Array as Arr, Either, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, PublicKey, type UnshieldedKeystore } from '../../KeyStore.js';

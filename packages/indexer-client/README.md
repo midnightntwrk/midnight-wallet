@@ -1,11 +1,11 @@
-# @midnight-ntwrk/wallet-sdk-indexer-client
+# @midnightntwrk/wallet-sdk-indexer-client
 
 Client for communicating with the Midnight indexer service.
 
 ## Installation
 
 ```bash
-npm install @midnight-ntwrk/wallet-sdk-indexer-client
+npm install @midnightntwrk/wallet-sdk-indexer-client
 ```
 
 ## Overview
@@ -36,7 +36,7 @@ import {
   UnshieldedTransactions,
   ZswapEvents,
   DustLedgerEvents,
-} from '@midnight-ntwrk/wallet-sdk-indexer-client';
+} from '@midnightntwrk/wallet-sdk-indexer-client';
 
 // Subscribe to shielded transaction events
 // Subscribe to unshielded transaction events
@@ -49,7 +49,7 @@ import {
 Query blockchain data:
 
 ```typescript
-import { BlockHash } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
 
 // Query block information including:
 // - Block height
@@ -78,7 +78,7 @@ import {
   SubscriptionClient,
   HttpQueryClient,
   WsSubscriptionClient,
-} from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+} from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 ```
 
 ## License

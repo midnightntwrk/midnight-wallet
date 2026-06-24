@@ -28,8 +28,8 @@
 // encoding does not match its tag — the former MM-09 case — is rejected by assertKeyAddressConsistency
 // when the ledger key decoder fails to decode it; see serialization.test.ts.)
 
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, type PublicKey, type UnshieldedKeystore } from '../src/KeyStore.js';

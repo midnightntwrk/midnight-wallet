@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import type { Signature, SignatureVerifyingKey } from '@midnight-ntwrk/ledger-v9';
+import type { Signature, SignatureVerifyingKey } from '@midnightntwrk/ledger-v9';
 import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
 import { sha256 } from '@noble/hashes/sha2';
 
@@ -22,7 +22,7 @@ const toBytes = (hex: string): Uint8Array => Uint8Array.from(Buffer.from(hex, 'h
  * Verifying wallet-produced signatures with `@noble/curves` (a different implementation from the ledger that produced
  * them) keeps signatures from being self-attested by the library under test.
  *
- * Behaviour confirmed against `@midnight-ntwrk/ledger-v9@0.1.0-alpha.1`: the ledger signs `sha256(data)` under both
+ * Behaviour confirmed against `@midnightntwrk/ledger-v9@0.1.0-alpha.1`: the ledger signs `sha256(data)` under both
  * schemes —
  *
  * - `schnorr`: BIP-340 over secp256k1, 32-byte x-only verifying key;

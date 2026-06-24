@@ -22,9 +22,9 @@ import {
   type Signaturish,
   type Transaction,
   type Event,
-} from '@midnight-ntwrk/ledger-v9';
-import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+} from '@midnightntwrk/ledger-v9';
+import { ProtocolVersion, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
+import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Array as Arr, Option, pipe } from 'effect';
 import { type Dust, type DustWithNullifier } from './types/Dust.js';
 import { type CoinWithValue } from './CoinsAndBalances.js';

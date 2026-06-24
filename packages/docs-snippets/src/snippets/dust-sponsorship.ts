@@ -10,11 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { generateRandomSeed } from '@midnight-ntwrk/wallet-sdk';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { generateRandomSeed } from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
-import { type UnboundTransaction } from '@midnight-ntwrk/wallet-sdk/proving';
+import { type UnboundTransaction } from '@midnightntwrk/wallet-sdk/proving';
 import { aFakeProvingProvider, initWalletWithSeed } from '../utils.ts';
 
 /*

@@ -40,9 +40,9 @@
 //     that the two schemes' addresses are disjoint — not that the address
 //     self-identifies its scheme.
 import { readFileSync } from 'node:fs';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { HDWallet, type Role, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { HDWallet, type Role, Roles } from '@midnightntwrk/wallet-sdk-hd';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, type UnshieldedKeystore } from '../src/KeyStore.js';
 import { verifyWithOracle } from './ecdsaOracle.js';

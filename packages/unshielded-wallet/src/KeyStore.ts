@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { UnshieldedAddress, type MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { UnshieldedAddress, type MidnightBech32m } from '@midnightntwrk/wallet-sdk-address-format';
 import {
   addressFromKey,
   type Signature,
@@ -20,8 +20,8 @@ import {
   type SigningKey as LedgerSigningKey,
   type UserAddress,
   signatureVerifyingKey,
-} from '@midnight-ntwrk/ledger-v9';
-import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+} from '@midnightntwrk/ledger-v9';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export type UnshieldedSecretKey = {
   kind: SignatureKind;

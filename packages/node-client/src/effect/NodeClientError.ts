@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Data } from 'effect';
 import { type SubmissionEvent } from './SubmissionEvent.js';
-import { type SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export class SubmissionError extends Data.TaggedError('SubmissionError')<{
   message: string;

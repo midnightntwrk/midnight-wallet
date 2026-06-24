@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type DefaultConfiguration,
   DustWallet,
@@ -24,8 +24,8 @@ import {
   PublicKey,
   UnshieldedWallet,
   mergeWalletEntries,
-} from '@midnight-ntwrk/wallet-sdk';
-import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk/capabilities';
+} from '@midnightntwrk/wallet-sdk';
+import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk/capabilities';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
 

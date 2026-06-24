@@ -12,10 +12,10 @@
 // limitations under the License.
 import { Effect, Exit, Scope, type Types } from 'effect';
 import * as rx from 'rxjs';
-import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Variant, type VariantBuilder, type WalletLike, WalletRuntimeError } from './abstractions/index.js';
 import { type StateOf } from './abstractions/Variant.js';
-import { ObservableOps, HList, type Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { ObservableOps, HList, type Poly } from '@midnightntwrk/wallet-sdk-utilities';
 import * as Runtime from './Runtime.js';
 
 /**

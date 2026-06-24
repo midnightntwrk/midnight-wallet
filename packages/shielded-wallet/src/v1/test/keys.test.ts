@@ -11,9 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, it, expect } from 'vitest';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { makeDefaultKeysCapability } from '../Keys.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { CoreWallet } from '../CoreWallet.js';
 import * as fc from 'fast-check';
 

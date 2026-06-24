@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Either, pipe, Schema } from 'effect';
-import { type SignatureKind } from '@midnight-ntwrk/ledger-v9';
+import { type SignatureKind } from '@midnightntwrk/ledger-v9';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { assertKeyAddressConsistency } from '../SchemeConsistency.js';
 import { CoreWallet } from './CoreWallet.js';
-import { type NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { UnshieldedState } from './UnshieldedState.js';
 
 export type SerializationCapability<TWallet, TSerialized> = {

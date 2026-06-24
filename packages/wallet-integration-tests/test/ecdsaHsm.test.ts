@@ -19,7 +19,7 @@
 // `sign(payload) => ledger.Signature` plus a public key, with availability and
 // auth failures surfaced as distinct typed errors. Signatures are checked with
 // an independent @noble oracle.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { describe, expect, it } from 'vitest';
 import { FakeHsm, HsmAuthError, HsmUnavailableError, verifyEcdsaWithOracle } from './helpers/ecdsaSigners.js';
 

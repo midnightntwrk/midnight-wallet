@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import { vi } from 'vitest';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   Effect,
   Stream,
@@ -27,18 +27,18 @@ import {
   Ref,
   Number as Num,
 } from 'effect';
-import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { type SubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { describe, expect, it } from 'vitest';
-import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { ZswapEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import type {
   ZswapEventsSubscription,
   ZswapEventsSubscriptionVariables,
-} from '@midnight-ntwrk/wallet-sdk-indexer-client';
+} from '@midnightntwrk/wallet-sdk-indexer-client';
 import { makeEventsSyncService } from '../Sync.js';
 import { CoreWallet } from '../CoreWallet.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Simulator, getLastBlock, getLastBlockEvents } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Simulator, getLastBlock, getLastBlockEvents } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 
 vi.setConfig({
   testTimeout: 60_000,

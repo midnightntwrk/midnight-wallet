@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type DefaultConfiguration,
   DustWallet,
@@ -26,7 +26,7 @@ import {
   type UnshieldedKeystore,
   UnshieldedWallet,
   mergeWalletEntries,
-} from '@midnight-ntwrk/wallet-sdk';
+} from '@midnightntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
 
 const PROOF_SERVER_PORT = Number.parseInt(globalThis.process?.env?.['PROOF_SERVER_PORT'] ?? '6300', 10);

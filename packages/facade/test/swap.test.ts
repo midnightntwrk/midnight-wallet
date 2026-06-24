@@ -10,13 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { PublicKey, UnshieldedWallet, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { V1Builder } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { CustomShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { PublicKey, UnshieldedWallet, createKeystore } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import * as rx from 'rxjs';
@@ -31,7 +31,7 @@ import {
   mergeWalletEntries,
 } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils/index.js';
-import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
 

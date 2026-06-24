@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 

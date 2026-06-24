@@ -1463,7 +1463,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@graphql-codegen/typescript-operations@npm:6.0.3, @graphql-codegen/typescript-operations@npm:^6.0.3":
+"@graphql-codegen/typescript-operations@npm:^6.0.3":
   version: 6.0.3
   resolution: "@graphql-codegen/typescript-operations@npm:6.0.3"
   dependencies:
@@ -1482,7 +1482,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@graphql-codegen/typescript@npm:6.0.2, @graphql-codegen/typescript@npm:^6.0.2":
+"@graphql-codegen/typescript@npm:^6.0.2":
   version: 6.0.2
   resolution: "@graphql-codegen/typescript@npm:6.0.2"
   dependencies:
@@ -2318,94 +2318,107 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/ledger-v8@npm:^8.1.0":
-  version: 8.1.0
-  resolution: "@midnight-ntwrk/ledger-v8@npm:8.1.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fledger-v8%2F8.1.0%2Fc42ed442b6c8c79e28ca5fc13a8764f31eab2f73"
-  checksum: 10c0/12a8b58678dbed60e7280ef1b3f16b465aa93d6fd4d0e1cbbb82730db941999c4354af5ffdfd1048b770afb497792e91cac0317962815dfc7c5471e581a96c40
-  languageName: node
-  linkType: hard
-
-"@midnight-ntwrk/ledger-v9@npm:0.1.0-alpha.1":
-  version: 0.1.0-alpha.1
-  resolution: "@midnight-ntwrk/ledger-v9@npm:0.1.0-alpha.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fledger-v9%2F0.1.0-alpha.1%2Fa5533dc1678f37cdb57e586f85b5b4e885e80622"
-  checksum: 10c0/cdb12625259d827326dc1b24395e6698391299c398c8f251cbbe29a8964e523b2c70126ef85c3f76d7f2908804e446d11e63ab4d0c9502c507fba66bc8cd346d
-  languageName: node
-  linkType: hard
-
-"@midnight-ntwrk/midnight-js-network-id@npm:^3.1.0":
-  version: 3.1.0
-  resolution: "@midnight-ntwrk/midnight-js-network-id@npm:3.1.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fmidnight-js-network-id%2F3.1.0%2Faf602592a7eb0f0dc56ffbc98530dc10b65875ef"
-  checksum: 10c0/baf3e60075c2605b95d0579034bbe59ceda566ade40d61ba6cd84c26fdd12e1b7699f6566b2bad0786e1f273fc0f332424c147873fdebb7ddef46bce72a226e7
-  languageName: node
-  linkType: hard
-
-"@midnight-ntwrk/wallet-api@npm:^3.5.0":
-  version: 3.5.0
-  resolution: "@midnight-ntwrk/wallet-api@npm:3.5.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.5.0%2Fca387b2ca0ce9a7d68d7776886c938668925f196"
-  dependencies:
-    "@midnight-ntwrk/zswap": "npm:^3.0.2"
-  peerDependencies:
-    rxjs: 7.x
-  checksum: 10c0/d9f5a5f739d7acaf4f736705431ffc2318364266a02f62a9bbe9c8f792014b1dbf98e329a76734c1921e886e335aac9b0ba3e3f3e8d7f1dd73a6793f0bfb66b9
-  languageName: node
-  linkType: hard
-
-"@midnight-ntwrk/wallet-api@npm:^5.0.0":
-  version: 5.0.0
-  resolution: "@midnight-ntwrk/wallet-api@npm:5.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F5.0.0%2F3fdac91d3019d1e0e8f440a6444d9fd840f72741"
-  dependencies:
-    "@midnight-ntwrk/zswap": "npm:^4.0.0"
-  peerDependencies:
-    rxjs: 7.x
-  checksum: 10c0/879e5010e85254c41e23033fca4a5426d39ef022806c983afef6eda7d116bea37190fa8ba5b0dc125792d36b8e4c804622bc92d32734449655834a380ce35ec8
-  languageName: node
-  linkType: hard
-
 "@midnight-ntwrk/wallet-integration-tests@workspace:packages/wallet-integration-tests":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-integration-tests@workspace:packages/wallet-integration-tests"
   dependencies:
-    "@midnight-ntwrk/ledger-v9": "npm:0.1.0-alpha.1"
-    "@midnight-ntwrk/wallet-api": "npm:^5.0.0"
-    "@midnight-ntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
-    "@midnight-ntwrk/wallet-sdk-address-format": "npm:^3.1.2"
-    "@midnight-ntwrk/wallet-sdk-capabilities": "npm:^3.3.1"
-    "@midnight-ntwrk/wallet-sdk-facade": "npm:^4.0.1"
-    "@midnight-ntwrk/wallet-sdk-hd": "npm:^3.0.2"
-    "@midnight-ntwrk/wallet-sdk-prover-client": "npm:^1.2.2"
-    "@midnight-ntwrk/wallet-sdk-runtime": "npm:^1.0.4"
-    "@midnight-ntwrk/wallet-sdk-shielded": "npm:^3.0.1"
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "npm:^3.1.0"
-    "@noble/curves": "npm:^1.9.7"
-    "@noble/hashes": "npm:^1.8.0"
-    "@types/node": "npm:^25.3.0"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.2"
+    "@midnightntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
+    "@midnightntwrk/wallet-sdk-address-format": "npm:^3.1.2"
+    "@midnightntwrk/wallet-sdk-capabilities": "npm:^3.3.1"
+    "@midnightntwrk/wallet-sdk-facade": "npm:^4.1.0"
+    "@midnightntwrk/wallet-sdk-hd": "npm:^3.0.3"
+    "@midnightntwrk/wallet-sdk-prover-client": "npm:^1.2.3"
+    "@midnightntwrk/wallet-sdk-runtime": "npm:^1.0.5"
+    "@midnightntwrk/wallet-sdk-shielded": "npm:^3.0.2"
+    "@midnightntwrk/wallet-sdk-unshielded-wallet": "npm:^3.1.0"
+    "@types/node": "npm:^24.13.2"
     effect: "npm:^3.19.19"
     pure-rand: "npm:^7.0.1"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-abstractions@npm:^2.1.0, @midnight-ntwrk/wallet-sdk-abstractions@workspace:*, @midnight-ntwrk/wallet-sdk-abstractions@workspace:^, @midnight-ntwrk/wallet-sdk-abstractions@workspace:packages/abstractions":
+"@midnight-ntwrk/wallet-test-website@workspace:apps/test-website":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-abstractions@workspace:packages/abstractions"
+  resolution: "@midnight-ntwrk/wallet-test-website@workspace:apps/test-website"
+  dependencies:
+    "@midnightntwrk/wallet-sdk": "workspace:*"
+    "@types/lodash-es": "npm:4.17.12"
+    "@types/react": "npm:^19.2.14"
+    "@types/react-dom": "npm:^19.2.3"
+    buffer: "npm:^6.0.3"
+    lodash-es: "npm:^4.17.23"
+    react: "npm:^19.2.4"
+    react-dom: "npm:^19.2.4"
+    rxjs: "npm:^7.8.2"
+    vite: "npm:7.3.5"
+    vite-plugin-node-polyfills: "npm:0.28.0"
+    vite-plugin-wasm: "npm:3.6.0"
+  languageName: unknown
+  linkType: soft
+
+"@midnight-ntwrk/zkir-v2@npm:^2.1.0":
+  version: 2.1.0
+  resolution: "@midnight-ntwrk/zkir-v2@npm:2.1.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzkir-v2%2F2.1.0%2Fb3c8b9720535d7e62b86c5ff8341a13a46eb5c7e"
+  checksum: 10c0/cf139a9dc6834d5e4036af6c65a40d384a02e66c4ef14d1e948fc690be62ce1bcf79d468efb2df719ff573c1825251c9c65630f287fbc76d2026482a13b907ef
+  languageName: node
+  linkType: hard
+
+"@midnight/wallet-e2e-tests@workspace:packages/e2e-tests":
+  version: 0.0.0-use.local
+  resolution: "@midnight/wallet-e2e-tests@workspace:packages/e2e-tests"
+  dependencies:
+    "@cardano-sdk/key-management": "npm:0.29.13"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.2"
+    "@midnightntwrk/wallet-sdk-abstractions": "workspace:*"
+    "@midnightntwrk/wallet-sdk-address-format": "workspace:*"
+    "@midnightntwrk/wallet-sdk-facade": "workspace:^"
+    "@midnightntwrk/wallet-sdk-hd": "workspace:^"
+    "@midnightntwrk/wallet-sdk-shielded": "workspace:^"
+    "@midnightntwrk/wallet-sdk-testkit": "workspace:^"
+    "@midnightntwrk/wallet-sdk-unshielded-wallet": "workspace:^"
+    "@types/node": "npm:24.13.2"
+    "@vitest/ui": "npm:4.1.8"
+    eslint: "npm:10.4.1"
+    pino: "npm:10.3.1"
+    pino-pretty: "npm:13.1.3"
+    prettier: "npm:3.8.4"
+    rxjs: "npm:7.8.2"
+    testcontainers: "npm:11.14.0"
+    typescript: "npm:5.9.3"
+    vitest: "npm:4.1.8"
+  languageName: unknown
+  linkType: soft
+
+"@midnightntwrk/ledger-v9@npm:1.0.0-rc.2":
+  version: 1.0.0-rc.2
+  resolution: "@midnightntwrk/ledger-v9@npm:1.0.0-rc.2"
+  checksum: 10c0/7b0e8436074b1d8caeb8e378be2646d31c74e4ba285292e06bdec45503e765aea30f12b920dfdfc47777a14fa1b98cf2bfbe16730cc554c27e828c2f558d73ca
+  languageName: node
+  linkType: hard
+
+"@midnightntwrk/wallet-sdk-abstractions@npm:^2.1.0, @midnightntwrk/wallet-sdk-abstractions@workspace:*, @midnightntwrk/wallet-sdk-abstractions@workspace:^, @midnightntwrk/wallet-sdk-abstractions@workspace:packages/abstractions":
+  version: 0.0.0-use.local
+  resolution: "@midnightntwrk/wallet-sdk-abstractions@workspace:packages/abstractions"
   dependencies:
     effect: "npm:^3.19.19"
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-address-format@npm:^3.1.2, @midnight-ntwrk/wallet-sdk-address-format@workspace:*, @midnight-ntwrk/wallet-sdk-address-format@workspace:^, @midnight-ntwrk/wallet-sdk-address-format@workspace:packages/address-format":
+"@midnightntwrk/wallet-sdk-address-format@npm:^3.1.2, @midnightntwrk/wallet-sdk-address-format@workspace:*, @midnightntwrk/wallet-sdk-address-format@workspace:^, @midnightntwrk/wallet-sdk-address-format@workspace:packages/address-format":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-address-format@workspace:packages/address-format"
+  resolution: "@midnightntwrk/wallet-sdk-address-format@workspace:packages/address-format"
   dependencies:
-    "@midnight-ntwrk/ledger-v9": "npm:0.1.0-alpha.1"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.2"
     "@scure/base": "npm:^2.0.0"
     "@subsquid/scale-codec": "npm:^4.0.1"
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-capabilities@npm:^3.3.1, @midnight-ntwrk/wallet-sdk-capabilities@workspace:^, @midnight-ntwrk/wallet-sdk-capabilities@workspace:packages/capabilities":
+"@midnightntwrk/wallet-sdk-capabilities@npm:^3.3.1, @midnightntwrk/wallet-sdk-capabilities@workspace:^, @midnightntwrk/wallet-sdk-capabilities@workspace:packages/capabilities":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-capabilities@workspace:packages/capabilities"
+  resolution: "@midnightntwrk/wallet-sdk-capabilities@workspace:packages/capabilities"
   dependencies:
     "@effect/cluster": "npm:0.59.0"
     "@effect/experimental": "npm:0.60.0"
@@ -2414,67 +2427,68 @@ __metadata:
     "@effect/rpc": "npm:0.75.1"
     "@effect/sql": "npm:0.51.1"
     "@effect/workflow": "npm:0.18.2"
-    "@midnight-ntwrk/ledger-v9": "npm:0.1.0-alpha.1"
-    "@midnight-ntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:^1.2.2"
-    "@midnight-ntwrk/wallet-sdk-node-client": "npm:^1.1.2"
-    "@midnight-ntwrk/wallet-sdk-prover-client": "npm:^1.2.2"
-    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.2.0"
     "@midnight-ntwrk/zkir-v2": "npm:^2.1.0"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.2"
+    "@midnightntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
+    "@midnightntwrk/wallet-sdk-indexer-client": "npm:^1.2.2"
+    "@midnightntwrk/wallet-sdk-node-client": "npm:^1.1.2"
+    "@midnightntwrk/wallet-sdk-prover-client": "npm:^1.2.2"
+    "@midnightntwrk/wallet-sdk-utilities": "npm:^1.2.0"
     effect: "npm:^3.19.19"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-docs-snippets@workspace:packages/docs-snippets":
+"@midnightntwrk/wallet-sdk-docs-snippets@workspace:packages/docs-snippets":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-docs-snippets@workspace:packages/docs-snippets"
+  resolution: "@midnightntwrk/wallet-sdk-docs-snippets@workspace:packages/docs-snippets"
   dependencies:
-    "@midnight-ntwrk/wallet-sdk": "workspace:*"
+    "@midnightntwrk/wallet-sdk": "workspace:*"
     "@types/lodash-es": "npm:4.17.12"
     buffer: "npm:^6.0.3"
     lodash-es: "npm:^4.17.23"
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-dust-wallet@npm:^4.1.0, @midnight-ntwrk/wallet-sdk-dust-wallet@workspace:^, @midnight-ntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet":
+"@midnightntwrk/wallet-sdk-dust-wallet@npm:^4.2.0, @midnightntwrk/wallet-sdk-dust-wallet@workspace:^, @midnightntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet"
+  resolution: "@midnightntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet"
   dependencies:
-    "@midnight-ntwrk/ledger-v9": "npm:0.1.0-alpha.1"
-    "@midnight-ntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
-    "@midnight-ntwrk/wallet-sdk-address-format": "npm:^3.1.2"
-    "@midnight-ntwrk/wallet-sdk-capabilities": "npm:^3.3.1"
-    "@midnight-ntwrk/wallet-sdk-hd": "npm:^3.0.2"
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:^1.2.2"
-    "@midnight-ntwrk/wallet-sdk-runtime": "npm:^1.0.4"
-    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.2.0"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.2"
+    "@midnightntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
+    "@midnightntwrk/wallet-sdk-address-format": "npm:^3.1.2"
+    "@midnightntwrk/wallet-sdk-capabilities": "npm:^3.3.1"
+    "@midnightntwrk/wallet-sdk-hd": "npm:^3.0.3"
+    "@midnightntwrk/wallet-sdk-indexer-client": "npm:^1.2.3"
+    "@midnightntwrk/wallet-sdk-runtime": "npm:^1.0.5"
+    "@midnightntwrk/wallet-sdk-utilities": "npm:^1.2.0"
     effect: "npm:^3.19.19"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-facade@npm:^4.0.1, @midnight-ntwrk/wallet-sdk-facade@workspace:^, @midnight-ntwrk/wallet-sdk-facade@workspace:packages/facade":
+"@midnightntwrk/wallet-sdk-facade@npm:^4.1.0, @midnightntwrk/wallet-sdk-facade@workspace:^, @midnightntwrk/wallet-sdk-facade@workspace:packages/facade":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-facade@workspace:packages/facade"
+  resolution: "@midnightntwrk/wallet-sdk-facade@workspace:packages/facade"
   dependencies:
-    "@midnight-ntwrk/ledger-v9": "npm:0.1.0-alpha.1"
-    "@midnight-ntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
-    "@midnight-ntwrk/wallet-sdk-address-format": "npm:^3.1.2"
-    "@midnight-ntwrk/wallet-sdk-capabilities": "npm:^3.3.1"
-    "@midnight-ntwrk/wallet-sdk-dust-wallet": "npm:^4.1.0"
-    "@midnight-ntwrk/wallet-sdk-hd": "npm:^3.0.2"
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:^1.2.2"
-    "@midnight-ntwrk/wallet-sdk-shielded": "npm:^3.0.1"
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "npm:^3.1.0"
-    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.2.0"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.2"
+    "@midnightntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
+    "@midnightntwrk/wallet-sdk-address-format": "npm:^3.1.2"
+    "@midnightntwrk/wallet-sdk-capabilities": "npm:^3.3.1"
+    "@midnightntwrk/wallet-sdk-dust-wallet": "npm:^4.2.0"
+    "@midnightntwrk/wallet-sdk-hd": "npm:^3.0.3"
+    "@midnightntwrk/wallet-sdk-indexer-client": "npm:^1.2.3"
+    "@midnightntwrk/wallet-sdk-shielded": "npm:^3.0.2"
+    "@midnightntwrk/wallet-sdk-unshielded-wallet": "npm:^3.1.0"
+    "@midnightntwrk/wallet-sdk-utilities": "npm:^1.2.0"
+    effect: "npm:^3.19.19"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-hd@npm:^3.0.2, @midnight-ntwrk/wallet-sdk-hd@workspace:^, @midnight-ntwrk/wallet-sdk-hd@workspace:packages/hd":
+"@midnightntwrk/wallet-sdk-hd@npm:^3.0.2, @midnightntwrk/wallet-sdk-hd@npm:^3.0.3, @midnightntwrk/wallet-sdk-hd@workspace:^, @midnightntwrk/wallet-sdk-hd@workspace:packages/hd":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-hd@workspace:packages/hd"
+  resolution: "@midnightntwrk/wallet-sdk-hd@workspace:packages/hd"
   dependencies:
     "@ethereumjs/wallet": "npm:10.0.0"
     "@scure/bip32": "npm:^2.0.1"
@@ -2482,16 +2496,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-indexer-client@npm:^1.2.2, @midnight-ntwrk/wallet-sdk-indexer-client@workspace:^, @midnight-ntwrk/wallet-sdk-indexer-client@workspace:packages/indexer-client":
+"@midnightntwrk/wallet-sdk-indexer-client@npm:^1.2.2, @midnightntwrk/wallet-sdk-indexer-client@npm:^1.2.3, @midnightntwrk/wallet-sdk-indexer-client@workspace:^, @midnightntwrk/wallet-sdk-indexer-client@workspace:packages/indexer-client":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-indexer-client@workspace:packages/indexer-client"
+  resolution: "@midnightntwrk/wallet-sdk-indexer-client@workspace:packages/indexer-client"
   dependencies:
     "@graphql-codegen/cli": "npm:7.1.2"
     "@graphql-codegen/client-preset": "npm:6.0.1"
-    "@graphql-codegen/typescript": "npm:6.0.2"
-    "@graphql-codegen/typescript-operations": "npm:6.0.3"
     "@graphql-typed-document-node/core": "npm:^3.2.0"
-    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.2.0"
+    "@midnightntwrk/wallet-sdk-utilities": "npm:^1.2.0"
     effect: "npm:^3.19.19"
     graphql: "npm:^16.13.0"
     graphql-http: "npm:^1.22.4"
@@ -2499,16 +2511,16 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-monorepo@workspace:.":
+"@midnightntwrk/wallet-sdk-monorepo@workspace:.":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-monorepo@workspace:."
+  resolution: "@midnightntwrk/wallet-sdk-monorepo@workspace:."
   dependencies:
     "@changesets/cli": "npm:2.31.0"
     "@effect/language-service": "npm:0.86.2"
     "@eslint/compat": "npm:2.1.0"
     "@eslint/js": "npm:10.0.1"
-    "@tsconfig/node22": "npm:22.0.5"
-    "@types/node": "npm:25.9.3"
+    "@tsconfig/node24": "npm:24.0.4"
+    "@types/node": "npm:24.13.2"
     "@vitest/coverage-v8": "npm:4.1.8"
     "@vitest/runner": "npm:4.1.8"
     "@vitest/ui": "npm:4.1.8"
@@ -2530,9 +2542,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-node-client@npm:^1.1.2, @midnight-ntwrk/wallet-sdk-node-client@workspace:packages/node-client":
+"@midnightntwrk/wallet-sdk-node-client@npm:^1.1.2, @midnightntwrk/wallet-sdk-node-client@npm:^1.1.3, @midnightntwrk/wallet-sdk-node-client@workspace:packages/node-client":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-node-client@workspace:packages/node-client"
+  resolution: "@midnightntwrk/wallet-sdk-node-client@workspace:packages/node-client"
   dependencies:
     "@effect/cluster": "npm:0.59.0"
     "@effect/experimental": "npm:0.60.0"
@@ -2541,10 +2553,10 @@ __metadata:
     "@effect/rpc": "npm:0.75.1"
     "@effect/sql": "npm:0.51.1"
     "@effect/workflow": "npm:0.18.2"
-    "@midnight-ntwrk/ledger-v9": "npm:0.1.0-alpha.1"
-    "@midnight-ntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
-    "@midnight-ntwrk/wallet-sdk-prover-client": "npm:^1.2.2"
-    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.2.0"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.2"
+    "@midnightntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
+    "@midnightntwrk/wallet-sdk-prover-client": "npm:^1.2.3"
+    "@midnightntwrk/wallet-sdk-utilities": "npm:^1.2.0"
     "@polkadot/api": "npm:^16.5.4"
     "@polkadot/types": "npm:^16.5.4"
     "@polkadot/util": "npm:^14.0.1"
@@ -2555,71 +2567,71 @@ __metadata:
     tar-stream: "npm:3.2.0"
     tsx: "npm:4.22.4"
   peerDependencies:
-    "@midnight-ntwrk/ledger-v8": ^8.1.0
-    "@midnight-ntwrk/wallet-sdk-prover-client": ^1.2.2
+    "@midnightntwrk/ledger-v9": 1.0.0-rc.2
+    "@midnightntwrk/wallet-sdk-prover-client": ^1.2.3
   peerDependenciesMeta:
-    "@midnight-ntwrk/ledger-v8":
+    "@midnightntwrk/ledger-v9":
       optional: true
-    "@midnight-ntwrk/wallet-sdk-prover-client":
+    "@midnightntwrk/wallet-sdk-prover-client":
       optional: true
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-prover-client@npm:^1.2.2, @midnight-ntwrk/wallet-sdk-prover-client@workspace:packages/prover-client":
+"@midnightntwrk/wallet-sdk-prover-client@npm:^1.2.2, @midnightntwrk/wallet-sdk-prover-client@npm:^1.2.3, @midnightntwrk/wallet-sdk-prover-client@workspace:packages/prover-client":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-prover-client@workspace:packages/prover-client"
+  resolution: "@midnightntwrk/wallet-sdk-prover-client@workspace:packages/prover-client"
   dependencies:
     "@effect/platform": "npm:^0.96.0"
-    "@midnight-ntwrk/ledger-v9": "npm:0.1.0-alpha.1"
-    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.2.0"
     "@midnight-ntwrk/zkir-v2": "npm:^2.1.0"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.2"
+    "@midnightntwrk/wallet-sdk-utilities": "npm:^1.2.0"
     effect: "npm:^3.19.19"
     web-worker: "npm:^1.5.0"
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-runtime@npm:^1.0.4, @midnight-ntwrk/wallet-sdk-runtime@workspace:packages/runtime":
+"@midnightntwrk/wallet-sdk-runtime@npm:^1.0.4, @midnightntwrk/wallet-sdk-runtime@npm:^1.0.5, @midnightntwrk/wallet-sdk-runtime@workspace:packages/runtime":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-runtime@workspace:packages/runtime"
+  resolution: "@midnightntwrk/wallet-sdk-runtime@workspace:packages/runtime"
   dependencies:
-    "@midnight-ntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
-    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.2.0"
+    "@midnightntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
+    "@midnightntwrk/wallet-sdk-utilities": "npm:^1.2.0"
     effect: "npm:^3.19.19"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-shielded@npm:^3.0.1, @midnight-ntwrk/wallet-sdk-shielded@workspace:^, @midnight-ntwrk/wallet-sdk-shielded@workspace:packages/shielded-wallet":
+"@midnightntwrk/wallet-sdk-shielded@npm:^3.0.2, @midnightntwrk/wallet-sdk-shielded@workspace:^, @midnightntwrk/wallet-sdk-shielded@workspace:packages/shielded-wallet":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-shielded@workspace:packages/shielded-wallet"
+  resolution: "@midnightntwrk/wallet-sdk-shielded@workspace:packages/shielded-wallet"
   dependencies:
-    "@midnight-ntwrk/ledger-v9": "npm:0.1.0-alpha.1"
-    "@midnight-ntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
-    "@midnight-ntwrk/wallet-sdk-address-format": "npm:^3.1.2"
-    "@midnight-ntwrk/wallet-sdk-capabilities": "npm:^3.3.1"
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:^1.2.2"
-    "@midnight-ntwrk/wallet-sdk-runtime": "npm:^1.0.4"
-    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.2.0"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.2"
+    "@midnightntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
+    "@midnightntwrk/wallet-sdk-address-format": "npm:^3.1.2"
+    "@midnightntwrk/wallet-sdk-capabilities": "npm:^3.3.1"
+    "@midnightntwrk/wallet-sdk-indexer-client": "npm:^1.2.3"
+    "@midnightntwrk/wallet-sdk-runtime": "npm:^1.0.5"
+    "@midnightntwrk/wallet-sdk-utilities": "npm:^1.2.0"
     effect: "npm:^3.19.19"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-testkit@workspace:^, @midnight-ntwrk/wallet-sdk-testkit@workspace:packages/wallet-sdk-testkit":
+"@midnightntwrk/wallet-sdk-testkit@workspace:^, @midnightntwrk/wallet-sdk-testkit@workspace:packages/wallet-sdk-testkit":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-testkit@workspace:packages/wallet-sdk-testkit"
+  resolution: "@midnightntwrk/wallet-sdk-testkit@workspace:packages/wallet-sdk-testkit"
   dependencies:
-    "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
-    "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-dust-wallet": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-facade": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-hd": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-shielded": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-utilities": "workspace:^"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.2"
+    "@midnightntwrk/wallet-sdk-abstractions": "workspace:^"
+    "@midnightntwrk/wallet-sdk-address-format": "workspace:^"
+    "@midnightntwrk/wallet-sdk-capabilities": "workspace:^"
+    "@midnightntwrk/wallet-sdk-dust-wallet": "workspace:^"
+    "@midnightntwrk/wallet-sdk-facade": "workspace:^"
+    "@midnightntwrk/wallet-sdk-hd": "workspace:^"
+    "@midnightntwrk/wallet-sdk-indexer-client": "workspace:^"
+    "@midnightntwrk/wallet-sdk-shielded": "workspace:^"
+    "@midnightntwrk/wallet-sdk-unshielded-wallet": "workspace:^"
+    "@midnightntwrk/wallet-sdk-utilities": "workspace:^"
     pino: "npm:^10.3.1"
     pino-pretty: "npm:^13.1.3"
     rimraf: "npm:^6.1.3"
@@ -2628,39 +2640,37 @@ __metadata:
     typescript: "npm:^5.9.3"
     vitest: "npm:4.1.8"
   peerDependencies:
-    "@midnight-ntwrk/wallet-sdk-utilities": "workspace:^"
+    "@midnightntwrk/wallet-sdk-utilities": "workspace:^"
     testcontainers: ^11.12.0
     vitest: ^4.1.4
   peerDependenciesMeta:
-    "@midnight-ntwrk/wallet-sdk-utilities":
+    "@midnightntwrk/wallet-sdk-utilities":
       optional: true
     testcontainers:
       optional: true
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-unshielded-wallet@npm:^3.1.0, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:^, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet":
+"@midnightntwrk/wallet-sdk-unshielded-wallet@npm:^3.1.0, @midnightntwrk/wallet-sdk-unshielded-wallet@workspace:^, @midnightntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet"
+  resolution: "@midnightntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet"
   dependencies:
-    "@midnight-ntwrk/ledger-v9": "npm:0.1.0-alpha.1"
-    "@midnight-ntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
-    "@midnight-ntwrk/wallet-sdk-address-format": "npm:^3.1.2"
-    "@midnight-ntwrk/wallet-sdk-capabilities": "npm:^3.3.1"
-    "@midnight-ntwrk/wallet-sdk-hd": "npm:^3.0.2"
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:^1.2.2"
-    "@midnight-ntwrk/wallet-sdk-runtime": "npm:^1.0.4"
-    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.2.0"
-    "@noble/curves": "npm:^1.9.7"
-    "@noble/hashes": "npm:^1.8.0"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.2"
+    "@midnightntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
+    "@midnightntwrk/wallet-sdk-address-format": "npm:^3.1.2"
+    "@midnightntwrk/wallet-sdk-capabilities": "npm:^3.3.1"
+    "@midnightntwrk/wallet-sdk-hd": "npm:^3.0.2"
+    "@midnightntwrk/wallet-sdk-indexer-client": "npm:^1.2.2"
+    "@midnightntwrk/wallet-sdk-runtime": "npm:^1.0.4"
+    "@midnightntwrk/wallet-sdk-utilities": "npm:^1.2.0"
     effect: "npm:^3.19.19"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-utilities@npm:^1.2.0, @midnight-ntwrk/wallet-sdk-utilities@workspace:^, @midnight-ntwrk/wallet-sdk-utilities@workspace:packages/utilities":
+"@midnightntwrk/wallet-sdk-utilities@npm:^1.2.0, @midnightntwrk/wallet-sdk-utilities@workspace:^, @midnightntwrk/wallet-sdk-utilities@workspace:packages/utilities":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-utilities@workspace:packages/utilities"
+  resolution: "@midnightntwrk/wallet-sdk-utilities@workspace:packages/utilities"
   dependencies:
     effect: "npm:^3.19.19"
     portfinder: "npm:1.0.38"
@@ -2668,117 +2678,23 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk@workspace:*, @midnight-ntwrk/wallet-sdk@workspace:packages/wallet-sdk":
+"@midnightntwrk/wallet-sdk@workspace:*, @midnightntwrk/wallet-sdk@workspace:packages/wallet-sdk":
   version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk@workspace:packages/wallet-sdk"
+  resolution: "@midnightntwrk/wallet-sdk@workspace:packages/wallet-sdk"
   dependencies:
-    "@midnight-ntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
-    "@midnight-ntwrk/wallet-sdk-address-format": "npm:^3.1.2"
-    "@midnight-ntwrk/wallet-sdk-capabilities": "npm:^3.3.1"
-    "@midnight-ntwrk/wallet-sdk-dust-wallet": "npm:^4.1.0"
-    "@midnight-ntwrk/wallet-sdk-facade": "npm:^4.0.1"
-    "@midnight-ntwrk/wallet-sdk-hd": "npm:^3.0.2"
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:^1.2.2"
-    "@midnight-ntwrk/wallet-sdk-node-client": "npm:^1.1.2"
-    "@midnight-ntwrk/wallet-sdk-prover-client": "npm:^1.2.2"
-    "@midnight-ntwrk/wallet-sdk-runtime": "npm:^1.0.4"
-    "@midnight-ntwrk/wallet-sdk-shielded": "npm:^3.0.1"
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "npm:^3.1.0"
-    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.2.0"
-  languageName: unknown
-  linkType: soft
-
-"@midnight-ntwrk/wallet-test-website@workspace:apps/test-website":
-  version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-test-website@workspace:apps/test-website"
-  dependencies:
-    "@midnight-ntwrk/wallet-sdk": "workspace:*"
-    "@types/lodash-es": "npm:4.17.12"
-    "@types/react": "npm:^19.2.14"
-    "@types/react-dom": "npm:^19.2.3"
-    buffer: "npm:^6.0.3"
-    effect: "npm:^3.19.19"
-    lodash-es: "npm:^4.17.23"
-    react: "npm:^19.2.4"
-    react-dom: "npm:^19.2.4"
-    rxjs: "npm:^7.8.2"
-    testcontainers: "npm:^11.14.0"
-    vite: "npm:7.3.5"
-    vite-plugin-node-polyfills: "npm:0.28.0"
-    vite-plugin-wasm: "npm:3.6.0"
-  languageName: unknown
-  linkType: soft
-
-"@midnight-ntwrk/wallet_qanet@npm:@midnight-ntwrk/wallet@3.7.4":
-  version: 3.7.4
-  resolution: "@midnight-ntwrk/wallet@npm:3.7.4::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.7.4%2F4b2e2ea506862eca50295098b6497cf37305d55b"
-  dependencies:
-    "@midnight-ntwrk/wallet-api": "npm:^3.5.0"
-    "@midnight-ntwrk/zswap": "npm:^3.0.2"
-    isomorphic-ws: "npm:^5.0.0"
-    node-fetch: "npm:3.3.2"
-    rxjs: "npm:^7.5"
-    scale-ts: "npm:^1.1.0"
-    ws: "npm:^8.8.1"
-  checksum: 10c0/8d02651668a82560b4866fcc670780768ecbba0ee4e93f7ca0cfa673fde95868615908160b7b86391ddcc32a8c167f6f383c7a20f95650851d726a6aef889a9b
-  languageName: node
-  linkType: hard
-
-"@midnight-ntwrk/zkir-v2@npm:^2.1.0":
-  version: 2.1.0
-  resolution: "@midnight-ntwrk/zkir-v2@npm:2.1.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzkir-v2%2F2.1.0%2Fb3c8b9720535d7e62b86c5ff8341a13a46eb5c7e"
-  checksum: 10c0/cf139a9dc6834d5e4036af6c65a40d384a02e66c4ef14d1e948fc690be62ce1bcf79d468efb2df719ff573c1825251c9c65630f287fbc76d2026482a13b907ef
-  languageName: node
-  linkType: hard
-
-"@midnight-ntwrk/zswap@npm:^3.0.2":
-  version: 3.0.6
-  resolution: "@midnight-ntwrk/zswap@npm:3.0.6::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.6%2Feeb594d52b8abf93e6b5510a9cb1c3c6eca521b8"
-  checksum: 10c0/bc10f8d739596fc0a6e00179be81c50153315e144801b2e39f95140082277ad8b066a50193832951f1e4f03fbaf86efdfd550b4cb59f59b213f98657c31d9850
-  languageName: node
-  linkType: hard
-
-"@midnight-ntwrk/zswap@npm:^4.0.0":
-  version: 4.0.0
-  resolution: "@midnight-ntwrk/zswap@npm:4.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F4.0.0%2Fcf83884fe94a4f03aadfc82e5161c05d54822053"
-  checksum: 10c0/c4bedf9e89a781639b2c1da104a1ab6947897c47dd77ee36e40f4e39f371b335b2636e64d3f4a87451be6632946de24221d8946e7ce56e8dc897f4335ac9b323
-  languageName: node
-  linkType: hard
-
-"@midnight/wallet-e2e-tests@workspace:packages/e2e-tests":
-  version: 0.0.0-use.local
-  resolution: "@midnight/wallet-e2e-tests@workspace:packages/e2e-tests"
-  dependencies:
-    "@cardano-sdk/key-management": "npm:0.29.13"
-    "@midnight-ntwrk/ledger-v9": "npm:0.1.0-alpha.1"
-    "@midnight-ntwrk/midnight-js-network-id": "npm:^3.1.0"
-    "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*"
-    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*"
-    "@midnight-ntwrk/wallet-sdk-facade": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-hd": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-shielded": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-testkit": "workspace:^"
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:^"
-    "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.4"
-    "@types/node": "npm:25.9.3"
-    "@types/ws": "npm:8.18.1"
-    "@vitest/runner": "npm:4.1.8"
-    "@vitest/ui": "npm:4.1.8"
-    eslint: "npm:10.4.1"
-    fp-ts: "npm:2.16.11"
-    pino: "npm:10.3.1"
-    pino-pretty: "npm:13.1.3"
-    prettier: "npm:3.8.4"
-    rimraf: "npm:6.1.3"
-    rxjs: "npm:7.8.2"
-    shx: "npm:0.4.0"
-    testcontainers: "npm:11.14.0"
-    tsc-watch: "npm:7.2.0"
-    typescript: "npm:5.9.3"
-    typescript-eslint: "npm:8.61.0"
-    vitest: "npm:4.1.8"
-    vitest-ctrf-json-reporter: "npm:0.0.3"
-    ws: "npm:8.21.0"
+    "@midnightntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
+    "@midnightntwrk/wallet-sdk-address-format": "npm:^3.1.2"
+    "@midnightntwrk/wallet-sdk-capabilities": "npm:^3.3.1"
+    "@midnightntwrk/wallet-sdk-dust-wallet": "npm:^4.2.0"
+    "@midnightntwrk/wallet-sdk-facade": "npm:^4.1.0"
+    "@midnightntwrk/wallet-sdk-hd": "npm:^3.0.3"
+    "@midnightntwrk/wallet-sdk-indexer-client": "npm:^1.2.3"
+    "@midnightntwrk/wallet-sdk-node-client": "npm:^1.1.3"
+    "@midnightntwrk/wallet-sdk-prover-client": "npm:^1.2.3"
+    "@midnightntwrk/wallet-sdk-runtime": "npm:^1.0.5"
+    "@midnightntwrk/wallet-sdk-shielded": "npm:^3.0.2"
+    "@midnightntwrk/wallet-sdk-unshielded-wallet": "npm:^3.1.0"
+    "@midnightntwrk/wallet-sdk-utilities": "npm:^1.2.0"
   languageName: unknown
   linkType: soft
 
@@ -2887,7 +2803,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/curves@npm:^1.3.0, @noble/curves@npm:^1.9.7, @noble/curves@npm:~1.9.0, @noble/curves@npm:~1.9.2":
+"@noble/curves@npm:^1.3.0, @noble/curves@npm:~1.9.0, @noble/curves@npm:~1.9.2":
   version: 1.9.7
   resolution: "@noble/curves@npm:1.9.7"
   dependencies:
@@ -2905,7 +2821,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/hashes@npm:1.8.0, @noble/hashes@npm:^1.2.0, @noble/hashes@npm:^1.3.3, @noble/hashes@npm:^1.8.0, @noble/hashes@npm:~1.8.0":
+"@noble/hashes@npm:1.8.0, @noble/hashes@npm:^1.2.0, @noble/hashes@npm:^1.3.3, @noble/hashes@npm:~1.8.0":
   version: 1.8.0
   resolution: "@noble/hashes@npm:1.8.0"
   checksum: 10c0/06a0b52c81a6fa7f04d67762e08b2c476a00285858150caeaaff4037356dd5e119f45b2a530f638b77a5eeca013168ec1b655db41bae3236cb2e9d511484fc77
@@ -3920,10 +3836,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tsconfig/node22@npm:22.0.5":
-  version: 22.0.5
-  resolution: "@tsconfig/node22@npm:22.0.5"
-  checksum: 10c0/c64b1d51e1556da9212463799f5096289d2cc8561eaed10cd0a0a36c25790b4c6bed30c0f846afccf8da75b5750326fa281216a908c2b67ead7b55adaf3eda22
+"@tsconfig/node24@npm:24.0.4":
+  version: 24.0.4
+  resolution: "@tsconfig/node24@npm:24.0.4"
+  checksum: 10c0/9c5d4173204c6935c45d3ff0584fd423bd7d8bc3f6b246e646320ae584e4226b34ea1c66ec67cd16769c73e7e80f4cc562287b0acaa4ec81aa482463972ff83f
   languageName: node
   linkType: hard
 
@@ -4085,7 +4001,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:*, @types/node@npm:>=13.7.0, @types/node@npm:^25.3.0":
+"@types/node@npm:*, @types/node@npm:>=13.7.0":
   version: 25.7.0
   resolution: "@types/node@npm:25.7.0"
   dependencies:
@@ -4094,12 +4010,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:25.9.3":
-  version: 25.9.3
-  resolution: "@types/node@npm:25.9.3"
+"@types/node@npm:24.13.2, @types/node@npm:^24.13.2":
+  version: 24.13.2
+  resolution: "@types/node@npm:24.13.2"
   dependencies:
-    undici-types: "npm:>=7.24.0 <7.24.7"
-  checksum: 10c0/72d3aece9d42c2c641bcd3f3cb2dc2828b4bd384dfcbd910c404b8859a68bd69d50c4769ce7defd4ff5e049768e23e615f09407ea2cbbb5f44b90d75a7c6b8ca
+    undici-types: "npm:~7.18.0"
+  checksum: 10c0/d7d48a88a4feb0a6aac3cbfaf9ef3b12752b4b09447f88dd0b4c77c03b281e3d4330fe6982a99aedcd63fc16c7540a0c248b91eb2abb0b3edd884d7fe684e9ea
   languageName: node
   linkType: hard
 
@@ -4181,7 +4097,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/ws@npm:8.18.1, @types/ws@npm:^8.0.0":
+"@types/ws@npm:^8.0.0":
   version: 8.18.1
   resolution: "@types/ws@npm:8.18.1"
   dependencies:
@@ -5577,19 +5493,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cross-spawn@npm:^6.0.0":
-  version: 6.0.6
-  resolution: "cross-spawn@npm:6.0.6"
-  dependencies:
-    nice-try: "npm:^1.0.4"
-    path-key: "npm:^2.0.1"
-    semver: "npm:^5.5.0"
-    shebang-command: "npm:^1.2.0"
-    which: "npm:^1.2.9"
-  checksum: 10c0/bf61fb890e8635102ea9bce050515cf915ff6a50ccaa0b37a17dc82fded0fb3ed7af5478b9367b86baee19127ad86af4be51d209f64fd6638c0862dca185fe1d
-  languageName: node
-  linkType: hard
-
 "cross-spawn@npm:^7.0.5, cross-spawn@npm:^7.0.6":
   version: 7.0.6
   resolution: "cross-spawn@npm:7.0.6"
@@ -5863,13 +5766,6 @@ __metadata:
     es-errors: "npm:^1.3.0"
     gopd: "npm:^1.2.0"
   checksum: 10c0/199f2a0c1c16593ca0a145dbf76a962f8033ce3129f01284d48c45ed4e14fea9bbacd7b3610b6cdc33486cef20385ac054948fefc6272fcce645c09468f93031
-  languageName: node
-  linkType: hard
-
-"duplexer@npm:~0.1.1":
-  version: 0.1.2
-  resolution: "duplexer@npm:0.1.2"
-  checksum: 10c0/c57bcd4bdf7e623abab2df43a7b5b23d18152154529d166c1e0da6bee341d84c432d157d7e97b32fecb1bf3a8b8857dd85ed81a915789f550637ed25b8e64fc2
   languageName: node
   linkType: hard
 
@@ -6383,21 +6279,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"event-stream@npm:=3.3.4":
-  version: 3.3.4
-  resolution: "event-stream@npm:3.3.4"
-  dependencies:
-    duplexer: "npm:~0.1.1"
-    from: "npm:~0"
-    map-stream: "npm:~0.1.0"
-    pause-stream: "npm:0.0.11"
-    split: "npm:0.3"
-    stream-combiner: "npm:~0.0.4"
-    through: "npm:~2.3.1"
-  checksum: 10c0/c3ec4e1efc27ab3e73a98923f0a2fa9a19051b87068fea2f3d53d2e4e8c5cfdadf8c8a115b17f3d90b16a46432d396bad91b6e8d0cceb3e449be717a03b75209
-  languageName: node
-  linkType: hard
-
 "event-target-shim@npm:^5.0.0":
   version: 5.0.1
   resolution: "event-target-shim@npm:5.0.1"
@@ -6443,21 +6324,6 @@ __metadata:
     node-gyp: "npm:latest"
     safe-buffer: "npm:^5.1.1"
   checksum: 10c0/77fbe2d94a902a80e9b8f5a73dcd695d9c14899c5e82967a61b1fc6cbbb28c46552d9b127cff47c45fcf684748bdbcfa0a50410349109de87ceb4b199ef6ee99
-  languageName: node
-  linkType: hard
-
-"execa@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "execa@npm:1.0.0"
-  dependencies:
-    cross-spawn: "npm:^6.0.0"
-    get-stream: "npm:^4.0.0"
-    is-stream: "npm:^1.1.0"
-    npm-run-path: "npm:^2.0.0"
-    p-finally: "npm:^1.0.0"
-    signal-exit: "npm:^3.0.0"
-    strip-eof: "npm:^1.0.0"
-  checksum: 10c0/cc71707c9aa4a2552346893ee63198bf70a04b5a1bc4f8a0ef40f1d03c319eae80932c59191f037990d7d102193e83a38ec72115fff814ec2fb3099f3661a590
   languageName: node
   linkType: hard
 
@@ -6528,7 +6394,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fast-glob@npm:^3.2.9, fast-glob@npm:^3.3.2":
+"fast-glob@npm:^3.2.9":
   version: 3.3.3
   resolution: "fast-glob@npm:3.3.3"
   dependencies:
@@ -6712,24 +6578,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fp-ts@npm:2.16.11":
-  version: 2.16.11
-  resolution: "fp-ts@npm:2.16.11"
-  checksum: 10c0/9a263a577964adbb754221c48449a64a6962c91fa6af136e73b043ee70ee41c7b856fe1e6cc21fb4f0264dd9a75c53bd381b1bb486b6caa99a71f33d1bb24c2a
-  languageName: node
-  linkType: hard
-
 "fraction.js@npm:4.0.1":
   version: 4.0.1
   resolution: "fraction.js@npm:4.0.1"
   checksum: 10c0/e54478b80d66a7ab4a8c46f777dfc4100265597f053eab45897bcd11eb86642965bb48f076f72081ba15221a862af969f4195ef011fc690317cb764c1215b118
-  languageName: node
-  linkType: hard
-
-"from@npm:~0":
-  version: 0.1.7
-  resolution: "from@npm:0.1.7"
-  checksum: 10c0/3aab5aea8fe8e1f12a5dee7f390d46a93431ce691b6222dcd5701c5d34378e51ca59b44967da1105a0f90fcdf5d7629d963d51e7ccd79827d19693bdcfb688d4
   languageName: node
   linkType: hard
 
@@ -6869,15 +6721,6 @@ __metadata:
   dependencies:
     global: "npm:^4.4.0"
   checksum: 10c0/7b78d7fe5c3eba6e6d5a2c6339a1b6e3b70424d1feeb2321faed2189e60f0013c04a86b83233eb6f391b80077fdf0dcfae94e6999a57e04c89b0a488be2850e6
-  languageName: node
-  linkType: hard
-
-"get-stream@npm:^4.0.0":
-  version: 4.1.0
-  resolution: "get-stream@npm:4.1.0"
-  dependencies:
-    pump: "npm:^3.0.0"
-  checksum: 10c0/294d876f667694a5ca23f0ca2156de67da950433b6fb53024833733975d32582896dbc7f257842d331809979efccf04d5e0b6b75ad4d45744c45f193fd497539
   languageName: node
   linkType: hard
 
@@ -7260,13 +7103,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"interpret@npm:^1.0.0":
-  version: 1.4.0
-  resolution: "interpret@npm:1.4.0"
-  checksum: 10c0/08c5ad30032edeec638485bc3f6db7d0094d9b3e85e0f950866600af3c52e9fd69715416d29564731c479d9f4d43ff3e4d302a178196bdc0e6837ec147640450
-  languageName: node
-  linkType: hard
-
 "invariant@npm:^2.2.4":
   version: 2.2.4
   resolution: "invariant@npm:2.2.4"
@@ -7416,13 +7252,6 @@ __metadata:
   dependencies:
     is-unc-path: "npm:^1.0.0"
   checksum: 10c0/61157c4be8594dd25ac6f0ef29b1218c36667259ea26698367a4d9f39ff9018368bc365c490b3c79be92dfb1e389e43c4b865c95709e7b3bc72c5932f751fb60
-  languageName: node
-  linkType: hard
-
-"is-stream@npm:^1.1.0":
-  version: 1.1.0
-  resolution: "is-stream@npm:1.1.0"
-  checksum: 10c0/b8ae7971e78d2e8488d15f804229c6eed7ed36a28f8807a1815938771f4adff0e705218b7dab968270433f67103e4fef98062a0beea55d64835f705ee72c7002
   languageName: node
   linkType: hard
 
@@ -7956,13 +7785,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"map-stream@npm:~0.1.0":
-  version: 0.1.0
-  resolution: "map-stream@npm:0.1.0"
-  checksum: 10c0/7dd6debe511c1b55d9da75e1efa65a28b1252a2d8357938d2e49b412713c478efbaefb0cdf0ee0533540c3bf733e8f9f71e1a15aa0fe74bf71b64e75bf1576bd
-  languageName: node
-  linkType: hard
-
 "math-intrinsics@npm:^1.1.0":
   version: 1.1.0
   resolution: "math-intrinsics@npm:1.1.0"
@@ -8335,7 +8157,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"minimist@npm:^1.2.6, minimist@npm:^1.2.8":
+"minimist@npm:^1.2.6":
   version: 1.2.8
   resolution: "minimist@npm:1.2.8"
   checksum: 10c0/19d3fcdca050087b84c2029841a093691a91259a47def2f18222f41e7645a0b7c44ef4b40e88a1e58a40c84d2ef0ee6047c55594d298146d0eb3f6b737c20ce6
@@ -8565,13 +8387,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nice-try@npm:^1.0.4":
-  version: 1.0.5
-  resolution: "nice-try@npm:1.0.5"
-  checksum: 10c0/95568c1b73e1d0d4069a3e3061a2102d854513d37bcfda73300015b7ba4868d3b27c198d1dbbd8ebdef4112fc2ed9e895d4a0f2e1cce0bd334f2a1346dc9205f
-  languageName: node
-  linkType: hard
-
 "nock@npm:^13.5.5":
   version: 13.5.6
   resolution: "nock@npm:13.5.6"
@@ -8592,28 +8407,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"node-cleanup@npm:^2.1.2":
-  version: 2.1.2
-  resolution: "node-cleanup@npm:2.1.2"
-  checksum: 10c0/c59077d7cac01f6315e4417e5d13523e43aa19965b14768581dbd06b37419323abe5f7171afe6aa52b7a483bdd0027e5a5f62a532a2ebec2a8c4cdf163736c92
-  languageName: node
-  linkType: hard
-
 "node-domexception@npm:^1.0.0":
   version: 1.0.0
   resolution: "node-domexception@npm:1.0.0"
   checksum: 10c0/5e5d63cda29856402df9472335af4bb13875e1927ad3be861dc5ebde38917aecbf9ae337923777af52a48c426b70148815e890a5d72760f1b4d758cc671b1a2b
-  languageName: node
-  linkType: hard
-
-"node-fetch@npm:3.3.2, node-fetch@npm:^3.3.2":
-  version: 3.3.2
-  resolution: "node-fetch@npm:3.3.2"
-  dependencies:
-    data-uri-to-buffer: "npm:^4.0.0"
-    fetch-blob: "npm:^3.1.4"
-    formdata-polyfill: "npm:^4.0.10"
-  checksum: 10c0/f3d5e56190562221398c9f5750198b34cf6113aa304e34ee97c94fd300ec578b25b2c2906edba922050fce983338fde0d5d34fcb0fc3336ade5bd0e429ad7538
   languageName: node
   linkType: hard
 
@@ -8628,6 +8425,17 @@ __metadata:
     encoding:
       optional: true
   checksum: 10c0/b55786b6028208e6fbe594ccccc213cab67a72899c9234eb59dba51062a299ea853210fcf526998eaa2867b0963ad72338824450905679ff0fa304b8c5093ae8
+  languageName: node
+  linkType: hard
+
+"node-fetch@npm:^3.3.2":
+  version: 3.3.2
+  resolution: "node-fetch@npm:3.3.2"
+  dependencies:
+    data-uri-to-buffer: "npm:^4.0.0"
+    fetch-blob: "npm:^3.1.4"
+    formdata-polyfill: "npm:^4.0.10"
+  checksum: 10c0/f3d5e56190562221398c9f5750198b34cf6113aa304e34ee97c94fd300ec578b25b2c2906edba922050fce983338fde0d5d34fcb0fc3336ade5bd0e429ad7538
   languageName: node
   linkType: hard
 
@@ -8730,15 +8538,6 @@ __metadata:
   version: 3.0.0
   resolution: "normalize-path@npm:3.0.0"
   checksum: 10c0/e008c8142bcc335b5e38cf0d63cfd39d6cf2d97480af9abdbe9a439221fd4d749763bab492a8ee708ce7a194bb00c9da6d0a115018672310850489137b3da046
-  languageName: node
-  linkType: hard
-
-"npm-run-path@npm:^2.0.0":
-  version: 2.0.2
-  resolution: "npm-run-path@npm:2.0.2"
-  dependencies:
-    path-key: "npm:^2.0.0"
-  checksum: 10c0/95549a477886f48346568c97b08c4fda9cdbf7ce8a4fbc2213f36896d0d19249e32d68d7451bdcbca8041b5fba04a6b2c4a618beaf19849505c05b700740f1de
   languageName: node
   linkType: hard
 
@@ -8846,13 +8645,6 @@ __metadata:
   dependencies:
     p-map: "npm:^2.0.0"
   checksum: 10c0/5ac34b74b3b691c04212d5dd2319ed484f591c557a850a3ffc93a08cb38c4f5540be059c6b10a185773c479ca583a91ea00c7d6c9958c815e6b74d052f356645
-  languageName: node
-  linkType: hard
-
-"p-finally@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "p-finally@npm:1.0.0"
-  checksum: 10c0/6b8552339a71fe7bd424d01d8451eea92d379a711fc62f6b2fe64cad8a472c7259a236c9a22b4733abca0b5666ad503cb497792a0478c5af31ded793d00937e7
   languageName: node
   linkType: hard
 
@@ -9019,13 +8811,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"path-key@npm:^2.0.0, path-key@npm:^2.0.1":
-  version: 2.0.1
-  resolution: "path-key@npm:2.0.1"
-  checksum: 10c0/dd2044f029a8e58ac31d2bf34c34b93c3095c1481942960e84dd2faa95bbb71b9b762a106aead0646695330936414b31ca0bd862bf488a937ad17c8c5d73b32b
-  languageName: node
-  linkType: hard
-
 "path-key@npm:^3.1.0":
   version: 3.1.1
   resolution: "path-key@npm:3.1.1"
@@ -9077,15 +8862,6 @@ __metadata:
   version: 2.0.3
   resolution: "pathe@npm:2.0.3"
   checksum: 10c0/c118dc5a8b5c4166011b2b70608762e260085180bb9e33e80a50dcdb1e78c010b1624f4280c492c92b05fc276715a4c357d1f9edc570f8f1b3d90b6839ebaca1
-  languageName: node
-  linkType: hard
-
-"pause-stream@npm:0.0.11":
-  version: 0.0.11
-  resolution: "pause-stream@npm:0.0.11"
-  dependencies:
-    through: "npm:~2.3"
-  checksum: 10c0/86f12c64cdaaa8e45ebaca4e39a478e1442db8b4beabc280b545bfaf79c0e2f33c51efb554aace5c069cc441c7b924ba484837b345eaa4ba6fc940d62f826802
   languageName: node
   linkType: hard
 
@@ -9358,17 +9134,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ps-tree@npm:^1.2.0":
-  version: 1.2.0
-  resolution: "ps-tree@npm:1.2.0"
-  dependencies:
-    event-stream: "npm:=3.3.4"
-  bin:
-    ps-tree: ./bin/ps-tree.js
-  checksum: 10c0/9d1c159e0890db5aa05f84d125193c2190a6c4ecd457596fd25e7611f8f747292a846459dcc0244e27d45529d4cea6d1010c3a2a087fad02624d12fdb7d97c22
-  languageName: node
-  linkType: hard
-
 "public-encrypt@npm:^4.0.3":
   version: 4.0.3
   resolution: "public-encrypt@npm:4.0.3"
@@ -9595,15 +9360,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rechoir@npm:^0.6.2":
-  version: 0.6.2
-  resolution: "rechoir@npm:0.6.2"
-  dependencies:
-    resolve: "npm:^1.1.6"
-  checksum: 10c0/22c4bb32f4934a9468468b608417194f7e3ceba9a508512125b16082c64f161915a28467562368eeb15dc16058eb5b7c13a20b9eb29ff9927d1ebb3b5aa83e84
-  languageName: node
-  linkType: hard
-
 "remedial@npm:^1.0.7":
   version: 1.0.8
   resolution: "remedial@npm:1.0.8"
@@ -9646,7 +9402,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"resolve@npm:^1.1.6, resolve@npm:^1.17.0":
+"resolve@npm:^1.17.0":
   version: 1.22.11
   resolution: "resolve@npm:1.22.11"
   dependencies:
@@ -9659,7 +9415,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"resolve@patch:resolve@npm%3A^1.1.6#optional!builtin<compat/resolve>, resolve@patch:resolve@npm%3A^1.17.0#optional!builtin<compat/resolve>":
+"resolve@patch:resolve@npm%3A^1.17.0#optional!builtin<compat/resolve>":
   version: 1.22.11
   resolution: "resolve@patch:resolve@npm%3A1.22.11#optional!builtin<compat/resolve>::version=1.22.11&hash=c3c19d"
   dependencies:
@@ -9824,7 +9580,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rxjs@npm:7.8.2, rxjs@npm:^7.4.0, rxjs@npm:^7.5, rxjs@npm:^7.8.1, rxjs@npm:^7.8.2":
+"rxjs@npm:7.8.2, rxjs@npm:^7.4.0, rxjs@npm:^7.8.1, rxjs@npm:^7.8.2":
   version: 7.8.2
   resolution: "rxjs@npm:7.8.2"
   dependencies:
@@ -9881,13 +9637,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"scale-ts@npm:^1.1.0":
-  version: 1.6.1
-  resolution: "scale-ts@npm:1.6.1"
-  checksum: 10c0/bbcf476029095152189c5bd210922b43342e8bfb712bf56237de172d55b528e090419e80da67c627a8f706a228237346b82de527755d7f197bb4d822c6383dfd
-  languageName: node
-  linkType: hard
-
 "scheduler@npm:^0.27.0":
   version: 0.27.0
   resolution: "scheduler@npm:0.27.0"
@@ -9899,15 +9648,6 @@ __metadata:
   version: 4.1.0
   resolution: "secure-json-parse@npm:4.1.0"
   checksum: 10c0/52b3f8125ea974db1333a5b63e6a1df550c36c0d5f9a263911d6732812bd02e938b30be324dcbbb9da3ef9bf5a84849e0dd911f56544003d3c09e8eee12504de
-  languageName: node
-  linkType: hard
-
-"semver@npm:^5.5.0":
-  version: 5.7.2
-  resolution: "semver@npm:5.7.2"
-  bin:
-    semver: bin/semver
-  checksum: 10c0/e4cf10f86f168db772ae95d86ba65b3fd6c5967c94d97c708ccb463b778c2ee53b914cd7167620950fc07faf5a564e6efe903836639e512a1aa15fbc9667fa25
   languageName: node
   linkType: hard
 
@@ -9972,28 +9712,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"shebang-command@npm:^1.2.0":
-  version: 1.2.0
-  resolution: "shebang-command@npm:1.2.0"
-  dependencies:
-    shebang-regex: "npm:^1.0.0"
-  checksum: 10c0/7b20dbf04112c456b7fc258622dafd566553184ac9b6938dd30b943b065b21dabd3776460df534cc02480db5e1b6aec44700d985153a3da46e7db7f9bd21326d
-  languageName: node
-  linkType: hard
-
 "shebang-command@npm:^2.0.0":
   version: 2.0.0
   resolution: "shebang-command@npm:2.0.0"
   dependencies:
     shebang-regex: "npm:^3.0.0"
   checksum: 10c0/a41692e7d89a553ef21d324a5cceb5f686d1f3c040759c50aab69688634688c5c327f26f3ecf7001ebfd78c01f3c7c0a11a7c8bfd0a8bc9f6240d4f40b224e4e
-  languageName: node
-  linkType: hard
-
-"shebang-regex@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "shebang-regex@npm:1.0.0"
-  checksum: 10c0/9abc45dee35f554ae9453098a13fdc2f1730e525a5eb33c51f096cc31f6f10a4b38074c1ebf354ae7bffa7229506083844008dfc3bb7818228568c0b2dc1fff2
   languageName: node
   linkType: hard
 
@@ -10008,32 +9732,6 @@ __metadata:
   version: 1.8.3
   resolution: "shell-quote@npm:1.8.3"
   checksum: 10c0/bee87c34e1e986cfb4c30846b8e6327d18874f10b535699866f368ade11ea4ee45433d97bf5eada22c4320c27df79c3a6a7eb1bf3ecfc47f2c997d9e5e2672fd
-  languageName: node
-  linkType: hard
-
-"shelljs@npm:^0.9.2":
-  version: 0.9.2
-  resolution: "shelljs@npm:0.9.2"
-  dependencies:
-    execa: "npm:^1.0.0"
-    fast-glob: "npm:^3.3.2"
-    interpret: "npm:^1.0.0"
-    rechoir: "npm:^0.6.2"
-  bin:
-    shjs: bin/shjs
-  checksum: 10c0/2aed1e2ff344b03a36aa018326ab768e4af88e22b0f3d89fbb2f15bca1a6cf6209c6d523658ebc7fc7986675ea75c7bdbce0501201b8883f1db21b22a50d5e6d
-  languageName: node
-  linkType: hard
-
-"shx@npm:0.4.0":
-  version: 0.4.0
-  resolution: "shx@npm:0.4.0"
-  dependencies:
-    minimist: "npm:^1.2.8"
-    shelljs: "npm:^0.9.2"
-  bin:
-    shx: lib/cli.js
-  checksum: 10c0/0ccff768baaed7866641d9345713560014842fb5e7a0705ebf4a9e4e5664ca5eb58fc38e6a2a4e4c6cebe1451091b6afb0277fff390647723de6e6560dca4b01
   languageName: node
   linkType: hard
 
@@ -10092,7 +9790,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"signal-exit@npm:^3.0.0, signal-exit@npm:^3.0.2":
+"signal-exit@npm:^3.0.2":
   version: 3.0.7
   resolution: "signal-exit@npm:3.0.7"
   checksum: 10c0/25d272fa73e146048565e08f3309d5b942c1979a6f4a58a8c59d5fa299728e9c2fcd1a759ec870863b1fd38653670240cd420dad2ad9330c71f36608a6a1c912
@@ -10221,15 +9919,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"split@npm:0.3":
-  version: 0.3.3
-  resolution: "split@npm:0.3.3"
-  dependencies:
-    through: "npm:2"
-  checksum: 10c0/88c09b1b4de84953bf5d6c153123a1fbb20addfea9381f70d27b4eb6b2bfbadf25d313f8f5d3fd727d5679b97bfe54da04766b91010f131635bf49e51d5db3fc
-  languageName: node
-  linkType: hard
-
 "sponge-case@npm:^2.0.2":
   version: 2.0.3
   resolution: "sponge-case@npm:2.0.3"
@@ -10311,15 +10000,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"stream-combiner@npm:~0.0.4":
-  version: 0.0.4
-  resolution: "stream-combiner@npm:0.0.4"
-  dependencies:
-    duplexer: "npm:~0.1.1"
-  checksum: 10c0/8075a94c0eb0f20450a8236cb99d4ce3ea6e6a4b36d8baa7440b1a08cde6ffd227debadffaecd80993bd334282875d0e927ab5b88484625e01970dd251004ff5
-  languageName: node
-  linkType: hard
-
 "stream-http@npm:^3.2.0":
   version: 3.2.0
   resolution: "stream-http@npm:3.2.0"
@@ -10340,13 +10020,6 @@ __metadata:
     fast-fifo: "npm:^1.3.2"
     text-decoder: "npm:^1.1.0"
   checksum: 10c0/15708ce37818d588632fe1104e8febde573e33e8c0868bf583fce0703f3faf8d2a063c278e30df2270206811b69997f64eb78792099933a1fe757e786fbcbd44
-  languageName: node
-  linkType: hard
-
-"string-argv@npm:^0.3.2":
-  version: 0.3.2
-  resolution: "string-argv@npm:0.3.2"
-  checksum: 10c0/75c02a83759ad1722e040b86823909d9a2fc75d15dd71ec4b537c3560746e33b5f5a07f7332d1e3f88319909f82190843aa2f0a0d8c8d591ec08e93d5b8dec82
   languageName: node
   linkType: hard
 
@@ -10436,13 +10109,6 @@ __metadata:
   version: 3.0.0
   resolution: "strip-bom@npm:3.0.0"
   checksum: 10c0/51201f50e021ef16672593d7434ca239441b7b760e905d9f33df6e4f3954ff54ec0e0a06f100d028af0982d6f25c35cd5cda2ce34eaebccd0250b8befb90d8f1
-  languageName: node
-  linkType: hard
-
-"strip-eof@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "strip-eof@npm:1.0.0"
-  checksum: 10c0/f336beed8622f7c1dd02f2cbd8422da9208fae81daf184f73656332899978919d5c0ca84dc6cfc49ad1fc4dd7badcde5412a063cf4e0d7f8ed95a13a63f68f45
   languageName: node
   linkType: hard
 
@@ -10581,7 +10247,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"testcontainers@npm:11.14.0, testcontainers@npm:^11.12.0, testcontainers@npm:^11.14.0":
+"testcontainers@npm:11.14.0, testcontainers@npm:^11.12.0":
   version: 11.14.0
   resolution: "testcontainers@npm:11.14.0"
   dependencies:
@@ -10619,13 +10285,6 @@ __metadata:
   dependencies:
     real-require: "npm:^0.2.0"
   checksum: 10c0/f0a47a673af574062df20140ec3e857d679365253fcaa98a76c167c9a053ee03291f4b25bd89b078c7f6a48f07f49d5a49e4f5598bb1c8a263ec15955a018fbd
-  languageName: node
-  linkType: hard
-
-"through@npm:2, through@npm:~2.3, through@npm:~2.3.1":
-  version: 2.3.8
-  resolution: "through@npm:2.3.8"
-  checksum: 10c0/4b09f3774099de0d4df26d95c5821a62faee32c7e96fb1f4ebd54a2d7c11c57fe88b0a0d49cf375de5fee5ae6bf4eb56dbbf29d07366864e2ee805349970d3cc
   languageName: node
   linkType: hard
 
@@ -10753,22 +10412,6 @@ __metadata:
   version: 3.0.2
   resolution: "ts-log@npm:3.0.2"
   checksum: 10c0/a2c35c96a74a21d8081419b2343858ca92d03ad3944094ac0c9529c5c775d3760af7f80fd409f50e25bd88affe86b632fd1ecf314317bdcac88a8f0f17e26a6b
-  languageName: node
-  linkType: hard
-
-"tsc-watch@npm:7.2.0":
-  version: 7.2.0
-  resolution: "tsc-watch@npm:7.2.0"
-  dependencies:
-    cross-spawn: "npm:^7.0.6"
-    node-cleanup: "npm:^2.1.2"
-    ps-tree: "npm:^1.2.0"
-    string-argv: "npm:^0.3.2"
-  peerDependencies:
-    typescript: "*"
-  bin:
-    tsc-watch: dist/lib/tsc-watch.js
-  checksum: 10c0/32d849be1579fa57c9503988729ef5dc2886fae6ff7df95eb5fc07ea0a7efce100e0bf32b9a34a8b342fda19a58d810b8723fb49229d53c4ed42cc4bfa0d1e1f
   languageName: node
   linkType: hard
 
@@ -10934,17 +10577,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"undici-types@npm:>=7.24.0 <7.24.7":
-  version: 7.24.6
-  resolution: "undici-types@npm:7.24.6"
-  checksum: 10c0/d9cd8befb643ac904615c280a095ba4240531f6bb4a5e75a22a7483630ca8d3f1016d2ab6ace6ceda1f63b3a2db2fe037fafe121d6917a0187573aa548ff78ca
-  languageName: node
-  linkType: hard
-
 "undici-types@npm:~5.26.4":
   version: 5.26.5
   resolution: "undici-types@npm:5.26.5"
   checksum: 10c0/bb673d7876c2d411b6eb6c560e0c571eef4a01c1c19925175d16e3a30c4c428181fb8d7ae802a261f283e4166a0ac435e2f505743aa9e45d893f9a3df017b501
+  languageName: node
+  linkType: hard
+
+"undici-types@npm:~7.18.0":
+  version: 7.18.2
+  resolution: "undici-types@npm:7.18.2"
+  checksum: 10c0/85a79189113a238959d7a647368e4f7c5559c3a404ebdb8fc4488145ce9426fcd82252a844a302798dfc0e37e6fb178ff481ed03bc4caf634c5757d9ef43521d
   languageName: node
   linkType: hard
 
@@ -11150,13 +10793,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vitest-ctrf-json-reporter@npm:0.0.3":
-  version: 0.0.3
-  resolution: "vitest-ctrf-json-reporter@npm:0.0.3"
-  checksum: 10c0/f0693895513488982743c36e36bdd1d1e59410464789ba8b147c3c1f5b0a552b918409447b109c53aecb1e9c5dcffd4dd51df0512c71e94f489886b3f1b5dc97
-  languageName: node
-  linkType: hard
-
 "vitest@npm:4.1.8":
   version: 4.1.8
   resolution: "vitest@npm:4.1.8"
@@ -11305,17 +10941,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"which@npm:^1.2.9":
-  version: 1.3.1
-  resolution: "which@npm:1.3.1"
-  dependencies:
-    isexe: "npm:^2.0.0"
-  bin:
-    which: ./bin/which
-  checksum: 10c0/e945a8b6bbf6821aaaef7f6e0c309d4b615ef35699576d5489b4261da9539f70393c6b2ce700ee4321c18f914ebe5644bc4631b15466ffbaad37d83151f6af59
-  languageName: node
-  linkType: hard
-
 "which@npm:^2.0.1":
   version: 2.0.2
   resolution: "which@npm:2.0.2"
@@ -11394,21 +11019,6 @@ __metadata:
   version: 1.0.2
   resolution: "wrappy@npm:1.0.2"
   checksum: 10c0/56fece1a4018c6a6c8e28fbc88c87e0fbf4ea8fd64fc6c63b18f4acc4bd13e0ad2515189786dd2c30d3eec9663d70f4ecf699330002f8ccb547e4a18231fc9f0
-  languageName: node
-  linkType: hard
-
-"ws@npm:8.21.0":
-  version: 8.21.0
-  resolution: "ws@npm:8.21.0"
-  peerDependencies:
-    bufferutil: ^4.0.1
-    utf-8-validate: ">=5.0.2"
-  peerDependenciesMeta:
-    bufferutil:
-      optional: true
-    utf-8-validate:
-      optional: true
-  checksum: 10c0/ef4a243476283fc49bc7550966c4af4aa0eef56273837211e700de3b664e08604a760cdddcb5ba43c049140e74ccfec5b0ee0bb439e08c2adf9138902fdde5f9
   languageName: node
   linkType: hard
 

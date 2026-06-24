@@ -18,11 +18,11 @@
 // directly. The full UnshieldedWallet/facade build is covered by the Docker
 // E2E suite (Phase 5). Spend signatures are checked with the independent
 // @noble/curves oracle AND the ledger, so nothing is self-attested.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
+import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, PublicKey, type UnshieldedKeystore } from '../src/KeyStore.js';

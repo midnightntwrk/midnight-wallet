@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { firstValueFrom } from 'rxjs';
 import { randomUUID } from 'node:crypto';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
@@ -18,8 +18,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { UnshieldedWallet } from '../src/index.js';
 import { getUnshieldedSeed, createWalletConfig, waitForCoins } from './testUtils.js';
 import { createKeystore, PublicKey } from '../src/KeyStore.js';
-import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { NoOpTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 
 vi.setConfig({ testTimeout: 100_000, hookTimeout: 100_000 });
 

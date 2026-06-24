@@ -14,14 +14,14 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
-import { PendingTransactions } from '@midnight-ntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import * as rx from 'rxjs';
 import { finalizedTransactionTrait } from '../src/transaction.js';
 

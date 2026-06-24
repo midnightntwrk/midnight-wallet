@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { getBalanceRecipe, Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { getBalanceRecipe, Imbalances } from '@midnightntwrk/wallet-sdk-capabilities';
 import { describe, expect, test } from 'vitest';
 import { chooseCoin } from '../CoinsAndBalances.js';
 import { type Dust } from '../types/Dust.js';

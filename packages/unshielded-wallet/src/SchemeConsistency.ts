@@ -23,7 +23,7 @@ import {
   type Signature,
   type SignatureKind,
   type SignatureVerifyingKey,
-} from '@midnight-ntwrk/ledger-v9';
+} from '@midnightntwrk/ledger-v9';
 import { Either, pipe } from 'effect';
 import type { PublicKey } from './KeyStore.js';
 import { OtherWalletError, SchemeMismatchError, type WalletError } from './v1/WalletError.js';

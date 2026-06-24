@@ -10,10 +10,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Either, Option, pipe, Record } from 'effect';
-import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { CoreWallet } from './CoreWallet.js';
 import { InsufficientFundsError, OtherWalletError, type WalletError } from './WalletError.js';
 import {
@@ -22,8 +22,8 @@ import {
   getBalanceRecipe,
   Imbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
-} from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { type ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+} from '@midnightntwrk/wallet-sdk-capabilities';
+import { type ShieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { ShieldedCostModel, TransactionImbalances } from './TransactionImbalances.js';
 import { TransactionOps } from './TransactionOps.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
@@ -379,7 +379,7 @@ export class TransactingCapabilityImplementation<
     imbalances: TransactionImbalances,
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
     targetImbalances: Imbalances,
-  ): Either.Either<{ offer: ledger.ZswapOffer<ledger.PreProof>; newState: CoreWallet }, WalletError> {
+  ): Either.Either<{ offer: ledger.ZswapOffer<ledger.PreProof> | undefined; newState: CoreWallet }, WalletError> {
     return Either.gen(this, function* () {
       const balanceRecipe = yield* Either.try({
         try: () =>
@@ -411,12 +411,13 @@ export class TransactingCapabilityImplementation<
         },
       });
 
-      return yield* pipe(
+      // An empty recipe (e.g. the guaranteed section is already balanced) yields no offer.
+      // Treat that as "nothing to add" rather than a failure, mirroring the fallible section.
+      return pipe(
         this.#prepareOffer(secretKeys, state, balanceRecipe, 0),
-        Either.fromOption(() => {
-          return new OtherWalletError({
-            message: 'Could not create a valid guaranteed offer',
-          });
+        Option.match({
+          onNone: () => ({ offer: undefined, newState: state }),
+          onSome: (result) => result,
         }),
       );
     });

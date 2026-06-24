@@ -22,10 +22,10 @@
 // unshielded spends (ECDSA-SPEND-03) stay covered by tokenTransfer.undeployed.
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import * as rx from 'rxjs';
-import * as ledger from '@midnight-ntwrk/ledger-v9';
-import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { createKeystore } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as utils from './utils.js';
 import { logger } from './logger.js';

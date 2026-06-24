@@ -12,7 +12,7 @@
 // limitations under the License.
 import { describe, expect, it } from 'vitest';
 import { Either } from 'effect';
-import { NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { UnshieldedState } from '../UnshieldedState.js';

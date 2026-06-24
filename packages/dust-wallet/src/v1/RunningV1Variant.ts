@@ -19,26 +19,26 @@ import {
   type SignatureVerifyingKey,
   type FinalizedTransaction,
   type UnprovenTransaction,
-} from '@midnight-ntwrk/ledger-v9';
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+} from '@midnightntwrk/ledger-v9';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { OtherWalletError, type WalletError } from './WalletError.js';
-import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
   type WalletRuntimeError,
   type Variant,
   StateChange,
   VersionChangeType,
-} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+} from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
 import { type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
-import { type SimulatorState } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
+import { type SimulatorState } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type CoinsAndBalancesCapability, type CoinSelection } from './CoinsAndBalances.js';
 import { type NightUtxoSplitForDustRegistration, type TransactingCapability } from './Transacting.js';
 import { type CoreWallet } from './CoreWallet.js';
 import { type SerializationCapability } from './Serialization.js';
 import { type AnyTransaction } from './types/ledger.js';
-import { type DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
