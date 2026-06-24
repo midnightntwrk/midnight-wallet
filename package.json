@@ -55,7 +55,15 @@
     "uuid": "^14.0.0",
     "yaml": "^2.8.3",
     "glob@npm:^10.0.0": "^13.0.6",
-    "@substrate/connect": "^2.0.0"
+    "@substrate/connect": "^2.0.0",
+    "shell-quote": "^1.8.4",
+    "@grpc/grpc-js": "^1.14.4",
+    "postcss": "^8.5.10",
+    "brace-expansion": "^5.0.6",
+    "@babel/core": "^7.29.6",
+    "js-yaml@npm:^4.1.0": "^4.2.0",
+    "js-yaml@npm:^4.1.1": "^4.2.0",
+    "ip-address@npm:^10.0.1": "^10.1.1"
   },
   "scripts": {
     "format:root": "prettier --write --ignore-path .prettierignore.root \"**/*.{ts,js,json,yaml,yml,md}\"",
