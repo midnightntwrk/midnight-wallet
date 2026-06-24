@@ -302,10 +302,12 @@ integration files); the `integration` project `include`s only that glob. Command
 - `yarn test:unit` — unit only (fast gate; no Docker).
 - `yarn test:integration` — integration only.
 
-In CI, unit tests run as a fast early gate; integration tests run as a **matrix with one job per package** (own runner +
-own Docker stack). Within a package job, files run serially (`--no-file-parallelism`) so only one Docker stack is up at
-a time and no two files contend for infra. The package list is discovered dynamically from `*.integration.test.ts`
-files, so adding a test to a new package automatically gets its own CI job.
+In CI, unit tests run as a fast early gate; integration tests run as a **matrix with one job per file** (own runner +
+own Docker stack) so no two files contend for infra and a failing file never cancels the rest. The file list is
+discovered dynamically from `*.integration.test.ts`, so adding a test automatically gets its own parallel CI job — and
+wall-clock stays at the slowest single file regardless of how files are distributed across packages. A single
+`Integration Tests` aggregate job (`needs: [test-integration]`) gates the matrix, giving one required status check while
+the per-file checks remain for detail.
 
 ### Test-Driven Development (MANDATORY)
 
