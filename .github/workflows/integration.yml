@@ -56,7 +56,7 @@ jobs:
       fail-fast: false
       # Each file runs on its own runner with its own Docker stack, so this is a
       # speed/cost knob, not a contention risk. Set to 1 for strictly serial.
-      max-parallel: 8
+      max-parallel: 6
       matrix:
         test-file: ${{ fromJson(needs.discover-integration.outputs.files) }}
     steps:
