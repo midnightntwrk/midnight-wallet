@@ -145,6 +145,9 @@ describe('default v1 serialization capability', () => {
 
   // Deserialization is a trust boundary: a relabelled or spliced snapshot must
   // be rejected, not silently accepted (#402 AC #4 — ECDSA-MM-09 / MM-01/02).
+  // A key whose encoding length does not match its scheme tag cannot be decoded
+  // by the ledger key decoder, so assertKeyAddressConsistency fails closed with
+  // an OtherWalletError rather than letting the wasm trap escape.
   it('rejects an ecdsa-tagged key carrying a schnorr-length value (ECDSA-MM-09)', () => {
     const tampered = JSON.stringify({
       publicKey: {
@@ -163,8 +166,7 @@ describe('default v1 serialization capability', () => {
 
     expect(Either.isLeft(restored)).toBe(true);
     if (Either.isLeft(restored)) {
-      expect(restored.left).toBeInstanceOf(SchemeMismatchError);
-      expect((restored.left as SchemeMismatchError).at).toBe('deserialization');
+      expect(restored.left).toBeInstanceOf(OtherWalletError);
     }
   });
 

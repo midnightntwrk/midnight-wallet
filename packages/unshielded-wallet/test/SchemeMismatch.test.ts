@@ -22,21 +22,18 @@
 //
 // The guards under test live in `src/SchemeConsistency.ts`:
 //   - assertKeyAddressConsistency — the stored address must derive from the stored key (MM-01/02);
-//   - assertSignatureMatchesKey   — a supplied signature must share the key's scheme tag (MM-03/04/05);
-//   - assertKeyTagConsistency     — a tagged key's encoding length must match its tag (MM-09).
+//   - assertSignatureMatchesKey   — a supplied signature must share the key's scheme tag (MM-03/04/05).
 // They are wired into signUnprovenTransaction/signUnboundTransaction (before a signature is attached)
-// and onto the deserialization path; this suite exercises them directly.
+// and onto the deserialization path; this suite exercises them directly. (A relabelled key whose
+// encoding does not match its tag — the former MM-09 case — is rejected by assertKeyAddressConsistency
+// when the ledger key decoder fails to decode it; see serialization.test.ts.)
 
 import * as ledger from '@midnight-ntwrk/ledger-v9';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, type PublicKey, type UnshieldedKeystore } from '../src/KeyStore.js';
-import {
-  assertKeyAddressConsistency,
-  assertKeyTagConsistency,
-  assertSignatureMatchesKey,
-} from '../src/SchemeConsistency.js';
+import { assertKeyAddressConsistency, assertSignatureMatchesKey } from '../src/SchemeConsistency.js';
 import { SchemeMismatchError } from '../src/v1/WalletError.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
@@ -183,35 +180,6 @@ describe('ECDSA-MM — scheme-mismatch rejection (#402 AC #4)', () => {
       expect(ledger.verifySignature(schnorrKey, message, ecdsaSig)).toBe(false);
       expect(ledger.verifySignature(schnorrKey, message, schnorrSig)).toBe(true);
       expect(ledger.verifySignature(ecdsaKey, message, ecdsaSig)).toBe(true);
-    });
-  });
-
-  describe('tag-enforced encoding (MM-09)', () => {
-    it.each([
-      {
-        id: 'ECDSA-MM-09a',
-        title: 'ecdsa tag with schnorr-length value',
-        key: { tag: 'ecdsa' as const, value: schnorrKey.value },
-      },
-      {
-        id: 'ECDSA-MM-09b',
-        title: 'schnorr tag with ecdsa-length value',
-        key: { tag: 'schnorr' as const, value: ecdsaKey.value },
-      },
-    ])('$id rejects "$title" (tag↔encoding length must agree)', ({ key }) => {
-      const result = assertKeyTagConsistency(key);
-
-      expect(Either.isLeft(result)).toBe(true);
-      if (Either.isLeft(result)) {
-        expectSchemeMismatch(result.left, 'deserialization');
-      }
-    });
-
-    it.each([
-      { id: 'schnorr', key: schnorrKey },
-      { id: 'ecdsa', key: ecdsaKey },
-    ])('accepts a well-formed $id key (positive control)', ({ key }) => {
-      expect(Either.isRight(assertKeyTagConsistency(key))).toBe(true);
     });
   });
 

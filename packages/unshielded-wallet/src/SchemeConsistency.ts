@@ -30,20 +30,6 @@ import { OtherWalletError, SchemeMismatchError, type WalletError } from './v1/Wa
 
 const otherScheme = (kind: SignatureKind): SignatureKind => (kind === 'schnorr' ? 'ecdsa' : 'schnorr');
 
-// Hex-string lengths of a verifying key per scheme: BIP-340 schnorr keys are
-// 32-byte x-only (64 hex); ecdsa keys are 33-byte SEC1-compressed (66 hex).
-const VERIFYING_KEY_HEX_LENGTH: Record<SignatureKind, number> = { schnorr: 64, ecdsa: 66 };
-
-const schemeForVerifyingKeyHexLength = (length: number): SignatureKind | undefined => {
-  if (length === VERIFYING_KEY_HEX_LENGTH.schnorr) {
-    return 'schnorr';
-  }
-  if (length === VERIFYING_KEY_HEX_LENGTH.ecdsa) {
-    return 'ecdsa';
-  }
-  return undefined;
-};
-
 /**
  * Asserts that a {@link PublicKey}'s stored address was derived from its stored verifying key. A `schnorr` address
  * bundled with an `ecdsa` key (or the inverse) is rejected at wallet construction.
@@ -54,9 +40,10 @@ const schemeForVerifyingKeyHexLength = (length: number): SignatureKind | undefin
  */
 export const assertKeyAddressConsistency = (publicKey: PublicKey): Either.Either<PublicKey, WalletError> =>
   pipe(
-    // Deriving the address exercises the ledger's key decoder. A value that cleared the length/tag check but is not a
-    // valid curve point throws inside the wasm; wrap it so this guard (run on the deserialization trust boundary) fails
-    // closed with a typed error instead of letting a wasm trap escape.
+    // Deriving the address exercises the ledger's key decoder, which rejects any key whose encoding does not match its
+    // scheme tag (a relabelled or otherwise malformed value — wrong length, or a valid length but not a curve point —
+    // throws inside the wasm). Wrap it so this guard (run on the deserialization trust boundary) fails closed with a
+    // typed `OtherWalletError` instead of letting a wasm trap escape.
     Either.try({
       try: () => addressFromKey(publicKey.publicKey),
       catch: (cause) =>
@@ -107,32 +94,6 @@ export const assertSignatureMatchesKey = (
       expected: key.tag,
       supplied: signature.tag,
       message: `Signature scheme does not match the signing key: expected a ${key.tag} signature but a ${signature.tag} signature was supplied. Signature schemes must not be mixed.`,
-    }),
-  );
-};
-
-/**
- * Asserts that a verifying key's encoding length matches its scheme tag, enforcing the tag boundary on the
- * deserialization path so a key cannot be relabelled across schemes (e.g. an `ecdsa`-tagged value carrying a 32-byte
- * schnorr key).
- *
- * @param key - The tagged verifying key to validate.
- * @returns `Right(key)` when the encoding length matches the tag; otherwise `Left(SchemeMismatchError)` tagged `at:
- *   'deserialization'`.
- */
-export const assertKeyTagConsistency = (
-  key: SignatureVerifyingKey,
-): Either.Either<SignatureVerifyingKey, SchemeMismatchError> => {
-  if (key.value.length === VERIFYING_KEY_HEX_LENGTH[key.tag]) {
-    return Either.right(key);
-  }
-  const supplied = schemeForVerifyingKeyHexLength(key.value.length) ?? otherScheme(key.tag);
-  return Either.left(
-    new SchemeMismatchError({
-      at: 'deserialization',
-      expected: key.tag,
-      supplied,
-      message: `Verifying key encoding does not match its scheme tag: tag is ${key.tag} (expects a ${VERIFYING_KEY_HEX_LENGTH[key.tag] / 2}-byte key) but the value encodes ${key.value.length / 2} bytes. Signature schemes must not be mixed.`,
     }),
   );
 };

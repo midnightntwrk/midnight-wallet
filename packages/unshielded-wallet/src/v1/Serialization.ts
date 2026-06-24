@@ -13,7 +13,7 @@
 import { Either, pipe, Schema } from 'effect';
 import { type SignatureKind } from '@midnight-ntwrk/ledger-v9';
 import { OtherWalletError, type WalletError } from './WalletError.js';
-import { assertKeyAddressConsistency, assertKeyTagConsistency } from '../SchemeConsistency.js';
+import { assertKeyAddressConsistency } from '../SchemeConsistency.js';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { UnshieldedState } from './UnshieldedState.js';
@@ -95,13 +95,14 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         serialized,
         Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
         Either.mapLeft((err) => new OtherWalletError(err)),
-        // Enforce the scheme tag at the deserialization trust boundary: the
-        // verifying key's encoding must match its tag, and the stored address
-        // must derive from that key. Rejects relabelled or spliced snapshots.
+        // Enforce scheme consistency at the deserialization trust boundary: the
+        // stored address must derive from the stored verifying key. This rejects
+        // relabelled or spliced snapshots — a key whose encoding does not match
+        // its scheme tag fails to decode (OtherWalletError), and a key/address
+        // scheme mismatch is reported as a SchemeMismatchError.
         Either.flatMap((snapshot) =>
           pipe(
-            assertKeyTagConsistency(snapshot.publicKey.publicKey),
-            Either.flatMap(() => assertKeyAddressConsistency(snapshot.publicKey)),
+            assertKeyAddressConsistency(snapshot.publicKey),
             Either.map(() => snapshot),
           ),
         ),
