@@ -44,6 +44,9 @@ jobs:
     name: 'Integration Tests: ${{ matrix.test-file }}'
     needs: [discover-integration]
     runs-on: ubuntu-latest-8-core-x64
+    # Per-file guard (each matrix job is one file). Slowest healthy file is ~12 min,
+    # so 30 never false-kills but caps a hung Docker stack instead of the 6h default.
+    timeout-minutes: 30
     strategy:
       # A failing file must not cancel the rest; each file is fully isolated.
       fail-fast: false
