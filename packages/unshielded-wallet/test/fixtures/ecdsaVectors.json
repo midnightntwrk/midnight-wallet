@@ -32,8 +32,8 @@
     "privateKey": "47449ec711797d91de373bdf13d9206bceb7241f1b01f8ebaa8d81e478ff9928",
     "verifyingKey": "03c1dd59dec4983309daebb4a927febe58930f3178bd3381752704d89498d5cd1c",
     "verifyingKeyBytes": 33,
-    "addressHex": "16cf88752c22ec7ad635ea71f4ae674d2b6f41a24cdd57a5bb3fac39eb570134",
-    "bech32Address": "mn_addr_undeployed1zm8csafvytk84434afclftn8f54k7sdzfnw40fdm87krn66hqy6q9t438e",
+    "addressHex": "621ce499ee2d35da2a1f0d606b4c5b1eea0385a309a3c3f29a0486d0edaeac75",
+    "bech32Address": "mn_addr_undeployed1vgwwfx0w956a52slp4sxknzmrm4q8pdrpx3u8u56qjrdpmdw436srw9ujv",
     "signatureDeterministic": true,
     "signature": "6137352fab18d124ba4459937b5c9e0cdfe345f7357b347f1a28b7bb895953206027629e7925aa33b3945c4771fd8b183ba97c67716c0a1fb7c1d74f4a82026b"
   }
