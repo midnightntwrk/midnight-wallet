@@ -156,6 +156,10 @@ jobs:
     name: Unit Tests
     needs: [general-checks]
     runs-on: ubuntu-latest
+    # checks: write lets the junit-report action publish the unit test-result check-run.
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -217,6 +221,11 @@ jobs:
   integration:
     name: Integration Tests
     needs: [test-unit]
+    # Grant here too: a reusable workflow's token is capped by the caller job's
+    # permissions, so checks: write must be granted at the call site as well.
+    permissions:
+      contents: read
+      checks: write
     uses: ./.github/workflows/integration.yml
     secrets: inherit
 

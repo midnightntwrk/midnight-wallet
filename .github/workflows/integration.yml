@@ -16,7 +16,11 @@ env:
   DEPLOYMENT: local
   APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
 
-permissions: {}
+# checks: write lets the junit-report action create test-result check-runs;
+# contents: read is for checkout. Capped by the caller job's permissions in ci.yml.
+permissions:
+  contents: read
+  checks: write
 
 jobs:
   discover-integration:
