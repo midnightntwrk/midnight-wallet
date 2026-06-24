@@ -14,9 +14,9 @@
     "@eslint/js": "10.0.1",
     "@tsconfig/node24": "24.0.4",
     "@types/node": "24.13.2",
-    "@vitest/coverage-v8": "4.1.8",
-    "@vitest/runner": "4.1.8",
-    "@vitest/ui": "4.1.8",
+    "@vitest/coverage-v8": "4.1.9",
+    "@vitest/runner": "4.1.9",
+    "@vitest/ui": "4.1.9",
     "dotenv": "17.4.2",
     "eslint": "10.4.1",
     "eslint-config-prettier": "10.1.8",
@@ -31,10 +31,10 @@
     "turbo": "2.9.16",
     "typescript": "5.9.3",
     "typescript-eslint": "8.61.0",
-    "vitest": "4.1.8"
+    "vitest": "4.1.9"
   },
   "resolutions": {
-    "vitest": "4.1.8",
+    "vitest": "4.1.9",
     "vite": "^7.3.1",
     "readdir-glob": "^3.0.0",
     "minimatch": "^10.2.3",
@@ -47,7 +47,7 @@
     "picomatch@npm:^4.0.2": "^4.0.4",
     "picomatch@npm:^4.0.3": "^4.0.4",
     "rollup": "^4.60.2",
-    "undici": "8.4.1",
+    "undici": "8.5.0",
     "bn.js@npm:^4.0.0": "^4.12.3",
     "bn.js@npm:^4.1.0": "^4.12.3",
     "bn.js@npm:^4.11.9": "^4.12.3",
@@ -55,7 +55,15 @@
     "uuid": "^14.0.0",
     "yaml": "^2.8.3",
     "glob@npm:^10.0.0": "^13.0.6",
-    "@substrate/connect": "^2.0.0"
+    "@substrate/connect": "^2.0.0",
+    "shell-quote": "^1.8.4",
+    "@grpc/grpc-js": "^1.14.4",
+    "postcss": "^8.5.10",
+    "brace-expansion": "^5.0.6",
+    "@babel/core": "^7.29.6",
+    "js-yaml@npm:^4.1.0": "^4.2.0",
+    "js-yaml@npm:^4.1.1": "^4.2.0",
+    "ip-address@npm:^10.0.1": "^10.1.1"
   },
   "scripts": {
     "format:root": "prettier --write --ignore-path .prettierignore.root \"**/*.{ts,js,json,yaml,yml,md}\"",
