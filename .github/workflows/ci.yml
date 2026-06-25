@@ -295,13 +295,13 @@ jobs:
         run: |
           yarn dlx turbo test-undeployed -- -t @smoke
 
-  # ⚠️ TEMPORARY — REMOVE BEFORE MERGE.
-  # Runs the full e2e undeployed suite EXCLUDING @smoke, so the migrated e2e tests
-  # (which normally only run nightly via e2e-tests-local.yml) get validated on this PR.
-  # Gates nothing (not in the `tests` aggregate) so it can't block merge. Delete this
-  # whole job once the migration is verified.
+  # ⚠️ TEMPORARY — currently DISABLED (`if: false`). Kept in place so it can be
+  # re-enabled by flipping `if: false` → `if: true`. Runs the full e2e undeployed
+  # suite EXCLUDING @smoke, validating the migrated e2e tests on the PR (these
+  # otherwise only run nightly via e2e-tests-local.yml). Gates nothing.
   e2e-nonsmoke-temp:
     name: 'TEMP — E2E (non-smoke)'
+    if: false # ← flip to true to re-enable
     needs: [general-checks]
     runs-on: ubuntu-latest-8-core-x64
     steps:
