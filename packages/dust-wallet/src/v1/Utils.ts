@@ -43,11 +43,26 @@ export const hashMapGroupBy = <K, V>(arr: ReadonlyArray<V>, keyFn: (v: V) => K):
     );
   }, HashMap.empty<K, V[]>());
 
-// Little-endian hex, no length prefix
-export const nullifierToHex = (n: bigint): string => {
-  const bytes = Buffer.from(ScaleBigInt.encode(n)).slice(1); // drop the 0x73 prefix byte
+export const leBigintToHex = (n: bigint, dropLengthPrefix: boolean = false): string => {
+  let bytes = Buffer.from(ScaleBigInt.encode(n));
+  if (dropLengthPrefix) {
+    bytes = bytes.subarray(1); // drop the 0x73 prefix byte
+  }
   const str = bytes.toString('hex');
   return str.length % 2 === 0 ? str : '0' + str;
 };
 
 export const uniqueArray = <T>(arr: ReadonlyArray<T>): T[] => Array.from(HashSet.fromIterable(arr));
+
+export const calculatePrefixLength = (anonymityLevel: number, totalItems: number, maxLength: number) => {
+  const itemPower = totalItems <= 0 ? 1 : Math.round(Math.log2(totalItems));
+  let prefixLength = Math.max(0, itemPower - anonymityLevel);
+
+  // as we work with hex values, we need to ensure the length is even
+  prefixLength = prefixLength % 2 === 1 ? prefixLength - 1 : prefixLength;
+
+  // force it to be between 2 (indexer's min length) and maxLength
+  prefixLength = Math.min(maxLength, Math.max(2, prefixLength));
+
+  return prefixLength;
+};

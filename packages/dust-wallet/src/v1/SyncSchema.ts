@@ -455,10 +455,11 @@ export type DustProjectionsUpdate = Data.TaggedEnum<{
     readonly spentUtxos: DustUtxoMap;
     readonly collapsedCommitments: CollapsedMerkleTree[];
     readonly lastBlockTimestamp: Date;
+    readonly dustCommitmentMerkleTreeRoot: string;
+    readonly dustGenerationMerkleTreeRoot: string;
   };
 }>;
 const DustProjectionsUpdate = Data.taggedEnum<DustProjectionsUpdate>();
-export const isState = DustProjectionsUpdate.$is('StateUpdate');
 export const isProgressUpdate = DustProjectionsUpdate.$is('ProgressUpdate');
 export const { $match: match, StateUpdate, ProgressUpdate } = DustProjectionsUpdate;
 
@@ -470,6 +471,8 @@ export const WireBlockDataSchema = Schema.Struct({
   zswapEndIndex: Schema.Number,
   dustCommitmentEndIndex: Schema.Number,
   dustGenerationEndIndex: Schema.Number,
+  dustCommitmentMerkleTreeRoot: Schema.String,
+  dustGenerationMerkleTreeRoot: Schema.String,
 });
 
 export const BlockDataSchema = Schema.transform(
@@ -483,6 +486,8 @@ export const BlockDataSchema = Schema.transform(
       zswapEndIndex: Schema.Number,
       dustCommitmentEndIndex: Schema.Number,
       dustGenerationEndIndex: Schema.Number,
+      dustCommitmentMerkleTreeRoot: Schema.String,
+      dustGenerationMerkleTreeRoot: Schema.String,
     }),
   ),
   {

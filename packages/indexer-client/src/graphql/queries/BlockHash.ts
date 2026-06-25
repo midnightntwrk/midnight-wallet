@@ -25,6 +25,8 @@ export const BlockHash = Query.make(
         zswapEndIndex
         dustCommitmentEndIndex
         dustGenerationEndIndex
+        dustCommitmentMerkleTreeRoot
+        dustGenerationMerkleTreeRoot
       }
     }
   `),

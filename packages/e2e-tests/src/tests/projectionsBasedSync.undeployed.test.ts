@@ -12,7 +12,7 @@
 // limitations under the License.
 import { describe, test, expect } from 'vitest';
 import * as rx from 'rxjs';
-import { Effect, Stream, Queue, Array as Arr } from 'effect';
+import { Array as Arr } from 'effect';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
@@ -85,13 +85,19 @@ describe('Projections-based synchronisation model', () => {
         JSON.stringify(utxo2, (_, v) => (typeof v === 'bigint' ? v.toString() : v)),
     )(state1.utxos, state2.utxos).length === 0;
 
+  const rootsEqual = (state1: ledger.DustLocalState, state2: ledger.DustLocalState) =>
+    state1.commitmentTreeRoot() === state2.commitmentTreeRoot() &&
+    state1.generatingTreeRoot() === state2.generatingTreeRoot();
+
   const sendAndRegisterNightUtxos = async () => {
-    const initialState = await funded.wallet.waitForSyncedState();
     await fundedNew.wallet.doSync(fundedNew.shieldedSecretKeys, fundedNew.dustSecretKey);
+    await receiverNew.wallet.doSync(receiverNew.shieldedSecretKeys, receiverNew.dustSecretKey);
+
+    const initialState = await funded.wallet.waitForSyncedState();
     const initialStateNew = await fundedNew.wallet.waitForSyncedState();
     const receiverInitialState = await receiver.wallet.waitForSyncedState();
-    await receiverNew.wallet.doSync(receiverNew.shieldedSecretKeys, receiverNew.dustSecretKey);
     const receiverInitialStateNew = await receiverNew.wallet.waitForSyncedState();
+
     const receiverInitialAvailableCoins = receiverInitialStateNew.unshielded.availableCoins.length;
     const initialUnshieldedBalance = initialStateNew.unshielded.balances[unshieldedTokenRaw];
     logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
@@ -178,6 +184,13 @@ describe('Projections-based synchronisation model', () => {
     await fundedNew.wallet.doSync(fundedNew.shieldedSecretKeys, fundedNew.dustSecretKey);
     await receiverNew.wallet.doSync(receiverNew.shieldedSecretKeys, receiverNew.dustSecretKey);
 
+    const fundedState = await funded.wallet.waitForSyncedState();
+    const fundedNewState = await fundedNew.wallet.waitForSyncedState();
+    const receiverState = await receiver.wallet.waitForSyncedState();
+    const receiverNewState = await receiverNew.wallet.waitForSyncedState();
+
+    console.log('2) rootsEqual new:', rootsEqual(fundedNewState.dust.state.state, receiverNewState.dust.state.state));
+
     const nightUtxos = receiverState2.unshielded.availableCoins.filter(
       (coin) => coin.meta.registeredForDustGeneration === false,
     );
@@ -200,8 +213,16 @@ describe('Projections-based synchronisation model', () => {
     logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+    await fundedNew.wallet.doSync(fundedNew.shieldedSecretKeys, fundedNew.dustSecretKey);
     await receiverNew.wallet.doSync(receiverNew.shieldedSecretKeys, receiverNew.dustSecretKey);
-    await receiverNew.wallet.waitForSyncedState();
+    // await receiverNew.wallet.waitForSyncedState();
+    console.log(
+      '3) rootsEqual new:',
+      rootsEqual(
+        (await fundedNew.wallet.waitForSyncedState()).dust.state.state,
+        (await receiverNew.wallet.waitForSyncedState()).dust.state.state,
+      ),
+    );
 
     const receiverStateAfterRegistration = await utils.waitForStateAfterDustRegistration(
       receiverNew.wallet,

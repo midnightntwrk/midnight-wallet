@@ -103,6 +103,8 @@ describe('BlockHash query', () => {
         zswapEndIndex: 1,
         dustCommitmentEndIndex: 1,
         dustGenerationEndIndex: 1,
+        dustCommitmentMerkleTreeRoot: '',
+        dustGenerationMerkleTreeRoot: '',
         transactions: [],
       },
     };
@@ -112,6 +114,8 @@ describe('BlockHash query', () => {
         hash: block.block.hash,
         ledgerParameters: block.block.ledgerParameters,
         timestamp: block.block.timestamp,
+        dustCommitmentMerkleTreeRoot: block.block.dustCommitmentMerkleTreeRoot,
+        dustGenerationMerkleTreeRoot: block.block.dustGenerationMerkleTreeRoot,
       }),
     });
     const mockedQueryFn: Mock<(v: BlockHashQueryVariables) => Effect.Effect<BlockHashQuery>> = vi.fn();

@@ -82,7 +82,7 @@ import {
   StateUpdate,
   isProgressUpdate,
 } from './SyncSchema.js';
-import { hashMapGroupBy, nullifierToHex, uniqueArray } from './Utils.js';
+import { calculatePrefixLength, hashMapGroupBy, leBigintToHex, uniqueArray } from './Utils.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
@@ -131,6 +131,7 @@ export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
   networkId: NetworkId;
   batchUpdates?: BatchUpdatesConfig;
+  anonymityLevel?: number;
 };
 
 export type SimulatorSyncConfiguration = {
@@ -266,6 +267,8 @@ const loadCollapsedCommitments = (
   );
 };
 
+const NULLIFIER_LENGTH = 64;
+
 const resolveNullifierSpends = (
   initialNullifiers: DustNullifier[],
   initialNewUtxos: DustUtxoMap,
@@ -274,6 +277,7 @@ const resolveNullifierSpends = (
   latestBlock: BlockData,
   dustGenerationUpdates: DustGenerationsSyncUpdate,
   indexerSyncService: IndexerSyncService,
+  anonymityLevel: number,
   emit: {
     single: (update: DustProjectionsUpdate) => Promise<void>;
   },
@@ -290,10 +294,16 @@ const resolveNullifierSpends = (
           return Effect.succeed(Option.none());
         }
         return Effect.gen(function* () {
+          const prefixLength = calculatePrefixLength(
+            anonymityLevel,
+            latestBlock.dustCommitmentEndIndex - 1,
+            NULLIFIER_LENGTH,
+          );
           const nullifierTransactions = yield* pipe(
             indexerSyncService.subscribeDustNullifierTransactions(
               nullifiersToCheck as Arr.NonEmptyArray<DustNullifier>,
               latestBlock.height,
+              prefixLength,
             ),
             Stream.runCollect,
             Effect.map(Chunk.toArray),
@@ -344,6 +354,7 @@ export const makeEventLessSyncService = (
   const doSync = (
     state: CoreWallet,
     secretKey: DustSecretKey,
+    anonymityLevel: number,
   ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
     return Stream.asyncEffect((emit) =>
       Effect.gen(function* () {
@@ -379,6 +390,7 @@ export const makeEventLessSyncService = (
           blockData,
           dustGenerationUpdates,
           indexerSyncService,
+          anonymityLevel,
           emit,
         );
 
@@ -401,6 +413,8 @@ export const makeEventLessSyncService = (
               newUtxos: finalUtxos,
               collapsedCommitments,
               lastBlockTimestamp: blockData.timestamp,
+              dustCommitmentMerkleTreeRoot: blockData.dustCommitmentMerkleTreeRoot,
+              dustGenerationMerkleTreeRoot: blockData.dustGenerationMerkleTreeRoot,
             }),
           ),
         );
@@ -415,7 +429,7 @@ export const makeEventLessSyncService = (
       secretKey: DustSecretKey,
     ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope> =>
       pipe(
-        doSync(state, secretKey),
+        doSync(state, secretKey, config.anonymityLevel ?? 7),
         Stream.provideSomeLayer(Layer.merge(indexerSyncService.connectionLayer(), indexerSyncService.queryClient())),
       ),
     blockData: (): Effect.Effect<BlockData, WalletError> => defaultSyncService.blockData(),
@@ -435,6 +449,7 @@ export type IndexerSyncService = {
   subscribeDustNullifierTransactions: (
     dustNullifiers: Arr.NonEmptyReadonlyArray<DustNullifier>,
     toBlock: number | null,
+    prefixLength: number,
   ) => Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   dustCommitmentMerkleTreeUpdate: (
     startIndex: number,
@@ -518,14 +533,10 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
     subscribeDustNullifierTransactions(
       dustNullifiers: Arr.NonEmptyReadonlyArray<DustNullifier>,
       toBlock: number | null,
+      prefixLength: number,
     ): Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
-      const hexedNullifiers = HashSet.fromIterable(dustNullifiers.map(nullifierToHex));
+      const hexedNullifiers = HashSet.fromIterable(dustNullifiers.map((n) => leBigintToHex(n, true)));
       console.log(`Subscribing to dust nullifier transactions from block 0 to block ${toBlock}`);
-
-      // TODO: replace with some specific number
-      let prefixLength = [...hexedNullifiers].at(0)!.length / 2;
-      if (prefixLength % 2 === 1) prefixLength -= 1;
-
       return pipe(
         DustNullifierTransactions.run({
           nullifierLeBytesPrefixes: [...hexedNullifiers].map((n) => n.substring(0, prefixLength)),
@@ -656,9 +667,6 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         const received = Option.getOrElse(HashMap.get(groupedNewUtxos, txId), () => []);
         const spent = Option.getOrElse(HashMap.get(groupedSpentUtxos, txId), () => []);
         const txHash = (received.at(0)?.transactionHash || spent.at(0)?.transactionHash)!;
-        console.log(
-          `Processing transaction ${txHash} with ${received.length} received and ${spent.length} spent UTXOs`,
-        );
         return new DustStateChanges(
           txHash,
           received.map(({ qdo }) => qdo),
@@ -668,6 +676,23 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
 
       updatedWallet.state.syncTime = lastBlockTimestamp;
       updatedWallet = { ...updatedWallet, state: updatedWallet.state.processTtls(lastBlockTimestamp) };
+
+      const newCommitmentTreeRoot =
+        updatedWallet.state.commitmentTreeRoot() !== undefined
+          ? leBigintToHex(updatedWallet.state.commitmentTreeRoot()!)
+          : '';
+      const newGeneratingTreeRoot =
+        updatedWallet.state.generatingTreeRoot() !== undefined
+          ? leBigintToHex(updatedWallet.state.generatingTreeRoot()!)
+          : '';
+
+      // verify root hashes
+      if (
+        newCommitmentTreeRoot !== update.dustCommitmentMerkleTreeRoot ||
+        newGeneratingTreeRoot !== update.dustGenerationMerkleTreeRoot
+      ) {
+        // throw new OtherWalletError({ message: 'Root hashes don`t match' });
+      }
 
       return [updatedWallet, { changes, protocolVersion: Number(state.protocolVersion) }];
     },
@@ -785,6 +810,8 @@ export const makeSimulatorSyncService = (
           zswapEndIndex: 1, // NOTE: not implemented
           dustCommitmentEndIndex: 1, // NOTE: not implemented
           dustGenerationEndIndex: 1, // NOTE: not implemented
+          dustCommitmentMerkleTreeRoot: '', // NOTE: not implemented
+          dustGenerationMerkleTreeRoot: '', // NOTE: not implemented
         };
       });
     },
