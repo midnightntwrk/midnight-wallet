@@ -1,0 +1,18 @@
+@startuml
+
+[*] --> seed
+seed --> ESK: sample "midnight:esk"
+seed --> CSK: sha256 "midnight:csk"
+ESK --> EPK: ECDH
+CSK --> CPK: sha256 "mdn:pk"
+EPK --> addr: Base16
+CPK --> addr: Base16
+
+state "Zswap Seed" as seed: 32 bytes
+state "Encryption Secret Key" as ESK: Key to decrypt outputs
+state "Encryption Public Key" as EPK: Key to encrypt outputs
+state "Coin Secret Key" as CSK: Key to spend coins
+state "Coin Public Key" as CPK: Key to receive coins
+state "Address" as addr: Address for sharing with other parties\nConcatenation of public keys
+
+@enduml

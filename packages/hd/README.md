@@ -2,6 +2,9 @@
 
 This package provides support for Hierarchical Deterministic (HD) Wallet.
 
+Key derivation follows the [Wallet Specification](../../docs/spec/Specification.md) (Key management section); the
+[spec reference implementation](../spec-reference) provides the canonical test vectors.
+
 To allow deterministic derivation of keys for different features, Midnight follows algorithms and structure being a mix
 of [BIP-32](https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki),
 [BIP-44](https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki) and
