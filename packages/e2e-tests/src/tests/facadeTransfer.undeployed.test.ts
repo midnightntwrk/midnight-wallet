@@ -29,7 +29,7 @@ import {
   WalletFacade,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
-import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tNightAmount } from './utils.js';
+import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils.js';
 import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
@@ -150,7 +150,7 @@ describe('Wallet Facade Transfer', () => {
             {
               type: ledger.shieldedToken().raw,
               receiverAddress,
-              amount: tNightAmount(1n),
+              amount: tokenValue(1n),
             },
           ],
         },
@@ -184,7 +184,7 @@ describe('Wallet Facade Transfer', () => {
     const isValid = await rx.firstValueFrom(
       receiverFacade
         .state()
-        .pipe(rx.filter((s) => s.shielded.availableCoins.some((c) => c.coin.value === tNightAmount(1n)))),
+        .pipe(rx.filter((s) => s.shielded.availableCoins.some((c) => c.coin.value === tokenValue(1n)))),
     );
 
     expect(isValid).toBeTruthy();
@@ -200,7 +200,7 @@ describe('Wallet Facade Transfer', () => {
         type: 'unshielded',
         outputs: [
           {
-            amount: tNightAmount(1n),
+            amount: tokenValue(1n),
             receiverAddress,
             type: ledger.unshieldedToken().raw,
           },
@@ -245,7 +245,7 @@ describe('Wallet Facade Transfer', () => {
     const isValid = await rx.firstValueFrom(
       receiverFacade
         .state()
-        .pipe(rx.filter((s) => s.unshielded.availableCoins.some((c) => c.utxo.value === tNightAmount(1n)))),
+        .pipe(rx.filter((s) => s.unshielded.availableCoins.some((c) => c.utxo.value === tokenValue(1n)))),
     );
 
     expect(isValid).toBeTruthy();
@@ -263,7 +263,7 @@ describe('Wallet Facade Transfer', () => {
 
     const transfer = {
       type: ledger.shieldedToken().raw,
-      amount: tNightAmount(1n),
+      amount: tokenValue(1n),
     };
 
     const coin = ledger.createShieldedCoinInfo(transfer.type, transfer.amount);
@@ -299,7 +299,7 @@ describe('Wallet Facade Transfer', () => {
     const isValid = await rx.firstValueFrom(
       receiverFacade
         .state()
-        .pipe(rx.filter((s) => s.shielded.availableCoins.some((c) => c.coin.value === tNightAmount(1n)))),
+        .pipe(rx.filter((s) => s.shielded.availableCoins.some((c) => c.coin.value === tokenValue(1n)))),
     );
 
     expect(isValid).toBeTruthy();
@@ -316,7 +316,7 @@ describe('Wallet Facade Transfer', () => {
     const outputs = [
       {
         type: ledger.unshieldedToken().raw,
-        value: tNightAmount(1n),
+        value: tokenValue(1n),
         owner: unshieldedReceiverKeystore.getAddress(),
       },
     ];
@@ -351,7 +351,7 @@ describe('Wallet Facade Transfer', () => {
     const isValid = await rx.firstValueFrom(
       receiverFacade
         .state()
-        .pipe(rx.filter((s) => s.unshielded.availableCoins.some((c) => c.utxo.value === tNightAmount(1n)))),
+        .pipe(rx.filter((s) => s.unshielded.availableCoins.some((c) => c.utxo.value === tokenValue(1n)))),
     );
 
     expect(isValid).toBeTruthy();
@@ -362,7 +362,7 @@ describe('Wallet Facade Transfer', () => {
   // with MalformedError::FeeCalculation (node error code 168). Keeping this test last
   // avoids the cross-test interference until the underlying fee-calc divergence is fixed.
   it('records shielded, unshielded, and dust sections in tx history for a combined transfer matches expected structure', async () => {
-    const transferAmount = tNightAmount(1n);
+    const transferAmount = tokenValue(1n);
 
     const [, receiverPreState] = await Promise.all([
       senderFacade.waitForSyncedState(),

@@ -20,6 +20,9 @@ export const sleep = (secs: number): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, secs * 1000));
 };
 
+/** Waits a fixed interval for Dust to be generated from registered Night. */
+export const waitForDustGenerated = (seconds: number = 10): Promise<void> => sleep(seconds);
+
 const fetchBlockHeight = async (indexerHttpUrl: string): Promise<number> => {
   const result = await QueryRunner.runPromise(BlockHash, { offset: null }, { url: indexerHttpUrl });
   if (!result.block) throw new Error('No block returned from indexer');

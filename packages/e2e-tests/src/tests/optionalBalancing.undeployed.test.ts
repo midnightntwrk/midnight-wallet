@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tNightAmount } from './utils.js';
+import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import {
@@ -128,14 +128,14 @@ describe('Optional Balancing', () => {
   const unshieldedTokenType = ledger.unshieldedToken().raw;
 
   const createArbitraryShieldedOffer = () => {
-    const coin = ledger.createShieldedCoinInfo(shieldedTokenType, tNightAmount(1n));
+    const coin = ledger.createShieldedCoinInfo(shieldedTokenType, tokenValue(1n));
     const zswapOutput = ledger.ZswapOutput.new(
       coin,
       0,
       ledger.sampleCoinPublicKey(),
       ledger.sampleEncryptionPublicKey(),
     );
-    return ledger.ZswapOffer.fromOutput(zswapOutput, shieldedTokenType, tNightAmount(1n));
+    return ledger.ZswapOffer.fromOutput(zswapOutput, shieldedTokenType, tokenValue(1n));
   };
 
   const createArbitraryTx = (networkId: NetworkId.NetworkId): ledger.UnprovenTransaction => {
@@ -144,7 +144,7 @@ describe('Optional Balancing', () => {
     const unshieldedOutput = [
       {
         type: unshieldedTokenType,
-        value: tNightAmount(1n),
+        value: tokenValue(1n),
         owner: ledger.sampleUserAddress(),
       },
     ];
@@ -589,7 +589,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.initSwap(
         {
           shielded: {
-            [shieldedTokenType]: tNightAmount(1n),
+            [shieldedTokenType]: tokenValue(1n),
           },
         },
         [
@@ -599,7 +599,7 @@ describe('Optional Balancing', () => {
               {
                 type: shieldedTokenType,
                 receiverAddress: shielded.address,
-                amount: tNightAmount(1n),
+                amount: tokenValue(1n),
               },
             ],
           },
@@ -623,7 +623,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.initSwap(
         {
           shielded: {
-            [shieldedTokenType]: tNightAmount(1n),
+            [shieldedTokenType]: tokenValue(1n),
           },
         },
         [
@@ -633,7 +633,7 @@ describe('Optional Balancing', () => {
               {
                 type: shieldedTokenType,
                 receiverAddress: shielded.address,
-                amount: tNightAmount(1n),
+                amount: tokenValue(1n),
               },
             ],
           },
@@ -657,7 +657,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.initSwap(
         {
           shielded: {
-            [shieldedTokenType]: tNightAmount(1n),
+            [shieldedTokenType]: tokenValue(1n),
           },
         },
         [
@@ -667,7 +667,7 @@ describe('Optional Balancing', () => {
               {
                 type: shieldedTokenType,
                 receiverAddress: shielded.address,
-                amount: tNightAmount(1n),
+                amount: tokenValue(1n),
               },
             ],
           },
@@ -699,7 +699,7 @@ describe('Optional Balancing', () => {
               {
                 type: shieldedTokenType,
                 receiverAddress: shielded.address,
-                amount: tNightAmount(1n),
+                amount: tokenValue(1n),
               },
             ],
           },
@@ -728,7 +728,7 @@ describe('Optional Balancing', () => {
               {
                 type: shieldedTokenType,
                 receiverAddress: shielded.address,
-                amount: tNightAmount(1n),
+                amount: tokenValue(1n),
               },
             ],
           },
@@ -757,7 +757,7 @@ describe('Optional Balancing', () => {
               {
                 type: shieldedTokenType,
                 receiverAddress: shielded.address,
-                amount: tNightAmount(1n),
+                amount: tokenValue(1n),
               },
             ],
           },
