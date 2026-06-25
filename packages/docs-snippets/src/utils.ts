@@ -101,4 +101,7 @@ export const aFakeProvingProvider: ledger.ProvingProvider = {
   prove(_serializedPreimage: Uint8Array, _keyLocation: string, _overwriteBindingInput?: bigint): Promise<Uint8Array> {
     return Promise.resolve(new Uint8Array(0));
   },
+  lookupKey(_keyLocation: string): Promise<ledger.ProvingKeyMaterial | undefined> {
+    return Promise.resolve(undefined);
+  },
 };
