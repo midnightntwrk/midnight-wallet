@@ -29,8 +29,8 @@ import {
   WalletEntrySchema,
   WalletFacade,
   mergeWalletEntries,
-} from '../src/index.js';
-import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils/index.js';
+} from '@midnightntwrk/wallet-sdk-facade';
+import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tNightAmount } from './utils.js';
 import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
@@ -154,10 +154,10 @@ describe('Swaps', () => {
     const { shielded: walletBShieldedStateBefore } = facadeBState;
 
     const nativeShieldedTokenType = '0000000000000000000000000000000000000000000000000000000000000002';
-    const nativeShieldedTokenAmount = tokenValue(10n);
+    const nativeShieldedTokenAmount = tNightAmount(10n);
 
     const shieldedTokenType = ledger.shieldedToken().raw;
-    const shieldedTokenAmount = tokenValue(10n);
+    const shieldedTokenAmount = tNightAmount(10n);
 
     const ttl = new Date(Date.now() + 60 * 60 * 1000);
 

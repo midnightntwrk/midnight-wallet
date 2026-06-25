@@ -19,7 +19,7 @@ import { Array as Arr, Order, pipe } from 'effect';
 import { type Observable } from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForDustGenerated } from './utils/helpers.js';
+import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tNightAmount, sleep } from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import {
   createKeystore,
@@ -35,7 +35,7 @@ import {
   WalletEntrySchema,
   WalletFacade,
   mergeWalletEntries,
-} from '../src/index.js';
+} from '@midnightntwrk/wallet-sdk-facade';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ArrayOps, DateOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -155,7 +155,7 @@ describe('Dust Registration', () => {
         type: 'unshielded',
         outputs: [
           {
-            amount: tokenValue(150_000_000n),
+            amount: tNightAmount(150_000_000n),
             receiverAddress: unshieldedReceiverState,
             type: ledger.unshieldedToken().raw,
           },
@@ -205,7 +205,7 @@ describe('Dust Registration', () => {
 
     expect(ArrayOps.sumBigInt(nightUtxos.map(({ utxo }) => utxo.value))).toEqual(nightBalanceBeforeRegistration);
 
-    await waitForDustGenerated();
+    await sleep(10);
 
     const dustRegistrationRecipe = await receiverFacade.registerNightUtxosForDustGeneration(
       nightUtxos,
@@ -254,7 +254,7 @@ describe('Dust Registration', () => {
           type: 'unshielded',
           outputs: [
             {
-              amount: tokenValue(1_000_000n),
+              amount: tNightAmount(1_000_000n),
               receiverAddress: unshieldedReceiverAddress,
               type: ledger.unshieldedToken().raw,
             },
