@@ -52,6 +52,8 @@
     "publint": "publint --strict"
   },
   "devDependencies": {
-    "@midnightntwrk/wallet-sdk-hd": "^3.0.2"
+    "@midnightntwrk/wallet-sdk-hd": "^3.0.2",
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.8.0"
   }
 }

@@ -20,6 +20,7 @@ export type WalletError =
   | SyncWalletError
   | TransactingError
   | SignError
+  | SchemeMismatchError
   | ApplyTransactionError
   | RollbackUtxoError
   | SpendUtxoError;
@@ -54,6 +55,18 @@ export class TransactingError extends Data.TaggedError('Wallet.Transacting')<{
 export class SignError extends Data.TaggedError('Wallet.Sign')<{
   message: string;
   cause?: unknown;
+}> {}
+
+/**
+ * Raised when a signature scheme (`schnorr` vs `ecdsa`) is mixed across an unshielded key, address, or signature.
+ * Mismatches are rejected early — at wallet construction or at signature provision — never silently coerced. The `at`
+ * field records where the mismatch was caught.
+ */
+export class SchemeMismatchError extends Data.TaggedError('Wallet.SchemeMismatch')<{
+  message: string;
+  expected: ledger.SignatureKind;
+  supplied: ledger.SignatureKind;
+  at: 'construction' | 'signature-provision';
 }> {}
 
 export class ApplyTransactionError extends Data.TaggedError('Wallet.ApplyTransaction')<{

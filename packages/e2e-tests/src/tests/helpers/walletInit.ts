@@ -30,6 +30,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { Roles } from '@midnightntwrk/wallet-sdk-hd';
 import { type TestContainersFixture } from '../test-fixture.js';
 import { logger } from '../logger.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed } from './seeds.js';
@@ -249,12 +250,21 @@ export const saveState = async (wallet: WalletFacade, filename: string) => {
   }
 };
 
-export const initWalletWithSeed = async (seed: string, fixture: TestContainersFixture): Promise<WalletInit> => {
+export const initWalletWithSeed = async (
+  seed: string,
+  fixture: TestContainersFixture,
+  // Unshielded signing scheme. Defaults to `schnorr` (legacy/default role) so
+  // existing callers are unaffected; `ecdsa` derives under its own HD role.
+  unshieldedScheme: ledger.SignatureKind = 'schnorr',
+): Promise<WalletInit> => {
   const walletConfig = fixture.getWalletConfig();
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
   const unshieldedKeystore = createKeystore(
-    { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
+    {
+      kind: unshieldedScheme,
+      secret: getUnshieldedSeed(seed, unshieldedScheme === 'ecdsa' ? Roles.EcdsaUnshielded : Roles.NightExternal),
+    },
     fixture.getNetworkId(),
   );
 
