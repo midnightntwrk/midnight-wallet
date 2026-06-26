@@ -294,9 +294,11 @@ Tests are split by **filename suffix** so each type can run independently:
 **When adding a test, pick the suffix by whether it needs live infra to pass.** Do not mix both kinds in one file — if a
 file would need both, split it (see `BlockHash.test.ts` / `BlockHash.integration.test.ts` in `indexer-client`).
 
-Selection is wired per package via two Vitest projects (`unit` / `integration`) declared in each `vitest.config.ts`. The
-`unit` project must `exclude` the `**/*.integration.test.ts` glob (the default `**/*.test.ts` would otherwise match
-integration files); the `integration` project `include`s only that glob. Commands:
+Selection is wired via `unit` and `integration` Vitest projects in each SDK package's `vitest.config.ts` (the e2e
+packages differ — `e2e-tests` uses `undeployed`/`remote`/`universal`, and `docs-snippets` adds an `undeployed` project
+for its snippet runner; see the e2e tier below). The `unit` project must `exclude` the `**/*.integration.test.ts` glob
+(the default `**/*.test.ts` would otherwise match integration files); the `integration` project `include`s only that
+glob. Commands:
 
 - `yarn test` — full suite (both projects).
 - `yarn test:unit` — unit only (fast gate; no Docker).
@@ -305,9 +307,17 @@ integration files); the `integration` project `include`s only that glob. Command
 In CI, unit tests run as a fast early gate; integration tests run as a **matrix with one job per file** (own runner +
 own Docker stack) so no two files contend for infra and a failing file never cancels the rest. The file list is
 discovered dynamically from `*.integration.test.ts`, so adding a test automatically gets its own parallel CI job — and
-wall-clock stays at the slowest single file regardless of how files are distributed across packages. A single
-`Integration Tests` aggregate job (`needs: [test-integration]`) gates the matrix, giving one required status check while
-the per-file checks remain for detail.
+wall-clock stays at the slowest single file regardless of how files are distributed across packages. The matrix lives in
+a reusable workflow (`.github/workflows/integration.yml`) invoked as a single `Integration Tests` job, so GitHub nests
+the per-file jobs under one collapsible check.
+
+The required status check for merge is the aggregate **`Tests`** job, which passes only when **all** tiers pass — it
+gates on unit, integration, and smoke e2e (`needs: [test-unit, integration, e2e-smoke]`).
+
+**End-to-end tests** are a separate tier: full wallet flows through the public API against real infra are e2e, not
+integration. They live in the `e2e-tests` package as `*.undeployed.test.ts` and run via `turbo test-undeployed` (smoke
+subset on PRs, full suite nightly) — not in the integration matrix. The docs-snippets runner is also e2e and runs in that
+lane while staying in its own package.
 
 ### Test-Driven Development (MANDATORY)
 
