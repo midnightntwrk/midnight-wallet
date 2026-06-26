@@ -337,7 +337,6 @@ export type DustGenerationsSyncUpdate = {
   rawUpdates: DustGenerationsSubscription[];
   newGenerations: NewDustGeneration[];
   generationDtimeUpdates: DustGenerationDtimUpdate[];
-  lastUpdateIndex: number | undefined;
 };
 export const DustGenerationsSyncUpdate = {
   create: (
@@ -381,17 +380,10 @@ export const DustGenerationsSyncUpdate = {
       .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
       .map(({ __typename, ...rest }) => rest);
 
-    const lastUpdateIndex = rawUpdates
-      .filter((u) => u.__typename === 'DustGenerationsProgress')
-      .map((u) => u.highestIndex)
-      .toSorted()
-      .at(-1);
-
     return {
       rawUpdates,
       newGenerations,
       generationDtimeUpdates,
-      lastUpdateIndex,
     };
   },
 };
@@ -448,7 +440,7 @@ export const DustUtxoMap = {
 };
 
 export type DustProjectionsUpdate = Data.TaggedEnum<{
-  ProgressUpdate: { readonly progress: number };
+  ProgressUpdate: { readonly appliedIndex?: number; readonly highestRelevantIndex?: number };
   StateUpdate: {
     readonly dustGenerations: DustGenerationsSyncUpdate;
     readonly newUtxos: DustUtxoMap;

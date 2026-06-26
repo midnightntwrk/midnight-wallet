@@ -271,6 +271,8 @@ const resolveNullifierSpends = (
   WalletError,
   Scope.Scope | SubscriptionClient
 > => {
+  const maxCommitmentEndIndex = latestBlock.dustCommitmentEndIndex - 1;
+  const commitmentIndicesSum = initialNullifiers.length * maxCommitmentEndIndex;
   return pipe(
     Stream.unfoldEffect(
       [initialNullifiers, initialNewUtxos, HashMap.empty() as DustUtxoMap] as const,
@@ -279,11 +281,7 @@ const resolveNullifierSpends = (
           return Effect.succeed(Option.none());
         }
         return Effect.gen(function* () {
-          const prefixLength = calculatePrefixLength(
-            anonymityLevel,
-            latestBlock.dustCommitmentEndIndex - 1,
-            NULLIFIER_LENGTH,
-          );
+          const prefixLength = calculatePrefixLength(anonymityLevel, maxCommitmentEndIndex, NULLIFIER_LENGTH);
           const nullifierTransactions = yield* pipe(
             indexerSyncService.subscribeDustNullifierTransactions(
               nullifiersToCheck as Arr.NonEmptyArray<DustNullifier>,
@@ -305,9 +303,12 @@ const resolveNullifierSpends = (
           const freshUtxos = dustUtxoUpdates.filter((u) => !u.isSpent);
           if (freshUtxos.length > 0) {
             const mtIndicesSum = freshUtxos.reduce((partialSum, a) => partialSum + a.qdo.mtIndex, 0n);
-            const maxCommitmentIndex = latestBlock.dustCommitmentEndIndex - 1;
-            const progress = (0.8 * Number(mtIndicesSum)) / (freshUtxos.length * maxCommitmentIndex);
-            yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: progress * 100 + 10 })));
+            const generationEndIndex = latestBlock.dustGenerationEndIndex - 1;
+            const progress =
+              Number(mtIndicesSum) +
+              ((initialNullifiers.length - freshUtxos.length) * maxCommitmentEndIndex) / commitmentIndicesSum;
+            // NOTE: since this process goes after the generation updates, we need to add the generationEndIndex to the progress
+            yield* Effect.promise(() => emit.single(ProgressUpdate({ appliedIndex: progress + generationEndIndex })));
           }
 
           const { nextUtxos, nextSpentUtxos } = accumulateUtxoUpdates(dustUtxoUpdates, newUtxos, spentUtxos);
@@ -344,6 +345,17 @@ export const doEventlessSync = (
       const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree - 1n;
       const lastSyncedGenerationIndex = state.state.generatingTreeFirstFree - 1n;
 
+      const highestInitialIndex =
+        maxGeneratingTreeIndex + maxCommitmentTreeIndex + state.state.nullifiers.size * maxCommitmentTreeIndex;
+      const initialAppliedIndex =
+        Number(lastSyncedGenerationIndex) +
+        Number(lastSyncedCommitmentIndex) +
+        state.state.nullifiers.size * Number(maxCommitmentTreeIndex);
+
+      yield* Effect.promise(() =>
+        emit.single(ProgressUpdate({ highestRelevantIndex: highestInitialIndex, appliedIndex: initialAppliedIndex })),
+      );
+
       const rawGenerations = yield* pipe(
         indexerSyncService.subscribeDustGenerations(
           state.publicKey.address,
@@ -355,13 +367,20 @@ export const doEventlessSync = (
       );
       const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
 
-      yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 10 })));
-
       const initialNullifiers = dustGenerationUpdates.newGenerations
         .map((n) => n.dustNullifier)
         .concat([...state.state.nullifiers.keys()]);
-      const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
 
+      const highestRelevantIndex =
+        maxGeneratingTreeIndex + maxCommitmentTreeIndex + initialNullifiers.length * maxCommitmentTreeIndex;
+
+      // increase the highestRelevantIndex as our nullifier list got expanded by new generations
+      // appliedIndex now reflects the completed generation tree sync
+      yield* Effect.promise(() =>
+        emit.single(ProgressUpdate({ highestRelevantIndex, appliedIndex: maxGeneratingTreeIndex })),
+      );
+
+      const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
       const { nextUtxos: finalUtxos, nextSpentUtxos: finalSpentUtxos } = yield* resolveNullifierSpends(
         initialNullifiers,
         initialNewUtxos,
@@ -374,7 +393,11 @@ export const doEventlessSync = (
         emit,
       );
 
-      yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 90 })));
+      yield* Effect.promise(() =>
+        emit.single(
+          ProgressUpdate({ appliedIndex: maxGeneratingTreeIndex + initialNullifiers.length * maxCommitmentTreeIndex }),
+        ),
+      );
 
       // lastSyncedCommitmentIndex out of maxCommitmentTreeIndex
       const collapsedCommitments = yield* loadCollapsedCommitments(
@@ -384,7 +407,6 @@ export const doEventlessSync = (
         indexerSyncService,
       );
 
-      yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 100 })));
       yield* Effect.promise(() =>
         emit.single(
           StateUpdate({
@@ -398,6 +420,9 @@ export const doEventlessSync = (
           }),
         ),
       );
+
+      // NOTE: appliedIndex = highestRelevantIndex means we're fully synced
+      yield* Effect.promise(() => emit.single(ProgressUpdate({ appliedIndex: highestRelevantIndex })));
       yield* Effect.promise(() => emit.end());
     }),
   );
@@ -627,7 +652,10 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
       if (isProgressUpdate(update)) {
         return [
           CoreWallet.updateProgress(state, {
-            highestIndex: BigInt(Math.floor(update.progress)), // we use the `highestIndex` to track the local progress
+            appliedIndex: BigInt(update.appliedIndex ?? state.progress.appliedIndex),
+            highestRelevantWalletIndex: BigInt(
+              update.highestRelevantIndex ?? state.progress.highestRelevantWalletIndex,
+            ),
             isConnected: true,
           }),
           { changes: [], protocolVersion: Number(state.protocolVersion) },
@@ -651,15 +679,6 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
       updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, newUtxos);
       updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, newUtxos, collapsedCommitments);
       updatedWallet = CoreWallet.applySpentNullifiers(updatedWallet, [...HashMap.keys(spentUtxos)]);
-
-      if (dustGenerations.lastUpdateIndex !== undefined) {
-        updatedWallet = CoreWallet.updateProgress(updatedWallet, {
-          appliedIndex: BigInt(dustGenerations.lastUpdateIndex),
-          highestIndex: 0n, // reset the local progress
-          highestRelevantWalletIndex: BigInt(dustGenerations.lastUpdateIndex),
-          isConnected: true,
-        });
-      }
 
       const groupedNewUtxos = hashMapGroupBy([...HashMap.values(newUtxos)], (u) => u.transactionId);
       const groupedSpentUtxos = hashMapGroupBy([...HashMap.values(spentUtxos)], (u) => u.transactionId);
@@ -712,7 +731,7 @@ const createUtxoUpdatesFromSpend = (
   generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
   transaction: NullifierRegularTransaction,
   dustSpend: DustSpendProcessedEvent,
-): Effect.Effect<DustUtxoUpdate[], SyncWalletError> =>
+): Effect.Effect<[DustUtxoUpdate, DustUtxoUpdate], SyncWalletError> =>
   Effect.gen(function* () {
     const { nullifier, vFee, commitmentIndex, declaredTime } = dustSpend;
     const knownUtxo = Option.getOrUndefined(HashMap.get(knownUtxos, nullifier));
