@@ -179,27 +179,12 @@ export const makeDefaultSyncService = (
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },
+
     blockData: (height?: number): Effect.Effect<BlockData, WalletError> => {
-      return Effect.gen(function* () {
-        const query = yield* BlockHash;
-        const result = yield* query({ offset: height !== undefined ? { height } : null });
-        return result.block;
-      }).pipe(
+      return pipe(
+        indexerSyncService.blockData(height),
         Effect.provide(indexerSyncService.queryClient()),
         Effect.scoped,
-        Effect.catchAll((err) =>
-          Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
-        ),
-        Effect.flatMap((blockData) => {
-          if (!blockData) {
-            throw new OtherWalletError({ message: 'Unable to fetch block data' });
-          }
-          return pipe(
-            Schema.decodeUnknownEither(BlockDataSchema)(blockData),
-            Either.mapLeft((err) => new SyncWalletError(err)),
-            EitherOps.toEffect,
-          );
-        }),
       );
     },
   };
@@ -345,83 +330,85 @@ const resolveNullifierSpends = (
   );
 };
 
+export const doEventlessSync = (
+  state: CoreWallet,
+  secretKey: DustSecretKey,
+  anonymityLevel: number,
+  indexerSyncService: IndexerSyncService,
+): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
+  return Stream.asyncEffect((emit) =>
+    Effect.gen(function* () {
+      const blockData = yield* indexerSyncService.blockData();
+      const maxCommitmentTreeIndex = blockData.dustCommitmentEndIndex - 1;
+      const maxGeneratingTreeIndex = blockData.dustGenerationEndIndex - 1;
+      const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree - 1n;
+      const lastSyncedGenerationIndex = state.state.generatingTreeFirstFree - 1n;
+
+      const rawGenerations = yield* pipe(
+        indexerSyncService.subscribeDustGenerations(
+          state.publicKey.address,
+          Number(lastSyncedGenerationIndex),
+          maxGeneratingTreeIndex,
+        ),
+        Stream.runCollect,
+        Effect.map(Chunk.toArray),
+      );
+      const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
+
+      yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 10 })));
+
+      const initialNullifiers = dustGenerationUpdates.newGenerations
+        .map((n) => n.dustNullifier)
+        .concat([...state.state.nullifiers.keys()]);
+      const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
+
+      const { nextUtxos: finalUtxos, nextSpentUtxos: finalSpentUtxos } = yield* resolveNullifierSpends(
+        initialNullifiers,
+        initialNewUtxos,
+        state.state,
+        secretKey,
+        blockData,
+        dustGenerationUpdates,
+        indexerSyncService,
+        anonymityLevel,
+        emit,
+      );
+
+      yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 90 })));
+
+      // lastSyncedCommitmentIndex out of maxCommitmentTreeIndex
+      const collapsedCommitments = yield* loadCollapsedCommitments(
+        Math.max(0, Number(lastSyncedCommitmentIndex)),
+        maxCommitmentTreeIndex,
+        finalUtxos,
+        indexerSyncService,
+      );
+
+      yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 100 })));
+      yield* Effect.promise(() =>
+        emit.single(
+          StateUpdate({
+            dustGenerations: dustGenerationUpdates,
+            spentUtxos: finalSpentUtxos,
+            newUtxos: finalUtxos,
+            collapsedCommitments,
+            lastBlockTimestamp: blockData.timestamp,
+            dustCommitmentMerkleTreeRoot: blockData.dustCommitmentMerkleTreeRoot,
+            dustGenerationMerkleTreeRoot: blockData.dustGenerationMerkleTreeRoot,
+          }),
+        ),
+      );
+      yield* Effect.promise(() => emit.end());
+    }),
+  );
+};
+
 export const makeEventLessSyncService = (
   config: DefaultSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, DustProjectionsUpdate> => {
   const defaultSyncService = makeDefaultSyncService(config);
   const indexerSyncService = makeIndexerSyncService(config);
-
-  const doSync = (
-    state: CoreWallet,
-    secretKey: DustSecretKey,
-    anonymityLevel: number,
-  ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
-    return Stream.asyncEffect((emit) =>
-      Effect.gen(function* () {
-        const blockData = yield* defaultSyncService.blockData();
-        const maxCommitmentTreeIndex = blockData.dustCommitmentEndIndex - 1;
-        const maxGeneratingTreeIndex = blockData.dustGenerationEndIndex - 1;
-        const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree - 1n;
-        const lastSyncedGenerationIndex = state.state.generatingTreeFirstFree - 1n;
-
-        const rawGenerations = yield* pipe(
-          indexerSyncService.subscribeDustGenerations(
-            state.publicKey.address,
-            Number(lastSyncedGenerationIndex),
-            maxGeneratingTreeIndex,
-          ),
-          Stream.runCollect,
-          Effect.map(Chunk.toArray),
-        );
-        const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
-
-        yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 10 })));
-
-        const initialNullifiers = dustGenerationUpdates.newGenerations
-          .map((n) => n.dustNullifier)
-          .concat([...state.state.nullifiers.keys()]);
-        const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
-
-        const { nextUtxos: finalUtxos, nextSpentUtxos: finalSpentUtxos } = yield* resolveNullifierSpends(
-          initialNullifiers,
-          initialNewUtxos,
-          state.state,
-          secretKey,
-          blockData,
-          dustGenerationUpdates,
-          indexerSyncService,
-          anonymityLevel,
-          emit,
-        );
-
-        yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 90 })));
-
-        // lastSyncedCommitmentIndex out of maxCommitmentTreeIndex
-        const collapsedCommitments = yield* loadCollapsedCommitments(
-          Math.max(0, Number(lastSyncedCommitmentIndex)),
-          maxCommitmentTreeIndex,
-          finalUtxos,
-          indexerSyncService,
-        );
-
-        yield* Effect.promise(() => emit.single(ProgressUpdate({ progress: 100 })));
-        yield* Effect.promise(() =>
-          emit.single(
-            StateUpdate({
-              dustGenerations: dustGenerationUpdates,
-              spentUtxos: finalSpentUtxos,
-              newUtxos: finalUtxos,
-              collapsedCommitments,
-              lastBlockTimestamp: blockData.timestamp,
-              dustCommitmentMerkleTreeRoot: blockData.dustCommitmentMerkleTreeRoot,
-              dustGenerationMerkleTreeRoot: blockData.dustGenerationMerkleTreeRoot,
-            }),
-          ),
-        );
-        yield* Effect.promise(() => emit.end());
-      }),
-    );
-  };
+  const anonymityLevel = config.anonymityLevel ?? 7;
 
   return {
     updates: (
@@ -429,7 +416,7 @@ export const makeEventLessSyncService = (
       secretKey: DustSecretKey,
     ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope> =>
       pipe(
-        doSync(state, secretKey, config.anonymityLevel ?? 7),
+        doEventlessSync(state, secretKey, anonymityLevel, indexerSyncService),
         Stream.provideSomeLayer(Layer.merge(indexerSyncService.connectionLayer(), indexerSyncService.queryClient())),
       ),
     blockData: (): Effect.Effect<BlockData, WalletError> => defaultSyncService.blockData(),
@@ -456,6 +443,7 @@ export type IndexerSyncService = {
     endIndex: number,
   ) => Effect.Effect<CollapsedMerkleTree, WalletError, Scope.Scope | QueryClient>;
   queryClient: () => Layer.Layer<QueryClient, WalletError, Scope.Scope>;
+  blockData: (height?: number) => Effect.Effect<BlockData, WalletError, Scope.Scope | QueryClient>;
 };
 
 export const makeIndexerSyncService = (config: DefaultSyncConfiguration): IndexerSyncService => {
@@ -565,6 +553,24 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
         Effect.flatMap((result) => {
           return pipe(
             Schema.decodeUnknownEither(CollapsedMerkleTreeSchema)(result.dustCommitmentMerkleTreeUpdate),
+            Either.mapLeft((err) => new SyncWalletError(err)),
+            EitherOps.toEffect,
+          );
+        }),
+        Effect.catchAll((err) =>
+          Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
+        ),
+      );
+    },
+    blockData: (height?: number): Effect.Effect<BlockData, WalletError, Scope.Scope | QueryClient> => {
+      return pipe(
+        BlockHash.run({ offset: height !== undefined ? { height } : null }),
+        Effect.flatMap((result) => {
+          if (!result.block) {
+            throw new OtherWalletError({ message: 'Unable to fetch block data' });
+          }
+          return pipe(
+            Schema.decodeUnknownEither(BlockDataSchema)(result.block),
             Either.mapLeft((err) => new SyncWalletError(err)),
             EitherOps.toEffect,
           );
