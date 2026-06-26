@@ -316,8 +316,8 @@ gates on unit, integration, and smoke e2e (`needs: [test-unit, integration, e2e-
 
 **End-to-end tests** are a separate tier: full wallet flows through the public API against real infra are e2e, not
 integration. They live in the `e2e-tests` package as `*.undeployed.test.ts` and run via `turbo test-undeployed` (smoke
-subset on PRs, full suite nightly) — not in the integration matrix. The docs-snippets runner is also e2e and runs in that
-lane while staying in its own package.
+subset on PRs, full suite nightly) — not in the integration matrix. The docs-snippets runner is also e2e and runs in
+that lane while staying in its own package.
 
 ### Test-Driven Development (MANDATORY)
 
