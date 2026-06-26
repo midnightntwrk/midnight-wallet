@@ -115,7 +115,11 @@ describe('signing rejects a scheme mismatch (ECDSA-MM-03/04/05/07/08)', () => {
     // Exercise the signUnboundTransaction path explicitly (shares the internal
     // signer, but the public entry point is distinct from signUnprovenTransaction).
     const unbound = await ecdsaOwnedTransaction().prove(
-      { prove: () => Promise.resolve(Buffer.from([42])), check: () => Promise.resolve([]), lookupKey: () => Promise.resolve(undefined) },
+      {
+        prove: () => Promise.resolve(Buffer.from([42])),
+        check: () => Promise.resolve([]),
+        lookupKey: () => Promise.resolve(undefined),
+      },
       ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
     );
 
