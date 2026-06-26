@@ -52,7 +52,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { outputsArbitrary, recipientArbitrary, swapParamsArbitrary } from '../src/arbitraries.js';
+import { outputsArbitrary, recipientArbitrary, swapParamsArbitrary } from './arbitraries.js';
 import { getShieldedSeed } from './utils.js';
 
 type TokenTransfer = Transacting.TokenTransfer;
