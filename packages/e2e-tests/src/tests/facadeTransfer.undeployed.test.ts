@@ -28,8 +28,8 @@ import {
   WalletEntrySchema,
   WalletFacade,
   mergeWalletEntries,
-} from '../src/index.js';
-import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils/index.js';
+} from '@midnightntwrk/wallet-sdk-facade';
+import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils.js';
 import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });

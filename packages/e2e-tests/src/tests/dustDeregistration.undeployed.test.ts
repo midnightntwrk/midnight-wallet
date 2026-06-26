@@ -16,11 +16,16 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed, getDustSeed } from './utils/index.js';
+import { getShieldedSeed, getUnshieldedSeed, getDustSeed } from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
-import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
+import {
+  type DefaultConfiguration,
+  WalletEntrySchema,
+  WalletFacade,
+  mergeWalletEntries,
+} from '@midnightntwrk/wallet-sdk-facade';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { makeDefaultSubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
