@@ -2490,6 +2490,13 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@midnightntwrk/ledger-v9@npm:^1.0.0-rc.2":
+  version: 1.0.0-rc.2
+  resolution: "@midnightntwrk/ledger-v9@npm:1.0.0-rc.2"
+  checksum: 10c0/7b0e8436074b1d8caeb8e378be2646d31c74e4ba285292e06bdec45503e765aea30f12b920dfdfc47777a14fa1b98cf2bfbe16730cc554c27e828c2f558d73ca
+  languageName: node
+  linkType: hard
+
 "@midnightntwrk/wallet-sdk-abstractions@npm:^2.1.0, @midnightntwrk/wallet-sdk-abstractions@workspace:*, @midnightntwrk/wallet-sdk-abstractions@workspace:^, @midnightntwrk/wallet-sdk-abstractions@workspace:packages/abstractions":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-abstractions@workspace:packages/abstractions"
@@ -2714,6 +2721,7 @@ __metadata:
   resolution: "@midnightntwrk/wallet-sdk-spec-reference@workspace:packages/spec-reference"
   dependencies:
     "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
+    "@midnightntwrk/ledger-v9": "npm:^1.0.0-rc.2"
     "@noble/curves": "npm:^1.8.1"
     "@scure/base": "npm:^2.0.0"
     "@subsquid/scale-codec": "npm:^4.0.1"
