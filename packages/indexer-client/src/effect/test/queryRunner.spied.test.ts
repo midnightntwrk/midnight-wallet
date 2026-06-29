@@ -25,7 +25,17 @@ describe('QueryRunner', () => {
       const SpiedQueryRunner = await import('../QueryRunner.js');
 
       const block: BlockHashQuery = {
-        block: { height: 1_000, hash: 'SOME_HASH', ledgerParameters: '0x0', timestamp: 1 },
+        block: {
+          height: 1_000,
+          hash: 'SOME_HASH',
+          ledgerParameters: '0x0',
+          timestamp: 1,
+          zswapEndIndex: 1,
+          dustCommitmentEndIndex: 1,
+          dustGenerationEndIndex: 1,
+          dustCommitmentMerkleTreeRoot: '',
+          dustGenerationMerkleTreeRoot: '',
+        },
       };
 
       const dispose = vi.fn();

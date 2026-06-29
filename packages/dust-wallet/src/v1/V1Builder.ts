@@ -26,8 +26,8 @@ import {
   type DefaultSyncConfiguration,
   makeDefaultSyncCapability,
   makeDefaultSyncService,
-  type WalletSyncUpdate,
 } from './Sync.js';
+import { type WalletSyncUpdate } from './SyncSchema.js';
 import {
   type DefaultTransactionHistoryConfiguration,
   makeDefaultTransactionHistoryService,

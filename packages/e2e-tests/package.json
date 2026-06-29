@@ -16,7 +16,7 @@
   },
   "devDependencies": {
     "@cardano-sdk/key-management": "0.29.13",
-    "@midnight-ntwrk/ledger-v8": "^8.1.0",
+    "@midnight-ntwrk/ledger-v8": "link:../../../midnight-ledger-master/result/lib/node_modules/@midnight-ntwrk/ledger-v8",
     "@midnightntwrk/wallet-sdk-abstractions": "workspace:*",
     "@midnightntwrk/wallet-sdk-address-format": "workspace:*",
     "@midnightntwrk/wallet-sdk-capabilities": "workspace:^",

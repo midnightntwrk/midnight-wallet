@@ -25,10 +25,16 @@ import {
 } from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { Array as Arr, Option, pipe } from 'effect';
+import { Array as Arr, HashMap, Option, pipe } from 'effect';
 import { type Dust, type DustWithNullifier } from './types/Dust.js';
 import { type CoinWithValue } from './CoinsAndBalances.js';
 import { type NetworkId, type UnprovenDustSpend } from './types/ledger.js';
+import {
+  type CollapsedMerkleTree,
+  type NewDustGeneration,
+  type DustGenerationDtimUpdate,
+  type DustUtxoMap,
+} from './SyncSchema.js';
 
 export type PublicKey = {
   publicKey: DustPublicKey;
@@ -107,6 +113,102 @@ export const CoreWallet = {
       },
       stateWithChanges.changes,
     ];
+  },
+
+  applyDustGenerations(
+    wallet: CoreWallet,
+    updates: ReadonlyArray<CollapsedMerkleTree>,
+    newGenerations: ReadonlyArray<NewDustGeneration>,
+    generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
+  ): CoreWallet {
+    let updatedState = wallet.state;
+
+    let lastUpdatedIndex = -1;
+    for (const { generationMtIndex, genInfo, qdo } of newGenerations) {
+      // apply updates prior to the current generation index
+      updatedState = updates
+        .filter(({ startIndex, endIndex }) => startIndex > lastUpdatedIndex && endIndex < generationMtIndex)
+        .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
+
+      // now, insert the generation info
+      updatedState = updatedState.insertGenerationInfo(BigInt(generationMtIndex), genInfo, qdo.backingNight);
+      lastUpdatedIndex = generationMtIndex;
+    }
+
+    // apply the rest of the updates
+    updatedState = updates
+      .filter(({ startIndex }) => startIndex > lastUpdatedIndex)
+      .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
+
+    // apply dtime updates
+    updatedState = generationDtimeUpdates.reduce(
+      (state, update) => state.updateGenerationTreeFromEvidence(update.treeInsertionPath),
+      updatedState,
+    );
+
+    return {
+      ...wallet,
+      state: updatedState,
+    };
+  },
+
+  applyNewDustUtxos(wallet: CoreWallet, newDustUtxos: Readonly<DustUtxoMap>): CoreWallet {
+    const updatedState = [...newDustUtxos]
+      .toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex))
+      .reduce((state, [dustNullifier, utxoInfo]) => state.addUtxo(dustNullifier, utxoInfo.qdo), wallet.state);
+    return {
+      ...wallet,
+      state: updatedState,
+    };
+  },
+
+  applyDustCommitments(
+    wallet: CoreWallet,
+    newDustUtxos: Readonly<DustUtxoMap>,
+    collapsedCommitments: ReadonlyArray<CollapsedMerkleTree>,
+  ): CoreWallet {
+    let updatedState = wallet.state;
+    const newUtxos = [...HashMap.values(newDustUtxos)].toSorted((a, b) => Number(a.qdo.mtIndex - b.qdo.mtIndex));
+    for (const { startIndex, update } of collapsedCommitments) {
+      // apply utxos going before the current index
+      const priorUtxos = newUtxos.filter((utxoInfo) => Number(utxoInfo.qdo.mtIndex) < startIndex);
+      updatedState = priorUtxos.reduce(
+        (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
+        updatedState,
+      );
+      // apply current update
+      updatedState = updatedState.applyCommitmentCollapsedUpdate(update);
+    }
+
+    // check utxos after the last index
+    const lastCollapsedIndex = collapsedCommitments.at(-1);
+    if (lastCollapsedIndex !== undefined) {
+      const utxosAfterLastIndex = newUtxos.filter(
+        (utxoInfo) => Number(utxoInfo.qdo.mtIndex) > lastCollapsedIndex.endIndex,
+      );
+      updatedState = utxosAfterLastIndex.reduce(
+        (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
+        updatedState,
+      );
+    }
+
+    // edge-case: no collapsed commitments but new utxos
+    if (!collapsedCommitments.length && newUtxos.length) {
+      updatedState = newUtxos.reduce(
+        (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
+        updatedState,
+      );
+    }
+
+    return { ...wallet, state: updatedState };
+  },
+
+  applySpentNullifiers(wallet: CoreWallet, spentNullifiers: ReadonlyArray<DustNullifier>): CoreWallet {
+    const updatedState = spentNullifiers.reduce((state, nullifier) => state.removeUtxo(nullifier), wallet.state);
+    return {
+      ...wallet,
+      state: updatedState,
+    };
   },
 
   applyFailed(wallet: CoreWallet, tx: Transaction<Signaturish, Proofish, Bindingish>): CoreWallet {

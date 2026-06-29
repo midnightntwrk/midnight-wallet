@@ -1116,12 +1116,23 @@ export class WalletFacade {
     ]).then(() => this.pendingTransactionsService.clear(tx as unknown as ledger.FinalizedTransaction));
   }
 
-  async start(shieldedSecretKeys: ledger.ZswapSecretKeys, dustSecretKey: ledger.DustSecretKey): Promise<void> {
+  async start(
+    shieldedSecretKeys: ledger.ZswapSecretKeys,
+    dustSecretKey: ledger.DustSecretKey,
+    manualSync: boolean = false,
+  ): Promise<void> {
     await Promise.all([
       this.shielded.start(shieldedSecretKeys),
       this.unshielded.start(),
-      this.dust.start(dustSecretKey),
+      !manualSync ? this.dust.start(dustSecretKey) : undefined,
       this.pendingTransactionsService.start(),
+    ]);
+  }
+
+  async doSync(shieldedSecretKeys: ledger.ZswapSecretKeys, dustSecretKey: ledger.DustSecretKey): Promise<void> {
+    await Promise.all([
+      // this.shielded.stepSync(shieldedSecretKeys),
+      this.dust.stepSync(dustSecretKey),
     ]);
   }
 
