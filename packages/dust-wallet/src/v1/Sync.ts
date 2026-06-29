@@ -34,6 +34,7 @@ import {
   DustStateChanges,
   type DustLocalState,
 } from '@midnight-ntwrk/ledger-v8';
+import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import {
   DustGenerationEvents,
   BlockHash,
@@ -277,9 +278,10 @@ const resolveNullifierSpends = (
 > => {
   const maxCommitmentEndIndex = latestBlock.dustCommitmentEndIndex - 1;
   const commitmentIndicesSum = initialNullifiers.length * maxCommitmentEndIndex;
+  const initialSpentUtxos: DustUtxoMap = HashMap.empty();
   return pipe(
     Stream.unfoldEffect(
-      [initialNullifiers, initialNewUtxos, HashMap.empty() as DustUtxoMap] as const,
+      [initialNullifiers, initialNewUtxos, initialSpentUtxos] as const,
       ([nullifiersToCheck, newUtxos, spentUtxos]) => {
         if (nullifiersToCheck.length === 0) {
           return Effect.succeed(Option.none());
@@ -362,7 +364,7 @@ export const doEventlessSync = (
 
       const rawGenerations = yield* pipe(
         indexerSyncService.subscribeDustGenerations(
-          state.publicKey.address,
+          DustAddress.encodePublicKey(state.networkId, secretKey.publicKey),
           Number(lastSyncedGenerationIndex),
           maxGeneratingTreeIndex,
         ),

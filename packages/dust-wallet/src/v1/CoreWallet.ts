@@ -35,18 +35,15 @@ import {
   type DustGenerationDtimUpdate,
   type DustUtxoMap,
 } from './SyncSchema.js';
-import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 
 export type PublicKey = {
   publicKey: DustPublicKey;
-  address: string;
 };
 
 export const PublicKey = {
-  fromSecretKey: (secretKey: DustSecretKey, networkId: NetworkId): PublicKey => {
+  fromSecretKey: (secretKey: DustSecretKey): PublicKey => {
     return {
       publicKey: secretKey.publicKey,
-      address: DustAddress.encodePublicKey(networkId, secretKey.publicKey),
     };
   },
 };
@@ -62,15 +59,11 @@ export type CoreWallet = Readonly<{
 
 export const CoreWallet = {
   init(localState: DustLocalState, secretKey: DustSecretKey, networkId: NetworkId): CoreWallet {
-    return CoreWallet.empty(localState, PublicKey.fromSecretKey(secretKey, networkId), networkId);
+    return CoreWallet.empty(localState, PublicKey.fromSecretKey(secretKey), networkId);
   },
 
   initEmpty(dustParameters: DustParameters, secretKey: DustSecretKey, networkId: NetworkId): CoreWallet {
-    return CoreWallet.empty(
-      new DustLocalState(dustParameters),
-      PublicKey.fromSecretKey(secretKey, networkId),
-      networkId,
-    );
+    return CoreWallet.empty(new DustLocalState(dustParameters), PublicKey.fromSecretKey(secretKey), networkId);
   },
 
   empty(localState: DustLocalState, publicKey: PublicKey, networkId: NetworkId): CoreWallet {
