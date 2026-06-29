@@ -30,7 +30,6 @@ describe('BlockHash query', () => {
         dustGenerationEndIndex: 1,
         dustCommitmentMerkleTreeRoot: '',
         dustGenerationMerkleTreeRoot: '',
-        transactions: [],
       },
     };
     const blockExpectation = expect.objectContaining({
