@@ -1,5 +1,5 @@
 ---
-'@midnight-ntwrk/wallet-sdk-dust-wallet': minor
+'@midnightntwrk/wallet-sdk-dust-wallet': minor
 ---
 
 Add `DustWalletAPI.getLatestBlockData()` for fetching the latest on-chain block data
