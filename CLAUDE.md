@@ -95,19 +95,25 @@ yarn
 yarn dist
 
 # Build specific package
-yarn dist --filter=@midnight-ntwrk/wallet-sdk-facade
+yarn dist --filter=@midnightntwrk/wallet-sdk-facade
 
 # Build and watch for changes
 yarn watch
 
-# Run all unit tests
+# Run the full suite (unit + integration)
 yarn test
 
+# Run ONLY unit tests (pure, no Docker/network — fast, runs anywhere)
+yarn test:unit
+
+# Run ONLY integration tests (require Docker/testcontainers)
+yarn test:integration
+
 # Run tests for specific package
-yarn test --filter=@midnight-ntwrk/wallet-sdk-unshielded-wallet
+yarn test --filter=@midnightntwrk/wallet-sdk-unshielded-wallet
 
 # Run specific test file
-yarn test --filter=@midnight-ntwrk/wallet-sdk-unshielded-wallet -- test/UnshieldedWallet.test.ts
+yarn test --filter=@midnightntwrk/wallet-sdk-unshielded-wallet -- test/UnshieldedWallet.test.ts
 
 # Full CI verification (typecheck, lint, tests)
 yarn verify
@@ -276,6 +282,42 @@ Uses Effect library with `SubscriptionRef` for BLoC-like state management:
 ## Testing
 
 Tests use Vitest with workspace configuration. Each package has its own `vitest.config.ts`.
+
+### Unit vs Integration Tests
+
+Tests are split by **filename suffix** so each type can run independently:
+
+- **Unit tests** — `*.test.ts`. Pure: no Docker, no network, no external services. Use in-memory `Simulator`, injected
+  fakes, or `vi.fn`. Must run anywhere with zero setup.
+- **Integration tests** — `*.integration.test.ts`. Require infra (Docker/testcontainers, indexer, node, prover).
+
+**When adding a test, pick the suffix by whether it needs live infra to pass.** Do not mix both kinds in one file — if a
+file would need both, split it (see `BlockHash.test.ts` / `BlockHash.integration.test.ts` in `indexer-client`).
+
+Selection is wired via `unit` and `integration` Vitest projects in each SDK package's `vitest.config.ts` (the e2e
+packages differ — `e2e-tests` uses `undeployed`/`remote`/`universal`, and `docs-snippets` adds an `undeployed` project
+for its snippet runner; see the e2e tier below). The `unit` project must `exclude` the `**/*.integration.test.ts` glob
+(the default `**/*.test.ts` would otherwise match integration files); the `integration` project `include`s only that
+glob. Commands:
+
+- `yarn test` — full suite (both projects).
+- `yarn test:unit` — unit only (fast gate; no Docker).
+- `yarn test:integration` — integration only.
+
+In CI, unit tests run as a fast early gate; integration tests run as a **matrix with one job per file** (own runner +
+own Docker stack) so no two files contend for infra and a failing file never cancels the rest. The file list is
+discovered dynamically from `*.integration.test.ts`, so adding a test automatically gets its own parallel CI job — and
+wall-clock stays at the slowest single file regardless of how files are distributed across packages. The matrix lives in
+a reusable workflow (`.github/workflows/integration.yml`) invoked as a single `Integration Tests` job, so GitHub nests
+the per-file jobs under one collapsible check.
+
+The required status check for merge is the aggregate **`Tests`** job, which passes only when **all** tiers pass — it
+gates on unit, integration, and smoke e2e (`needs: [test-unit, integration, e2e-smoke]`).
+
+**End-to-end tests** are a separate tier: full wallet flows through the public API against real infra are e2e, not
+integration. They live in the `e2e-tests` package as `*.undeployed.test.ts` and run via `turbo test-undeployed` (smoke
+subset on PRs, full suite nightly) — not in the integration matrix. The docs-snippets runner is also e2e and runs in
+that lane while staying in its own package.
 
 ### Test-Driven Development (MANDATORY)
 

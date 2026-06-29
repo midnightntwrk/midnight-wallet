@@ -15,7 +15,7 @@ import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
-} from '@midnight-ntwrk/wallet-sdk-address-format';
+} from '@midnightntwrk/wallet-sdk-address-format';
 
 export type KeysCapability<TState> = {
   getCoinPublicKey(state: TState): ShieldedCoinPublicKey;

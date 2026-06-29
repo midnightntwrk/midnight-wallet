@@ -1,11 +1,11 @@
-# @midnight-ntwrk/wallet-sdk-dust-wallet
+# @midnightntwrk/wallet-sdk-dust-wallet
 
 Manages dust (transaction fees) on the Midnight network.
 
 ## Installation
 
 ```bash
-npm install @midnight-ntwrk/wallet-sdk-dust-wallet
+npm install @midnightntwrk/wallet-sdk-dust-wallet
 ```
 
 ## Overview
@@ -24,7 +24,7 @@ provides:
 ### Starting the Wallet
 
 ```typescript
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 
 await dustWallet.start(dustSecretKey);
 ```
@@ -96,7 +96,7 @@ const signedTx = await dustWallet.addDustGenerationSignature(dustGenerationTx, s
 Use the V1 builder pattern for wallet construction:
 
 ```typescript
-import { V1Builder, RunningV1Variant } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { V1Builder, RunningV1Variant } from '@midnightntwrk/wallet-sdk-dust-wallet';
 
 // Build a V1 dust wallet variant
 ```

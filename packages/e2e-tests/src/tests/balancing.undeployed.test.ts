@@ -15,7 +15,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { randomBytes } from 'node:crypto';
-import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { inspect } from 'node:util';
 
 /** Tests checking transaction balancing */

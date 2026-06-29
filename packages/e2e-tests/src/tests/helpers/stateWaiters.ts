@@ -14,9 +14,9 @@
 import * as rx from 'rxjs';
 import { expect } from 'vitest';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { type UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { type WalletFacade, type WalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
+import { type UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { type WalletFacade, type WalletEntry } from '@midnightntwrk/wallet-sdk-facade';
 import { logger } from '../logger.js';
 
 export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
@@ -114,6 +114,30 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
         };
       }),
       rx.filter(({ state, txFound }) => txFound && state.isSynced && state.dust.availableCoins.length > 0),
+      rx.map(({ state }) => state),
+    ),
+  );
+
+/** Waits for a dust deregistration transaction to settle and the consolidated Night output to re-sync. */
+export const waitForStateAfterDustDeregistration = (
+  wallet: WalletFacade,
+  finalizedTx: ledger.FinalizedTransaction,
+  unshieldedTokenRaw: ledger.RawTokenType,
+) =>
+  rx.firstValueFrom(
+    wallet.state().pipe(
+      rx.mergeMap(async (state) => {
+        const txInHistory = await wallet.queryTxHistoryByHash(finalizedTx.transactionHash());
+
+        return {
+          state,
+          txFound: txInHistory !== undefined,
+        };
+      }),
+      rx.filter(
+        ({ state, txFound }) =>
+          txFound && state.isSynced && state.unshielded.balances[unshieldedTokenRaw] !== undefined,
+      ),
       rx.map(({ state }) => state),
     ),
   );

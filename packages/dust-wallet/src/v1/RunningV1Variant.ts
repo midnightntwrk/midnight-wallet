@@ -20,29 +20,25 @@ import {
   type FinalizedTransaction,
   type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v8';
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { OtherWalletError, type WalletError } from './WalletError.js';
-import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
   type WalletRuntimeError,
   type Variant,
   StateChange,
   VersionChangeType,
-} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+} from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
 import { type BlockData, type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
-import { type SimulatorState } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
-import {
-  type CoinsAndBalancesCapability,
-  type CoinSelection,
-  type UtxoWithFullDustDetails,
-} from './CoinsAndBalances.js';
-import { type TransactingCapability } from './Transacting.js';
+import { type SimulatorState } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { type CoinsAndBalancesCapability, type CoinSelection } from './CoinsAndBalances.js';
+import { type NightUtxoSplitForDustRegistration, type TransactingCapability } from './Transacting.js';
 import { type CoreWallet } from './CoreWallet.js';
 import { type SerializationCapability } from './Serialization.js';
 import { type AnyTransaction } from './types/ledger.js';
-import { type DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
@@ -155,21 +151,27 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
           }),
         ).pipe(
           Effect.flatMap(({ changes, protocolVersion }) =>
-            pipe(
-              Effect.forEach(
-                changes,
-                (change) =>
-                  pipe(
-                    this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
-                    Effect.flatMap((metadata) =>
-                      this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
-                    ),
-                    Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+            // Skip the tx-history fork entirely when there are no changes.
+            // Forking unconditionally allocates a fiber per apply call (one
+            // for every batch the sync emits, even the all-progress ones),
+            // which adds up fast during catch-up.
+            changes.length === 0
+              ? Effect.void
+              : pipe(
+                  Effect.forEach(
+                    changes,
+                    (change) =>
+                      pipe(
+                        this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
+                        Effect.flatMap((metadata) =>
+                          this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                        ),
+                        Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+                      ),
+                    { discard: true, concurrency: 'unbounded' },
                   ),
-                { discard: true, concurrency: 'unbounded' },
-              ),
-              Effect.forkScoped,
-            ),
+                  Effect.forkScoped,
+                ),
           ),
           Effect.provideService(Scope.Scope, this.#scope),
         ),
@@ -200,19 +202,53 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
       return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
     }
-    return Effect.Do.pipe(
-      Effect.bind('currentState', () => SubscriptionRef.get(this.#context.stateRef)),
-      Effect.bind('blockData', () => this.#v1Context.syncService.blockData()),
-      Effect.let('currentTime', ({ blockData }): Date => currentTime ?? blockData.timestamp),
-      Effect.let('utxosWithDustValue', ({ currentState, currentTime }): ReadonlyArray<UtxoWithFullDustDetails> => {
-        return this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(currentState, nightUtxos, currentTime);
-      }),
-      Effect.flatMap(({ utxosWithDustValue, currentTime }) => {
-        return this.#v1Context.transactingCapability
-          .createDustGenerationTransaction(currentTime, ttl, utxosWithDustValue, nightVerifyingKey, dustReceiverAddress)
-          .pipe(EitherOps.toEffect);
-      }),
-    );
+    return Effect.gen(this, function* () {
+      const currentState = yield* SubscriptionRef.get(this.#context.stateRef);
+      const blockData = yield* this.#v1Context.syncService.blockData();
+      const resolvedTime = currentTime ?? blockData.timestamp;
+      const utxosWithDustValue = this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(
+        currentState,
+        nightUtxos,
+        resolvedTime,
+      );
+      return yield* this.#v1Context.transactingCapability
+        .createDustGenerationTransaction(resolvedTime, ttl, utxosWithDustValue, nightVerifyingKey, dustReceiverAddress)
+        .pipe(EitherOps.toEffect);
+    });
+  }
+
+  splitNightUtxosForDustRegistration(
+    currentTime: Date,
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    isRegistration: boolean,
+  ): Effect.Effect<NightUtxoSplitForDustRegistration, WalletError> {
+    if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
+      return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
+    }
+    return Effect.gen(this, function* () {
+      const currentState = yield* SubscriptionRef.get(this.#context.stateRef);
+      const utxosWithDustValue = this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(
+        currentState,
+        nightUtxos,
+        currentTime,
+      );
+      return this.#v1Context.transactingCapability.splitNightUtxosForDustRegistration(
+        utxosWithDustValue,
+        isRegistration,
+      );
+    });
+  }
+
+  attachDustRegistration(
+    transaction: UnprovenTransaction,
+    currentTime: Date,
+    nightVerifyingKey: SignatureVerifyingKey,
+    dustReceiverAddress: DustAddress | undefined,
+    feePayment: bigint,
+  ): Effect.Effect<UnprovenTransaction, WalletError> {
+    return this.#v1Context.transactingCapability
+      .attachDustRegistration(transaction, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment)
+      .pipe(EitherOps.toEffect);
   }
 
   addDustGenerationSignature(
@@ -221,6 +257,15 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   ): Effect.Effect<UnprovenTransaction, WalletError> {
     return this.#v1Context.transactingCapability
       .addDustGenerationSignature(transaction, signature)
+      .pipe(EitherOps.toEffect);
+  }
+
+  addDustRegistrationSignature(
+    transaction: UnprovenTransaction,
+    signature: Signature,
+  ): Effect.Effect<UnprovenTransaction, WalletError> {
+    return this.#v1Context.transactingCapability
+      .addDustRegistrationSignature(transaction, signature)
       .pipe(EitherOps.toEffect);
   }
 

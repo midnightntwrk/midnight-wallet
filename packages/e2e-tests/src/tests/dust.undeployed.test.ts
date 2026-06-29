@@ -16,8 +16,8 @@ import { type TestContainersFixture, useTestContainersFixture } from './test-fix
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
-import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
-import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
+import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
 
 describe('Dust tests', () => {
@@ -107,7 +107,6 @@ describe('Dust tests', () => {
     logger.info(inspect(receiverState2.unshielded.availableCoins, { depth: null }));
     logger.info(`Wallet 2: ${finalUnshieldedBalance} unshielded tokens`);
 
-    await utils.waitForBlockAdvancement(fixture.getIndexerUri());
     const nightUtxos = receiverState2.unshielded.availableCoins.filter(
       (coin) => coin.meta.registeredForDustGeneration === false,
     );
@@ -118,6 +117,14 @@ describe('Dust tests', () => {
 
     expect(ArrayOps.sumBigInt(nightUtxos.map((coin) => coin.utxo.value))).toEqual(finalUnshieldedBalance);
     logger.info(`utxo length: ${nightUtxos.length}`);
+
+    // Wait until the Night UTxOs have generated enough Dust to cover the registration's own fee.
+    // Without this, registerNightUtxosForDustGeneration would fail with "Insufficient generated
+    // dust to cover registration fee" (or, before the SDK guard, the chain would reject the tx
+    // with BalanceCheckOverspend).
+    const { fee: estimatedRegistrationFee } = await receiver.wallet.estimateRegistration(nightUtxos);
+    logger.info(`Estimated registration fee: ${estimatedRegistrationFee} stroke; waiting for generation to cover it`);
+    await receiver.wallet.waitForGeneratedDust(nightUtxos, estimatedRegistrationFee);
 
     const dustRegistrationRecipe = await receiver.wallet.registerNightUtxosForDustGeneration(
       nightUtxos,
@@ -226,7 +233,7 @@ describe('Dust tests', () => {
       const dustDeregistrationTxid = await receiver.wallet.submitTransaction(finalizedDustTx);
       logger.info(`Dust de-registration tx id: ${dustDeregistrationTxid}`);
 
-      const walletStateAfterDeregister = await receiver.wallet.waitForSyncedState();
+      await receiver.wallet.waitForSyncedState();
 
       const finalDustBalance = await rx.firstValueFrom(
         receiver.wallet.state().pipe(
@@ -241,7 +248,13 @@ describe('Dust tests', () => {
 
       expect(finalDustBalance).toBe(0n);
 
-      const finalWalletNightBalance = walletStateAfterDeregister.unshielded.balances[unshieldedTokenRaw];
+      const walletStateAfterNightRestored = await utils.waitForStateAfterDustDeregistration(
+        receiver.wallet,
+        finalizedDustTx,
+        unshieldedTokenRaw,
+      );
+
+      const finalWalletNightBalance = walletStateAfterNightRestored.unshielded.balances[unshieldedTokenRaw];
       expect(finalWalletNightBalance).toBe(initialNightBalance);
     },
     timeout,

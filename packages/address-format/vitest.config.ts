@@ -28,6 +28,23 @@ export default defineConfig({
       reporter: ['clover', 'json', 'json-summary', 'lcov', 'text'],
       reportsDirectory: './coverage',
     },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['**/*.test.ts'],
+          exclude: [...configDefaults.exclude, '**/dist/**', '**/*.integration.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'integration',
+          include: ['**/*.integration.test.ts'],
+        },
+      },
+    ],
     reporters: [
       'default',
       ['junit', { outputFile: `reports/report/test-report.xml` }],

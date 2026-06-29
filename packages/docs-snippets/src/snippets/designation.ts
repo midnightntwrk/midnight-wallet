@@ -15,7 +15,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';
-import { generateRandomSeed } from '@midnight-ntwrk/wallet-sdk';
+import { generateRandomSeed } from '@midnightntwrk/wallet-sdk';
 
 const sender = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
@@ -62,12 +62,16 @@ await sender.wallet
   );
 
 await sender.wallet.stop();
-await new Promise((resolve) => setTimeout(resolve, 1 * 60 * 1000));
 
 // #endregion
 
 const stateBefore = await rx.firstValueFrom(wallet.state().pipe(rx.filter((s) => s.isSynced)));
 console.log('Generating dust before designation:', stateBefore.dust.availableCoins.length > 0);
+
+// Wait until the freshly-received Night UTxOs have generated enough Dust to cover the
+// registration's own fee — otherwise registerNightUtxosForDustGeneration will refuse to submit.
+const { fee } = await wallet.estimateRegistration(stateBefore.unshielded.availableCoins);
+await wallet.waitForGeneratedDust(stateBefore.unshielded.availableCoins, fee);
 
 await wallet
   .registerNightUtxosForDustGeneration(

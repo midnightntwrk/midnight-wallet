@@ -20,7 +20,7 @@ import {
   ClientError,
   ServerError,
   HttpURL,
-} from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+} from '@midnightntwrk/wallet-sdk-utilities/networking';
 
 export const layer: (
   config: QueryClient.ServerConfig,

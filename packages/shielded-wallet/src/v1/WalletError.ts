@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Data } from 'effect';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 export const WalletError = {
   other(err: unknown): WalletError {

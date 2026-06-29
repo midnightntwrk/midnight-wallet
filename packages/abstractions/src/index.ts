@@ -20,4 +20,3 @@ export * as SyncProgress from './SyncProgress.js';
 export * from './InMemoryTransactionHistoryStorage.js';
 export * from './NoOpTransactionHistoryStorage.js';
 export * as TransactionHistoryStorage from './TransactionHistoryStorage.js';
-export { type Clock, systemClock } from './Clock.js';
