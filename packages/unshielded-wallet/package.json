@@ -1,6 +1,6 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-unshielded-wallet",
-  "version": "3.0.0",
+  "name": "@midnightntwrk/wallet-sdk-unshielded-wallet",
+  "version": "3.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -8,11 +8,13 @@
   "author": "Midnight Foundation",
   "license": "Apache-2.0",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
+    "url": "git+https://github.com/midnightntwrk/midnight-wallet.git",
+    "directory": "packages/unshielded-wallet"
   },
   "files": [
     "dist/"
@@ -29,18 +31,20 @@
   },
   "dependencies": {
     "@midnight-ntwrk/ledger-v8": "link:../../../midnight-ledger-master/result/lib/node_modules/@midnight-ntwrk/ledger-v8",
-    "@midnight-ntwrk/wallet-sdk-abstractions": "2.1.0",
-    "@midnight-ntwrk/wallet-sdk-address-format": "3.1.1",
-    "@midnight-ntwrk/wallet-sdk-capabilities": "3.3.0",
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "1.2.1",
-    "@midnight-ntwrk/wallet-sdk-runtime": "1.0.3",
-    "@midnight-ntwrk/wallet-sdk-utilities": "1.1.1",
+    "@midnightntwrk/wallet-sdk-abstractions": "^2.1.0",
+    "@midnightntwrk/wallet-sdk-address-format": "^3.1.2",
+    "@midnightntwrk/wallet-sdk-capabilities": "^3.3.1",
+    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.2",
+    "@midnightntwrk/wallet-sdk-runtime": "^1.0.4",
+    "@midnightntwrk/wallet-sdk-utilities": "^1.2.0",
     "effect": "^3.19.19",
     "rxjs": "^7.8.2"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit --passWithNoTests",
+    "test:integration": "vitest run --project integration --passWithNoTests",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
@@ -50,6 +54,6 @@
     "publint": "publint --strict"
   },
   "devDependencies": {
-    "@midnight-ntwrk/wallet-sdk-hd": "3.0.2"
+    "@midnightntwrk/wallet-sdk-hd": "^3.0.2"
   }
 }

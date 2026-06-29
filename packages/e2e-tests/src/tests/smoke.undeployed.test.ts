@@ -16,19 +16,15 @@ import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { type CombinedTokenTransfer, WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
-import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet, type DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import { type CombinedTokenTransfer, WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
+import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { DustWallet, type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
 
-/**
- * Smoke tests
- *
- * @group undeployed
- */
+/** Smoke tests */
 
 describe('Smoke tests', () => {
   const getFixture = useTestContainersFixture();

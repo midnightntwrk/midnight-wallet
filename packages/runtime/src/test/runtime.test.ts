@@ -10,12 +10,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { StateChange, VersionChangeType } from '../abstractions/index.js';
-import { toProtocolStateArray } from '../testing/utils.js';
+import { isOrderedSubsequenceOf, protocolStateEquals, toProtocolStateArray } from '../testing/utils.js';
 import {
   type InterceptingRunningVariant,
   InterceptingVariantBuilder,
@@ -44,7 +44,21 @@ describe('Wallet runtime', () => {
     });
     const wallet = Wallet.startEmpty(Wallet);
 
-    const allCollectedState = toProtocolStateArray<number>(wallet.rawState.pipe(rx.take(6)));
+    // The state stream has latest-value semantics: a subscriber always converges on the latest
+    // state, but may skip intermediate states when it lags behind the producer. Collect until the
+    // terminal state arrives and assert order-preserving delivery against the full emission.
+    const fullStateSequence = [
+      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
+      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
+      { version: ProtocolVersion.MinSupportedVersion, state: 1 },
+      { version: ProtocolVersion.ProtocolVersion(50n), state: 1 }, // This is expected to be emitted by the intercepting variant
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 4 }, // This is the rest
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 6 },
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 8 },
+    ];
+    const allCollectedState = toProtocolStateArray<number>(
+      wallet.rawState.pipe(rx.takeWhile(({ state }: ProtocolState.ProtocolState<number>) => state !== 8, true)),
+    );
 
     // Let's wait for the intercepting variant to be initiated to remove any chance of races
     await rx.firstValueFrom(
@@ -63,14 +77,11 @@ describe('Wallet runtime', () => {
       .pipe(Effect.runPromise);
 
     expect(dispatchResult).toBe(true);
-    expect(await allCollectedState).toEqual([
-      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
-      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
-      { version: ProtocolVersion.MinSupportedVersion, state: 1 },
-      { version: ProtocolVersion.ProtocolVersion(50n), state: 1 }, // This is expected to be emitted by the intercepting variant
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 4 }, // This is the rest
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 6 },
-    ]);
+    const receivedStates = await allCollectedState;
+    expect(receivedStates.at(-1)).toEqual({ version: ProtocolVersion.ProtocolVersion(100n), state: 8 });
+    expect(receivedStates).toSatisfy((received: typeof receivedStates) =>
+      isOrderedSubsequenceOf(received, fullStateSequence, protocolStateEquals),
+    );
   });
 
   it('allows wallet to implement own starting procedure', async () => {
@@ -93,10 +104,9 @@ describe('Wallet runtime', () => {
     expect(wallet).toBeInstanceOf(BaseWallet);
     expect(wallet).toBeInstanceOf(Wallet);
 
-    const state = wallet.rawState.pipe(rx.take(6)); // We expect five values + the initial one.
-    const receivedStates = await toProtocolStateArray(state);
-
-    expect(receivedStates).toEqual([
+    // Latest-value semantics: intermediate states may be skipped, but order is preserved and the
+    // stream converges on the terminal state.
+    const fullStateSequence = [
       { version: ProtocolVersion.MinSupportedVersion, state: 42 },
       { version: ProtocolVersion.MinSupportedVersion, state: 42 },
       { version: ProtocolVersion.MinSupportedVersion, state: 43 },
@@ -104,7 +114,15 @@ describe('Wallet runtime', () => {
       { version: ProtocolVersion.ProtocolVersion(100n), state: 88 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 90 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 92 },
-    ]);
+    ];
+    const receivedStates = await toProtocolStateArray(
+      wallet.rawState.pipe(rx.takeWhile(({ state }: ProtocolState.ProtocolState<number>) => state !== 92, true)),
+    );
+
+    expect(receivedStates.at(-1)).toEqual({ version: ProtocolVersion.ProtocolVersion(100n), state: 92 });
+    expect(receivedStates).toSatisfy((received: typeof receivedStates) =>
+      isOrderedSubsequenceOf(received, fullStateSequence, protocolStateEquals),
+    );
   });
 
   it('allows to start from arbitrary variant by providing its state', async () => {
@@ -123,7 +141,17 @@ describe('Wallet runtime', () => {
     });
     const wallet = Wallet.start(Wallet, Intercepting, 42);
 
-    const allCollectedState = toProtocolStateArray<number>(wallet.rawState.pipe(rx.take(3)));
+    // Latest-value semantics: intermediate states may be skipped, but order is preserved and the
+    // stream converges on the terminal state.
+    const fullStateSequence = [
+      { version: ProtocolVersion.ProtocolVersion(50n), state: 42 }, // this is the state we provided, and runtime automatically emits it
+      { version: ProtocolVersion.ProtocolVersion(50n), state: 42 }, // the intercepting variant emits it again on start
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 86 },
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 88 },
+    ];
+    const allCollectedState = toProtocolStateArray<number>(
+      wallet.rawState.pipe(rx.takeWhile(({ state }: ProtocolState.ProtocolState<number>) => state !== 88, true)),
+    );
 
     await wallet.runtime
       .dispatch({
@@ -134,11 +162,11 @@ describe('Wallet runtime', () => {
       })
       .pipe(Effect.runPromise);
 
-    expect(await allCollectedState).toEqual([
-      { version: ProtocolVersion.ProtocolVersion(50n), state: 42 }, // this is the state we provided, and runtime automatically emits it
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 86 },
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 88 },
-    ]);
+    const receivedStates = await allCollectedState;
+    expect(receivedStates.at(-1)).toEqual({ version: ProtocolVersion.ProtocolVersion(100n), state: 88 });
+    expect(receivedStates).toSatisfy((received: typeof receivedStates) =>
+      isOrderedSubsequenceOf(received, fullStateSequence, protocolStateEquals),
+    );
   });
 
   it('allows to start from the first variant by providing its state', async () => {
@@ -153,10 +181,9 @@ describe('Wallet runtime', () => {
 
     const wallet = Wallet.startFirst(Wallet, 42);
 
-    const state = wallet.rawState.pipe(rx.take(6)); // We expect five values.
-    const receivedStates = await toProtocolStateArray(state);
-
-    expect(receivedStates).toEqual([
+    // Latest-value semantics: intermediate states may be skipped, but order is preserved and the
+    // stream converges on the terminal state.
+    const fullStateSequence = [
       { version: ProtocolVersion.MinSupportedVersion, state: 42 }, // The initial state is emitted both by runtime and the variant
       { version: ProtocolVersion.MinSupportedVersion, state: 42 },
       { version: ProtocolVersion.MinSupportedVersion, state: 43 },
@@ -164,7 +191,15 @@ describe('Wallet runtime', () => {
       { version: ProtocolVersion.ProtocolVersion(100n), state: 88 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 90 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 92 },
-    ]);
+    ];
+    const receivedStates = await toProtocolStateArray(
+      wallet.rawState.pipe(rx.takeWhile(({ state }: ProtocolState.ProtocolState<number>) => state !== 92, true)),
+    );
+
+    expect(receivedStates.at(-1)).toEqual({ version: ProtocolVersion.ProtocolVersion(100n), state: 92 });
+    expect(receivedStates).toSatisfy((received: typeof receivedStates) =>
+      isOrderedSubsequenceOf(received, fullStateSequence, protocolStateEquals),
+    );
   });
 
   it('reports progress updates from variant through runtime.progress', async () => {

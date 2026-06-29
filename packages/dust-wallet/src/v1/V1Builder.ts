@@ -11,13 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, Scope, type Types, type Either } from 'effect';
-import { type Expect, type ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { type Expect, type ItemType } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { type DustSecretKey, type FinalizedTransaction } from '@midnight-ntwrk/ledger-v8';
 import {
   type WalletRuntimeError,
   type VariantBuilder,
   type Variant,
-} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+} from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type WalletError } from './WalletError.js';
 import {
   type SyncService,
@@ -50,7 +50,6 @@ import {
   type TransactingCapability,
 } from './Transacting.js';
 import { type NetworkId } from './types/ledger.js';
-import { type Dust } from './types/Dust.js';
 import { makeDefaultV1SerializationCapability, type SerializationCapability } from './Serialization.js';
 import { type TotalCostParameters } from './types/transaction.js';
 
@@ -249,7 +248,7 @@ export class V1Builder<
   }
 
   withCoinSelection<TCoinSelectionConfig, TCoinSelectionContext extends Partial<RunningV1Variant.AnyContext>>(
-    coinSelection: (config: TCoinSelectionConfig, getContext: () => TCoinSelectionContext) => CoinSelection<Dust>,
+    coinSelection: (config: TCoinSelectionConfig, getContext: () => TCoinSelectionContext) => CoinSelection,
   ): V1Builder<
     TConfig & TCoinSelectionConfig,
     TContext & TCoinSelectionContext,
@@ -485,7 +484,7 @@ declare namespace V1Builder {
   };
 
   type HasCoinSelection<TConfig, TContext> = {
-    readonly coinSelection: (configuration: TConfig, getContext: () => TContext) => CoinSelection<Dust>;
+    readonly coinSelection: (configuration: TConfig, getContext: () => TContext) => CoinSelection;
   };
 
   type HasCoinsAndBalances<TConfig, TContext> = {

@@ -14,31 +14,25 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
-import { ShieldedWallet, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, type ShieldedWalletClass } from '@midnightntwrk/wallet-sdk-shielded';
 import * as KeyManagement from '@cardano-sdk/key-management';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as utils from './utils.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,
   PublicKey,
   UnshieldedWallet,
   type UnshieldedWalletClass,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet, type DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { DustWallet, type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import { logger } from './logger.js';
-import { DustAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { DustAddress, UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { inspect } from 'node:util';
 
-/**
- * Tests using an empty wallet
- *
- * @group undeployed
- * @group devnet
- * @group testnet
- */
+/** Tests using an empty wallet */
 describe('Fresh wallet with empty state', () => {
   const getFixture = useTestContainersFixture();
   const walletSeed = '0000000000000000000000000000000000000000000000000000000000000009';

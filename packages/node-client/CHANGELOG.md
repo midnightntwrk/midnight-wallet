@@ -1,4 +1,27 @@
-# @midnight-ntwrk/wallet-sdk-node-client
+# @midnightntwrk/wallet-sdk-node-client
+
+## 1.1.3
+
+### Patch Changes
+
+- 81ae094: Declare `@midnight-ntwrk/ledger-v8` and `@midnightntwrk/wallet-sdk-prover-client` as optional peer
+  dependencies. They are used at runtime by the `./testing` export, so consumers of that export need them installed.
+- Updated dependencies [7111b55]
+  - @midnightntwrk/wallet-sdk-prover-client@1.2.3
+
+## 1.1.2
+
+### Patch Changes
+
+- 7452e96: Bump `@midnight-ntwrk/ledger-v8` from `^8.0.3` to `^8.1.0`. Internal balancing flows in `dust-wallet`,
+  `unshielded-wallet`, and `shielded-wallet` are refactored to use the new ledger 8.1.0 builder API
+  (`Transaction.addIntent`, `Transaction.addZswapOffer`) instead of post-construction field mutation on
+  `Transaction.fromParts(...)`. No public API changes; consumers must resolve `@midnight-ntwrk/ledger-v8` to `>=8.1.0`.
+- 25f58b4: Widen ranges for internal `@midnightntwrk/wallet-sdk-*` dependencies from exact versions to caret ranges so
+  consumers can dedupe shared sibling packages into a single installed copy.
+- Updated dependencies [6e187fe]
+- Updated dependencies [7452e96]
+  - @midnightntwrk/wallet-sdk-utilities@1.2.0
 
 ## 1.1.1
 
@@ -11,8 +34,8 @@
 - Updated dependencies [c1ae369]
 - Updated dependencies [0db3290]
 - Updated dependencies [7f82432]
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.1.0
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.1
+  - @midnightntwrk/wallet-sdk-abstractions@2.1.0
+  - @midnightntwrk/wallet-sdk-utilities@1.1.1
 
 ## 1.1.0
 
@@ -25,7 +48,7 @@
 - 1fa7e03: Clarify the error message returned for invalid transactions.
 - Updated dependencies [ea55591]
 - Updated dependencies [aa7b1f4]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0
+  - @midnightntwrk/wallet-sdk-utilities@1.1.0
 
 ## 1.1.0-rc.0
 
@@ -37,7 +60,7 @@
 
 - Updated dependencies [ea55591]
 - Updated dependencies [aa7b1f4]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0-rc.0
+  - @midnightntwrk/wallet-sdk-utilities@1.1.0-rc.0
 
 ## 1.0.1
 
@@ -50,8 +73,8 @@
 - Updated dependencies [0f29d01]
 - Updated dependencies [55380e5]
 - Updated dependencies [330867f]
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1
+  - @midnightntwrk/wallet-sdk-abstractions@2.0.0
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1
 
 ## 1.0.0
 

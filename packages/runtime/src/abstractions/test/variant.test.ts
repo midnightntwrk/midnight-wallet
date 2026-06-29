@@ -10,9 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { type HList, type Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
-import type { Expect, Equal, CanAssign } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type HList, type Poly } from '@midnightntwrk/wallet-sdk-utilities';
+import type { Expect, Equal, CanAssign } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { describe, expect, it } from 'vitest';
 import {
   type InterceptingRunningVariant,

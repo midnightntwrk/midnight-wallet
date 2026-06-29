@@ -19,8 +19,8 @@ import {
 } from './effect/index.js';
 import { Effect, Exit, pipe, Scope } from 'effect';
 import { type Observable } from '@polkadot/types/types';
-import { ObservableOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { type SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ObservableOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { type SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export { Config, makeConfig, DEFAULT_CONFIG } from './effect/PolkadotNodeClient.js';
 

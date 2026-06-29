@@ -27,7 +27,7 @@ import {
 import { Uint8ArraySchema } from './Serialization.js';
 import { type DustGenerationInfo } from './types/index.js';
 import { type PublicKey } from './CoreWallet.js';
-import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 
 const DustStateMerkleTreeCollapsedUpdateSchema = Schema.declare(
   (input: unknown): input is DustStateMerkleTreeCollapsedUpdate => input instanceof DustStateMerkleTreeCollapsedUpdate,

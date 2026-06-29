@@ -11,14 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type WalletRuntimeError,
   type Variant,
   StateChange,
   VersionChangeType,
-} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+} from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type SerializationCapability } from './Serialization.js';
 import { type SyncCapability, type SyncService } from './Sync.js';
 import { type WalletSyncUpdate } from './SyncSchema.js';
@@ -29,11 +29,12 @@ import {
   type UnboundTransactionBalanceResult,
   type UnprovenTransactionBalanceResult,
 } from './Transacting.js';
+import { type UtxoWithMeta } from './UnshieldedState.js';
 import { type UnboundTransaction } from './TransactionOps.js';
 import { type WalletError } from './WalletError.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
-import { type CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { type CoinSelection } from '@midnightntwrk/wallet-sdk-capabilities';
 import { type CoreWallet } from './CoreWallet.js';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
@@ -179,6 +180,27 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
         this.#v1Context.transactingCapability.makeTransfer(state, outputs, ttl),
+        EitherOps.toEffect,
+        Effect.map(({ transaction, newState }) => [transaction, newState]),
+      );
+    });
+  }
+
+  rotateUtxos(
+    guaranteedUtxos: ReadonlyArray<UtxoWithMeta>,
+    fallibleUtxos: ReadonlyArray<UtxoWithMeta>,
+    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    ttl: Date,
+  ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
+    return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
+      return pipe(
+        this.#v1Context.transactingCapability.rotateUtxos(
+          state,
+          guaranteedUtxos,
+          fallibleUtxos,
+          nightVerifyingKey,
+          ttl,
+        ),
         EitherOps.toEffect,
         Effect.map(({ transaction, newState }) => [transaction, newState]),
       );

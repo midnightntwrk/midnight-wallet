@@ -1,11 +1,11 @@
-# @midnight-ntwrk/wallet-sdk-abstractions
+# @midnightntwrk/wallet-sdk-abstractions
 
 Domain-specific abstractions for the Midnight Wallet SDK.
 
 ## Installation
 
 ```bash
-npm install @midnight-ntwrk/wallet-sdk-abstractions
+npm install @midnightntwrk/wallet-sdk-abstractions
 ```
 
 ## Overview

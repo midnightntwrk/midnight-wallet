@@ -12,6 +12,14 @@ It provides components for:
 - syncing state with [indexer](https://github.com/midnightntwrk/midnight-indexer)
 - testing without external infrastructure
 
+## Examples and documentation
+
+[Docs](./docs) directory features some design documentation and development guidelines.
+
+Example usage can be found at [docs snippets](./packages/docs-snippets/src/snippets) (always up-to-date with the recent
+changes) or at the [SDK documentation site](https://docs.midnight.network/sdks/official/wallet-developer-guide) (aligned
+with the recent release)
+
 ## Modules structure
 
 This project is a Yarn workspaces monorepo combined with Turborepo. Packages are organized under `packages/` and
@@ -101,7 +109,7 @@ yarn dist
 To build a specific package, use the `--filter` flag:
 
 ```shell
-yarn dist --filter=@midnight-ntwrk/wallet-sdk-facade
+yarn dist --filter=@midnightntwrk/wallet-sdk-facade
 ```
 
 ## Build and watch
@@ -161,13 +169,13 @@ yarn test
 To run tests for a specific package:
 
 ```shell
-yarn test --filter=@midnight-ntwrk/wallet-sdk-unshielded-wallet
+yarn test --filter=@midnightntwrk/wallet-sdk-unshielded-wallet
 ```
 
 To run a specific test file:
 
 ```shell
-yarn test --filter=@midnight-ntwrk/wallet-sdk-unshielded-wallet -- test/UnshieldedWallet.test.ts
+yarn test --filter=@midnightntwrk/wallet-sdk-unshielded-wallet -- test/UnshieldedWallet.test.ts
 ```
 
 ### CI verification

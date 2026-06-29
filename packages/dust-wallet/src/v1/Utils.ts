@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { HashMap, HashSet, Option } from 'effect';
-import { ScaleBigInt } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { ScaleBigInt } from '@midnightntwrk/wallet-sdk-address-format';
 
 export const SignatureMarker = {
   signature: 'signature',

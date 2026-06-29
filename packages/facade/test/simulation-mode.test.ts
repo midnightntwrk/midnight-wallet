@@ -29,12 +29,8 @@
  * - DApp connector reference implementation tests
  */
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import {
-  Simulator,
-  immediateBlockProducer,
-  type GenesisMint,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
@@ -51,7 +47,7 @@ import {
 
 vi.setConfig({ testTimeout: 30_000 }); // Fast tests - no real proving or network
 
-const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw;
+const shieldedTokenType = ledger.shieldedToken().raw;
 const NETWORK_ID = NetworkId.NetworkId.Undeployed;
 
 const SENDER_SEED = '0000000000000000000000000000000000000000000000000000000000000001';
