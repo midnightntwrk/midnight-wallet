@@ -19,7 +19,7 @@ services:
       start_period: 10s
 
   indexer:
-    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.4.0-pre-alpha.10-l91r2-n2r1-bridge-and-events-epics-balances-fix-1155684'
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.4.0-pre-alpha.14-l91r3-n2r3-bridge-and-events-epics-ca3e554'
     container_name: indexer_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
@@ -45,7 +45,7 @@ services:
       node:
         condition: service_healthy
   node:
-    image: 'ghcr.io/midnight-ntwrk/midnight-node:2.0.0-rc.1'
+    image: 'ghcr.io/midnight-ntwrk/midnight-node:2.0.0-rc.3'
     container_name: node_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
