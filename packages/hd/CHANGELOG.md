@@ -1,5 +1,13 @@
 # @midnightntwrk/wallet-sdk-hd
 
+## 3.1.0-beta.0
+
+### Minor Changes
+
+- ce4cd19: Repurpose HD derivation role 4 (previously the unused Metadata role) as `Roles.EcdsaUnshielded`. Keys for
+  ECDSA unshielded operations are derived under their own role, so the secret scalar is never shared with the schnorr
+  roles (0/1) of the same account.
+
 ## 3.0.3
 
 ### Patch Changes

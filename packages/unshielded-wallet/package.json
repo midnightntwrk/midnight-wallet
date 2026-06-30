@@ -1,6 +1,6 @@
 {
   "name": "@midnightntwrk/wallet-sdk-unshielded-wallet",
-  "version": "3.1.0",
+  "version": "4.0.0-beta.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -32,9 +32,9 @@
   "dependencies": {
     "@midnightntwrk/ledger-v9": "1.0.0-rc.2",
     "@midnightntwrk/wallet-sdk-abstractions": "^2.1.0",
-    "@midnightntwrk/wallet-sdk-address-format": "^3.1.2",
-    "@midnightntwrk/wallet-sdk-capabilities": "^3.3.1",
-    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.2",
+    "@midnightntwrk/wallet-sdk-address-format": "^4.0.0-beta.0",
+    "@midnightntwrk/wallet-sdk-capabilities": "^4.0.0-beta.0",
+    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.4-beta.0",
     "@midnightntwrk/wallet-sdk-runtime": "^1.0.4",
     "@midnightntwrk/wallet-sdk-utilities": "^1.2.0",
     "effect": "^3.19.19",
@@ -54,7 +54,7 @@
     "publint": "publint --strict"
   },
   "devDependencies": {
-    "@midnightntwrk/wallet-sdk-hd": "^3.0.2",
+    "@midnightntwrk/wallet-sdk-hd": "^3.1.0-beta.0",
     "@noble/curves": "^1.9.7",
     "@noble/hashes": "^1.8.0"
   }
