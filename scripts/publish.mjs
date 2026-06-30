@@ -23,8 +23,8 @@
 // Versions already on the registry are skipped so re-runs are idempotent.
 //
 // Usage:
-//   node scripts/publish.mjs              # publish under default dist-tag
-//   node scripts/publish.mjs --tag canary # publish under `canary` dist-tag
+//   node scripts/publish.mjs              # dist-tag from changesets pre mode, else `latest`
+//   node scripts/publish.mjs --tag canary # force the `canary` dist-tag
 
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -56,7 +56,31 @@ const { values } = parseArgs({
   strict: true,
 });
 
-const tagArgs = values.tag ? ['--tag', values.tag] : [];
+// Resolve the dist-tag once: an explicit --tag wins (the canary flow passes
+// --tag canary), otherwise honor changesets pre mode (.changeset/pre.json with
+// `mode: "pre"` → its tag, e.g. beta), otherwise undefined so npm publishes
+// under `latest`. Reading pre.json directly mirrors scripts/write-canary-changeset.mjs
+// and cd.yml's grep on the same file.
+const readPreState = () => {
+  try {
+    return JSON.parse(readFileSync('.changeset/pre.json', 'utf8'));
+  } catch {
+    return undefined; // No .changeset/pre.json (or unreadable) → not in pre mode.
+  }
+};
+
+// Precedence: an explicit --tag wins (the canary flow passes --tag canary),
+// otherwise the changesets pre tag (e.g. beta), otherwise undefined → `latest`.
+const resolveDistTag = (explicitTag, preState) => {
+  if (explicitTag) return explicitTag;
+  if (preState?.mode === 'pre' && typeof preState.tag === 'string' && preState.tag.length > 0) {
+    return preState.tag;
+  }
+  return undefined;
+};
+
+const distTag = resolveDistTag(values.tag, readPreState());
+const tagArgs = distTag ? ['--tag', distTag] : [];
 
 const workspaces = execFileSync('yarn', ['workspaces', 'list', '--json'], { encoding: 'utf8' })
   .trim()
@@ -74,7 +98,7 @@ if (publishable.length === 0) {
   process.exit(0);
 }
 
-console.log(`Publishing ${publishable.length} package(s)${values.tag ? ` (dist-tag: ${values.tag})` : ''}:`);
+console.log(`Publishing ${publishable.length} package(s)${distTag ? ` (dist-tag: ${distTag})` : ''}:`);
 publishable.forEach((ws) => console.log(`  - ${ws.pkg.name}@${ws.pkg.version} (+ alias ${toAlias(ws.pkg.name)})`));
 
 const isAlreadyPublished = (name, version) => {
@@ -169,12 +193,13 @@ const publishPrimary = (ws) => {
 };
 
 const results = publishable.flatMap((ws) => {
-  // In prerelease/canary mode (--tag set), only publish packages that received
-  // a snapshot version. A snapshot version always carries a semver prerelease
-  // "-"; a canonical version (no "-") must never be published under a canary
-  // dist-tag. Stable publishes pass no --tag, so this never affects releases.
-  if (values.tag && !ws.pkg.version.includes('-')) {
-    console.log(`Skip ${ws.pkg.name}@${ws.pkg.version}: no snapshot version for --tag ${values.tag}.`);
+  // Under any non-`latest` dist-tag (a canary snapshot or a changesets pre/beta
+  // release), only publish prerelease-versioned packages. A prerelease version
+  // always carries a semver "-"; a canonical version (no "-") must never sit
+  // under a prerelease dist-tag. Plain `latest` releases resolve no dist-tag
+  // (distTag undefined), so this never affects them.
+  if (distTag && !ws.pkg.version.includes('-')) {
+    console.log(`Skip ${ws.pkg.name}@${ws.pkg.version}: not a prerelease version for --tag ${distTag}.`);
     return [];
   }
   const primary = publishPrimary(ws);
