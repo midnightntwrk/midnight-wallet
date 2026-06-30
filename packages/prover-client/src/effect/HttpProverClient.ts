@@ -144,6 +144,7 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
         Effect.flatMap((tx) => this.request(PROVE_TX_PATH, tx, 'Failed to prove')),
         Effect.runPromise,
       ),
+    lookupKey: (_keyLocation: string): Promise<ledger.ProvingKeyMaterial | undefined> => Promise.resolve(undefined),
   });
 
   proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
