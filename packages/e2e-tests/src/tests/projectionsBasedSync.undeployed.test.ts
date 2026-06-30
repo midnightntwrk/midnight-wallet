@@ -17,16 +17,16 @@ import { type TestContainersFixture, useTestContainersFixture } from './test-fix
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
-import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
-import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
+import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
 import {
   CustomDustWallet,
   type DefaultDustConfiguration,
   makeEventLessSyncCapability,
   makeEventLessSyncService,
-} from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { V1Builder } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+} from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 
 /** @group undeployed */
 
