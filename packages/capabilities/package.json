@@ -1,6 +1,6 @@
 {
   "name": "@midnightntwrk/wallet-sdk-capabilities",
-  "version": "3.3.1",
+  "version": "4.0.0-beta.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -43,15 +43,19 @@
     "./simulation": {
       "types": "./dist/simulation/index.d.ts",
       "import": "./dist/simulation/index.js"
+    },
+    "./validation": {
+      "types": "./dist/validation/index.d.ts",
+      "import": "./dist/validation/index.js"
     }
   },
   "dependencies": {
     "@midnight-ntwrk/zkir-v2": "^2.1.0",
     "@midnightntwrk/ledger-v9": "1.0.0-rc.3",
     "@midnightntwrk/wallet-sdk-abstractions": "^2.1.0",
-    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.2",
-    "@midnightntwrk/wallet-sdk-node-client": "^1.1.2",
-    "@midnightntwrk/wallet-sdk-prover-client": "^1.2.2",
+    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.4-beta.0",
+    "@midnightntwrk/wallet-sdk-node-client": "^2.0.0-beta.0",
+    "@midnightntwrk/wallet-sdk-prover-client": "^2.0.0-beta.0",
     "@midnightntwrk/wallet-sdk-utilities": "^1.2.0",
     "effect": "^3.19.19",
     "rxjs": "^7.8.2"
