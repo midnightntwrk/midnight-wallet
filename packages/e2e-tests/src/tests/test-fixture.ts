@@ -58,7 +58,8 @@ export function useTestContainersFixture() {
       case 'devnet':
       case 'qanet':
       case 'preview':
-      case 'preprod': {
+      case 'preprod':
+      case 'stagenet': {
         const environmentVars = buildTestEnvironmentVariables(envVarsToPass, {
           additionalVars: {
             TESTCONTAINERS_UID: uid,
@@ -147,6 +148,9 @@ export class TestContainersFixture {
       case 'preprod': {
         return 'https://indexer.preprod.midnight.network/api/v4/graphql';
       }
+      case 'stagenet': {
+        return 'https://indexer.stagenet.midnight.network/api/v4/graphql';
+      }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
         return `http://localhost:${indexerPort}/api/v3/graphql`;
@@ -170,6 +174,9 @@ export class TestContainersFixture {
       }
       case 'preprod': {
         return 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
+      }
+      case 'stagenet': {
+        return 'wss://indexer.stagenet.midnight.network/api/v4/graphql/ws';
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
@@ -195,6 +202,9 @@ export class TestContainersFixture {
       case 'preprod': {
         return 'wss://rpc.preprod.midnight.network';
       }
+      case 'stagenet': {
+        return 'wss://rpc.stagenet.midnight.network';
+      }
       case 'undeployed': {
         const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);
         return `ws://localhost:${nodePortRpc}`;
@@ -217,6 +227,8 @@ export class TestContainersFixture {
         return NetworkId.NetworkId.Preview;
       case 'preprod':
         return NetworkId.NetworkId.PreProd;
+      case 'stagenet':
+        return NetworkId.NetworkId.StageNet;
       default:
         throw new Error(`Unrecognized network: ${String(TestContainersFixture.network)}`);
     }
