@@ -19,7 +19,22 @@
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "3.1.0",
     "@midnightntwrk/wallet-sdk-utilities": "1.2.0",
     "@midnight-ntwrk/wallet-integration-tests": "0.0.1",
-    "@midnightntwrk/wallet-sdk": "1.1.0"
+    "@midnightntwrk/wallet-sdk": "1.1.0",
+    "@midnightntwrk/wallet-sdk-testkit": "0.2.0"
   },
-  "changesets": []
+  "changesets": [
+    "bright-rabbits-peel",
+    "clever-states-move",
+    "combined-dep-updates-20260624",
+    "drop-unused-indexer-codegen-deps",
+    "dust-balance-transactions-return-blockdata",
+    "ecdsa-unshielded-role",
+    "eighty-shrimps-post",
+    "facade-declare-effect-dependency",
+    "migrate-to-ledger-v9",
+    "swift-times-taste",
+    "testkit-alias-npmjs-publish",
+    "unshielded-scheme-consistency",
+    "well-formed-validation"
+  ]
 }
