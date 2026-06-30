@@ -19,7 +19,7 @@ import { Array as Arr, Order, pipe } from 'effect';
 import { type Observable } from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForDustGenerated } from './utils/helpers.js';
+import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForDustGenerated } from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import {
   createKeystore,
@@ -35,7 +35,7 @@ import {
   WalletEntrySchema,
   WalletFacade,
   mergeWalletEntries,
-} from '../src/index.js';
+} from '@midnightntwrk/wallet-sdk-facade';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ArrayOps, DateOps } from '@midnightntwrk/wallet-sdk-utilities';
