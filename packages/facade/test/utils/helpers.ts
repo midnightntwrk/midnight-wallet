@@ -45,6 +45,7 @@ import {
   type UnboundTransaction,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { type Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { makeSimulatorBlockDataFetcher } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { Effect, type Scope } from 'effect';
 import * as rx from 'rxjs';
@@ -304,6 +305,7 @@ export const makeSimulatorFacade = (
         dust: () => factories.createDustWallet(keys.dustKey, dustParameters),
         provingService: () => provingService,
         submissionService: () => submissionService,
+        fetchBlockData: () => makeSimulatorBlockDataFetcher(config.simulator),
         clock: () => simulatorClock(config.simulator),
       });
 

@@ -168,7 +168,7 @@ describe('DustWallet', () => {
         undefined,
       );
 
-      const balancingTransaction = yield* wallet.balanceTransactions(
+      const { transaction: balancingTransaction } = yield* wallet.balanceTransactions(
         dustSecretKey,
         [deRegisterForDustTransaction],
         ttl,
@@ -403,7 +403,7 @@ describe('DustWallet', () => {
       const transferTransaction = Transaction.fromParts(NETWORK, undefined, undefined, intent);
 
       // cover fees with dust
-      const balancingTransaction = yield* wallet.balanceTransactions(
+      const { transaction: balancingTransaction } = yield* wallet.balanceTransactions(
         dustSecretKey,
         [transferTransaction],
         ttl,
@@ -552,7 +552,7 @@ describe('DustWallet', () => {
       const walletStateBeforeTx = walletState;
 
       // cover fees with dust
-      const balancingTransaction = yield* wallet.balanceTransactions(
+      const { transaction: balancingTransaction } = yield* wallet.balanceTransactions(
         dustSecretKey,
         [transferTransaction],
         ttl,
@@ -665,7 +665,7 @@ describe('DustWallet', () => {
       const transferTransaction = Transaction.fromParts(NETWORK, undefined, undefined, intent);
 
       // balance the transaction — this marks dust as pending
-      const balancingTransaction = yield* wallet.balanceTransactions(
+      const { transaction: balancingTransaction } = yield* wallet.balanceTransactions(
         dustSecretKey,
         [transferTransaction],
         ttl,
@@ -731,14 +731,14 @@ describe('DustWallet', () => {
       };
 
       // balance two separate transactions — each picks a different dust coin
-      const balancingTx1 = yield* wallet.balanceTransactions(
+      const { transaction: balancingTx1 } = yield* wallet.balanceTransactions(
         dustSecretKey,
         [makeTransferTx(nightTokens[0])],
         ttl,
         currentTime,
       );
 
-      const balancingTx2 = yield* wallet.balanceTransactions(
+      const { transaction: balancingTx2 } = yield* wallet.balanceTransactions(
         dustSecretKey,
         [makeTransferTx(nightTokens[1])],
         ttl,
@@ -810,7 +810,12 @@ describe('DustWallet', () => {
 
       const transferTxs = Array.from({ length: 40 }, () => makeTransferTx(nightTokens[0]));
 
-      const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, transferTxs, ttl, currentTime);
+      const { transaction: balancingTx } = yield* wallet.balanceTransactions(
+        dustSecretKey,
+        transferTxs,
+        ttl,
+        currentTime,
+      );
 
       walletState = yield* SubscriptionRef.get(stateRef);
       const pendingAfterBalance = walletVariant.coinsAndBalances.getPendingCoins(walletState);
