@@ -803,17 +803,19 @@ describe('DustWallet', () => {
       const bobAddress = bobKeyStore.getAddress();
       const nightTokens = getNightTokens(simulatorState, walletAddress);
 
-      const makeTransferTx = (sendToken: (typeof nightTokens)[0]) => {
+      const makeTransferTx = (sendToken: (typeof nightTokens)[0], segmentId: number) => {
         const intent = Intent.new(ttl);
         intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(
           [{ ...sendToken, owner: nightVerifyingKey }],
           [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }],
           [],
         );
-        return Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
+        // Deterministic, unique fallible segment per tx (range [1, 65535]) so merging the
+        // batch during balancing can never hit a random segment-id collision.
+        return Transaction.fromParts(NETWORK).addIntent({ tag: 'specific', value: segmentId }, intent);
       };
 
-      const transferTxs = Array.from({ length: 40 }, () => makeTransferTx(nightTokens[0]));
+      const transferTxs = Array.from({ length: 40 }, (_, i) => makeTransferTx(nightTokens[0], i + 1));
 
       const { transaction: balancingTx } = yield* wallet.balanceTransactions(
         dustSecretKey,

@@ -15,6 +15,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { inspect } from 'util';
+import { isFinalizedWalletEntry } from '@midnightntwrk/wallet-sdk-facade';
 
 /** Tests using a funded wallet */
 
@@ -168,7 +169,8 @@ describe('Funded wallet', () => {
     async () => {
       await funded.wallet.waitForSyncedState();
       const txHistory = await funded.wallet.getAllFromTxHistory();
-      const unshieldedEntries = txHistory.filter((e) => e.unshielded !== undefined);
+      const confirmed = txHistory.filter(isFinalizedWalletEntry);
+      const unshieldedEntries = confirmed.filter((e) => e.unshielded !== undefined);
       expect(unshieldedEntries.length).toBeGreaterThan(0);
       unshieldedEntries.forEach((entry) => utils.expectValidUnshieldedTxHistoryEntry(entry));
       // At least one entry should have createdUtxos (from genesis funding)
@@ -183,7 +185,8 @@ describe('Funded wallet', () => {
     async () => {
       await funded.wallet.waitForSyncedState();
       const txHistory = await funded.wallet.getAllFromTxHistory();
-      const shieldedEntries = txHistory.filter((e) => e.shielded !== undefined);
+      const confirmed = txHistory.filter(isFinalizedWalletEntry);
+      const shieldedEntries = confirmed.filter((e) => e.shielded !== undefined);
       expect(shieldedEntries.length).toBeGreaterThan(0);
       shieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
       // At least one entry should have receivedCoins (from genesis funding)
