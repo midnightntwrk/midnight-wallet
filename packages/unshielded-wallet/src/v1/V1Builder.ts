@@ -36,6 +36,7 @@ import {
   type TransactingCapability,
 } from './Transacting.js';
 import { type WalletError } from './WalletError.js';
+import { makeDefaultSigningService, type SigningService } from './Signing.js';
 import { type CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
 import { type CoinSelection, chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
@@ -113,6 +114,7 @@ export class V1Builder<
     return this.withSyncDefaults()
       .withSerializationDefaults()
       .withTransactingDefaults()
+      .withSigningDefaults()
       .withCoinsAndBalancesDefaults()
       .withTransactionHistoryDefaults()
       .withKeysDefaults()
@@ -182,6 +184,19 @@ export class V1Builder<
     return new V1Builder<TConfig & TTransactingConfig, TContext & TTransactingContext, TSerialized, TSyncUpdate>({
       ...this.#buildState,
       transactingCapability,
+    });
+  }
+
+  withSigningDefaults(): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate> {
+    return this.withSigning(makeDefaultSigningService);
+  }
+
+  withSigning<TSigningConfig, TSigningContext extends Partial<RunningV1Variant.AnyContext>>(
+    signingService: (configuration: TSigningConfig, getContext: () => TSigningContext) => SigningService,
+  ): V1Builder<TConfig & TSigningConfig, TContext & TSigningContext, TSerialized, TSyncUpdate> {
+    return new V1Builder<TConfig & TSigningConfig, TContext & TSigningContext, TSerialized, TSyncUpdate>({
+      ...this.#buildState,
+      signingService,
     });
   }
 
@@ -306,6 +321,7 @@ export class V1Builder<
       syncCapability,
       syncService,
       transactingCapability,
+      signingService,
       serializationCapability,
       coinSelection,
       coinsAndBalancesCapability,
@@ -320,6 +336,7 @@ export class V1Builder<
       syncCapability: syncCapability(configuration, getContext),
       syncService: syncService(configuration, getContext),
       transactingCapability: transactingCapability(configuration, getContext),
+      signingService: signingService(configuration, getContext),
       coinsAndBalancesCapability: coinsAndBalancesCapability(configuration, getContext),
       keysCapability: keysCapability(configuration, getContext),
       coinSelection: coinSelection(configuration, getContext),
@@ -345,6 +362,10 @@ declare namespace V1Builder {
       configuration: TConfig,
       getContext: () => TContext,
     ) => TransactingCapability<CoreWallet>;
+  };
+
+  type HasSigning<TConfig, TContext> = {
+    readonly signingService: (configuration: TConfig, getContext: () => TContext) => SigningService;
   };
 
   type HasCoinSelection<TConfig, TContext> = {
@@ -381,6 +402,7 @@ declare namespace V1Builder {
     HasSync<TConfig, TContext, TSyncUpdate> &
       HasSerialization<TConfig, TContext, TSerialized> &
       HasTransacting<TConfig, TContext> &
+      HasSigning<TConfig, TContext> &
       HasCoinSelection<TConfig, TContext> &
       HasCoinsAndBalances<TConfig, TContext> &
       HasKeys<TConfig, TContext> &
@@ -407,6 +429,7 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate>(
     'syncService',
     'syncCapability',
     'transactingCapability',
+    'signingService',
     'coinSelection',
     'serializationCapability',
     'coinsAndBalancesCapability',

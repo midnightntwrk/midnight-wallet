@@ -197,9 +197,7 @@ describe('Token transfer', () => {
           ttl: new Date(Date.now() + 60 * 60 * 1000),
         },
       );
-      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
-        funded.unshieldedKeystore.signData(payload),
-      );
+      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
@@ -515,9 +513,7 @@ describe('Token transfer', () => {
         },
       );
       logger.info('Sending transaction...');
-      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
-        funded.unshieldedKeystore.signData(payload),
-      );
+      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
       const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
@@ -630,9 +626,7 @@ describe('Token transfer', () => {
         },
       );
       logger.info('Sending transaction...');
-      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
-        funded.unshieldedKeystore.signData(payload),
-      );
+      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
@@ -649,7 +643,7 @@ describe('Token transfer', () => {
       const dustRegistrationRecipe = await receiver3.wallet.registerNightUtxosForDustGeneration(
         unregisteredNightUtxos,
         receiver3.unshieldedKeystore.getPublicKey(),
-        (payload) => receiver3.unshieldedKeystore.signData(payload),
+        receiver3.unshieldedKeystore.signDataAsync,
       );
       const finalizedDustTx = await receiver3.wallet.finalizeRecipe(dustRegistrationRecipe);
       logger.info('Submitting dust registration transaction...');

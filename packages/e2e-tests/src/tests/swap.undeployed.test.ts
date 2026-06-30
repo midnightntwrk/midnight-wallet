@@ -294,7 +294,7 @@ describe('Swaps', () => {
     );
 
     const signedSwapTxRecipe = await walletAFacade.signRecipe(swapTxRecipe, (payload) => {
-      return unshieldedWalletAKeystore.signData(payload);
+      return unshieldedWalletAKeystore.signDataAsync(payload);
     });
 
     const finalizedSwapTx = await walletAFacade.finalizeRecipe(signedSwapTxRecipe);
@@ -312,7 +312,7 @@ describe('Swaps', () => {
     );
 
     const walletBSignedTxRecipe = await walletBFacade.signRecipe(walletBBalancedTxRecipe, (payload) => {
-      return unshieldedWalletBKeystore.signData(payload);
+      return unshieldedWalletBKeystore.signDataAsync(payload);
     });
 
     const finalizedTx = await walletBFacade.finalizeRecipe(walletBSignedTxRecipe);

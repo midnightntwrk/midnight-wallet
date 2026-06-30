@@ -53,7 +53,7 @@ await sender.wallet
     },
   )
   .then((recipe) => {
-    return sender.wallet.signRecipe(recipe, (payload) => sender.unshieldedKeystore.signData(payload));
+    return sender.wallet.signRecipe(recipe, sender.unshieldedKeystore.signDataAsync);
   })
   .then((tx) => sender.wallet.finalizeRecipe(tx))
   .then((finalizedTransaction) => sender.wallet.submitTransaction(finalizedTransaction));

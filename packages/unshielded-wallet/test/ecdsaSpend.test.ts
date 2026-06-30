@@ -23,7 +23,7 @@ import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractio
 import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { Either } from 'effect';
+import { Either, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, PublicKey, type UnshieldedKeystore } from '../src/KeyStore.js';
 import { makeDefaultCoinsAndBalancesCapability } from '../src/v1/CoinsAndBalances.js';
@@ -37,6 +37,7 @@ import {
 import { TransactionOps } from '../src/v1/TransactionOps.js';
 import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js';
 import { UnshieldedState, UtxoWithMeta } from '../src/v1/UnshieldedState.js';
+import { type WalletError } from '../src/v1/WalletError.js';
 import { verifyWithOracle } from './ecdsaOracle.js';
 
 const NIGHT = ledger.nativeToken().raw;
@@ -87,6 +88,19 @@ const buildTransfer = (keystore: UnshieldedKeystore): ledger.UnprovenTransaction
     .makeTransfer(walletWithNight(keystore), [{ amount: 100n, type: NIGHT, receiverAddress: recipient }], ttl)
     .pipe(Either.getOrThrow).transaction;
 
+// Authorize a transaction the way the signing service does, but synchronously and purely: collect each segment's
+// signable data, sign it with the keystore, then attach. Signing with a wrong-scheme keystore is rejected by
+// `attachSignatures` (Left), exactly as it would be through the async pathway.
+const authorize = <T extends ledger.UnprovenTransaction>(
+  transaction: T,
+  keystore: UnshieldedKeystore,
+): Either.Either<T, WalletError> =>
+  pipe(
+    TransactionOps.collectSignableData(transaction),
+    Either.map((segments) => segments.map(({ segment, data }) => ({ segment, signature: keystore.signData(data) }))),
+    Either.flatMap((signatures) => TransactionOps.attachSignatures(transaction, signatures)),
+  );
+
 describe('Phase 2 — instantiation reports scheme and address (ECDSA-W-01/02)', () => {
   it('ECDSA-W-01 a wallet built from an ECDSA key reports the ecdsa scheme and an ecdsa address', () => {
     const wallet = walletWithNight(keystores.ecdsa);
@@ -128,9 +142,7 @@ describe('Phase 2 — authorized spend, signatures independently verified (ECDSA
     expect(allVerify.every(Boolean)).toBe(true);
 
     // the wallet authorizes the spend (matching-scheme signature attaches without rejection)
-    expect(Either.isRight(transacting.signUnprovenTransaction(transaction, (data) => keystore.signData(data)))).toBe(
-      true,
-    );
+    expect(Either.isRight(authorize(transaction, keystore))).toBe(true);
   });
 });
 
@@ -155,32 +167,18 @@ describe('Phase 2 — mixed wallets coexist with no cross-talk (ECDSA-SPEND-04)'
     expect(verifyWithOracle(ecdsaWallet.publicKey.publicKey, data, schnorrSignature)).toBe(false);
   });
 
-  it('both wallets authorize their own real spends concurrently without interference', async () => {
-    // Build a transfer for each wallet, then authorize both concurrently. The
-    // capability signs synchronously and is stateless, so interleaving them must
-    // not bleed scheme/state across the two sessions.
+  it('each wallet authorizes its own real spend, and cross-scheme authorization is rejected', () => {
+    // Build a transfer for each wallet and authorize each with its matching keystore. Authorization is pure and
+    // stateless, so the two are independent.
     const ecdsaTransfer = buildTransfer(keystores.ecdsa);
     const schnorrTransfer = buildTransfer(keystores.schnorr);
 
-    const [ecdsaSigned, schnorrSigned] = await Promise.all([
-      Promise.resolve(transacting.signUnprovenTransaction(ecdsaTransfer, (data) => keystores.ecdsa.signData(data))),
-      Promise.resolve(transacting.signUnprovenTransaction(schnorrTransfer, (data) => keystores.schnorr.signData(data))),
-    ]);
-
-    expect(Either.isRight(ecdsaSigned)).toBe(true);
-    expect(Either.isRight(schnorrSigned)).toBe(true);
+    expect(Either.isRight(authorize(ecdsaTransfer, keystores.ecdsa))).toBe(true);
+    expect(Either.isRight(authorize(schnorrTransfer, keystores.schnorr))).toBe(true);
 
     // Cross-signing must still be rejected: the ECDSA transfer cannot be authorized by Schnorr, and vice versa.
-    expect(
-      Either.isLeft(
-        transacting.signUnprovenTransaction(buildTransfer(keystores.ecdsa), (d) => keystores.schnorr.signData(d)),
-      ),
-    ).toBe(true);
-    expect(
-      Either.isLeft(
-        transacting.signUnprovenTransaction(buildTransfer(keystores.schnorr), (d) => keystores.ecdsa.signData(d)),
-      ),
-    ).toBe(true);
+    expect(Either.isLeft(authorize(buildTransfer(keystores.ecdsa), keystores.schnorr))).toBe(true);
+    expect(Either.isLeft(authorize(buildTransfer(keystores.schnorr), keystores.ecdsa))).toBe(true);
   });
 });
 
@@ -226,7 +224,7 @@ describe('Phase 2 — ECDSA signs a multi-offer transaction (guaranteed + fallib
     expect(allVerify.every(Boolean)).toBe(true);
 
     // ...and signing attaches a signature to BOTH offers.
-    const signed = transacting.signUnprovenTransaction(transaction, (data) => keystores.ecdsa.signData(data));
+    const signed = authorize(transaction, keystores.ecdsa);
     expect(Either.isRight(signed)).toBe(true);
     if (Either.isRight(signed)) {
       const signedIntent = Array.from(signed.right.intents?.values() ?? [])[0];
@@ -250,7 +248,7 @@ describe('Phase 2 — ECDSA wallet survives serialize → restore and can still 
     const { transaction } = transacting
       .makeTransfer(restored, [{ amount: 100n, type: NIGHT, receiverAddress: recipient }], ttl)
       .pipe(Either.getOrThrow);
-    const signed = transacting.signUnprovenTransaction(transaction, (data) => keystores.ecdsa.signData(data));
+    const signed = authorize(transaction, keystores.ecdsa);
     expect(Either.isRight(signed)).toBe(true);
   });
 });

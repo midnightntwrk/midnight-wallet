@@ -181,8 +181,9 @@ describe('Dust Registration', () => {
       },
     );
 
-    const signedTransferTxRecipe = await senderFacade.signRecipe(transferTxRecipe, (payload) =>
-      unshieldedSenderKeystore.signData(payload),
+    const signedTransferTxRecipe = await senderFacade.signRecipe(
+      transferTxRecipe,
+      unshieldedSenderKeystore.signDataAsync,
     );
 
     const finalizedTx = await senderFacade.finalizeRecipe(signedTransferTxRecipe);
@@ -216,7 +217,7 @@ describe('Dust Registration', () => {
     const dustRegistrationRecipe = await receiverFacade.registerNightUtxosForDustGeneration(
       nightUtxos,
       unshieldedReceiverKeystore.getPublicKey(),
-      (payload) => unshieldedReceiverKeystore.signData(payload),
+      unshieldedReceiverKeystore.signDataAsync,
     );
 
     const provenDustRegistrationTx = await receiverFacade.finalizeRecipe(dustRegistrationRecipe);
@@ -273,9 +274,7 @@ describe('Dust Registration', () => {
       },
       { ttl: new Date(Date.now() + 30 * 60 * 1000) },
     );
-    const signedTransfer = await senderFacade.signRecipe(transferTxRecipe, (payload) =>
-      unshieldedSenderKeystore.signData(payload),
-    );
+    const signedTransfer = await senderFacade.signRecipe(transferTxRecipe, unshieldedSenderKeystore.signDataAsync);
     const finalizedTransfer = await senderFacade.finalizeRecipe(signedTransfer);
     await senderFacade.submitTransaction(finalizedTransfer);
 
@@ -301,7 +300,7 @@ describe('Dust Registration', () => {
     await receiverFacade.registerNightUtxosForDustGeneration(
       nightUtxos,
       unshieldedReceiverKeystore.getPublicKey(),
-      (payload) => unshieldedReceiverKeystore.signData(payload),
+      unshieldedReceiverKeystore.signDataAsync,
     );
 
     // Booking contract: the just-registered UTxOs must no longer appear as available
@@ -319,7 +318,7 @@ describe('Dust Registration', () => {
       receiverFacade.registerNightUtxosForDustGeneration(
         nightUtxos,
         unshieldedReceiverKeystore.getPublicKey(),
-        (payload) => unshieldedReceiverKeystore.signData(payload),
+        unshieldedReceiverKeystore.signDataAsync,
       ),
     ).rejects.toThrow();
   });
@@ -364,7 +363,7 @@ describe('Dust Registration', () => {
           ttl: DateOps.addSeconds(new Date(), 1800),
         },
       )
-      .then((recipe) => senderFacade.signRecipe(recipe, (payload) => unshieldedSenderKeystore.signData(payload)))
+      .then((recipe) => senderFacade.signRecipe(recipe, unshieldedSenderKeystore.signDataAsync))
       .then((signedTxRecipe) => senderFacade.finalizeRecipe(signedTxRecipe))
       .then((tx) => senderFacade.submitTransaction(tx));
 
@@ -396,7 +395,7 @@ describe('Dust Registration', () => {
       .registerNightUtxosForDustGeneration(
         receiverStateBeforeRegistration.unshielded.availableCoins,
         unshieldedReceiverKeystore.getPublicKey(),
-        (payload) => unshieldedReceiverKeystore.signData(payload),
+        unshieldedReceiverKeystore.signDataAsync,
       )
       .then((recipe) => receiverFacade.finalizeRecipe(recipe))
       .then((tx) => receiverFacade.submitTransaction(tx));

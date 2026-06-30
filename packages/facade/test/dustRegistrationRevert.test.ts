@@ -89,8 +89,10 @@ describe('Dust registration revert-on-failure', () => {
       // Build-time failure: not enough generated dust to pay the registration fee.
       yield* Effect.promise(() =>
         expect(
-          facade.registerNightUtxosForDustGeneration(nightUtxos, keys.signatureVerifyingKey, (payload) =>
-            keys.unshieldedKeystore.signData(payload),
+          facade.registerNightUtxosForDustGeneration(
+            nightUtxos,
+            keys.signatureVerifyingKey,
+            keys.unshieldedKeystore.signDataAsync,
           ),
         ).rejects.toThrow(),
       );
@@ -128,13 +130,14 @@ describe('Dust registration revert-on-failure', () => {
       expect(nightUtxos.length).toBeGreaterThan(0);
       const bookedKeys = new Set(nightUtxos.map(utxoKey));
 
-      // Build-time failure: the caller's signer rejects. Signing happens after booking.
+      // Build-time failure: the caller's async signer rejects. Signing happens after booking, and the segment
+      // signer's failure surfaces wrapped in a SignError ('Signer callback failed') with the original cause attached.
       yield* Effect.promise(() =>
         expect(
-          facade.registerNightUtxosForDustGeneration(nightUtxos, keys.signatureVerifyingKey, () => {
-            throw new Error('signing failed');
-          }),
-        ).rejects.toThrow('signing failed'),
+          facade.registerNightUtxosForDustGeneration(nightUtxos, keys.signatureVerifyingKey, () =>
+            Promise.reject(new Error('signing failed')),
+          ),
+        ).rejects.toThrow('Signer callback failed'),
       );
 
       // Revert contract: the booking is released even though we failed at the signing step.

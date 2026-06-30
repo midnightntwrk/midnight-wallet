@@ -85,7 +85,7 @@ export function registerDustHealthchecks({ getEnv, seed, syncCacheDir, timeout =
         const dustRegistrationRecipe = await wallet.wallet.registerNightUtxosForDustGeneration(
           firstTwoNightUtxos,
           wallet.unshieldedKeystore.getPublicKey(),
-          (payload) => wallet.unshieldedKeystore.signData(payload),
+          wallet.unshieldedKeystore.signDataAsync,
         );
 
         const finalizedDustTx = await wallet.wallet.finalizeRecipe(dustRegistrationRecipe);
@@ -134,7 +134,7 @@ export function registerDustHealthchecks({ getEnv, seed, syncCacheDir, timeout =
         const dustDeregistrationRecipe = await wallet.wallet.deregisterFromDustGeneration(
           firstTwoRegisteredNightUtxos,
           wallet.unshieldedKeystore.getPublicKey(),
-          (payload) => wallet.unshieldedKeystore.signData(payload),
+          wallet.unshieldedKeystore.signDataAsync,
         );
 
         const balancedTransactionRecipe = await wallet.wallet.balanceUnprovenTransaction(

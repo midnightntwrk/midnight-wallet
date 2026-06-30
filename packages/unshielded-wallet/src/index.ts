@@ -12,4 +12,5 @@
 // limitations under the License.
 export * from './UnshieldedWallet.js';
 export { type UnshieldedTransactionHistoryEntry, UnshieldedSectionSchema } from './v1/TransactionHistory.js';
+export { type SignSegment } from './v1/Signing.js';
 export * from './KeyStore.js';

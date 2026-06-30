@@ -135,8 +135,10 @@ describe('WalletFacade in simulation mode', () => {
 
       // Registration transaction's fee is covered by allowFeePayment (would-be generated Dust)
       const dustRegistrationRecipe = yield* Effect.promise(() =>
-        senderFacade.registerNightUtxosForDustGeneration(nightUtxos, senderKeys.signatureVerifyingKey, (payload) =>
-          senderKeys.unshieldedKeystore.signData(payload),
+        senderFacade.registerNightUtxosForDustGeneration(
+          nightUtxos,
+          senderKeys.signatureVerifyingKey,
+          senderKeys.unshieldedKeystore.signDataAsync,
         ),
       );
       const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
@@ -283,8 +285,10 @@ describe('WalletFacade in simulation mode', () => {
       expect(nightUtxos.length).toBeGreaterThan(0);
 
       const dustRegistrationRecipe = yield* Effect.promise(() =>
-        senderFacade.registerNightUtxosForDustGeneration(nightUtxos, senderKeys.signatureVerifyingKey, (payload) =>
-          senderKeys.unshieldedKeystore.signData(payload),
+        senderFacade.registerNightUtxosForDustGeneration(
+          nightUtxos,
+          senderKeys.signatureVerifyingKey,
+          senderKeys.unshieldedKeystore.signDataAsync,
         ),
       );
       const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
@@ -379,8 +383,10 @@ describe('WalletFacade in simulation mode', () => {
       expect(nightUtxos.length).toBeGreaterThan(0);
 
       const dustRegistrationRecipe = yield* Effect.promise(() =>
-        senderFacade.registerNightUtxosForDustGeneration(nightUtxos, senderKeys.signatureVerifyingKey, (payload) =>
-          senderKeys.unshieldedKeystore.signData(payload),
+        senderFacade.registerNightUtxosForDustGeneration(
+          nightUtxos,
+          senderKeys.signatureVerifyingKey,
+          senderKeys.unshieldedKeystore.signDataAsync,
         ),
       );
       const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
@@ -467,8 +473,10 @@ describe('WalletFacade in simulation mode', () => {
       expect(nightUtxos.length).toBeGreaterThan(0);
 
       const dustRegistrationRecipe = yield* Effect.promise(() =>
-        senderFacade.registerNightUtxosForDustGeneration(nightUtxos, senderKeys.signatureVerifyingKey, (payload) =>
-          senderKeys.unshieldedKeystore.signData(payload),
+        senderFacade.registerNightUtxosForDustGeneration(
+          nightUtxos,
+          senderKeys.signatureVerifyingKey,
+          senderKeys.unshieldedKeystore.signDataAsync,
         ),
       );
       const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));

@@ -226,9 +226,7 @@ describe('Wallet Facade Transfer', () => {
       },
     );
 
-    const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, (payload) =>
-      unshieldedSenderKeystore.signData(payload),
-    );
+    const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, unshieldedSenderKeystore.signDataAsync);
 
     const finalizedTx = await senderFacade.finalizeRecipe(signedTxRecipe);
     const finalizedTxHash = finalizedTx.transactionHash().toString();
@@ -344,8 +342,9 @@ describe('Wallet Facade Transfer', () => {
     );
 
     // Sign the balancing transaction before finalizing
-    const signedBalancingTxRecipe = await senderFacade.signRecipe(balancingTxRecipe, (payload) =>
-      unshieldedSenderKeystore.signData(payload),
+    const signedBalancingTxRecipe = await senderFacade.signRecipe(
+      balancingTxRecipe,
+      unshieldedSenderKeystore.signDataAsync,
     );
 
     const finalizedArbitraryTx = await senderFacade.finalizeRecipe(signedBalancingTxRecipe);
@@ -438,9 +437,7 @@ describe('Wallet Facade Transfer', () => {
       { ttl },
     );
 
-    const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, (payload) =>
-      unshieldedSenderKeystore.signData(payload),
-    );
+    const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, unshieldedSenderKeystore.signDataAsync);
     const finalizedTx = await senderFacade.finalizeRecipe(signedTxRecipe);
     const finalizedTxHash = finalizedTx.transactionHash().toString();
     const submittedTxIdentifier = await senderFacade.submitTransaction(finalizedTx);

@@ -123,9 +123,7 @@ describe('Smoke tests', () => {
           ttl: new Date(Date.now() + 30 * 60 * 1000),
         },
       );
-      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
-        unshieldedFundedKeyStore.signData(payload),
-      );
+      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, unshieldedFundedKeyStore.signDataAsync);
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);

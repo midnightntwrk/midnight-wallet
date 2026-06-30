@@ -30,7 +30,7 @@ await sender.wallet
   .registerNightUtxosForDustGeneration(
     [senderUnshieldedState.availableCoins[0]],
     sender.unshieldedKeystore.getPublicKey(),
-    (payload) => sender.unshieldedKeystore.signData(payload),
+    sender.unshieldedKeystore.signDataAsync,
     receiverStateBefore.dust.address,
   )
   .then((recipe) =>

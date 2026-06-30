@@ -225,6 +225,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
       .withSync(UnshieldedSync.makeSimulatorSyncService, UnshieldedSync.makeSimulatorSyncCapability)
       .withSerializationDefaults()
       .withTransactingDefaults()
+      .withSigningDefaults()
       .withCoinsAndBalancesDefaults()
       .withKeysDefaults()
       .withCoinSelectionDefaults()
