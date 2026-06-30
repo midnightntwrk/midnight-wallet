@@ -314,7 +314,9 @@ const resolveNullifierSpends = (
               Number(mtIndicesSum) +
               ((initialNullifiers.length - freshUtxos.length) * maxCommitmentEndIndex) / commitmentIndicesSum;
             // NOTE: since this process goes after the generation updates, we need to add the generationEndIndex to the progress
-            yield* Effect.promise(() => emit.single(ProgressUpdate({ appliedIndex: progress + generationEndIndex })));
+            yield* Effect.promise(() =>
+              emit.single(ProgressUpdate({ appliedIndex: Math.floor(progress) + generationEndIndex })),
+            );
           }
 
           const { nextUtxos, nextSpentUtxos } = accumulateUtxoUpdates(dustUtxoUpdates, newUtxos, spentUtxos);
