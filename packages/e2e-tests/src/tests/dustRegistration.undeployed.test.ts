@@ -34,6 +34,7 @@ import {
   type FacadeState,
   WalletEntrySchema,
   WalletFacade,
+  isFinalizedWalletEntry,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
@@ -226,7 +227,7 @@ describe('Dust Registration', () => {
 
           return {
             state,
-            txFound: txInHistory !== undefined,
+            txFound: txInHistory !== undefined && isFinalizedWalletEntry(txInHistory),
           };
         }),
         rx.filter(({ state, txFound }) => txFound && state.isSynced && state.dust.availableCoins.length > 0),

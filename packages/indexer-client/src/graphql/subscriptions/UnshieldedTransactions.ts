@@ -26,6 +26,8 @@ export const UnshieldedTransactions = Subscription.make(
             hash
             protocolVersion
             block {
+              hash
+              height
               timestamp
             }
             ... on RegularTransaction {
