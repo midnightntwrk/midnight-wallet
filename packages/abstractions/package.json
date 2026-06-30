@@ -1,5 +1,5 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-abstractions",
+  "name": "@midnightntwrk/wallet-sdk-abstractions",
   "description": "Domain-specific abstractions for the wallet SDK",
   "version": "2.1.0",
   "type": "module",
@@ -9,14 +9,16 @@
   "author": "Midnight Foundation",
   "license": "Apache-2.0",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "files": [
     "dist/"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
+    "url": "git+https://github.com/midnightntwrk/midnight-wallet.git",
+    "directory": "packages/abstractions"
   },
   "exports": {
     ".": {
@@ -30,6 +32,8 @@
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit --passWithNoTests",
+    "test:integration": "vitest run --project integration --passWithNoTests",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",

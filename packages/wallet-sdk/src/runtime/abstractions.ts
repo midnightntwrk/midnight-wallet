@@ -11,4 +11,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export * from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+export * from '@midnightntwrk/wallet-sdk-runtime/abstractions';

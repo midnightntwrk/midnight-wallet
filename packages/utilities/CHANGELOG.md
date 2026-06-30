@@ -1,4 +1,4 @@
-# @midnight-ntwrk/wallet-sdk-utilities
+# @midnightntwrk/wallet-sdk-utilities
 
 ## 1.2.0
 

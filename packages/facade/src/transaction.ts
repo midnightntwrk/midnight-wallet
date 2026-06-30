@@ -14,8 +14,8 @@
  */
 
 import { Array as Arr, DateTime, Duration, HashSet, Option, Order, pipe } from 'effect';
-import { type PendingTransactions } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { type AnyTransaction } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
+import { type AnyTransaction } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 
 /**

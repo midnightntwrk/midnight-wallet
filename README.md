@@ -109,7 +109,7 @@ yarn dist
 To build a specific package, use the `--filter` flag:
 
 ```shell
-yarn dist --filter=@midnight-ntwrk/wallet-sdk-facade
+yarn dist --filter=@midnightntwrk/wallet-sdk-facade
 ```
 
 ## Build and watch
@@ -169,13 +169,13 @@ yarn test
 To run tests for a specific package:
 
 ```shell
-yarn test --filter=@midnight-ntwrk/wallet-sdk-unshielded-wallet
+yarn test --filter=@midnightntwrk/wallet-sdk-unshielded-wallet
 ```
 
 To run a specific test file:
 
 ```shell
-yarn test --filter=@midnight-ntwrk/wallet-sdk-unshielded-wallet -- test/UnshieldedWallet.test.ts
+yarn test --filter=@midnightntwrk/wallet-sdk-unshielded-wallet -- test/UnshieldedWallet.test.ts
 ```
 
 ### CI verification

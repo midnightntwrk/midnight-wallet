@@ -21,7 +21,7 @@ import {
   WsURL,
   ClientError,
   ServerError,
-} from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+} from '@midnightntwrk/wallet-sdk-utilities/networking';
 
 // ============================================================================
 // Error classification

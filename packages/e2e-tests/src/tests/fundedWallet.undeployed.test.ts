@@ -15,7 +15,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { inspect } from 'util';
-import { isFinalizedWalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
+import { isFinalizedWalletEntry } from '@midnightntwrk/wallet-sdk-facade';
 
 /** Tests using a funded wallet */
 

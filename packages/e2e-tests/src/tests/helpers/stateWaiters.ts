@@ -14,14 +14,14 @@
 import * as rx from 'rxjs';
 import { expect } from 'vitest';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { type UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
+import { type UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import {
   type WalletFacade,
   type WalletEntry,
   isPendingWalletEntry,
   isFinalizedWalletEntry,
-} from '@midnight-ntwrk/wallet-sdk-facade';
+} from '@midnightntwrk/wallet-sdk-facade';
 import { logger } from '../logger.js';
 
 export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
