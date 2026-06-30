@@ -15,7 +15,32 @@
 
 import { Array as Arr, DateTime, Duration, HashSet, Option, Order, pipe } from 'effect';
 import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
+import { type AnyTransaction } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
+
+/**
+ * The key under which a transaction's history entry is stored.
+ *
+ * Prefer the ledger transaction hash — it's the canonical chain identifier and the value the indexer reports a
+ * confirmed tx under. `transactionHash()` is only defined for proven + signed + bound transactions, though; it throws
+ * for the other variants, notably the proof-erased transactions the simulator produces. In that case fall back to the
+ * hex of the tx's serialized bytes: `serialize()` is total over every variant (it's the same encoding used to submit
+ * the tx), so a key is always available — unlike `identifiers[0]`, which is an identifier, not a hash of the
+ * transaction.
+ *
+ * Both the submit (pending) and revert (rejected) sides route through this one function so they can never disagree on
+ * the key. The fallback is deterministic: the same transaction object yields the same bytes every time, and the
+ * auto-revert path reverts the very object it submitted, so the rejected entry lands on the pending entry in place.
+ * (Serialization differs across lifecycle states, so this is only stable for a fixed tx — which is exactly the
+ * submit→revert flow.)
+ */
+export const txHistoryHash = (tx: AnyTransaction): string => {
+  try {
+    return tx.transactionHash().toString();
+  } catch {
+    return Buffer.from(tx.serialize()).toString('hex');
+  }
+};
 
 export const finalizedTransactionTrait: PendingTransactions.TransactionTrait<ledger.FinalizedTransaction> = {
   areAllTxIdsIncluded(tx: ledger.FinalizedTransaction, txIds: readonly string[]): boolean {
