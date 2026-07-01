@@ -1,5 +1,57 @@
 # @midnightntwrk/wallet-sdk-facade
 
+## 5.0.0
+
+### Major Changes
+
+- e89ab0b: Track transaction lifecycle in transaction history. Submitted transactions are now recorded as pending,
+  transition to finalized once confirmed by the indexer, and to rejected if they are reverted — giving a single,
+  consistent view of in-flight and settled transactions.
+
+### Minor Changes
+
+- ef16433: Add `WalletFacade.validateTransaction` for pre-submission well-formedness checks. Validation logic lives in a
+  new `ValidationService` (in `@midnightntwrk/wallet-sdk-capabilities/validation`); the facade method is a thin
+  delegate.
+
+  The signature accepts an options bag — `validateTransaction(tx, { flags, blockData? })` — supporting
+  `FinalizedTransaction`, `UnboundTransaction`, and `UnprovenTransaction`. Validation always uses real on-chain ledger
+  parameters; if `blockData` is provided it is reused, otherwise the service fetches via the configured
+  `fetchBlockData`. Recipes returned by balancing methods (`FinalizedTransactionRecipe`, `UnboundTransactionRecipe`,
+  `UnprovenTransactionRecipe`) now expose an optional `blockData` field, carried through `signRecipe`, so callers can
+  chain `balance → validate → submit` without a redundant fetch.
+
+  Errors are now typed: `WellFormedError` and `ValidationFetchError` (both `Data.TaggedError`), exported from the
+  facade.
+
+  New `InitParams` factories:
+
+  - `validationService` — override the default validation service.
+  - `fetchBlockData` — override the default indexer-backed block-data fetcher (use `makeSimulatorBlockDataFetcher` for
+    simulator-based tests).
+
+### Patch Changes
+
+- 44bbcae: Declare `effect` as a direct dependency. The facade imports from `effect` in its source (`src/index.ts`,
+  `src/transaction.ts`) but previously relied on the dependency being hoisted from another workspace package, which
+  could fail for consumers that install the facade in isolation.
+- 1eaad77: Pin internal `@midnightntwrk/wallet-sdk-*` dependencies to exact versions instead of caret ranges. A caret
+  range on a prerelease base (e.g. `^5.0.0-beta.0`) satisfies canary snapshots published on the same `major.minor.patch`
+  (`5.0.0-canary.*`), and since `canary` sorts above `beta`/`alpha`, installing a prerelease pulled canary builds of the
+  sibling packages. Exact pins make published releases resolve to a single coherent set regardless of what snapshots
+  exist on the registry.
+- Updated dependencies [44bbcae]
+- Updated dependencies [ef16433]
+- Updated dependencies [e89ab0b]
+- Updated dependencies [1eaad77]
+- Updated dependencies [ef16433]
+  - @midnightntwrk/wallet-sdk-indexer-client@1.3.0
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@3.2.0
+  - @midnightntwrk/wallet-sdk-shielded@3.1.0
+  - @midnightntwrk/wallet-sdk-capabilities@3.4.0
+
 ## 4.1.0
 
 ### Minor Changes
