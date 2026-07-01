@@ -12,19 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Publishes non-private workspace packages to npmjs under TWO scopes during the
-// org migration from `@midnight-ntwrk` to `@midnightntwrk`, both via npm Trusted
-// Publishing (OIDC) + `--provenance` (no tokens):
+// Publishes the transitional `@midnight-ntwrk/*` (dashed) alias to npmjs during
+// the org migration to `@midnightntwrk`, via npm Trusted Publishing (OIDC) +
+// `--provenance` (no tokens). For each non-private workspace package it stages a
+// copy in a temp dir, rewrites the scope in package.json, the README, and the
+// compiled `dist/**`, then publishes it under the dashed scope with a migration
+// banner pointing at the `@midnightntwrk` equivalent.
 //
-//   1. Primary `@midnightntwrk/*` — published as-is from the workspace.
-//   2. Alias `@midnight-ntwrk/*` — transitional, so dashed-scope consumers keep
-//      resolving; staged in a temp dir with the scope rewritten, then published.
+// The canonical `@midnightntwrk` scope is NOT published here — `changeset
+// publish` owns it (see .github/workflows/cd.yml): via changesets/action for
+// stable releases (which also creates the GitHub Releases), and via a
+// `--no-git-tag` snapshot publish for canaries. This script runs afterwards and
+// only mirrors the alias, so it never leads the canonical scope.
 //
 // Versions already on the registry are skipped so re-runs are idempotent.
 //
 // Usage:
-//   node scripts/publish.mjs              # dist-tag from changesets pre mode, else `latest`
-//   node scripts/publish.mjs --tag canary # force the `canary` dist-tag
+//   node scripts/publish-alias.mjs              # dist-tag from changesets pre mode, else `latest`
+//   node scripts/publish-alias.mjs --tag canary # force the `canary` dist-tag
 
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -98,8 +103,8 @@ if (publishable.length === 0) {
   process.exit(0);
 }
 
-console.log(`Publishing ${publishable.length} package(s)${distTag ? ` (dist-tag: ${distTag})` : ''}:`);
-publishable.forEach((ws) => console.log(`  - ${ws.pkg.name}@${ws.pkg.version} (+ alias ${toAlias(ws.pkg.name)})`));
+console.log(`Publishing ${publishable.length} alias package(s)${distTag ? ` (dist-tag: ${distTag})` : ''}:`);
+publishable.forEach((ws) => console.log(`  - ${toAlias(ws.pkg.name)}@${ws.pkg.version}`));
 
 const isAlreadyPublished = (name, version) => {
   try {
@@ -172,29 +177,9 @@ const publishAlias = (ws) => {
   }
 };
 
-// Publish the primary @midnightntwrk scope via OIDC + provenance.
-const publishPrimary = (ws) => {
-  const { name, version } = ws.pkg;
-  if (isAlreadyPublished(name, version)) {
-    console.log(`\nSkip ${name}@${version}: already published.`);
-    return { name, version, status: 'skipped' };
-  }
-
-  console.log(`\nPublishing ${name}@${version} (OIDC + provenance)...`);
-  try {
-    execFileSync('npm', ['publish', '--provenance', '--access', 'public', ...tagArgs], {
-      cwd: ws.location,
-      stdio: 'inherit',
-    });
-    return { name, version, status: 'published' };
-  } catch (err) {
-    return { name, version, status: 'failed', error: err.message };
-  }
-};
-
 const results = publishable.flatMap((ws) => {
   // Under any non-`latest` dist-tag (a canary snapshot or a changesets pre/beta
-  // release), only publish prerelease-versioned packages. A prerelease version
+  // release), only mirror prerelease-versioned packages. A prerelease version
   // always carries a semver "-"; a canonical version (no "-") must never sit
   // under a prerelease dist-tag. Plain `latest` releases resolve no dist-tag
   // (distTag undefined), so this never affects them.
@@ -202,16 +187,10 @@ const results = publishable.flatMap((ws) => {
     console.log(`Skip ${ws.pkg.name}@${ws.pkg.version}: not a prerelease version for --tag ${distTag}.`);
     return [];
   }
-  const primary = publishPrimary(ws);
-  // Only mirror to the dashed alias once the primary scope is in good shape
-  // (published or already present). If the primary publish failed, skip the
-  // alias so the transitional scope never leads the @midnightntwrk one.
-  if (primary.status === 'failed') {
-    const aliasName = toAlias(ws.pkg.name);
-    console.error(`Skip alias ${aliasName}@${ws.pkg.version}: primary publish failed.`);
-    return [primary];
-  }
-  return [primary, publishAlias(ws)];
+  // The canonical @midnightntwrk publish ran first via `changeset publish`
+  // (see cd.yml); step ordering means it is already live, so mirroring the
+  // dashed alias here can never let the alias lead the canonical scope.
+  return [publishAlias(ws)];
 });
 
 const counts = results.reduce((acc, r) => ({ ...acc, [r.status]: (acc[r.status] ?? 0) + 1 }), {});
