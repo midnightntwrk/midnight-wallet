@@ -330,7 +330,6 @@ describe('Optional Balancing', () => {
             {
               check: () => Promise.resolve([]),
               prove: () => Promise.resolve(tx.mockProve().guaranteedOffer!.outputs.at(0)!.proof.serialize()),
-              lookupKey: () => Promise.resolve(undefined),
             },
             ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
           ),

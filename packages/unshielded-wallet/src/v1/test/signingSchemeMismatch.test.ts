@@ -118,7 +118,6 @@ describe('signing rejects a scheme mismatch (ECDSA-MM-03/04/05/07/08)', () => {
       {
         prove: () => Promise.resolve(Buffer.from([42])),
         check: () => Promise.resolve([]),
-        lookupKey: () => Promise.resolve(undefined),
       },
       ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
     );

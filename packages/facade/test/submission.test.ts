@@ -170,7 +170,7 @@ describe('Facade submission', () => {
     const seed = crypto.randomBytes(32);
     const shielded = ShieldedWallet(config).startWithSeed(seed);
     const unshielded = UnshieldedWallet(config).startWithPublicKey(
-      PublicKey.fromKeyStore(createKeystore(seed, config.networkId)),
+      PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
     );
     const dust = DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
     const fakeSubmission = new (class implements SubmissionService<ledger.FinalizedTransaction> {
@@ -237,7 +237,7 @@ describe('Facade transaction history reads return entries regardless of lifecycl
       configuration: config,
       shielded: (c) => ShieldedWallet(c).startWithSeed(seed),
       unshielded: (c) =>
-        UnshieldedWallet(c).startWithPublicKey(PublicKey.fromKeyStore(createKeystore(seed, c.networkId))),
+        UnshieldedWallet(c).startWithPublicKey(PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, c.networkId))),
       dust: (c) => DustWallet(c).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust),
       submissionService: () => fakeSubmission,
     });
