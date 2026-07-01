@@ -1,5 +1,11 @@
 # @midnightntwrk/wallet-sdk-hd
 
+## 3.1.0-beta.1
+
+### Patch Changes
+
+- 057701e: fix: pins internal dependencies
+
 ## 3.1.0-beta.0
 
 ### Minor Changes
