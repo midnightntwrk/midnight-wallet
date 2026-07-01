@@ -1,5 +1,24 @@
 # @midnightntwrk/wallet-sdk-indexer-client
 
+## 1.3.0
+
+### Minor Changes
+
+- e89ab0b: Track transaction lifecycle in transaction history. Submitted transactions are now recorded as pending,
+  transition to finalized once confirmed by the indexer, and to rejected if they are reverted — giving a single,
+  consistent view of in-flight and settled transactions.
+
+### Patch Changes
+
+- 44bbcae: Remove unused devDependencies `@graphql-codegen/typescript` and `@graphql-codegen/typescript-operations`.
+  They are bundled transitively by `@graphql-codegen/client-preset` (used via `preset: 'client'` in `codegen.ts`), so
+  dropping them as direct dependencies has no effect on code generation or the published package.
+- 1eaad77: Pin internal `@midnightntwrk/wallet-sdk-*` dependencies to exact versions instead of caret ranges. A caret
+  range on a prerelease base (e.g. `^5.0.0-beta.0`) satisfies canary snapshots published on the same `major.minor.patch`
+  (`5.0.0-canary.*`), and since `canary` sorts above `beta`/`alpha`, installing a prerelease pulled canary builds of the
+  sibling packages. Exact pins make published releases resolve to a single coherent set regardless of what snapshots
+  exist on the registry.
+
 ## 1.2.3
 
 ### Patch Changes
