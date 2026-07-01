@@ -217,36 +217,38 @@ const accumulateUtxoUpdates = (
   );
 
 const loadCollapsedCommitments = (
-  fromIndex: number,
-  toIndex: number,
+  lastAppliedIndex: number,
+  maxIndex: number,
   newUtxos: Readonly<DustUtxoMap>,
   indexerSyncService: IndexerSyncService,
 ): Effect.Effect<CollapsedMerkleTree[], WalletError, Scope.Scope | QueryClient> => {
-  if (toIndex < 0) {
+  if (maxIndex < 0 || lastAppliedIndex === maxIndex) {
     return Effect.succeed([]);
   }
 
   const skipMtIndexes = [...newUtxos]
     .toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex))
-    .map(([_, u]) => Number(u.qdo.mtIndex));
+    .map(([_, u]) => Number(u.qdo.mtIndex)); // e.g. 43, 67, 68, 75
 
   // 1: split into groups
   const groups = [];
   const firstSkipIndex = skipMtIndexes.at(0);
 
-  if (firstSkipIndex !== undefined && fromIndex < firstSkipIndex) {
-    groups.push({ start: fromIndex, end: firstSkipIndex - 1 });
+  const startIndex = lastAppliedIndex + 1;
+  if (firstSkipIndex !== undefined && startIndex < firstSkipIndex) {
+    groups.push({ start: startIndex, end: firstSkipIndex - 1 });
   } else if (firstSkipIndex === undefined) {
-    groups.push({ start: fromIndex, end: toIndex });
+    groups.push({ start: startIndex, end: maxIndex });
   }
 
-  skipMtIndexes.forEach((skipMtIndex, index) => {
+  skipMtIndexes.forEach((skipMtIndex, i) => {
     const start = skipMtIndex + 1;
-    const end = skipMtIndexes.at(index + 1);
-    if (end !== undefined && end - start > 0) {
-      groups.push({ start, end: end - 1 });
-    } else if (end === undefined && start <= toIndex) {
-      groups.push({ start, end: toIndex });
+    const next = skipMtIndexes.at(i + 1);
+    // skip consecutive indices e.g., 67, 68
+    if (next !== undefined && next - start > 0) {
+      groups.push({ start, end: next - 1 });
+    } else if (next === undefined && start <= maxIndex) {
+      groups.push({ start, end: maxIndex });
     }
   });
 
@@ -409,7 +411,7 @@ export const doEventlessSync = (
 
       // lastSyncedCommitmentIndex out of maxCommitmentTreeIndex
       const collapsedCommitments = yield* loadCollapsedCommitments(
-        Math.max(0, Number(lastSyncedCommitmentIndex)),
+        Number(lastSyncedCommitmentIndex),
         maxCommitmentTreeIndex,
         finalUtxos,
         indexerSyncService,

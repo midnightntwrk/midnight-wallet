@@ -171,7 +171,10 @@ export const CoreWallet = {
     const newUtxos = [...HashMap.values(newDustUtxos)].toSorted((a, b) => Number(a.qdo.mtIndex - b.qdo.mtIndex));
     for (const { startIndex, update } of collapsedCommitments) {
       // apply utxos going before the current index
-      const priorUtxos = newUtxos.filter((utxoInfo) => Number(utxoInfo.qdo.mtIndex) < startIndex);
+      const priorUtxos = newUtxos.filter(
+        (utxoInfo) =>
+          Number(utxoInfo.qdo.mtIndex) < startIndex && utxoInfo.qdo.mtIndex >= updatedState.commitmentTreeFirstFree,
+      );
       updatedState = priorUtxos.reduce(
         (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
         updatedState,
