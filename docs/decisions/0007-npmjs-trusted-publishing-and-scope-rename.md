@@ -29,8 +29,8 @@ publish time. Both scopes publish via OIDC + provenance — there are no long-li
 
 - **Source tree uses `@midnightntwrk`.** Package names, internal SDK dependency ranges, source imports, changesets, and
   the lockfile are all on the dashless scope.
-- **`@midnight-ntwrk` is a publish-time alias.** `scripts/publish.mjs` stages a copy of each package in a temp dir and
-  rewrites the name, internal SDK deps, and compiled `dist/**` import specifiers back to the dashed scope, then
+- **`@midnight-ntwrk` is a publish-time alias.** `scripts/publish-alias.mjs` stages a copy of each package in a temp dir
+  and rewrites the name, internal SDK deps, and compiled `dist/**` import specifiers back to the dashed scope, then
   publishes it. The working tree stays pristine (so `changeset tag` tags the canonical scope). The alias README carries
   a migration banner pointing at the `@midnightntwrk` equivalent.
 - **Both scopes publish via OIDC + `npm publish --provenance`** — no token in the environment, so npm performs the
@@ -71,8 +71,8 @@ never collide):
 the `canary` dist-tag inconsistent across packages. Before snapshotting, the canary job runs
 `scripts/write-canary-changeset.mjs`, which writes a temporary changeset patch-bumping **every** publishable package, so
 the whole SDK at `@canary` is a coherent set from a single commit. Real pending changesets are kept, so their
-minor/major bumps still win. As defence-in-depth, `scripts/publish.mjs` skips any package whose version lacks a snapshot
-prerelease (`-`) when publishing under a `--tag`, so a canonical version can never reach a `canary*` tag.
+minor/major bumps still win. As defence-in-depth, `scripts/publish-alias.mjs` skips any package whose version lacks a
+snapshot prerelease (`-`) when publishing under a `--tag`, so a canonical version can never reach a `canary*` tag.
 
 ## Consequences
 
@@ -80,13 +80,43 @@ prerelease (`-`) when publishing under a `--tag`, so a canonical version can nev
 - Both scopes are tokenless and provenance-attested; there is no long-lived publish token to rotate or leak.
 - Identical content under both scopes is guaranteed by a single build per run.
 - Stable releases require human approval (the `npm-publish-stable` environment); canary never blocks on approval.
-- The scope rename was a large mechanical diff, and `publish.mjs` carries temp-dir staging + dist-specifier rewriting
-  for the duration of the migration window.
+- The scope rename was a large mechanical diff, and `publish-alias.mjs` carries temp-dir staging + dist-specifier
+  rewriting for the duration of the migration window.
 
-The alias is removed (the alias branch in `scripts/publish.mjs` + the migration banner) once consumers have migrated to
-`@midnightntwrk`.
+The alias is removed (the alias branch in `scripts/publish-alias.mjs` + the migration banner) once consumers have
+migrated to `@midnightntwrk`.
 
 ## Links
 
 - [npm Trusted Publishers](https://docs.npmjs.com/trusted-publishers)
-- Implemented by `scripts/publish.mjs`, `scripts/write-canary-changeset.mjs`, and `.github/workflows/cd.yml`
+- Implemented by `scripts/publish-alias.mjs`, `scripts/write-canary-changeset.mjs`, and `.github/workflows/cd.yml`
+
+## Amendment (2026-06-30): canonical publish handed back to `changeset publish`
+
+The original decision had a single hand-rolled script (`scripts/publish.mjs`) publish **both** scopes via
+`npm publish --provenance`. That worked, but it published the canonical scope outside `changesets/action`, and the
+action's publish step is what creates **GitHub Releases** (one per package, body from each `CHANGELOG.md`, parsed from
+the `New tag:` lines its publish command prints). Hand-rolling the publish therefore silently dropped GitHub Releases —
+they stopped being created once publishing moved into a bare workflow step.
+
+Rather than re-implement release creation ourselves, the canonical `@midnightntwrk` publish was handed back to
+`changeset publish`, which restores Releases for free and reduces the script to its actual reason for existing (the
+alias). The topology described above is updated as follows; everything else (dual-scope intent, OIDC + provenance,
+per-type environments with stable-only human approval, the canary coherent-set via `write-canary-changeset.mjs`) is
+unchanged.
+
+- **Canonical `@midnightntwrk` is published by `changeset publish`, everywhere.**
+  - `publish-stable`: `changesets/action` runs `changeset publish`. The action publishes the canonical scope (OIDC;
+    provenance via `NPM_CONFIG_PROVENANCE=true`), pushes the release tags, and **creates a GitHub Release per package**.
+    This replaces the old bare `yarn changeset:publish` + manual `git push --tags` step (and the `changeset:publish` npm
+    script, now removed).
+  - `canary`: `changeset publish --tag <canary-tag> --no-git-tag` publishes the snapshot. `--no-git-tag` keeps canaries
+    tag-less and Release-less (only the action creates Releases, not the CLI). This also exercises the
+    `changeset publish` + OIDC path on every snapshot push, so the stable path's publishing is continuously validated.
+- **`scripts/publish-alias.mjs` is now single-purpose** — it only stages and mirrors the dashed `@midnight-ntwrk` alias,
+  running **after** the canonical publish in both jobs (so the alias can never lead the canonical scope). It no longer
+  publishes the canonical scope; the `--alias-only` flag and the `publishPrimary` path were removed.
+- **GitHub Releases are an explicit, restored behavior** of `publish-stable`, created by `changesets/action`.
+
+Net effect on the topology table: `publish-stable` → canonical via `changeset publish` (+ tags + GitHub Releases) then
+alias; `canary` → canonical snapshot via `changeset publish --no-git-tag` then alias.

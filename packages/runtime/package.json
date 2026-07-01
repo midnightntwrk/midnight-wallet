@@ -31,8 +31,8 @@
     }
   },
   "dependencies": {
-    "@midnightntwrk/wallet-sdk-abstractions": "^2.1.0",
-    "@midnightntwrk/wallet-sdk-utilities": "^1.2.0",
+    "@midnightntwrk/wallet-sdk-abstractions": "2.1.0",
+    "@midnightntwrk/wallet-sdk-utilities": "1.2.0",
     "effect": "^3.19.19",
     "rxjs": "^7.8.2"
   },

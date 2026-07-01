@@ -15,6 +15,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { inspect } from 'util';
+import { isFinalizedWalletEntry } from '@midnightntwrk/wallet-sdk-facade';
 
 /** Tests using a funded wallet */
 
@@ -168,7 +169,8 @@ describe('Funded wallet', () => {
     async () => {
       await funded.wallet.waitForSyncedState();
       const txHistory = await funded.wallet.getAllFromTxHistory();
-      const unshieldedEntries = txHistory.filter((e) => e.unshielded !== undefined);
+      const confirmed = txHistory.filter(isFinalizedWalletEntry);
+      const unshieldedEntries = confirmed.filter((e) => e.unshielded !== undefined);
       expect(unshieldedEntries.length).toBeGreaterThan(0);
       unshieldedEntries.forEach((entry) => utils.expectValidUnshieldedTxHistoryEntry(entry));
       // At least one entry should have createdUtxos (from genesis funding)
@@ -188,13 +190,15 @@ describe('Funded wallet', () => {
       const shieldedEntries = await vi.waitFor(
         async () => {
           const txHistory = await funded.wallet.getAllFromTxHistory();
-          const entries = txHistory.filter((e) => e.shielded !== undefined);
-          expect(entries.length).toBeGreaterThan(0);
-          return entries;
+          const confirmed = txHistory.filter(isFinalizedWalletEntry);
+          const shieldedEntries = confirmed.filter((e) => e.shielded !== undefined);
+          expect(shieldedEntries.length).toBeGreaterThan(0);
+          shieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
+          return shieldedEntries;
         },
         { timeout: 30_000, interval: 1_000 },
       );
-      shieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
+
       // At least one entry should have receivedCoins (from genesis funding)
       const entryWithReceived = shieldedEntries.find((e) => e.shielded!.receivedCoins.length > 0);
       expect(entryWithReceived).toBeDefined();

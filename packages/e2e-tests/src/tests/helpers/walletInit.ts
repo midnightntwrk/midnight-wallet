@@ -78,7 +78,7 @@ const restoreUnshieldedWallet = async (
   seed: string,
   fixture: TestContainersFixture,
   readIfExists: (path: string) => Promise<string | undefined>,
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
+  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage,
 ) => {
   try {
     const serialized = await readIfExists(path);

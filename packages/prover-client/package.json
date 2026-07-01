@@ -33,7 +33,7 @@
     "@effect/platform": "^0.96.0",
     "@midnight-ntwrk/zkir-v2": "^2.1.0",
     "@midnightntwrk/ledger-v9": "1.0.0-rc.3",
-    "@midnightntwrk/wallet-sdk-utilities": "^1.2.0",
+    "@midnightntwrk/wallet-sdk-utilities": "1.2.0",
     "effect": "^3.19.19",
     "web-worker": "^1.5.0"
   },
