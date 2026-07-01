@@ -17,7 +17,7 @@ import { type TestContainersFixture, useTestContainersFixture } from './test-fix
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
-import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer, type FacadeState, type UtxoWithMeta } from '@midnightntwrk/wallet-sdk-facade';
 import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
 import {
@@ -50,10 +50,8 @@ describe('Projections-based synchronisation model', () => {
   let fundedNew: utils.WalletInit;
   let receiver: utils.WalletInit;
   let receiverNew: utils.WalletInit;
-  let retryIndex = 0;
 
   beforeEach(async () => {
-    ++retryIndex;
     fixture = getFixture();
     funded = await utils.initWalletWithSeed(seedFunded, fixture);
     fundedNew = await utils.initWalletWithSeed(seedFunded, fixture, {
@@ -76,18 +74,44 @@ describe('Projections-based synchronisation model', () => {
     await receiverNew.wallet.stop();
   }, 20_000);
 
-  const dustStatesEqual = (state1: ledger.DustLocalState, state2: ledger.DustLocalState) =>
-    state1.commitmentTreeRoot() === state2.commitmentTreeRoot() &&
-    state1.generatingTreeRoot() === state2.generatingTreeRoot() &&
-    Arr.differenceWith<ledger.QualifiedDustOutput>(
-      (utxo1, utxo2) =>
-        JSON.stringify(utxo1, (_, v) => (typeof v === 'bigint' ? v.toString() : v)) ===
-        JSON.stringify(utxo2, (_, v) => (typeof v === 'bigint' ? v.toString() : v)),
-    )(state1.utxos, state2.utxos).length === 0;
+  const stringifyWithBigInts = (value: unknown) =>
+    JSON.stringify(value, (_, v: unknown) => (typeof v === 'bigint' ? v.toString() : v));
+
+  const sameItems = <T>(left: readonly T[], right: readonly T[], equal: (leftItem: T, rightItem: T) => boolean) =>
+    left.length === right.length &&
+    Arr.differenceWith<T>(equal)(left, right).length === 0 &&
+    Arr.differenceWith<T>(equal)(right, left).length === 0;
 
   const rootsEqual = (state1: ledger.DustLocalState, state2: ledger.DustLocalState) =>
     state1.commitmentTreeRoot() === state2.commitmentTreeRoot() &&
     state1.generatingTreeRoot() === state2.generatingTreeRoot();
+
+  const dustStatesEqual = (state1: ledger.DustLocalState, state2: ledger.DustLocalState) =>
+    rootsEqual(state1, state2) &&
+    sameItems<ledger.QualifiedDustOutput>(
+      state1.utxos,
+      state2.utxos,
+      (utxo1, utxo2) => stringifyWithBigInts(utxo1) === stringifyWithBigInts(utxo2),
+    );
+
+  const unshieldedCoinsEqual = (coins1: readonly UtxoWithMeta[], coins2: readonly UtxoWithMeta[]) =>
+    sameItems(
+      coins1,
+      coins2,
+      (coin1, coin2) =>
+        coin1.meta.registeredForDustGeneration === coin2.meta.registeredForDustGeneration &&
+        stringifyWithBigInts(coin1.utxo) === stringifyWithBigInts(coin2.utxo),
+    );
+
+  const expectSameSyncState = (oldSyncState: FacadeState, projectionsSyncState: FacadeState) => {
+    expect(dustStatesEqual(oldSyncState.dust.state.state, projectionsSyncState.dust.state.state)).toBe(true);
+    expect(oldSyncState.unshielded.balances[unshieldedTokenRaw]).toEqual(
+      projectionsSyncState.unshielded.balances[unshieldedTokenRaw],
+    );
+    expect(
+      unshieldedCoinsEqual(oldSyncState.unshielded.availableCoins, projectionsSyncState.unshielded.availableCoins),
+    ).toBe(true);
+  };
 
   const sendAndRegisterNightUtxos = async () => {
     await fundedNew.wallet.doSync(fundedNew.shieldedSecretKeys, fundedNew.dustSecretKey);
@@ -136,10 +160,10 @@ describe('Projections-based synchronisation model', () => {
       },
     ];
     const fundedStatesEqual = dustStatesEqual(initialState.dust.state.state, initialStateNew.dust.state.state);
-    console.log('dust states equal for the "funded" wallets', fundedStatesEqual);
+    logger.info(`dust states equal for the "funded" wallets: ${fundedStatesEqual}`);
     if (!fundedStatesEqual) {
-      console.log('funded dust state1 old', initialState.dust.state.state.toString());
-      console.log('funded dust state1 new', initialStateNew.dust.state.state.toString());
+      logger.info(`funded dust state1 old: ${initialState.dust.state.state.toString()}`);
+      logger.info(`funded dust state1 new: ${initialStateNew.dust.state.state.toString()}`);
     }
     expect(fundedStatesEqual).toBe(true);
 
@@ -147,10 +171,10 @@ describe('Projections-based synchronisation model', () => {
       receiverInitialState.dust.state.state,
       receiverInitialStateNew.dust.state.state,
     );
-    console.log('dust states equal for "receiver" wallets', receiverStatesEqual);
+    logger.info(`dust states equal for "receiver" wallets: ${receiverStatesEqual}`);
     if (!receiverStatesEqual) {
-      console.log('receiver dust state1 new', receiverInitialStateNew.dust.state.state.toString());
-      console.log('receiver dust state1 old', receiverInitialState.dust.state.state.toString());
+      logger.info(`receiver dust state1 new: ${receiverInitialStateNew.dust.state.state.toString()}`);
+      logger.info(`receiver dust state1 old: ${receiverInitialState.dust.state.state.toString()}`);
     }
     expect(receiverStatesEqual).toBe(true);
 
@@ -189,7 +213,7 @@ describe('Projections-based synchronisation model', () => {
     const receiverState = await receiver.wallet.waitForSyncedState();
     const receiverNewState = await receiverNew.wallet.waitForSyncedState();
 
-    console.log('2) rootsEqual new:', rootsEqual(fundedNewState.dust.state.state, receiverNewState.dust.state.state));
+    logger.info(`2) rootsEqual new: ${rootsEqual(fundedNewState.dust.state.state, receiverNewState.dust.state.state)}`);
 
     const nightUtxos = receiverState2.unshielded.availableCoins.filter(
       (coin) => coin.meta.registeredForDustGeneration === false,
@@ -201,6 +225,10 @@ describe('Projections-based synchronisation model', () => {
 
     expect(ArrayOps.sumBigInt(nightUtxos.map((coin) => coin.utxo.value))).toEqual(finalUnshieldedBalance);
     logger.info(`utxo length: ${nightUtxos.length}`);
+
+    const { fee: estimatedRegistrationFee } = await receiverNew.wallet.estimateRegistration(nightUtxos);
+    logger.info(`Estimated registration fee: ${estimatedRegistrationFee} stroke; waiting for generation to cover it`);
+    await receiverNew.wallet.waitForGeneratedDust(nightUtxos, estimatedRegistrationFee);
 
     const dustRegistrationRecipe = await receiverNew.wallet.registerNightUtxosForDustGeneration(
       nightUtxos,
@@ -216,21 +244,43 @@ describe('Projections-based synchronisation model', () => {
     await fundedNew.wallet.doSync(fundedNew.shieldedSecretKeys, fundedNew.dustSecretKey);
     await receiverNew.wallet.doSync(receiverNew.shieldedSecretKeys, receiverNew.dustSecretKey);
     // await receiverNew.wallet.waitForSyncedState();
-    console.log(
-      '3) rootsEqual new:',
-      rootsEqual(
-        (await fundedNew.wallet.waitForSyncedState()).dust.state.state,
-        (await receiverNew.wallet.waitForSyncedState()).dust.state.state,
-      ),
+    const fundedNewStateAfterRegistration = await fundedNew.wallet.waitForSyncedState();
+    const receiverNewStateSyncedAfterRegistration = await receiverNew.wallet.waitForSyncedState();
+    logger.info(
+      `3) rootsEqual new: ${rootsEqual(
+        fundedNewStateAfterRegistration.dust.state.state,
+        receiverNewStateSyncedAfterRegistration.dust.state.state,
+      )}`,
     );
 
     const receiverStateAfterRegistration = await utils.waitForStateAfterDustRegistration(
       receiverNew.wallet,
       finalizedDustTx,
     );
+    const receiverStateAfterRegistrationOld = await rx.firstValueFrom(
+      receiver.wallet.state().pipe(
+        rx.filter((s) => s.isSynced),
+        rx.filter(
+          (s) =>
+            s.dust.availableCoins.length > 0 &&
+            s.unshielded.availableCoins.some((coin) => coin.meta.registeredForDustGeneration === true),
+        ),
+      ),
+    );
 
     const nightBalanceAfterRegistration = receiverStateAfterRegistration.unshielded.balances[unshieldedTokenRaw];
     expect(nightBalanceAfterRegistration).toBe(finalUnshieldedBalance);
+
+    return {
+      fundedState,
+      fundedNewState,
+      receiverState,
+      receiverNewState,
+      fundedNewStateAfterRegistration,
+      receiverStateAfterRegistration: receiverStateAfterRegistrationOld,
+      receiverNewStateAfterRegistration: receiverStateAfterRegistration,
+      finalUnshieldedBalance,
+    };
   };
 
   test(
@@ -255,6 +305,41 @@ describe('Projections-based synchronisation model', () => {
         (coin) => coin.meta.registeredForDustGeneration === true,
       );
       expect(registeredNightUtxos.length).toBeGreaterThan(0);
+    },
+    timeout,
+  );
+
+  test(
+    'New sync model matches the default sync model after transfer and Dust registration',
+    async () => {
+      const {
+        fundedState,
+        fundedNewState,
+        receiverState,
+        receiverNewState,
+        fundedNewStateAfterRegistration,
+        receiverStateAfterRegistration,
+        receiverNewStateAfterRegistration,
+        finalUnshieldedBalance,
+      } = await sendAndRegisterNightUtxos();
+
+      expectSameSyncState(fundedState, fundedNewState);
+      expectSameSyncState(receiverState, receiverNewState);
+      expectSameSyncState(receiverStateAfterRegistration, receiverNewStateAfterRegistration);
+      expect(rootsEqual(fundedNewState.dust.state.state, receiverNewState.dust.state.state)).toBe(true);
+      expect(
+        rootsEqual(
+          fundedNewStateAfterRegistration.dust.state.state,
+          receiverNewStateAfterRegistration.dust.state.state,
+        ),
+      ).toBe(true);
+
+      const registeredNightUtxos = receiverNewStateAfterRegistration.unshielded.availableCoins.filter(
+        (coin) => coin.meta.registeredForDustGeneration === true,
+      );
+      expect(registeredNightUtxos.length).toBeGreaterThan(0);
+      expect(ArrayOps.sumBigInt(registeredNightUtxos.map((coin) => coin.utxo.value))).toEqual(finalUnshieldedBalance);
+      expect(receiverNewStateAfterRegistration.dust.balance(new Date())).toBeGreaterThan(0n);
     },
     timeout,
   );
