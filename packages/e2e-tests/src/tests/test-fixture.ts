@@ -149,7 +149,7 @@ export class TestContainersFixture {
         return 'https://indexer.preprod.midnight.network/api/v4/graphql';
       }
       case 'stagenet': {
-        return 'https://indexer.stagenet.midnight.network/api/v4/graphql';
+        return 'https://indexer.stagenet.shielded.tools/api/v4/graphql';
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
@@ -176,7 +176,7 @@ export class TestContainersFixture {
         return 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
       }
       case 'stagenet': {
-        return 'wss://indexer.stagenet.midnight.network/api/v4/graphql/ws';
+        return 'wss://indexer.stagenet.shielded.tools/api/v4/graphql/ws';
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
@@ -203,7 +203,7 @@ export class TestContainersFixture {
         return 'wss://rpc.preprod.midnight.network';
       }
       case 'stagenet': {
-        return 'wss://rpc.stagenet.midnight.network';
+        return 'wss://rpc.stagenet.shielded.tools';
       }
       case 'undeployed': {
         const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);
