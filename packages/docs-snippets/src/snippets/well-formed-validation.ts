@@ -49,7 +49,7 @@ const recipe = await sender.wallet.balanceUnprovenTransaction(
   { shieldedSecretKeys: sender.shieldedSecretKeys, dustSecretKey: sender.dustSecretKey },
   { ttl: new Date(Date.now() + 30 * 60 * 1000) },
 );
-const signedRecipe = await sender.wallet.signRecipe(recipe, (payload) => sender.unshieldedKeystore.signData(payload));
+const signedRecipe = await sender.wallet.signRecipe(recipe, sender.unshieldedKeystore.signDataAsync);
 const finalizedTx = await sender.wallet.finalizeRecipe(signedRecipe);
 
 // Stage 2: validate before submitTransaction.
