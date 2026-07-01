@@ -14,7 +14,7 @@ import { logger } from '../logger.js';
 import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 
-export type MidnightNetwork = 'undeployed' | 'qanet' | 'devnet' | 'preview' | 'preprod';
+export type MidnightNetwork = 'undeployed' | 'qanet' | 'devnet' | 'preview' | 'preprod' | 'stagenet';
 
 export const sleep = (secs: number): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, secs * 1000));

@@ -54,6 +54,12 @@ export const NETWORK_PRESETS: Record<RemoteNetwork, RemoteNetworkPreset> = {
     indexerWsUrl: 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws',
     nodeUrl: 'wss://rpc.preprod.midnight.network',
   },
+  stagenet: {
+    networkId: NetworkId.NetworkId.StageNet,
+    indexerHttpUrl: 'https://indexer.stagenet.shielded.tools/api/v4/graphql',
+    indexerWsUrl: 'wss://indexer.stagenet.shielded.tools/api/v4/graphql/ws',
+    nodeUrl: 'wss://rpc.stagenet.shielded.tools',
+  },
 };
 
 /**

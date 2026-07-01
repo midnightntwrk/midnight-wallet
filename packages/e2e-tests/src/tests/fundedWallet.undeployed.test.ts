@@ -182,9 +182,18 @@ describe('Funded wallet', () => {
     'Shielded transaction history entries contain receivedCoins and spentCoins',
     async () => {
       await funded.wallet.waitForSyncedState();
-      const txHistory = await funded.wallet.getAllFromTxHistory();
-      const shieldedEntries = txHistory.filter((e) => e.shielded !== undefined);
-      expect(shieldedEntries.length).toBeGreaterThan(0);
+      // Shielded tx-history is populated in a detached fiber after state sync (it needs an extra
+      // TransactionHistoryDetail indexer query the shielded subscription doesn't provide), so it is
+      // eventually consistent and not covered by waitForSyncedState(). Poll until it lands.
+      const shieldedEntries = await vi.waitFor(
+        async () => {
+          const txHistory = await funded.wallet.getAllFromTxHistory();
+          const entries = txHistory.filter((e) => e.shielded !== undefined);
+          expect(entries.length).toBeGreaterThan(0);
+          return entries;
+        },
+        { timeout: 30_000, interval: 1_000 },
+      );
       shieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
       // At least one entry should have receivedCoins (from genesis funding)
       const entryWithReceived = shieldedEntries.find((e) => e.shielded!.receivedCoins.length > 0);

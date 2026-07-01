@@ -21,6 +21,7 @@ on:
           - qanet
           - preview
           - prepod
+          - stagenet
       seed:
         type: string
         description: Seed of a funded wallet (leave empty to use secret default)

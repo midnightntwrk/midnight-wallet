@@ -17,7 +17,7 @@ import { type DefaultProvingConfiguration } from '@midnightntwrk/wallet-sdk-capa
 import { type DefaultSubmissionConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/submission';
 
 /** Networks a wallet test environment can target. */
-export type MidnightNetwork = 'undeployed' | 'qanet' | 'devnet' | 'preview' | 'preprod';
+export type MidnightNetwork = 'undeployed' | 'qanet' | 'devnet' | 'preview' | 'preprod' | 'stagenet';
 
 /** A remote (already-running) network — anything other than the local testcontainers stack. */
 export type RemoteNetwork = Exclude<MidnightNetwork, 'undeployed'>;

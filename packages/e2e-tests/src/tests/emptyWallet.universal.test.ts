@@ -167,7 +167,8 @@ describe('Fresh wallet with empty state', () => {
       const serialized = await unshieldedWallet.serializeState();
       const stateObject = JSON.parse(serialized);
       logger.info(`Serialized unshielded wallet state: ${inspect(stateObject)}`);
-      expect(stateObject.publicKey.publicKey).toHaveLength(64);
+      expect(stateObject.publicKey.publicKey.tag).toBe('schnorr');
+      expect(stateObject.publicKey.publicKey.value).toHaveLength(64);
       expect(stateObject.publicKey.addressHex).toHaveLength(64);
       const restoredWallet = Unshielded.restore(serialized);
       const newState = await firstValueFrom(restoredWallet.state);
