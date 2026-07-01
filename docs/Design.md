@@ -5,6 +5,9 @@ This document is compilation of the design of the Wallet SDK. Some parts of it a
 [IcePanel diagram](https://app.icepanel.io/landscapes/yERCUolKk91aYF1pzsql/versions/latest/diagrams/editor?diagram=JwWBu6RYGg&model=onccvco5c4p&overlay_tab=tags&x1=-1463.3&y1=-830.7&x2=2295.3&y2=1129.3),
 and some are more ephemeral.
 
+> The behavioural contract this SDK implements is the [Wallet Specification](./spec/Specification.md), accompanied by an
+> executable [reference implementation](../packages/spec-reference) for key derivation and address formatting.
+
 ## High-level structure
 
 Midnight implements 3 kinds of tokens/resources, which wallet needs to be aware of:

@@ -2714,6 +2714,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@midnightntwrk/wallet-sdk-spec-reference@workspace:packages/spec-reference":
+  version: 0.0.0-use.local
+  resolution: "@midnightntwrk/wallet-sdk-spec-reference@workspace:packages/spec-reference"
+  dependencies:
+    "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
+    "@noble/curves": "npm:^1.8.1"
+    "@scure/base": "npm:^2.0.0"
+    "@subsquid/scale-codec": "npm:^4.0.1"
+    commander: "npm:^14.0.0"
+    tsx: "npm:4.22.4"
+  languageName: unknown
+  linkType: soft
+
 "@midnightntwrk/wallet-sdk-testkit@workspace:^, @midnightntwrk/wallet-sdk-testkit@workspace:packages/wallet-sdk-testkit":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-testkit@workspace:packages/wallet-sdk-testkit"
@@ -2900,7 +2913,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/curves@npm:^1.3.0, @noble/curves@npm:~1.9.0, @noble/curves@npm:~1.9.2":
+"@noble/curves@npm:^1.3.0, @noble/curves@npm:^1.8.1, @noble/curves@npm:~1.9.0, @noble/curves@npm:~1.9.2":
   version: 1.9.7
   resolution: "@noble/curves@npm:1.9.7"
   dependencies:
@@ -5413,6 +5426,13 @@ __metadata:
   version: 2.0.20
   resolution: "colorette@npm:2.0.20"
   checksum: 10c0/e94116ff33b0ff56f3b83b9ace895e5bf87c2a7a47b3401b8c3f3226e050d5ef76cf4072fb3325f9dc24d1698f9b730baf4e05eeaf861d74a1883073f4c98a40
+  languageName: node
+  linkType: hard
+
+"commander@npm:^14.0.0":
+  version: 14.0.3
+  resolution: "commander@npm:14.0.3"
+  checksum: 10c0/755652564bbf56ff2ff083313912b326450d3f8d8c85f4b71416539c9a05c3c67dbd206821ca72635bf6b160e2afdefcb458e86b317827d5cb333b69ce7f1a24
   languageName: node
   linkType: hard
 
