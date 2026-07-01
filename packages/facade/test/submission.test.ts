@@ -237,7 +237,9 @@ describe('Facade transaction history reads return entries regardless of lifecycl
       configuration: config,
       shielded: (c) => ShieldedWallet(c).startWithSeed(seed),
       unshielded: (c) =>
-        UnshieldedWallet(c).startWithPublicKey(PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, c.networkId))),
+        UnshieldedWallet(c).startWithPublicKey(
+          PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, c.networkId)),
+        ),
       dust: (c) => DustWallet(c).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust),
       submissionService: () => fakeSubmission,
     });
