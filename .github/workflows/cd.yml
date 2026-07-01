@@ -189,13 +189,28 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Build, publish (both scopes), and tag
-        # Both scopes publish via OIDC + provenance (see scripts/publish.mjs).
-        run: |
-          yarn changeset:publish
-          git push origin --tags
+      - name: Build packages
+        run: yarn dist:publish
+
+      # Publish the canonical @midnightntwrk scope via changesets. The action
+      # runs `changeset publish` (OIDC Trusted Publishing — no token; provenance
+      # via NPM_CONFIG_PROVENANCE), then pushes the release tags and creates one
+      # GitHub Release per package from its CHANGELOG. This restores the Releases
+      # that the action created before publishing was hand-rolled into a script.
+      - name: Publish @midnightntwrk + GitHub Releases
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          publish: yarn changeset publish
+          setupGitUser: false
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
+
+      # Mirror the transitional @midnight-ntwrk alias (dashed scope). The
+      # canonical scope is already live from the step above; this only stages
+      # and publishes the alias, so it can never lead the canonical scope.
+      - name: Publish @midnight-ntwrk alias
+        run: node scripts/publish-alias.mjs
 
   canary:
     name: Canary (snapshot publish)
@@ -241,6 +256,7 @@ jobs:
       - name: Snapshot version + publish canary
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
         run: |
           set -euo pipefail
 
@@ -292,14 +308,21 @@ jobs:
           yarn dist:publish
 
           # Publish under a branch-specific dist-tag: "canary" on main,
-          # "canary-<branch>" elsewhere. Uses the npm CLI (OIDC + provenance)
-          # via scripts/publish.mjs, which forwards --tag to `npm publish`.
+          # "canary-<branch>" elsewhere.
           if [ "${{ github.ref_name }}" = "main" ]; then
             CANARY_TAG="canary"
           else
             CANARY_TAG="canary-${{ github.ref_name }}"
           fi
-          node scripts/publish.mjs --tag "$CANARY_TAG"
+
+          # Canonical @midnightntwrk scope: `changeset publish` (OIDC +
+          # provenance via NPM_CONFIG_PROVENANCE), the same mechanism the stable
+          # job uses. --no-git-tag so canary snapshots leave no git tags (and
+          # no GitHub Releases — that is the action's job, not the CLI's).
+          yarn changeset publish --tag "$CANARY_TAG" --no-git-tag
+
+          # Dashed @midnight-ntwrk alias: mirrored afterwards from the workspace.
+          node scripts/publish-alias.mjs --tag "$CANARY_TAG"
 
       - name: Cleanup (always)
         if: always()
