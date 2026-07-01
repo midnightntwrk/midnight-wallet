@@ -1,5 +1,11 @@
 # @midnightntwrk/wallet-sdk-address-format
 
+## 4.0.0-beta.1
+
+### Patch Changes
+
+- 057701e: fix: pins internal dependencies
+
 ## 4.0.0-beta.0
 
 ### Major Changes

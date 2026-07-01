@@ -1,5 +1,31 @@
 # @midnightntwrk/wallet-sdk
 
+## 2.0.0-beta.1
+
+### Patch Changes
+
+- 1eaad77: Pin internal `@midnightntwrk/wallet-sdk-*` dependencies to exact versions instead of caret ranges. A caret
+  range on a prerelease base (e.g. `^5.0.0-beta.0`) satisfies canary snapshots published on the same `major.minor.patch`
+  (`5.0.0-canary.*`), and since `canary` sorts above `beta`/`alpha`, installing a prerelease pulled canary builds of the
+  sibling packages. Exact pins make published releases resolve to a single coherent set regardless of what snapshots
+  exist on the registry.
+- 057701e: fix: pins internal dependencies
+- Updated dependencies [e89ab0b]
+- Updated dependencies [1eaad77]
+- Updated dependencies [057701e]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-beta.0
+  - @midnightntwrk/wallet-sdk-facade@5.0.0-beta.1
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-beta.1
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-beta.1
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-beta.1
+  - @midnightntwrk/wallet-sdk-indexer-client@1.3.0-beta.1
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-beta.1
+  - @midnightntwrk/wallet-sdk-node-client@2.0.0-beta.1
+  - @midnightntwrk/wallet-sdk-prover-client@2.0.0-beta.1
+  - @midnightntwrk/wallet-sdk-runtime@1.0.6-beta.0
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-beta.1
+  - @midnightntwrk/wallet-sdk-hd@3.1.0-beta.1
+
 ## 2.0.0-beta.0
 
 ### Major Changes
