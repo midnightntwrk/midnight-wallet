@@ -13,7 +13,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@midnightntwrk/ledger-v9": "1.0.0-rc.2",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.3",
     "@midnightntwrk/wallet-sdk-abstractions": "^3.0.0-beta.0",
     "@midnightntwrk/wallet-sdk-address-format": "^4.0.0-beta.1",
     "@midnightntwrk/wallet-sdk-capabilities": "^4.0.0-beta.1",
