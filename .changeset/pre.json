@@ -23,6 +23,7 @@
     "@midnightntwrk/wallet-sdk-testkit": "0.2.0"
   },
   "changesets": [
+    "async-signer-pathway",
     "bright-rabbits-peel",
     "cd-create-github-releases",
     "clever-states-move",
@@ -37,6 +38,7 @@
     "fix-520-integration-check-names",
     "forty-seals-join",
     "honest-eggs-sit",
+    "ledger-rc3-upgrade",
     "migrate-to-ledger-v9",
     "pin-internal-deps-exact",
     "soft-aliens-send",
