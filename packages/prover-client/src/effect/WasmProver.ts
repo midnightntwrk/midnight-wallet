@@ -167,6 +167,8 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
         op: 'prove',
         args: [serializedPreimage, overwriteBindingInput],
       }),
+    lookupKey: (keyLocation: string): Promise<ProvingKeyMaterial | undefined> =>
+      (keyMaterialProvider ?? this.keyMaterialProvider).lookupKey(keyLocation),
   });
 
   proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(

@@ -293,6 +293,9 @@ describe('Unshielded wallet transacting', () => {
           check(): Promise<(bigint | undefined)[]> {
             return Promise.resolve([]);
           },
+          lookupKey(): Promise<ledger.ProvingKeyMaterial | undefined> {
+            return Promise.resolve(undefined);
+          },
         },
         ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
       );
