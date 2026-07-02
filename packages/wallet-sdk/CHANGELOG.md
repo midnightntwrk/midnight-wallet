@@ -1,5 +1,21 @@
 # @midnightntwrk/wallet-sdk
 
+## 2.0.0-beta.2
+
+### Patch Changes
+
+- 3c06af2: chore: upgrade ledger to 1.0.0-rc.3
+- Updated dependencies [1f7aaca]
+- Updated dependencies [3c06af2]
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-facade@5.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-prover-client@2.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-node-client@2.0.0-beta.2
+
 ## 2.0.0-beta.1
 
 ### Patch Changes

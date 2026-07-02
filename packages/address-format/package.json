@@ -1,6 +1,6 @@
 {
   "name": "@midnightntwrk/wallet-sdk-address-format",
-  "version": "4.0.0-beta.1",
+  "version": "4.0.0-beta.2",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
