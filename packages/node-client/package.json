@@ -1,6 +1,6 @@
 {
   "name": "@midnightntwrk/wallet-sdk-node-client",
-  "version": "2.0.0-beta.0",
+  "version": "2.0.0-beta.1",
   "type": "module",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -33,8 +33,8 @@
     }
   },
   "dependencies": {
-    "@midnightntwrk/wallet-sdk-abstractions": "^2.1.0",
-    "@midnightntwrk/wallet-sdk-utilities": "^1.2.0",
+    "@midnightntwrk/wallet-sdk-abstractions": "3.0.0-beta.0",
+    "@midnightntwrk/wallet-sdk-utilities": "1.2.0",
     "@polkadot/api": "^16.5.4",
     "@polkadot/types": "^16.5.4",
     "@polkadot/util": "^14.0.1",
@@ -44,7 +44,7 @@
   },
   "peerDependencies": {
     "@midnightntwrk/ledger-v9": "1.0.0-rc.3",
-    "@midnightntwrk/wallet-sdk-prover-client": "^2.0.0-beta.0"
+    "@midnightntwrk/wallet-sdk-prover-client": "2.0.0-beta.1"
   },
   "peerDependenciesMeta": {
     "@midnightntwrk/ledger-v9": {
@@ -63,7 +63,7 @@
     "@effect/sql": "0.51.1",
     "@effect/workflow": "0.18.2",
     "@midnightntwrk/ledger-v9": "1.0.0-rc.3",
-    "@midnightntwrk/wallet-sdk-prover-client": "^2.0.0-beta.0",
+    "@midnightntwrk/wallet-sdk-prover-client": "^2.0.0-beta.1",
     "@types/tar-stream": "3.1.4",
     "tar-stream": "3.2.0",
     "tsx": "4.22.4"

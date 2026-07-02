@@ -144,6 +144,8 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
         Effect.flatMap((tx) => this.request(PROVE_TX_PATH, tx, 'Failed to prove')),
         Effect.runPromise,
       ),
+    // The proof server holds its own key material and resolves circuits from the
+    // preimage's key location, so there is never local key material to provide.
     lookupKey: (_keyLocation: string): Promise<ledger.ProvingKeyMaterial | undefined> => Promise.resolve(undefined),
   });
 

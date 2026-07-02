@@ -567,6 +567,18 @@ describe('DustWallet', () => {
       const feeImbalance = Transacting.TransactingCapabilityImplementation.feeImbalance(provenTransaction, totalFee);
       expectWithMargin(feeImbalance, 0n, totalFee);
 
+      // `totalFee` is only an ESTIMATE. The ledger samples fresh random field elements (Intent
+      // binding/commitment randomness) on every transaction construction, which serialize as
+      // variable-length (598 bytes most of the time, 597 ~1/256). estimateFee() and
+      // balanceTransactions() each build the transaction independently, so when their byte lengths
+      // differ by one, the REALIZED fee diverges from the estimate by a fixed jump (the fee is a
+      // function of serialized size). The proven transaction we actually submitted carries the
+      // realized fee; `feeImbalance` is precisely (realized fee - estimate) for this transaction,
+      // so the realized fee is `totalFee + feeImbalance`. All balance-change assertions below MUST
+      // use this actual fee, never the estimate — comparing the realized balance change against the
+      // estimate is what made this test flaky. Do not "simplify" actualFee back to totalFee.
+      const actualFee = totalFee + feeImbalance;
+
       yield* submissionService.submitTransaction(provenTransaction, 'InBlock');
       // Block 3: after rewardNight (1), registerNightTokens (2), and this submission (3)
       // Note: fastForward only advances time, not block numbers
@@ -589,24 +601,22 @@ describe('DustWallet', () => {
       );
       const walletBalanceAfterTx = walletVariant.coinsAndBalances.getWalletBalance(walletState, lastBlock.timestamp);
 
-      // validate wallet balance changed to balance_now ≈ balance_before - tx_fee (±2% margin)
-      expectWithMargin(walletBalanceAfterTx, walletBalanceBeforeTx - totalFee, totalFee);
+      // Both balances are evaluated at the SAME time point (lastBlock.timestamp), so the
+      // generation/decay term cancels and the balance change equals exactly the realized fee.
+      // Asserting against the actual fee (not the estimate) makes this hold deterministically.
+      expectWithMargin(walletBalanceAfterTx, walletBalanceBeforeTx - actualFee, totalFee);
 
-      // The balance after paying the fee should be less than balance before minus fee
-      // (because old coin has more decay than new coin at the same time point)
-      expect(walletBalanceAfterTx).toBeLessThanOrEqual(walletBalanceBeforeTx - totalFee);
+      // The balance change at a single time point is exactly the dust spent on the fee — no decay
+      // gap to account for, since both balances share the timestamp. This is an exact equality.
+      expect(walletBalanceAfterTx).toBe(walletBalanceBeforeTx - actualFee);
 
-      // The balance difference should be close to the fee (within the decay amount for the time gap)
-      // The time gap is roughly 10 seconds (from fastForward), so decay difference could be significant
-      const decayTolerance = newAvailableCoins[0].rate * 11n; // ~11 seconds of decay difference
-      expect(walletBalanceAfterTx).toBeGreaterThanOrEqual(walletBalanceBeforeTx - totalFee - decayTolerance);
-
-      // validate it decays properly (±2% margin)
-      // Use 1 second after block timestamp for decay validation
+      // validate it decays properly: one second later the single remaining coin has decayed by
+      // exactly its rate. Re-base off the realized post-tx balance so we don't re-import the
+      // estimate error.
       const oneSecondAfterBlock = new Date(lastBlock.timestamp.getTime() + 1000);
       expectWithMargin(
         walletVariant.coinsAndBalances.getWalletBalance(walletState, oneSecondAfterBlock),
-        walletBalanceBeforeTx - totalFee - newAvailableCoins[0].rate,
+        walletBalanceAfterTx - newAvailableCoins[0].rate,
         totalFee,
       );
 
@@ -798,17 +808,19 @@ describe('DustWallet', () => {
       const bobAddress = bobKeyStore.getAddress();
       const nightTokens = getNightTokens(simulatorState, walletAddress);
 
-      const makeTransferTx = (sendToken: (typeof nightTokens)[0]) => {
+      const makeTransferTx = (sendToken: (typeof nightTokens)[0], segmentId: number) => {
         const intent = Intent.new(ttl);
         intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(
           [{ ...sendToken, owner: nightVerifyingKey }],
           [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }],
           [],
         );
-        return Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
+        // Deterministic, unique fallible segment per tx (range [1, 65535]) so merging the
+        // batch during balancing can never hit a random segment-id collision.
+        return Transaction.fromParts(NETWORK).addIntent({ tag: 'specific', value: segmentId }, intent);
       };
 
-      const transferTxs = Array.from({ length: 40 }, () => makeTransferTx(nightTokens[0]));
+      const transferTxs = Array.from({ length: 40 }, (_, i) => makeTransferTx(nightTokens[0], i + 1));
 
       const { transaction: balancingTx } = yield* wallet.balanceTransactions(
         dustSecretKey,

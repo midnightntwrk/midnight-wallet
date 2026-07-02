@@ -32,9 +32,21 @@ export const UnshieldedSectionSchema = Schema.Struct({
 
 type UnshieldedSection = Schema.Schema.Type<typeof UnshieldedSectionSchema>;
 
-export const UnshieldedTransactionHistoryEntrySchema = Schema.Struct({
-  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
-  unshielded: UnshieldedSectionSchema,
+export const mergeUnshieldedSections = (
+  existing: UnshieldedSection,
+  incoming: UnshieldedSection,
+): UnshieldedSection => ({
+  ...existing,
+  ...incoming,
+});
+
+/**
+ * Unshielded entry schema. Extends the common entry shape with an optional `unshielded` section. Tightening — required
+ * `unshielded` plus required `protocolVersion`/`status`/`timestamp` — happens at the writer-input type, not on the
+ * stored shape. Fees are not unshielded's concern (dust pays them); unshielded never writes `fees`.
+ */
+export const UnshieldedTransactionHistoryEntrySchema = TransactionHistoryStorage.extendEntrySchema({
+  unshielded: Schema.optional(UnshieldedSectionSchema),
 });
 
 export type UnshieldedTransactionHistoryEntry = Schema.Schema.Type<typeof UnshieldedTransactionHistoryEntrySchema>;
@@ -43,32 +55,41 @@ export type TransactionHistoryService = {
   put(update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError>;
 };
 
-export type DefaultTransactionHistoryConfiguration = {
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>;
-};
+export type UnshieldedHistoryStorage =
+  TransactionHistoryStorage.TransactionHistoryReader<TransactionHistoryStorage.TransactionHistoryEntryWithHash> &
+    TransactionHistoryStorage.TransactionHistoryWriter<UnshieldedTransactionHistoryEntry>;
 
-type StorageEntryWithUnshielded = Omit<
-  TransactionHistoryStorage.TransactionHistoryCommon,
-  'identifiers' | 'timestamp' | 'fees'
-> & {
-  readonly identifiers: readonly string[];
+/**
+ * Writer input for unshielded's `gotFinalized`. The stored shape leaves fields optional, but at write time we know
+ * `protocolVersion`, `status`, `timestamp`, and the `unshielded` section.
+ */
+type UnshieldedFinalizedInput = TransactionHistoryStorage.FinalizedEntryInput<UnshieldedTransactionHistoryEntry> & {
+  readonly protocolVersion: number;
+  readonly status: TransactionHistoryStorage.TransactionHistoryStatus;
   readonly timestamp: Date;
-  readonly fees: bigint | null;
   readonly unshielded: UnshieldedSection;
 };
 
-const convertUpdateToStorageEntry = ({
+export type DefaultTransactionHistoryConfiguration = {
+  txHistoryStorage: UnshieldedHistoryStorage;
+};
+
+const convertUpdateToFinalizedInput = ({
   transaction,
   createdUtxos,
   spentUtxos,
   status,
-}: UnshieldedUpdate): StorageEntryWithUnshielded => ({
+}: UnshieldedUpdate): UnshieldedFinalizedInput => ({
   hash: transaction.hash,
   protocolVersion: transaction.protocolVersion,
   status,
   identifiers: transaction.identifiers ?? [],
   timestamp: transaction.block.timestamp,
-  fees: transaction.fees?.paidFees ?? null,
+  finalizedBlock: {
+    hash: transaction.block.hash,
+    height: transaction.block.height,
+    timestamp: transaction.block.timestamp,
+  },
   unshielded: {
     id: transaction.id,
     createdUtxos: createdUtxos.map(({ utxo }) => ({
@@ -97,8 +118,8 @@ export const makeDefaultTransactionHistoryService = (
   return {
     put: (update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError> =>
       Effect.tryPromise({
-        try: () => txHistoryStorage.upsert(convertUpdateToStorageEntry(update)),
-        catch: (e) => new TransactionHistoryError({ message: 'Failed to put transaction history entry', cause: e }),
+        try: () => txHistoryStorage.gotFinalized(convertUpdateToFinalizedInput(update)),
+        catch: (e) => new TransactionHistoryError({ message: 'Failed to record finalized history entry', cause: e }),
       }),
   };
 };

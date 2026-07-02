@@ -1,6 +1,6 @@
 {
   "name": "@midnightntwrk/wallet-sdk-facade",
-  "version": "5.0.0-beta.0",
+  "version": "5.0.0-beta.1",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -27,18 +27,18 @@
   },
   "dependencies": {
     "@midnightntwrk/ledger-v9": "1.0.0-rc.3",
-    "@midnightntwrk/wallet-sdk-abstractions": "^2.1.0",
-    "@midnightntwrk/wallet-sdk-address-format": "^4.0.0-beta.0",
-    "@midnightntwrk/wallet-sdk-capabilities": "^4.0.0-beta.0",
-    "@midnightntwrk/wallet-sdk-dust-wallet": "^5.0.0-beta.0",
-    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.4-beta.0",
-    "@midnightntwrk/wallet-sdk-shielded": "^4.0.0-beta.0",
-    "@midnightntwrk/wallet-sdk-unshielded-wallet": "^4.0.0-beta.0",
+    "@midnightntwrk/wallet-sdk-abstractions": "3.0.0-beta.0",
+    "@midnightntwrk/wallet-sdk-address-format": "4.0.0-beta.1",
+    "@midnightntwrk/wallet-sdk-capabilities": "4.0.0-beta.1",
+    "@midnightntwrk/wallet-sdk-dust-wallet": "5.0.0-beta.1",
+    "@midnightntwrk/wallet-sdk-indexer-client": "1.3.0-beta.1",
+    "@midnightntwrk/wallet-sdk-shielded": "4.0.0-beta.1",
+    "@midnightntwrk/wallet-sdk-unshielded-wallet": "4.0.0-beta.1",
     "effect": "^3.19.19",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@midnightntwrk/wallet-sdk-hd": "^3.1.0-beta.0",
+    "@midnightntwrk/wallet-sdk-hd": "^3.1.0-beta.1",
     "@midnightntwrk/wallet-sdk-utilities": "^1.2.0"
   },
   "scripts": {

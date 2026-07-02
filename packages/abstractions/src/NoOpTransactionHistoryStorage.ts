@@ -13,14 +13,25 @@
 import {
   type TransactionHistoryStorage,
   type TransactionHash,
-  type TransactionHistoryCommon,
+  type TransactionHistoryEntryCommon,
+  type PendingEntryInput,
+  type FinalizedEntryInput,
+  type RejectedEntryInput,
   type SerializedTransactionHistory,
 } from './TransactionHistoryStorage.js';
 
 export class NoOpTransactionHistoryStorage<
-  T extends { hash: TransactionHash } = TransactionHistoryCommon,
+  T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon,
 > implements TransactionHistoryStorage<T> {
-  upsert(_entry: T): Promise<void> {
+  gotPending(_entry: PendingEntryInput<T>): Promise<void> {
+    return Promise.resolve();
+  }
+
+  gotFinalized(_entry: FinalizedEntryInput<T>): Promise<void> {
+    return Promise.resolve();
+  }
+
+  gotRejected(_entry: RejectedEntryInput<T>): Promise<void> {
     return Promise.resolve();
   }
 

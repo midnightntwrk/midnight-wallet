@@ -15,6 +15,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { inspect } from 'util';
+import { isFinalizedWalletEntry } from '@midnightntwrk/wallet-sdk-facade';
 
 /** Tests using a funded wallet */
 
@@ -168,7 +169,8 @@ describe('Funded wallet', () => {
     async () => {
       await funded.wallet.waitForSyncedState();
       const txHistory = await funded.wallet.getAllFromTxHistory();
-      const unshieldedEntries = txHistory.filter((e) => e.unshielded !== undefined);
+      const confirmed = txHistory.filter(isFinalizedWalletEntry);
+      const unshieldedEntries = confirmed.filter((e) => e.unshielded !== undefined);
       expect(unshieldedEntries.length).toBeGreaterThan(0);
       unshieldedEntries.forEach((entry) => utils.expectValidUnshieldedTxHistoryEntry(entry));
       // At least one entry should have createdUtxos (from genesis funding)
@@ -182,10 +184,21 @@ describe('Funded wallet', () => {
     'Shielded transaction history entries contain receivedCoins and spentCoins',
     async () => {
       await funded.wallet.waitForSyncedState();
-      const txHistory = await funded.wallet.getAllFromTxHistory();
-      const shieldedEntries = txHistory.filter((e) => e.shielded !== undefined);
-      expect(shieldedEntries.length).toBeGreaterThan(0);
-      shieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
+      // Shielded tx-history is populated in a detached fiber after state sync (it needs an extra
+      // TransactionHistoryDetail indexer query the shielded subscription doesn't provide), so it is
+      // eventually consistent and not covered by waitForSyncedState(). Poll until it lands.
+      const shieldedEntries = await vi.waitFor(
+        async () => {
+          const txHistory = await funded.wallet.getAllFromTxHistory();
+          const confirmed = txHistory.filter(isFinalizedWalletEntry);
+          const shieldedEntries = confirmed.filter((e) => e.shielded !== undefined);
+          expect(shieldedEntries.length).toBeGreaterThan(0);
+          shieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
+          return shieldedEntries;
+        },
+        { timeout: 30_000, interval: 1_000 },
+      );
+
       // At least one entry should have receivedCoins (from genesis funding)
       const entryWithReceived = shieldedEntries.find((e) => e.shielded!.receivedCoins.length > 0);
       expect(entryWithReceived).toBeDefined();

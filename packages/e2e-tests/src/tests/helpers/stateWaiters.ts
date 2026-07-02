@@ -16,7 +16,12 @@ import { expect } from 'vitest';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 import { type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
 import { type UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { type WalletFacade, type WalletEntry } from '@midnightntwrk/wallet-sdk-facade';
+import {
+  type WalletFacade,
+  type WalletEntry,
+  isPendingWalletEntry,
+  isFinalizedWalletEntry,
+} from '@midnightntwrk/wallet-sdk-facade';
 import { logger } from '../logger.js';
 
 export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
@@ -110,7 +115,7 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
 
         return {
           state,
-          txFound: txInHistory !== undefined,
+          txFound: txInHistory !== undefined && isFinalizedWalletEntry(txInHistory),
         };
       }),
       rx.filter(({ state, txFound }) => txFound && state.isSynced && state.dust.availableCoins.length > 0),
@@ -157,52 +162,127 @@ export const waitForRegisteredTokens = (wallet: WalletFacade) =>
     ),
   );
 
-export const waitForTxInHistory = async (
+/**
+ * The lifecycle stage {@link waitForTxInHistory} can wait for. Derived from the entry's `lifecycle.status` so it stays
+ * in lock-step with the schema's lifecycle union rather than duplicating the literals.
+ */
+export type TxLifecycleTarget = WalletEntry['lifecycle']['status'];
+
+/** Options controlling what {@link waitForTxInHistory} waits for. */
+export interface WaitForTxInHistoryOptions {
+  /**
+   * Which lifecycle stage to wait for. Defaults to `'finalized'`.
+   *
+   * - `'finalized'` — the tx has been confirmed on chain. **Additionally** requires the on-chain outcome `status ===
+   *   'SUCCESS'`, i.e. a _successful_ finalization. A finalized-but-failed tx (`FAILURE` / `PARTIAL_SUCCESS`) counts as
+   *   a terminal mismatch and is surfaced (so the assertion fails) rather than waited on. This is the default because
+   *   every transfer test wants a successful confirmation.
+   * - `'rejected'` — the tx was reverted or dropped and recorded as rejected (e.g. after `revertTransaction`). Rejected
+   *   entries carry no on-chain `status`.
+   * - `'pending'` — the tx has been submitted and recorded as pending, but not yet finalized.
+   */
+  until?: TxLifecycleTarget;
+  /**
+   * Optional refinement applied _on top of_ the `until` lifecycle match: the wait only resolves once the lifecycle
+   * target is reached **and** `ready(entry)` returns `true`. Defaults to `() => true` (no extra refinement). Typical
+   * use is to wait until a particular wallet section has populated, e.g. `ready: (e) => e.shielded !== undefined`. The
+   * predicate receives the full {@link WalletEntry}, so it can inspect any field (sections, `status`, `identifiers`,
+   * …).
+   */
+  ready?: (entry: WalletEntry) => boolean;
+}
+
+/**
+ * Polls a wallet's transaction history until the entry for `txHash` reaches a target lifecycle stage.
+ *
+ * By default (`until` omitted → `'finalized'`) it waits for a _successful_ finalization — lifecycle `finalized` **and**
+ * on-chain `status === 'SUCCESS'`. Pass `until: 'rejected'` or `until: 'pending'` to await those stages instead
+ * (neither carries a `SUCCESS` status). The optional {@link WaitForTxInHistoryOptions.ready} predicate refines the match
+ * further.
+ *
+ * Always returns the matching {@link WalletEntry} — the resolved entry is guaranteed (by the assertion below) to be in
+ * the requested lifecycle, so callers can read its sections/`status` directly without re-narrowing.
+ *
+ * The wait resolves as soon as the target lifecycle is reached and `ready` passes. If the tx instead settles into a
+ * _terminal_ lifecycle that isn't the requested one — e.g. waiting for `finalized` but the tx is `rejected`, or it
+ * finalized with a non-`SUCCESS` outcome — the wait aborts early and the returned entry fails the caller's assertion
+ * with a descriptive message rather than hanging until timeout.
+ *
+ * @param txHash - The transaction hash to look up in history.
+ * @param wallet - The wallet whose transaction history is polled.
+ * @param options - See {@link WaitForTxInHistoryOptions}. Omit it (or omit `until`) to wait for a successful
+ *   finalization.
+ */
+export async function waitForTxInHistory(
   txHash: string,
   wallet: WalletFacade,
-  ready?: (entry: WalletEntry) => boolean,
-) => {
-  const isReady = ready ?? (() => true);
+  options: WaitForTxInHistoryOptions = {},
+): Promise<WalletEntry> {
+  const until = options.until ?? 'finalized';
+  const isReady = options.ready ?? (() => true);
+
+  // A finalized target additionally demands a SUCCESS outcome; rejected/pending match on lifecycle alone.
+  const matchesTarget = (entry: WalletEntry): boolean =>
+    until === 'finalized'
+      ? isFinalizedWalletEntry(entry) && entry.status === 'SUCCESS'
+      : until === 'rejected'
+        ? entry.lifecycle.status === 'rejected'
+        : isPendingWalletEntry(entry);
+
+  // A lifecycle is *terminal* once it can no longer change (finalized or rejected); pending is transient.
+  const isTerminal = (entry: WalletEntry): boolean =>
+    isFinalizedWalletEntry(entry) || entry.lifecycle.status === 'rejected';
+
   const describeSections = (e: WalletEntry): string =>
     (['shielded', 'unshielded', 'dust'] as const).filter((k) => e[k] !== undefined).join(',');
+
   let pollsSinceDump = 0;
   const txEntry = await rx.firstValueFrom(
     rx.merge(wallet.state().pipe(rx.filter((state) => state.isSynced)), rx.interval(500)).pipe(
       rx.mergeMap(async () => {
         const entry = await wallet.queryTxHistoryByHash(txHash);
-        if (entry !== undefined && entry.status !== 'SUCCESS') {
-          logger.info(
-            `Waiting for tx ${txHash} in history: found, status=${entry.status}, sections=[${describeSections(entry)}] — non-SUCCESS, aborting wait`,
-          );
-          return entry;
-        }
-        const notReady = entry === undefined || !isReady(entry);
-        const needsDump = notReady && pollsSinceDump >= 20;
+        // Resolve when we hit the requested lifecycle (+ ready). Fast-fail when the tx settles into a different
+        // terminal lifecycle — it will never reach the target, so surface it instead of waiting for the timeout.
+        const reached = entry !== undefined && matchesTarget(entry) && isReady(entry);
+        const terminalMismatch = entry !== undefined && !matchesTarget(entry) && isTerminal(entry);
+        const done = reached || terminalMismatch;
+
         if (entry === undefined) {
-          logger.info(`Waiting for tx ${txHash} in history: not found yet`);
+          logger.info(`Waiting for tx ${txHash} (until=${until}): not found yet`);
         } else {
-          logger.info(`Waiting for tx ${txHash} in history: found, status=${entry.status}, ready=${isReady(entry)}`);
+          logger.info(
+            `Waiting for tx ${txHash} (until=${until}): lifecycle=${entry.lifecycle.status}, status=${entry.status}, sections=[${describeSections(entry)}], done=${done}`,
+          );
         }
-        if (needsDump) {
+
+        if (!done && pollsSinceDump >= 20) {
           const all = await wallet.getAllFromTxHistory();
           const summary = all.map((e) => ({
             hash: e.hash,
-            status: e.status,
-            sections: describeSections(e),
-            identifiers: e.identifiers ?? [],
+            lifecycle: e.lifecycle.status,
+            status: e.status ?? '(none)',
+            sections: describeSections(e) || '(none)',
+            identifiers: e.identifiers,
           }));
           logger.info(`Storage snapshot (${all.length} entries): ${JSON.stringify(summary, null, 2)}`);
           pollsSinceDump = 0;
         } else {
-          pollsSinceDump = notReady ? pollsSinceDump + 1 : 0;
+          pollsSinceDump = done ? 0 : pollsSinceDump + 1;
         }
-        return entry;
+
+        return done ? entry : undefined;
       }),
-      rx.filter((entry): entry is WalletEntry => entry !== undefined && (entry.status !== 'SUCCESS' || isReady(entry))),
+      rx.filter((entry): entry is WalletEntry => entry !== undefined),
     ),
   );
+
   expect(txEntry).toBeDefined();
   expect(txEntry.hash).toBe(txHash);
-  expect(txEntry.status).toBe('SUCCESS');
+  if (!matchesTarget(txEntry)) {
+    throw new Error(
+      `Expected ${until} entry for ${txHash}, got lifecycle '${txEntry.lifecycle.status}'` +
+        (isFinalizedWalletEntry(txEntry) ? ` (status '${txEntry.status}')` : ''),
+    );
+  }
   return txEntry;
-};
+}

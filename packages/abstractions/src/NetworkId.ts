@@ -18,6 +18,7 @@ export const NetworkId = {
   Undeployed: 'undeployed',
   Preview: 'preview',
   PreProd: 'preprod',
+  StageNet: 'stagenet',
 } as const;
 
 export type WellKnownNetworkId = (typeof NetworkId)[keyof typeof NetworkId];

@@ -60,3 +60,6 @@ CLAUDE.local.md
 
 # Claude Code — credentials (Linux/Windows only; macOS uses Keychain)
 .claude/.credentials.json
+
+# Claude Code — per-session runtime lock files (e.g. scheduled_tasks.lock)
+.claude/*.lock
