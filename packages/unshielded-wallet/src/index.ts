@@ -16,4 +16,5 @@ export {
   UnshieldedSectionSchema,
   mergeUnshieldedSections,
 } from './v1/TransactionHistory.js';
+export { type SignSegment } from './v1/Signing.js';
 export * from './KeyStore.js';

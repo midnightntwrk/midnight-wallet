@@ -222,9 +222,7 @@ export function registerTokenTransferHealthchecks(deps: TokenTransferScenarioDep
         );
         logger.info('Signing tx...');
         logger.info(txRecipe);
-        const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, (payload) =>
-          sender.unshieldedKeystore.signData(payload),
-        );
+        const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, sender.unshieldedKeystore.signDataAsync);
         logger.info('Transaction to prove...');
         logger.info(signedTxRecipe);
         const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);

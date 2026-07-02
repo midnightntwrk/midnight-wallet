@@ -31,6 +31,7 @@ import {
   type DefaultTransactingContext,
   makeDefaultTransactingCapability,
 } from '../Transacting.js';
+import { type SegmentSignature, TransactionOps, type UnboundTransaction } from '../TransactionOps.js';
 import { UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
 import { SchemeMismatchError } from '../WalletError.js';
 
@@ -86,11 +87,23 @@ const ecdsaOwnedTransaction = (): ledger.UnprovenTransaction => {
     .transaction;
 };
 
-describe('signing rejects a scheme mismatch (ECDSA-MM-03/04/05/07/08)', () => {
-  it('rejects a Schnorr signature for an ECDSA-owned transaction, before submission', () => {
+// Produce one signature per signable segment using the given keystore — the bytes the async signing path would
+// otherwise feed into `attachSignatures`. The scheme of the signature follows the keystore, so a Schnorr keystore
+// over an ECDSA-owned transaction yields the cross-scheme signatures these tests reject.
+const signAllSegments = (
+  transaction: ledger.UnprovenTransaction | UnboundTransaction,
+  keystore: UnshieldedKeystore,
+): readonly SegmentSignature[] =>
+  TransactionOps.getSegments(transaction).map((segment) => ({
+    segment,
+    signature: keystore.signData(TransactionOps.getSignatureData(transaction, segment).pipe(Either.getOrThrow)),
+  }));
+
+describe('attaching signatures rejects a scheme mismatch (ECDSA-MM-03/04/05/07/08)', () => {
+  it('rejects a Schnorr signature for an ECDSA-owned transaction, before it is attached', () => {
     const transaction = ecdsaOwnedTransaction();
 
-    const result = transacting.signUnprovenTransaction(transaction, (data) => schnorrKeystore.signData(data));
+    const result = TransactionOps.attachSignatures(transaction, signAllSegments(transaction, schnorrKeystore));
 
     expect(Either.isLeft(result)).toBe(true);
     if (Either.isLeft(result)) {
@@ -102,7 +115,7 @@ describe('signing rejects a scheme mismatch (ECDSA-MM-03/04/05/07/08)', () => {
       }
     }
 
-    // ECDSA-MM-07: the mismatch is caught before the signature is attached, so the
+    // ECDSA-MM-07: the mismatch is caught before any signature is attached, so the
     // transaction carries no partial signature (nothing is left in a submittable state).
     const attachedSignatures = Array.from(transaction.intents?.values() ?? []).flatMap((intent) => [
       ...(intent.guaranteedUnshieldedOffer?.signatures ?? []),
@@ -112,8 +125,8 @@ describe('signing rejects a scheme mismatch (ECDSA-MM-03/04/05/07/08)', () => {
   });
 
   it('rejects a Schnorr signature for an ECDSA-owned UNBOUND transaction too', async () => {
-    // Exercise the signUnboundTransaction path explicitly (shares the internal
-    // signer, but the public entry point is distinct from signUnprovenTransaction).
+    // Exercise the unbound transaction path explicitly (shares attachSignatures,
+    // but is a distinct transaction shape from the unproven one).
     const unbound = await ecdsaOwnedTransaction().prove(
       {
         prove: () => Promise.resolve(Buffer.from([42])),
@@ -123,7 +136,7 @@ describe('signing rejects a scheme mismatch (ECDSA-MM-03/04/05/07/08)', () => {
       ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
     );
 
-    const result = transacting.signUnboundTransaction(unbound, (data) => schnorrKeystore.signData(data));
+    const result = TransactionOps.attachSignatures(unbound, signAllSegments(unbound, schnorrKeystore));
 
     expect(Either.isLeft(result)).toBe(true);
     if (Either.isLeft(result)) {
@@ -134,7 +147,7 @@ describe('signing rejects a scheme mismatch (ECDSA-MM-03/04/05/07/08)', () => {
   it('accepts the matching ECDSA signature for the same transaction (positive control)', () => {
     const transaction = ecdsaOwnedTransaction();
 
-    const result = transacting.signUnprovenTransaction(transaction, (data) => ecdsaKeystore.signData(data));
+    const result = TransactionOps.attachSignatures(transaction, signAllSegments(transaction, ecdsaKeystore));
 
     expect(Either.isRight(result)).toBe(true);
   });

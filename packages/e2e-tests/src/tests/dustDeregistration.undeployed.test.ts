@@ -136,7 +136,7 @@ describe('Dust Deregistration', () => {
     const dustDeregistrationTx = await walletFacade.deregisterFromDustGeneration(
       nightUtxosRegisteredForDustGeneration.slice(0, deregisterTokens),
       unshieldedWalletKeystore.getPublicKey(),
-      (payload) => unshieldedWalletKeystore.signData(payload),
+      unshieldedWalletKeystore.signDataAsync,
     );
 
     const balancingRecipe = await walletFacade.balanceUnprovenTransaction(
@@ -204,8 +204,10 @@ describe('Dust Deregistration', () => {
     expect(nightUtxos.length).toBeGreaterThan(0);
 
     // First call: build a deregistration recipe without submitting it.
-    await walletFacade.deregisterFromDustGeneration(nightUtxos, unshieldedWalletKeystore.getPublicKey(), (payload) =>
-      unshieldedWalletKeystore.signData(payload),
+    await walletFacade.deregisterFromDustGeneration(
+      nightUtxos,
+      unshieldedWalletKeystore.getPublicKey(),
+      unshieldedWalletKeystore.signDataAsync,
     );
 
     // Booking contract: the just-deregistered UTxOs must no longer appear as available
@@ -219,8 +221,10 @@ describe('Dust Deregistration', () => {
 
     // Fail-fast contract: a second deregistration over the same UTxOs must reject at build time.
     await expect(
-      walletFacade.deregisterFromDustGeneration(nightUtxos, unshieldedWalletKeystore.getPublicKey(), (payload) =>
-        unshieldedWalletKeystore.signData(payload),
+      walletFacade.deregisterFromDustGeneration(
+        nightUtxos,
+        unshieldedWalletKeystore.getPublicKey(),
+        unshieldedWalletKeystore.signDataAsync,
       ),
     ).rejects.toThrow();
   });

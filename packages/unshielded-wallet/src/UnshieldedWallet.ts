@@ -34,6 +34,7 @@ import {
   type UnprovenTransactionBalanceResult,
 } from './v1/Transacting.js';
 import { type WalletSyncUpdate } from './v1/SyncSchema.js';
+import { type SignSegment } from './v1/Signing.js';
 import { type UtxoWithMeta } from './v1/UnshieldedState.js';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
@@ -149,13 +150,10 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
 
   signUnprovenTransaction(
     transaction: ledger.UnprovenTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
+    signSegment: SignSegment,
   ): Promise<ledger.UnprovenTransaction>;
 
-  signUnboundTransaction(
-    transaction: UnboundTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Promise<UnboundTransaction>;
+  signUnboundTransaction(transaction: UnboundTransaction, signSegment: SignSegment): Promise<UnboundTransaction>;
 
   serializeState(): Promise<TSerialized>;
 
@@ -308,7 +306,7 @@ export function CustomUnshieldedWallet<
 
     signUnprovenTransaction(
       transaction: ledger.UnprovenTransaction,
-      signSegment: (data: Uint8Array) => ledger.Signature,
+      signSegment: SignSegment,
     ): Promise<ledger.UnprovenTransaction> {
       return this.runtime
         .dispatch({
@@ -317,10 +315,7 @@ export function CustomUnshieldedWallet<
         .pipe(Effect.runPromise);
     }
 
-    signUnboundTransaction(
-      transaction: UnboundTransaction,
-      signSegment: (data: Uint8Array) => ledger.Signature,
-    ): Promise<UnboundTransaction> {
+    signUnboundTransaction(transaction: UnboundTransaction, signSegment: SignSegment): Promise<UnboundTransaction> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.signUnboundTransaction(transaction, signSegment),

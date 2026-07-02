@@ -31,7 +31,7 @@ await sender.wallet
   .deregisterFromDustGeneration(
     [senderUnshieldedState.availableCoins[0]],
     sender.unshieldedKeystore.getPublicKey(),
-    (payload) => sender.unshieldedKeystore.signData(payload),
+    sender.unshieldedKeystore.signDataAsync,
   )
   .then((recipe) =>
     sender.wallet.balanceUnprovenTransaction(

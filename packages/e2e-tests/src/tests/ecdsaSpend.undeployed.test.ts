@@ -84,9 +84,7 @@ describe('ECDSA unshielded spend (undeployed)', () => {
       { shieldedSecretKeys: funded.shieldedSecretKeys, dustSecretKey: funded.dustSecretKey },
       { ttl: new Date(Date.now() + 30 * 60 * 1000) },
     );
-    const signedFunding = await funded.wallet.signRecipe(fundingRecipe, (payload) =>
-      funded.unshieldedKeystore.signData(payload),
-    );
+    const signedFunding = await funded.wallet.signRecipe(fundingRecipe, funded.unshieldedKeystore.signDataAsync);
     await funded.wallet.submitTransaction(await funded.wallet.finalizeRecipe(signedFunding));
 
     // The ECDSA wallet receives the Night UTxOs at its ECDSA address.
@@ -105,7 +103,7 @@ describe('ECDSA unshielded spend (undeployed)', () => {
     const registrationRecipe = await ecdsa.wallet.registerNightUtxosForDustGeneration(
       nightUtxos,
       ecdsa.unshieldedKeystore.getPublicKey(),
-      (payload) => ecdsa.unshieldedKeystore.signData(payload),
+      ecdsa.unshieldedKeystore.signDataAsync,
     );
     const finalizedRegistration = await ecdsa.wallet.finalizeRecipe(registrationRecipe);
     await ecdsa.wallet.submitTransaction(finalizedRegistration);
@@ -144,9 +142,7 @@ describe('ECDSA unshielded spend (undeployed)', () => {
         { shieldedSecretKeys: ecdsa.shieldedSecretKeys, dustSecretKey: ecdsa.dustSecretKey },
         { ttl: new Date(Date.now() + 30 * 60 * 1000) },
       );
-      const signed = await ecdsa.wallet.signRecipe(spendRecipe, (payload) =>
-        ecdsa.unshieldedKeystore.signData(payload),
-      );
+      const signed = await ecdsa.wallet.signRecipe(spendRecipe, ecdsa.unshieldedKeystore.signDataAsync);
       const finalized = await ecdsa.wallet.finalizeRecipe(signed);
       const txId = await ecdsa.wallet.submitTransaction(finalized);
       logger.info(`ECDSA-authorized spend submitted, tx id: ${txId}`);
@@ -196,9 +192,7 @@ describe('ECDSA unshielded spend (undeployed)', () => {
       );
 
       // signRecipe must reject the scheme mismatch before finalize/submit — nothing reaches the chain.
-      await expect(ecdsa.wallet.signRecipe(recipe, (payload) => wrongSchemeKeystore.signData(payload))).rejects.toThrow(
-        /scheme/i,
-      );
+      await expect(ecdsa.wallet.signRecipe(recipe, wrongSchemeKeystore.signDataAsync)).rejects.toThrow(/scheme/i);
     },
     timeout,
   );

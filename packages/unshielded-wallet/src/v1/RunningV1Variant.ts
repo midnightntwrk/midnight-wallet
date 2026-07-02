@@ -31,6 +31,7 @@ import {
 } from './Transacting.js';
 import { type UtxoWithMeta } from './UnshieldedState.js';
 import { type UnboundTransaction } from './TransactionOps.js';
+import { type SignSegment, type SigningService } from './Signing.js';
 import { type WalletError } from './WalletError.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
@@ -67,6 +68,7 @@ export declare namespace RunningV1Variant {
     syncService: SyncService<CoreWallet, TSyncUpdate>;
     syncCapability: SyncCapability<CoreWallet, TSyncUpdate>;
     transactingCapability: TransactingCapability<CoreWallet>;
+    signingService: SigningService;
     coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
     keysCapability: KeysCapability<CoreWallet>;
     coinSelection: CoinSelection<ledger.Utxo>;
@@ -222,16 +224,16 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
 
   signUnprovenTransaction(
     transaction: ledger.UnprovenTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
+    signSegment: SignSegment,
   ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
-    return this.#v1Context.transactingCapability.signUnprovenTransaction(transaction, signSegment);
+    return this.#v1Context.signingService.sign(transaction, signSegment);
   }
 
   signUnboundTransaction(
     transaction: UnboundTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
+    signSegment: SignSegment,
   ): Effect.Effect<UnboundTransaction, WalletError> {
-    return this.#v1Context.transactingCapability.signUnboundTransaction(transaction, signSegment);
+    return this.#v1Context.signingService.sign(transaction, signSegment);
   }
 
   revertTransaction(

@@ -14,6 +14,7 @@ export * from './V1Builder.js';
 export * as Sync from './Sync.js';
 export * as SyncProgress from './SyncProgress.js';
 export * as Transacting from './Transacting.js';
+export * as Signing from './Signing.js';
 export * as TransactionHistory from './TransactionHistory.js';
 export * as Serialization from './Serialization.js';
 export * as CoinsAndBalances from './CoinsAndBalances.js';

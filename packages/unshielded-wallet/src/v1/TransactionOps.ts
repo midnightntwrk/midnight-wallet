@@ -14,6 +14,7 @@ import { Either, type Option, pipe, Array as Arr, Iterable as IterableOps } from
 import { Imbalances } from '@midnightntwrk/wallet-sdk-capabilities';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 import { addressFromKey, SignatureEnabled } from '@midnightntwrk/ledger-v9';
+import { assertSignatureMatchesKey } from '../SchemeConsistency.js';
 import { TransactingError, type WalletError } from './WalletError.js';
 
 /** Unbound transaction type. This is a transaction that has no signatures and is not bound yet. */
@@ -21,6 +22,33 @@ export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, led
 
 /** Utility type to extract the Intent type from a Transaction type. Maps Transaction<S, P, B> to Intent<S, P, B>. */
 export type IntentOf<T> = T extends ledger.Transaction<infer S, infer P, infer B> ? ledger.Intent<S, P, B> : never;
+
+/** A transaction segment paired with the bytes that must be signed to authorize it. */
+export type SignableSegment = { readonly segment: number; readonly data: Uint8Array };
+
+/** A signature produced for a specific transaction segment, ready to be attached. */
+export type SegmentSignature = { readonly segment: number; readonly signature: ledger.Signature };
+
+/**
+ * Asserts that `signature` shares the scheme of every input owner authorized in `segment`. Pure and synchronous: a
+ * mismatch short-circuits with a typed `SchemeMismatchError` so a wrong-scheme signature is never attached.
+ */
+const assertSignatureMatchesSegmentOwners = (
+  transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  segment: number,
+  signature: ledger.Signature,
+): Either.Either<ledger.Signature, WalletError> => {
+  const intent = transaction.intents?.get(segment);
+  const owners = [
+    ...(intent?.guaranteedUnshieldedOffer?.inputs ?? []),
+    ...(intent?.fallibleUnshieldedOffer?.inputs ?? []),
+  ].map((input) => input.owner);
+  const seed: Either.Either<ledger.Signature, WalletError> = Either.right(signature);
+  return pipe(
+    owners,
+    Arr.reduce(seed, (acc, owner) => Either.flatMap(acc, () => assertSignatureMatchesKey(owner, signature))),
+  );
+};
 
 export type TransactionOps = {
   getSignatureData: (
@@ -35,6 +63,13 @@ export type TransactionOps = {
     transaction: TTransaction,
     signature: ledger.Signature,
     segment: number,
+  ): Either.Either<TTransaction, WalletError>;
+  collectSignableData(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>,
+  ): Either.Either<readonly SignableSegment[], WalletError>;
+  attachSignatures<TTransaction extends ledger.UnprovenTransaction | UnboundTransaction>(
+    transaction: TTransaction,
+    signatures: readonly SegmentSignature[],
   ): Either.Either<TTransaction, WalletError>;
   getImbalances(
     transaction: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
@@ -129,6 +164,37 @@ export const TransactionOps: TransactionOps = {
       ).set(segment, intent);
 
       return transaction;
+    });
+  },
+  collectSignableData(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>,
+  ): Either.Either<readonly SignableSegment[], WalletError> {
+    // A transaction with no intents has no signable segments — yields an empty list, never an error.
+    return Either.all(
+      TransactionOps.getSegments(transaction).map((segment) =>
+        Either.map(TransactionOps.getSignatureData(transaction, segment), (data) => ({ segment, data })),
+      ),
+    );
+  },
+  attachSignatures<TTransaction extends ledger.UnprovenTransaction | UnboundTransaction>(
+    transaction: TTransaction,
+    signatures: readonly SegmentSignature[],
+  ): Either.Either<TTransaction, WalletError> {
+    return Either.gen(function* () {
+      // Validate every signature's scheme against its segment's owners BEFORE attaching any of them, so a
+      // mismatch leaves the transaction untouched (no partially-signed transaction can escape toward the network).
+      yield* Either.all(
+        signatures.map(({ segment, signature }) =>
+          assertSignatureMatchesSegmentOwners(transaction, segment, signature),
+        ),
+      );
+      const seed: Either.Either<TTransaction, WalletError> = Either.right(transaction);
+      return yield* pipe(
+        signatures,
+        Arr.reduce(seed, (acc, { segment, signature }) =>
+          Either.flatMap(acc, (tx) => TransactionOps.addSignature(tx, signature, segment)),
+        ),
+      );
     });
   },
   getImbalances(

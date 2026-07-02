@@ -24,7 +24,6 @@ import {
   InsufficientFundsError as BalancingInsufficientFundsError,
 } from '@midnightntwrk/wallet-sdk-capabilities';
 import { TransactionOps, type UnboundTransaction, type IntentOf } from './TransactionOps.js';
-import { assertSignatureMatchesKey } from '../SchemeConsistency.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
@@ -101,20 +100,10 @@ export interface TransactingCapability<TState> {
     transaction: ledger.UnprovenTransaction,
   ): Either.Either<[UnprovenTransactionBalanceResult, CoreWallet], WalletError>;
 
-  signUnprovenTransaction(
-    transaction: ledger.UnprovenTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Either.Either<ledger.UnprovenTransaction, WalletError>;
-
   revertTransaction(
     wallet: CoreWallet,
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Either.Either<CoreWallet, WalletError>;
-
-  signUnboundTransaction(
-    transaction: UnboundTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Either.Either<UnboundTransaction, WalletError>;
 }
 
 export type DefaultTransactingConfiguration = {
@@ -430,68 +419,6 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
         transaction: tx,
       };
     });
-  }
-
-  signUnprovenTransaction(
-    transaction: ledger.UnprovenTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Either.Either<ledger.UnprovenTransaction, WalletError> {
-    return this.#signTransactionInternal(transaction, signSegment);
-  }
-
-  signUnboundTransaction(
-    transaction: UnboundTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Either.Either<UnboundTransaction, WalletError> {
-    return this.#signTransactionInternal(transaction, signSegment);
-  }
-
-  /**
-   * Internal method to sign either an unproven or unbound transaction
-   *
-   * @param transaction - The transaction to sign
-   * @param signSegment - The signing function
-   * @returns The signed transaction if successful, otherwise an error
-   */
-  #signTransactionInternal<T extends ledger.UnprovenTransaction | UnboundTransaction>(
-    transaction: T,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Either.Either<T, WalletError> {
-    return Either.gen(this, function* () {
-      const segments = this.txOps.getSegments(transaction);
-
-      for (const segment of segments) {
-        const signedData = yield* this.txOps.getSignatureData(transaction, segment);
-        const signature = signSegment(signedData);
-        // Reject a wrong-scheme signature before it is attached, so a mismatch
-        // never reaches the network (no partially-signed transaction escapes).
-        yield* this.#assertSignatureMatchesSegmentOwners(transaction, segment, signature);
-        transaction = yield* this.txOps.addSignature<T>(transaction, signature, segment);
-      }
-      return transaction;
-    });
-  }
-
-  /**
-   * Asserts that a freshly produced signature shares the scheme (`schnorr` vs `ecdsa`) of every input owner it will
-   * authorize in the given segment. Pure and synchronous: a mismatch short-circuits signing with a typed
-   * `SchemeMismatchError` before the signature is attached.
-   */
-  #assertSignatureMatchesSegmentOwners<T extends ledger.UnprovenTransaction | UnboundTransaction>(
-    transaction: T,
-    segment: number,
-    signature: ledger.Signature,
-  ): Either.Either<ledger.Signature, WalletError> {
-    const intent = transaction.intents?.get(segment);
-    const owners = [
-      ...(intent?.guaranteedUnshieldedOffer?.inputs ?? []),
-      ...(intent?.fallibleUnshieldedOffer?.inputs ?? []),
-    ].map((input) => input.owner);
-    const ok: Either.Either<ledger.Signature, WalletError> = Either.right(signature);
-    return pipe(
-      owners,
-      Arr.reduce(ok, (acc, owner) => Either.flatMap(acc, () => assertSignatureMatchesKey(owner, signature))),
-    );
   }
 
   /**

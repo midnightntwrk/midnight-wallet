@@ -46,7 +46,7 @@ await sender.wallet
       ttl: new Date(Date.now() + 30 * 60 * 1000),
     },
   )
-  .then((recipe) => sender.wallet.signRecipe(recipe, (payload) => sender.unshieldedKeystore.signData(payload)))
+  .then((recipe) => sender.wallet.signRecipe(recipe, sender.unshieldedKeystore.signDataAsync))
   .then((recipe) => sender.wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => sender.wallet.submitTransaction(finalizedTransaction))
   .then(() =>
@@ -77,7 +77,7 @@ await wallet
   .registerNightUtxosForDustGeneration(
     stateBefore.unshielded.availableCoins,
     unshieldedKeystore.getPublicKey(),
-    (payload) => unshieldedKeystore.signData(payload),
+    unshieldedKeystore.signDataAsync,
   )
   .then((recipe) => wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => wallet.submitTransaction(finalizedTransaction));

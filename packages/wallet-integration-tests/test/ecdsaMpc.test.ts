@@ -11,75 +11,118 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// MPC signer integration (#402 §7 — ECDSA-MPC-01/02/03/04).
+// MPC signer integration (#402 §7 / #504 — ECDSA-MPC-01/02/03/04).
 //
-// A threshold-ECDSA backend is, to the wallet, a function that returns a valid
-// ledger Signature for the wallet's verifying key. These tests use a fake
-// coordinator (additive share fixtures, t-of-t) and verify the assembled
-// signature with an independent @noble oracle, plus the orchestration semantics.
-//
-// NOTE (integration gap): the facade `signRecipe(recipe, signSegment)` callback
-// is SYNCHRONOUS ((data) => Signature), but MPC is async. Wiring an async backend
-// in requires either pre-signing each segment's data and returning the cached
-// signature synchronously, or an async-capable signer pathway in the SDK. The
-// signature produced here is exactly what such a pathway must feed in.
+// A threshold-ECDSA backend is, to the wallet, an async function that returns a valid ledger Signature for the
+// wallet's verifying key. Since #504 the SDK's signing pathway accepts exactly such an async signer, so these tests
+// drive a fake coordinator (additive share fixtures, t-of-t) THROUGH the real `SigningService` — authorizing a genuine
+// transfer end-to-end — and assert the orchestration semantics (threshold, timeout, concurrency) surface correctly.
+// The assembled signatures are verified with an independent @noble oracle and the ledger, so nothing is self-attested.
 import * as ledger from '@midnightntwrk/ledger-v9';
+import { WalletError } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { TransactionOps } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { Cause, Effect, Either, Exit, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import {
   FakeMpcCoordinator,
+  type MpcParticipant,
   MpcThresholdError,
   MpcTimeoutError,
   verifyEcdsaWithOracle,
 } from './helpers/ecdsaSigners.js';
+import { buildEcdsaTransfer, signingService } from './helpers/sdkSigning.js';
 
 const secret = Buffer.alloc(32, 0x21);
-const payload = new TextEncoder().encode('authorize unshielded spend');
 const PARTIES = 3;
 
-describe('ECDSA MPC signer integration (#402 §7)', () => {
-  it('ECDSA-MPC-01: a signature assembled from the threshold shares verifies under the group key', async () => {
+/** A signer that asks the coordinator to assemble a threshold signature over each segment the SDK presents. */
+const mpcSigner =
+  (coordinator: FakeMpcCoordinator, participants: readonly MpcParticipant[], timeoutMs?: number) =>
+  (data: Uint8Array): Promise<ledger.Signature> =>
+    coordinator.requestSignature(data, participants, timeoutMs);
+
+describe('ECDSA MPC signer integration (#402 §7 / #504)', () => {
+  it('ECDSA-MPC-01: a threshold-MPC backend authorizes a real transfer through the SDK signing pathway', async () => {
     const coordinator = FakeMpcCoordinator.fromSecret(secret, PARTIES);
+    const transaction = buildEcdsaTransfer(secret);
 
     // NOTE: this fake is t-of-t (all parties must participate); a true t-of-n
     // "enough-but-not-all" success path is not modelled here.
-    const signature = await coordinator.requestSignature(payload, coordinator.allParticipants());
+    const signed = await Effect.runPromise(
+      signingService.sign(transaction, mpcSigner(coordinator, coordinator.allParticipants())),
+    );
 
-    expect(signature.tag).toBe('ecdsa');
-    // Independent oracle AND the ledger accept it under the coordinator's public key —
+    // The SDK attached the MPC-assembled signature(s) to the spend...
+    const attached = Array.from(signed.intents?.values() ?? []).flatMap((intent) => [
+      ...(intent.guaranteedUnshieldedOffer?.signatures ?? []),
+      ...(intent.fallibleUnshieldedOffer?.signatures ?? []),
+    ]);
+    expect(attached.length).toBeGreaterThan(0);
+
+    // ...and each signed segment's threshold signature verifies under the group key (independent oracle AND ledger),
     // i.e. it is a valid authorization for a spend owned by that key.
-    expect(verifyEcdsaWithOracle(coordinator.publicKey, payload, signature)).toBe(true);
-    expect(ledger.verifySignature(coordinator.publicKey, payload, signature)).toBe(true);
+    for (const segment of TransactionOps.getSegments(signed)) {
+      const data = TransactionOps.getSignatureData(signed, segment).pipe(Either.getOrThrow);
+      const signature = await coordinator.requestSignature(data, coordinator.allParticipants());
+      expect(verifyEcdsaWithOracle(coordinator.publicKey, data, signature)).toBe(true);
+      expect(ledger.verifySignature(coordinator.publicKey, data, signature)).toBe(true);
+    }
   });
 
-  it('ECDSA-MPC-02: below-threshold participation yields a typed error and no signature', async () => {
+  it('ECDSA-MPC-02: below-threshold participation surfaces a SignError (MpcThresholdError) and signs nothing', async () => {
     const coordinator = FakeMpcCoordinator.fromSecret(secret, PARTIES);
+    const transaction = buildEcdsaTransfer(secret);
     const tooFew = coordinator.allParticipants().slice(0, PARTIES - 1);
 
-    await expect(coordinator.requestSignature(payload, tooFew)).rejects.toBeInstanceOf(MpcThresholdError);
+    const exit = await Effect.runPromiseExit(signingService.sign(transaction, mpcSigner(coordinator, tooFew)));
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      const error = Option.getOrThrow(Cause.failureOption(exit.cause));
+      expect(error).toBeInstanceOf(WalletError.SignError);
+      if (error instanceof WalletError.SignError) {
+        expect(error.cause).toBeInstanceOf(MpcThresholdError);
+      }
+    }
   });
 
-  it('ECDSA-MPC-03: an unresponsive party times out cleanly without hanging', async () => {
+  it('ECDSA-MPC-03: an unresponsive party times out cleanly, surfacing a SignError (MpcTimeoutError)', async () => {
     const coordinator = FakeMpcCoordinator.fromSecret(secret, PARTIES);
+    const transaction = buildEcdsaTransfer(secret);
     // One party never responds within the timeout window.
     const participants = [{ index: 0 }, { index: 1 }, { index: 2, delayMs: 10_000 }];
 
-    await expect(coordinator.requestSignature(payload, participants, 50)).rejects.toBeInstanceOf(MpcTimeoutError);
+    const exit = await Effect.runPromiseExit(
+      signingService.sign(transaction, mpcSigner(coordinator, participants, 50)),
+    );
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      const error = Option.getOrThrow(Cause.failureOption(exit.cause));
+      expect(error).toBeInstanceOf(WalletError.SignError);
+      if (error instanceof WalletError.SignError) {
+        expect(error.cause).toBeInstanceOf(MpcTimeoutError);
+      }
+    }
   });
 
-  it('ECDSA-MPC-04: concurrent signing requests do not bleed into each other', async () => {
+  it('ECDSA-MPC-04: concurrent signings of distinct transfers do not bleed into each other', async () => {
     const coordinator = FakeMpcCoordinator.fromSecret(secret, PARTIES);
-    const payloadA = new TextEncoder().encode('spend A');
-    const payloadB = new TextEncoder().encode('spend B');
+    const transferA = buildEcdsaTransfer(secret);
+    const transferB = buildEcdsaTransfer(secret);
 
-    const [signatureA, signatureB] = await Promise.all([
-      coordinator.requestSignature(payloadA, coordinator.allParticipants()),
-      coordinator.requestSignature(payloadB, coordinator.allParticipants()),
+    const [signedA, signedB] = await Promise.all([
+      Effect.runPromise(signingService.sign(transferA, mpcSigner(coordinator, coordinator.allParticipants()))),
+      Effect.runPromise(signingService.sign(transferB, mpcSigner(coordinator, coordinator.allParticipants()))),
     ]);
 
-    // Each signature verifies against its own payload and not the other's.
-    expect(verifyEcdsaWithOracle(coordinator.publicKey, payloadA, signatureA)).toBe(true);
-    expect(verifyEcdsaWithOracle(coordinator.publicKey, payloadB, signatureB)).toBe(true);
-    expect(verifyEcdsaWithOracle(coordinator.publicKey, payloadB, signatureA)).toBe(false);
-    expect(verifyEcdsaWithOracle(coordinator.publicKey, payloadA, signatureB)).toBe(false);
+    // Each transfer is independently authorized: every segment's signature verifies under the group key.
+    for (const signed of [signedA, signedB]) {
+      for (const segment of TransactionOps.getSegments(signed)) {
+        const data = TransactionOps.getSignatureData(signed, segment).pipe(Either.getOrThrow);
+        const signature = await coordinator.requestSignature(data, coordinator.allParticipants());
+        expect(verifyEcdsaWithOracle(coordinator.publicKey, data, signature)).toBe(true);
+      }
+    }
   });
 });

@@ -268,47 +268,6 @@ describe('Unshielded wallet transacting', () => {
     );
   });
 
-  describe('when signing', () => {
-    it('does nothing if an unproven transaction does not have any intents', () => {
-      const transacting = makeDefaultTransactingCapability(config, () => context);
-
-      const emptyTx = ledger.Transaction.fromParts(config.networkId);
-      const result = transacting
-        .signUnprovenTransaction(emptyTx, () => {
-          throw new Error('should not be called');
-        })
-        .pipe(EitherOps.getOrThrowLeft);
-
-      expect(result).toBe(emptyTx);
-    });
-
-    it('does nothing if an unbound transaction does not have any intents', async () => {
-      const transacting = makeDefaultTransactingCapability(config, () => context);
-
-      const emptyTx = await ledger.Transaction.fromParts(config.networkId).prove(
-        {
-          prove() {
-            return Promise.resolve(Buffer.from([42]));
-          },
-          check(): Promise<(bigint | undefined)[]> {
-            return Promise.resolve([]);
-          },
-          lookupKey(): Promise<ledger.ProvingKeyMaterial | undefined> {
-            return Promise.resolve(undefined);
-          },
-        },
-        ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
-      );
-      const result = transacting
-        .signUnboundTransaction(emptyTx, () => {
-          throw new Error('should not be called');
-        })
-        .pipe(EitherOps.getOrThrowLeft);
-
-      expect(result).toBe(emptyTx);
-    });
-  });
-
   describe('rotateUtxos', () => {
     const buildWalletWithNightUtxos = (count: number): { wallet: CoreWallet; utxos: ReadonlyArray<UtxoWithMeta> } => {
       const sample = ledger.sampleSigningKey();

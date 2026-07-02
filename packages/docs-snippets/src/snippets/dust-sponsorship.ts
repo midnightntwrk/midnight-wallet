@@ -60,7 +60,7 @@ await sponsor.wallet
     },
     { ttl: new Date(Date.now() + 30 * 60 * 1000) },
   )
-  .then((recipe) => sponsor.wallet.signRecipe(recipe, (payload) => sponsor.unshieldedKeystore.signData(payload)))
+  .then((recipe) => sponsor.wallet.signRecipe(recipe, sponsor.unshieldedKeystore.signDataAsync))
   .then((recipe) => sponsor.wallet.finalizeRecipe(recipe))
   .then((tx) => sponsor.wallet.submitTransaction(tx));
 
@@ -112,7 +112,7 @@ const transactionWithoutFees = await user.wallet
       tokenKindsToBalance: ['shielded', 'unshielded'],
     },
   )
-  .then((recipe) => user.wallet.signRecipe(recipe, (payload) => user.unshieldedKeystore.signData(payload)))
+  .then((recipe) => user.wallet.signRecipe(recipe, user.unshieldedKeystore.signDataAsync))
   .then((tx) => user.wallet.finalizeRecipe(tx));
 
 // With sponsor paying fees and submitting transaction
@@ -128,7 +128,7 @@ await sponsor.wallet
       tokenKindsToBalance: ['dust'],
     },
   )
-  .then((recipe) => sponsor.wallet.signRecipe(recipe, (payload) => sponsor.unshieldedKeystore.signData(payload)))
+  .then((recipe) => sponsor.wallet.signRecipe(recipe, sponsor.unshieldedKeystore.signDataAsync))
   .then((recipe) => sponsor.wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => sponsor.wallet.submitTransaction(finalizedTransaction));
 

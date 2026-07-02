@@ -57,8 +57,8 @@ describe('Transaction balancing examples', () => {
     logger.info(inspect(initialState.shielded.availableCoins, { depth: null }));
 
     sender = await utils.initWalletWithSeed(senderSeed, fixture);
-    const senderInitialstate = await sender.wallet.waitForSyncedState();
-    const senderInitialAvailableUnshieldedCoins = senderInitialstate.unshielded.availableCoins.length;
+    const senderInitialState = await sender.wallet.waitForSyncedState();
+    const senderInitialAvailableUnshieldedCoins = senderInitialState.unshielded.availableCoins.length;
 
     const outputsToCreate: CombinedTokenTransfer[] = [
       {
@@ -67,17 +67,17 @@ describe('Transaction balancing examples', () => {
           {
             type: shieldedTokenRaw,
             amount: output100,
-            receiverAddress: senderInitialstate.shielded.address,
+            receiverAddress: senderInitialState.shielded.address,
           },
           {
             type: shieldedTokenRaw,
             amount: output50,
-            receiverAddress: senderInitialstate.shielded.address,
+            receiverAddress: senderInitialState.shielded.address,
           },
           {
             type: shieldedTokenRaw,
             amount: output30,
-            receiverAddress: senderInitialstate.shielded.address,
+            receiverAddress: senderInitialState.shielded.address,
           },
         ],
       },
@@ -86,7 +86,7 @@ describe('Transaction balancing examples', () => {
         outputs: [
           {
             amount: unshieldedAmount,
-            receiverAddress: senderInitialstate.unshielded.address,
+            receiverAddress: senderInitialState.unshielded.address,
             type: unshieldedTokenRaw,
           },
         ],
@@ -103,9 +103,7 @@ describe('Transaction balancing examples', () => {
         ttl: getTtl(),
       },
     );
-    const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
-      funded.unshieldedKeystore.signData(payload),
-    );
+    const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
     const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
     const id = await funded.wallet.submitTransaction(finalizedTx);
     logger.info('Transaction id: ' + id);
@@ -125,7 +123,7 @@ describe('Transaction balancing examples', () => {
     const dustRegistrationRecipe = await sender.wallet.registerNightUtxosForDustGeneration(
       nightUtxos,
       sender.unshieldedKeystore.getPublicKey(),
-      (payload) => sender.unshieldedKeystore.signData(payload),
+      sender.unshieldedKeystore.signDataAsync,
     );
     logger.info('Dust registration recipe:');
     logger.info(dustRegistrationRecipe.transaction.toString());

@@ -38,7 +38,11 @@ import {
   ShieldedSectionSchema,
   mergeShieldedSections,
 } from '@midnightntwrk/wallet-sdk-shielded';
-import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import type {
+  DefaultUnshieldedConfiguration,
+  SignSegment,
+  UnshieldedWalletAPI,
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import {
   type UnshieldedWalletState,
   UnshieldedSectionSchema,
@@ -318,6 +322,12 @@ const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
  * without a circular dependency.
  */
 export { Clock };
+
+/**
+ * The asynchronous signer callback used by every signing entry point. A `Promise`-returning callback so out-of-process
+ * signers (MPC, HSM) can be plugged in directly; an in-process keystore resolves immediately.
+ */
+export type { SignSegment };
 
 /**
  * The Terms and Conditions returned by the indexer, containing a URL for display and a SHA-256 hash for content
@@ -639,7 +649,7 @@ export class WalletFacade {
     action: { type: 'registration'; dustReceiverAddress: DustAddress } | { type: 'deregistration' },
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
-    signDustRegistration: (payload: Uint8Array) => ledger.Signature,
+    signDustRegistration: SignSegment,
   ): Promise<ledger.UnprovenTransaction> {
     const ttl = this.defaultTtl();
     const now = this.clock.now();
@@ -1003,10 +1013,7 @@ export class WalletFacade {
       });
   }
 
-  async signRecipe(
-    recipe: BalancingRecipe,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Promise<BalancingRecipe> {
+  async signRecipe(recipe: BalancingRecipe, signSegment: SignSegment): Promise<BalancingRecipe> {
     switch (recipe.type) {
       case 'FINALIZED_TRANSACTION': {
         const signedBalancingTx = await this.signUnprovenTransaction(recipe.balancingTransaction, signSegment);
@@ -1046,28 +1053,25 @@ export class WalletFacade {
 
   async #signDustRegistrationIfPresent(
     tx: ledger.UnprovenTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
+    signSegment: SignSegment,
   ): Promise<ledger.UnprovenTransaction> {
     const intent = tx.intents?.get(1);
     const registrations = intent?.dustActions?.registrations ?? [];
     if (!intent || registrations.length === 0) {
       return tx;
     }
-    const signature = signSegment(intent.signatureData(1));
+    const signature = await signSegment(intent.signatureData(1));
     return await this.dust.addDustRegistrationSignature(tx, signature);
   }
 
   async signUnprovenTransaction(
     tx: ledger.UnprovenTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
+    signSegment: SignSegment,
   ): Promise<ledger.UnprovenTransaction> {
     return await this.unshielded.signUnprovenTransaction(tx, signSegment);
   }
 
-  async signUnboundTransaction(
-    tx: UnboundTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Promise<UnboundTransaction> {
+  async signUnboundTransaction(tx: UnboundTransaction, signSegment: SignSegment): Promise<UnboundTransaction> {
     return await this.unshielded.signUnboundTransaction(tx, signSegment);
   }
 
@@ -1277,7 +1281,7 @@ export class WalletFacade {
   async registerNightUtxosForDustGeneration(
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
-    signDustRegistration: (payload: Uint8Array) => ledger.Signature,
+    signDustRegistration: SignSegment,
     dustReceiverAddress?: DustAddress,
   ): Promise<UnprovenTransactionRecipe> {
     if (nightUtxos.length === 0) {
@@ -1329,7 +1333,7 @@ export class WalletFacade {
   async deregisterFromDustGeneration(
     nightUtxos: UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
-    signDustRegistration: (payload: Uint8Array) => ledger.Signature,
+    signDustRegistration: SignSegment,
   ): Promise<UnprovenTransactionRecipe> {
     const dustDeregistrationTx = await this.createDustActionTransaction(
       { type: 'deregistration' },

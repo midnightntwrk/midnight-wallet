@@ -49,7 +49,15 @@ export interface UnshieldedKeystore {
   getBech32Address(): MidnightBech32m;
   getPublicKey(): SignatureVerifyingKey;
   getAddress(): UserAddress;
+  /** The synchronous in-process signing primitive. */
   signData(data: Uint8Array): Signature;
+  /**
+   * Async counterpart of {@link signData} that conforms to the SDK's signer callback shape (`(data) =>
+   * Promise<Signature>`), so the keystore can be passed directly to `signRecipe`/`signUnprovenTransaction`/… without
+   * wrapping each call site. It simply resolves the synchronous {@link signData}; out-of-process backends (MPC, HSM)
+   * supply their own async signer.
+   */
+  signDataAsync: (data: Uint8Array) => Promise<Signature>;
 }
 
 export const createKeystore = (secretKey: UnshieldedSecretKey, networkId: NetworkId.NetworkId): UnshieldedKeystore => {
@@ -72,6 +80,8 @@ export const createKeystore = (secretKey: UnshieldedSecretKey, networkId: Networ
     getAddress: () => addressFromKey(keystore.getPublicKey()),
 
     signData: (data: Uint8Array) => signData(ledgerSigningKey, data),
+
+    signDataAsync: (data: Uint8Array) => Promise.resolve(keystore.signData(data)),
   };
 
   return keystore;

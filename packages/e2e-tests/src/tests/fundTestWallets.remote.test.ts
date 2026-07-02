@@ -124,9 +124,7 @@ describe('Set up test wallet', () => {
       );
       logger.info('Signing tx...');
       logger.info(txRecipe);
-      const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, (payload) =>
-        sender.unshieldedKeystore.signData(payload),
-      );
+      const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, sender.unshieldedKeystore.signDataAsync);
       logger.info('Transaction to prove...');
       logger.info(signedTxRecipe.type.toString());
       const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
@@ -146,7 +144,7 @@ describe('Set up test wallet', () => {
       const dustRegistrationRecipe = await receiver.wallet.registerNightUtxosForDustGeneration(
         [unregisteredNightUtxos[0]],
         receiver.unshieldedKeystore.getPublicKey(),
-        (payload) => receiver.unshieldedKeystore.signData(payload),
+        receiver.unshieldedKeystore.signDataAsync,
       );
       const finalizedDustTx = await receiver.wallet.finalizeRecipe(dustRegistrationRecipe);
       logger.info('Submitting dust registration transaction...');
@@ -213,9 +211,7 @@ describe('Set up test wallet', () => {
       );
       logger.info('Signing tx...');
       logger.info(txRecipe);
-      const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, (payload) =>
-        sender.unshieldedKeystore.signData(payload),
-      );
+      const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, sender.unshieldedKeystore.signDataAsync);
       logger.info('Transaction to prove...');
       logger.info(signedTxRecipe);
       const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
