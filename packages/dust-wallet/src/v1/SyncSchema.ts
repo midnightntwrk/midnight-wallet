@@ -343,12 +343,13 @@ export const DustGenerationsSyncUpdate = {
     rawUpdates: DustGenerationsSubscription[],
     secretKey: DustSecretKey,
     publicKey: PublicKey,
+    lastSyncedGenerationIndex: bigint,
   ): DustGenerationsSyncUpdate => {
     const { publicKey: dustPublicKey } = publicKey;
     const dustAddressHex = new DustAddress(dustPublicKey).hexString;
     const newGenerations = rawUpdates
       .filter((u) => u.__typename === 'DustGenerationsItem')
-      .filter((u) => u.owner === dustAddressHex)
+      .filter((u) => u.owner === dustAddressHex && u.generationMtIndex > lastSyncedGenerationIndex)
       .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
       .map((u) => {
         const qdo = {
@@ -446,9 +447,7 @@ export type DustProjectionsUpdate = Data.TaggedEnum<{
     readonly newUtxos: DustUtxoMap;
     readonly spentUtxos: DustUtxoMap;
     readonly collapsedCommitments: CollapsedMerkleTree[];
-    readonly lastBlockTimestamp: Date;
-    readonly dustCommitmentMerkleTreeRoot: string;
-    readonly dustGenerationMerkleTreeRoot: string;
+    readonly latestBlock: BlockData;
   };
 }>;
 const DustProjectionsUpdate = Data.taggedEnum<DustProjectionsUpdate>();

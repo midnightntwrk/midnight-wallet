@@ -117,7 +117,7 @@ export const CoreWallet = {
 
   applyDustGenerations(
     wallet: CoreWallet,
-    updates: ReadonlyArray<CollapsedMerkleTree>,
+    dustCollapsedGenTreeSnapshot: ReadonlyArray<CollapsedMerkleTree>, // a full snapshot starting from index 0
     newGenerations: ReadonlyArray<NewDustGeneration>,
     generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
   ): CoreWallet {
@@ -126,7 +126,7 @@ export const CoreWallet = {
     let lastUpdatedIndex = -1;
     for (const { generationMtIndex, genInfo, qdo } of newGenerations) {
       // apply updates prior to the current generation index
-      updatedState = updates
+      updatedState = dustCollapsedGenTreeSnapshot
         .filter(({ startIndex, endIndex }) => startIndex > lastUpdatedIndex && endIndex < generationMtIndex)
         .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
 
@@ -136,7 +136,7 @@ export const CoreWallet = {
     }
 
     // apply the rest of the updates
-    updatedState = updates
+    updatedState = dustCollapsedGenTreeSnapshot
       .filter(({ startIndex }) => startIndex > lastUpdatedIndex)
       .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
 
@@ -210,6 +210,7 @@ export const CoreWallet = {
     const updatedState = spentNullifiers.reduce((state, nullifier) => state.removeUtxo(nullifier), wallet.state);
     return {
       ...wallet,
+      pendingDust: wallet.pendingDust.filter((d) => !spentNullifiers.includes(d.nullifier)),
       state: updatedState,
     };
   },

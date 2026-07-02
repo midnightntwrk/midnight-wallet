@@ -58,7 +58,6 @@ describe('Projections-based synchronisation model', () => {
       dustWallet: eventLessDustWallet,
       manualSync: true,
     });
-    logger.info('fundedNew synced in before stage');
     receiver = await utils.initWalletWithSeed(seed, fixture);
     receiverNew = await utils.initWalletWithSeed(seed, fixture, {
       dustWallet: eventLessDustWallet,
@@ -103,30 +102,59 @@ describe('Projections-based synchronisation model', () => {
         stringifyWithBigInts(coin1.utxo) === stringifyWithBigInts(coin2.utxo),
     );
 
-  const expectSameSyncState = (oldSyncState: FacadeState, projectionsSyncState: FacadeState) => {
-    expect(dustStatesEqual(oldSyncState.dust.state.state, projectionsSyncState.dust.state.state)).toBe(true);
-    expect(oldSyncState.unshielded.balances[unshieldedTokenRaw]).toEqual(
+  const expectSameSyncState = (eventsSyncState: FacadeState, projectionsSyncState: FacadeState) => {
+    const statesEqual = dustStatesEqual(eventsSyncState.dust.state.state, projectionsSyncState.dust.state.state);
+    if (!statesEqual) {
+      console.log('statesEqual', statesEqual);
+      console.log('eventsSyncState.dust.state.state', eventsSyncState.dust.state.state.toString());
+      console.log('projectionsSyncState.dust.state.state', projectionsSyncState.dust.state.state.toString());
+    }
+    expect(statesEqual).toBe(true);
+    expect(eventsSyncState.unshielded.balances[unshieldedTokenRaw]).toEqual(
       projectionsSyncState.unshielded.balances[unshieldedTokenRaw],
     );
     expect(
-      unshieldedCoinsEqual(oldSyncState.unshielded.availableCoins, projectionsSyncState.unshielded.availableCoins),
+      unshieldedCoinsEqual(eventsSyncState.unshielded.availableCoins, projectionsSyncState.unshielded.availableCoins),
     ).toBe(true);
   };
 
-  const sendAndRegisterNightUtxos = async () => {
+  const expectSameRoots = (state1: FacadeState, state2: FacadeState) => {
+    expect(rootsEqual(state1.dust.state.state, state2.dust.state.state)).toBe(true);
+  };
+
+  const syncAndVerify = async () => {
+    // Events-based sync
+    const fundedState = await funded.wallet.waitForSyncedState();
+    const receiverState = await receiver.wallet.waitForSyncedState();
+
+    // Projections-based sync
     await fundedNew.wallet.doSync(fundedNew.shieldedSecretKeys, fundedNew.dustSecretKey);
     await receiverNew.wallet.doSync(receiverNew.shieldedSecretKeys, receiverNew.dustSecretKey);
 
-    const initialState = await funded.wallet.waitForSyncedState();
-    const initialStateNew = await fundedNew.wallet.waitForSyncedState();
-    const receiverInitialState = await receiver.wallet.waitForSyncedState();
-    const receiverInitialStateNew = await receiverNew.wallet.waitForSyncedState();
+    const fundedNewState = await fundedNew.wallet.waitForSyncedState();
+    const receiverNewState = await receiverNew.wallet.waitForSyncedState();
+
+    expectSameSyncState(fundedState, fundedNewState);
+    expectSameSyncState(receiverState, receiverNewState);
+    expectSameRoots(fundedNewState, receiverNewState);
+
+    logger.info('States are correct');
+
+    return {
+      fundedNewState,
+      receiverNewState,
+    };
+  };
+
+  const sendAndRegisterNightUtxos = async () => {
+    const { fundedNewState: initialStateNew, receiverNewState: receiverInitialStateNew } = await syncAndVerify();
 
     const receiverInitialAvailableCoins = receiverInitialStateNew.unshielded.availableCoins.length;
     const initialUnshieldedBalance = initialStateNew.unshielded.balances[unshieldedTokenRaw];
     logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
     logger.info(`Wallet 1 total unshielded coins: ${initialStateNew.unshielded.totalCoins.length}`);
 
+    // Step 1: Send tokens to receiver's address
     const outputsToCreate: CombinedTokenTransfer[] = [
       {
         type: 'shielded',
@@ -159,24 +187,6 @@ describe('Projections-based synchronisation model', () => {
         ],
       },
     ];
-    const fundedStatesEqual = dustStatesEqual(initialState.dust.state.state, initialStateNew.dust.state.state);
-    logger.info(`dust states equal for the "funded" wallets: ${fundedStatesEqual}`);
-    if (!fundedStatesEqual) {
-      logger.info(`funded dust state1 old: ${initialState.dust.state.state.toString()}`);
-      logger.info(`funded dust state1 new: ${initialStateNew.dust.state.state.toString()}`);
-    }
-    expect(fundedStatesEqual).toBe(true);
-
-    const receiverStatesEqual = dustStatesEqual(
-      receiverInitialState.dust.state.state,
-      receiverInitialStateNew.dust.state.state,
-    );
-    logger.info(`dust states equal for "receiver" wallets: ${receiverStatesEqual}`);
-    if (!receiverStatesEqual) {
-      logger.info(`receiver dust state1 new: ${receiverInitialStateNew.dust.state.state.toString()}`);
-      logger.info(`receiver dust state1 old: ${receiverInitialState.dust.state.state.toString()}`);
-    }
-    expect(receiverStatesEqual).toBe(true);
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
 
@@ -199,23 +209,20 @@ describe('Projections-based synchronisation model', () => {
     const txId = await fundedNew.wallet.submitTransaction(finalizedTx);
     logger.info('Transaction id: ' + txId);
     logger.info('Waiting for finalized balance...');
-    const receiverState2 = await utils.waitForUnshieldedCoinUpdate(receiverNew.wallet, receiverInitialAvailableCoins);
-    const finalUnshieldedBalance = receiverState2.unshielded.balances[unshieldedTokenRaw];
-    logger.info(inspect(receiverState2.unshielded.availableCoins, { depth: null }));
+
+    // verify received tokens
+    const receiverStateAfterTransfer = await utils.waitForUnshieldedCoinUpdate(
+      receiverNew.wallet,
+      receiverInitialAvailableCoins,
+    );
+    const finalUnshieldedBalance = receiverStateAfterTransfer.unshielded.balances[unshieldedTokenRaw];
+    logger.info(inspect(receiverStateAfterTransfer.unshielded.availableCoins, { depth: null }));
     logger.info(`Wallet 2: ${finalUnshieldedBalance} unshielded tokens`);
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
-    await fundedNew.wallet.doSync(fundedNew.shieldedSecretKeys, fundedNew.dustSecretKey);
-    await receiverNew.wallet.doSync(receiverNew.shieldedSecretKeys, receiverNew.dustSecretKey);
+    await syncAndVerify();
 
-    const fundedState = await funded.wallet.waitForSyncedState();
-    const fundedNewState = await fundedNew.wallet.waitForSyncedState();
-    const receiverState = await receiver.wallet.waitForSyncedState();
-    const receiverNewState = await receiverNew.wallet.waitForSyncedState();
-
-    logger.info(`2) rootsEqual new: ${rootsEqual(fundedNewState.dust.state.state, receiverNewState.dust.state.state)}`);
-
-    const nightUtxos = receiverState2.unshielded.availableCoins.filter(
+    const nightUtxos = receiverStateAfterTransfer.unshielded.availableCoins.filter(
       (coin) => coin.meta.registeredForDustGeneration === false,
     );
     if (nightUtxos.length === 0) {
@@ -226,6 +233,7 @@ describe('Projections-based synchronisation model', () => {
     expect(ArrayOps.sumBigInt(nightUtxos.map((coin) => coin.utxo.value))).toEqual(finalUnshieldedBalance);
     logger.info(`utxo length: ${nightUtxos.length}`);
 
+    // Step 2: Register night UTXOs for Dust generation
     const { fee: estimatedRegistrationFee } = await receiverNew.wallet.estimateRegistration(nightUtxos);
     logger.info(`Estimated registration fee: ${estimatedRegistrationFee} stroke; waiting for generation to cover it`);
     await receiverNew.wallet.waitForGeneratedDust(nightUtxos, estimatedRegistrationFee);
@@ -241,53 +249,23 @@ describe('Projections-based synchronisation model', () => {
     logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
-    await fundedNew.wallet.doSync(fundedNew.shieldedSecretKeys, fundedNew.dustSecretKey);
-    await receiverNew.wallet.doSync(receiverNew.shieldedSecretKeys, receiverNew.dustSecretKey);
-    // await receiverNew.wallet.waitForSyncedState();
-    const fundedNewStateAfterRegistration = await fundedNew.wallet.waitForSyncedState();
-    const receiverNewStateSyncedAfterRegistration = await receiverNew.wallet.waitForSyncedState();
-    logger.info(
-      `3) rootsEqual new: ${rootsEqual(
-        fundedNewStateAfterRegistration.dust.state.state,
-        receiverNewStateSyncedAfterRegistration.dust.state.state,
-      )}`,
-    );
 
     const receiverStateAfterRegistration = await utils.waitForStateAfterDustRegistration(
       receiverNew.wallet,
       finalizedDustTx,
     );
-    const receiverStateAfterRegistrationOld = await rx.firstValueFrom(
-      receiver.wallet.state().pipe(
-        rx.filter((s) => s.isSynced),
-        rx.filter(
-          (s) =>
-            s.dust.availableCoins.length > 0 &&
-            s.unshielded.availableCoins.some((coin) => coin.meta.registeredForDustGeneration === true),
-        ),
-      ),
-    );
-
+    logger.info('Registered for Dust generation');
     const nightBalanceAfterRegistration = receiverStateAfterRegistration.unshielded.balances[unshieldedTokenRaw];
     expect(nightBalanceAfterRegistration).toBe(finalUnshieldedBalance);
 
-    return {
-      fundedState,
-      fundedNewState,
-      receiverState,
-      receiverNewState,
-      fundedNewStateAfterRegistration,
-      receiverStateAfterRegistration: receiverStateAfterRegistrationOld,
-      receiverNewStateAfterRegistration: receiverStateAfterRegistration,
-      finalUnshieldedBalance,
-    };
+    return await syncAndVerify();
   };
 
   test(
-    'Able to register Night tokens for Dust generation after receiving unshielded tokens using new sync model @healthcheck',
+    'Able to register Night tokens for Dust generation after receiving unshielded tokens using projections sync model @healthcheck',
     async () => {
-      await sendAndRegisterNightUtxos();
-      const initialWalletState = await receiverNew.wallet.waitForSyncedState();
+      const { receiverNewState } = await sendAndRegisterNightUtxos();
+      console.log('');
       const receiverDustBalance = await rx.firstValueFrom(
         receiverNew.wallet.state().pipe(
           rx.tap((s) => {
@@ -301,45 +279,10 @@ describe('Projections-based synchronisation model', () => {
 
       expect(receiverDustBalance).toBeGreaterThan(0n);
       await utils.waitForRegisteredTokens(receiverNew.wallet);
-      const registeredNightUtxos = initialWalletState.unshielded.availableCoins.filter(
+      const registeredNightUtxos = receiverNewState.unshielded.availableCoins.filter(
         (coin) => coin.meta.registeredForDustGeneration === true,
       );
       expect(registeredNightUtxos.length).toBeGreaterThan(0);
-    },
-    timeout,
-  );
-
-  test(
-    'New sync model matches the default sync model after transfer and Dust registration',
-    async () => {
-      const {
-        fundedState,
-        fundedNewState,
-        receiverState,
-        receiverNewState,
-        fundedNewStateAfterRegistration,
-        receiverStateAfterRegistration,
-        receiverNewStateAfterRegistration,
-        finalUnshieldedBalance,
-      } = await sendAndRegisterNightUtxos();
-
-      expectSameSyncState(fundedState, fundedNewState);
-      expectSameSyncState(receiverState, receiverNewState);
-      expectSameSyncState(receiverStateAfterRegistration, receiverNewStateAfterRegistration);
-      expect(rootsEqual(fundedNewState.dust.state.state, receiverNewState.dust.state.state)).toBe(true);
-      expect(
-        rootsEqual(
-          fundedNewStateAfterRegistration.dust.state.state,
-          receiverNewStateAfterRegistration.dust.state.state,
-        ),
-      ).toBe(true);
-
-      const registeredNightUtxos = receiverNewStateAfterRegistration.unshielded.availableCoins.filter(
-        (coin) => coin.meta.registeredForDustGeneration === true,
-      );
-      expect(registeredNightUtxos.length).toBeGreaterThan(0);
-      expect(ArrayOps.sumBigInt(registeredNightUtxos.map((coin) => coin.utxo.value))).toEqual(finalUnshieldedBalance);
-      expect(receiverNewStateAfterRegistration.dust.balance(new Date())).toBeGreaterThan(0n);
     },
     timeout,
   );

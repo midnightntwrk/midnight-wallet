@@ -16,8 +16,8 @@ import { gql } from '../generated/index.js';
 export const DustGenerationEvents = Subscription.make(
   'DustGenerations',
   gql(`
-    subscription DustGenerations($dustAddress: DustAddress!, $startIndex: Int!, $endIndex: Int!) {
-      dustGenerations(dustAddress: $dustAddress, startIndex: $startIndex, endIndex: $endIndex) {
+    subscription DustGenerations($dustAddress: DustAddress!, $blockHash: HexEncoded!, $dtimeCutoffHeight: Int!) {
+      dustGenerations(dustAddress: $dustAddress, blockHash: $blockHash, dtimeCutoffHeight: $dtimeCutoffHeight) {
         __typename
         ... on DustGenerationsItem {
           commitmentMtIndex

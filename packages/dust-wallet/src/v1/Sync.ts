@@ -84,6 +84,7 @@ import {
   isProgressUpdate,
 } from './SyncSchema.js';
 import { calculatePrefixLength, hashMapGroupBy, leBigintToHex, uniqueArray } from './Utils.js';
+import { type Dust } from './types/index.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
@@ -264,6 +265,7 @@ const NULLIFIER_LENGTH = 64;
 const resolveNullifierSpends = (
   initialNullifiers: DustNullifier[],
   initialNewUtxos: DustUtxoMap,
+  pendingDust: Map<DustNullifier, Dust>,
   dustState: DustLocalState,
   secretKey: DustSecretKey,
   latestBlock: BlockData,
@@ -305,9 +307,11 @@ const resolveNullifierSpends = (
             nullifierTransactions,
             secretKey,
             newUtxos,
+            pendingDust,
             dustGenerationUpdates.generationDtimeUpdates,
           );
 
+          // report progress
           const freshUtxos = dustUtxoUpdates.filter((u) => !u.isSpent);
           if (freshUtxos.length > 0) {
             const mtIndicesSum = freshUtxos.reduce((partialSum, a) => partialSum + a.qdo.mtIndex, 0n);
@@ -315,6 +319,7 @@ const resolveNullifierSpends = (
             const progress =
               Number(mtIndicesSum) +
               ((initialNullifiers.length - freshUtxos.length) * maxCommitmentEndIndex) / commitmentIndicesSum;
+
             // NOTE: since this process goes after the generation updates, we need to add the generationEndIndex to the progress
             yield* Effect.promise(() =>
               emit.single(ProgressUpdate({ appliedIndex: Math.floor(progress) + generationEndIndex })),
@@ -349,11 +354,12 @@ export const doEventlessSync = (
 ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
   return Stream.asyncEffect((emit) =>
     Effect.gen(function* () {
-      const blockData = yield* indexerSyncService.blockData();
-      const maxCommitmentTreeIndex = blockData.dustCommitmentEndIndex - 1;
-      const maxGeneratingTreeIndex = blockData.dustGenerationEndIndex - 1;
+      const latestBlock = yield* indexerSyncService.blockData();
+      const maxCommitmentTreeIndex = latestBlock.dustCommitmentEndIndex - 1;
+      const maxGeneratingTreeIndex = latestBlock.dustGenerationEndIndex - 1;
       const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree - 1n;
       const lastSyncedGenerationIndex = state.state.generatingTreeFirstFree - 1n;
+      const lastSyncedBlockHeight = state.progress.highestIndex;
 
       const highestInitialIndex =
         maxGeneratingTreeIndex + maxCommitmentTreeIndex + state.state.nullifiers.size * maxCommitmentTreeIndex;
@@ -369,20 +375,26 @@ export const doEventlessSync = (
       const rawGenerations = yield* pipe(
         indexerSyncService.subscribeDustGenerations(
           DustAddress.encodePublicKey(state.networkId, secretKey.publicKey),
-          Number(lastSyncedGenerationIndex),
+          Number(lastSyncedBlockHeight),
           maxGeneratingTreeIndex,
+          latestBlock,
         ),
         Stream.runCollect,
         Effect.map(Chunk.toArray),
       );
-      const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
+      const dustGenerationUpdates = DustGenerationsSyncUpdate.create(
+        rawGenerations,
+        secretKey,
+        state.publicKey,
+        lastSyncedGenerationIndex,
+      );
 
-      const initialNullifiers = dustGenerationUpdates.newGenerations
+      const allNullifiers = dustGenerationUpdates.newGenerations
         .map((n) => n.dustNullifier)
-        .concat([...state.state.nullifiers.keys()]);
+        .concat([...state.state.nullifiers.keys(), ...state.pendingDust.map((d) => d.nullifier)]);
 
       const highestRelevantIndex =
-        maxGeneratingTreeIndex + maxCommitmentTreeIndex + initialNullifiers.length * maxCommitmentTreeIndex;
+        maxGeneratingTreeIndex + maxCommitmentTreeIndex + allNullifiers.length * maxCommitmentTreeIndex;
 
       // increase the highestRelevantIndex as our nullifier list got expanded by new generations
       // appliedIndex now reflects the completed generation tree sync
@@ -390,13 +402,14 @@ export const doEventlessSync = (
         emit.single(ProgressUpdate({ highestRelevantIndex, appliedIndex: maxGeneratingTreeIndex })),
       );
 
-      const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
+      const newUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
       const { nextUtxos: finalUtxos, nextSpentUtxos: finalSpentUtxos } = yield* resolveNullifierSpends(
-        initialNullifiers,
-        initialNewUtxos,
+        allNullifiers,
+        newUtxos,
+        CoreWallet.pendingDustToMap(state.pendingDust),
         state.state,
         secretKey,
-        blockData,
+        latestBlock,
         dustGenerationUpdates,
         indexerSyncService,
         anonymityLevel,
@@ -405,7 +418,7 @@ export const doEventlessSync = (
 
       yield* Effect.promise(() =>
         emit.single(
-          ProgressUpdate({ appliedIndex: maxGeneratingTreeIndex + initialNullifiers.length * maxCommitmentTreeIndex }),
+          ProgressUpdate({ appliedIndex: maxGeneratingTreeIndex + allNullifiers.length * maxCommitmentTreeIndex }),
         ),
       );
 
@@ -424,9 +437,7 @@ export const doEventlessSync = (
             spentUtxos: finalSpentUtxos,
             newUtxos: finalUtxos,
             collapsedCommitments,
-            lastBlockTimestamp: blockData.timestamp,
-            dustCommitmentMerkleTreeRoot: blockData.dustCommitmentMerkleTreeRoot,
-            dustGenerationMerkleTreeRoot: blockData.dustGenerationMerkleTreeRoot,
+            latestBlock,
           }),
         ),
       );
@@ -465,8 +476,9 @@ export type IndexerSyncService = {
   ) => Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   subscribeDustGenerations: (
     dustAddress: string,
-    lastAppliedIndex: number,
-    endIndex: number,
+    lastSyncedBlockHeight: number,
+    maxGeneratingTreeIndex: number,
+    latestBlock: BlockData,
   ) => Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   subscribeDustNullifierTransactions: (
     dustNullifiers: Arr.NonEmptyReadonlyArray<DustNullifier>,
@@ -554,18 +566,19 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
     },
     subscribeDustGenerations(
       dustAddress: string,
-      lastAppliedIndex: number,
-      endIndex: number,
+      lastSyncedBlockHeight: number,
+      maxGeneratingTreeIndex: number,
+      latestBlock: BlockData,
     ): Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
-      if (endIndex < 0 || lastAppliedIndex === endIndex) {
+      if (maxGeneratingTreeIndex < 0 || (latestBlock.height === lastSyncedBlockHeight && lastSyncedBlockHeight !== 0)) {
         return Stream.empty;
       }
 
       return pipe(
         DustGenerationEvents.run({
           dustAddress,
-          startIndex: lastAppliedIndex + 1,
-          endIndex,
+          blockHash: latestBlock.hash,
+          dtimeCutoffHeight: lastSyncedBlockHeight,
         }),
         Stream.mapEffect((subscription) => {
           return pipe(
@@ -583,10 +596,9 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       prefixLength: number,
     ): Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
       const hexedNullifiers = HashSet.fromIterable(dustNullifiers.map((n) => leBigintToHex(n, true)));
-      console.log(`Subscribing to dust nullifier transactions from block 0 to block ${toBlock}`);
       return pipe(
         DustNullifierTransactions.run({
-          nullifierLeBytesPrefixes: [...hexedNullifiers].map((n) => n.substring(0, prefixLength)),
+          nullifierLeBytesPrefixes: uniqueArray([...hexedNullifiers].map((n) => n.substring(0, prefixLength))),
           fromBlock: 0,
           toBlock,
         }),
@@ -694,7 +706,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         ];
       }
 
-      const { dustGenerations, spentUtxos, newUtxos, collapsedCommitments, lastBlockTimestamp } = update;
+      const { dustGenerations, spentUtxos, newUtxos, collapsedCommitments, latestBlock } = update;
 
       const dustGenTreeUpdates = dustGenerations.rawUpdates
         .filter((u) => u.__typename === 'DustGenerationsItem' || u.__typename === 'DustGenerationsProgress')
@@ -731,8 +743,8 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         );
       });
 
-      updatedWallet.state.syncTime = lastBlockTimestamp;
-      updatedWallet = { ...updatedWallet, state: updatedWallet.state.processTtls(lastBlockTimestamp) };
+      updatedWallet.state.syncTime = latestBlock.timestamp;
+      updatedWallet = { ...updatedWallet, state: updatedWallet.state.processTtls(latestBlock.timestamp) };
 
       const newCommitmentTreeRoot =
         updatedWallet.state.commitmentTreeRoot() !== undefined
@@ -745,11 +757,15 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
 
       // verify root hashes
       if (
-        newCommitmentTreeRoot !== update.dustCommitmentMerkleTreeRoot ||
-        newGeneratingTreeRoot !== update.dustGenerationMerkleTreeRoot
+        newCommitmentTreeRoot !== update.latestBlock.dustCommitmentMerkleTreeRoot ||
+        newGeneratingTreeRoot !== update.latestBlock.dustGenerationMerkleTreeRoot
       ) {
-        // throw new OtherWalletError({ message: 'Root hashes don`t match' });
+        throw new OtherWalletError({ message: 'Root hashes don`t match' });
       }
+
+      updatedWallet = CoreWallet.updateProgress(updatedWallet, {
+        highestIndex: BigInt(update.latestBlock.height),
+      });
 
       return [updatedWallet, { changes, protocolVersion: Number(state.protocolVersion) }];
     },
@@ -760,6 +776,7 @@ const createUtxoUpdatesFromSpend = (
   dustState: DustLocalState,
   secretKey: DustSecretKey,
   knownUtxos: Readonly<DustUtxoMap>,
+  pendingDust: Map<DustNullifier, Dust>,
   generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
   transaction: NullifierRegularTransaction,
   dustSpend: DustSpendProcessedEvent,
@@ -767,7 +784,7 @@ const createUtxoUpdatesFromSpend = (
   Effect.gen(function* () {
     const { nullifier, vFee, commitmentIndex, declaredTime } = dustSpend;
     const knownUtxo = Option.getOrUndefined(HashMap.get(knownUtxos, nullifier));
-    const qdo = knownUtxo?.qdo ?? dustState.findUtxoByNullifier(nullifier);
+    const qdo = knownUtxo?.qdo ?? pendingDust.get(nullifier) ?? dustState.findUtxoByNullifier(nullifier);
     if (!qdo) {
       return yield* new SyncWalletError({ message: `Failed to find qdo by nullifier: ${nullifier}` });
     }
@@ -802,6 +819,7 @@ const createDustUtxoUpdates = (
   nullifierTransactions: ReadonlyArray<DustNullifierTransactionsSubscription>,
   secretKey: DustSecretKey,
   knownUtxos: Readonly<DustUtxoMap>,
+  pendingDust: Map<DustNullifier, Dust>,
   generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
 ): Effect.Effect<DustUtxoUpdate[], SyncWalletError> =>
   pipe(
@@ -809,6 +827,7 @@ const createDustUtxoUpdates = (
     Arr.filterMap(({ transaction }) =>
       transaction.__typename === 'RegularTransaction' ? Option.some(transaction) : Option.none(),
     ),
+    Arr.dedupeAdjacentWith((a, b) => a.id === b.id),
     Arr.flatMap((transaction) =>
       Arr.filterMap(transaction.dustLedgerEvents, (event) =>
         event.raw.content.tag === 'dustSpendProcessed'
@@ -817,7 +836,15 @@ const createDustUtxoUpdates = (
       ),
     ),
     Arr.map(({ transaction, dustSpend }) =>
-      createUtxoUpdatesFromSpend(dustState, secretKey, knownUtxos, generationDtimeUpdates, transaction, dustSpend),
+      createUtxoUpdatesFromSpend(
+        dustState,
+        secretKey,
+        knownUtxos,
+        pendingDust,
+        generationDtimeUpdates,
+        transaction,
+        dustSpend,
+      ),
     ),
     Effect.all,
     Effect.map(Arr.flatten),
