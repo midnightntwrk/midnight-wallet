@@ -161,7 +161,13 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                         Effect.flatMap((metadata) =>
                           this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
                         ),
-                        Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+                        Effect.catchAllCause((cause) =>
+                          // A sustained indexer outage (longer than getTransactionDetails' retry window) still lands
+                          // here. Surface it as a structured warning carrying the tx hash — not a silent
+                          // Console.error defect — since applyUpdate has already advanced appliedIndex and this
+                          // change.source won't be re-processed.
+                          Effect.logWarning(cause, `Failed to record shielded tx-history section for ${change.source}`),
+                        ),
                       ),
                     { discard: true, concurrency: 'unbounded' },
                   ),
