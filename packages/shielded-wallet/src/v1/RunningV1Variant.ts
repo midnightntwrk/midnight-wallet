@@ -163,10 +163,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                         ),
                         Effect.catchAllCause((cause) =>
                           // A sustained indexer outage (longer than getTransactionDetails' retry window) still lands
-                          // here. Surface it as a structured warning carrying the tx hash — not a silent
-                          // Console.error defect — since applyUpdate has already advanced appliedIndex and this
-                          // change.source won't be re-processed.
-                          Effect.logWarning(cause, `Failed to record shielded tx-history section for ${change.source}`),
+                          // here. applyUpdate has already advanced appliedIndex, so this change.source won't be
+                          // re-processed — the shielded section is permanently lost. Surface that as a structured
+                          // error carrying the tx hash, not a silent Console.error defect.
+                          Effect.logError(cause, `Failed to record shielded tx-history section for ${change.source}`),
                         ),
                       ),
                     { discard: true, concurrency: 'unbounded' },
