@@ -258,6 +258,61 @@ describe('Projections-based synchronisation model', () => {
   };
 
   test(
+    'Projections-based sync produces correct state for wallet with pre-existing blockchain history',
+    async () => {
+      // funded derives from seedFunded which has genesis-allocated balances — it has real history
+      // on the chain before any test activity. This verifies the projections sync reaches the
+      // same dust/unshielded state as events-based replay for a non-trivial starting state.
+      await syncAndVerify();
+    },
+    timeout,
+  );
+
+  test(
+    'Initial projections-based sync of empty wallet (no transaction history) is near-instant',
+    async () => {
+      // receiver starts on a fresh blockchain with no prior UTXOs — the projection snapshot is
+      // empty, so the sync should be purely a roundtrip to the indexer with no heavy computation.
+      const start = Date.now();
+      await receiver.wallet.doSync(receiver.shieldedSecretKeys, receiver.dustSecretKey);
+      const elapsedMs = Date.now() - start;
+
+      const state = await receiver.wallet.waitForSyncedState();
+      logger.info(`Empty wallet projections sync took ${elapsedMs}ms`);
+
+      expect(state.isSynced).toBe(true);
+      expect(elapsedMs).toBeLessThan(30_000);
+    },
+    timeout,
+  );
+
+  test(
+    'Incremental projections-based sync after new blocks is near-instant',
+    async () => {
+      // Establish a clean baseline state for receiver (empty wallet).
+      await receiver.wallet.doSync(receiver.shieldedSecretKeys, receiver.dustSecretKey);
+      await receiver.wallet.waitForSyncedState();
+
+      // Advance the chain without involving the receiver wallet.
+      // The projections sync only fetches the delta since the last snapshot,
+      // so re-syncing should be a tiny request even if many blocks were produced.
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+
+      const start = Date.now();
+      await receiver.wallet.doSync(receiver.shieldedSecretKeys, receiver.dustSecretKey);
+      const elapsedMs = Date.now() - start;
+
+      const state = await receiver.wallet.waitForSyncedState();
+      logger.info(`Incremental projections sync took ${elapsedMs}ms`);
+
+      expect(state.isSynced).toBe(true);
+      expect(elapsedMs).toBeLessThan(15_000);
+    },
+    timeout,
+  );
+
+  test(
     'Able to register Night tokens for Dust generation after receiving unshielded tokens using projections sync model @healthcheck',
     async () => {
       const { receiverState } = await sendAndRegisterNightUtxos();
