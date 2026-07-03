@@ -104,11 +104,6 @@ describe('Projections-based synchronisation model', () => {
 
   const expectSameSyncState = (eventsSyncState: FacadeState, projectionsSyncState: FacadeState) => {
     const statesEqual = dustStatesEqual(eventsSyncState.dust.state.state, projectionsSyncState.dust.state.state);
-    if (!statesEqual) {
-      console.log('statesEqual', statesEqual);
-      console.log('eventsSyncState.dust.state.state', eventsSyncState.dust.state.state.toString());
-      console.log('projectionsSyncState.dust.state.state', projectionsSyncState.dust.state.state.toString());
-    }
     expect(statesEqual).toBe(true);
     expect(eventsSyncState.unshielded.balances[unshieldedTokenRaw]).toEqual(
       projectionsSyncState.unshielded.balances[unshieldedTokenRaw],
