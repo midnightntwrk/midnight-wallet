@@ -169,7 +169,9 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                           Effect.logError(cause, `Failed to record shielded tx-history section for ${change.source}`),
                         ),
                       ),
-                    { discard: true, concurrency: 'unbounded' },
+                    // Bound the fan-out: an unbounded burst of N lookups (each retrying up to 4×) would peak at
+                    // ~4N simultaneous queries against an indexer that may already be lagging.
+                    { discard: true, concurrency: 8 },
                   ),
                   Effect.forkScoped,
                 ),

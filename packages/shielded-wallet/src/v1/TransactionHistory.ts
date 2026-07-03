@@ -172,7 +172,11 @@ export const makeDefaultTransactionHistoryService = (
       }).pipe(
         Effect.provide(queryClientLayer),
         Effect.scoped,
-        Effect.retry(Schedule.exponential(Duration.seconds(1)).pipe(Schedule.compose(Schedule.recurs(3)))),
+        // Jitter the delays so a batch of concurrent lookups that all hit the indexer-lag race don't retry in
+        // lockstep (t≈1s/2s/4s waves) against an already-behind indexer.
+        Effect.retry(
+          Schedule.exponential(Duration.seconds(1)).pipe(Schedule.jittered, Schedule.compose(Schedule.recurs(3))),
+        ),
         Effect.mapError(
           (cause) =>
             new TransactionHistoryError({
