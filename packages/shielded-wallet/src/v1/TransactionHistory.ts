@@ -12,7 +12,7 @@
 // limitations under the License.
 import { TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Duration, Array as EArray, Effect, Option, Schedule, Schema } from 'effect';
+import { Duration, Array as EArray, Effect, Schedule, Schema } from 'effect';
 import { TransactionHistoryDetail } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { TransactionHistoryError } from './WalletError.js';
@@ -149,11 +149,11 @@ export const makeDefaultTransactionHistoryService = (
         // endpoint has ingested the same hash — a normal race on any deployed network. In that window the array
         // is empty; fail with a *typed* error so the retry schedule below engages and re-queries once the indexer
         // catches up (rather than dereferencing `undefined` and dying with an unretriable defect).
-        const tx = yield* Option.match(EArray.head(result.transactions), {
-          onNone: () =>
-            Effect.fail(new TransactionHistoryError({ message: `Indexer has not yet indexed transaction ${hash}` })),
-          onSome: Effect.succeed,
-        });
+        const tx = yield* EArray.head(result.transactions).pipe(
+          Effect.orElseFail(
+            () => new TransactionHistoryError({ message: `Indexer has not yet indexed transaction ${hash}` }),
+          ),
+        );
         const rawStatus = tx.__typename === 'RegularTransaction' ? tx.transactionResult.status : undefined;
         const status: TransactionDetails['status'] =
           rawStatus === 'FAILURE' || rawStatus === 'PARTIAL_SUCCESS' ? rawStatus : 'SUCCESS';
@@ -177,12 +177,14 @@ export const makeDefaultTransactionHistoryService = (
         Effect.retry(
           Schedule.exponential(Duration.seconds(1)).pipe(Schedule.jittered, Schedule.compose(Schedule.recurs(3))),
         ),
-        Effect.mapError(
-          (cause) =>
-            new TransactionHistoryError({
-              message: `Failed to fetch transaction metadata for ${hash}`,
-              cause,
-            }),
+        // Let our own "not yet indexed" error through untouched; only wrap the indexer query's ClientError/ServerError.
+        Effect.mapError((error) =>
+          error instanceof TransactionHistoryError
+            ? error
+            : new TransactionHistoryError({
+                message: `Failed to fetch transaction metadata for ${hash}`,
+                cause: error,
+              }),
         ),
       ),
   };
