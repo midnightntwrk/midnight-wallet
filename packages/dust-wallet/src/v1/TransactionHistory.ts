@@ -61,6 +61,12 @@ type DustFinalizedInput = TransactionHistoryStorage.FinalizedEntryInput<DustTran
 export type DefaultTransactionHistoryConfiguration = {
   txHistoryStorage: DustHistoryStorage;
   indexerClientConnection: { indexerHttpUrl: string };
+  /**
+   * How long to keep re-querying the indexer for a transaction's details before giving up, when the WS event arrives
+   * ahead of HTTP ingestion. This is a bounded window, not a guarantee: if the indexer lags beyond it the dust section
+   * is lost (the change is not re-processed, even across restarts) and the failure is logged. Default: 2 minutes.
+   */
+  transactionDetailsRetryWindow?: Duration.DurationInput;
 };
 
 const utxoEquals = Schema.equivalence(DustUtxoInfoSchema);
@@ -143,6 +149,7 @@ export const makeDefaultTransactionHistoryService = (
 ): TransactionHistoryService => {
   const txHistoryStorage = config.txHistoryStorage;
   const queryClientLayer = HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl });
+  const retryWindow = config.transactionDetailsRetryWindow ?? Duration.minutes(2);
 
   return {
     put: (
@@ -158,7 +165,15 @@ export const makeDefaultTransactionHistoryService = (
       Effect.gen(function* () {
         const statusQuery = yield* TransactionHistoryDetail;
         const result = yield* statusQuery({ transactionHash: hash });
-        const tx = result.transactions[0];
+        // The WS ledger-events stream can deliver a relevant event before the indexer's HTTP `transactions(...)`
+        // endpoint has ingested the same hash — a normal race on any deployed network. In that window the array
+        // is empty; fail with a *typed* error so the retry schedule below engages and re-queries once the indexer
+        // catches up (rather than dereferencing `undefined` and dying with an unretriable defect).
+        const tx = yield* EArray.head(result.transactions).pipe(
+          Effect.orElseFail(
+            () => new TransactionHistoryError({ message: `Indexer has not yet indexed transaction ${hash}` }),
+          ),
+        );
         const rawStatus = tx.__typename === 'RegularTransaction' ? tx.transactionResult.status : undefined;
         const status: TransactionDetails['status'] =
           rawStatus === 'FAILURE' || rawStatus === 'PARTIAL_SUCCESS' ? rawStatus : 'SUCCESS';
@@ -179,13 +194,18 @@ export const makeDefaultTransactionHistoryService = (
       }).pipe(
         Effect.provide(queryClientLayer),
         Effect.scoped,
-        Effect.retry(Schedule.exponential(Duration.seconds(1)).pipe(Schedule.compose(Schedule.recurs(3)))),
-        Effect.mapError(
-          (cause) =>
-            new TransactionHistoryError({
-              message: `Failed to fetch transaction metadata for ${hash}`,
-              cause,
-            }),
+        // Retry for a bounded window (default 2 min) while the indexer catches up. Jitter the delays so a batch of
+        // concurrent lookups that all hit the indexer-lag race don't retry in lockstep against an already-behind
+        // indexer. Beyond the window we give up — the change is not re-processed, so the caller logs the loss.
+        Effect.retry(Schedule.exponential(Duration.seconds(1)).pipe(Schedule.jittered, Schedule.upTo(retryWindow))),
+        // Let our own "not yet indexed" error through untouched; only wrap the indexer query's ClientError/ServerError.
+        Effect.mapError((error) =>
+          error instanceof TransactionHistoryError
+            ? error
+            : new TransactionHistoryError({
+                message: `Failed to fetch transaction metadata for ${hash}`,
+                cause: error,
+              }),
         ),
       ),
   };

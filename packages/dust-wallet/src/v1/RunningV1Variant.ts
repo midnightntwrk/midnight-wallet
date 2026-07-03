@@ -166,9 +166,17 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                         Effect.flatMap((metadata) =>
                           this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
                         ),
-                        Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+                        Effect.catchAllCause((cause) =>
+                          // A sustained indexer outage (longer than getTransactionDetails' retry window) still lands
+                          // here. applyUpdate has already advanced appliedIndex, so this change.source won't be
+                          // re-processed — the dust section is permanently lost. Surface that as a structured error
+                          // carrying the tx hash, not a silent Console.error defect.
+                          Effect.logError(cause, `Failed to record dust tx-history section for ${change.source}`),
+                        ),
                       ),
-                    { discard: true, concurrency: 'unbounded' },
+                    // Bound the fan-out: an unbounded burst of N lookups (each retrying up to the retry window) would
+                    // peak at many simultaneous queries against an indexer that may already be lagging.
+                    { discard: true, concurrency: 8 },
                   ),
                   Effect.forkScoped,
                 ),
