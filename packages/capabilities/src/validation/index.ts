@@ -10,10 +10,5 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './UnshieldedWallet.js';
-export {
-  type UnshieldedTransactionHistoryEntry,
-  UnshieldedSectionSchema,
-  mergeUnshieldedSections,
-} from './v1/TransactionHistory.js';
-export * from './KeyStore.js';
+export * from './blockData.js';
+export * from './validationService.js';
