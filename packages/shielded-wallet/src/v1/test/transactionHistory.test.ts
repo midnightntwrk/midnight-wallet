@@ -41,6 +41,9 @@ const populatedResponse: TransactionHistoryDetailQuery = {
 const config: DefaultTransactionHistoryConfiguration = {
   txHistoryStorage: new InMemoryTransactionHistoryStorage(ShieldedTransactionHistoryEntrySchema),
   indexerClientConnection: { indexerHttpUrl: 'http://localhost:9999/graphql' },
+  // Keep the retry window short so the TestClock only has to advance a few seconds; the behaviour under test
+  // (retry-then-succeed vs. exhaust-then-typed-fail) is independent of the production default (2 minutes).
+  transactionDetailsRetryWindow: Duration.seconds(5),
 };
 
 /**

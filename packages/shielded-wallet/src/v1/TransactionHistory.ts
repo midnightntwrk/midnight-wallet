@@ -58,6 +58,13 @@ type ShieldedFinalizedInput = TransactionHistoryStorage.FinalizedEntryInput<Shie
 export type DefaultTransactionHistoryConfiguration = {
   txHistoryStorage: ShieldedHistoryStorage;
   indexerClientConnection: { indexerHttpUrl: string };
+  /**
+   * How long to keep re-querying the indexer for a transaction's details before giving up, when the WS event arrives
+   * ahead of HTTP ingestion. This is a bounded window, not a guarantee: if the indexer lags beyond it the shielded
+   * section is lost (the change is not re-processed, even across restarts) and the failure is logged. Default: 2
+   * minutes.
+   */
+  transactionDetailsRetryWindow?: Duration.DurationInput;
 };
 
 const coinEquals = Schema.equivalence(QualifiedShieldedCoinInfoSchema);
@@ -130,6 +137,7 @@ export const makeDefaultTransactionHistoryService = (
 ): TransactionHistoryService => {
   const txHistoryStorage = config.txHistoryStorage;
   const queryClientLayer = HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl });
+  const retryWindow = config.transactionDetailsRetryWindow ?? Duration.minutes(2);
 
   return {
     put: (
@@ -172,11 +180,10 @@ export const makeDefaultTransactionHistoryService = (
       }).pipe(
         Effect.provide(queryClientLayer),
         Effect.scoped,
-        // Jitter the delays so a batch of concurrent lookups that all hit the indexer-lag race don't retry in
-        // lockstep (t≈1s/2s/4s waves) against an already-behind indexer.
-        Effect.retry(
-          Schedule.exponential(Duration.seconds(1)).pipe(Schedule.jittered, Schedule.compose(Schedule.recurs(3))),
-        ),
+        // Retry for a bounded window (default 2 min) while the indexer catches up. Jitter the delays so a batch of
+        // concurrent lookups that all hit the indexer-lag race don't retry in lockstep against an already-behind
+        // indexer. Beyond the window we give up — the change is not re-processed, so the caller logs the loss.
+        Effect.retry(Schedule.exponential(Duration.seconds(1)).pipe(Schedule.jittered, Schedule.upTo(retryWindow))),
         // Let our own "not yet indexed" error through untouched; only wrap the indexer query's ClientError/ServerError.
         Effect.mapError((error) =>
           error instanceof TransactionHistoryError
