@@ -249,6 +249,7 @@ describe('Projections-based synchronisation model', () => {
     logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+    await receiverNew.wallet.doSync(receiverNew.shieldedSecretKeys, receiverNew.dustSecretKey);
 
     const receiverStateAfterRegistration = await utils.waitForStateAfterDustRegistration(
       receiverNew.wallet,
@@ -265,7 +266,6 @@ describe('Projections-based synchronisation model', () => {
     'Able to register Night tokens for Dust generation after receiving unshielded tokens using projections sync model @healthcheck',
     async () => {
       const { receiverNewState } = await sendAndRegisterNightUtxos();
-      console.log('');
       const receiverDustBalance = await rx.firstValueFrom(
         receiverNew.wallet.state().pipe(
           rx.tap((s) => {
