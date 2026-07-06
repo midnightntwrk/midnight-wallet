@@ -799,7 +799,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@effect/platform@npm:0.96.1, @effect/platform@npm:^0.96.0":
+"@effect/platform@npm:0.96.1":
   version: 0.96.1
   resolution: "@effect/platform@npm:0.96.1"
   dependencies:
@@ -809,6 +809,19 @@ __metadata:
   peerDependencies:
     effect: ^3.21.2
   checksum: 10c0/eab00a4e66d1a921f2bf05e66f9dd35088a01215027839b852b9d8656488958a471aa7a3c61a9cb7604e4374d542f9fa99b1e09a1d99e6129432170604dab7ec
+  languageName: node
+  linkType: hard
+
+"@effect/platform@npm:^0.96.0":
+  version: 0.96.2
+  resolution: "@effect/platform@npm:0.96.2"
+  dependencies:
+    find-my-way-ts: "npm:^0.1.6"
+    msgpackr: "npm:^1.11.10"
+    multipasta: "npm:^0.2.7"
+  peerDependencies:
+    effect: ^3.21.4
+  checksum: 10c0/4a982ea71f890f661f6870ab791d8bd97c93fcfdf2864a09607102aac09e375b774cc680a3fc07824516b71c2cc74fee954fa995508641a710f76e6830255165
   languageName: node
   linkType: hard
 
