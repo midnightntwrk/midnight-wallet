@@ -5004,16 +5004,16 @@ __metadata:
   linkType: hard
 
 "bn.js@npm:^4.12.3":
-  version: 4.12.3
-  resolution: "bn.js@npm:4.12.3"
-  checksum: 10c0/53b6a4db8a583abd2522eacd480fece26fe6c4d8d35d03e5e11e15cb0873a3044eb4e3d1f9fef56f47eb008219e99ba5b620c26f57db49a687c6ab2cf848d50b
+  version: 4.12.4
+  resolution: "bn.js@npm:4.12.4"
+  checksum: 10c0/27e773799df0701b4da72f9b18440afb6867c8e95b44dc1df91a03229f2f11429040faf292aeed08db699885252a823c32215daaf6917750649efb3e689695e8
   languageName: node
   linkType: hard
 
 "bn.js@npm:^5.2.1, bn.js@npm:^5.2.2, bn.js@npm:^5.2.3":
-  version: 5.2.3
-  resolution: "bn.js@npm:5.2.3"
-  checksum: 10c0/eef19cb9cf5e91e91e3e0f036b799ce6c72f79463c3934d62991c3dcdb58f6c94dc3d806495d9b0bf31cd121870ed79bb2115cea71b56c03e794fb71485031fa
+  version: 5.2.4
+  resolution: "bn.js@npm:5.2.4"
+  checksum: 10c0/2f681ab7f075429892b28627bbbdff70e145103cf45815a3ffd161531f9f0207256af1803a6472798a4f04a4c1e3a83aead4cfdb476588dfbd38098d5d61df4c
   languageName: node
   linkType: hard
 
