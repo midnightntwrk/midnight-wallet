@@ -63,7 +63,7 @@ jobs:
 
       - name: Save turbo cache
         if: always()
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-${{ github.run_attempt }}
@@ -116,7 +116,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Restore turbo cache
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
@@ -147,7 +147,7 @@ jobs:
 
       - name: Save turbo cache
         if: always()
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
@@ -188,7 +188,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Restore turbo cache
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
@@ -276,7 +276,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Restore turbo cache
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
@@ -364,7 +364,7 @@ jobs:
 
       - name: Save turbo cache
         if: always()
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-${{ github.run_attempt }}
@@ -417,7 +417,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Restore turbo cache
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-${{ github.run_attempt }}
