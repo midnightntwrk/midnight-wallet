@@ -180,13 +180,20 @@ export const makeDefaultTransactionHistoryService = (
       }).pipe(
         Effect.provide(queryClientLayer),
         Effect.scoped,
-        // Retry for a bounded window (default 2 min) while the indexer catches up. Jitter the delays so a batch of
-        // concurrent lookups that all hit the indexer-lag race don't retry in lockstep against an already-behind
-        // indexer. Beyond the window we give up — the change is not re-processed, so the caller logs the loss.
-        // Only the typed "not yet indexed" failure is transient; anything else (bad URL, 4xx, schema mismatch)
-        // cannot succeed by waiting, so it fails fast instead of holding a fan-out slot for the whole window.
+        // Retry for a bounded window (default 2 min) while the indexer catches up. The exponential delay is capped
+        // at 10s (`either` takes the earlier of the two schedules) so probes keep landing every ≤10s late in the
+        // window — uncapped doubling would leave minute-long gaps and overshoot the window. Jitter the delays so a
+        // batch of concurrent lookups that all hit the indexer-lag race don't retry in lockstep against an
+        // already-behind indexer. Beyond the window we give up — the change is not re-processed, so the caller logs
+        // the loss. Only the typed "not yet indexed" failure is transient; anything else (bad URL, 4xx, schema
+        // mismatch) cannot succeed by waiting, so it fails fast instead of holding a fan-out slot for the whole
+        // window.
         Effect.retry({
-          schedule: Schedule.exponential(Duration.seconds(1)).pipe(Schedule.jittered, Schedule.upTo(retryWindow)),
+          schedule: Schedule.exponential(Duration.seconds(1)).pipe(
+            Schedule.either(Schedule.spaced(Duration.seconds(10))),
+            Schedule.jittered,
+            Schedule.upTo(retryWindow),
+          ),
           while: (error) => error instanceof TransactionHistoryError,
         }),
         // Let our own "not yet indexed" error through untouched; only wrap the indexer query's ClientError/ServerError.

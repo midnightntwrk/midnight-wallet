@@ -13,7 +13,7 @@
 import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { TransactionHistoryDetail, type TransactionHistoryDetailQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { ClientError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Cause, Duration, Effect, Exit, Fiber, Option, Ref, TestClock, TestContext } from 'effect';
+import { Cause, Clock, Duration, Effect, Exit, Fiber, Option, Ref, TestClock, TestContext } from 'effect';
 import { describe, expect, it } from 'vitest';
 import {
   makeDefaultTransactionHistoryService,
@@ -51,10 +51,13 @@ const config: DefaultTransactionHistoryConfiguration = {
  * Fork the effect, fast-forward the TestClock past the whole retry window, then await the result. Retries in
  * `getTransactionDetails` sleep on the (test) clock, so advancing it releases each attempt without real waiting.
  */
-const runToExit = <A, E>(effect: Effect.Effect<A, E>): Promise<Exit.Exit<A, E>> =>
+const runToExit = <A, E>(
+  effect: Effect.Effect<A, E>,
+  adjustBy: Duration.DurationInput = Duration.seconds(60),
+): Promise<Exit.Exit<A, E>> =>
   Effect.gen(function* () {
     const fiber = yield* Effect.fork(effect);
-    yield* TestClock.adjust(Duration.seconds(60));
+    yield* TestClock.adjust(adjustBy);
     return yield* Fiber.await(fiber);
   }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
 
@@ -120,6 +123,33 @@ describe('makeDefaultTransactionHistoryService.getTransactionDetails', () => {
           expect(failure.value.cause).toBe(clientError);
         }
       }
+    }
+  });
+
+  it('keeps probing at most ~10s apart late in the window, so a late indexer recovery is seen promptly', async () => {
+    // With uncapped exponential doubling the probes land at ~1, 3, 7, 15, 31, 63, 127s: an indexer recovering at
+    // t=70s would not be queried again until ~127s (>=101s with jitter) — a minute-long dead gap, overshooting the
+    // window. With the delay capped at 10s, the probe after the last pre-recovery one arrives within one capped,
+    // jittered delay: no later than 70s + 10s * 1.2.
+    const recoveryMillis = 70_000;
+    const service = makeDefaultTransactionHistoryService(
+      { ...config, transactionDetailsRetryWindow: Duration.minutes(2) },
+      () => undefined,
+    );
+
+    const program = Effect.gen(function* () {
+      const fakeQuery = () =>
+        Effect.map(Clock.currentTimeMillis, (now) => (now >= recoveryMillis ? populatedResponse : emptyResponse));
+      yield* service.getTransactionDetails(hash).pipe(Effect.provideService(TransactionHistoryDetail.tag, fakeQuery));
+      return yield* Clock.currentTimeMillis;
+    });
+
+    const exit = await runToExit(program, Duration.minutes(5));
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) {
+      expect(exit.value).toBeGreaterThanOrEqual(recoveryMillis);
+      expect(exit.value).toBeLessThanOrEqual(recoveryMillis + 12_000);
     }
   });
 
