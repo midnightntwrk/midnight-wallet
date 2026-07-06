@@ -12,6 +12,7 @@
 // limitations under the License.
 import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { TransactionHistoryDetail, type TransactionHistoryDetailQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
+import { ClientError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Cause, Duration, Effect, Exit, Fiber, Option, Ref, TestClock, TestContext } from 'effect';
 import { describe, expect, it } from 'vitest';
 import {
@@ -84,6 +85,42 @@ describe('makeDefaultTransactionHistoryService.getTransactionDetails (dust)', ()
       expect(exit.value.identifiers).toEqual(['identifier-1']);
       expect(exit.value.fees).toBe(1234n);
       expect(exit.value.block).toEqual({ hash: 'block-hash', height: 42, timestamp: 1_700_000_000 });
+    }
+  });
+
+  it('fails fast on errors other than the not-yet-indexed case, instead of retrying through the window', async () => {
+    const service = makeDefaultTransactionHistoryService(config, () => undefined);
+    // A permanent failure (bad URL, 4xx, schema mismatch): waiting cannot turn it into a success, so the
+    // retry-for-indexer-lag schedule must not engage for it.
+    const clientError = new ClientError({ message: 'HTTP 400: Bad Request' });
+
+    const program = Effect.gen(function* () {
+      const callCount = yield* Ref.make(0);
+      const fakeQuery = () => Ref.update(callCount, (n) => n + 1).pipe(Effect.andThen(Effect.fail(clientError)));
+      const exit = yield* service
+        .getTransactionDetails(hash)
+        .pipe(Effect.provideService(TransactionHistoryDetail.tag, fakeQuery), Effect.exit);
+      const calls = yield* Ref.get(callCount);
+      return { exit, calls };
+    });
+
+    const result = await runToExit(program);
+
+    expect(Exit.isSuccess(result)).toBe(true);
+    if (Exit.isSuccess(result)) {
+      const { exit, calls } = result.value;
+      // Exactly one query: a failure that can never succeed must not burn the retry window
+      // (holding a fan-out slot for its full duration) before surfacing.
+      expect(calls).toBe(1);
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const failure = Cause.failureOption(exit.cause);
+        expect(Option.isSome(failure)).toBe(true);
+        if (Option.isSome(failure)) {
+          expect(failure.value).toBeInstanceOf(TransactionHistoryError);
+          expect(failure.value.cause).toBe(clientError);
+        }
+      }
     }
   });
 
