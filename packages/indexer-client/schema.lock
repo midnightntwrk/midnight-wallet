@@ -1,0 +1,9 @@
+# @managed by scripts/schema-sync — prefer the CLI over hand-edits.
+# tag + sha256 = the lock: bump `tag` with `--tag`; `sha256` is computed, never hand-edit it.
+# repo + path = the upstream source: stable, but if it moves edit them, then run `--update` to re-lock.
+#   yarn schema:sync --filter=@midnightntwrk/wallet-sdk-indexer-client -- --tag <version>
+
+repo: midnightntwrk/midnight-indexer
+tag: v4.3.2
+path: indexer-api/graphql/schema-v4.graphql
+sha256: ee13e3f7d73c50934c2bff8771afb4f87a4a91e01567f6595b39af6c142f5bef

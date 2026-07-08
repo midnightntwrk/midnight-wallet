@@ -1,0 +1,326 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//
+// Pure logic for the indexer GraphQL schema sync tool — no I/O (no network, no
+// filesystem). It parses/validates the `schema.lock` config, hashes content,
+// renders/parses the provenance header stamped onto `indexer.gql`, parses CLI
+// arguments, and decides what a `verify`/`update` run should do given
+// already-fetched inputs.
+//
+// The CLI entry (`../sync.ts`) does the I/O and interprets these decisions.
+// Keeping the split here makes this logic trivially unit-testable without mocks.
+//
+
+import { Data, Either, Option, Schema } from 'effect';
+import { createHash } from 'node:crypto';
+
+// --- Config (schema.lock) ---------------------------------------------
+
+/** A lowercase 64-char hex SHA-256 digest. */
+const Sha256Hex = Schema.String.pipe(
+  Schema.pattern(/^[0-9a-f]{64}$/, { message: () => 'sha256 must be a lowercase 64-character hex string' }),
+);
+
+/** A GitHub `owner/repo` slug. */
+const RepoSlug = Schema.String.pipe(
+  Schema.pattern(/^[^/\s]+\/[^/\s]+$/, { message: () => "repo must be a GitHub 'owner/repo' slug" }),
+);
+
+/**
+ * Shape of `schema.lock` — the source of truth for which upstream schema the indexer client targets.
+ *
+ * - `repo`/`tag`/`path` say _what_ to fetch (the compatibility declaration).
+ * - `sha256` is the lock: the plain SHA-256 of the raw upstream file — the integrity anchor, independent of `tag` (two
+ *   tags can serve identical bytes).
+ */
+const SchemaLockSchema = Schema.Struct({
+  repo: RepoSlug,
+  tag: Schema.NonEmptyString,
+  path: Schema.NonEmptyString,
+  sha256: Sha256Hex,
+});
+
+export type SchemaLock = Schema.Schema.Type<typeof SchemaLockSchema>;
+
+/** Parse+validate an already-YAML-decoded value into a {@link SchemaLock}. */
+export const decodeConfig = (raw: unknown): Either.Either<SchemaLock, string> =>
+  Schema.decodeUnknownEither(SchemaLockSchema, { errors: 'all' })(raw).pipe(
+    Either.mapLeft((error) => `Invalid schema.lock: ${error.message}`),
+  );
+
+/**
+ * Banner stamped at the top of `schema.lock`. The file is a tool-managed lock (like `yarn.lock`): `schema:sync` writes
+ * it, and it distinguishes the lock values (tool-owned) from the source pointers (rarely human-serviceable).
+ */
+export const CONFIG_BANNER = [
+  '# @managed by scripts/schema-sync — prefer the CLI over hand-edits.',
+  '# tag + sha256 = the lock: bump `tag` with `--tag`; `sha256` is computed, never hand-edit it.',
+  '# repo + path = the upstream source: stable, but if it moves edit them, then run `--update` to re-lock.',
+  '#   yarn schema:sync --filter=@midnightntwrk/wallet-sdk-indexer-client -- --tag <version>',
+].join('\n');
+
+/** Render `schema.lock` deterministically (fixed key order) so tool re-writes produce clean diffs. */
+export const renderConfig = (cfg: SchemaLock): string =>
+  [CONFIG_BANNER, '', `repo: ${cfg.repo}`, `tag: ${cfg.tag}`, `path: ${cfg.path}`, `sha256: ${cfg.sha256}`, ''].join(
+    '\n',
+  );
+
+// --- Hashing ---------------------------------------------------------------
+
+/** SHA-256 (lowercase hex) of UTF-8 text or raw bytes. Matches `shasum -a 256`. */
+export const sha256Hex = (content: string | Uint8Array): string =>
+  createHash('sha256')
+    .update(typeof content === 'string' ? Buffer.from(content, 'utf8') : content)
+    .digest('hex');
+
+// --- Provenance header -----------------------------------------------------
+
+/** Provenance stamped at the top of `indexer.gql` so the file is self-identifying. */
+export type Provenance = {
+  readonly repo: string;
+  readonly tag: string;
+  readonly path: string;
+  readonly commit: string;
+  readonly sha256: string;
+};
+
+const RULE = '# ─────────────────────────────────────────────────────────────';
+const SENTINEL = '# @generated indexer GraphQL schema — DO NOT EDIT BY HAND';
+const UPDATE_HINT = '# Update with: yarn schema:sync --filter=@midnightntwrk/wallet-sdk-indexer-client -- --update';
+
+/** Render the `#`-comment provenance header (GraphQL ignores `#` lines), ending with a blank separator line. */
+export const renderHeader = (p: Provenance): string =>
+  [
+    RULE,
+    SENTINEL,
+    UPDATE_HINT,
+    `# source:  ${p.repo}`,
+    `# tag:     ${p.tag}`,
+    `# path:    ${p.path}`,
+    `# commit:  ${p.commit}`,
+    `# sha256:  ${p.sha256}`,
+    RULE,
+    '',
+    '',
+  ].join('\n');
+
+/** Compose a full committed file: provenance header followed by the verbatim body. */
+export const renderFile = (p: Provenance, body: string): string => renderHeader(p) + body;
+
+/**
+ * Split a committed file into its provenance header (if any) and body. Our header is the contiguous block of leading
+ * `#` lines containing the sentinel; the body is everything after it (with the single separating blank line dropped).
+ * Upstream schema bodies begin with `"""` descriptions, never `#`, so the leading-`#` block is unambiguously ours.
+ */
+export const splitHeader = (content: string): { header: Option.Option<string>; body: string } => {
+  const lines = content.split('\n');
+  const firstNonHash = lines.findIndex((line) => !line.startsWith('#'));
+  const headerLineCount = firstNonHash === -1 ? lines.length : firstNonHash;
+  const headerLines = lines.slice(0, headerLineCount);
+  const isOurs = headerLineCount > 0 && headerLines.some((line) => line === SENTINEL);
+  if (!isOurs) {
+    return { header: Option.none(), body: content };
+  }
+  const rest = lines.slice(headerLineCount);
+  const bodyLines = rest.length > 0 && rest[0] === '' ? rest.slice(1) : rest;
+  return { header: Option.some(headerLines.join('\n')), body: bodyLines.join('\n') };
+};
+
+/** The schema body with any provenance header removed. */
+export const stripHeader = (content: string): string => splitHeader(content).body;
+
+/** Parse the fields out of a rendered provenance header. */
+export const parseHeader = (content: string): Option.Option<Provenance> => {
+  const { header } = splitHeader(content);
+  return Option.flatMap(header, (headerText) => {
+    const field = (key: string): Option.Option<string> => {
+      const match = headerText.match(new RegExp(`^#\\s+${key}:\\s+(.+?)\\s*$`, 'm'));
+      return match ? Option.some(match[1]) : Option.none();
+    };
+    return Option.all({
+      repo: field('source'),
+      tag: field('tag'),
+      path: field('path'),
+      commit: field('commit'),
+      sha256: field('sha256'),
+    });
+  });
+};
+
+// --- CLI parsing -----------------------------------------------------------
+
+/** A parsed CLI invocation. */
+export type SyncCommand = Data.TaggedEnum<{
+  /** Read-only integrity check (the default). */
+  Verify: {}; // eslint-disable-line @typescript-eslint/no-empty-object-type
+  /** Fetch + write. `tag` sets the version; `path` optionally overrides auto-discovery. */
+  Update: { readonly tag: Option.Option<string>; readonly path: Option.Option<string> };
+}>;
+export const SyncCommand = Data.taggedEnum<SyncCommand>();
+
+/**
+ * Parse `schema:sync` CLI arguments.
+ *
+ * - (none) → verify
+ * - `--update` → apply the tag currently pinned in the lock
+ * - `--tag <v>` → set tag=<v> and apply (implies update)
+ * - `--path <p>` → override the schema path instead of auto-discovering it
+ */
+export const parseArgs = (argv: ReadonlyArray<string>): Either.Either<SyncCommand, string> => {
+  const valueOf = (index: number, flag: string): Either.Either<string, string> => {
+    const inline = argv[index].includes('=') ? argv[index].split('=').slice(1).join('=') : undefined;
+    if (inline !== undefined) return inline === '' ? Either.left(`${flag} requires a value`) : Either.right(inline);
+    const next = argv[index + 1];
+    return next === undefined || next.startsWith('--') ? Either.left(`${flag} requires a value`) : Either.right(next);
+  };
+
+  type Acc = { update: boolean; tag: Option.Option<string>; path: Option.Option<string> };
+  const empty: Acc = { update: false, tag: Option.none(), path: Option.none() };
+
+  const folded = argv.reduce<Either.Either<Acc, string>>((accE, arg, index) => {
+    if (Either.isLeft(accE)) return accE;
+    const acc = accE.right;
+    if (arg.startsWith('--tag')) {
+      return Either.map(valueOf(index, '--tag'), (tag) => ({ ...acc, update: true, tag: Option.some(tag) }));
+    }
+    if (arg.startsWith('--path')) {
+      return Either.map(valueOf(index, '--path'), (path) => ({ ...acc, path: Option.some(path) }));
+    }
+    if (arg === '--update') return Either.right({ ...acc, update: true });
+    if (arg === '--verify') return Either.right(acc);
+    // Skip a value already consumed by its flag.
+    const prev = argv[index - 1];
+    if ((prev === '--tag' || prev === '--path') && !arg.startsWith('--')) return Either.right(acc);
+    return Either.left(`Unknown argument: ${arg}`);
+  }, Either.right(empty));
+
+  return Either.map(
+    folded,
+    (acc): SyncCommand => (acc.update ? SyncCommand.Update({ tag: acc.tag, path: acc.path }) : SyncCommand.Verify()),
+  );
+};
+
+/** Pick the highest `schema-vN.graphql` from a list of filenames in the upstream graphql dir. */
+export const pickSchemaFile = (filenames: ReadonlyArray<string>): Option.Option<string> => {
+  const versioned = filenames
+    .map((name) => {
+      const match = name.match(/^schema-v(\d+)\.graphql$/);
+      return match ? { name, version: Number(match[1]) } : undefined;
+    })
+    .filter((entry): entry is { name: string; version: number } => entry !== undefined);
+  return versioned.length === 0
+    ? Option.none()
+    : Option.some(versioned.reduce((best, entry) => (entry.version > best.version ? entry : best)).name);
+};
+
+// --- Decisions -------------------------------------------------------------
+
+/** What a `verify` run concluded. Only `InSync` is a pass. */
+export type VerifyOutcome = Data.TaggedEnum<{
+  InSync: {}; // eslint-disable-line @typescript-eslint/no-empty-object-type
+  Missing: {}; // eslint-disable-line @typescript-eslint/no-empty-object-type
+  LockMismatch: { readonly remoteSha: string; readonly lockSha: string };
+  BodyDrift: { readonly bodySha: string; readonly lockSha: string };
+  HeaderMismatch: { readonly field: string; readonly expected: string; readonly actual: string };
+}>;
+export const VerifyOutcome = Data.taggedEnum<VerifyOutcome>();
+
+/** What an `update` run should do. */
+export type UpdateOutcome = Data.TaggedEnum<{
+  /** Body + header already match; write nothing. */
+  Noop: {}; // eslint-disable-line @typescript-eslint/no-empty-object-type
+  /** Body unchanged but the header names a different tag; restamp header only, no regen. */
+  Retarget: { readonly fromTag: Option.Option<string>; readonly toTag: string };
+  /** Body content changed; rewrite file, update the lock, regenerate types. */
+  Rewrite: { readonly newSha: string; readonly previousSha: Option.Option<string> };
+}>;
+export const UpdateOutcome = Data.taggedEnum<UpdateOutcome>();
+
+// `commit` is informational provenance only — not an integrity anchor, so it is not compared.
+const headerMatches = (
+  header: Provenance,
+  expected: Provenance,
+): Option.Option<{ field: string; expected: string; actual: string }> => {
+  const checks: ReadonlyArray<readonly [keyof Provenance, string]> = [
+    ['repo', 'source'],
+    ['tag', 'tag'],
+    ['path', 'path'],
+    ['sha256', 'sha256'],
+  ];
+  const mismatch = checks.find(([key]) => header[key] !== expected[key]);
+  return mismatch
+    ? Option.some({ field: mismatch[1], expected: expected[mismatch[0]], actual: header[mismatch[0]] })
+    : Option.none();
+};
+
+/**
+ * Decide the result of a `verify` run from already-fetched inputs.
+ *
+ * @param lockSha - `sha256` from schema.lock
+ * @param expected - Provenance the header is expected to carry (from config)
+ * @param remoteSha - Hash of the freshly fetched upstream file
+ * @param current - Current on-disk `indexer.gql` contents; `None` if the file is absent
+ */
+export const decideVerify = (input: {
+  readonly lockSha: string;
+  readonly expected: Provenance;
+  readonly remoteSha: string;
+  readonly current: Option.Option<string>;
+}): VerifyOutcome => {
+  if (input.remoteSha !== input.lockSha) {
+    return VerifyOutcome.LockMismatch({ remoteSha: input.remoteSha, lockSha: input.lockSha });
+  }
+  if (Option.isNone(input.current)) {
+    return VerifyOutcome.Missing();
+  }
+  const bodySha = sha256Hex(stripHeader(input.current.value));
+  if (bodySha !== input.lockSha) {
+    return VerifyOutcome.BodyDrift({ bodySha, lockSha: input.lockSha });
+  }
+  const header = parseHeader(input.current.value);
+  if (Option.isNone(header)) {
+    return VerifyOutcome.HeaderMismatch({ field: 'header', expected: 'present', actual: 'absent' });
+  }
+  return Option.match(headerMatches(header.value, input.expected), {
+    onNone: () => VerifyOutcome.InSync(),
+    onSome: (mismatch) => VerifyOutcome.HeaderMismatch(mismatch),
+  });
+};
+
+/**
+ * Decide what an `update` run should do from already-fetched inputs.
+ *
+ * @param remoteSha - Hash of the freshly fetched upstream body
+ * @param expected - Provenance the freshly written header should carry
+ * @param current - Current on-disk `indexer.gql` contents; `None` if absent
+ */
+export const decideUpdate = (input: {
+  readonly remoteSha: string;
+  readonly expected: Provenance;
+  readonly current: Option.Option<string>;
+}): UpdateOutcome => {
+  if (Option.isNone(input.current)) {
+    return UpdateOutcome.Rewrite({ newSha: input.remoteSha, previousSha: Option.none() });
+  }
+  const bodySha = sha256Hex(stripHeader(input.current.value));
+  if (bodySha !== input.remoteSha) {
+    return UpdateOutcome.Rewrite({ newSha: input.remoteSha, previousSha: Option.some(bodySha) });
+  }
+  const header = parseHeader(input.current.value);
+  const headerOk = Option.isSome(header) && Option.isNone(headerMatches(header.value, input.expected));
+  if (headerOk) {
+    return UpdateOutcome.Noop();
+  }
+  return UpdateOutcome.Retarget({ fromTag: Option.map(header, (h) => h.tag), toTag: input.expected.tag });
+};
