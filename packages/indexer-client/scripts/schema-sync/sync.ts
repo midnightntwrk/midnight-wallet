@@ -14,7 +14,9 @@
 //
 // CLI entry for the indexer GraphQL schema sync tool. It does the I/O — GitHub
 // API, filesystem, codegen — and delegates every decision to the pure logic in
-// `./lib`. Run from the repo root:
+// `./lib`. It reads two files: schema.config.yml (editable source: repo + path)
+// and schema.lock (tool-owned: tag + sha256), and only ever writes the lock.
+// Run from the repo root:
 //
 //   yarn schema:sync --filter=@midnightntwrk/wallet-sdk-indexer-client                 # verify (default)
 //   yarn schema:sync --filter=@midnightntwrk/wallet-sdk-indexer-client -- --tag v4.3.3 # pin a version
@@ -23,13 +25,14 @@
 // See ./README.md for the full behaviour matrix.
 //
 
-import { Console, Data, Effect, Layer, Option, Schema, pipe } from 'effect';
+import { Console, Data, Effect, Layer, Option, pipe } from 'effect';
 import { Command, FetchHttpClient, FileSystem, HttpClient, HttpClientRequest } from '@effect/platform';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import {
   type Provenance,
+  type SchemaConfig,
   type SchemaLock,
   SyncCommand,
   UpdateOutcome,
@@ -37,10 +40,10 @@ import {
   decideUpdate,
   decideVerify,
   decodeConfig,
+  decodeLock,
   parseArgs,
-  pickSchemaFile,
-  renderConfig,
   renderFile,
+  renderLock,
   sha256Hex,
   stripHeader,
 } from './lib/index.js';
@@ -56,7 +59,8 @@ class SchemaSyncError extends Data.TaggedError(
 // Paths resolved relative to this script, so cwd does not matter.
 const scriptDir = path.dirname(new URL(import.meta.url).pathname);
 const packageDir = path.resolve(scriptDir, '..', '..');
-const configPath = path.join(packageDir, 'schema.lock');
+const configPath = path.join(packageDir, 'schema.config.yml');
+const lockPath = path.join(packageDir, 'schema.lock');
 const schemaPath = path.join(packageDir, 'indexer.gql');
 const generatedDir = path.join(packageDir, 'src', 'graphql', 'generated');
 
@@ -85,8 +89,6 @@ const fetchText = (url: string, accept: string) =>
     return yield* response.text;
   });
 
-const DirEntrySchema = Schema.Array(Schema.Struct({ name: Schema.String }));
-
 /** Fetch the schema file's bytes as text. */
 const fetchSchema = (repo: string, filePath: string, tag: string) =>
   fetchText(contentsUrl(repo, filePath, tag), 'application/vnd.github.raw');
@@ -98,22 +100,19 @@ const fetchCommit = (repo: string, tag: string) =>
     'application/vnd.github.sha',
   ).pipe(Effect.map((sha) => sha.trim()));
 
-/** Auto-discover the highest `schema-vN.graphql` in the same directory as the pinned path. */
-const discoverSchemaPath = (repo: string, tag: string, currentPath: string) =>
-  Effect.gen(function* () {
-    const dir = path.posix.dirname(currentPath);
-    const text = yield* fetchText(contentsUrl(repo, dir, tag), 'application/vnd.github+json');
-    const entries = yield* Schema.decodeUnknown(DirEntrySchema)(JSON.parse(text));
-    return Option.match(pickSchemaFile(entries.map((entry) => entry.name)), {
-      onNone: () => currentPath,
-      onSome: (name) => path.posix.join(dir, name),
-    });
-  });
-
 const readConfig = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
   const text = yield* fs.readFileString(configPath, 'utf8');
   return yield* decodeConfig(parseYaml(text)).pipe(Effect.mapError((message) => new SchemaSyncError({ message })));
+});
+
+const readLock = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  if (!(yield* fs.exists(lockPath))) return Option.none<SchemaLock>();
+  const text = yield* fs.readFileString(lockPath, 'utf8');
+  return Option.some(
+    yield* decodeLock(parseYaml(text)).pipe(Effect.mapError((message) => new SchemaSyncError({ message }))),
+  );
 });
 
 const readCurrentSchema = Effect.gen(function* () {
@@ -122,8 +121,8 @@ const readCurrentSchema = Effect.gen(function* () {
   return exists ? Option.some(yield* fs.readFileString(schemaPath, 'utf8')) : Option.none<string>();
 });
 
-const writeConfig = (config: SchemaLock) =>
-  Effect.flatMap(FileSystem.FileSystem, (fs) => fs.writeFileString(configPath, renderConfig(config)));
+const writeLock = (lock: SchemaLock) =>
+  Effect.flatMap(FileSystem.FileSystem, (fs) => fs.writeFileString(lockPath, renderLock(lock)));
 
 const writeSchema = (provenance: Provenance, body: string) =>
   Effect.flatMap(FileSystem.FileSystem, (fs) => fs.writeFileString(schemaPath, renderFile(provenance, body)));
@@ -144,27 +143,41 @@ const regenerateTypes = Effect.gen(function* () {
   }
 });
 
+/** The provenance a committed `indexer.gql` should carry, from the resolved source + version. */
+const provenanceOf = (config: SchemaConfig, tag: string, commit: string, sha256: string): Provenance => ({
+  repo: config.repo,
+  tag,
+  path: config.path,
+  commit,
+  sha256,
+});
+
 const runVerify = Effect.gen(function* () {
   const config = yield* readConfig;
+  const lock = yield* readLock;
+  if (Option.isNone(lock)) {
+    return yield* new SchemaSyncError({ message: 'schema.lock is missing — run `schema:sync -- --tag <version>`' });
+  }
+  const { tag, sha256 } = lock.value;
   const current = yield* readCurrentSchema;
-  const remoteSha = sha256Hex(yield* fetchSchema(config.repo, config.path, config.tag));
+  const remoteSha = sha256Hex(yield* fetchSchema(config.repo, config.path, tag));
 
   const outcome = decideVerify({
-    lockSha: config.sha256,
+    lockSha: sha256,
     // `commit` is not compared; empty is fine.
-    expected: { repo: config.repo, tag: config.tag, path: config.path, commit: '', sha256: config.sha256 },
+    expected: provenanceOf(config, tag, '', sha256),
     remoteSha,
     current,
   });
 
   return yield* VerifyOutcome.$match(outcome, {
-    InSync: () => Console.log(`✔ schema in sync — ${config.repo} @ ${config.tag} (${config.sha256.slice(0, 12)}…)`),
+    InSync: () => Console.log(`✔ schema in sync — ${config.repo} @ ${tag} (${sha256.slice(0, 12)}…)`),
     Missing: () =>
       Effect.fail(new SchemaSyncError({ message: 'indexer.gql is missing — run `schema:sync -- --update`' })),
     LockMismatch: ({ remoteSha: r, lockSha }) =>
       Effect.fail(
         new SchemaSyncError({
-          message: `upstream content under ${config.tag} changed: remote ${r.slice(0, 12)}… ≠ lock ${lockSha.slice(0, 12)}…`,
+          message: `upstream content under ${tag} changed: remote ${r.slice(0, 12)}… ≠ lock ${lockSha.slice(0, 12)}…`,
         }),
       ),
     BodyDrift: ({ bodySha, lockSha }) =>
@@ -185,26 +198,29 @@ const runVerify = Effect.gen(function* () {
 const runUpdate = (command: Extract<SyncCommand, { _tag: 'Update' }>) =>
   Effect.gen(function* () {
     const config = yield* readConfig;
-    const tag = Option.getOrElse(command.tag, () => config.tag);
+    const lock = yield* readLock;
 
-    const shouldDiscover = Option.isSome(command.tag) && Option.isNone(command.path);
-    const schemaFilePath = Option.isSome(command.path)
-      ? command.path.value
-      : shouldDiscover
-        ? yield* discoverSchemaPath(config.repo, tag, config.path)
-        : config.path;
+    // Version to apply: --tag wins, else the currently-pinned tag, else there is nothing to pin.
+    const tag = yield* Option.match(command.tag, {
+      onSome: (t) => Effect.succeed(t),
+      onNone: () =>
+        Option.match(lock, {
+          onSome: (l) => Effect.succeed(l.tag),
+          onNone: () => new SchemaSyncError({ message: 'no tag pinned in schema.lock — pass `--tag <version>`' }),
+        }),
+    });
 
-    yield* Console.log(`Fetching ${config.repo} @ ${tag} — ${schemaFilePath}`);
-    const body = yield* fetchSchema(config.repo, schemaFilePath, tag);
+    yield* Console.log(`Fetching ${config.repo} @ ${tag} — ${config.path}`);
+    const body = yield* fetchSchema(config.repo, config.path, tag);
     const commit = yield* fetchCommit(config.repo, tag);
     const remoteSha = sha256Hex(body);
 
-    const provenance: Provenance = { repo: config.repo, tag, path: schemaFilePath, commit, sha256: remoteSha };
+    const provenance = provenanceOf(config, tag, commit, remoteSha);
     const current = yield* readCurrentSchema;
     const outcome = decideUpdate({ remoteSha, expected: provenance, current });
 
-    // The lock is always re-rendered so it stays authoritative; identical fields produce no git diff.
-    yield* writeConfig({ repo: config.repo, tag, path: schemaFilePath, sha256: remoteSha });
+    // The lock is always re-rendered so it stays authoritative; identical values produce no git diff.
+    yield* writeLock({ tag, sha256: remoteSha });
 
     return yield* UpdateOutcome.$match(outcome, {
       Noop: () => Console.log(`✔ already in sync — ${config.repo} @ ${tag}`),

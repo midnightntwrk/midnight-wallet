@@ -40,11 +40,12 @@ yarn schema:sync --filter=@midnightntwrk/wallet-sdk-indexer-client -- --update
 
 | File                          | Role                                                                                                        |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `schema.lock`                 | **Tool-managed lock** — `repo`, `tag`, `path`, `sha256`. Never hand-edit.                                   |
+| `schema.config.yml`           | **Editable config** — `repo` + `path`: where the schema is fetched from. Hand-edit if the source moves.     |
+| `schema.lock`                 | **Tool-managed lock** — `tag` + `sha256`. Generated; never hand-edit.                                       |
 | `indexer.gql`                 | The schema: a `#` provenance header (source/tag/commit/sha256) + a byte-faithful copy of the upstream file. |
 | `src/graphql/generated/`      | Types produced from `indexer.gql` by `graphql-codegen`.                                                     |
 | `scripts/schema-sync/sync.ts` | CLI entry — the Effect I/O shell (GitHub API, filesystem, codegen).                                         |
-| `scripts/schema-sync/lib/`    | Pure logic (config, hashing, provenance header, decisions, arg parsing) — unit-tested.                      |
+| `scripts/schema-sync/lib/`    | Pure logic (config/lock parsing, hashing, provenance header, decisions, arg parsing) — unit-tested.         |
 
 ## What each command touches
 
@@ -54,27 +55,28 @@ yarn schema:sync --filter=@midnightntwrk/wallet-sdk-indexer-client -- --update
 | `--tag <v>`                     |          yes          | only if content changed | only if content changed |
 | `--update`                      |          yes          | only if content changed | only if content changed |
 
-The write commands always re-render `schema.lock` (fixed key order) so it stays authoritative — identical values produce
-no git diff. When the new schema is byte-identical to the old one (e.g. `v4.0.0` → `v4.0.2`), only the header's
-tag/commit is restamped; the body and generated types are untouched.
+The write commands always re-render `schema.lock` so it stays authoritative — identical values produce no git diff. When
+the new schema is byte-identical to the old one (e.g. `v4.0.0` → `v4.0.2`), only the header's tag/commit is restamped;
+the body and generated types are untouched.
 
-## `schema.lock` fields
+## Config vs lock
 
-It's a lock, like `yarn.lock` — prefer the CLI over hand-editing. Its four fields fall into two groups:
+Two files, mirroring `package.json` vs `yarn.lock`:
 
-| Field    | Group                                              | Who changes it                                                     |
-| -------- | -------------------------------------------------- | ------------------------------------------------------------------ |
-| `tag`    | **lock** — the pinned version                      | Bump via `--tag`.                                                  |
-| `sha256` | **lock** — integrity hash of the raw upstream file | Computed by the tool — **never** hand-edit.                        |
-| `repo`   | **source** — where to fetch from                   | Stable; edit only if the upstream repo moves, then run `--update`. |
-| `path`   | **source** — schema location in that repo          | Auto-discovered on `--tag`; edit + `--update` if it moves.         |
+| File                | Fields                               | Edit by hand?                                                                        |
+| ------------------- | ------------------------------------ | ------------------------------------------------------------------------------------ |
+| `schema.config.yml` | `repo`, `path` — where to fetch from | **Yes.** Change only if the upstream repo or file moves, then run `--update`.        |
+| `schema.lock`       | `tag`, `sha256` — what is pinned     | **No.** Tool-generated: bump `tag` with `--tag`; `sha256` is the computed file hash. |
+
+The "where it came from" receipt lives in `indexer.gql`'s provenance header (source/tag/commit/sha256), so the lock
+stays minimal and unambiguous.
 
 ## Rules
 
 - **`sha256` is the hash of the raw upstream file** (what `shasum -a 256` of the GitHub file gives). `verify` hashes
   `indexer.gql`'s body (header stripped) and compares.
 - **Version selection is a deliberate pin.** There is no reliable in-repo "current indexer version" to derive from, so
-  the tag is pinned here and bumped intentionally via `--tag`.
+  the tag is pinned in `schema.lock` and bumped intentionally via `--tag`.
 
 ## Note on generated types
 

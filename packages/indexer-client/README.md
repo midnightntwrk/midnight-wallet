@@ -27,8 +27,8 @@ blockchain data and provides efficient access to:
 ## GraphQL schema
 
 The committed schema (`indexer.gql`) and its generated types are kept in sync with a pinned indexer release by a sync
-tool — do not edit `indexer.gql` or `schema.lock` by hand. See
-[`scripts/schema-sync/README.md`](scripts/schema-sync/README.md).
+tool. To change the source repo/file, edit `schema.config.yml`; `indexer.gql` and `schema.lock` are tool-generated —
+never hand-edit them. See [`scripts/schema-sync/README.md`](scripts/schema-sync/README.md).
 
 ## Usage
 

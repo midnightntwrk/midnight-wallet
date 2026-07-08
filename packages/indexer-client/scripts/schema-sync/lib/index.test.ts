@@ -14,17 +14,17 @@ import { Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import {
-  CONFIG_BANNER,
+  LOCK_BANNER,
   decideUpdate,
   decideVerify,
   decodeConfig,
+  decodeLock,
   parseArgs,
   parseHeader,
-  pickSchemaFile,
   type Provenance,
-  renderConfig,
   renderFile,
   renderHeader,
+  renderLock,
   sha256Hex,
   splitHeader,
   stripHeader,
@@ -41,35 +41,44 @@ const provenance: Provenance = {
   sha256: BODY_SHA,
 };
 
-const validConfig = {
-  repo: 'midnightntwrk/midnight-indexer',
-  tag: 'v4.0.2',
-  path: 'indexer-api/graphql/schema-v4.graphql',
-  sha256: BODY_SHA,
-};
+const validConfig = { repo: 'midnightntwrk/midnight-indexer', path: 'indexer-api/graphql/schema-v4.graphql' };
+const validLock = { tag: 'v4.0.2', sha256: BODY_SHA };
 
-describe('decodeConfig', () => {
+describe('decodeConfig (schema.config.yml — repo/path)', () => {
   it('accepts a well-formed config', () => {
-    const result = decodeConfig(validConfig);
-    expect(Either.isRight(result)).toBe(true);
-  });
-
-  it('rejects a non-hex / wrong-length sha256', () => {
-    const result = decodeConfig({ ...validConfig, sha256: 'NOTAHASH' });
-    expect(Either.isLeft(result)).toBe(true);
-  });
-
-  it('rejects a missing tag', () => {
-    const { tag: _tag, ...noTag } = validConfig;
-    expect(Either.isLeft(decodeConfig(noTag))).toBe(true);
-  });
-
-  it('rejects an empty tag', () => {
-    expect(Either.isLeft(decodeConfig({ ...validConfig, tag: '' }))).toBe(true);
+    expect(Either.isRight(decodeConfig(validConfig))).toBe(true);
   });
 
   it('rejects a repo that is not owner/repo', () => {
     expect(Either.isLeft(decodeConfig({ ...validConfig, repo: 'not-a-slug' }))).toBe(true);
+  });
+
+  it('rejects a missing path', () => {
+    const { path: _path, ...noPath } = validConfig;
+    expect(Either.isLeft(decodeConfig(noPath))).toBe(true);
+  });
+
+  it('rejects an empty path', () => {
+    expect(Either.isLeft(decodeConfig({ ...validConfig, path: '' }))).toBe(true);
+  });
+});
+
+describe('decodeLock (schema.lock — tag/sha256)', () => {
+  it('accepts a well-formed lock', () => {
+    expect(Either.isRight(decodeLock(validLock))).toBe(true);
+  });
+
+  it('rejects a non-hex / wrong-length sha256', () => {
+    expect(Either.isLeft(decodeLock({ ...validLock, sha256: 'NOTAHASH' }))).toBe(true);
+  });
+
+  it('rejects a missing tag', () => {
+    const { tag: _tag, ...noTag } = validLock;
+    expect(Either.isLeft(decodeLock(noTag))).toBe(true);
+  });
+
+  it('rejects an empty tag', () => {
+    expect(Either.isLeft(decodeLock({ ...validLock, tag: '' }))).toBe(true);
   });
 });
 
@@ -117,22 +126,19 @@ describe('provenance header', () => {
   });
 });
 
-describe('renderConfig', () => {
-  it('emits the managed banner and groups source (repo/path) before lock (tag/sha256)', () => {
-    const yaml = renderConfig(validConfig);
-    expect(yaml.startsWith(CONFIG_BANNER)).toBe(true);
+describe('renderLock', () => {
+  it('emits the lock banner and tag before sha256', () => {
+    const yaml = renderLock(validLock);
+    expect(yaml.startsWith(LOCK_BANNER)).toBe(true);
     expect(yaml).toContain('tag: v4.0.2');
     expect(yaml).toContain(`sha256: ${BODY_SHA}`);
-    // source group first (repo, path), then lock group (tag, sha256)
-    expect(yaml.indexOf('repo:')).toBeLessThan(yaml.indexOf('path:'));
-    expect(yaml.indexOf('path:')).toBeLessThan(yaml.indexOf('tag:'));
     expect(yaml.indexOf('tag:')).toBeLessThan(yaml.indexOf('sha256:'));
   });
 
-  it('renders valid YAML that decodes back to the config (comments and all)', () => {
-    const decoded = decodeConfig(parseYaml(renderConfig(validConfig)));
+  it('renders valid YAML that decodes back to the lock (comments and all)', () => {
+    const decoded = decodeLock(parseYaml(renderLock(validLock)));
     expect(Either.isRight(decoded)).toBe(true);
-    if (Either.isRight(decoded)) expect(decoded.right).toEqual(validConfig);
+    if (Either.isRight(decoded)) expect(decoded.right).toEqual(validLock);
   });
 });
 
@@ -160,11 +166,6 @@ describe('parseArgs', () => {
     if (cmd._tag === 'Update') expect(Option.getOrNull(cmd.tag)).toBe('v4.3.3');
   });
 
-  it('parses --path override alongside --tag', () => {
-    const cmd = right(parseArgs(['--tag', 'v5.0.0', '--path', 'a/b/schema-v5.graphql']));
-    if (cmd._tag === 'Update') expect(Option.getOrNull(cmd.path)).toBe('a/b/schema-v5.graphql');
-  });
-
   it('rejects a --tag with no value', () => {
     expect(Either.isLeft(parseArgs(['--tag']))).toBe(true);
   });
@@ -175,22 +176,6 @@ describe('parseArgs', () => {
 
   it('rejects unknown arguments', () => {
     expect(Either.isLeft(parseArgs(['--frobnicate']))).toBe(true);
-  });
-});
-
-describe('pickSchemaFile', () => {
-  it('picks the highest schema-vN.graphql', () => {
-    expect(Option.getOrNull(pickSchemaFile(['schema-v1.graphql', 'schema-v4.graphql', 'schema-v3.graphql']))).toBe(
-      'schema-v4.graphql',
-    );
-  });
-
-  it('ignores non-matching files', () => {
-    expect(Option.getOrNull(pickSchemaFile(['README.md', 'schema-v2.graphql', 'notes.txt']))).toBe('schema-v2.graphql');
-  });
-
-  it('returns none when there is no schema file', () => {
-    expect(Option.isNone(pickSchemaFile(['README.md']))).toBe(true);
   });
 });
 
@@ -263,11 +248,7 @@ describe('decideVerify', () => {
 
 describe('decideUpdate', () => {
   it('rewrites when there is no current file', () => {
-    const outcome = decideUpdate({
-      remoteSha: BODY_SHA,
-      expected: provenance,
-      current: Option.none(),
-    });
+    const outcome = decideUpdate({ remoteSha: BODY_SHA, expected: provenance, current: Option.none() });
     expect(outcome._tag).toBe('Rewrite');
   });
 
