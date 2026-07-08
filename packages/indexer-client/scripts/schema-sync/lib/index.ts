@@ -60,21 +60,43 @@ export const decodeConfig = (raw: unknown): Either.Either<SchemaLock, string> =>
   );
 
 /**
- * Banner stamped at the top of `schema.lock`. The file is a tool-managed lock (like `yarn.lock`): `schema:sync` writes
- * it, and it distinguishes the lock values (tool-owned) from the source pointers (rarely human-serviceable).
+ * Top banner of `schema.lock`. The file is a tool-managed lock (like `yarn.lock`): `schema:sync` writes it. The
+ * per-group comments below distinguish the editable source pointers from the tool-owned lock values.
  */
 export const CONFIG_BANNER = [
   '# @managed by scripts/schema-sync — prefer the CLI over hand-edits.',
-  '# tag + sha256 = the lock: bump `tag` with `--tag`; `sha256` is computed, never hand-edit it.',
-  '# repo + path = the upstream source: stable, but if it moves edit them, then run `--update` to re-lock.',
   '#   yarn schema:sync --filter=@midnightntwrk/wallet-sdk-indexer-client -- --tag <version>',
 ].join('\n');
 
-/** Render `schema.lock` deterministically (fixed key order) so tool re-writes produce clean diffs. */
+/** Comment above the source pointers (repo/path) — the editable group. */
+const SOURCE_COMMENT = [
+  '# Source — where the schema is fetched from. Edit these only if the upstream',
+  '# repo or file moves, then run `--update` to re-lock.',
+].join('\n');
+
+/** Comment above the lock values (tag/sha256) — the tool-owned group. */
+const LOCK_COMMENT = [
+  '# Lock — written by the tool; do not hand-edit. Bump `tag` with `--tag`;',
+  '# `sha256` is the computed hash of the upstream file.',
+].join('\n');
+
+/**
+ * Render `schema.lock` deterministically so tool re-writes produce clean diffs. Fields are grouped: the editable source
+ * pointers first, then the tool-owned lock values, each under an explanatory comment.
+ */
 export const renderConfig = (cfg: SchemaLock): string =>
-  [CONFIG_BANNER, '', `repo: ${cfg.repo}`, `tag: ${cfg.tag}`, `path: ${cfg.path}`, `sha256: ${cfg.sha256}`, ''].join(
-    '\n',
-  );
+  [
+    CONFIG_BANNER,
+    '',
+    SOURCE_COMMENT,
+    `repo: ${cfg.repo}`,
+    `path: ${cfg.path}`,
+    '',
+    LOCK_COMMENT,
+    `tag: ${cfg.tag}`,
+    `sha256: ${cfg.sha256}`,
+    '',
+  ].join('\n');
 
 // --- Hashing ---------------------------------------------------------------
 

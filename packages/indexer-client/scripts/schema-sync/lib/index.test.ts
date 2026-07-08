@@ -12,6 +12,7 @@
 // limitations under the License.
 import { Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
+import { parse as parseYaml } from 'yaml';
 import {
   CONFIG_BANNER,
   decideUpdate,
@@ -117,13 +118,21 @@ describe('provenance header', () => {
 });
 
 describe('renderConfig', () => {
-  it('emits the managed banner and all fields in fixed order', () => {
+  it('emits the managed banner and groups source (repo/path) before lock (tag/sha256)', () => {
     const yaml = renderConfig(validConfig);
     expect(yaml.startsWith(CONFIG_BANNER)).toBe(true);
     expect(yaml).toContain('tag: v4.0.2');
     expect(yaml).toContain(`sha256: ${BODY_SHA}`);
-    expect(yaml.indexOf('repo:')).toBeLessThan(yaml.indexOf('tag:'));
+    // source group first (repo, path), then lock group (tag, sha256)
+    expect(yaml.indexOf('repo:')).toBeLessThan(yaml.indexOf('path:'));
+    expect(yaml.indexOf('path:')).toBeLessThan(yaml.indexOf('tag:'));
     expect(yaml.indexOf('tag:')).toBeLessThan(yaml.indexOf('sha256:'));
+  });
+
+  it('renders valid YAML that decodes back to the config (comments and all)', () => {
+    const decoded = decodeConfig(parseYaml(renderConfig(validConfig)));
+    expect(Either.isRight(decoded)).toBe(true);
+    if (Either.isRight(decoded)) expect(decoded.right).toEqual(validConfig);
   });
 });
 
