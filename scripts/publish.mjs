@@ -56,11 +56,22 @@ const migrationBanner = (primaryName) =>
   ].join('\n');
 
 const { values } = parseArgs({
-  options: { tag: { type: 'string' } },
+  // `--only` restricts publishing to an explicit comma-separated allowlist of
+  // canonical (@midnightntwrk) package names. Used to scope a targeted release
+  // (e.g. a single-package hotfix) so the alias mirror does not backfill stale
+  // sibling versions that merely happen to be missing on the dashed scope.
+  options: { tag: { type: 'string' }, only: { type: 'string' } },
   strict: true,
 });
 
 const tagArgs = values.tag ? ['--tag', values.tag] : [];
+
+const onlyNames = values.only
+  ? values.only
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+  : null;
 
 const workspaces = execFileSync('yarn', ['workspaces', 'list', '--json'], { encoding: 'utf8' })
   .trim()
@@ -68,10 +79,21 @@ const workspaces = execFileSync('yarn', ['workspaces', 'list', '--json'], { enco
   .map((line) => JSON.parse(line))
   .filter((ws) => ws.location !== '.');
 
-const publishable = workspaces.flatMap((ws) => {
+const allPublishable = workspaces.flatMap((ws) => {
   const pkg = JSON.parse(readFileSync(resolve(ws.location, 'package.json'), 'utf8'));
   return pkg.private ? [] : [{ ...ws, pkg }];
 });
+
+const publishable = onlyNames ? allPublishable.filter((ws) => onlyNames.includes(ws.pkg.name)) : allPublishable;
+
+if (onlyNames) {
+  const missing = onlyNames.filter((n) => !allPublishable.some((ws) => ws.pkg.name === n));
+  if (missing.length > 0) {
+    console.error(`--only names not found among publishable packages: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+  console.log(`--only restricts this run to: ${onlyNames.join(', ')}`);
+}
 
 if (publishable.length === 0) {
   console.log('No publishable packages found.');

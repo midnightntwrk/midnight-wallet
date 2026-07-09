@@ -167,8 +167,18 @@ jobs:
         run: yarn install --immutable
 
       - name: Build, publish (both scopes), and tag
+        # HOTFIX (wallet-sdk-utilities@1.2.1): scope the publish to ONLY utilities.
+        # This branch is cut from the v1.2.0 tag, where every other package sits at
+        # its already-released 1.2.0-line version. An unscoped `changeset:publish`
+        # would still backfill each @midnight-ntwrk (dashed) sibling that happens to
+        # be missing on that scope — including the broken testkit@0.2.0 (workspace:^
+        # leak). Inlining `changeset:publish` (dist:publish + publish.mjs + tag) with
+        # `--only` restricts both scopes to utilities. Canonical is safe regardless
+        # (publish.mjs skips already-published versions; only utilities@1.2.1 is new).
         run: |
-          yarn changeset:publish
+          yarn dist:publish
+          node scripts/publish.mjs --only @midnightntwrk/wallet-sdk-utilities
+          yarn changeset tag
           git push origin --tags
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
@@ -180,6 +190,12 @@ jobs:
 
   canary:
     name: Canary (snapshot publish)
+    # HOTFIX (wallet-sdk-utilities@1.2.1): this branch exists only to drive a
+    # scoped, utilities-only publish via workflow_dispatch. Skip the full-SDK
+    # canary snapshot here — it is ungated and would otherwise snapshot-publish
+    # every package (both scopes, backfilling dashed siblings) under a
+    # `canary-<branch>` dist-tag. Canary still runs unchanged on main/v2 pushes.
+    if: github.ref_name == 'main' || github.ref_name == 'v2'
     runs-on: ubuntu-latest-8-core-x64
     # Intentionally independent of the stable jobs: canary must publish
     # automatically on every main push, so it must not be gated by (or depend
