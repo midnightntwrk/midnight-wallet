@@ -105,7 +105,7 @@ describe('Set up test wallet', () => {
           outputs: [
             {
               type: unshieldedTokenRaw,
-              amount: outputValue,
+              amount: outputValue * 1000n,
               receiverAddress: receiverUnshieldedAddress,
             },
           ],
@@ -134,15 +134,33 @@ describe('Set up test wallet', () => {
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
 
-      // Register unshielded tokens for dust generation
+      // Register a Night UTxO for dust generation. The receiver is a fresh wallet with NO dust yet —
+      // dust only starts generating once Night is registered — so the registration fee cannot be paid
+      // from an existing dust balance. It is instead covered by the dust the Night UTxO itself projects
+      // during the pre-registration grace period. That fee is drawn from a single guaranteed UTxO (the
+      // wallet does not pool generation across UTxOs for the fee), so register the highest-value
+      // unregistered UTxO and wait until its projected generation reaches the estimated fee.
       await utils.waitForUnshieldedCoinUpdate(receiver.wallet, initialReceiverState.unshielded.availableCoins.length);
       const receiverStateAfterTransfer = await receiver.wallet.waitForSyncedState();
       const unregisteredNightUtxos = receiverStateAfterTransfer.unshielded.availableCoins.filter(
         (coin) => coin.utxo.type === unshieldedTokenRaw && coin.meta.registeredForDustGeneration === false,
       );
       expect(unregisteredNightUtxos.length, 'No unregistered UTXOs found').toBeGreaterThan(0);
+      const nightUtxoToRegister = unregisteredNightUtxos.reduce((largest, coin) =>
+        coin.utxo.value > largest.utxo.value ? coin : largest,
+      );
+
+      const { fee: estimatedRegistrationFee } = await receiver.wallet.estimateRegistration([nightUtxoToRegister]);
+      logger.info(
+        `Receiver has no dust yet; waiting for the Night UTxO to project ${estimatedRegistrationFee} specks ` +
+          `of dust (pre-registration grace period) to cover its own registration fee...`,
+      );
+      await receiver.wallet.waitForGeneratedDust([nightUtxoToRegister], estimatedRegistrationFee, {
+        timeoutMs: syncTimeout,
+      });
+
       const dustRegistrationRecipe = await receiver.wallet.registerNightUtxosForDustGeneration(
-        [unregisteredNightUtxos[0]],
+        [nightUtxoToRegister],
         receiver.unshieldedKeystore.getPublicKey(),
         receiver.unshieldedKeystore.signDataAsync,
       );
