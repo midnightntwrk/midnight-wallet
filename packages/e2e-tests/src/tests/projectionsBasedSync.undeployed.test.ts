@@ -257,15 +257,51 @@ describe('Projections-based synchronisation model', () => {
     return await syncAndVerify();
   };
 
+  const submitHistoryBuildingTransfer = async (receiverAddress: FacadeState['shielded']['address']) => {
+    const txRecipe = await fundedEventsSynced.wallet.transferTransaction(
+      [
+        {
+          type: 'shielded',
+          outputs: [{ type: shieldedTokenRaw, amount: outputValue, receiverAddress }],
+        },
+      ],
+      {
+        shieldedSecretKeys: fundedEventsSynced.shieldedSecretKeys,
+        dustSecretKey: fundedEventsSynced.dustSecretKey,
+      },
+      { ttl: new Date(Date.now() + 30 * 60 * 1000) },
+    );
+    const finalizedTx = await fundedEventsSynced.wallet.finalizeRecipe(txRecipe);
+    await fundedEventsSynced.wallet.submitTransaction(finalizedTx);
+
+    const txHash = finalizedTx.transactionHash();
+    await utils.waitForTxInHistory(txHash, fundedEventsSynced.wallet, {
+      ready: (entry) => entry.shielded !== undefined && entry.dust !== undefined,
+    });
+    await utils.waitForFacadePendingClear(fundedEventsSynced.wallet);
+  };
+
   test(
-    'Projections-based sync produces correct state for wallet with pre-existing blockchain history',
+    'Projections-based sync recovers a pre-funded wallet with a multi-spend Dust nullifier chain',
     async () => {
-      // funded derives from seedFunded which has genesis-allocated balances — it has real history
-      // on the chain before any test activity. This verifies the projections sync reaches the
-      // same dust/unshielded state as events-based replay for a non-trivial starting state.
-      await syncAndVerify();
+      const receiverState = await receiverEventsSynced.wallet.waitForSyncedState();
+      await fundedEventsSynced.wallet.waitForSyncedState();
+
+      for (const expectedChainDepth of [1, 2]) {
+        await submitHistoryBuildingTransfer(receiverState.shielded.address);
+
+        const eventsState = await fundedEventsSynced.wallet.waitForSyncedState();
+        const deepestDustChain = Math.max(...eventsState.dust.state.state.utxos.map((utxo) => utxo.seq));
+        expect(deepestDustChain).toBeGreaterThanOrEqual(expectedChainDepth);
+      }
+
+      await funded.wallet.doSync(funded.shieldedSecretKeys, funded.dustSecretKey);
+
+      const eventsState = await fundedEventsSynced.wallet.waitForSyncedState();
+      const projectionsState = await funded.wallet.waitForSyncedState();
+      expectSameSyncState(eventsState, projectionsState);
     },
-    timeout,
+    timeout * 2,
   );
 
   test(

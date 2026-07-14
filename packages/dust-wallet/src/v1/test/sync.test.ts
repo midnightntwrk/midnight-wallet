@@ -22,7 +22,8 @@ import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-ut
 import { Effect, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
-import { makeDefaultSyncService } from '../Sync.js';
+import { makeDefaultSyncService, makeEventLessSyncCapability } from '../Sync.js';
+import { DustUtxoMap, StateUpdate } from '../SyncSchema.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const dustParameters = LedgerParameters.initialParameters().dust;
@@ -85,5 +86,68 @@ describe('V1 dust wallet subscription', () => {
 
       expect(variables).toEqual({ id: 4 });
     });
+  });
+});
+
+describe('V1 projections sync capability', () => {
+  const projectionUpdate = (
+    timestamp: Date,
+    dustCommitmentMerkleTreeRoot = '00',
+    dustGenerationMerkleTreeRoot = '00',
+  ) =>
+    StateUpdate({
+      dustGenerations: {
+        rawUpdates: [],
+        newGenerations: [],
+        generationDtimeUpdates: [],
+      },
+      newUtxos: DustUtxoMap.create([]),
+      spentUtxos: DustUtxoMap.create([]),
+      collapsedCommitments: [],
+      latestBlock: {
+        height: 1,
+        hash: '00'.repeat(32),
+        ledgerParameters: LedgerParameters.initialParameters(),
+        timestamp,
+        zswapEndIndex: 0,
+        dustCommitmentEndIndex: 0,
+        dustGenerationEndIndex: 0,
+        dustCommitmentMerkleTreeRoot,
+        dustGenerationMerkleTreeRoot,
+      },
+    });
+
+  it('updates sync time on a fresh state without mutating the input state', () => {
+    const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+    const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const serializedInput = state.state.serialize();
+    const inputSyncTime = state.state.syncTime;
+    const timestamp = new Date('2026-07-14T10:00:00.000Z');
+
+    const [updatedState, result] = makeEventLessSyncCapability().applyUpdate(state, projectionUpdate(timestamp));
+
+    expect(updatedState.state).not.toBe(state.state);
+    expect(updatedState.state.syncTime).toEqual(timestamp);
+    expect(updatedState.progress.highestIndex).toBe(1n);
+    expect(result.changes).toEqual([]);
+    expect(state.state.syncTime).toEqual(inputSyncTime);
+    expect(state.state.serialize()).toEqual(serializedInput);
+  });
+
+  it('does not mutate or advance the input state when root validation fails', () => {
+    const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+    const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const serializedInput = state.state.serialize();
+    const inputSyncTime = state.state.syncTime;
+    const inputProgress = state.progress;
+    const timestamp = new Date('2026-07-14T10:00:00.000Z');
+
+    expect(() =>
+      makeEventLessSyncCapability().applyUpdate(state, projectionUpdate(timestamp, 'unexpected-commitment-root')),
+    ).toThrow('Root hashes don`t match');
+
+    expect(state.state.syncTime).toEqual(inputSyncTime);
+    expect(state.state.serialize()).toEqual(serializedInput);
+    expect(state.progress).toBe(inputProgress);
   });
 });

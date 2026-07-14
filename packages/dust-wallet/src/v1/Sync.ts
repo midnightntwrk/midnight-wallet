@@ -710,19 +710,21 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
 
       const dustGenTreeUpdates = dustGenerations.rawUpdates
         .filter((u) => u.__typename === 'DustGenerationsItem' || u.__typename === 'DustGenerationsProgress')
-        .filter((u) => u.collapsedMerkleTree !== null)
-        .map((u) => u.collapsedMerkleTree as CollapsedMerkleTree)
+        .map((u) => u.collapsedMerkleTree)
+        .filter((update): update is CollapsedMerkleTree => update !== null)
         .toSorted((u1, u2) => u1.startIndex - u2.startIndex);
 
-      let updatedWallet = CoreWallet.applyDustGenerations(
-        state,
-        dustGenTreeUpdates,
-        dustGenerations.newGenerations,
-        dustGenerations.generationDtimeUpdates,
+      const walletWithAppliedUpdates = pipe(
+        CoreWallet.applyDustGenerations(
+          state,
+          dustGenTreeUpdates,
+          dustGenerations.newGenerations,
+          dustGenerations.generationDtimeUpdates,
+        ),
+        (wallet) => CoreWallet.applyNewDustUtxos(wallet, newUtxos),
+        (wallet) => CoreWallet.applyDustCommitments(wallet, newUtxos, collapsedCommitments),
+        (wallet) => CoreWallet.applySpentNullifiers(wallet, [...HashMap.keys(spentUtxos)]),
       );
-      updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, newUtxos);
-      updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, newUtxos, collapsedCommitments);
-      updatedWallet = CoreWallet.applySpentNullifiers(updatedWallet, [...HashMap.keys(spentUtxos)]);
 
       const groupedNewUtxos = hashMapGroupBy([...HashMap.values(newUtxos)], (u) => u.transactionId);
       const groupedSpentUtxos = hashMapGroupBy([...HashMap.values(spentUtxos)], (u) => u.transactionId);
@@ -743,16 +745,19 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         );
       });
 
-      updatedWallet.state.syncTime = latestBlock.timestamp;
-      updatedWallet = { ...updatedWallet, state: updatedWallet.state.processTtls(latestBlock.timestamp) };
+      // `processTtls` returns a fresh WASM-backed state. Mutating only that owned copy keeps this capability from
+      // changing the input state when an update contains no tree or UTXO changes.
+      const updatedDustState = walletWithAppliedUpdates.state.processTtls(latestBlock.timestamp);
+      updatedDustState.syncTime = latestBlock.timestamp;
+      const walletAtLatestBlock = { ...walletWithAppliedUpdates, state: updatedDustState };
 
       const newCommitmentTreeRoot =
-        updatedWallet.state.commitmentTreeRoot() !== undefined
-          ? leBigintToHex(updatedWallet.state.commitmentTreeRoot()!)
+        walletAtLatestBlock.state.commitmentTreeRoot() !== undefined
+          ? leBigintToHex(walletAtLatestBlock.state.commitmentTreeRoot()!)
           : '';
       const newGeneratingTreeRoot =
-        updatedWallet.state.generatingTreeRoot() !== undefined
-          ? leBigintToHex(updatedWallet.state.generatingTreeRoot()!)
+        walletAtLatestBlock.state.generatingTreeRoot() !== undefined
+          ? leBigintToHex(walletAtLatestBlock.state.generatingTreeRoot()!)
           : '';
 
       // verify root hashes
@@ -760,10 +765,12 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         newCommitmentTreeRoot !== update.latestBlock.dustCommitmentMerkleTreeRoot ||
         newGeneratingTreeRoot !== update.latestBlock.dustGenerationMerkleTreeRoot
       ) {
+        // `SyncCapability.applyUpdate` has no typed error channel, so throwing preserves its public tuple-returning API;
+        // `RunningV1Variant` catches this at the capability boundary. See #572 for the planned `Either`-based API.
         throw new OtherWalletError({ message: 'Root hashes don`t match' });
       }
 
-      updatedWallet = CoreWallet.updateProgress(updatedWallet, {
+      const updatedWallet = CoreWallet.updateProgress(walletAtLatestBlock, {
         highestIndex: BigInt(update.latestBlock.height),
       });
 
