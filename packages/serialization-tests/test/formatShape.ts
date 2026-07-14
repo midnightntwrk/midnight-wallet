@@ -22,9 +22,9 @@
 // migration that adds a required field (e.g. `lifecycle`), drops one, renames one, or changes a
 // value's encoding (string-bigint -> number) changes the shape and trips the gate.
 //
-// ponytail: struct-vs-map is a heuristic (all keys hex/numeric => map). A record whose real schema
-// keys are all-hex would be misread as a map; none of the wallet schemas do that. Upgrade path if
-// that ever bites: pass an explicit set of map-typed paths instead of sniffing keys.
+// NOTE: struct-vs-map is a heuristic (all keys hex/numeric => map). A record whose real schema
+// keys are all-hex would be misread as a map; none of the wallet schemas do that. If that ever
+// bites, pass an explicit set of map-typed paths instead of sniffing keys.
 
 const MAP_KEY = /^([0-9a-fA-F]{16,}|\d+)$/;
 

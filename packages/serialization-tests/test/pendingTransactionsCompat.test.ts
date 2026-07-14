@@ -23,7 +23,7 @@ import { DateTime, Either } from 'effect';
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
 import { loadFixture } from './fixtures.js';
 
-const PENDING_TX_TRAINS = ['t2-2026-03-10', 't3-2026-03-20', 't4-2026-04-23', 't6-2026-06-19'] as const;
+const PENDING_TX_TRAINS = ['facade-2.0.0', 'facade-3.0.0', 'facade-4.0.0', 'facade-4.1.0'] as const;
 
 // Functionally the facade's (internal) finalizedTransactionTrait: the deserialize call is the same
 // `Transaction.deserialize('signature', 'proof', 'binding', bytes)` the production restore path

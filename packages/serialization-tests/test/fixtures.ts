@@ -27,12 +27,12 @@ export type Fixture = {
   expected: Record<string, unknown>;
 };
 
-export const TRAINS = ['t1-2026-01-28', 't2-2026-03-10', 't3-2026-03-20', 't4-2026-04-23', 't6-2026-06-19'] as const;
+export const TRAINS = ['facade-1.0.0', 'facade-2.0.0', 'facade-3.0.0', 'facade-4.0.0', 'facade-4.1.0'] as const;
 
 export type Train = (typeof TRAINS)[number];
 
 /** Trains that include a tx-history payload (the storage layer only exists from T4 on). */
-export const TX_HISTORY_TRAINS = ['t4-2026-04-23', 't6-2026-06-19'] as const;
+export const TX_HISTORY_TRAINS = ['facade-4.0.0', 'facade-4.1.0'] as const;
 
 export type FixtureName =
   | 'shielded'

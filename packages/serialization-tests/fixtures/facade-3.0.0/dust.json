@@ -1,5 +1,5 @@
 {
-  "train": "t3-2026-03-20",
+  "train": "facade-3.0.0",
   "name": "@midnight-ntwrk/wallet-sdk-dust-wallet",
   "version": "3.0.0",
   "ledgerDep": "@midnight-ntwrk/ledger-v8@^8.0.2",

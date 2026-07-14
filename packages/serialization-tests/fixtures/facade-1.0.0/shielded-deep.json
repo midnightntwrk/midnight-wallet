@@ -1,5 +1,5 @@
 {
-  "train": "t1-2026-01-28",
+  "train": "facade-1.0.0",
   "name": "@midnight-ntwrk/wallet-sdk-shielded",
   "version": "1.0.0",
   "ledgerDep": "@midnight-ntwrk/ledger-v7@7.0.0",

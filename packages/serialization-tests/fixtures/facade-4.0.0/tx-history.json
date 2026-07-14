@@ -1,5 +1,5 @@
 {
-  "train": "t4-2026-04-23",
+  "train": "facade-4.0.0",
   "name": "@midnight-ntwrk/wallet-sdk-abstractions",
   "version": "2.1.0",
   "schemaFrom": {
