@@ -1,0 +1,16 @@
+{
+  "train": "t2-2026-03-10",
+  "name": "@midnight-ntwrk/wallet-sdk-unshielded-wallet",
+  "version": "2.0.0",
+  "ledgerDep": "@midnight-ntwrk/ledger-v7@^7.0.2",
+  "generatedWith": {
+    "fixedDate": "2026-03-01T12:00:00.000Z"
+  },
+  "snapshotFields": ["publicKey", "state", "protocolVersion", "networkId"],
+  "expected": {
+    "networkId": "undeployed",
+    "availableValues": ["777"],
+    "pendingValues": []
+  },
+  "serialized": "{\"publicKey\":{\"publicKey\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"addressHex\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"address\":\"7e8874dfd9a2a2bd7dfed8d65f4d108708df76c564c79bb2e127c75bda9369ac\"},\"state\":{\"availableUtxos\":[{\"utxo\":{\"value\":\"777\",\"owner\":\"7e8874dfd9a2a2bd7dfed8d65f4d108708df76c564c79bb2e127c75bda9369ac\",\"type\":\"3333333333333333333333333333333333333333333333333333333333333333\",\"intentHash\":\"5656565656565656565656565656565656565656565656565656565656565656\",\"outputNo\":1},\"meta\":{\"ctime\":\"2026-03-01T12:00:00.000Z\",\"registeredForDustGeneration\":false}}],\"pendingUtxos\":[]},\"protocolVersion\":\"1\",\"networkId\":\"undeployed\"}"
+}

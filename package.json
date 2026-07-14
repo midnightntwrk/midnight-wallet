@@ -80,6 +80,7 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "test:unit": "turbo run test:unit",
+    "test:serialization": "turbo run test:unit --filter=@midnight/wallet-serialization-tests",
     "test:integration": "turbo run test:integration",
     "dist": "turbo run dist",
     "watch": "turbo watch dist",
