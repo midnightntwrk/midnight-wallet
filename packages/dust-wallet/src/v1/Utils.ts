@@ -54,7 +54,7 @@ export const leBigintToHex = (n: bigint, dropLengthPrefix: boolean = false): str
 
 export const uniqueArray = <T>(arr: ReadonlyArray<T>): T[] => Array.from(HashSet.fromIterable(arr));
 
-export const calculatePrefixLength = (anonymityLevel: number, totalItems: number, maxLength: number) => {
+export const calculatePrefixLength = (anonymityLevel: number, totalItems: number, maxLength: number): number => {
   const itemPower = totalItems <= 0 ? 1 : Math.round(Math.log2(totalItems));
   let prefixLength = Math.max(0, itemPower - anonymityLevel);
 
