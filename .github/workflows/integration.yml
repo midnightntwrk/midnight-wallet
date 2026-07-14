@@ -84,7 +84,7 @@ jobs:
           yarn --version
 
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
@@ -98,7 +98,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Restore turbo cache
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}

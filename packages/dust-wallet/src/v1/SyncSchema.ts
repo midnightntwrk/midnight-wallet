@@ -302,8 +302,8 @@ const NullifierBlockInfoSchema = Schema.Struct({
   ledgerParameters: HexedLedgerParameters,
 });
 
-const NullifierSystemTransactionSchema = Schema.Struct({
-  __typename: Schema.Literal('SystemTransaction'),
+const NullifierNonRegularTransactionSchema = Schema.Struct({
+  __typename: Schema.Literal('SystemTransaction', 'BridgeClaimTransaction'),
   block: NullifierBlockInfoSchema,
 });
 
@@ -317,7 +317,10 @@ const NullifierRegularTransactionSchema = Schema.Struct({
 });
 export type NullifierRegularTransaction = Schema.Schema.Type<typeof NullifierRegularTransactionSchema>;
 
-const NullifierTransactionSchema = Schema.Union(NullifierSystemTransactionSchema, NullifierRegularTransactionSchema);
+const NullifierTransactionSchema = Schema.Union(
+  NullifierNonRegularTransactionSchema,
+  NullifierRegularTransactionSchema,
+);
 
 export const DustNullifierTransactionSubscriptionSchema = Schema.Struct({
   nullifierLeBytes: Schema.String,

@@ -58,6 +58,7 @@ export type TransactionHistoryDetailQueryVariables = Exact<{
 
 
 export type TransactionHistoryDetailQuery = { readonly transactions: ReadonlyArray<
+    | { readonly __typename: 'BridgeClaimTransaction', readonly hash: string, readonly block: { readonly hash: string, readonly height: number, readonly timestamp: number } }
     | { readonly __typename: 'RegularTransaction', readonly identifiers: ReadonlyArray<string>, readonly hash: string, readonly fees: { readonly paidFees: string }, readonly transactionResult: { readonly status: TransactionResultStatus }, readonly block: { readonly hash: string, readonly height: number, readonly timestamp: number } }
     | { readonly __typename: 'SystemTransaction', readonly hash: string, readonly block: { readonly hash: string, readonly height: number, readonly timestamp: number } }
   > };
@@ -68,6 +69,7 @@ export type TransactionStatusQueryVariables = Exact<{
 
 
 export type TransactionStatusQuery = { readonly transactions: ReadonlyArray<
+    | { readonly __typename: 'BridgeClaimTransaction' }
     | { readonly __typename: 'RegularTransaction', readonly identifiers: ReadonlyArray<string>, readonly transactionResult: { readonly __typename: 'TransactionResult', readonly status: TransactionResultStatus, readonly segments: ReadonlyArray<{ readonly id: number, readonly success: boolean }> | null } }
     | { readonly __typename: 'SystemTransaction' }
   > };
@@ -105,6 +107,7 @@ export type DustNullifierTransactionsSubscriptionVariables = Exact<{
 
 
 export type DustNullifierTransactionsSubscription = { readonly dustNullifierTransactions: { readonly nullifierLeBytes: string, readonly commitmentLeBytes: string, readonly transactionId: number, readonly transactionHash: string, readonly blockHeight: number, readonly blockHash: string, readonly transaction:
+      | { readonly __typename: 'BridgeClaimTransaction', readonly block: { readonly ledgerParameters: string } }
       | { readonly __typename: 'RegularTransaction', readonly id: number, readonly hash: string, readonly dustLedgerEvents: ReadonlyArray<
           | { readonly id: number, readonly raw: string, readonly maxId: number, readonly protocolVersion: number }
           | { readonly id: number, readonly raw: string, readonly maxId: number, readonly protocolVersion: number }
@@ -133,6 +136,7 @@ export type UnshieldedTransactionsSubscriptionVariables = Exact<{
 
 export type UnshieldedTransactionsSubscription = { readonly unshieldedTransactions:
     | { readonly type: 'UnshieldedTransaction', readonly transaction:
+        | { readonly id: number, readonly hash: string, readonly protocolVersion: number, readonly type: 'BridgeClaimTransaction', readonly block: { readonly hash: string, readonly height: number, readonly timestamp: number } }
         | { readonly identifiers: ReadonlyArray<string>, readonly id: number, readonly hash: string, readonly protocolVersion: number, readonly type: 'RegularTransaction', readonly fees: { readonly paidFees: string, readonly estimatedFees: string }, readonly transactionResult: { readonly status: TransactionResultStatus, readonly segments: ReadonlyArray<{ readonly id: number, readonly success: boolean }> | null }, readonly block: { readonly hash: string, readonly height: number, readonly timestamp: number } }
         | { readonly id: number, readonly hash: string, readonly protocolVersion: number, readonly type: 'SystemTransaction', readonly block: { readonly hash: string, readonly height: number, readonly timestamp: number } }
       , readonly createdUtxos: ReadonlyArray<{ readonly owner: string, readonly tokenType: string, readonly value: string, readonly outputIndex: number, readonly intentHash: string, readonly ctime: number | null, readonly registeredForDustGeneration: boolean }>, readonly spentUtxos: ReadonlyArray<{ readonly owner: string, readonly tokenType: string, readonly value: string, readonly outputIndex: number, readonly intentHash: string, readonly ctime: number | null, readonly registeredForDustGeneration: boolean }> }
