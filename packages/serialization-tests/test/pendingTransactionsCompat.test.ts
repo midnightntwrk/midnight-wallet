@@ -21,9 +21,7 @@
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { DateTime, Either } from 'effect';
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
-import { loadFixture } from './fixtures.js';
-
-const PENDING_TX_TRAINS = ['facade-2.0.0', 'facade-3.0.0', 'facade-4.0.0', 'facade-4.1.0'] as const;
+import { loadFixture, PENDING_TX_TRAINS } from './fixtures.js';
 
 // Functionally the facade's (internal) finalizedTransactionTrait: the deserialize call is the same
 // `Transaction.deserialize('signature', 'proof', 'binding', bytes)` the production restore path

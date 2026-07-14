@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { readFileSync } from 'node:fs';
+import { readdirSync, existsSync, readFileSync } from 'node:fs';
 
 /**
  * A committed fixture produced by `fixture-generator/generate.mjs` with a real published SDK version. `serialized` is
@@ -27,12 +27,45 @@ export type Fixture = {
   expected: Record<string, unknown>;
 };
 
-export const TRAINS = ['facade-1.0.0', 'facade-2.0.0', 'facade-3.0.0', 'facade-4.0.0', 'facade-4.1.0'] as const;
+const FIXTURES_DIR = new URL('../fixtures/', import.meta.url);
 
-export type Train = (typeof TRAINS)[number];
+/**
+ * The provisional train captured from the CURRENT workspace by `capture-unreleased.mjs`. It is the drift baseline but
+ * NOT a compatibility train — compat only tests bytes a real published version wrote. At release, the
+ * `reconcile-train.mjs` hook (run from `changeset:version`) renames it to `facade-<the actual bump>`, at which point it
+ * automatically joins {@link TRAINS} because it is no longer named `facade-unreleased`.
+ */
+export const UNRELEASED_TRAIN = 'facade-unreleased';
 
-/** Trains that include a tx-history payload (the storage layer only exists from T4 on). */
-export const TX_HISTORY_TRAINS = ['facade-4.0.0', 'facade-4.1.0'] as const;
+const versionParts = (train: string): readonly number[] => train.replace('facade-', '').split('.').map(Number);
+
+const bySemver = (a: string, b: string): number => {
+  const [pa, pb] = [versionParts(a), versionParts(b)];
+  const len = Math.max(pa.length, pb.length);
+  return Array.from({ length: len }, (_, i) => (pa[i] ?? 0) - (pb[i] ?? 0)).find((diff) => diff !== 0) ?? 0;
+};
+
+const allTrainDirs = (): readonly string[] =>
+  readdirSync(FIXTURES_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith('facade-'))
+    .map((entry) => entry.name);
+
+/** Published trains (semver-ascending); excludes the {@link UNRELEASED_TRAIN} capture. */
+export const TRAINS = allTrainDirs()
+  .filter((train) => train !== UNRELEASED_TRAIN)
+  .sort(bySemver);
+
+/** The train the format-drift gate compares current output against: the unreleased capture if present, else newest. */
+export const DRIFT_BASELINE = allTrainDirs().includes(UNRELEASED_TRAIN) ? UNRELEASED_TRAIN : TRAINS[TRAINS.length - 1];
+
+const trainHasFixture = (train: string, name: FixtureName): boolean =>
+  existsSync(new URL(`../fixtures/${train}/${name}.json`, import.meta.url));
+
+/** Published trains that carry a tx-history payload (the storage layer only exists from facade-4.0.0 on). */
+export const TX_HISTORY_TRAINS = TRAINS.filter((train) => trainHasFixture(train, 'tx-history'));
+
+/** Published trains that carry a pending-transactions payload (the capabilities layer exists from facade-2.0.0 on). */
+export const PENDING_TX_TRAINS = TRAINS.filter((train) => trainHasFixture(train, 'pending-transactions'));
 
 export type FixtureName =
   | 'shielded'

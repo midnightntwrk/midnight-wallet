@@ -222,16 +222,16 @@ jobs:
 
   # Serialization gates (packages/serialization-tests), run as two clearly-named
   # checks so a red run says WHICH invariant broke:
-  #   • "Serialization: Restore Compat" — current code can still READ fixtures
+  #   • "Serialization Tests: Restore Compat" — current code can still READ fixtures
   #     written by previously published SDK versions (a red run = this PR changed
   #     a persisted format without a migration).
-  #   • "Serialization: Format Drift" — current code WRITES the same shape as the
+  #   • "Serialization Tests: Format Drift" — current code WRITES the same shape as the
   #     newest frozen train (a red run = the persisted format evolved and a new
   #     train must be captured).
   # Pure unit lane — no Docker. fail-fast: false so one gate's failure never
   # cancels the other.
   test-serialization:
-    name: 'Serialization: ${{ matrix.gate.name }}'
+    name: 'Serialization Tests: ${{ matrix.gate.name }}'
     # Runs in parallel with test-unit, integration and e2e-smoke (all gated only
     # on general-checks). build-publish still waits for all of them via `tests`.
     needs: [general-checks]

@@ -30,7 +30,7 @@ import { UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
-import { TRAINS, loadFixture, type FixtureName } from './fixtures.js';
+import { DRIFT_BASELINE, loadFixture, type FixtureName } from './fixtures.js';
 import { formatShape } from './formatShape.js';
 
 // ── formatShape self-check (the one runnable check for the shape reducer) ────────────────────────
@@ -52,7 +52,9 @@ describe('formatShape', () => {
 });
 
 // ── the drift gate ───────────────────────────────────────────────────────────────────────────────
-const NEWEST_TRAIN = TRAINS[TRAINS.length - 1];
+// Baseline is the unreleased capture when present (mint it with `yarn capture:unreleased`), otherwise
+// the newest published train. See fixtures.ts / DRIFT_BASELINE.
+const NEWEST_TRAIN = DRIFT_BASELINE;
 
 // Endpoints are never dialled — restore() decodes eagerly and start() is never called.
 const dummyConnections = {
@@ -121,9 +123,18 @@ const KINDS: readonly Kind[] = [
 ];
 
 const driftMessage = (kind: string): string =>
-  `Format drift: current code serializes '${kind}' with a DIFFERENT shape than the newest train (${NEWEST_TRAIN}).\n` +
-  `The persisted format has evolved since the last train, so a NEW train is due. Capture what the current code\n` +
-  `writes and commit it as a new fixture train (never edit an existing train). See README "Creating a new train".`;
+  `\n────────────────────────────────────────────────────────────────────────────────\n` +
+  `FORMAT DRIFT DETECTED for '${kind}'.\n\n` +
+  `Current code serializes '${kind}' with a DIFFERENT shape than the drift baseline (${NEWEST_TRAIN}),\n` +
+  `so the persisted on-disk format has changed.\n\n` +
+  `➤ If this change is INTENTIONAL, capture the new format as the unreleased train:\n\n` +
+  `      yarn capture:unreleased\n\n` +
+  `  That (re)writes fixtures/facade-unreleased/ from the current code — commit it alongside your change.\n` +
+  `  The gate then passes and still guards against any FURTHER format change.\n\n` +
+  `  You do NOT pick a version number. At release, 'changeset:version' runs 'reconcile-train', which\n` +
+  `  renames facade-unreleased → facade-<the actual published version> in the same Version Packages PR.\n\n` +
+  `➤ If this change is UNINTENTIONAL, revert it instead — do not capture.\n` +
+  `────────────────────────────────────────────────────────────────────────────────`;
 
 describe(`format-drift detection (baseline: ${NEWEST_TRAIN})`, () => {
   describe.each(KINDS)('$fixture', (kind) => {

@@ -13,6 +13,8 @@
     "test:serialization:compat": "vitest run --project unit --passWithNoTests Compat",
     "test:serialization:drift": "vitest run --project unit --passWithNoTests Drift",
     "test:integration": "vitest run --project integration --passWithNoTests",
+    "capture": "node capture-unreleased.mjs && prettier --write \"fixtures/facade-unreleased/*.json\"",
+    "reconcile-train": "node reconcile-train.mjs && prettier --write \"fixtures/**/*.json\"",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\""
