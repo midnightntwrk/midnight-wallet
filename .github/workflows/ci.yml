@@ -220,16 +220,28 @@ jobs:
           report_paths: |
             **/test-report*.xml
 
-  # Serialization compatibility gate: restores fixtures written by previously
-  # published SDK versions (packages/serialization-tests) through the current
-  # workspace code. A red run means this PR changed a persisted format in a way
-  # that breaks reading previously persisted data. Pure unit lane — no Docker.
+  # Serialization gates (packages/serialization-tests), run as two clearly-named
+  # checks so a red run says WHICH invariant broke:
+  #   • "Serialization: Restore Compat" — current code can still READ fixtures
+  #     written by previously published SDK versions (a red run = this PR changed
+  #     a persisted format without a migration).
+  #   • "Serialization: Format Drift" — current code WRITES the same shape as the
+  #     newest frozen train (a red run = the persisted format evolved and a new
+  #     train must be captured).
+  # Pure unit lane — no Docker. fail-fast: false so one gate's failure never
+  # cancels the other.
   test-serialization:
-    name: Serialization Tests
+    name: 'Serialization: ${{ matrix.gate.name }}'
     # Runs in parallel with test-unit, integration and e2e-smoke (all gated only
     # on general-checks). build-publish still waits for all of them via `tests`.
     needs: [general-checks]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gate:
+          - { name: 'Restore Compat', script: 'test:serialization:compat' }
+          - { name: 'Format Drift', script: 'test:serialization:drift' }
     # checks: write lets the junit-report action publish failure annotations.
     permissions:
       contents: read
@@ -275,8 +287,8 @@ jobs:
           name: build-artifacts-${{ github.run_id }}
           path: .
 
-      - name: Run serialization compatibility tests
-        run: yarn test:serialization
+      - name: Run ${{ matrix.gate.name }} gate
+        run: yarn ${{ matrix.gate.script }}
 
       # annotate_only for the same reason as the unit job: this job's own status
       # reports pass/fail; a named check-run would be mis-grouped (see #520).
