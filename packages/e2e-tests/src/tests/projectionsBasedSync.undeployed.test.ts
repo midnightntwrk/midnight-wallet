@@ -123,8 +123,8 @@ describe('Projections-based synchronisation model', () => {
     const receiverStateEventsSynced = await receiverEventsSynced.wallet.waitForSyncedState();
 
     // Projections-based sync
-    await funded.wallet.doSync(funded.shieldedSecretKeys, funded.dustSecretKey);
-    await receiver.wallet.doSync(receiver.shieldedSecretKeys, receiver.dustSecretKey);
+    await funded.wallet.doSync(funded.dustSecretKey);
+    await receiver.wallet.doSync(receiver.dustSecretKey);
 
     const fundedState = await funded.wallet.waitForSyncedState();
     const receiverState = await receiver.wallet.waitForSyncedState();
@@ -185,8 +185,8 @@ describe('Projections-based synchronisation model', () => {
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
 
-    await funded.wallet.doSync(funded.shieldedSecretKeys, funded.dustSecretKey);
-    await receiver.wallet.doSync(receiver.shieldedSecretKeys, receiver.dustSecretKey);
+    await funded.wallet.doSync(funded.dustSecretKey);
+    await receiver.wallet.doSync(receiver.dustSecretKey);
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
     const txRecipe = await funded.wallet.transferTransaction(
@@ -244,7 +244,7 @@ describe('Projections-based synchronisation model', () => {
     logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
-    await receiver.wallet.doSync(receiver.shieldedSecretKeys, receiver.dustSecretKey);
+    await receiver.wallet.doSync(receiver.dustSecretKey);
 
     const receiverStateAfterRegistration = await utils.waitForStateAfterDustRegistration(
       receiver.wallet,
@@ -295,7 +295,7 @@ describe('Projections-based synchronisation model', () => {
         expect(deepestDustChain).toBeGreaterThanOrEqual(expectedChainDepth);
       }
 
-      await funded.wallet.doSync(funded.shieldedSecretKeys, funded.dustSecretKey);
+      await funded.wallet.doSync(funded.dustSecretKey);
 
       const eventsState = await fundedEventsSynced.wallet.waitForSyncedState();
       const projectionsState = await funded.wallet.waitForSyncedState();
@@ -310,7 +310,7 @@ describe('Projections-based synchronisation model', () => {
       // receiver starts on a fresh blockchain with no prior UTXOs — the projection snapshot is
       // empty, so the sync should be purely a roundtrip to the indexer with no heavy computation.
       const start = Date.now();
-      await receiver.wallet.doSync(receiver.shieldedSecretKeys, receiver.dustSecretKey);
+      await receiver.wallet.doSync(receiver.dustSecretKey);
       const elapsedMs = Date.now() - start;
 
       const state = await receiver.wallet.waitForSyncedState();
@@ -326,7 +326,7 @@ describe('Projections-based synchronisation model', () => {
     'Incremental projections-based sync after new blocks is near-instant',
     async () => {
       // Establish a clean baseline state for receiver (empty wallet).
-      await receiver.wallet.doSync(receiver.shieldedSecretKeys, receiver.dustSecretKey);
+      await receiver.wallet.doSync(receiver.dustSecretKey);
       await receiver.wallet.waitForSyncedState();
 
       // Advance the chain without involving the receiver wallet.
@@ -336,7 +336,7 @@ describe('Projections-based synchronisation model', () => {
       await utils.waitForBlockAdvancement(fixture.getIndexerUri());
 
       const start = Date.now();
-      await receiver.wallet.doSync(receiver.shieldedSecretKeys, receiver.dustSecretKey);
+      await receiver.wallet.doSync(receiver.dustSecretKey);
       const elapsedMs = Date.now() - start;
 
       const state = await receiver.wallet.waitForSyncedState();

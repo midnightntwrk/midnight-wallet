@@ -1366,6 +1366,15 @@ export class WalletFacade {
     });
   }
 
+  /**
+   * Starts the wallets and their background synchronization.
+   *
+   * @param shieldedSecretKeys - Secret keys for the shielded wallet
+   * @param dustSecretKey - Secret key for the dust wallet
+   * @param manualSync - When true, the dust wallet is not started in the background; drive it explicitly with
+   *   {@link doSync} instead (requires a dust wallet built with the projections sync service, see
+   *   `makeEventLessSyncService`)
+   */
   async start(
     shieldedSecretKeys: ledger.ZswapSecretKeys,
     dustSecretKey: ledger.DustSecretKey,
@@ -1379,11 +1388,14 @@ export class WalletFacade {
     ]);
   }
 
-  async doSync(shieldedSecretKeys: ledger.ZswapSecretKeys, dustSecretKey: ledger.DustSecretKey): Promise<void> {
-    await Promise.all([
-      // this.shielded.stepSync(shieldedSecretKeys),
-      this.dust.stepSync(dustSecretKey),
-    ]);
+  /**
+   * Runs a single dust synchronization pass and resolves when it completes. Only the dust wallet supports manual sync;
+   * the shielded and unshielded wallets keep syncing in the background via {@link start}.
+   *
+   * @param dustSecretKey - Secret key for the dust wallet
+   */
+  async doSync(dustSecretKey: ledger.DustSecretKey): Promise<void> {
+    await this.dust.stepSync(dustSecretKey);
   }
 
   async stop(): Promise<void> {

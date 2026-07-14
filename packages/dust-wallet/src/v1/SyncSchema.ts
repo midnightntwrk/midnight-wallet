@@ -415,15 +415,14 @@ export const WalletSyncUpdate = {
   },
 };
 
-export type DustUtxoMap = HashMap.HashMap<
-  DustNullifier,
-  {
-    qdo: QualifiedDustOutput;
-    transactionId: number;
-    transactionHash: string;
-    genInfo: DustGenerationInfo;
-  }
->;
+export type DustUtxoEntry = {
+  qdo: QualifiedDustOutput;
+  transactionId: number;
+  transactionHash: string;
+  genInfo: DustGenerationInfo;
+};
+
+export type DustUtxoMap = HashMap.HashMap<DustNullifier, DustUtxoEntry>;
 
 export const DustUtxoMap = {
   create: (generations: ReadonlyArray<NewDustGeneration>): DustUtxoMap =>
@@ -465,8 +464,9 @@ export const WireBlockDataSchema = Schema.Struct({
   zswapEndIndex: Schema.Number,
   dustCommitmentEndIndex: Schema.Number,
   dustGenerationEndIndex: Schema.Number,
-  dustCommitmentMerkleTreeRoot: Schema.String,
-  dustGenerationMerkleTreeRoot: Schema.String,
+  // nullable in the indexer schema: a block may carry no dust state
+  dustCommitmentMerkleTreeRoot: Schema.NullOr(Schema.String),
+  dustGenerationMerkleTreeRoot: Schema.NullOr(Schema.String),
 });
 
 export const BlockDataSchema = Schema.transform(
@@ -490,11 +490,18 @@ export const BlockDataSchema = Schema.transform(
       return {
         ...wire,
         timestamp: new Date(wire.timestamp),
+        // '' is the local encoding for "no root" — it matches the wallet-side encoding of an empty tree
+        dustCommitmentMerkleTreeRoot: wire.dustCommitmentMerkleTreeRoot ?? '',
+        dustGenerationMerkleTreeRoot: wire.dustGenerationMerkleTreeRoot ?? '',
       };
     },
     encode: (domain) => ({
       ...domain,
-      timestamp: Math.floor(domain.timestamp.getTime() * 1000),
+      timestamp: domain.timestamp.getTime(),
+      dustCommitmentMerkleTreeRoot:
+        domain.dustCommitmentMerkleTreeRoot === '' ? null : domain.dustCommitmentMerkleTreeRoot,
+      dustGenerationMerkleTreeRoot:
+        domain.dustGenerationMerkleTreeRoot === '' ? null : domain.dustGenerationMerkleTreeRoot,
     }),
   },
 );
