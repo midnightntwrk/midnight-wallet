@@ -48,44 +48,25 @@ describe('tx-history storage compatibility', () => {
 
   // The behaviour a persistence layer must have: reading its own prior output — through both the
   // storage-level common schema and the app-level facade schema (what production apps actually
-  // pass). `it.fails` documents that today the pre-`lifecycle` payloads are rejected with a
-  // ParseError. Remove `.fails` when a migration lands — these become its acceptance tests.
+  // pass). These are the acceptance tests for the pending `lifecycle` migration: they fail today
+  // because pre-`lifecycle` payloads are rejected with a ParseError, and must pass once it lands.
   describe.each(TX_HISTORY_TRAINS)('%s', (train) => {
     const fixture = loadFixture(train, 'tx-history');
 
-    it.fails(
-      `restores tx history written by ${fixture.name}@${fixture.version} via the current common schema (KNOWN BREAK)`,
-      async () => {
-        const restored = InMemoryTransactionHistoryStorage.restore(fixture.serialized, CurrentCommonSchema);
-        const entries = await restored.getAll();
+    it(`restores tx history written by ${fixture.name}@${fixture.version} via the current common schema`, async () => {
+      const restored = InMemoryTransactionHistoryStorage.restore(fixture.serialized, CurrentCommonSchema);
+      const entries = await restored.getAll();
 
-        expect(entries.map((e) => e.hash)).toEqual(fixture.expected['hashes']);
-      },
-    );
+      expect(entries.map((e) => e.hash)).toEqual(fixture.expected['hashes']);
+    });
 
-    it.fails(
-      `restores tx history written by ${fixture.name}@${fixture.version} via the current facade WalletEntrySchema (KNOWN BREAK)`,
-      async () => {
-        const restored = InMemoryTransactionHistoryStorage.restore(fixture.serialized, WalletEntrySchema);
-        const entries = await restored.getAll();
+    it(`restores tx history written by ${fixture.name}@${fixture.version} via the current facade WalletEntrySchema`, async () => {
+      const restored = InMemoryTransactionHistoryStorage.restore(fixture.serialized, WalletEntrySchema);
+      const entries = await restored.getAll();
 
-        expect(entries.map((e) => e.hash)).toEqual(fixture.expected['hashes']);
-        expect(entries.map((e) => e.status)).toEqual(fixture.expected['statuses']);
-      },
-    );
-  });
-
-  // Characterisation of the defect, for precise reporting: the rejection is a hard throw caused by
-  // the required `lifecycle` field the old format cannot have. A second axis exists independently:
-  // entry 3 of the fixture legally omitted `identifiers`, which the current schema also requires.
-  // DELETE this test when the migration lands — it asserts broken behaviour on purpose so the
-  // break is visible in test output.
-  it('currently rejects every pre-lifecycle payload with a ParseError naming `lifecycle` (characterisation)', () => {
-    const fixture = loadFixture('t4-2026-04-23', 'tx-history');
-
-    expect(() => InMemoryTransactionHistoryStorage.restore(fixture.serialized, CurrentCommonSchema)).toThrow(
-      /lifecycle/,
-    );
+      expect(entries.map((e) => e.hash)).toEqual(fixture.expected['hashes']);
+      expect(entries.map((e) => e.status)).toEqual(fixture.expected['statuses']);
+    });
   });
 
   // Scoping: an EMPTY history payload is a bare `[]` in every era (same serializer output since

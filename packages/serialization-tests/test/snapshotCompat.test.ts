@@ -127,8 +127,8 @@ describe('shielded snapshot compatibility', () => {
   // schema no longer has that field, and Effect Schema silently ignores unknown keys — so the
   // restore SUCCEEDS but the user's transaction history is silently destroyed. This test asserts
   // the behaviour a persistence layer should have (history survives a restore→serialize round
-  // trip); `it.fails` documents that today it does not. Remove `.fails` when a migration lands.
-  it.fails('preserves the embedded tx history of a t1-2026-01-28 snapshot (KNOWN SILENT DATA LOSS)', async () => {
+  // trip); it fails today and must pass once the migration lands.
+  it('preserves the embedded tx history of a t1-2026-01-28 snapshot', async () => {
     // Type cast required because: JSON.parse is untyped; the raw snapshot shape is exactly what this test inspects
     type RawShieldedSnapshot = { txHistory?: readonly string[] };
     const fixture = loadFixture('t1-2026-01-28', 'shielded');
