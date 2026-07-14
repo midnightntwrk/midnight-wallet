@@ -33,6 +33,7 @@ import {
   type CollapsedMerkleTree,
   type NewDustGeneration,
   type DustGenerationDtimUpdate,
+  type DustUtxoEntry,
   type DustUtxoMap,
 } from './SyncSchema.js';
 
@@ -121,29 +122,32 @@ export const CoreWallet = {
     newGenerations: ReadonlyArray<NewDustGeneration>,
     generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
   ): CoreWallet {
-    let updatedState = wallet.state;
+    // apply snapshot updates covering (lastIndex, nextGenerationIndex) — the gap before the next own generation,
+    // or every remaining update when there is no next generation
+    const applySnapshotGap = (state: DustLocalState, lastIndex: number, nextGenerationIndex?: number): DustLocalState =>
+      dustCollapsedGenTreeSnapshot
+        .filter(
+          ({ startIndex, endIndex }) =>
+            startIndex > lastIndex && (nextGenerationIndex === undefined || endIndex < nextGenerationIndex),
+        )
+        .reduce((current, update) => current.applyGenerationCollapsedUpdate(update.update), state);
 
-    let lastUpdatedIndex = -1;
-    for (const { generationMtIndex, genInfo, qdo } of newGenerations) {
-      // apply updates prior to the current generation index
-      updatedState = dustCollapsedGenTreeSnapshot
-        .filter(({ startIndex, endIndex }) => startIndex > lastUpdatedIndex && endIndex < generationMtIndex)
-        .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
+    const { state: stateWithGenerations, lastIndex } = newGenerations.reduce(
+      (acc, { generationMtIndex, genInfo, qdo }) => ({
+        state: applySnapshotGap(acc.state, acc.lastIndex, generationMtIndex).insertGenerationInfo(
+          BigInt(generationMtIndex),
+          genInfo,
+          qdo.backingNight,
+        ),
+        lastIndex: generationMtIndex,
+      }),
+      { state: wallet.state, lastIndex: -1 },
+    );
 
-      // now, insert the generation info
-      updatedState = updatedState.insertGenerationInfo(BigInt(generationMtIndex), genInfo, qdo.backingNight);
-      lastUpdatedIndex = generationMtIndex;
-    }
-
-    // apply the rest of the updates
-    updatedState = dustCollapsedGenTreeSnapshot
-      .filter(({ startIndex }) => startIndex > lastUpdatedIndex)
-      .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
-
-    // apply dtime updates
-    updatedState = generationDtimeUpdates.reduce(
+    // apply the rest of the updates, then the dtime updates
+    const updatedState = generationDtimeUpdates.reduce(
       (state, update) => state.updateGenerationTreeFromEvidence(update.treeInsertionPath),
-      updatedState,
+      applySnapshotGap(stateWithGenerations, lastIndex),
     );
 
     return {
@@ -167,41 +171,28 @@ export const CoreWallet = {
     newDustUtxos: Readonly<DustUtxoMap>,
     collapsedCommitments: ReadonlyArray<CollapsedMerkleTree>,
   ): CoreWallet {
-    let updatedState = wallet.state;
     const newUtxos = [...HashMap.values(newDustUtxos)].toSorted((a, b) => Number(a.qdo.mtIndex - b.qdo.mtIndex));
-    for (const { startIndex, update } of collapsedCommitments) {
-      // apply utxos going before the current index
+
+    const insertCommitments = (state: DustLocalState, utxos: ReadonlyArray<DustUtxoEntry>): DustLocalState =>
+      utxos.reduce((current, utxoInfo) => current.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true), state);
+
+    const stateAfterCollapsed = collapsedCommitments.reduce((state, { startIndex, update }) => {
+      // apply utxos going before the current index, then the current update
       const priorUtxos = newUtxos.filter(
         (utxoInfo) =>
-          Number(utxoInfo.qdo.mtIndex) < startIndex && utxoInfo.qdo.mtIndex >= updatedState.commitmentTreeFirstFree,
+          Number(utxoInfo.qdo.mtIndex) < startIndex && utxoInfo.qdo.mtIndex >= state.commitmentTreeFirstFree,
       );
-      updatedState = priorUtxos.reduce(
-        (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
-        updatedState,
-      );
-      // apply current update
-      updatedState = updatedState.applyCommitmentCollapsedUpdate(update);
-    }
+      return insertCommitments(state, priorUtxos).applyCommitmentCollapsedUpdate(update);
+    }, wallet.state);
 
-    // check utxos after the last index
+    // insert the utxos after the last collapsed update — all of them when there were no collapsed updates
     const lastCollapsedIndex = collapsedCommitments.at(-1);
-    if (lastCollapsedIndex !== undefined) {
-      const utxosAfterLastIndex = newUtxos.filter(
-        (utxoInfo) => Number(utxoInfo.qdo.mtIndex) > lastCollapsedIndex.endIndex,
-      );
-      updatedState = utxosAfterLastIndex.reduce(
-        (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
-        updatedState,
-      );
-    }
-
-    // edge-case: no collapsed commitments but new utxos
-    if (!collapsedCommitments.length && newUtxos.length) {
-      updatedState = newUtxos.reduce(
-        (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
-        updatedState,
-      );
-    }
+    const updatedState = insertCommitments(
+      stateAfterCollapsed,
+      lastCollapsedIndex !== undefined
+        ? newUtxos.filter((utxoInfo) => Number(utxoInfo.qdo.mtIndex) > lastCollapsedIndex.endIndex)
+        : newUtxos,
+    );
 
     return { ...wallet, state: updatedState };
   },
