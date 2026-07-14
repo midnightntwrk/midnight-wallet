@@ -83,7 +83,14 @@ import {
   StateUpdate,
   isProgressUpdate,
 } from './SyncSchema.js';
-import { calculatePrefixLength, hashMapGroupBy, leBigintToHex, uniqueArray } from './Utils.js';
+import {
+  bigintToLeHex,
+  calculatePrefixLength,
+  gapRanges,
+  hashMapGroupBy,
+  leBigintToHex,
+  uniqueArray,
+} from './Utils.js';
 import { type Dust } from './types/index.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
@@ -231,36 +238,32 @@ const loadCollapsedCommitments = (
     .toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex))
     .map(([_, u]) => Number(u.qdo.mtIndex)); // e.g. 43, 67, 68, 75
 
-  // 1: split into groups
-  const groups = [];
-  const firstSkipIndex = skipMtIndexes.at(0);
+  // 1: split into the ranges not covered by the wallet's own utxo indexes
+  const groups = gapRanges(lastAppliedIndex, maxIndex, skipMtIndexes);
 
-  const startIndex = lastAppliedIndex + 1;
-  if (firstSkipIndex !== undefined && startIndex < firstSkipIndex) {
-    groups.push({ start: startIndex, end: firstSkipIndex - 1 });
-  } else if (firstSkipIndex === undefined) {
-    groups.push({ start: startIndex, end: maxIndex });
-  }
-
-  skipMtIndexes.forEach((skipMtIndex, i) => {
-    const start = skipMtIndex + 1;
-    const next = skipMtIndexes.at(i + 1);
-    // skip consecutive indices e.g., 67, 68
-    if (next !== undefined && next - start > 0) {
-      groups.push({ start, end: next - 1 });
-    } else if (next === undefined && start <= maxIndex) {
-      groups.push({ start, end: maxIndex });
-    }
-  });
-
-  // 2: Query all groups in parallel
+  // 2: query all groups
   return pipe(
     groups.map(({ start, end }) => indexerSyncService.dustCommitmentMerkleTreeUpdate(start, end)),
     Effect.all,
   );
 };
 
-const NULLIFIER_LENGTH = 64;
+const NULLIFIER_BYTE_LENGTH = 32;
+const NULLIFIER_LENGTH = NULLIFIER_BYTE_LENGTH * 2;
+
+// Progress through the nullifier-resolution phase, in commitment-index units: a nullifier with no further spends
+// counts as a full scan of the commitment space; a still-live chain counts up to the merkle index of its freshest
+// successor. Bounded by totalNullifiers * maxCommitmentEndIndex (the phase ceiling).
+export const nullifierPhaseProgress = (
+  mtIndicesSum: bigint,
+  totalNullifiers: number,
+  freshCount: number,
+  maxCommitmentEndIndex: number,
+): number =>
+  Math.min(
+    Number(mtIndicesSum) + (totalNullifiers - freshCount) * maxCommitmentEndIndex,
+    totalNullifiers * maxCommitmentEndIndex,
+  );
 
 const resolveNullifierSpends = (
   initialNullifiers: DustNullifier[],
@@ -281,7 +284,6 @@ const resolveNullifierSpends = (
   Scope.Scope | SubscriptionClient
 > => {
   const maxCommitmentEndIndex = latestBlock.dustCommitmentEndIndex - 1;
-  const commitmentIndicesSum = initialNullifiers.length * maxCommitmentEndIndex;
   const initialSpentUtxos: DustUtxoMap = HashMap.empty();
   return pipe(
     Stream.unfoldEffect(
@@ -316,14 +318,15 @@ const resolveNullifierSpends = (
           if (freshUtxos.length > 0) {
             const mtIndicesSum = freshUtxos.reduce((partialSum, a) => partialSum + a.qdo.mtIndex, 0n);
             const generationEndIndex = latestBlock.dustGenerationEndIndex - 1;
-            const progress =
-              Number(mtIndicesSum) +
-              ((initialNullifiers.length - freshUtxos.length) * maxCommitmentEndIndex) / commitmentIndicesSum;
+            const progress = nullifierPhaseProgress(
+              mtIndicesSum,
+              initialNullifiers.length,
+              freshUtxos.length,
+              maxCommitmentEndIndex,
+            );
 
             // NOTE: since this process goes after the generation updates, we need to add the generationEndIndex to the progress
-            yield* Effect.promise(() =>
-              emit.single(ProgressUpdate({ appliedIndex: Math.floor(progress) + generationEndIndex })),
-            );
+            yield* Effect.promise(() => emit.single(ProgressUpdate({ appliedIndex: progress + generationEndIndex })));
           }
 
           const { nextUtxos, nextSpentUtxos } = accumulateUtxoUpdates(dustUtxoUpdates, newUtxos, spentUtxos);
@@ -465,7 +468,7 @@ export const makeEventLessSyncService = (
         doEventlessSync(state, secretKey, anonymityLevel, indexerSyncService),
         Stream.provideSomeLayer(Layer.merge(indexerSyncService.connectionLayer(), indexerSyncService.queryClient())),
       ),
-    blockData: (): Effect.Effect<BlockData, WalletError> => defaultSyncService.blockData(),
+    blockData: defaultSyncService.blockData,
   };
 };
 
@@ -595,7 +598,8 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       toBlock: number | null,
       prefixLength: number,
     ): Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
-      const hexedNullifiers = HashSet.fromIterable(dustNullifiers.map((n) => leBigintToHex(n, true)));
+      // fixed 32-byte little-endian form — the encoding nullifierLeBytes uses on the wire
+      const hexedNullifiers = HashSet.fromIterable(dustNullifiers.map((n) => bigintToLeHex(n, NULLIFIER_BYTE_LENGTH)));
       return pipe(
         DustNullifierTransactions.run({
           nullifierLeBytesPrefixes: uniqueArray([...hexedNullifiers].map((n) => n.substring(0, prefixLength))),
@@ -787,13 +791,16 @@ const createUtxoUpdatesFromSpend = (
   generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
   transaction: NullifierRegularTransaction,
   dustSpend: DustSpendProcessedEvent,
-): Effect.Effect<[DustUtxoUpdate, DustUtxoUpdate], SyncWalletError> =>
+): Effect.Effect<Option.Option<[DustUtxoUpdate, DustUtxoUpdate]>, SyncWalletError> =>
   Effect.gen(function* () {
     const { nullifier, vFee, commitmentIndex, declaredTime } = dustSpend;
     const knownUtxo = Option.getOrUndefined(HashMap.get(knownUtxos, nullifier));
     const qdo = knownUtxo?.qdo ?? pendingDust.get(nullifier) ?? dustState.findUtxoByNullifier(nullifier);
     if (!qdo) {
-      return yield* new SyncWalletError({ message: `Failed to find qdo by nullifier: ${nullifier}` });
+      // A matched transaction carries every dust spend it contains, including other parties' (e.g. the counterparty
+      // of a multi-intent transaction paying its own fees). Those nullifiers can never resolve locally — skip them.
+      yield* Effect.logDebug(`Skipping dust spend of a nullifier not owned by this wallet: ${nullifier}`);
+      return Option.none();
     }
     const genInfo = knownUtxo?.genInfo ?? dustState.generationInfo(qdo);
     if (!genInfo) {
@@ -818,10 +825,10 @@ const createUtxoUpdatesFromSpend = (
       isSpent: false,
       ...txMeta,
     };
-    return [spentUtxoUpdate, newUtxoUpdate];
+    return Option.some<[DustUtxoUpdate, DustUtxoUpdate]>([spentUtxoUpdate, newUtxoUpdate]);
   });
 
-const createDustUtxoUpdates = (
+export const createDustUtxoUpdates = (
   dustState: DustLocalState,
   nullifierTransactions: ReadonlyArray<DustNullifierTransactionsSubscription>,
   secretKey: DustSecretKey,
@@ -854,6 +861,7 @@ const createDustUtxoUpdates = (
       ),
     ),
     Effect.all,
+    Effect.map(Arr.getSomes),
     Effect.map(Arr.flatten),
   );
 
