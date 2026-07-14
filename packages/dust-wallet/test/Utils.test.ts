@@ -14,7 +14,7 @@
 import { describe, it } from '@vitest/runner';
 import { expect } from 'vitest';
 import { calculatePrefixLength } from '../src/v1/Utils.js';
-import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 describe('Utils', () => {
   it('calculatePrefixLength()', () => {
