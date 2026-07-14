@@ -35,9 +35,9 @@ import { type NightUtxoSplitForDustRegistration } from './v1/Transacting.js';
 import { type DustFullInfo, type UtxoWithMeta } from './v1/types/Dust.js';
 import { type AnyTransaction } from './v1/types/ledger.js';
 import { type BaseV1Configuration, type DefaultV1Configuration, type V1Variant, V1Builder } from './v1/V1Builder.js';
-import { type BlockData, type WalletSyncUpdate } from './v1/Sync.js';
+import { type WalletSyncUpdate, type BlockData } from './v1/SyncSchema.js';
 
-export type { BlockData } from './v1/Sync.js';
+export type { BlockData } from './v1/SyncSchema.js';
 
 import { type TransactionHistoryService } from './v1/TransactionHistory.js';
 
@@ -120,6 +120,8 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
   readonly state: rx.Observable<DustWalletState<TSerialized>>;
 
   start(secretKey: TStartAux): Promise<void>;
+
+  stepSync(secretKey: TStartAux): Promise<void>;
 
   createDustGenerationTransaction(
     currentTime: Date | undefined,
@@ -318,6 +320,10 @@ export function CustomDustWallet<
 
     start(secretKey: TStartAux): Promise<void> {
       return this.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(secretKey) }).pipe(Effect.runPromise);
+    }
+
+    stepSync(secretKey: TStartAux): Promise<void> {
+      return this.runtime.dispatch({ [V1Tag]: (v1) => v1.sync(secretKey) }).pipe(Effect.runPromise);
     }
 
     async createDustGenerationTransaction(
