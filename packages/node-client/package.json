@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@midnightntwrk/wallet-sdk-abstractions": "2.1.0",
-    "@midnightntwrk/wallet-sdk-utilities": "1.2.0",
+    "@midnightntwrk/wallet-sdk-utilities": "1.2.1",
     "@polkadot/api": "^16.5.4",
     "@polkadot/types": "^16.5.4",
     "@polkadot/util": "^14.0.1",

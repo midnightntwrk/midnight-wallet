@@ -159,7 +159,7 @@
     "@midnightntwrk/wallet-sdk-runtime": "1.0.5",
     "@midnightntwrk/wallet-sdk-shielded": "3.0.2",
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "3.1.0",
-    "@midnightntwrk/wallet-sdk-utilities": "1.2.0"
+    "@midnightntwrk/wallet-sdk-utilities": "1.2.1"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
