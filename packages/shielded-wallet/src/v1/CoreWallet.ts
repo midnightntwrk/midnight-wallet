@@ -76,6 +76,11 @@ export type CoreWallet = Readonly<{
   progress: SyncProgress.SyncProgress;
   networkId: string;
   coinHashes: CoinHashesMap;
+  // Preserved verbatim from a shielded@1.0.0 snapshot, which embedded the tx history (raw hex txs)
+  // inside the snapshot itself. Tx history moved to separate storage at 2.0.0, but a 1.0.0 restore
+  // must not silently destroy it — it rides along here so serialize can re-emit it. Undefined for
+  // every wallet written by 2.0.0+.
+  legacyTxHistory?: readonly string[];
 }>;
 
 export const CoreWallet = {

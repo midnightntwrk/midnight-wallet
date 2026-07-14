@@ -52,7 +52,7 @@ describe('formatShape', () => {
 });
 
 // ── the drift gate ───────────────────────────────────────────────────────────────────────────────
-const NEWEST_TRAIN = TRAINS[TRAINS.length - 1]!;
+const NEWEST_TRAIN = TRAINS[TRAINS.length - 1];
 
 // Endpoints are never dialled — restore() decodes eagerly and start() is never called.
 const dummyConnections = {
@@ -113,8 +113,10 @@ const KINDS: readonly Kind[] = [
   },
   {
     fixture: 'pending-transactions',
-    reserialize: async (s) =>
-      PendingTransactions.serialize(Either.getOrThrow(PendingTransactions.deserialize(s, txTrait)), txTrait),
+    reserialize: (s) =>
+      Promise.resolve(
+        PendingTransactions.serialize(Either.getOrThrow(PendingTransactions.deserialize(s, txTrait)), txTrait),
+      ),
   },
 ];
 
