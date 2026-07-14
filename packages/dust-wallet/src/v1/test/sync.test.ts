@@ -22,7 +22,6 @@ import { DustLedgerEvents, DustNullifierTransactions } from '@midnightntwrk/wall
 import type {
   DustLedgerEventsSubscription,
   DustLedgerEventsSubscriptionVariables,
-  DustNullifierTransactionsSubscription as WireDustNullifierTransactionsSubscription,
   DustNullifierTransactionsSubscriptionVariables,
 } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
@@ -198,7 +197,7 @@ describe('V1 projections nullifier subscription', () => {
       recorded.value = variables;
       return Stream.fromIterable(
         [topByteSetHex, decoyHex, topByteZeroHex].map((hex) => ({ dustNullifierTransactions: wireRecord(hex) })),
-      ) as Stream.Stream<WireDustNullifierTransactionsSubscription, ClientError | ServerError, SubscriptionClient>;
+      );
     };
 
     const service = makeIndexerSyncService({
