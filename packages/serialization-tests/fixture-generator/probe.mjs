@@ -9,8 +9,7 @@ const HERE = path.dirname(new URL(import.meta.url).pathname);
 const pkgDir = (alias) => path.join(HERE, 'node_modules', alias);
 
 // Resolve a dependency exactly as the aliased package itself would (nested vs hoisted node_modules).
-export const resolveFromPkg = (alias, dep) =>
-  createRequire(path.join(pkgDir(alias), 'dist', 'index.js')).resolve(dep);
+export const resolveFromPkg = (alias, dep) => createRequire(path.join(pkgDir(alias), 'dist', 'index.js')).resolve(dep);
 
 const surface = async (alias, files) => {
   console.log(`\n===== ${alias}`);

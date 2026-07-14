@@ -22,10 +22,10 @@ import {
 } from './TransactionHistoryStorage.js';
 
 /**
- * On-disk version of the serialized tx-history envelope. Bumped whenever the persisted format
- * changes in a way `restore` must migrate from. v1 wraps the entries in `{ version, entries }` and
- * requires a `lifecycle` on every entry; pre-v1 payloads (abstractions ≤ 2.1.0) are bare arrays
- * whose entries have no `lifecycle` and may omit `identifiers`.
+ * On-disk version of the serialized tx-history envelope. Bumped whenever the persisted format changes in a way
+ * `restore` must migrate from. v1 wraps the entries in `{ version, entries }` and requires a `lifecycle` on every
+ * entry; pre-v1 payloads (abstractions ≤ 2.1.0) are bare arrays whose entries have no `lifecycle` and may omit
+ * `identifiers`.
  */
 const CURRENT_SCHEMA_VERSION = 1;
 
@@ -61,9 +61,9 @@ const synthesizeEncodedLifecycle = (raw: Record<string, unknown>): Record<string
 };
 
 /**
- * Migrate a single ENCODED (JSON) entry to the current schema's encoded shape. Idempotent: entries
- * that already carry a `lifecycle` (v1 payloads) pass through untouched. Pre-`lifecycle` entries get
- * a lifecycle synthesized from their `status`/`timestamp`, and an empty `identifiers` when absent.
+ * Migrate a single ENCODED (JSON) entry to the current schema's encoded shape. Idempotent: entries that already carry a
+ * `lifecycle` (v1 payloads) pass through untouched. Pre-`lifecycle` entries get a lifecycle synthesized from their
+ * `status`/`timestamp`, and an empty `identifiers` when absent.
  */
 const migrateEncodedEntry = (raw: unknown): unknown => {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw; // let the schema reject non-objects

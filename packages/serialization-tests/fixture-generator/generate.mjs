@@ -47,8 +47,7 @@ const loadDist = (alias, file) => import(pathToFileURL(path.join(HERE, 'node_mod
 const pkgMeta = (alias) => {
   const pkgJson = JSON.parse(readFileSync(path.join(HERE, 'node_modules', alias, 'package.json'), 'utf8'));
   const ledgerName = Object.keys(pkgJson.dependencies ?? {}).find((d) => d.includes('ledger'));
-  const ledgerDep =
-    ledgerName === undefined ? undefined : `${ledgerName}@${pkgJson.dependencies[ledgerName]}`;
+  const ledgerDep = ledgerName === undefined ? undefined : `${ledgerName}@${pkgJson.dependencies[ledgerName]}`;
   return { name: pkgJson.name, version: pkgJson.version, ledgerDep };
 };
 
@@ -113,7 +112,9 @@ const generateShieldedSet = async (train, alias, { family }) => {
       isConnected: false,
     });
 
-  const senderSynced = progress(replay(CoreWallet.initEmpty(senderKeys, NETWORK_ID), senderKeys, scenario.allEventBytes));
+  const senderSynced = progress(
+    replay(CoreWallet.initEmpty(senderKeys, NETWORK_ID), senderKeys, scenario.allEventBytes),
+  );
   const receiverSynced = progress(
     replay(CoreWallet.initEmpty(receiverKeys, NETWORK_ID), receiverKeys, scenario.allEventBytes),
   );
@@ -347,7 +348,13 @@ const generateTxHistory = async (train, absAlias, faAlias) => {
       unshielded: {
         id: 7,
         createdUtxos: [
-          { value: 1000n, owner: 'owner-address', tokenType: CUSTOM_UNSHIELDED, intentHash: '55'.repeat(32), outputIndex: 0 },
+          {
+            value: 1000n,
+            owner: 'owner-address',
+            tokenType: CUSTOM_UNSHIELDED,
+            intentHash: '55'.repeat(32),
+            outputIndex: 0,
+          },
         ],
         spentUtxos: [],
       },
@@ -526,11 +533,36 @@ const mptSweep = async () => {
 // @midnightntwrk scope rename, so the facade-4.0.0 and facade-4.1.0 abstractions differ ONLY by npm
 // scope; the `-new` alias installs the post-rename @midnightntwrk package.
 const TRAINS = [
-  { train: 'facade-1.0.0', sh: 'sh-1.0.0', un: 'un-1.0.0', du: 'du-1.0.0', shieldedFamily: 'embeddedHistory', dustFlat: true },
+  {
+    train: 'facade-1.0.0',
+    sh: 'sh-1.0.0',
+    un: 'un-1.0.0',
+    du: 'du-1.0.0',
+    shieldedFamily: 'embeddedHistory',
+    dustFlat: true,
+  },
   { train: 'facade-2.0.0', sh: 'sh-2.0.0', un: 'un-2.0.0', du: 'du-2.0.0', shieldedFamily: 'plain', cap: 'cap-3.1.0' },
   { train: 'facade-3.0.0', sh: 'sh-2.1.0', un: 'un-2.1.0', du: 'du-3.0.0', shieldedFamily: 'plain', cap: 'cap-3.2.0' },
-  { train: 'facade-4.0.0', sh: 'sh-3.0.0', un: 'un-3.0.0', du: 'du-4.0.0', shieldedFamily: 'withChanges', abs: 'abs-2.1.0', fa: 'fa-4.0.0', cap: 'cap-3.3.0' },
-  { train: 'facade-4.1.0', sh: 'sh-3.0.2', un: 'un-3.1.0', du: 'du-4.2.0', shieldedFamily: 'withChanges', abs: 'abs-2.1.0-new', fa: 'fa-4.1.0', cap: 'cap-3.3.1' },
+  {
+    train: 'facade-4.0.0',
+    sh: 'sh-3.0.0',
+    un: 'un-3.0.0',
+    du: 'du-4.0.0',
+    shieldedFamily: 'withChanges',
+    abs: 'abs-2.1.0',
+    fa: 'fa-4.0.0',
+    cap: 'cap-3.3.0',
+  },
+  {
+    train: 'facade-4.1.0',
+    sh: 'sh-3.0.2',
+    un: 'un-3.1.0',
+    du: 'du-4.2.0',
+    shieldedFamily: 'withChanges',
+    abs: 'abs-2.1.0-new',
+    fa: 'fa-4.1.0',
+    cap: 'cap-3.3.1',
+  },
 ];
 
 for (const t of TRAINS) {

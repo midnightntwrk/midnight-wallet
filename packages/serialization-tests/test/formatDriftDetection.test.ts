@@ -63,9 +63,17 @@ const dummyConnections = {
 };
 const txHistoryStorage = () => new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
 const shieldedWallet = () =>
-  ShieldedWallet({ ...dummyConnections, networkId: NetworkId.NetworkId.Undeployed, txHistoryStorage: txHistoryStorage() });
+  ShieldedWallet({
+    ...dummyConnections,
+    networkId: NetworkId.NetworkId.Undeployed,
+    txHistoryStorage: txHistoryStorage(),
+  });
 const unshieldedWallet = () =>
-  UnshieldedWallet({ ...dummyConnections, networkId: NetworkId.NetworkId.Undeployed, txHistoryStorage: txHistoryStorage() });
+  UnshieldedWallet({
+    ...dummyConnections,
+    networkId: NetworkId.NetworkId.Undeployed,
+    txHistoryStorage: txHistoryStorage(),
+  });
 const dustWallet = () =>
   DustWallet({
     ...dummyConnections,
@@ -90,8 +98,14 @@ const txTrait: PendingTransactions.TransactionTrait<ledger.FinalizedTransaction>
 type Kind = { fixture: FixtureName; reserialize: (serialized: string) => Promise<string> };
 
 const KINDS: readonly Kind[] = [
-  { fixture: 'shielded', reserialize: async (s) => (await firstValueFrom(shieldedWallet().restore(s).state)).serialize() },
-  { fixture: 'unshielded', reserialize: async (s) => (await firstValueFrom(unshieldedWallet().restore(s).state)).serialize() },
+  {
+    fixture: 'shielded',
+    reserialize: async (s) => (await firstValueFrom(shieldedWallet().restore(s).state)).serialize(),
+  },
+  {
+    fixture: 'unshielded',
+    reserialize: async (s) => (await firstValueFrom(unshieldedWallet().restore(s).state)).serialize(),
+  },
   { fixture: 'dust', reserialize: async (s) => (await firstValueFrom(dustWallet().restore(s).state)).serialize() },
   {
     fixture: 'tx-history',

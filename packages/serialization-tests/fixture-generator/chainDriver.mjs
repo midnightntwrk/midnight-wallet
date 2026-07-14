@@ -155,9 +155,7 @@ export const runScenario = (L, { networkId = 'undeployed', deep = false } = {}) 
     mkOutputOffer(receiverKeys, TOKEN_A, TRANSFER_VALUE),
     mkOutputOffer(senderKeys, TOKEN_A, 250n - TRANSFER_VALUE),
   ]);
-  const transferEventBytes = applyBlock('transfer', [
-    L.Transaction.fromParts(networkId, transferOffer).eraseProofs(),
-  ]);
+  const transferEventBytes = applyBlock('transfer', [L.Transaction.fromParts(networkId, transferOffer).eraseProofs()]);
 
   // --- deep option: grow the tree with interleaved mints and spends ------------------------------
   // Each round replays everything emitted so far to pick the next coin, so the rounds accumulate
@@ -167,19 +165,16 @@ export const runScenario = (L, { networkId = 'undeployed', deep = false } = {}) 
   const deepEventBytes = !deep
     ? []
     : Array.from({ length: DEEP_ROUNDS }, (_, round) => round).flatMap((round) => {
-        const mintBytes = applyBlock(
-          `deep-mint-${round}`,
-          [
-            L.Transaction.fromParts(
-              networkId,
-              mergeOffers([
-                mkOutputOffer(senderKeys, TOKEN_A, BigInt(1000 + round)),
-                mkOutputOffer(senderKeys, TOKEN_B, BigInt(2000 + round)),
-                mkOutputOffer(receiverKeys, TOKEN_A, BigInt(3000 + round)),
-              ]),
-            ).eraseProofs(),
-          ],
-        );
+        const mintBytes = applyBlock(`deep-mint-${round}`, [
+          L.Transaction.fromParts(
+            networkId,
+            mergeOffers([
+              mkOutputOffer(senderKeys, TOKEN_A, BigInt(1000 + round)),
+              mkOutputOffer(senderKeys, TOKEN_B, BigInt(2000 + round)),
+              mkOutputOffer(receiverKeys, TOKEN_A, BigInt(3000 + round)),
+            ]),
+          ).eraseProofs(),
+        ]);
         // Spend the oldest currently-unspent sender TOKEN_A coin back and forth to churn the tree.
         const soFar = [
           ...mintEventBytes,
@@ -190,7 +185,9 @@ export const runScenario = (L, { networkId = 'undeployed', deep = false } = {}) 
           ...mintBytes,
         ];
         const local = new L.ZswapLocalState().replayEvents(senderKeys, eventsOf(soFar));
-        const spendable = [...local.coins].filter((c) => c.type === TOKEN_A).sort((a, b) => Number(a.mt_index - b.mt_index));
+        const spendable = [...local.coins]
+          .filter((c) => c.type === TOKEN_A)
+          .sort((a, b) => Number(a.mt_index - b.mt_index));
         const coin = spendable[0];
         const [, deepInput] = local.spend(senderKeys, coin, 0);
         const spendBytes = applyBlock(`deep-spend-${round}`, [
