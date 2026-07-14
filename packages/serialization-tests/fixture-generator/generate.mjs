@@ -188,12 +188,14 @@ const generateShieldedSet = async (train, alias, { family }) => {
 };
 
 // --- unshielded --------------------------------------------------------------------------------
-const generateUnshieldedSet = async (train, alias) => {
+const generateUnshieldedSet = async (train, alias, shAlias) => {
   const L = await ledgerFor(alias);
   const { UnshieldedState, UtxoWithMeta } = await loadDist(alias, 'v1/UnshieldedState.js');
   const Ser = await loadDist(alias, 'v1/Serialization.js');
   const capability = Ser.makeDefaultV1SerializationCapability();
-  const { scenario } = await scenarioFor(alias.replace('un-', 'sh-'), false);
+  // The chain scenario is generated with the shielded package's ledger; take the train's shielded
+  // alias explicitly (versions differ per package within a train, so it can't be string-derived).
+  const { scenario } = await scenarioFor(shAlias, false);
 
   const nightToken = typeof L.nativeToken === 'function' ? (L.nativeToken().raw ?? L.nativeToken()) : '00'.repeat(32);
   const mkUtxo = (value, type, outputNo, intentHashByte, registered) =>
@@ -271,14 +273,15 @@ const generateUnshieldedSet = async (train, alias) => {
 };
 
 // --- dust ---------------------------------------------------------------------------------------
-const generateDust = async (train, alias, { flatDist = false } = {}) => {
+const generateDust = async (train, alias, shAlias, { flatDist = false } = {}) => {
   const L = await ledgerFor(alias);
   const prefix = flatDist ? '' : 'v1/';
   const CW = await loadDist(alias, `${prefix}${flatDist ? 'DustCoreWallet' : 'CoreWallet'}.js`);
   const CoreWallet = flatDist ? CW.DustCoreWallet : CW.CoreWallet;
   const Ser = await loadDist(alias, `${prefix}Serialization.js`);
   const capability = Ser.makeDefaultV1SerializationCapability();
-  const { scenario } = await scenarioFor(alias.replace('du-', 'sh-'), false);
+  // Shielded alias passed explicitly (see generateUnshieldedSet) — the scenario uses its ledger.
+  const { scenario } = await scenarioFor(shAlias, false);
 
   const dustKey = L.DustSecretKey.fromSeed(SEEDS.dust);
   const params = L.LedgerParameters.initialParameters().dust;
@@ -450,8 +453,8 @@ const generatePendingTransactions = async (train, capAlias, shAlias) => {
 // deterministic churn (LCG-seeded mint/spend interleavings) plus the deep scenario states, failing
 // generation if any v7 state is rejected by v8.
 const mptSweep = async () => {
-  const L7 = await ledgerFor('sh-t2'); // 7.0.2, exactly what T2 prod apps ran
-  const L803 = await ledgerFor('sh-t3'); // 8.0.3, exactly what T3 prod apps ran
+  const L7 = await ledgerFor('sh-2.0.0'); // 7.0.2, exactly what T2 prod apps ran
+  const L803 = await ledgerFor('sh-2.1.0'); // 8.0.3, exactly what T3 prod apps ran
   const keys = L7.ZswapSecretKeys.fromSeed(SEEDS.shieldedSender);
 
   const lcg = (() => {
@@ -509,19 +512,32 @@ const mptSweep = async () => {
 };
 
 // --- trains --------------------------------------------------------------------------------------
+// A train IS a facade version — facade is the source of truth. The `sh`/`un`/`du`/`abs`/`cap`
+// aliases below are named by the wallet version they install, and those versions are exactly
+// facade@<train>'s declared dependency closure (verified against `npm view <facade>@X dependencies`).
+// We still install each wallet package directly (aliased) because the generator drives wallet
+// INTERNALS (CoreWallet, Serialization, capabilities) that facade doesn't re-export — facade decides
+// the versions, not the imports.
+//
+// To add a train: `npm view @midnightntwrk/wallet-sdk-facade@<new> dependencies`, then add aliases
+// pinned to exactly those versions and a row here keyed by the new facade version.
+//
+// `abs-2.1.0-new` vs `abs-2.1.0`: abstractions kept version 2.1.0 across the @midnight-ntwrk →
+// @midnightntwrk scope rename, so the facade-4.0.0 and facade-4.1.0 abstractions differ ONLY by npm
+// scope; the `-new` alias installs the post-rename @midnightntwrk package.
 const TRAINS = [
-  { train: 't1-2026-01-28', sh: 'sh-t1', un: 'un-t1', du: 'du-t1', shieldedFamily: 'embeddedHistory', dustFlat: true },
-  { train: 't2-2026-03-10', sh: 'sh-t2', un: 'un-t2', du: 'du-t2', shieldedFamily: 'plain', cap: 'cap-t2' },
-  { train: 't3-2026-03-20', sh: 'sh-t3', un: 'un-t3', du: 'du-t3', shieldedFamily: 'plain', cap: 'cap-t3' },
-  { train: 't4-2026-04-23', sh: 'sh-t4', un: 'un-t4', du: 'du-t4', shieldedFamily: 'withChanges', abs: 'abs-t4', fa: 'fa-t4', cap: 'cap-t4' },
-  { train: 't6-2026-06-19', sh: 'sh-t6', un: 'un-t6', du: 'du-t6', shieldedFamily: 'withChanges', abs: 'abs-t6', fa: 'fa-t6', cap: 'cap-t6' },
+  { train: 'facade-1.0.0', sh: 'sh-1.0.0', un: 'un-1.0.0', du: 'du-1.0.0', shieldedFamily: 'embeddedHistory', dustFlat: true },
+  { train: 'facade-2.0.0', sh: 'sh-2.0.0', un: 'un-2.0.0', du: 'du-2.0.0', shieldedFamily: 'plain', cap: 'cap-3.1.0' },
+  { train: 'facade-3.0.0', sh: 'sh-2.1.0', un: 'un-2.1.0', du: 'du-3.0.0', shieldedFamily: 'plain', cap: 'cap-3.2.0' },
+  { train: 'facade-4.0.0', sh: 'sh-3.0.0', un: 'un-3.0.0', du: 'du-4.0.0', shieldedFamily: 'withChanges', abs: 'abs-2.1.0', fa: 'fa-4.0.0', cap: 'cap-3.3.0' },
+  { train: 'facade-4.1.0', sh: 'sh-3.0.2', un: 'un-3.1.0', du: 'du-4.2.0', shieldedFamily: 'withChanges', abs: 'abs-2.1.0-new', fa: 'fa-4.1.0', cap: 'cap-3.3.1' },
 ];
 
 for (const t of TRAINS) {
   console.log(`\n=== ${t.train}`);
   await generateShieldedSet(t.train, t.sh, { family: t.shieldedFamily });
-  await generateUnshieldedSet(t.train, t.un);
-  await generateDust(t.train, t.du, { flatDist: t.dustFlat === true });
+  await generateUnshieldedSet(t.train, t.un, t.sh);
+  await generateDust(t.train, t.du, t.sh, { flatDist: t.dustFlat === true });
   if (t.abs) await generateTxHistory(t.train, t.abs, t.fa);
   if (t.cap) await generatePendingTransactions(t.train, t.cap, t.sh);
 }

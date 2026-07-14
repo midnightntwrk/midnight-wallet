@@ -8,65 +8,65 @@
     "generate": "node generate.mjs"
   },
   "dependencies": {
-    "sh-t1": "npm:@midnight-ntwrk/wallet-sdk-shielded@1.0.0",
-    "un-t1": "npm:@midnight-ntwrk/wallet-sdk-unshielded-wallet@1.0.0",
-    "du-t1": "npm:@midnight-ntwrk/wallet-sdk-dust-wallet@1.0.0",
-    "sh-t2": "npm:@midnight-ntwrk/wallet-sdk-shielded@2.0.0",
-    "un-t2": "npm:@midnight-ntwrk/wallet-sdk-unshielded-wallet@2.0.0",
-    "du-t2": "npm:@midnight-ntwrk/wallet-sdk-dust-wallet@2.0.0",
-    "sh-t3": "npm:@midnight-ntwrk/wallet-sdk-shielded@2.1.0",
-    "un-t3": "npm:@midnight-ntwrk/wallet-sdk-unshielded-wallet@2.1.0",
-    "du-t3": "npm:@midnight-ntwrk/wallet-sdk-dust-wallet@3.0.0",
-    "sh-t4": "npm:@midnight-ntwrk/wallet-sdk-shielded@3.0.0",
-    "un-t4": "npm:@midnight-ntwrk/wallet-sdk-unshielded-wallet@3.0.0",
-    "du-t4": "npm:@midnight-ntwrk/wallet-sdk-dust-wallet@4.0.0",
-    "abs-t4": "npm:@midnight-ntwrk/wallet-sdk-abstractions@2.1.0",
-    "fa-t4": "npm:@midnight-ntwrk/wallet-sdk-facade@4.0.0",
-    "sh-t6": "npm:@midnightntwrk/wallet-sdk-shielded@3.0.2",
-    "un-t6": "npm:@midnightntwrk/wallet-sdk-unshielded-wallet@3.1.0",
-    "du-t6": "npm:@midnightntwrk/wallet-sdk-dust-wallet@4.2.0",
-    "abs-t6": "npm:@midnightntwrk/wallet-sdk-abstractions@2.1.0",
-    "fa-t6": "npm:@midnightntwrk/wallet-sdk-facade@4.1.0",
-    "cap-t2": "npm:@midnight-ntwrk/wallet-sdk-capabilities@3.1.0",
-    "cap-t3": "npm:@midnight-ntwrk/wallet-sdk-capabilities@3.2.0",
-    "cap-t4": "npm:@midnight-ntwrk/wallet-sdk-capabilities@3.3.0",
-    "cap-t6": "npm:@midnightntwrk/wallet-sdk-capabilities@3.3.1"
+    "sh-1.0.0": "npm:@midnight-ntwrk/wallet-sdk-shielded@1.0.0",
+    "un-1.0.0": "npm:@midnight-ntwrk/wallet-sdk-unshielded-wallet@1.0.0",
+    "du-1.0.0": "npm:@midnight-ntwrk/wallet-sdk-dust-wallet@1.0.0",
+    "sh-2.0.0": "npm:@midnight-ntwrk/wallet-sdk-shielded@2.0.0",
+    "un-2.0.0": "npm:@midnight-ntwrk/wallet-sdk-unshielded-wallet@2.0.0",
+    "du-2.0.0": "npm:@midnight-ntwrk/wallet-sdk-dust-wallet@2.0.0",
+    "sh-2.1.0": "npm:@midnight-ntwrk/wallet-sdk-shielded@2.1.0",
+    "un-2.1.0": "npm:@midnight-ntwrk/wallet-sdk-unshielded-wallet@2.1.0",
+    "du-3.0.0": "npm:@midnight-ntwrk/wallet-sdk-dust-wallet@3.0.0",
+    "sh-3.0.0": "npm:@midnight-ntwrk/wallet-sdk-shielded@3.0.0",
+    "un-3.0.0": "npm:@midnight-ntwrk/wallet-sdk-unshielded-wallet@3.0.0",
+    "du-4.0.0": "npm:@midnight-ntwrk/wallet-sdk-dust-wallet@4.0.0",
+    "abs-2.1.0": "npm:@midnight-ntwrk/wallet-sdk-abstractions@2.1.0",
+    "fa-4.0.0": "npm:@midnight-ntwrk/wallet-sdk-facade@4.0.0",
+    "sh-3.0.2": "npm:@midnightntwrk/wallet-sdk-shielded@3.0.2",
+    "un-3.1.0": "npm:@midnightntwrk/wallet-sdk-unshielded-wallet@3.1.0",
+    "du-4.2.0": "npm:@midnightntwrk/wallet-sdk-dust-wallet@4.2.0",
+    "abs-2.1.0-new": "npm:@midnightntwrk/wallet-sdk-abstractions@2.1.0",
+    "fa-4.1.0": "npm:@midnightntwrk/wallet-sdk-facade@4.1.0",
+    "cap-3.1.0": "npm:@midnight-ntwrk/wallet-sdk-capabilities@3.1.0",
+    "cap-3.2.0": "npm:@midnight-ntwrk/wallet-sdk-capabilities@3.2.0",
+    "cap-3.3.0": "npm:@midnight-ntwrk/wallet-sdk-capabilities@3.3.0",
+    "cap-3.3.1": "npm:@midnightntwrk/wallet-sdk-capabilities@3.3.1"
   },
   "overrides": {
-    "sh-t2": {
+    "sh-2.0.0": {
       "@midnight-ntwrk/ledger-v7": "7.0.2"
     },
-    "un-t2": {
+    "un-2.0.0": {
       "@midnight-ntwrk/ledger-v7": "7.0.2"
     },
-    "du-t2": {
+    "du-2.0.0": {
       "@midnight-ntwrk/ledger-v7": "7.0.2"
     },
-    "sh-t3": {
+    "sh-2.1.0": {
       "@midnight-ntwrk/ledger-v8": "8.0.3"
     },
-    "un-t3": {
+    "un-2.1.0": {
       "@midnight-ntwrk/ledger-v8": "8.0.3"
     },
-    "du-t3": {
+    "du-3.0.0": {
       "@midnight-ntwrk/ledger-v8": "8.0.3"
     },
-    "sh-t4": {
+    "sh-3.0.0": {
       "@midnight-ntwrk/ledger-v8": "8.0.3"
     },
-    "un-t4": {
+    "un-3.0.0": {
       "@midnight-ntwrk/ledger-v8": "8.0.3"
     },
-    "du-t4": {
+    "du-4.0.0": {
       "@midnight-ntwrk/ledger-v8": "8.0.3"
     },
-    "sh-t6": {
+    "sh-3.0.2": {
       "@midnight-ntwrk/ledger-v8": "8.1.0"
     },
-    "un-t6": {
+    "un-3.1.0": {
       "@midnight-ntwrk/ledger-v8": "8.1.0"
     },
-    "du-t6": {
+    "du-4.2.0": {
       "@midnight-ntwrk/ledger-v8": "8.1.0"
     }
   }
