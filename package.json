@@ -83,6 +83,7 @@
     "test:serialization": "turbo run test:unit --filter=@midnight/wallet-serialization-tests",
     "test:integration": "turbo run test:integration",
     "dist": "turbo run dist",
+    "schema:sync": "turbo run schema:sync",
     "watch": "turbo watch dist",
     "dist:publish": "turbo run dist:publish",
     "changeset:version": "yarn changeset version && yarn install --mode=update-lockfile",

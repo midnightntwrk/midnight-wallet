@@ -54,7 +54,7 @@
     "rxjs": "^7.8.2"
   },
   "peerDependencies": {
-    "@midnightntwrk/wallet-sdk-utilities": "1.2.0",
+    "@midnightntwrk/wallet-sdk-utilities": "1.2.1",
     "testcontainers": "^11.12.0",
     "vitest": "^4.1.4"
   },
