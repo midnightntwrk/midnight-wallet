@@ -31,7 +31,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
-import { type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
+import { type BlockData, type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
 import { type SimulatorState } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type CoinsAndBalancesCapability, type CoinSelection } from './CoinsAndBalances.js';
 import { type NightUtxoSplitForDustRegistration, type TransactingCapability } from './Transacting.js';
@@ -91,6 +91,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   readonly #scope: Scope.Scope;
   readonly #context: Variant.VariantContext<CoreWallet>;
   readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>;
+  // Variant-wide cap on concurrent tx-history lookups. Each sync batch forks its own fan-out fiber, so a per-batch
+  // `concurrency` limit alone would let in-flight indexer queries grow with the number of live batches while their
+  // lookups retry through the indexer-lag window. Every lookup acquires a permit here, making the cap global.
+  readonly #txHistoryPermits = Effect.makeSemaphore(8).pipe(Effect.runSync);
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
 
@@ -162,13 +166,25 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                     changes,
                     (change) =>
                       pipe(
-                        this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
-                        Effect.flatMap((metadata) =>
-                          this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                        this.#txHistoryPermits.withPermits(1)(
+                          pipe(
+                            this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
+                            Effect.flatMap((metadata) =>
+                              this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                            ),
+                          ),
                         ),
-                        Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+                        Effect.catchAllCause((cause) =>
+                          // A sustained indexer outage (longer than getTransactionDetails' retry window) still lands
+                          // here. applyUpdate has already advanced appliedIndex, so this change.source won't be
+                          // re-processed — the dust section is permanently lost. Surface that as a structured error
+                          // carrying the tx hash, not a silent Console.error defect.
+                          Effect.logError(cause, `Failed to record dust tx-history section for ${change.source}`),
+                        ),
                       ),
-                    { discard: true, concurrency: 'unbounded' },
+                    // `concurrency` only bounds fiber creation within this one batch; the real cap on simultaneous
+                    // indexer queries is the variant-wide semaphore acquired around each lookup above.
+                    { discard: true, concurrency: 8 },
                   ),
                   Effect.forkScoped,
                 ),
@@ -313,22 +329,25 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Effect.Effect<UnprovenTransaction, WalletError> {
-    return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
-      return pipe(
-        this.#v1Context.syncService.blockData(),
-        Effect.flatMap((blockData) =>
-          this.#v1Context.transactingCapability.balanceTransactions(
-            secretKey,
-            state,
-            transactions,
-            ttl,
-            currentTime ?? blockData.timestamp,
-            blockData.ledgerParameters,
+  ): Effect.Effect<{ transaction: UnprovenTransaction; blockData: BlockData }, WalletError> {
+    return pipe(
+      this.#v1Context.syncService.blockData(),
+      Effect.flatMap((blockData) =>
+        pipe(
+          SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
+            this.#v1Context.transactingCapability.balanceTransactions(
+              secretKey,
+              state,
+              transactions,
+              ttl,
+              currentTime ?? blockData.timestamp,
+              blockData.ledgerParameters,
+            ),
           ),
+          Effect.map((transaction) => ({ transaction, blockData })),
         ),
-      );
-    });
+      ),
+    );
   }
 
   revertTransaction(transaction: AnyTransaction): Effect.Effect<void, WalletError> {

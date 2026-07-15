@@ -70,8 +70,8 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     failurePrefix: string,
   ): Effect.Effect<Uint8Array, ClientError | ServerError> {
     const concatBytes = (chunks: Uint8Array[]): Effect.Effect<Uint8Array> =>
-      Effect.promise(
-        (): Promise<Uint8Array> => BlobOps.getBytes(new Blob(chunks.map((chunk) => new Uint8Array(chunk)))),
+      Effect.promise((): Promise<Uint8Array> =>
+        BlobOps.getBytes(new Blob(chunks.map((chunk) => new Uint8Array(chunk)))),
       );
 
     const receiveBody = (response: HttpClientResponse.HttpClientResponse) =>
