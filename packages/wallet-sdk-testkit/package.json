@@ -70,7 +70,7 @@
     "@midnightntwrk/wallet-sdk-utilities": "workspace:^",
     "rimraf": "6.1.3",
     "testcontainers": "11.14.0",
-    "typescript": "5.9.3",
+    "typescript": "7.0.2",
     "vitest": "4.1.10"
   },
   "scripts": {
