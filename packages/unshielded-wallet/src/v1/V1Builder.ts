@@ -383,8 +383,7 @@ declare namespace V1Builder {
   >;
   type PartialBuildState<TConfig = object, TContext = object, TSerialized = never, TSyncUpdate = never> = {
     [K in keyof FullBuildState<never, never, never, never>]?:
-      | FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate>[K]
-      | undefined;
+      FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate>[K] | undefined;
   };
 
   /** Utility interface that manages the type variance of {@link V1Builder}. */
