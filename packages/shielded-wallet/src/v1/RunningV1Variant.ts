@@ -12,21 +12,21 @@
 // limitations under the License.
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type WalletRuntimeError,
   type Variant,
   StateChange,
   VersionChangeType,
-} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+} from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type SerializationCapability } from './Serialization.js';
 import { type ChangesResult, type EventsSyncUpdate, type SyncCapability, type SyncService } from './Sync.js';
 import { type TransactingCapability, type TokenTransfer, type BalancingResult } from './Transacting.js';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
-import { type CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { type CoinSelection } from '@midnightntwrk/wallet-sdk-capabilities';
 import { type CoreWallet } from './CoreWallet.js';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 
@@ -86,6 +86,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   readonly #scope: Scope.Scope;
   readonly #context: Variant.VariantContext<CoreWallet>;
   readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>;
+  // Variant-wide cap on concurrent tx-history lookups. Each sync batch forks its own fan-out fiber, so a per-batch
+  // `concurrency` limit alone would let in-flight indexer queries grow with the number of live batches while their
+  // lookups retry through the indexer-lag window. Every lookup acquires a permit here, making the cap global.
+  readonly #txHistoryPermits = Effect.makeSemaphore(8).pipe(Effect.runSync);
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
 
@@ -146,21 +150,39 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
           }),
         ).pipe(
           Effect.flatMap(({ changes, protocolVersion }) =>
-            pipe(
-              Effect.forEach(
-                changes,
-                (change) =>
-                  pipe(
-                    this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
-                    Effect.flatMap((metadata) =>
-                      this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
-                    ),
-                    Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+            // Skip the tx-history fork entirely when there are no changes.
+            // Forking unconditionally allocates a fiber per apply call (one
+            // for every batch the sync emits, even the all-progress ones),
+            // which adds up fast during catch-up.
+            changes.length === 0
+              ? Effect.void
+              : pipe(
+                  Effect.forEach(
+                    changes,
+                    (change) =>
+                      pipe(
+                        this.#txHistoryPermits.withPermits(1)(
+                          pipe(
+                            this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
+                            Effect.flatMap((metadata) =>
+                              this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                            ),
+                          ),
+                        ),
+                        Effect.catchAllCause((cause) =>
+                          // A sustained indexer outage (longer than getTransactionDetails' retry window) still lands
+                          // here. applyUpdate has already advanced appliedIndex, so this change.source won't be
+                          // re-processed — the shielded section is permanently lost. Surface that as a structured
+                          // error carrying the tx hash, not a silent Console.error defect.
+                          Effect.logError(cause, `Failed to record shielded tx-history section for ${change.source}`),
+                        ),
+                      ),
+                    // `concurrency` only bounds fiber creation within this one batch; the real cap on simultaneous
+                    // indexer queries is the variant-wide semaphore acquired around each lookup above.
+                    { discard: true, concurrency: 8 },
                   ),
-                { discard: true, concurrency: 'unbounded' },
-              ),
-              Effect.forkScoped,
-            ),
+                  Effect.forkScoped,
+                ),
           ),
           Effect.provideService(Scope.Scope, this.#scope),
         ),

@@ -1,11 +1,11 @@
-# @midnight-ntwrk/wallet-sdk-indexer-client
+# @midnightntwrk/wallet-sdk-indexer-client
 
 Client for communicating with the Midnight indexer service.
 
 ## Installation
 
 ```bash
-npm install @midnight-ntwrk/wallet-sdk-indexer-client
+npm install @midnightntwrk/wallet-sdk-indexer-client
 ```
 
 ## Overview
@@ -24,6 +24,12 @@ blockchain data and provides efficient access to:
   - Ledger parameters (including cost model)
   - Connection management
 
+## GraphQL schema
+
+The committed schema (`indexer.gql`) and its generated types are kept in sync with a pinned indexer release by a sync
+tool. To change the source repo/file, edit `schema.config.yml`; `indexer.gql` and `schema.lock` are tool-generated —
+never hand-edit them. See [`scripts/schema-sync/README.md`](scripts/schema-sync/README.md).
+
 ## Usage
 
 ### Subscriptions
@@ -36,7 +42,7 @@ import {
   UnshieldedTransactions,
   ZswapEvents,
   DustLedgerEvents,
-} from '@midnight-ntwrk/wallet-sdk-indexer-client';
+} from '@midnightntwrk/wallet-sdk-indexer-client';
 
 // Subscribe to shielded transaction events
 // Subscribe to unshielded transaction events
@@ -49,7 +55,7 @@ import {
 Query blockchain data:
 
 ```typescript
-import { BlockHash } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
 
 // Query block information including:
 // - Block height
@@ -78,7 +84,7 @@ import {
   SubscriptionClient,
   HttpQueryClient,
   WsSubscriptionClient,
-} from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+} from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 ```
 
 ## License

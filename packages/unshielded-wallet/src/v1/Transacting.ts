@@ -11,21 +11,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, Option, pipe, Array as Arr } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
-import { InsufficientFundsError, OtherWalletError, SignError, TransactingError, WalletError } from './WalletError.js';
+import { InsufficientFundsError, OtherWalletError, TransactingError, type WalletError } from './WalletError.js';
+import { type UtxoWithMeta } from './UnshieldedState.js';
 import {
-  BalanceRecipe,
-  CoinSelection,
+  type BalanceRecipe,
+  type CoinSelection,
   getBalanceRecipe,
   Imbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
-} from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { TransactionOps, UnboundTransaction, IntentOf } from './TransactionOps.js';
-import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
-import { KeysCapability } from './Keys.js';
-import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+} from '@midnightntwrk/wallet-sdk-capabilities';
+import { TransactionOps, type UnboundTransaction, type IntentOf } from './TransactionOps.js';
+import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { type KeysCapability } from './Keys.js';
+import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 
 const GUARANTEED_SEGMENT = 0;
 
@@ -57,6 +58,30 @@ export interface TransactingCapability<TState> {
     wallet: CoreWallet,
     desiredInputs: Record<string, bigint>,
     outputs: ReadonlyArray<TokenTransfer>,
+    ttl: Date,
+  ): Either.Either<TransactingResult<ledger.UnprovenTransaction, TState>, WalletError>;
+
+  /**
+   * Builds an unproven transaction that moves a caller-supplied set of Night UTxOs back to their current owner,
+   * splitting them between the guaranteed and fallible sections of a single intent. The provided UTxOs are booked in
+   * the wallet state (moved from available to pending) so that no subsequent build call can pick them.
+   *
+   * Used by the Dust wallet's registration/deregistration flow, where the Dust wallet picks the guaranteed slot (based
+   * on dust generation) and hands both sets here for booking and intent construction. The Dust wallet then attaches its
+   * DustActions onto the returned intent.
+   *
+   * @param wallet - The wallet whose UTxOs are being passed through
+   * @param guaranteedUtxos - UTxOs to place in the guaranteed offer (segment 0)
+   * @param fallibleUtxos - UTxOs to place in the fallible offer (segment 1+)
+   * @param nightVerifyingKey - The verifying key used as the input owner and the address for the consolidating output
+   * @param ttl - The TTL for the transaction
+   * @returns The new wallet state (with all provided UTxOs booked) and the unproven transaction
+   */
+  rotateUtxos(
+    wallet: CoreWallet,
+    guaranteedUtxos: ReadonlyArray<UtxoWithMeta>,
+    fallibleUtxos: ReadonlyArray<UtxoWithMeta>,
+    nightVerifyingKey: ledger.SignatureVerifyingKey,
     ttl: Date,
   ): Either.Either<TransactingResult<ledger.UnprovenTransaction, TState>, WalletError>;
 
@@ -136,8 +161,8 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   }
 
   /**
-   * Balances an unbound transaction
-   * Note: Unbound transactions are balanced in place and returned
+   * Balances an unbound transaction Note: Unbound transactions are balanced in place and returned
+   *
    * @param wallet - The wallet to balance the transaction with
    * @param transaction - The transaction to balance
    * @returns The balanced transaction and the new wallet state if successful, otherwise an error
@@ -150,8 +175,9 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   }
 
   /**
-   * Balances an unproven transaction
-   * Note: This method does the same thing as balanceUnboundTransaction but is provided for convenience and type safety
+   * Balances an unproven transaction Note: This method does the same thing as balanceUnboundTransaction but is provided
+   * for convenience and type safety
+   *
    * @param wallet - The wallet to balance the transaction with
    * @param transaction - The transaction to balance
    * @returns The balanced transaction and the new wallet state if successful, otherwise an error
@@ -164,12 +190,12 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   }
 
   /**
-   * Balances a bound transaction
-   * Note: In bound transactions we can only balance the guaranteed section in intents
+   * Balances a bound transaction Note: In bound transactions we can only balance the guaranteed section in intents
+   *
    * @param wallet - The wallet to balance the transaction with
    * @param transaction - The transaction to balance
-   * @returns A balancing counterpart transaction (which should be merged with the original transaction )
-   * and the new wallet state if successful, otherwise an error
+   * @returns A balancing counterpart transaction (which should be merged with the original transaction ) and the new
+   *   wallet state if successful, otherwise an error
    */
   balanceFinalizedTransaction(
     wallet: CoreWallet,
@@ -206,12 +232,18 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       const balancingIntent = ledger.Intent.new(intent!.ttl);
       balancingIntent.guaranteedUnshieldedOffer = offer;
 
-      return [ledger.Transaction.fromPartsRandomized(this.networkId, undefined, undefined, balancingIntent), newState];
+      const segmentId = Option.getOrElse(this.txOps.findAvailableSegmentId(transaction), () => 1);
+      const balancingTx = ledger.Transaction.fromParts(this.networkId).addIntent(
+        { tag: 'specific', value: segmentId },
+        balancingIntent,
+      );
+      return [balancingTx, newState];
     });
   }
 
   /**
    * Makes a transfer transaction
+   *
    * @param wallet - The wallet to make the transfer with
    * @param outputs - The outputs for the transfer
    * @param ttl - The TTL for the transaction
@@ -266,8 +298,88 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     });
   }
 
+  rotateUtxos(
+    wallet: CoreWallet,
+    guaranteedUtxos: ReadonlyArray<UtxoWithMeta>,
+    fallibleUtxos: ReadonlyArray<UtxoWithMeta>,
+    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    ttl: Date,
+  ): Either.Either<TransactingResult<ledger.UnprovenTransaction, CoreWallet>, WalletError> {
+    return Either.gen(this, function* () {
+      const { networkId } = this;
+
+      if (guaranteedUtxos.length === 0 && fallibleUtxos.length === 0) {
+        return yield* Either.left(
+          new TransactingError({ message: 'At least one UTxO must be provided to rotateUtxos' }),
+        );
+      }
+
+      const ownerAddress = ledger.addressFromKey(nightVerifyingKey);
+
+      const makeOffer = (
+        utxos: ReadonlyArray<UtxoWithMeta>,
+      ): Option.Option<ledger.UnshieldedOffer<ledger.SignatureEnabled>> => {
+        if (utxos.length === 0) {
+          return Option.none();
+        }
+        const inputs: ledger.UtxoSpend[] = utxos.map(({ utxo }) => ({
+          value: utxo.value,
+          type: utxo.type,
+          intentHash: utxo.intentHash,
+          outputNo: utxo.outputNo,
+          owner: nightVerifyingKey,
+        }));
+        const totalValue = pipe(
+          utxos,
+          Arr.map(({ utxo }) => utxo.value),
+          Arr.reduce(0n, (a, b) => a + b),
+        );
+        const output: ledger.UtxoOutput = {
+          owner: ownerAddress,
+          type: ledger.nativeToken().raw,
+          value: totalValue,
+        };
+        return Option.some(ledger.UnshieldedOffer.new(inputs, [output], []));
+      };
+
+      const allUtxos = [...guaranteedUtxos, ...fallibleUtxos].map(({ utxo }) => utxo);
+      const [, walletAfterBooking] = yield* CoreWallet.spendUtxos(wallet, allUtxos);
+
+      const guaranteedOffer = makeOffer(guaranteedUtxos);
+      const fallibleOffer = makeOffer(fallibleUtxos);
+
+      const intent = pipe(
+        ledger.Intent.new(ttl),
+        (i) =>
+          Option.match(guaranteedOffer, {
+            onNone: () => i,
+            onSome: (offer) => {
+              i.guaranteedUnshieldedOffer = offer;
+              return i;
+            },
+          }),
+        (i) =>
+          Option.match(fallibleOffer, {
+            onNone: () => i,
+            onSome: (offer) => {
+              i.fallibleUnshieldedOffer = offer;
+              return i;
+            },
+          }),
+      );
+
+      const transaction = ledger.Transaction.fromParts(networkId, undefined, undefined, intent);
+
+      return {
+        newState: walletAfterBooking,
+        transaction,
+      };
+    });
+  }
+
   /**
    * Initializes a swap transaction
+   *
    * @param wallet - The wallet to initialize the swap for
    * @param desiredInputs - The desired inputs for the swap
    * @param desiredOutputs - The desired outputs for the swap
@@ -335,6 +447,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
   /**
    * Internal method to sign either an unproven or unbound transaction
+   *
    * @param transaction - The transaction to sign
    * @param signSegment - The signing function
    * @returns The signed transaction if successful, otherwise an error
@@ -345,9 +458,6 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   ): Either.Either<T, WalletError> {
     return Either.gen(this, function* () {
       const segments = this.txOps.getSegments(transaction);
-      if (!segments.length) {
-        throw new SignError({ message: 'No segments found in the provided transaction' });
-      }
 
       for (const segment of segments) {
         const signedData = yield* this.txOps.getSignatureData(transaction, segment);
@@ -360,8 +470,10 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
   /**
    * Reverts a transaction by rolling back all inputs owned by this wallet
+   *
    * @param wallet - The wallet to revert the transaction for
-   * @param transaction - The transaction to revert (can be FinalizedTransaction, UnboundTransaction, or UnprovenTransaction)
+   * @param transaction - The transaction to revert (can be FinalizedTransaction, UnboundTransaction, or
+   *   UnprovenTransaction)
    * @returns The updated wallet with rolled back UTXOs if successful, otherwise an error
    */
   revertTransaction(
@@ -381,6 +493,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
   /**
    * Balances a segment of a transaction
+   *
    * @param wallet - The wallet to balance the segment for
    * @param imbalances - The imbalances to balance the segment for
    * @param targetImbalances - The target imbalances to balance the segment for
@@ -432,6 +545,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
   /**
    * Prepares an offer for a given balance recipe
+   *
    * @param wallet - The wallet to prepare the offer for
    * @param balanceRecipe - The balance recipe to prepare the offer for
    * @returns The prepared offer and the new wallet state if successful, otherwise an error
@@ -486,10 +600,11 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
   /**
    * Balances an unboundish (unproven or unbound) transaction
+   *
    * @param wallet - The wallet to balance the transaction with
    * @param transaction - The transaction to balance
    * @returns The balanced transaction and the new wallet state if successful, otherwise an error
-   * @TODO - https://shielded.atlassian.net/browse/PM-21260
+   * @todo - https://shielded.atlassian.net/browse/PM-21260
    */
   #balanceUnboundishTransaction<T extends ledger.UnprovenTransaction | UnboundTransaction>(
     wallet: CoreWallet,

@@ -6,47 +6,167 @@ env:
   MIDNIGHTCI_GPG_PRIVATE_KEY: ${{ secrets.MIDNIGHTCI_GPG_PRIVATE_KEY }}
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+      - v2
 
 permissions: {}
 
 jobs:
-  release:
-    name: Release
+  # Manages the changesets "Version Packages" PR. Ungated, so the release PR
+  # is created/updated automatically on every push — the human gate lives on
+  # the downstream publish-stable job (and on merging the release PR itself).
+  version:
+    name: Version (release PR)
     runs-on: ubuntu-latest-8-core-x64
     permissions:
       contents: write
       pull-requests: write
-      packages: write
-
+    outputs:
+      # Single publish-mode signal the downstream jobs gate on, so at most one
+      # can ever fire. Resolved by the "Resolve publish mode" step from two
+      # internal signals (hasChangesets from changesets/action, hasReleases from
+      # the detect step below):
+      #   'stable' → release PR merged: no changesets left → publish canonical
+      #   'canary' → pending package-bumping changeset(s) → publish snapshot
+      #   'none'   → docs/CI-only (empty changeset): publish nothing
+      mode: ${{ steps.mode.outputs.mode }}
     concurrency:
-      group: release-${{ github.ref_name }}
+      group: version-${{ github.ref_name }}
       cancel-in-progress: false
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f #v6.3.0
+      # No registry-url/scope here: this job only opens the release PR, it never
+      # runs `npm publish` (those are set on the publish-stable/canary jobs).
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
-          # This is required for the npm publish step
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@midnight-ntwrk'
 
       - name: Enable corepack
         run: corepack enable
 
-      - name: Configure yarn
+      - name: Configure yarn (install-time auth for GH Packages)
+        run: |
+          # Upstream @midnight-ntwrk deps (ledger-v8, zkir-v2, etc.)
+          # still live on GH Packages, so install needs that token.
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Import GPG key
+        id: gpg
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd #v7.0.0
+        with:
+          gpg_private_key: ${{ env.MIDNIGHTCI_GPG_PRIVATE_KEY }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
+      - name: Configure GIT signing
+        run: |
+          git config user.name  "MidnightCI"
+          git config user.email "midnight-automation+midnightci@iohk.io"
+          git config user.signingkey "${{ steps.gpg.outputs.fingerprint }}"
+          git config commit.gpgsign true
+          git config tag.gpgSign true
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      # Must run BEFORE the changesets action: `changeset version` consumes the
+      # changesets in the workspace. `releases` in the status JSON lists only
+      # packages that would actually be bumped (empty changesets contribute
+      # nothing), so its length is the precise "is there a real change to
+      # snapshot" signal that resolves `mode` to 'canary'.
+      - name: Detect package-bumping changesets
+        id: releases
+        run: |
+          set -uo pipefail   # no -e: we handle status's exit code ourselves
+          rm -f changeset-status.json
+          # status exits 1 if packages changed without a changeset (possible on
+          # v2 where the diff vs main is non-empty); treat any failure / missing
+          # output as "no releasing changesets".
+          yarn changeset status --output=changeset-status.json || true
+          if [ -f changeset-status.json ]; then
+            COUNT=$(node -p "require('./changeset-status.json').releases.length" 2>/dev/null || echo 0)
+          else
+            COUNT=0
+          fi
+          rm -f changeset-status.json
+          if [ "${COUNT:-0}" -gt 0 ]; then
+            echo "hasReleases=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "hasReleases=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create / update Release Pull Request
+        id: changesets
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          title: 'chore: release'
+          version: yarn changeset:version
+          # No `publish` here — publishing is the gated publish-stable job.
+          setupGitUser: false
+        env:
+          GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      # Collapse the two signals into one mutually-exclusive mode (see the
+      # `mode` job output above). hasChangesets == 'false' wins as 'stable':
+      # when the release PR merges there are no changesets left, so hasReleases
+      # is 'false' too and there is no ambiguity.
+      - name: Resolve publish mode
+        id: mode
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.changesets.outputs.hasChangesets }}" = "false" ]; then
+            MODE=stable
+          elif [ "${{ steps.releases.outputs.hasReleases }}" = "true" ]; then
+            MODE=canary
+          else
+            MODE=none
+          fi
+          echo "Resolved publish mode: ${MODE}"
+          echo "mode=${MODE}" >> "$GITHUB_OUTPUT"
+
+  # Publishes stable packages (primary @midnightntwrk + @midnight-ntwrk alias).
+  # Runs only on the push that merged the release PR (no changesets left) and
+  # is gated by the npm-publish-stable environment. Independent of canary, so
+  # snapshot publishing is never blocked by this gate.
+  publish-stable:
+    name: Publish (stable)
+    needs: [version]
+    if: needs.version.outputs.mode == 'stable'
+    runs-on: ubuntu-latest-8-core-x64
+    # Human gate: this environment must require reviewer approval before the
+    # job can run. Configure required reviewers in repo
+    # Settings → Environments → npm-publish-stable.
+    environment: npm-publish-stable
+    permissions:
+      contents: write # push release git tags
+      id-token: write # npm Trusted Publishing (OIDC) + provenance
+    concurrency:
+      group: publish-stable-${{ github.ref_name }}
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          token: ${{ env.MIDNIGHT_GH_TOKEN }} # so the release-tag push is authenticated
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: 'yarn.lock'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@midnightntwrk'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Configure yarn (install-time auth for GH Packages)
         run: |
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
@@ -67,49 +187,66 @@ jobs:
           git config tag.gpgSign true
 
       - name: Install dependencies
-        run: |
-          yarn install --immutable
+        run: yarn install --immutable
 
-      - name: Create Release Pull Request / Publish
-        id: changesets
-        uses: changesets/action@6a0a831ff30acef54f2c6aa1cbbc1096b066edaf # v1.7.0
+      - name: Build packages
+        run: yarn dist:publish
+
+      # Publish the canonical @midnightntwrk scope via changesets. The action
+      # runs `changeset publish` (OIDC Trusted Publishing — no token; provenance
+      # via NPM_CONFIG_PROVENANCE), then pushes the release tags and creates one
+      # GitHub Release per package from its CHANGELOG. This restores the Releases
+      # that the action created before publishing was hand-rolled into a script.
+      - name: Publish @midnightntwrk + GitHub Releases
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
-          title: 'chore: release'
-          version: yarn changeset:version
-          publish: yarn changeset:publish
+          publish: yarn changeset publish
           setupGitUser: false
-
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
+
+      # Mirror the transitional @midnight-ntwrk alias (dashed scope). The
+      # canonical scope is already live from the step above; this only stages
+      # and publishes the alias, so it can never lead the canonical scope.
+      - name: Publish @midnight-ntwrk alias
+        run: node scripts/publish-alias.mjs
 
   canary:
     name: Canary (snapshot publish)
+    needs: [version]
+    # Publish a snapshot only when there are pending package-bumping changesets
+    # (real unreleased changes). Mutually exclusive with publish-stable by
+    # construction (see the `mode` output). `version` is ungated, so this
+    # dependency adds no reviewer gate — it just provides the signal.
+    if: needs.version.outputs.mode == 'canary'
     runs-on: ubuntu-latest-8-core-x64
-    needs: [release]
+    # Canary has its own environment only to scope the npmjs Trusted Publisher
+    # per release type — no required reviewers here, so snapshot publishing is
+    # never blocked on approval.
+    environment: npm-publish-canary
     permissions:
-      packages: write
       contents: read
+      id-token: write # for npm Trusted Publishing (OIDC) + provenance
     concurrency:
       group: canary-${{ github.ref_name }}
       cancel-in-progress: false
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f #v6.3.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@midnight-ntwrk'
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@midnightntwrk'
 
       - name: Enable corepack
         run: corepack enable
 
-      - name: Configure yarn
+      - name: Configure yarn (install-time auth for GH Packages)
         run: |
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
@@ -118,8 +255,8 @@ jobs:
 
       - name: Snapshot version + publish canary
         env:
-          NODE_AUTH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
         run: |
           set -euo pipefail
 
@@ -132,6 +269,35 @@ jobs:
           SHORT_SHA=$(git rev-parse --short=7 HEAD)
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
 
+          # Force changeset to rewrite internal dependents' ranges during the
+          # snapshot. Internal sibling deps use caret ranges (see #399); a
+          # "-canary" prerelease does not satisfy a caret range, so without this
+          # those ranges are left untouched and yarn resolves the sibling from
+          # the published registry instead of the workspace, building against a
+          # stale package. "updateInternalDependents: always" makes changeset
+          # pin every internal range to the snapshot version so siblings resolve
+          # to the workspace. Applied only here (this checkout is discarded by
+          # the Cleanup step) so the regular release flow is unaffected.
+          # See https://github.com/changesets/changesets/blob/main/docs/experimental-options.md
+          node -e '
+            const fs = require("fs");
+            const path = ".changeset/config.json";
+            const config = JSON.parse(fs.readFileSync(path, "utf8"));
+            config.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH = {
+              ...config.___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH,
+              updateInternalDependents: "always",
+            };
+            fs.writeFileSync(path, JSON.stringify(config, null, 2) + "\n");
+          '
+
+          # Snapshot the ENTIRE SDK as one coherent set from this commit:
+          # `changeset version --snapshot` only versions packages named in a
+          # changeset (+ dependents), so without this the canary dist-tag would
+          # be inconsistent across packages. This writes a temporary changeset
+          # patch-bumping every publishable package (discarded by Cleanup); real
+          # changesets still win with their minor/major bumps.
+          node scripts/write-canary-changeset.mjs
+
           # Apply snapshot versions
           yarn changeset version --snapshot canary.${TIMESTAMP}-${SHORT_SHA}
 
@@ -141,8 +307,22 @@ jobs:
           # Build AFTER snapshot versions are applied
           yarn dist:publish
 
-          # Publish under dist-tag "canary"
-          yarn changeset publish --tag canary
+          # Publish under a branch-specific dist-tag: "canary" on main,
+          # "canary-<branch>" elsewhere.
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            CANARY_TAG="canary"
+          else
+            CANARY_TAG="canary-${{ github.ref_name }}"
+          fi
+
+          # Canonical @midnightntwrk scope: `changeset publish` (OIDC +
+          # provenance via NPM_CONFIG_PROVENANCE), the same mechanism the stable
+          # job uses. --no-git-tag so canary snapshots leave no git tags (and
+          # no GitHub Releases — that is the action's job, not the CLI's).
+          yarn changeset publish --tag "$CANARY_TAG" --no-git-tag
+
+          # Dashed @midnight-ntwrk alias: mirrored afterwards from the workspace.
+          node scripts/publish-alias.mjs --tag "$CANARY_TAG"
 
       - name: Cleanup (always)
         if: always()

@@ -17,8 +17,8 @@ export type TagOf<T> = T extends WithTag<infer Tag> ? Tag : never;
 
 export type WithTagFrom<T> = WithTag<TagOf<T>>;
 /**
- * Polymorphic function - function defined for multiple types at once
- * Leveraging tagging mechanics it can predictably work at runtime and be quite intuitively defined by hand
+ * Polymorphic function - function defined for multiple types at once Leveraging tagging mechanics it can predictably
+ * work at runtime and be quite intuitively defined by hand
  */
 export type PolyFunction<Variants extends WithTag<string | symbol>, T> = {
   [V in Variants as TagOf<V>]: (variant: V) => T;

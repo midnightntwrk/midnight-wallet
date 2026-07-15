@@ -50,6 +50,7 @@ packages/src/**/*.d.ts*
 reports
 
 # user files
+/.scratch
 **/.sync_cache
 /packages/e2e-tests/res
 
@@ -59,3 +60,6 @@ CLAUDE.local.md
 
 # Claude Code — credentials (Linux/Windows only; macOS uses Keychain)
 .claude/.credentials.json
+
+# Claude Code — per-session runtime lock files (e.g. scheduled_tasks.lock)
+.claude/*.lock

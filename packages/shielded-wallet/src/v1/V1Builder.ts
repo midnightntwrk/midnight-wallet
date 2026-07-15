@@ -12,12 +12,12 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, type Either, Scope, type Types } from 'effect';
-import { WalletSeed, type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { WalletSeed, type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type Variant,
   type VariantBuilder,
   type WalletRuntimeError,
-} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+} from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
 import { makeDefaultV1SerializationCapability, type SerializationCapability } from './Serialization.js';
 import {
@@ -39,14 +39,14 @@ import {
 import { type WalletError } from './WalletError.js';
 import { type CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
-import { type CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { type CoinSelection, chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
 import { CoreWallet, PublicKeys } from './CoreWallet.js';
 import {
-  DefaultTransactionHistoryConfiguration,
+  type DefaultTransactionHistoryConfiguration,
   makeDefaultTransactionHistoryService,
   type TransactionHistoryService,
 } from './TransactionHistory.js';
-import { type Expect, type Equal, type ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { type Expect, type Equal, type ItemType } from '@midnightntwrk/wallet-sdk-utilities/types';
 
 export type BaseV1Configuration = {
   networkId: NetworkId.NetworkId;
@@ -527,9 +527,7 @@ declare namespace V1Builder {
     readonly keysCapability: (configuration: TConfig, getContext: () => TContext) => KeysCapability<CoreWallet>;
   };
 
-  /**
-   * The internal build state of {@link V1Builder}.
-   */
+  /** The internal build state of {@link V1Builder}. */
   type FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux> = Types.Simplify<
     HasSync<TConfig, TContext, TSyncUpdate, TStartAux> &
       HasSerialization<TConfig, TContext, TSerialized> &
@@ -548,13 +546,10 @@ declare namespace V1Builder {
     TStartAux = object,
   > = {
     [K in keyof FullBuildState<never, never, never, never, never, never>]?:
-      | FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux>[K]
-      | undefined;
+      FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux>[K] | undefined;
   };
 
-  /**
-   * Utility interface that manages the type variance of {@link V1Builder}.
-   */
+  /** Utility interface that manages the type variance of {@link V1Builder}. */
   interface Variance<R> {
     readonly [V1BuilderSymbol.typeId]: {
       readonly _R: Types.Covariant<R>;
@@ -575,9 +570,7 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate, TTransact
     'keysCapability',
     'transactionHistoryService',
   ] as const;
-  /**
-   * This type will fail compilation if any key is omitted, letting the `isFull` check work properly
-   */
+  /** This type will fail compilation if any key is omitted, letting the `isFull` check work properly */
   type _1 = Expect<
     Equal<keyof V1Builder.FullBuildState<never, never, never, never, never, never>, ItemType<typeof allBuildStateKeys>>
   >;

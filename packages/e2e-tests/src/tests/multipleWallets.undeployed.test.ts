@@ -15,22 +15,18 @@ import { firstValueFrom } from 'rxjs';
 import { logger } from './logger.js';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import { getShieldedSeed } from './utils.js';
-import { ShieldedWallet, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ShieldedWallet, type ShieldedWalletClass } from '@midnightntwrk/wallet-sdk-shielded';
+import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,
   PublicKey,
   type UnshieldedKeystore,
   UnshieldedWallet,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { WalletFacade, WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { WalletFacade, WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import { DustWallet } from '../../../dust-wallet/dist/DustWallet.js';
 
-/**
- * Syncing tests
- *
- * @group undeployed
- */
+/** Syncing tests */
 
 describe('Syncing', () => {
   const getFixture = useTestContainersFixture();
@@ -71,7 +67,7 @@ describe('Syncing', () => {
             indexerHttpUrl: fixture.getIndexerUri(),
             indexerWsUrl: fixture.getIndexerWsUri(),
           },
-          txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystores[i]));
       }
 
@@ -80,7 +76,7 @@ describe('Syncing', () => {
           configuration: {
             ...fixture.getWalletConfig(),
             ...fixture.getDustWalletConfig(),
-            txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+            txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
           },
           shielded: () => shieldedWallets[i],
           unshielded: () => unshieldedWallets[i],

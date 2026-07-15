@@ -10,16 +10,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Chunk, Context, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
-import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
+import { Chunk, type Context, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
+import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest, type HttpClientResponse } from '@effect/platform';
 import { ProverClient } from './ProverClient.js';
 import {
   ClientError,
   HttpURL,
-  InvalidProtocolSchemeError,
+  type InvalidProtocolSchemeError,
   ServerError,
-} from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { BlobOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+} from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { BlobOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 
 const PROVE_TX_PATH = '/prove';
@@ -29,8 +29,8 @@ const CHECK_TX_PATH = '/check';
  * Creates a layer for a {@link ProverClient} that sends requests to a Proof Server over HTTP.
  *
  * @param config The server configuration to use when configuring the HTTP elements of the layer.
- * @returns A `Layer` for {@link ProverClient} that sends requests to a configured Proof Server over HTTP.
- * The layer can fail with an `InvalidProtocolSchemeError` if `config` is invalid for a HTTP context.
+ * @returns A `Layer` for {@link ProverClient} that sends requests to a configured Proof Server over HTTP. The layer can
+ *   fail with an `InvalidProtocolSchemeError` if `config` is invalid for a HTTP context.
  */
 export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverClient, InvalidProtocolSchemeError> = (
   config,
@@ -70,8 +70,8 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     failurePrefix: string,
   ): Effect.Effect<Uint8Array, ClientError | ServerError> {
     const concatBytes = (chunks: Uint8Array[]): Effect.Effect<Uint8Array> =>
-      Effect.promise(
-        (): Promise<Uint8Array> => BlobOps.getBytes(new Blob(chunks.map((chunk) => new Uint8Array(chunk)))),
+      Effect.promise((): Promise<Uint8Array> =>
+        BlobOps.getBytes(new Blob(chunks.map((chunk) => new Uint8Array(chunk)))),
       );
 
     const receiveBody = (response: HttpClientResponse.HttpClientResponse) =>
@@ -86,7 +86,15 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
 
     const proveTxRequest = pipe(
       Effect.succeed(payload),
-      Effect.map((body) => HttpClientRequest.post(url).pipe(HttpClientRequest.bodyUint8Array(body))),
+      Effect.map((body) =>
+        HttpClientRequest.post(url).pipe(
+          // A raw body must be used instead of `bodyUint8Array` so that no explicit `content-length`
+          // header is attached: `fetch` derives the length from the body itself, and an explicit
+          // header is rejected as malformed by undici >= 8.2.0 when it is installed as the global
+          // dispatcher (e.g. transitively via testcontainers or @effect/platform-node).
+          HttpClientRequest.setBody(HttpBody.raw(body, { contentType: 'application/octet-stream' })),
+        ),
+      ),
       Effect.flatMap(HttpClient.execute),
       Effect.flatMap((response: HttpClientResponse.HttpClientResponse) =>
         Effect.gen(function* () {

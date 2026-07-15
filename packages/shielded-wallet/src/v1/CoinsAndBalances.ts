@@ -10,10 +10,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { CoreWallet } from './CoreWallet.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { type CoreWallet } from './CoreWallet.js';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { pipe, Array } from 'effect';
-import { RecordOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { RecordOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 export type AvailableCoin = {
   coin: ledger.QualifiedShieldedCoinInfo;

@@ -11,8 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 export declare namespace Fluent {
-  /**
-   * Exclude named methods from `T` so that they are no longer callable.
-   */
+  /** Exclude named methods from `T` so that they are no longer callable. */
   type ExcludeMethod<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>;
 }

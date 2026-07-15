@@ -12,53 +12,75 @@
 // limitations under the License.
 import { describe, expect, it } from 'vitest';
 import {
+  DustAddress,
   mainnet,
   MidnightBech32m,
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionSecretKey,
+  UnshieldedAddress,
 } from '../src/index.js';
 import addresses from './addresses.json' with { type: 'json' };
 
+// The test vectors carry `networkId: null` for mainnet; the codecs use the `mainnet` symbol.
+const networkOf = (item: (typeof addresses)[number]) => item.networkId ?? mainnet;
+
 describe('Bech32 addresses', () => {
   it('ShieldedAddress - Bech32 representation should match its Hex representation', () => {
-    addresses.forEach((item, _) => {
-      const shA = ShieldedAddress.codec.decode(
-        item.networkId ?? mainnet,
-        MidnightBech32m.parse(item.shieldedAddress.bech32m),
-      );
+    addresses.forEach((item) => {
+      const shA = ShieldedAddress.codec.decode(networkOf(item), MidnightBech32m.parse(item.shieldedAddress.bech32m));
 
       expect(item.shieldedAddress.hex).toEqual(`${shA.coinPublicKeyString()}${shA.encryptionPublicKeyString()}`);
     });
   });
 
-  /**
-   * addresses.json needs to be updated with the correct format for this test to pass
-   */
-  it.skip('ShieldedEncryptionSecretKey - Bech32 representation should match its Hex representation', () => {
-    const zswapNetworkIds = ['dev', 'test', null];
-    const filteredAddresses = addresses.filter((item) => zswapNetworkIds.includes(item.networkId));
-    filteredAddresses.forEach((item, _) => {
+  it('ShieldedEncryptionSecretKey - Bech32 representation should match its Hex representation', () => {
+    addresses.forEach((item) => {
       const shESK = ShieldedEncryptionSecretKey.codec.decode(
-        'undeployed',
+        networkOf(item),
         MidnightBech32m.parse(item.shieldedESK.bech32m),
       );
 
-      const eskHEXRaw = shESK.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize();
-      const eskHEX = Buffer.from(eskHEXRaw.subarray(1)).toString('hex');
+      const eskHEX = Buffer.from(shESK.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize()).toString('hex');
 
       expect(item.shieldedESK.hex).toEqual(eskHEX);
     });
   });
 
   it('ShieldedCoinPublicKey - Bech32 representation should match its Hex representation', () => {
-    addresses.forEach((item, _) => {
+    addresses.forEach((item) => {
       const shCPK = ShieldedCoinPublicKey.codec.decode(
-        item.networkId ?? mainnet,
+        networkOf(item),
         MidnightBech32m.parse(item.shieldedCPK.bech32m),
       );
 
       expect(item.shieldedCPK.hex).toEqual(Buffer.from(shCPK.data).toString('hex'));
+    });
+  });
+
+  it('UnshieldedAddress - Bech32 representation should match its Hex representation', () => {
+    // Some seeds have no derivable unshielded address; those vectors carry a null hex/bech32m pair.
+    const withUnshielded = addresses.filter(
+      (item): item is typeof item & { unshieldedAddress: { hex: string; bech32m: string } } =>
+        item.unshieldedAddress.bech32m !== null,
+    );
+    expect(withUnshielded.length).toBeGreaterThan(0);
+
+    withUnshielded.forEach((item) => {
+      const address = UnshieldedAddress.codec.decode(
+        networkOf(item),
+        MidnightBech32m.parse(item.unshieldedAddress.bech32m),
+      );
+
+      expect(item.unshieldedAddress.hex).toEqual(address.hexString);
+    });
+  });
+
+  it('DustAddress - Bech32 representation should match its Hex representation', () => {
+    addresses.forEach((item) => {
+      const dustAddress = DustAddress.codec.decode(networkOf(item), MidnightBech32m.parse(item.dustAddress.bech32m));
+
+      expect(item.dustAddress.hex).toEqual(Buffer.from(dustAddress.serialize()).toString('hex'));
     });
   });
 });

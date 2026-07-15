@@ -17,21 +17,14 @@
     "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-dust-wallet": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-facade": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-hd": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-shielded": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:*",
+    "@midnightntwrk/wallet-sdk": "workspace:*",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "buffer": "^6.0.3",
-    "effect": "^3.19.19",
     "lodash-es": "^4.17.23",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "rxjs": "^7.8.2",
-    "testcontainers": "^11.12.0"
+    "rxjs": "^7.8.2"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
@@ -44,9 +37,9 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@types/lodash-es": "^4.17.12",
-    "vite": "^7.3.1",
-    "vite-plugin-node-polyfills": "^0.25.0",
-    "vite-plugin-wasm": "^3.5.0"
+    "@types/lodash-es": "4.17.12",
+    "vite": "7.3.6",
+    "vite-plugin-node-polyfills": "0.28.0",
+    "vite-plugin-wasm": "3.6.0"
   }
 }

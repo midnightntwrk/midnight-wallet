@@ -15,15 +15,15 @@ import { exit } from 'process';
 import { randomUUID } from 'node:crypto';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { type StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
-import { type MidnightNetwork, sleep } from './utils.js';
+import { type MidnightNetwork, sleep } from './helpers/network.js';
 import { logger } from './logger.js';
-import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
-import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
-import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
-import { type DefaultProvingConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
-import { type DefaultSubmissionConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
+import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
+import { type DefaultProvingConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import { type DefaultSubmissionConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/submission';
 
 export function useTestContainersFixture() {
   let fixture: TestContainersFixture | undefined;
@@ -57,7 +57,6 @@ export function useTestContainersFixture() {
       }
       case 'devnet':
       case 'qanet':
-      case 'testnet':
       case 'preview':
       case 'preprod': {
         const environmentVars = buildTestEnvironmentVariables(envVarsToPass, {
@@ -136,20 +135,17 @@ export class TestContainersFixture {
 
   public getIndexerUri(): string {
     switch (TestContainersFixture.network) {
-      case 'testnet': {
-        return 'https://indexer.testnet-02.midnight.network/api/v3/graphql';
-      }
       case 'devnet': {
-        return 'https://indexer.devnet.midnight.network/api/v3/graphql';
+        return 'https://indexer.devnet.midnight.network/api/v4/graphql';
       }
       case 'qanet': {
-        return 'https://indexer.qanet.midnight.network/api/v3/graphql';
+        return 'https://indexer.qanet.midnight.network/api/v4/graphql';
       }
       case 'preview': {
-        return 'https://indexer.preview.midnight.network/api/v3/graphql';
+        return 'https://indexer.preview.midnight.network/api/v4/graphql';
       }
       case 'preprod': {
-        return 'https://indexer.preprod.midnight.network/api/v3/graphql';
+        return 'https://indexer.preprod.midnight.network/api/v4/graphql';
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
@@ -163,20 +159,17 @@ export class TestContainersFixture {
 
   public getIndexerWsUri(): string {
     switch (TestContainersFixture.network) {
-      case 'testnet': {
-        return 'wss://indexer.testnet-02.midnight.network/api/v3/graphql/ws';
-      }
       case 'devnet': {
-        return 'wss://indexer.devnet.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer.devnet.midnight.network/api/v4/graphql/ws';
       }
       case 'qanet': {
-        return 'wss://indexer.qanet.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer-blue.qanet.midnight.network/api/v4/graphql/ws';
       }
       case 'preview': {
-        return 'wss://indexer.preview.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer.preview.midnight.network/api/v4/graphql/ws';
       }
       case 'preprod': {
-        return 'wss://indexer.preprod.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
@@ -190,9 +183,6 @@ export class TestContainersFixture {
 
   public getNodeUri(): string {
     switch (TestContainersFixture.network) {
-      case 'testnet': {
-        return 'https://rpc.testnet-02.midnight.network';
-      }
       case 'devnet': {
         return 'wss://rpc.devnet.midnight.network';
       }
@@ -223,8 +213,6 @@ export class TestContainersFixture {
         return NetworkId.NetworkId.DevNet;
       case 'qanet':
         return NetworkId.NetworkId.QaNet;
-      case 'testnet':
-        return NetworkId.NetworkId.TestNet;
       case 'preview':
         return NetworkId.NetworkId.Preview;
       case 'preprod':
@@ -243,7 +231,7 @@ export class TestContainersFixture {
       provingServerUrl: new URL(this.getProverUri()),
       relayURL: new URL(this.getNodeUri()),
       networkId: this.getNetworkId(),
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
   }
 
@@ -252,6 +240,10 @@ export class TestContainersFixture {
       networkId: this.getNetworkId(),
       costParameters: {
         feeBlocksMargin: 5,
+      },
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+      indexerClientConnection: {
+        indexerHttpUrl: this.getIndexerUri(),
       },
     };
   }

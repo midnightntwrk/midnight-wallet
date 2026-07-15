@@ -1,4 +1,22 @@
-# @midnight-ntwrk/wallet-sdk-address-format
+# @midnightntwrk/wallet-sdk-address-format
+
+## 3.1.2
+
+### Patch Changes
+
+- 7452e96: Bump `@midnight-ntwrk/ledger-v8` from `^8.0.3` to `^8.1.0`. Internal balancing flows in `dust-wallet`,
+  `unshielded-wallet`, and `shielded-wallet` are refactored to use the new ledger 8.1.0 builder API
+  (`Transaction.addIntent`, `Transaction.addZswapOffer`) instead of post-construction field mutation on
+  `Transaction.fromParts(...)`. No public API changes; consumers must resolve `@midnight-ntwrk/ledger-v8` to `>=8.1.0`.
+
+## 3.1.1
+
+### Patch Changes
+
+- 0db3290: chore: bump ledger version to 8.0.3
+- 7f82432: Introduce a shared transaction history storage layer with support for wallet-specific augmentation.
+  Reimplement shielded wallet transaction history and refactor unshielded wallet transaction history to use the new
+  shared storage.
 
 ## 3.1.0
 

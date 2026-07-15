@@ -12,26 +12,23 @@
 // limitations under the License.
 import { sampleIntentHash } from '@midnight-ntwrk/ledger-v8';
 import * as rx from 'rxjs';
-import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { UnshieldedUpdate, UtxoWithMeta } from '../src/v1/SyncSchema.js';
+import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
+import { type UnshieldedUpdate, type UtxoWithMeta } from '../src/v1/SyncSchema.js';
 import {
   NetworkId,
   InMemoryTransactionHistoryStorage,
   TransactionHistoryStorage,
-} from '@midnight-ntwrk/wallet-sdk-abstractions';
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { Schema } from 'effect';
 import { UnshieldedSectionSchema } from '../src/v1/TransactionHistory.js';
-import { DefaultV1Configuration } from '../src/v1/index.js';
+import { type DefaultV1Configuration } from '../src/v1/index.js';
 
-const UnshieldedEntrySchema = Schema.Struct({
-  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
+const UnshieldedEntrySchema = TransactionHistoryStorage.extendEntrySchema({
   unshielded: Schema.optional(UnshieldedSectionSchema),
 });
-import { UnshieldedWallet, UnshieldedWalletState } from '../src/UnshieldedWallet.js';
+import { type UnshieldedWallet, type UnshieldedWalletState } from '../src/UnshieldedWallet.js';
 
-/**
- * TODO: place in separate package with more additional mock functions
- */
+/** TODO: place in separate package with more additional mock functions */
 export const generateMockTransaction = (
   owner: string,
   type: string,
@@ -51,6 +48,8 @@ export const generateMockTransaction = (
       protocolVersion: 1,
       identifiers: createdUtxos.map((u) => u.utxo.intentHash),
       block: {
+        hash: crypto.randomUUID(),
+        height: Math.floor(Math.random() * 1000),
         timestamp: new Date(),
       },
       fees: {
@@ -106,8 +105,8 @@ export const getUnshieldedSeed = (seed: string): Uint8Array => {
 };
 
 /**
- * Creates a default wallet configuration for testing.
- * This encapsulates the common configuration pattern used across tests.
+ * Creates a default wallet configuration for testing. This encapsulates the common configuration pattern used across
+ * tests.
  *
  * @param indexerPort - The port number for the indexer service
  * @param overrides - Optional partial configuration to override defaults

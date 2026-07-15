@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type BaseV1Configuration,
   type DefaultV1Configuration,
@@ -35,11 +35,11 @@ import {
 } from './v1/Transacting.js';
 import { type WalletSyncUpdate } from './v1/SyncSchema.js';
 import { type UtxoWithMeta } from './v1/UnshieldedState.js';
-import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
+import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import { type PublicKey } from './KeyStore.js';
 import { type SyncProgress } from './v1/SyncProgress.js';
-import { type UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 
 export type UnshieldedWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, TSerialized>;
@@ -127,6 +127,19 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
   balanceUnprovenTransaction(tx: ledger.UnprovenTransaction): Promise<UnprovenTransactionBalanceResult>;
 
   transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<ledger.UnprovenTransaction>;
+
+  /**
+   * Books a caller-supplied set of Night UTxOs and returns an unproven transaction that moves them back to the same
+   * owner, split between the guaranteed (segment 0) and fallible (segment 1) sections of a single intent. Booking moves
+   * the UTxOs from available to pending so a concurrent build call cannot reuse them. The fallible section is available
+   * for callers that want to attach further actions (e.g. a Dust registration) at segment 1.
+   */
+  rotateUtxos(
+    guaranteedUtxos: readonly UtxoWithMeta[],
+    fallibleUtxos: readonly UtxoWithMeta[],
+    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    ttl: Date,
+  ): Promise<ledger.UnprovenTransaction>;
 
   initSwap(
     desiredInputs: Record<ledger.RawTokenType, bigint>,
@@ -270,6 +283,19 @@ export function CustomUnshieldedWallet<
         .pipe(Effect.runPromise);
     }
 
+    rotateUtxos(
+      guaranteedUtxos: readonly UtxoWithMeta[],
+      fallibleUtxos: readonly UtxoWithMeta[],
+      nightVerifyingKey: ledger.SignatureVerifyingKey,
+      ttl: Date,
+    ): Promise<ledger.UnprovenTransaction> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.rotateUtxos(guaranteedUtxos, fallibleUtxos, nightVerifyingKey, ttl),
+        })
+        .pipe(Effect.runPromise);
+    }
+
     initSwap(
       desiredInputs: Record<ledger.RawTokenType, bigint>,
       desiredOutputs: readonly TokenTransfer[],
@@ -319,8 +345,8 @@ export function CustomUnshieldedWallet<
     }
 
     /**
-     * Serializes the most recent state
-     * It's preferable to use [[UnshieldedWalletState.serialize]] instead, to know exactly, which state is serialized
+     * Serializes the most recent state It's preferable to use [[UnshieldedWalletState.serialize]] instead, to know
+     * exactly, which state is serialized
      */
     serializeState(): Promise<TSerialized> {
       return rx.firstValueFrom(this.state).then((state) => state.serialize());

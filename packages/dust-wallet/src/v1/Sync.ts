@@ -10,22 +10,44 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Either, Layer, ParseResult, pipe, Schema, Scope, Stream, Duration, Chunk, Schedule } from 'effect';
-import { DustSecretKey, Event as LedgerEvent, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
-import { BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import {
+  Effect,
+  Either,
+  Layer,
+  ParseResult,
+  pipe,
+  Schema,
+  type Scope,
+  Stream,
+  Duration,
+  Chunk,
+  Schedule,
+} from 'effect';
+import {
+  type DustSecretKey,
+  type DustStateChanges,
+  Event as LedgerEvent,
+  LedgerParameters,
+} from '@midnight-ntwrk/ledger-v8';
+import { BlockHash, DustLedgerEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
   HttpQueryClient,
   ConnectionHelper,
-  SubscriptionClient,
-  QueryClient,
-} from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { OtherWalletError, SyncWalletError, WalletError } from './WalletError.js';
-import { Simulator, SimulatorState } from './Simulator.js';
+  type SubscriptionClient,
+  type QueryClient,
+} from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { EitherOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { type URLError, WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { OtherWalletError, SyncWalletError, type WalletError } from './WalletError.js';
+import {
+  type Simulator,
+  type SimulatorState,
+  getBlockEventsFrom,
+  getLastBlock,
+} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
-import { NetworkId } from './types/ledger.js';
+import { type NetworkId } from './types/ledger.js';
 import { Uint8ArraySchema } from './Serialization.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
@@ -41,29 +63,45 @@ export interface BlockData {
   timestamp: Date;
 }
 
-export interface SyncCapability<TState, TUpdate> {
-  applyUpdate: (state: TState, update: TUpdate) => TState;
+export type ChangesResult = {
+  readonly changes: DustStateChanges[];
+  readonly protocolVersion: number;
+};
+
+export interface SyncCapability<TState, TUpdate, TResult> {
+  applyUpdate: (state: TState, update: TUpdate) => [TState, TResult];
 }
 
 export type IndexerClientConnection = {
   indexerHttpUrl: string;
   indexerWsUrl?: string;
   keepAlive?: number;
+  /** Cap on the in-flight event queue between the WebSocket push and the apply loop. Default: 10000. */
+  bufferSize?: number;
+  /** In-flight count at which the disposed WS subscription is reopened. Default: 100. */
+  resumeThreshold?: number;
 };
 
 export type BatchUpdatesConfig = {
-  /** Maximum number of events to collect into a single batch before emitting.
-   *  @default 10 */
+  /**
+   * Maximum number of events to collect into a single batch before emitting.
+   *
+   * @default 10
+   */
   readonly size?: number;
-  /** Maximum time in milliseconds to wait for a full batch before emitting a partial one.
-   *  Controls the `groupedWithin` timeout — lower values mean more responsive
-   *  (but smaller) batches when events arrive slowly.
-   *  @default 1 */
+  /**
+   * Maximum time in milliseconds to wait for a full batch before emitting a partial one. Controls the `groupedWithin`
+   * timeout — lower values mean more responsive (but smaller) batches when events arrive slowly.
+   *
+   * @default 1
+   */
   readonly timeout?: number;
-  /** Minimum delay in milliseconds injected between consecutive batches.
-   *  Prevents the sync stream from saturating downstream consumers when many
-   *  events are available at once. Set to 0 to disable spacing entirely.
-   *  @default 4 */
+  /**
+   * Minimum delay in milliseconds injected between consecutive batches. Prevents the sync stream from saturating
+   * downstream consumers when many events are available at once. Set to 0 to disable spacing entirely.
+   *
+   * @default 4
+   */
   readonly spacing?: number;
 };
 
@@ -102,20 +140,15 @@ const LedgerEventSchema = Schema.declare(
 
 const LedgerEventFromUInt8Array: Schema.Schema<LedgerEvent, Uint8Array> = Schema.asSchema(
   Schema.transformOrFail(Uint8ArraySchema, LedgerEventSchema, {
-    encode: (e) => {
-      return Effect.try({
+    encode: (e) =>
+      Effect.try({
         try: () => e.serialize(),
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not serialize Ledger Event');
-        },
-      });
-    },
+        catch: (err) => new ParseResult.Unexpected(err, 'Could not serialize Ledger Event'),
+      }),
     decode: (bytes) =>
       Effect.try({
         try: () => LedgerEvent.deserialize(bytes),
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not deserialize Ledger Event');
-        },
+        catch: (err) => new ParseResult.Unexpected(err, 'Could not deserialize Ledger Event'),
       }),
   }),
 );
@@ -239,10 +272,34 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       state: CoreWallet,
     ): Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient> {
       const { appliedIndex } = state.progress;
+      const bufferSize = config.indexerClientConnection.bufferSize ?? 10000;
+      const resumeThreshold = config.indexerClientConnection.resumeThreshold ?? 100;
+
+      // The boundary is load-bearing, not waste: this subscription emits only events (no tip/progress
+      // sentinel), and `isConnected`/the tip (`maxId`) are set only when an event is received. So the
+      // cursor must stay `<= appliedIndex` — never `appliedIndex + 1`. Requesting one event later would
+      // deliver nothing to a wallet already at the tip, so `applyUpdate` would never run and sync would
+      // hang.
+      //
+      // A fresh wallet has `appliedIndex === 0n` (the "nothing applied yet" sentinel), so `resumeFrom`
+      // is `-1n` and the `variables` mapping below opens the subscription with no `id` — the indexer
+      // streams from the very start. A restored wallet has `appliedIndex >= 1`, so `resumeFrom` is
+      // `appliedIndex - 1` and the inclusive cursor re-delivers the boundary event.
+      const resumeFrom = appliedIndex - 1n;
 
       return pipe(
-        DustLedgerEvents.run({
-          id: Number(appliedIndex),
+        // Backpressure caps the in-flight queue between the WS push and the
+        // apply loop. Without it the JS heap grows linearly with catch-up
+        // depth, since `Stream.asyncPush({ bufferSize: 'unbounded' })`
+        // buffers every event the indexer pushes regardless of apply rate.
+        DustLedgerEvents.runWithBackpressure({
+          bufferSize,
+          resumeThreshold,
+          from: resumeFrom,
+          // `resumeFrom < 0n` means a fresh wallet: send no `id` so the indexer streams from the very
+          // start, rather than relying on `id: 0` sorting below the first real event id.
+          variables: (cursor) => ({ id: cursor < 0n ? null : Number(cursor) }),
+          key: (r) => BigInt(r.dustLedgerEvents.id),
         }),
         Stream.mapEffect((subscription) =>
           pipe(
@@ -257,33 +314,38 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
   };
 };
 
-export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate> => {
+export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
   return {
-    applyUpdate(state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet {
+    applyUpdate(state: CoreWallet, wrappedUpdate: WalletSyncUpdate): [CoreWallet, ChangesResult] {
       const { updates, secretKey } = wrappedUpdate;
 
       // Nothing to update yet
       if (updates.length === 0) {
-        return state;
+        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
 
-      const lastUpdate = updates.at(-1)!;
-      const nextIndex = BigInt(lastUpdate.id);
-      const highestRelevantWalletIndex = BigInt(lastUpdate.maxId);
+      const appliedIndex = state.progress.appliedIndex;
+      const freshUpdates = updates.filter((u) => BigInt(u.id) > appliedIndex);
 
-      // in case the nextIndex is less than or equal to the current appliedIndex
-      // just update highestRelevantWalletIndex
-      if (nextIndex <= state.progress.appliedIndex) {
-        return CoreWallet.updateProgress(state, { highestRelevantWalletIndex, isConnected: true });
-      }
+      const highestRelevantWalletIndex = BigInt(updates.at(-1)!.maxId);
 
-      const events = updates.map((u) => u.raw).filter((event) => event !== null);
+      const [newState, changes]: [CoreWallet, DustStateChanges[]] =
+        freshUpdates.length === 0
+          ? [state, []]
+          : CoreWallet.applyEventsWithChanges(
+              state,
+              secretKey,
+              freshUpdates.map((u) => u.raw),
+              wrappedUpdate.timestamp,
+            );
 
-      return CoreWallet.updateProgress(CoreWallet.applyEvents(state, secretKey, events, wrappedUpdate.timestamp), {
-        appliedIndex: nextIndex,
+      const updatedState = CoreWallet.updateProgress(newState, {
+        appliedIndex: freshUpdates.length === 0 ? appliedIndex : BigInt(freshUpdates.at(-1)!.id),
         highestRelevantWalletIndex,
         isConnected: true,
       });
+
+      return [updatedState, { changes, protocolVersion: Number(updatedState.protocolVersion) }];
     },
   };
 };
@@ -292,32 +354,72 @@ export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, SimulatorSyncUpdate> => {
   return {
-    updates: (_state: CoreWallet, secretKey: DustSecretKey) =>
-      config.simulator.state$.pipe(Stream.map((state) => ({ update: state, secretKey }))),
+    updates: (_state: CoreWallet, secretKey: DustSecretKey) => {
+      // Get the initial state immediately to ensure we process the genesis block.
+      // Then subscribe to state$ for subsequent changes, but deduplicate by block number
+      // to avoid processing the same block twice.
+      let lastSeenBlockNumber: bigint | undefined;
+
+      return pipe(
+        Stream.fromEffect(config.simulator.getLatestState()),
+        Stream.concat(config.simulator.state$),
+        Stream.filter((state) => {
+          const lastBlock = getLastBlock(state);
+          if (lastBlock === undefined) {
+            return false; // Skip blank state
+          }
+          const blockNumber = lastBlock.number;
+          // Skip if we've already seen this block (deduplication)
+          if (lastSeenBlockNumber !== undefined && blockNumber <= lastSeenBlockNumber) {
+            return false;
+          }
+          lastSeenBlockNumber = blockNumber;
+          return true;
+        }),
+        Stream.map((state) => ({ update: state, secretKey })),
+      );
+    },
     blockData: (): Effect.Effect<BlockData> => {
       return Effect.gen(function* () {
         const state = yield* config.simulator.getLatestState();
-        const timestamp = DateOps.secondsToDate(state.lastTxNumber);
+        const lastBlock = getLastBlock(state);
+        // Use currentTime instead of lastBlock.timestamp for time-sensitive operations
+        // (e.g., Dust generation calculation). The currentTime reflects any fast-forwarding
+        // that has been done, while lastBlock.timestamp only reflects when the block was produced.
         return {
-          hash: yield* Simulator.blockHash(timestamp),
-          height: Number(state.lastTxNumber),
+          hash: lastBlock.hash,
+          height: Number(lastBlock.number),
           ledgerParameters: state.ledger.parameters,
-          timestamp,
+          timestamp: state.currentTime,
         };
       });
     },
   };
 };
 
-export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => ({
-  applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) =>
-    CoreWallet.updateProgress(
-      CoreWallet.applyEvents(
+export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate, ChangesResult> => {
+  return {
+    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): [CoreWallet, ChangesResult] => {
+      const lastBlock = getLastBlock(update.update);
+      // If no block exists yet (blank simulator), skip update
+      if (lastBlock === undefined) {
+        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
+      }
+      // Get all events from blocks starting at appliedIndex (the next block to process).
+      // appliedIndex semantics: the first block number we haven't processed yet.
+      // Initial: appliedIndex = 0 (haven't processed any blocks)
+      // After processing block N: appliedIndex = N + 1 (next block to process)
+      const events = [...getBlockEventsFrom(update.update, state.progress.appliedIndex)];
+      const [newState, changes] = CoreWallet.applyEventsWithChanges(
         state,
         update.secretKey,
-        update.update.lastTxResult?.events || [],
-        DateOps.secondsToDate(update.update.lastTxNumber),
-      ),
-      { appliedIndex: update.update.lastTxNumber },
-    ),
-});
+        events,
+        lastBlock.timestamp,
+      );
+      const updatedState = CoreWallet.updateProgress(newState, {
+        appliedIndex: lastBlock.number + 1n,
+      });
+      return [updatedState, { changes, protocolVersion: Number(updatedState.protocolVersion) }];
+    },
+  };
+};

@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type ProtocolState, ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, ProtocolVersion, type SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type BaseV1Configuration,
   type DefaultV1Configuration,
@@ -31,11 +31,11 @@ import {
   type ShieldedAddress,
   type ShieldedCoinPublicKey,
   type ShieldedEncryptionPublicKey,
-} from '@midnight-ntwrk/wallet-sdk-address-format';
+} from '@midnightntwrk/wallet-sdk-address-format';
 import { type TokenTransfer } from './v1/Transacting.js';
 import { type WalletSyncUpdate } from './v1/Sync.js';
-import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
+import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 
 export type ShieldedWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
@@ -314,8 +314,8 @@ export function CustomShieldedWallet<
     }
 
     /**
-     * Serializes the most recent state
-     * It's preferable to use [[ShieldedWalletState.serialize]] instead, to know exactly, which state is serialized
+     * Serializes the most recent state It's preferable to use [[ShieldedWalletState.serialize]] instead, to know
+     * exactly, which state is serialized
      */
     serializeState(): Promise<TSerialized> {
       return rx.firstValueFrom(this.state).then((state) => state.serialize());

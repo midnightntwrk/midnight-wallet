@@ -1,7 +1,7 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-runtime",
+  "name": "@midnightntwrk/wallet-sdk-runtime",
   "description": "Runtime for the wallet variants",
-  "version": "1.0.2",
+  "version": "1.0.5",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -9,14 +9,16 @@
   "author": "Midnight Foundation",
   "license": "Apache-2.0",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "files": [
     "dist/"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
+    "url": "git+https://github.com/midnightntwrk/midnight-wallet.git",
+    "directory": "packages/runtime"
   },
   "exports": {
     ".": {
@@ -29,14 +31,16 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-abstractions": "2.0.0",
-    "@midnight-ntwrk/wallet-sdk-utilities": "1.1.0",
+    "@midnightntwrk/wallet-sdk-abstractions": "2.1.0",
+    "@midnightntwrk/wallet-sdk-utilities": "1.2.1",
     "effect": "^3.19.19",
     "rxjs": "^7.8.2"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit --passWithNoTests",
+    "test:integration": "vitest run --project integration --passWithNoTests",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",

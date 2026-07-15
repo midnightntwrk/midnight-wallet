@@ -1,4 +1,30 @@
-# @midnight-ntwrk/wallet-sdk-utilities
+# @midnightntwrk/wallet-sdk-utilities
+
+## 1.2.0
+
+### Minor Changes
+
+- 6e187fe: Fix a race where Dust registration / deregistration would double-use Night UTxOs that another in-flight
+  transaction was already trying to spend. The build flow now books the chosen Night UTxOs (available → pending) at
+  build time, so a conflicting concurrent build fails immediately with `SpendUtxoError` instead of only at submission.
+  Adds new methods on `UnshieldedWallet` (`rotateUtxos`) and `DustWallet` (`splitNightUtxosForDustRegistration`,
+  `attachDustRegistration`) to support the split build.
+
+### Patch Changes
+
+- 7452e96: Bump `@midnight-ntwrk/ledger-v8` from `^8.0.3` to `^8.1.0`. Internal balancing flows in `dust-wallet`,
+  `unshielded-wallet`, and `shielded-wallet` are refactored to use the new ledger 8.1.0 builder API
+  (`Transaction.addIntent`, `Transaction.addZswapOffer`) instead of post-construction field mutation on
+  `Transaction.fromParts(...)`. No public API changes; consumers must resolve `@midnight-ntwrk/ledger-v8` to `>=8.1.0`.
+
+## 1.1.1
+
+### Patch Changes
+
+- 0db3290: chore: bump ledger version to 8.0.3
+- 7f82432: Introduce a shared transaction history storage layer with support for wallet-specific augmentation.
+  Reimplement shielded wallet transaction history and refactor unshielded wallet transaction history to use the new
+  shared storage.
 
 ## 1.1.0
 

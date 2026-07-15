@@ -17,6 +17,7 @@ import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
   test: {
+    fileParallelism: false,
     exclude: [...configDefaults.exclude, '**/dist/**'],
     setupFiles: ['../../setup-env.ts'],
     environment: 'node',
@@ -30,6 +31,23 @@ export default defineConfig({
       reporter: ['clover', 'json', 'json-summary', 'lcov', 'text'],
       reportsDirectory: './coverage',
     },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['**/*.test.ts'],
+          exclude: [...configDefaults.exclude, '**/dist/**', '**/*.integration.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'integration',
+          include: ['**/*.integration.test.ts'],
+        },
+      },
+    ],
     reporters: [
       'default',
       ['junit', { outputFile: `reports/report/test-report.xml` }],
@@ -38,7 +56,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@midnight-ntwrk/wallet-sdk-indexer-client/effect': fileURLToPath(
+      '@midnightntwrk/wallet-sdk-indexer-client/effect': fileURLToPath(
         new URL('../indexer-client/src/effect.ts', import.meta.url),
       ),
     },

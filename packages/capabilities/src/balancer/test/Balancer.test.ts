@@ -12,15 +12,21 @@
 // limitations under the License.
 import {
   createShieldedCoinInfo,
-  QualifiedShieldedCoinInfo,
-  RawTokenType,
+  type QualifiedShieldedCoinInfo,
+  type RawTokenType,
   sampleRawTokenType,
-  ShieldedCoinInfo,
+  type ShieldedCoinInfo,
   shieldedToken,
 } from '@midnight-ntwrk/ledger-v8';
 import * as fc from 'fast-check';
 import { describe, expect, test } from 'vitest';
-import { chooseCoin, CoinSelection, getBalanceRecipe, Imbalances, TransactionCostModel } from '../../index.js';
+import {
+  chooseCoin,
+  type CoinSelection,
+  getBalanceRecipe,
+  Imbalances,
+  type TransactionCostModel,
+} from '../../index.js';
 
 const createQualifiedCoin = (tokenType: string, value: bigint) => ({
   ...createShieldedCoinInfo(tokenType, value),
@@ -34,7 +40,7 @@ const transactionCostModel = {
   outputFeeOverhead: 19708n,
 };
 
-const nativeTokenType = (shieldedToken() as { tag: 'shielded'; raw: string }).raw;
+const nativeTokenType = shieldedToken().raw;
 
 const qualifiedCoinArbitrary = (typeArbitrary: fc.Arbitrary<RawTokenType>): fc.Arbitrary<QualifiedShieldedCoinInfo> => {
   return fc.record({

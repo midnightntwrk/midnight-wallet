@@ -119,9 +119,7 @@ export class Variant1 implements WalletAPI {
 
 // Variant2.ts
 export class Variant2 implements WalletAPI {
-  makeTransfer(params: { amount: bigint; recipient: string }): Promise<Transaction> {
-    /**/
-  }
+  makeTransfer(params: { amount: bigint; recipient: string }): Promise<Transaction> {}
 }
 
 // Wallet.ts

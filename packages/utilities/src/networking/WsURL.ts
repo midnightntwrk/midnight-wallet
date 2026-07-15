@@ -14,13 +14,9 @@ import { Either } from 'effect';
 import * as Brand from 'effect/Brand';
 import { InvalidProtocolSchemeError } from './URLError.js';
 
-/**
- * A 'HTTP' URL.
- */
+/** A 'HTTP' URL. */
 export type WsURL = Brand.Branded<URL, 'WsURL'>;
-/**
- * Constructs a 'WS' URL from a source URL, ensuring that the protocol is correct.
- */
+/** Constructs a 'WS' URL from a source URL, ensuring that the protocol is correct. */
 export const WsURL = Brand.refined<WsURL>(
   (url) => url.protocol === 'ws:' || url.protocol === 'wss:',
   (url) => Brand.error(`Invalid protocol scheme '${url.protocol}'. Expected 'ws:' or 'wss:'`),
@@ -31,7 +27,7 @@ export const WsURL = Brand.refined<WsURL>(
  *
  * @param url The URL to be made into a WebSocket URL.
  * @returns An `Either` that represents the valid WebSocket URL constructed from `url`; or an
- * {@link InvalidProtocolSchemeError}.
+ *   {@link InvalidProtocolSchemeError}.
  */
 export const make: (url: URL | string) => Either.Either<WsURL, InvalidProtocolSchemeError> = (url) => {
   const targetURL = new URL(url);

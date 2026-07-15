@@ -14,64 +14,116 @@ import { Schema } from 'effect';
 import {
   type TransactionHistoryStorage,
   type TransactionHash,
-  type TransactionHistoryCommon,
+  type TransactionHistoryEntryCommon,
+  type PendingEntryInput,
+  type FinalizedEntryInput,
+  type RejectedEntryInput,
   type SerializedTransactionHistory,
 } from './TransactionHistoryStorage.js';
 
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
+ *
+ * `T` is the entry shape — a {@link TransactionHistoryEntryCommon} extension carrying any wallet-specific sections. The
+ * reader returns `T` (with whichever lifecycle a given entry happens to be in); each writer method accepts a `T`-shaped
+ * input minus its `lifecycle` field, and the storage attaches the appropriate lifecycle.
+ *
+ * An optional `merge` function controls how an incoming write combines with an existing entry under the same hash.
+ * Default is a shallow spread (`{ ...existing, ...incoming }`).
+ *
+ * Because the merge runs **synchronously** inside the lifecycle methods, the single-threaded nature of JavaScript
+ * guarantees atomicity — no external semaphore is needed.
  */
 export class InMemoryTransactionHistoryStorage<
-  T extends { hash: TransactionHash } = TransactionHistoryCommon,
-  I = T,
+  T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon,
+  // `Encoded` is the schema's encoded-side type. It's a class generic (not an interface generic) because
+  // `Schema.Schema<A, I>` is invariant in `I`, so the encoded form has to be inferred at construction time from the
+  // schema argument. Callers don't usually supply this — TypeScript infers it from `schema`.
+  Encoded = T,
 > implements TransactionHistoryStorage<T> {
-  private entries: Map<TransactionHash, T>;
-  private readonly entrySchema: Schema.Schema<T, I>;
+  #storage: Map<TransactionHash, T>;
+  readonly #schema: Schema.Schema<T, Encoded>;
+  readonly #merge: (existing: T, incoming: T) => T;
 
-  constructor(entrySchema: Schema.Schema<T, I>) {
-    this.entries = new Map<TransactionHash, T>();
-    this.entrySchema = entrySchema;
+  constructor(schema: Schema.Schema<T, Encoded>, merge?: (existing: T, incoming: T) => T) {
+    this.#storage = new Map<TransactionHash, T>();
+    this.#schema = schema;
+    this.#merge = merge ?? ((existing, incoming) => ({ ...existing, ...incoming }));
   }
 
-  upsert(entry: T): Promise<void> {
-    const existing = this.entries.get(entry.hash);
-    this.entries.set(entry.hash, existing ? { ...existing, ...entry } : entry);
-    return Promise.resolve();
+  async gotPending(input: PendingEntryInput<T>): Promise<void> {
+    const { submittedAt, ...rest } = input;
+    const entry = { ...rest, lifecycle: { status: 'pending', submittedAt } } as unknown as T;
+    await this.#upsert(entry);
   }
 
-  async *getAll(): AsyncIterableIterator<T> {
-    for (const entry of this.entries.values()) {
-      yield await Promise.resolve(entry);
-    }
+  async gotFinalized(input: FinalizedEntryInput<T>): Promise<void> {
+    const { finalizedBlock, ...rest } = input;
+    const entry = { ...rest, lifecycle: { status: 'finalized', finalizedBlock } } as unknown as T;
+    await this.#upsert(entry);
+    this.#clearPendingByIdentifiers(entry.identifiers, entry.hash);
+  }
+
+  async gotRejected(input: RejectedEntryInput<T>): Promise<void> {
+    const { rejectedAt, reason, ...rest } = input;
+    const lifecycle =
+      reason !== undefined
+        ? { status: 'rejected' as const, rejectedAt, reason }
+        : { status: 'rejected' as const, rejectedAt };
+    const entry = { ...rest, lifecycle } as unknown as T;
+    await this.#upsert(entry);
+  }
+
+  getAll(): Promise<readonly T[]> {
+    return Promise.resolve([...this.#storage.values()]);
   }
 
   get(hash: TransactionHash): Promise<T | undefined> {
-    return Promise.resolve(this.entries.get(hash));
+    return Promise.resolve(this.#storage.get(hash));
   }
 
   reset(): void {
-    this.entries.clear();
+    this.#storage.clear();
   }
 
-  async serialize(): Promise<SerializedTransactionHistory> {
-    const allEntries: T[] = [];
-    for await (const entry of this.getAll()) {
-      allEntries.push(entry);
-    }
-    const encode = Schema.encodeSync(Schema.Array(this.entrySchema));
-    return JSON.stringify(encode(allEntries));
+  serialize(): Promise<SerializedTransactionHistory> {
+    const allEntries = [...this.#storage.values()];
+    const encode = Schema.encodeSync(Schema.Array(this.#schema));
+    return Promise.resolve(JSON.stringify(encode(allEntries)));
   }
 
-  static restore<T extends { hash: string }, I>(
+  static restore<T extends TransactionHistoryEntryCommon, Encoded>(
     serialized: SerializedTransactionHistory,
-    entrySchema: Schema.Schema<T, I>,
-  ): InMemoryTransactionHistoryStorage<T, I> {
-    const decode = Schema.decodeUnknownSync(Schema.Array(entrySchema));
+    schema: Schema.Schema<T, Encoded>,
+    merge?: (existing: T, incoming: T) => T,
+  ): InMemoryTransactionHistoryStorage<T, Encoded> {
+    const decode = Schema.decodeUnknownSync(Schema.Array(schema));
     const decoded = decode(JSON.parse(serialized));
-    const storage = new InMemoryTransactionHistoryStorage<T, I>(entrySchema);
+    const storage = new InMemoryTransactionHistoryStorage<T, Encoded>(schema, merge);
     for (const entry of decoded) {
-      storage.entries.set(entry.hash, entry);
+      storage.#storage.set(entry.hash, entry);
     }
     return storage;
+  }
+
+  #upsert(entry: T): Promise<void> {
+    const existing = this.#storage.get(entry.hash);
+    this.#storage.set(entry.hash, existing ? this.#merge(existing, entry) : entry);
+    return Promise.resolve();
+  }
+
+  #clearPendingByIdentifiers(identifiers: readonly string[], newHash: TransactionHash): void {
+    if (identifiers.length === 0) return;
+    const provided = new Set<string>(identifiers);
+    const match = [...this.#storage.values()].find(
+      (entry) =>
+        entry.identifiers.length > 0 &&
+        entry.identifiers.every((id) => provided.has(id)) &&
+        entry.lifecycle.status === 'pending' &&
+        entry.hash !== newHash,
+    );
+    if (match) {
+      this.#storage.delete(match.hash);
+    }
   }
 }

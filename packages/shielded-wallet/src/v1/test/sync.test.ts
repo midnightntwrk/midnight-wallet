@@ -27,18 +27,18 @@ import {
   Ref,
   Number as Num,
 } from 'effect';
-import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { SubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { describe, expect, it } from 'vitest';
-import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { ZswapEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import type {
   ZswapEventsSubscription,
   ZswapEventsSubscriptionVariables,
-} from '@midnight-ntwrk/wallet-sdk-indexer-client';
+} from '@midnightntwrk/wallet-sdk-indexer-client';
 import { makeEventsSyncService } from '../Sync.js';
 import { CoreWallet } from '../CoreWallet.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Simulator } from '../Simulator.js';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Simulator, getLastBlock, getLastBlockEvents } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 
 vi.setConfig({
   testTimeout: 60_000,
@@ -49,13 +49,16 @@ const createMockEventHex = async (): Promise<string> => {
   // Use Simulator to generate a real event, then serialize it
   return await Effect.gen(function* () {
     const scope = yield* Scope.make();
-    const simulator = yield* Simulator.init([
-      {
-        amount: 1000n,
-        type: ledger.shieldedToken().raw,
-        recipient: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
-      },
-    ]).pipe(Effect.provideService(Scope.Scope, scope));
+    const simulator = yield* Simulator.init({
+      genesisMints: [
+        {
+          type: 'shielded',
+          tokenType: ledger.shieldedToken().raw,
+          amount: 1000n,
+          recipient: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
+        },
+      ],
+    }).pipe(Effect.provideService(Scope.Scope, scope));
 
     const stateOption = yield* simulator.state$.pipe(Stream.take(1), Stream.runHead);
     const state = Option.match(stateOption, {
@@ -65,7 +68,11 @@ const createMockEventHex = async (): Promise<string> => {
       onSome: (s) => s,
     });
 
-    const events = state.lastTxResult.events;
+    const lastBlock = getLastBlock(state);
+    if (lastBlock === undefined) {
+      throw new Error('No block from simulator');
+    }
+    const events = getLastBlockEvents(state);
     if (events.length === 0) {
       throw new Error('No events generated from simulator');
     }
@@ -128,10 +135,10 @@ const createMockSubscriptionFn = (
           // Use TestClock.sleep when in test clock context, otherwise use Effect.sleep
           return useTestClock ? TestClock.sleep(delay) : Effect.sleep(delay);
         }),
-      ) as Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient>;
+      );
     }
 
-    return baseStream as Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient>;
+    return baseStream;
   };
 };
 
@@ -365,6 +372,54 @@ describe('Wallet subscription', () => {
         Effect.scoped,
         Effect.runPromise,
       );
+    });
+  });
+
+  describe('initial subscription cursor', () => {
+    // Open one subscription against a recording stub and return the variables it was opened with. The
+    // stub yields nothing, so the surrounding pipeline drains immediately.
+    const cursorFor = async (
+      state: CoreWallet,
+      secretKeys: ledger.ZswapSecretKeys,
+    ): Promise<ZswapEventsSubscriptionVariables | undefined> => {
+      const recorded: { value?: ZswapEventsSubscriptionVariables } = {};
+      const recordingFn = (variables: ZswapEventsSubscriptionVariables) => {
+        recorded.value = variables;
+        return Stream.empty as Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient>;
+      };
+
+      const syncService = makeEventsSyncService({
+        indexerClientConnection: {
+          indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+          indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+        },
+      });
+
+      await syncService
+        .updates(state, secretKeys)
+        .pipe(Stream.runDrain, Effect.provideService(ZswapEvents.tag, recordingFn), Effect.scoped, Effect.runPromise);
+
+      return recorded.value;
+    };
+
+    it('omits the id (null) for a fresh wallet so the indexer streams from the very start', async () => {
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const state = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
+
+      const variables = await cursorFor(state, secretKeys);
+
+      expect(variables).toEqual({ id: null });
+    });
+
+    it('requests one below the applied index for a restored wallet so the boundary event is re-delivered', async () => {
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const state = CoreWallet.updateProgress(CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed), {
+        appliedIndex: 5n,
+      });
+
+      const variables = await cursorFor(state, secretKeys);
+
+      expect(variables).toEqual({ id: 4 });
     });
   });
 });

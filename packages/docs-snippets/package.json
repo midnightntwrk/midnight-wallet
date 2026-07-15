@@ -1,5 +1,5 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-docs-snippets",
+  "name": "@midnightntwrk/wallet-sdk-docs-snippets",
   "description": "Documentation snippets for the wallet SDK",
   "version": "1.0.0-beta.1",
   "type": "module",
@@ -10,14 +10,16 @@
   "private": true,
   "license": "Apache-2.0",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "files": [
     "dist/"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
+    "url": "git+https://github.com/midnightntwrk/midnight-wallet.git",
+    "directory": "packages/docs-snippets"
   },
   "exports": {
     ".": {
@@ -26,25 +28,23 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-dust-wallet": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-facade": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-hd": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-shielded": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:*",
+    "@midnightntwrk/wallet-sdk": "workspace:*",
     "buffer": "^6.0.3",
     "lodash-es": "^4.17.23"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit --passWithNoTests",
+    "test:integration": "vitest run --project integration --passWithNoTests",
+    "test-undeployed": "vitest run --project undeployed --passWithNoTests",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
     "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp"
   },
   "devDependencies": {
-    "@types/lodash-es": "^4.17.12"
+    "@types/lodash-es": "4.17.12",
+    "vitest": "4.1.10"
   }
 }

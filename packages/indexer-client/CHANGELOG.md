@@ -1,4 +1,36 @@
-# @midnight-ntwrk/wallet-sdk-indexer-client
+# @midnightntwrk/wallet-sdk-indexer-client
+
+## 1.2.3
+
+### Patch Changes
+
+- 417d042: Fix a fiber/memory leak in the WebSocket subscription stream. At the indexer's sustained ~1k msg/sec push
+  rate, `Stream.async` was forking a top-level fiber per emit (via `Runtime.runPromiseExit`) and accumulating them in
+  Effect's `Global.roots`. Switched to `Stream.asyncPush`, which writes straight to an internal queue and ties teardown
+  to the surrounding scope via `Effect.acquireRelease`. Also preserves the full GraphQL error array as `cause` on
+  `ClientError` and joins all error messages instead of dropping all but the first.
+
+## 1.2.2
+
+### Patch Changes
+
+- 25f58b4: Widen ranges for internal `@midnightntwrk/wallet-sdk-*` dependencies from exact versions to caret ranges so
+  consumers can dedupe shared sibling packages into a single installed copy.
+- Updated dependencies [6e187fe]
+- Updated dependencies [7452e96]
+  - @midnightntwrk/wallet-sdk-utilities@1.2.0
+
+## 1.2.1
+
+### Patch Changes
+
+- e57a94b: Unify Simulator into capabilities package with proper fee payment and block production model
+- 7f82432: Introduce a shared transaction history storage layer with support for wallet-specific augmentation.
+  Reimplement shielded wallet transaction history and refactor unshielded wallet transaction history to use the new
+  shared storage.
+- Updated dependencies [0db3290]
+- Updated dependencies [7f82432]
+  - @midnightntwrk/wallet-sdk-utilities@1.1.1
 
 ## 1.2.0
 
@@ -10,18 +42,18 @@
 
 - 9d71d25: feat: expose Terms and Conditions via `WalletFacade.fetchTermsAndConditions`
 
-  Adds a new `FetchTermsAndConditions` GraphQL query to `@midnight-ntwrk/wallet-sdk-indexer-client` that retrieves the
+  Adds a new `FetchTermsAndConditions` GraphQL query to `@midnightntwrk/wallet-sdk-indexer-client` that retrieves the
   current Terms and Conditions (URL and SHA-256 hash) from the network indexer.
 
   Exposes a new static method `WalletFacade.fetchTermsAndConditions(configuration)` in
-  `@midnight-ntwrk/wallet-sdk-facade` that wallet builders can call before or independently of wallet initialization to
+  `@midnightntwrk/wallet-sdk-facade` that wallet builders can call before or independently of wallet initialization to
   obtain the T&C URL for display and the hash for content verification. The method accepts any configuration that
   includes `indexerClientConnection.indexerHttpUrl`, so the shared wallet configuration can be passed directly without
   adaptation.
 
 - Updated dependencies [ea55591]
 - Updated dependencies [aa7b1f4]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0
+  - @midnightntwrk/wallet-sdk-utilities@1.1.0
 
 ## 1.2.0-rc.0
 
@@ -33,24 +65,24 @@
 
 - 9d71d25: feat: expose Terms and Conditions via `WalletFacade.fetchTermsAndConditions`
 
-  Adds a new `FetchTermsAndConditions` GraphQL query to `@midnight-ntwrk/wallet-sdk-indexer-client` that retrieves the
+  Adds a new `FetchTermsAndConditions` GraphQL query to `@midnightntwrk/wallet-sdk-indexer-client` that retrieves the
   current Terms and Conditions (URL and SHA-256 hash) from the network indexer.
 
   Exposes a new static method `WalletFacade.fetchTermsAndConditions(configuration)` in
-  `@midnight-ntwrk/wallet-sdk-facade` that wallet builders can call before or independently of wallet initialization to
+  `@midnightntwrk/wallet-sdk-facade` that wallet builders can call before or independently of wallet initialization to
   obtain the T&C URL for display and the hash for content verification. The method accepts any configuration that
   includes `indexerClientConnection.indexerHttpUrl`, so the shared wallet configuration can be passed directly without
   adaptation.
 
 - Updated dependencies [ea55591]
 - Updated dependencies [aa7b1f4]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0-rc.0
+  - @midnightntwrk/wallet-sdk-utilities@1.1.0-rc.0
 
 ## 1.1.0
 
 ### Minor Changes
 
-- f52d01d: - Create a pending transactions service in the `@midnight-ntwrk/wallet-sdk-capabilities` package. The service
+- f52d01d: - Create a pending transactions service in the `@midnightntwrk/wallet-sdk-capabilities` package. The service
   checks TTL and status of transactions against indexer in order to report failures. The service state is also meant to
   be serialized and restored in order to not loose track of pending transactions in case of wallet restarts
   - Integrate the pending transactions service into the `WalletFacade`. It registers transactions as soon as they are
@@ -66,7 +98,7 @@
   not provided.
 - Updated dependencies [55380e5]
 - Updated dependencies [330867f]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1
 
 ## 1.1.0-rc.4
 
@@ -81,14 +113,14 @@
 ### Patch Changes
 
 - Updated dependencies [55380e5]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1-rc.1
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1-rc.1
 
 ## 1.1.0-rc.2
 
 ### Patch Changes
 
 - Updated dependencies [0f29d01]
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-abstractions@2.0.0-rc.1
 
 ## 1.1.0-rc.1
 
@@ -96,14 +128,14 @@
 
 - Updated dependencies [3843720]
 - Updated dependencies [330867f]
-  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.0
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1-rc.0
+  - @midnightntwrk/wallet-sdk-abstractions@2.0.0-rc.0
+  - @midnightntwrk/wallet-sdk-utilities@1.0.1-rc.0
 
 ## 1.1.0-rc.0
 
 ### Minor Changes
 
-- f52d01d: - Create a pending transactions service in the `@midnight-ntwrk/wallet-sdk-capabilities` package. The service
+- f52d01d: - Create a pending transactions service in the `@midnightntwrk/wallet-sdk-capabilities` package. The service
   checks TTL and status of transactions against indexer in order to report failures. The service state is also meant to
   be serialized and restored in order to not loose track of pending transactions in case of wallet restarts
   - Integrate the pending transactions service into the `WalletFacade`. It registers transactions as soon as they are
@@ -132,22 +164,22 @@
 - Updated dependencies [bcef7d8]
 - Updated dependencies [fb55d52]
 - Updated dependencies [fb55d52]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0
 
 ## 1.0.0-beta.17
 
 ### Patch Changes
 
 - Updated dependencies [f7aac06]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.11
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.11
 
 ## 1.0.0-beta.16
 
 ### Patch Changes
 
 - Updated dependencies [8b8d708]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.10
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.10
 
 ## 1.0.0-beta.15
 
@@ -157,15 +189,15 @@
 - bcef7d8: Allow TX creation with no own outputs
 - Updated dependencies [dae514d]
 - Updated dependencies [bcef7d8]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.9
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.10
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.9
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.10
 
 ## 1.0.0-beta.14
 
 ### Patch Changes
 
 - Updated dependencies [aef8d4b]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.8
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.8
 
 ## 1.0.0-beta.13
 
@@ -178,7 +210,7 @@
 ### Patch Changes
 
 - Updated dependencies [a06ccf3]
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.9
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.9
 
 ## 1.0.0-beta.11
 
@@ -188,8 +220,8 @@
 - Updated dependencies [976628a]
 - Updated dependencies [1db4280]
 - Updated dependencies [646c8df]
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.7
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.8
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.7
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.8
 
 ## 1.0.0-beta.10
 
@@ -197,8 +229,8 @@
 
 - 2a0d132: chore: force re-release after workspace failure
 - Updated dependencies [2a0d132]
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.7
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.6
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.7
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.6
 
 ## 1.0.0-beta.9
 
@@ -206,5 +238,5 @@
 
 - ae22baf: chore: initialize baseline release after introducing Changesets
 - Updated dependencies [ae22baf]
-  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.6
-  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.5
+  - @midnightntwrk/wallet-sdk-abstractions@1.0.0-beta.6
+  - @midnightntwrk/wallet-sdk-utilities@1.0.0-beta.5

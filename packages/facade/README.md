@@ -1,11 +1,14 @@
-# @midnight-ntwrk/wallet-sdk-facade
+# @midnightntwrk/wallet-sdk-facade
+
+> **Note:** It is recommended to use the [`@midnightntwrk/wallet-sdk`](../wallet-sdk/README.md) barrel package, which
+> re-exports this and all other wallet SDK packages through a single dependency.
 
 Unified facade for the Midnight Wallet SDK that combines all wallet types into a single API.
 
 ## Installation
 
 ```bash
-npm install @midnight-ntwrk/wallet-sdk-facade
+npm install @midnightntwrk/wallet-sdk-facade
 ```
 
 ## Overview
@@ -21,10 +24,15 @@ The Wallet Facade provides a high-level unified interface that aggregates the fu
 
 ## Usage
 
+More detailed and complete examples can be found at [docs snippets](../docs-snippets/src/snippets) (always up-to-date
+with the recent changes) or at the
+[SDK documentation site](https://docs.midnight.network/sdks/official/wallet-developer-guide) (aligned with the recent
+release)
+
 ### Initializing the Facade
 
 ```typescript
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import { WalletFacade } from '@midnightntwrk/wallet-sdk-facade';
 
 const facade = new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
 

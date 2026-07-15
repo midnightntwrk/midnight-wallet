@@ -1,7 +1,7 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-utilities",
+  "name": "@midnightntwrk/wallet-sdk-utilities",
   "description": "Domain-agnostic utilities for the wallet SDK - common operations and types",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -9,14 +9,16 @@
   "author": "Midnight Foundation",
   "license": "Apache-2.0",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "files": [
     "dist/"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
+    "url": "git+https://github.com/midnightntwrk/midnight-wallet.git",
+    "directory": "packages/utilities"
   },
   "exports": {
     ".": {
@@ -41,11 +43,13 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "portfinder": "^1.0.38"
+    "portfinder": "1.0.38"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit --passWithNoTests",
+    "test:integration": "vitest run --project integration --passWithNoTests",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",

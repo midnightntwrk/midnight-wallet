@@ -14,31 +14,25 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
-import { ShieldedWallet, ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, type ShieldedWalletClass } from '@midnightntwrk/wallet-sdk-shielded';
 import * as KeyManagement from '@cardano-sdk/key-management';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
+import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as utils from './utils.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,
   PublicKey,
   UnshieldedWallet,
-  UnshieldedWalletClass,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+  type UnshieldedWalletClass,
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { DustWallet, type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import { logger } from './logger.js';
-import { DustAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { DustAddress, UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { inspect } from 'node:util';
 
-/**
- * Tests using an empty wallet
- *
- * @group undeployed
- * @group devnet
- * @group testnet
- */
+/** Tests using an empty wallet */
 describe('Fresh wallet with empty state', () => {
   const getFixture = useTestContainersFixture();
   const walletSeed = '0000000000000000000000000000000000000000000000000000000000000009';
@@ -68,7 +62,7 @@ describe('Fresh wallet with empty state', () => {
     Wallet = ShieldedWallet(walletConfig);
     Unshielded = UnshieldedWallet({
       ...walletConfig,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     });
     shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
     unshieldedWallet = Unshielded.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
@@ -131,7 +125,7 @@ describe('Fresh wallet with empty state', () => {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
       }).startWithPublicKey(PublicKey.fromKeyStore(wallet.unshieldedKeystore));
     } catch (error) {
       expect(error).toBeUndefined();

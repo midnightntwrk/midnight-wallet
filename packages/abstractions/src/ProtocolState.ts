@@ -10,7 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ProtocolVersion from './ProtocolVersion.js';
+import { Equivalence } from 'effect';
+import type * as ProtocolVersion from './ProtocolVersion.js';
 
 /**
  * A type that associates some state with a given version of the Midnight protocol.
@@ -20,3 +21,18 @@ import * as ProtocolVersion from './ProtocolVersion.js';
 export type ProtocolState<TState> = Readonly<{ version: ProtocolVersion.ProtocolVersion; state: TState }>;
 
 export const state = <TState>(ps: ProtocolState<TState>): TState => ps.state;
+
+/**
+ * Derives an {@link Equivalence.Equivalence} for {@link ProtocolState} values from an equivalence of the underlying
+ * state. Versions are compared strictly.
+ *
+ * @param stateEquivalence The equivalence used to compare the `state` field.
+ * @returns An equivalence over `ProtocolState<TState>`.
+ */
+export const getEquivalence = <TState>(
+  stateEquivalence: Equivalence.Equivalence<TState>,
+): Equivalence.Equivalence<ProtocolState<TState>> =>
+  Equivalence.struct({
+    version: Equivalence.strict(),
+    state: stateEquivalence,
+  });

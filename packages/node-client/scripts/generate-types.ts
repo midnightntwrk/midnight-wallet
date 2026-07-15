@@ -11,10 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /**
- * This script calls polkadot codegen to generate types for a Midnight's Node Runtime
- * For unknown reason though, the generated code does not work out of the box, and there is a bunch of issues reported
- * One possible cause is our usage of pnpm linker (which is needed for as long as we have Scala code present)
- * For that reason the current flow for updating type definitions is:
+ * This script calls polkadot codegen to generate types for a Midnight's Node Runtime For unknown reason though, the
+ * generated code does not work out of the box, and there is a bunch of issues reported One possible cause is our usage
+ * of pnpm linker (which is needed for as long as we have Scala code present) For that reason the current flow for
+ * updating type definitions is:
+ *
  * 1. Ensure package.json field "referenceNodeVersion" contains right value
  * 2. Call this script, e.g. with `yarn turbo polkadot-typegen` in the repository root directory
  * 3. Edit contents of files generated at `src/gen` directory to one's needs
@@ -26,7 +27,7 @@ import { Command, FileSystem } from '@effect/platform';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
 import * as path from 'node:path';
 import { gatherAndPrintCommandOutput, handleProcessExit } from './utils/command.js';
-import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { TestContainers } from '@midnightntwrk/wallet-sdk-utilities/testing';
 
 const paths = new (class {
   currentDir = path.dirname(new URL(import.meta.url).pathname);

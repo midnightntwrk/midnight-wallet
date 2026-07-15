@@ -11,11 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type CoinRecipe } from '@midnightntwrk/wallet-sdk-capabilities';
+import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { pipe, Array as Arr, Order } from 'effect';
-import { CoreWallet } from './CoreWallet.js';
-import { KeysCapability } from './Keys.js';
-import { DustGenerationDetails, DustGenerationInfo, Dust, DustFullInfo, UtxoWithMeta } from './types/Dust.js';
+import { type CoreWallet } from './CoreWallet.js';
+import { type KeysCapability } from './Keys.js';
+import {
+  type DustGenerationDetails,
+  type DustGenerationInfo,
+  type Dust,
+  type DustFullInfo,
+  type UtxoWithMeta,
+} from './types/Dust.js';
 
 export type Balance = bigint;
 
@@ -25,39 +32,41 @@ export type CoinWithValue<TToken> = {
 };
 
 /**
- * Type describing a Night UTxO together with details of estimated Dust generation.
- * It is meant to be primarily used for fee estimation of Dust registration transaction
+ * Type describing a Night UTxO together with details of estimated Dust generation. It is meant to be primarily used for
+ * fee estimation of Dust registration transaction
  */
 export type UtxoWithFullDustDetails = Readonly<{
   utxo: UtxoWithMeta;
   dust: DustGenerationDetails;
 }>;
 
-export type CoinSelection<TInput> = (coins: readonly CoinWithValue<TInput>[]) => CoinWithValue<TInput> | undefined;
+export type CoinSelection = <TCoin extends CoinRecipe>(coins: readonly TCoin[]) => TCoin | undefined;
 
-export const chooseCoin = <TInput>(coins: readonly CoinWithValue<TInput>[]): CoinWithValue<TInput> | undefined =>
-  coins.toSorted((a, b) => Number(a.value - b.value)).at(0);
+export const chooseCoin: CoinSelection = (coins) =>
+  coins
+    .filter((coin) => coin.value > 0n)
+    .toSorted((a, b) => Number(a.value - b.value))
+    .at(0);
 
 export type CoinsAndBalancesCapability<TState> = {
   getWalletBalance(state: TState, time: Date): Balance;
-  getAvailableCoins(state: TState): readonly Dust[];
-  getPendingCoins(state: TState): readonly Dust[];
-  getTotalCoins(state: TState): ReadonlyArray<Dust>;
+  getAvailableCoins(state: TState, time?: Date): readonly DustFullInfo[];
+  getPendingCoins(state: TState, time?: Date): readonly DustFullInfo[];
+  getTotalCoins(state: TState, time?: Date): ReadonlyArray<DustFullInfo>;
   getAvailableCoinsWithGeneratedDust(state: TState, currentTime: Date): ReadonlyArray<CoinWithValue<Dust>>;
-  getAvailableCoinsWithFullInfo(state: TState, blockTime: Date): readonly DustFullInfo[];
   getGenerationInfo(state: TState, coin: Dust): DustGenerationInfo | undefined;
 
-  /**
-   * Splits provided Night utxos into the ones that will be used as inputs in the guaranteed and fallible sections
-   */
+  /** Splits provided Night utxos into the ones that will be used as inputs in the guaranteed and fallible sections */
   splitNightUtxos(nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>): {
     guaranteed: ReadonlyArray<UtxoWithFullDustDetails>;
     fallible: ReadonlyArray<UtxoWithFullDustDetails>;
   };
 
   /**
-   * Estimate how much Dust would be available to use if the Utxos provided were used for Dust generation from their beginning.
-   * This function is particularly useful for the purpose of registering for Dust generation and selecting the Utxo to be used for paying fees and approving the registration itself.
+   * Estimate how much Dust would be available to use if the Utxos provided were used for Dust generation from their
+   * beginning. This function is particularly useful for the purpose of registering for Dust generation and selecting
+   * the Utxo to be used for paying fees and approving the registration itself.
+   *
    * @param state Current state of the wallet
    * @param nightUtxos Existing Night utxos
    * @param currentTime Current time
@@ -83,18 +92,6 @@ export const makeDefaultCoinsAndBalancesCapability = (
     return state.state.walletBalance(time);
   };
 
-  const getAvailableCoins = (state: CoreWallet): Dust[] => {
-    const pendingSpends = new Set([...state.pendingDust.values()].map((coin) => coin.nonce));
-    return pipe(
-      state.state.utxos,
-      Arr.filter((coin) => !pendingSpends.has(coin.nonce)),
-    );
-  };
-
-  const getPendingCoins = (state: CoreWallet): Dust[] => state.pendingDust;
-
-  const getTotalCoins = (state: CoreWallet): Array<Dust> => [...getAvailableCoins(state), ...getPendingCoins(state)];
-
   const getGenerationInfo = (state: CoreWallet, coin: Dust): DustGenerationInfo | undefined => {
     const info = state.state.generationInfo(coin);
     return info && info.dtime
@@ -105,42 +102,35 @@ export const makeDefaultCoinsAndBalancesCapability = (
       : info;
   };
 
-  const getAvailableCoinsWithGeneratedDust = (state: CoreWallet, currentTime: Date): Array<CoinWithValue<Dust>> => {
-    const result: Array<CoinWithValue<Dust>> = [];
-    const available = getAvailableCoins(state);
+  const resolveTime = (state: CoreWallet, time?: Date): Date => time ?? state.state.syncTime;
 
-    for (const coin of available) {
+  const toFullInfo = (state: CoreWallet, coins: readonly Dust[], time: Date): readonly DustFullInfo[] =>
+    coins.flatMap((coin) => {
       const genInfo = getGenerationInfo(state, coin);
-      if (genInfo) {
-        const generatedValue = ledger.updatedValue(
-          coin.ctime,
-          coin.initialValue,
-          genInfo,
-          currentTime,
-          state.state.params,
-        );
-        result.push({ token: coin, value: generatedValue });
-      }
-    }
+      return genInfo ? [{ token: coin, ...getFullDustInfo(state.state.params, genInfo, coin, time) }] : [];
+    });
 
-    return result;
+  const availableDustTokens = (state: CoreWallet): Dust[] => {
+    const pendingSpends = new Set([...state.pendingDust.values()].map((coin) => coin.nonce));
+    return pipe(
+      state.state.utxos,
+      Arr.filter((coin) => !pendingSpends.has(coin.nonce)),
+    );
   };
 
-  const getAvailableCoinsWithFullInfo = (state: CoreWallet, blockTime: Date): Array<DustFullInfo> => {
-    const result: Array<DustFullInfo> = [];
-    const available = getAvailableCoins(state);
-    for (const coin of available) {
-      const genInfo = getGenerationInfo(state, coin);
-      if (genInfo) {
-        result.push({
-          token: coin,
-          ...getFullDustInfo(state.state.params, genInfo, coin, blockTime),
-        });
-      }
-    }
+  const getAvailableCoins = (state: CoreWallet, time?: Date): readonly DustFullInfo[] =>
+    toFullInfo(state, availableDustTokens(state), resolveTime(state, time));
 
-    return result;
+  const getPendingCoins = (state: CoreWallet, time?: Date): readonly DustFullInfo[] =>
+    toFullInfo(state, state.pendingDust, resolveTime(state, time));
+
+  const getTotalCoins = (state: CoreWallet, time?: Date): ReadonlyArray<DustFullInfo> => {
+    const effectiveTime = resolveTime(state, time);
+    return [...getAvailableCoins(state, effectiveTime), ...getPendingCoins(state, effectiveTime)];
   };
+
+  const getAvailableCoinsWithGeneratedDust = (state: CoreWallet, currentTime: Date): Array<CoinWithValue<Dust>> =>
+    getAvailableCoins(state, currentTime).map((info) => ({ token: info.token, value: info.generatedNow }));
 
   const getFullDustInfo = (
     parameters: ledger.DustParameters,
@@ -175,9 +165,7 @@ export const makeDefaultCoinsAndBalancesCapability = (
     );
   };
 
-  /**
-   * Create a fake generation info for a given Utxo. It allows to estimate the Dust generation from it
-   */
+  /** Create a fake generation info for a given Utxo. It allows to estimate the Dust generation from it */
   const fakeGenerationInfo = (utxo: UtxoWithMeta, dustPublicKey: ledger.DustPublicKey): DustGenerationInfo => {
     return {
       value: utxo.value,
@@ -187,9 +175,7 @@ export const makeDefaultCoinsAndBalancesCapability = (
     };
   };
 
-  /**
-   * Create a fake dust coin for a given Utxo. It allows to estimate full details of the Dust generation from it
-   */
+  /** Create a fake dust coin for a given Utxo. It allows to estimate full details of the Dust generation from it */
   const fakeDustToken = (dustPublicKey: ledger.DustPublicKey, utxo: UtxoWithMeta): Dust => ({
     initialValue: 0n,
     owner: dustPublicKey,
@@ -222,7 +208,6 @@ export const makeDefaultCoinsAndBalancesCapability = (
     getPendingCoins,
     getTotalCoins,
     getAvailableCoinsWithGeneratedDust,
-    getAvailableCoinsWithFullInfo,
     getGenerationInfo,
     estimateDustGeneration,
     splitNightUtxos,

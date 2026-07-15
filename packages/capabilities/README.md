@@ -1,11 +1,11 @@
-# @midnight-ntwrk/wallet-sdk-capabilities
+# @midnightntwrk/wallet-sdk-capabilities
 
 Internal wallet capabilities for transaction balancing on the Midnight network.
 
 ## Installation
 
 ```bash
-npm install @midnight-ntwrk/wallet-sdk-capabilities
+npm install @midnightntwrk/wallet-sdk-capabilities
 ```
 
 ## Overview
@@ -25,7 +25,7 @@ Key features:
 ### Basic Transaction Balancing
 
 ```typescript
-import { getBalanceRecipe, Imbalances, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { getBalanceRecipe, Imbalances, chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
 
 const recipe = getBalanceRecipe({
   coins: availableCoins,
@@ -47,7 +47,7 @@ console.log('Outputs to create:', recipe.outputs);
 ### Working with Imbalances
 
 ```typescript
-import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { Imbalances } from '@midnightntwrk/wallet-sdk-capabilities';
 
 // Create imbalances from entries
 const imbalances = Imbalances.fromEntries([
@@ -65,7 +65,7 @@ const nightImbalance = Imbalances.getValue(imbalances, 'NIGHT');
 ### Custom Coin Selection
 
 ```typescript
-import { getBalanceRecipe, CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { getBalanceRecipe, CoinSelection } from '@midnightntwrk/wallet-sdk-capabilities';
 
 // Custom strategy: prefer larger coins
 const largestFirst: CoinSelection<MyCoin> = (coins, tokenType, amountNeeded, costModel) => {
@@ -84,12 +84,10 @@ const recipe = getBalanceRecipe({
 ### Error Handling
 
 ```typescript
-import { getBalanceRecipe, InsufficientFundsError } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { getBalanceRecipe, InsufficientFundsError } from '@midnightntwrk/wallet-sdk-capabilities';
 
 try {
-  const recipe = getBalanceRecipe({
-    /* ... */
-  });
+  const recipe = getBalanceRecipe({/* ... */});
 } catch (error) {
   if (error instanceof InsufficientFundsError) {
     console.log(`Cannot balance: insufficient ${error.tokenType}`);

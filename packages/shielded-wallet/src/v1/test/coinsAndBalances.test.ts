@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Record, Array, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { makeDefaultCoinsAndBalancesCapability, AvailableCoin, PendingCoin } from '../CoinsAndBalances.js';
+import { makeDefaultCoinsAndBalancesCapability, type AvailableCoin, type PendingCoin } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
 
 type ShieldedTokenType = { tokenType: ledger.ShieldedTokenType; value: bigint };
@@ -112,9 +112,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
     fc.assert(
       fc.property(fc.array(coinArbitrary), (coinInputs) => {
         const secretKeys = ledger.ZswapSecretKeys.fromSeed(new Uint8Array(32).fill(1));
-        const setupAvailableCoins: AvailableCoin[] = coinInputs.map((c) =>
-          toAvailableCoin(c as { tokenType: { raw: string; tag: 'shielded' }; value: bigint }, secretKeys),
-        );
+        const setupAvailableCoins: AvailableCoin[] = coinInputs.map((c) => toAvailableCoin(c, secretKeys));
         const networkId = NetworkId.NetworkId.Undeployed;
         const capability = makeDefaultCoinsAndBalancesCapability();
 
@@ -147,12 +145,8 @@ describe('DefaultCoinsAndBalancesCapability', () => {
     fc.assert(
       fc.property(fc.array(coinArbitrary), fc.array(coinArbitrary), (fixtureAvailableCoins, fixturePendingCoins) => {
         const secretKeys = ledger.ZswapSecretKeys.fromSeed(new Uint8Array(32).fill(1));
-        const setupAvailableCoins: AvailableCoin[] = fixtureAvailableCoins.map((c) =>
-          toAvailableCoin(c as ShieldedTokenType, secretKeys),
-        );
-        const setupPendingCoins: PendingCoin[] = fixturePendingCoins.map((c) =>
-          toPendingCoin(c as ShieldedTokenType, secretKeys),
-        );
+        const setupAvailableCoins: AvailableCoin[] = fixtureAvailableCoins.map((c) => toAvailableCoin(c, secretKeys));
+        const setupPendingCoins: PendingCoin[] = fixturePendingCoins.map((c) => toPendingCoin(c, secretKeys));
         const networkId = NetworkId.NetworkId.Undeployed;
         const capability = makeDefaultCoinsAndBalancesCapability();
 
@@ -216,9 +210,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
     fc.assert(
       fc.property(fc.array(coinArbitrary), fc.integer({ min: 0, max: 3 }), (availableInputs, numSpends) => {
         const secretKeys = ledger.ZswapSecretKeys.fromSeed(new Uint8Array(32).fill(1));
-        const setupAvailableCoins: AvailableCoin[] = availableInputs.map((c) =>
-          toAvailableCoin(c as ShieldedTokenType, secretKeys),
-        );
+        const setupAvailableCoins: AvailableCoin[] = availableInputs.map((c) => toAvailableCoin(c, secretKeys));
 
         const spendsRaw = setupAvailableCoins.slice(0, Math.min(numSpends, setupAvailableCoins.length - 1));
 

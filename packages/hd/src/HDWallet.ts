@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { HDKey } from '@scure/bip32';
+import { HARDENED_OFFSET, HDKey } from '@scure/bip32';
 
 type ValueOf<T> = T[keyof T];
 
@@ -29,11 +29,15 @@ type CompositeDerivationResult<T extends readonly Role[]> =
   | { readonly type: 'keysDerived'; readonly keys: Record<T[number], Uint8Array> }
   | { readonly type: 'keyOutOfBounds'; readonly roles: readonly Role[] };
 type HDWalletResult =
-  | { readonly type: 'seedOk'; readonly hdWallet: HDWallet }
-  | { readonly type: 'seedError'; readonly error: unknown };
+  { readonly type: 'seedOk'; readonly hdWallet: HDWallet } | { readonly type: 'seedError'; readonly error: unknown };
 
 const PURPOSE = 44;
 const COIN_TYPE = 2400;
+
+// BIP32 path components (account, role, index) are integers in [0, 2^31);
+// @scure/bip32 inlines this check inside derive() and throws, so guard here
+const isValidChildIndex = (value: number): boolean =>
+  Number.isSafeInteger(value) && value >= 0 && value < HARDENED_OFFSET;
 
 const CompositeDerivationResult = {
   fromResults: <T extends readonly Role[]>(
@@ -81,7 +85,8 @@ export class HDWallet {
   }
 
   /**
-   * Once all keys are derived - clear internals from private data, so that they do not reside in memory longer than needed.
+   * Once all keys are derived - clear internals from private data, so that they do not reside in memory longer than
+   * needed.
    */
   public clear(): void {
     this.rootKey.wipePrivateData();
@@ -120,6 +125,9 @@ export class RoleKey {
 
   // Finally, derive the key at the given index.
   public deriveKeyAt(index: number): DerivationResult {
+    if (![this.account, this.role, index].every(isValidChildIndex)) {
+      return { type: 'keyOutOfBounds' };
+    }
     const path = `m/${PURPOSE}'/${COIN_TYPE}'/${this.account}'/${this.role}/${index}`;
     const derivedKey = this.rootKey.derive(path);
     return derivedKey.privateKey ? { type: 'keyDerived', key: derivedKey.privateKey } : { type: 'keyOutOfBounds' };
