@@ -1,0 +1,42 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "inputs": [
+        "test/**/*.{ts,tsx}",
+        "fixtures/**/*.json",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        "vitest.config.ts"
+      ]
+    },
+    "test:unit": {
+      "inputs": [
+        "test/**/*.{ts,tsx}",
+        "fixtures/**/*.json",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        "vitest.config.ts"
+      ]
+    },
+    "test:serialization:compat": {
+      "inputs": [
+        "test/**/*.{ts,tsx}",
+        "fixtures/**/*.json",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        "vitest.config.ts"
+      ]
+    },
+    "test:serialization:drift": {
+      "inputs": [
+        "test/**/*.{ts,tsx}",
+        "fixtures/**/*.json",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        "vitest.config.ts"
+      ]
+    }
+  }
+}

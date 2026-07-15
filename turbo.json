@@ -55,6 +55,18 @@
       "outputLogs": "new-only",
       "dependsOn": ["^dist", "typecheck"]
     },
+    "test:serialization:compat": {
+      "outputs": ["coverage/**", "reports/**"],
+      "env": ["DEBUG"],
+      "outputLogs": "new-only",
+      "dependsOn": ["^dist", "typecheck"]
+    },
+    "test:serialization:drift": {
+      "outputs": ["coverage/**", "reports/**"],
+      "env": ["DEBUG"],
+      "outputLogs": "new-only",
+      "dependsOn": ["^dist", "typecheck"]
+    },
     "typecheck": {
       "inputs": [
         "test/**/*.{ts,tsx}",

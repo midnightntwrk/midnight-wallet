@@ -80,12 +80,16 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "test:unit": "turbo run test:unit",
+    "test:serialization": "turbo run test:unit --filter=@midnight/wallet-serialization-tests",
+    "test:serialization:compat": "turbo run test:serialization:compat --filter=@midnight/wallet-serialization-tests",
+    "test:serialization:drift": "turbo run test:serialization:drift --filter=@midnight/wallet-serialization-tests",
+    "capture:unreleased": "yarn dist && yarn workspace @midnight/wallet-serialization-tests capture",
     "test:integration": "turbo run test:integration",
     "dist": "turbo run dist",
     "schema:sync": "turbo run schema:sync",
     "watch": "turbo watch dist",
     "dist:publish": "turbo run dist:publish",
-    "changeset:version": "yarn changeset version && yarn install --mode=update-lockfile",
+    "changeset:version": "yarn changeset version && yarn workspace @midnight/wallet-serialization-tests reconcile-train && yarn install --mode=update-lockfile",
     "changeset:check": "yarn changeset status --verbose",
     "clean": "turbo run clean"
   }
