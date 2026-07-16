@@ -47,6 +47,22 @@ Mandatory for all SDK code. Rationale and worked examples: `docs/CodingConventio
 - State lives in refs (`SubscriptionRef`/`SynchronizedRef`); pure functions transform it; services orchestrate. Update
   only via `Ref.update`/`Ref.modify` with a pure function, using only the state passed into the callback. Never pair a
   separate `get` with a write — that's a race.
+- RxJS `Observable`s appear only in APIs exposed to SDK users; internals use Effect streams/refs.
+
+## Public API documentation
+
+- Public APIs require JSDoc: description, `@param` for each parameter, `@returns`, `@throws` (facade APIs that throw),
+  and an `@example` with a working snippet (worked example: `docs/CodingConventions.md` → Documentation Standards).
+
+## Downstream impact
+
+| If you change...           | Impact                              | Action                                      |
+| -------------------------- | ----------------------------------- | ------------------------------------------- |
+| `abstractions/` interfaces | All wallet implementations break    | Breaking change — coordinate before merging |
+| `facade/` public API       | All SDK consumers break             | Major version bump, changeset required      |
+| `capabilities/`            | All wallet implementations affected | Run full test suite                         |
+| `utilities/`               | Everything depends on it            | Run full test suite                         |
+| `runtime/` variant pattern | Wallet lifecycle affected           | Test variant migration paths                |
 
 ## Where the patterns live
 

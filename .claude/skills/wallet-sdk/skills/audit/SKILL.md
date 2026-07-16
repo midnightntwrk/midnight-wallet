@@ -34,8 +34,8 @@ user approves.
    `description` fields still describe what the skill body does. Flag any `wallet-sdk:<name>` colon syntax (with or
    without a leading slash) anywhere in scope files — it is not a real input format and must not be documented; refer to
    skills by short name plus plugin (e.g. "the `tdd` skill from the `wallet-sdk` plugin").
-7. **Size budget** — CLAUDE.md target is ~250 lines / ~2.5k tokens. Flag if it exceeds 300 lines and name the sections
-   that grew.
+7. **Size budget** — CLAUDE.md target is ~120 lines / ~1.7k tokens. Flag if it exceeds 150 lines and name the sections
+   that grew; anything only relevant when specific files are touched belongs in a `.claude/rules/` glob, not here.
 8. **Formatter damage** — scan scope markdown for prettier-mangled structures: code fences or tables collapsed into
    run-on prose lines (compare fence/pipe structure against rendered intent).
 

@@ -121,6 +121,11 @@ GitHub nests the per-file jobs under one collapsible check.
 The required status check for merge is the aggregate **`Tests`** job, which passes only when **all** tiers pass — it
 gates on unit, integration, and smoke e2e (`needs: [test-unit, integration, e2e-smoke]`).
 
+**Local setup:** `nvm use && corepack enable`, then `yarn` (or `nix develop` with direnv). For tests requiring
+infrastructure: `cp .env.example .env` and set `APP_INFRA_SECRET` (e.g. `openssl rand -hex 32`).
+
+**Web packaging note:** browser builds require polyfills for Node's `Buffer` and `assert`.
+
 ---
 
 ## Versioning with Changesets

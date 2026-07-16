@@ -134,3 +134,28 @@ Defined in the root `package.json`, usable by humans and hooks alike:
 - `yarn verify:changed` — `format:changed`, then `lint:changed`, then `els:changed`. Format runs first on purpose: the
   ESLint config includes `eslint-plugin-prettier`, so unformatted code shows up as lint errors — formatting first clears
   those before lint runs.
+
+## Effect Language Service — manual usage
+
+`@effect/language-service` provides Effect-specific diagnostics (floating effects, wrong yield usage, deterministic
+keys, …), configured as a TypeScript plugin in `tsconfig.base.json`. The Stop hook runs it automatically via
+`yarn els:changed`; to run it by hand:
+
+```bash
+# Single file (always absolute paths — prefix with $(pwd)/)
+yarn effect-language-service diagnostics --file "$(pwd)/path/to/file.ts" --format pretty
+
+# Whole package — must use tsconfig.build.json or tsconfig.test.json, NOT tsconfig.json
+# (the latter only has references, no source files)
+yarn effect-language-service diagnostics --project "$(pwd)/packages/dust-wallet/tsconfig.build.json" --format pretty
+```
+
+Other subcommands: `quickfixes` (report-only diffs), `codegen` (applies `@effect-codegens` directives — writes changes),
+`overview`, `layerinfo`.
+
+## Code reference repos (shelf)
+
+Optional but recommended: [shelf](https://github.com/Rika-Labs/shelf) caches the upstream reference repos declared in
+`shelffile` (the midnight specs, `effect`, the language-service) locally under `~/.agents/shelf/repos/` for fast agent
+access — the `shelf` skill then reads them there instead of the web. Install: `bun install -g @rikalabs/shelf`, then
+`shelf install` from the repo root.
