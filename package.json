@@ -68,6 +68,12 @@
   "scripts": {
     "format:root": "prettier --write --ignore-path .prettierignore.root \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check:root": "prettier --check --ignore-path .prettierignore.root \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "format:file": "prettier --write --ignore-unknown --ignore-path .prettierignore.root",
+    "changed-files": "node scripts/changed-files.mjs",
+    "format:changed": "node scripts/changed-files.mjs | xargs -r yarn format:file",
+    "lint:changed": "turbo run lint --affected",
+    "els:changed": "node scripts/els-changed.mjs",
+    "verify:changed": "yarn format:changed && yarn lint:changed && yarn els:changed",
     "format": "turbo run format",
     "format:check": "turbo run format:check",
     "verify": "turbo run verify",

@@ -4,6 +4,9 @@ This document is intended for maintainers and contributors to the **Midnight Wal
 It describes the internal development and **release management** process used to maintain consistent, automated
 versioning and publishing.
 
+> 💡 Using Claude Code on this repo? Recommended personal permission settings (secret-read denies, gated git/gh
+> commands) are documented in [`docs/ClaudeCode.md`](docs/ClaudeCode.md).
+
 ---
 
 ## 📚 Overview
@@ -24,17 +27,24 @@ This setup ensures that:
 
 ## Branching Strategy
 
-We use a simple, linear workflow:
+We use a simple, linear workflow. Branch names are not enforced, but the strongly recommended pattern is:
 
-- `feat/*` → New features
+```
+<type>/<ticket>-<short-description>
+```
 
-- `fix/*` → Bug fixes
+- `<type>` is a [Conventional Commits](https://www.conventionalcommits.org/) type: `feat`, `fix`, `docs`, `style`,
+  `refactor`, `perf`, `test`, `build`, `ci`, `chore`.
 
-- `chore/*` → Maintenance and build-related updates
+- `<ticket>` is the issue number, when there is one (omit if there genuinely isn't).
+
+- `<short-description>` is kebab-case.
+
+Examples: `feat/123-optional-balancing`, `docs/576-restructure-docs-and-claude`, `chore/bump-ledger-v9`.
 
 **Rules**
 
-- Open PRs from `feat/*`, `fix/*`, or `chore/*` → merge into `main` after review and green CI.
+- Open PRs from these branches → merge into `main` after review and green CI.
 
 - Do **not** bump versions or edit changelogs manually — Changesets handles this.
 
@@ -87,6 +97,29 @@ will return as soon as the release workflow runs again.
 > They remain in place so that subsequent beta releases (e.g., `1.0.0-beta.1`, `1.0.0-beta.2`, etc.) can be generated
 > incrementally.  
 > Once the repository exits beta mode, the next stable release will remove all processed `.changeset` files as usual.
+
+---
+
+## Testing Tiers & CI
+
+Tests are split by **filename suffix** so each tier can run independently:
+
+- **Unit** — `*.test.ts`: pure, no Docker/network/external services. `yarn test:unit`.
+- **Integration** — `*.integration.test.ts`: require infra (Docker/testcontainers, indexer, node, prover).
+  `yarn test:integration`.
+- **End-to-end** — full wallet flows through the public API live in the `e2e-tests` package as `*.undeployed.test.ts`
+  and run via `turbo test-undeployed` (smoke subset on PRs, full suite nightly). The docs-snippets runner is also e2e
+  and runs in that lane while staying in its own package.
+
+In CI, unit tests run as a fast early gate. Integration tests run as a **matrix with one job per file** (own runner +
+own Docker stack), so no two files contend for infra and a failing file never cancels the rest. The file list is
+discovered dynamically from `*.integration.test.ts` — adding a test automatically gets it its own parallel CI job, and
+wall-clock time stays at the slowest single file regardless of how files are distributed across packages. The matrix
+lives in a reusable workflow (`.github/workflows/integration.yml`) invoked as a single `Integration Tests` job, so
+GitHub nests the per-file jobs under one collapsible check.
+
+The required status check for merge is the aggregate **`Tests`** job, which passes only when **all** tiers pass — it
+gates on unit, integration, and smoke e2e (`needs: [test-unit, integration, e2e-smoke]`).
 
 ---
 
