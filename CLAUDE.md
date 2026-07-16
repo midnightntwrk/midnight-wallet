@@ -34,10 +34,11 @@ Hard rules load automatically from `.claude/rules/` when matching files are touc
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <description>`
   — imperative mood, lower-case, no trailing period. Breaking changes: `!` after type/scope and/or a `BREAKING CHANGE:`
   footer.
-- **Never commit, push, or create/edit PRs or issues unattended** — show the user the diff and the exact commit message
-  (or PR/issue content) first, and wait for explicit approval.
-- Issues and PRs must use the templates in `.github/` — fill in every section and link the related issue
-  (`Closes #123`).
+- **Never commit, push, or create/edit PRs, issues, or comments unattended** — show the user the diff and the exact
+  commit message (or PR/issue/comment content) first, and wait for explicit approval.
+- Issues and PRs must use the templates in `.github/` — fill in every section and link the related issue with a plain
+  reference (`#123`). **Never use closing keywords** (`Closes`/`Fixes`/`Resolves`) — issues go through QA and are closed
+  manually, not by a merge.
 
 ## Key Specifications (ALWAYS CONSULT)
 

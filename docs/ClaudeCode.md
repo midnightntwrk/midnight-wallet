@@ -58,13 +58,15 @@ are mechanical: the tool call is intercepted and you approve or reject it every 
     "Bash(gh pr create:*)",
     "Bash(gh pr edit:*)",
     "Bash(gh issue create:*)",
-    "Bash(gh issue edit:*)"
+    "Bash(gh issue edit:*)",
+    "Bash(gh pr comment:*)",
+    "Bash(gh issue comment:*)"
   ]
 }
 ```
 
-With these in place, commits, pushes, and the creation or editing of PRs and issues always stop for your explicit
-approval, regardless of what any CLAUDE.md says.
+With these in place, commits, pushes, and the creation, editing, or commenting on PRs and issues always stop for your
+explicit approval, regardless of what any CLAUDE.md says.
 
 ## Hooks (tracked, apply to everyone)
 

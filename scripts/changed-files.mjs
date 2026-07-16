@@ -8,8 +8,8 @@
 //      (prettier over the entire package), rewriting files you never touched.
 //      This script feeds prettier only the changed files.
 //   2. Root coverage: --affected only sees workspace packages. Root-level files
-//      (CLAUDE.md, scripts/, docs/) have no package format task — format:file with
-//      .prettierignore.root is the only thing that formats them.
+//      (CLAUDE.md, scripts/, docs/) have no package format task — format:file is
+//      the only thing that formats them.
 //   3. Diff base: --affected diffs against the merge-base with main (the whole
 //      branch); this diffs against HEAD (your current uncommitted work), which is
 //      the right semantics for "format what I'm about to commit".

@@ -173,9 +173,9 @@ const total = items.reduce((sum, item) => sum + item.value, 0n);
 const result = items.filter((item) => item.active).map((item) => item.name);
 
 // CORRECT: reduce to build object
-const obj = items.reduce(
+const obj = items.reduce<Record<string, bigint>>(
   (acc, item) => ({ ...acc, [item.key]: (acc[item.key] ?? 0n) + item.value }),
-  {} as Record<string, bigint>,
+  {},
 );
 
 // CORRECT: conditional object properties

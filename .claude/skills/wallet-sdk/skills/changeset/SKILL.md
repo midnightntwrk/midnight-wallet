@@ -29,8 +29,9 @@ directly. The file format is trivial; the judgment is in the bump type and packa
 - List only the **directly changed, published** packages — Changesets pulls in dependent internal packages
   automatically. Do not list dependents.
 - Never list ignored/private packages — the `ignore` array in `.changeset/config.json` is the source of truth; check it.
-- Package names are the `name` field of each `packages/*/package.json` (e.g.
-  `@midnightntwrk/wallet-sdk-shielded-wallet`).
+- Package names are the `name` field of each `packages/*/package.json` — always read it, names don't reliably match
+  directory names (e.g. `packages/shielded-wallet` is `@midnightntwrk/wallet-sdk-shielded`, no `-wallet` suffix, while
+  `packages/unshielded-wallet` is `@midnightntwrk/wallet-sdk-unshielded-wallet`).
 
 ## 3. Pick the bump (SemVer)
 
