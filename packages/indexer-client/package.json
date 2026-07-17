@@ -30,22 +30,29 @@
   },
   "dependencies": {
     "@graphql-typed-document-node/core": "^3.2.0",
-    "@midnightntwrk/wallet-sdk-utilities": "^1.2.0",
+    "@midnightntwrk/wallet-sdk-utilities": "1.2.1",
     "effect": "^3.19.19",
     "graphql": "^17.0.0",
     "graphql-http": "^1.22.4",
     "graphql-ws": "^6.0.7"
   },
   "devDependencies": {
-    "@graphql-codegen/cli": "7.1.2",
-    "@graphql-codegen/client-preset": "6.0.1"
+    "@effect/platform": "0.96.2",
+    "@effect/platform-node": "0.107.0",
+    "@graphql-codegen/cli": "7.2.0",
+    "@graphql-codegen/client-preset": "6.1.0",
+    "tsx": "4.23.0",
+    "yaml": "^2.8.3"
   },
   "scripts": {
     "gql:codegen": "graphql-codegen --clean --config codegen.ts",
+    "schema:sync": "tsx ./scripts/schema-sync/sync.ts",
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
     "test": "vitest run",
+    "test:unit": "vitest run --project unit --passWithNoTests",
+    "test:integration": "vitest run --project integration --passWithNoTests",
     "lint": "eslint",
     "dist": "tsc -b ./tsconfig.build.json",
     "dist:publish": "tsc -b ./tsconfig.publish.json",

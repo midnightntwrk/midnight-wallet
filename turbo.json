@@ -21,10 +21,37 @@
         "src/**/*.{ts,tsx}",
         "tsconfig*.json",
         "$TURBO_ROOT$/tsconfig.base.json",
-        "vitest.config.mjs"
+        "vitest.config.ts"
       ],
       "outputs": ["coverage/**", "reports/**"],
       "env": ["DEBUG", "APP_INFRA_SECRET"],
+      "outputLogs": "new-only",
+      "dependsOn": ["^dist", "typecheck"]
+    },
+    "test:unit": {
+      "inputs": [
+        "test/**/*.{ts,tsx}",
+        "src/**/*.{ts,tsx}",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        "vitest.config.ts"
+      ],
+      "outputs": ["coverage/**", "reports/**"],
+      "env": ["DEBUG"],
+      "outputLogs": "new-only",
+      "dependsOn": ["^dist", "typecheck"]
+    },
+    "test:integration": {
+      "cache": false,
+      "inputs": [
+        "test/**/*.{ts,tsx}",
+        "src/**/*.{ts,tsx}",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        "vitest.config.ts"
+      ],
+      "outputs": ["coverage/**", "reports/**"],
+      "env": ["DEBUG", "APP_INFRA_SECRET", "NETWORK"],
       "outputLogs": "new-only",
       "dependsOn": ["^dist", "typecheck"]
     },
@@ -102,6 +129,9 @@
       "outputs": [],
       "outputLogs": "new-only"
     },
+    "schema:sync": {
+      "cache": false
+    },
     "//#format:root": {
       "cache": false,
       "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore.root"],
@@ -139,10 +169,13 @@
       "dependsOn": ["typecheck", "format:check", "lint", "//#check-barrel-exports"]
     },
     "verify:test": {
-      "dependsOn": ["test"]
+      "dependsOn": ["test:unit"]
+    },
+    "verify:integration": {
+      "dependsOn": ["test:integration"]
     },
     "verify": {
-      "dependsOn": ["verify:check", "verify:test"]
+      "dependsOn": ["verify:check", "verify:test", "verify:integration"]
     }
   }
 }

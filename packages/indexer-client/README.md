@@ -24,6 +24,12 @@ blockchain data and provides efficient access to:
   - Ledger parameters (including cost model)
   - Connection management
 
+## GraphQL schema
+
+The committed schema (`indexer.gql`) and its generated types are kept in sync with a pinned indexer release by a sync
+tool. To change the source repo/file, edit `schema.config.yml`; `indexer.gql` and `schema.lock` are tool-generated —
+never hand-edit them. See [`scripts/schema-sync/README.md`](scripts/schema-sync/README.md).
+
 ## Usage
 
 ### Subscriptions

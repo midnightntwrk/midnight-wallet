@@ -32,6 +32,7 @@ import {
   type UnshieldedWalletAPI,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type WalletEntry } from '../../src/index.js';
 import {
   Sync as UnshieldedSync,
   V1Builder as UnshieldedV1Builder,
@@ -44,6 +45,7 @@ import {
   type UnboundTransaction,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { type Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { makeSimulatorBlockDataFetcher } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { Effect, type Scope } from 'effect';
 import * as rx from 'rxjs';
@@ -184,7 +186,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
   const ShieldedWalletFactory = CustomShieldedWallet(
     {
       ...config,
-      txHistoryStorage: new NoOpTransactionHistoryStorage(),
+      txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>(),
       indexerClientConnection: { indexerHttpUrl: 'http://unused:0' },
     },
     new ShieldedV1Builder()
@@ -214,7 +216,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
 
   // Unshielded wallet: all defaults except sync (uses simulator sync)
   const UnshieldedWalletFactory = CustomUnshieldedWallet(
-    { ...config, txHistoryStorage: new NoOpTransactionHistoryStorage() },
+    { ...config, txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>() },
     new UnshieldedV1Builder()
       .withSync(UnshieldedSync.makeSimulatorSyncService, UnshieldedSync.makeSimulatorSyncCapability)
       .withSerializationDefaults()
@@ -279,13 +281,14 @@ export const makeSimulatorFacade = (
           // Dummy values - not used in simulation mode
           indexerClientConnection: { indexerHttpUrl: 'http://unused' },
           relayURL: new URL('ws://unused'),
-          txHistoryStorage: new NoOpTransactionHistoryStorage(),
+          txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>(),
         },
         shielded: () => factories.createShieldedWallet(keys.shieldedKeys),
         unshielded: () => factories.createUnshieldedWallet(keys.unshieldedKeystore),
         dust: () => factories.createDustWallet(keys.dustKey, dustParameters),
         provingService: () => provingService,
         submissionService: () => submissionService,
+        fetchBlockData: () => makeSimulatorBlockDataFetcher(config.simulator),
         clock: () => simulatorClock(config.simulator),
       });
 

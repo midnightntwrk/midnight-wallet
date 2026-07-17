@@ -147,19 +147,19 @@
     }
   },
   "dependencies": {
-    "@midnightntwrk/wallet-sdk-abstractions": "^2.1.0",
-    "@midnightntwrk/wallet-sdk-address-format": "^3.1.2",
-    "@midnightntwrk/wallet-sdk-capabilities": "^3.3.1",
-    "@midnightntwrk/wallet-sdk-dust-wallet": "^4.2.0",
-    "@midnightntwrk/wallet-sdk-facade": "^4.1.0",
-    "@midnightntwrk/wallet-sdk-hd": "^3.0.3",
-    "@midnightntwrk/wallet-sdk-indexer-client": "^1.2.3",
-    "@midnightntwrk/wallet-sdk-node-client": "^1.1.3",
-    "@midnightntwrk/wallet-sdk-prover-client": "^1.2.3",
-    "@midnightntwrk/wallet-sdk-runtime": "^1.0.5",
-    "@midnightntwrk/wallet-sdk-shielded": "^3.0.2",
-    "@midnightntwrk/wallet-sdk-unshielded-wallet": "^3.1.0",
-    "@midnightntwrk/wallet-sdk-utilities": "^1.2.0"
+    "@midnightntwrk/wallet-sdk-abstractions": "2.1.0",
+    "@midnightntwrk/wallet-sdk-address-format": "3.1.2",
+    "@midnightntwrk/wallet-sdk-capabilities": "3.3.1",
+    "@midnightntwrk/wallet-sdk-dust-wallet": "4.2.0",
+    "@midnightntwrk/wallet-sdk-facade": "4.1.0",
+    "@midnightntwrk/wallet-sdk-hd": "3.0.3",
+    "@midnightntwrk/wallet-sdk-indexer-client": "1.2.3",
+    "@midnightntwrk/wallet-sdk-node-client": "1.1.3",
+    "@midnightntwrk/wallet-sdk-prover-client": "1.2.3",
+    "@midnightntwrk/wallet-sdk-runtime": "1.0.5",
+    "@midnightntwrk/wallet-sdk-shielded": "3.0.2",
+    "@midnightntwrk/wallet-sdk-unshielded-wallet": "3.1.0",
+    "@midnightntwrk/wallet-sdk-utilities": "1.2.1"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",

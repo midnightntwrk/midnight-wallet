@@ -23,8 +23,7 @@ import { Schema } from 'effect';
 import { UnshieldedSectionSchema } from '../src/v1/TransactionHistory.js';
 import { type DefaultV1Configuration } from '../src/v1/index.js';
 
-const UnshieldedEntrySchema = Schema.Struct({
-  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
+const UnshieldedEntrySchema = TransactionHistoryStorage.extendEntrySchema({
   unshielded: Schema.optional(UnshieldedSectionSchema),
 });
 import { type UnshieldedWallet, type UnshieldedWalletState } from '../src/UnshieldedWallet.js';
@@ -49,6 +48,8 @@ export const generateMockTransaction = (
       protocolVersion: 1,
       identifiers: createdUtxos.map((u) => u.utxo.intentHash),
       block: {
+        hash: crypto.randomUUID(),
+        height: Math.floor(Math.random() * 1000),
         timestamp: new Date(),
       },
       fees: {
