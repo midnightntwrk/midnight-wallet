@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@midnight-ntwrk/ledger-v8": "^8.1.0",
+    "@midnightntwrk/ledger-v9": "^1.0.0-rc.2",
     "@noble/curves": "^1.8.1",
     "@scure/base": "^2.0.0",
     "@subsquid/scale-codec": "^4.0.1",

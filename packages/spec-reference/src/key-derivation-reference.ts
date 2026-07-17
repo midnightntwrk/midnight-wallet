@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as crypto from 'node:crypto';
-import { schnorr } from '@noble/curves/secp256k1';
+import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
 import { BLSScalar, type Field, JubJubScalar, toScalar } from './field.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 
@@ -107,5 +107,22 @@ export function unshieldedKeyPairFromUniformBytes(secretKeyBytes: Buffer): {
       secretKey: null,
       publicKey: null,
     };
+  }
+}
+
+export function ecdsaKeyPairFromUniformBytes(secretKeyBytes: Buffer): {
+  secretKey: Buffer | null;
+  publicKey: Buffer | null;
+} {
+  try {
+    const order = secp256k1.Point.CURVE().n;
+    const scalar = BigInt(`0x${secretKeyBytes.toString('hex')}`) % order;
+    if (scalar === 0n) return { secretKey: null, publicKey: null };
+    return {
+      secretKey: Buffer.from(scalar.toString(16).padStart(64, '0'), 'hex'),
+      publicKey: Buffer.from(secp256k1.getPublicKey(scalar, true)),
+    };
+  } catch {
+    return { secretKey: null, publicKey: null };
   }
 }
