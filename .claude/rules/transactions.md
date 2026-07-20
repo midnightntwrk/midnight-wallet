@@ -20,8 +20,8 @@ When building or inspecting transactions, consult the spec — don't guess proto
   `DustActions`, etc.
 - **Ledger spec** (midnight-ledger repo, `spec/`): `intents-transactions.md` (structure, intents, segments, binding),
   `zswap.md` (shielded protocol), `dust.md` (fee mechanics), `night.md` (unshielded), `cost-model.md` (fees).
-- **Wallet spec** (midnight-architecture repo): `components/WalletEngine/Specification.md` — transaction lifecycle
-  (pending → confirmed → finalized/discarded), coin lifecycle, balance types, state operations.
+- **Wallet spec** (in-repo): `docs/spec/Specification.md` — transaction lifecycle (pending → confirmed →
+  finalized/discarded), coin lifecycle, balance types, state operations.
 
 ## Key facts
 

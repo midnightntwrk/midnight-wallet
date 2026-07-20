@@ -5,9 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Overview
 
 The Midnight Wallet SDK is a TypeScript implementation of the
-[Midnight Wallet Specification](https://github.com/midnightntwrk/midnight-architecture/blob/main/components/WalletEngine/Specification.md).
-It provides key generation, address formatting, transaction building, state syncing with the indexer, and testing
-utilities for the Midnight privacy-focused blockchain.
+[Midnight Wallet Specification](docs/spec/Specification.md). It provides key generation, address formatting, transaction
+building, state syncing with the indexer, and testing utilities for the Midnight privacy-focused blockchain. Both the
+specification and its executable [reference implementation](packages/spec-reference) — which generates and verifies the
+spec's test vectors — live in this repository, at `docs/spec/` and `packages/spec-reference/`.
 
 ## Documentation Map
 
@@ -20,12 +21,13 @@ utilities for the Midnight privacy-focused blockchain.
 | Claude Code setup (permissions, hooks, scripts, ELS)  | `docs/ClaudeCode.md`                       |
 
 Hard rules load automatically from `.claude/rules/` when matching files are touched: `functional-style.md` (SDK code),
-`testing.md` (tests), `transactions.md` (transaction-handling packages), `claude-config.md` (`.claude/**`).
+`testing.md` (tests), `transactions.md` (transaction-handling packages), `spec-reference.md` (key derivation / address
+formatting), `claude-config.md` (`.claude/**`).
 
-**Specs over guesses:** never guess protocol or API semantics — consult the wallet spec
-(`midnightntwrk/midnight-architecture`), ledger spec (`midnightntwrk/midnight-ledger` → `spec/`), or DApp Connector API
-(`midnightntwrk/midnight-dapp-connector-api`); the `shelf` skill reads them from a local cache. **API usage examples:**
-`packages/docs-snippets` — always check there first when implementing against the public API.
+**Specs over guesses:** never guess protocol or API semantics — consult the wallet spec (`docs/spec/Specification.md`,
+in-repo), the ledger spec (`midnightntwrk/midnight-ledger` → `spec/`), or the DApp Connector API
+(`midnightntwrk/midnight-dapp-connector-api`); the `shelf` skill caches the external spec repos locally. **API usage
+examples:** `packages/docs-snippets` — always check there first when implementing against the public API.
 
 ## Git & GitHub Conventions
 

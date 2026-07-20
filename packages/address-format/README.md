@@ -2,6 +2,9 @@
 
 Bech32m address encoding and decoding for the Midnight network.
 
+The canonical encoding rules are defined in the [Wallet Specification](../../docs/spec/Specification.md) (Address format
+section), with test vectors maintained in the [spec reference implementation](../spec-reference).
+
 ## Installation
 
 ```bash
