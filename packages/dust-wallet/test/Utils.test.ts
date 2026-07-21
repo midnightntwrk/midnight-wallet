@@ -14,22 +14,79 @@
 import { describe, it } from '@vitest/runner';
 import { expect } from 'vitest';
 import { bigintToLeHex, calculatePrefixLength, gapRanges, leBigintToHex } from '../src/v1/Utils.js';
-import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 describe('Utils', () => {
-  it('calculatePrefixLength()', () => {
-    const maxLength = 64; // 12bdf27706a2994ad7f214d5653bb44546afe1fedadda5219c8ba4fe90f23f44
-    const nullifier = LedgerOps.generateHex(maxLength);
-    // 0 means no privacy, no overhead (anonymity set equals 2**0 = 1)
-    // 7 means 64x overhead, as well as 64 size of the anonymity set (62 additional values expected per query)
-    expect(nullifier.substring(0, calculatePrefixLength(0, 1000, maxLength)).length).toBe(10);
-    expect(nullifier.substring(0, calculatePrefixLength(1, 1000, maxLength)).length).toBe(8);
-    expect(nullifier.substring(0, calculatePrefixLength(2, 1000, maxLength)).length).toBe(8);
-    expect(nullifier.substring(0, calculatePrefixLength(3, 1000, maxLength)).length).toBe(6);
-    expect(nullifier.substring(0, calculatePrefixLength(4, 1000, maxLength)).length).toBe(6);
-    expect(nullifier.substring(0, calculatePrefixLength(5, 1000, maxLength)).length).toBe(4);
-    expect(nullifier.substring(0, calculatePrefixLength(6, 1000, maxLength)).length).toBe(4);
-    expect(nullifier.substring(0, calculatePrefixLength(7, 1000, maxLength)).length).toBe(2);
+  // calculatePrefixLength returns a HEX-CHARACTER count consumed as `.substring(0, prefixLength)` on a
+  // nullifier hex string, then decoded by the indexer with const_hex::decode (WHOLE BYTES => even hex chars,
+  // 4 bits/char, 8 bits/byte, non-empty => minimum 1 byte = 2 hex chars).
+  //
+  // To leave an anonymity set of 2^anonymityLevel out of a population of N commitments the on-wire prefix must
+  // be (log2(N) - anonymityLevel) BITS. Both log2(N) and the bit->byte conversion round DOWN (floor) so the
+  // realized prefix is never LONGER than ideal (shorter prefix => larger set => privacy-safe). The min-1-byte
+  // floor is the single exception where the realized set can drop below 2^anonymityLevel (see the N=2^14, n=7
+  // case below): an unavoidable non-empty-prefix protocol constraint.
+  const maxLength = 64; // full nullifier hex width = NULLIFIER_BYTE_LENGTH * 2
+
+  it('converts the ideal bit-length prefix down to whole-byte hex chars (ticket N=2^14, n=7)', () => {
+    // floor(log2(16384))=14; prefixBits=max(0,14-7)=7; prefixBytes=floor(7/8)=0; idealHexChars=0 -> min-1-byte
+    // floor clamps to 2 hex chars = 1 byte = 8-bit prefix. Realized set = 2^(14-8)=2^6=64 < requested 128:
+    // the min-1-byte floor forces a prefix 1 bit LONGER than the ideal 7 bits (documented byte-granularity limit).
+    // The BUG returns 6 (round(log2)-7 = 7 -> even 6 hex chars = 24-bit prefix -> set ~1, wallet linkable).
+    expect(calculatePrefixLength(7, 16384, maxLength)).toBe(2);
+  });
+
+  it('hits the anonymity set exactly when the ideal bit-length lands on a byte boundary (N=2^14, n=6)', () => {
+    // populationBits=14; prefixBits=8; prefixBytes=1; idealHexChars=2 -> 8-bit prefix. Realized set = 2^6 = 64.
+    expect(calculatePrefixLength(6, 16384, maxLength)).toBe(2);
+  });
+
+  it('hits the anonymity set exactly for a larger population on a byte boundary (N=2^24, n=8)', () => {
+    // populationBits=24; prefixBits=16; prefixBytes=2; idealHexChars=4 -> 16-bit prefix. Realized set = 2^8 = 256.
+    expect(calculatePrefixLength(8, 16777216, maxLength)).toBe(4);
+  });
+
+  it('floors the byte count down, over-shooting the set (privacy-safe) when bits are not byte-aligned (N=2^24, n=7)', () => {
+    // populationBits=24; prefixBits=17; prefixBytes=floor(17/8)=2; idealHexChars=4 -> 16-bit prefix.
+    // Realized set = 2^(24-16)=2^8=256 >= requested 2^7=128: floor made the set LARGER, never smaller.
+    expect(calculatePrefixLength(7, 16777216, maxLength)).toBe(4);
+  });
+
+  it('yields the full-selectivity prefix for n=0 (anonymity set of 1, N=2^24)', () => {
+    // populationBits=24; prefixBits=24; prefixBytes=3; idealHexChars=6 -> 24-bit prefix. Realized set = 2^0 = 1.
+    expect(calculatePrefixLength(0, 16777216, maxLength)).toBe(6);
+  });
+
+  it('always returns an even number of hex chars (whole bytes, so const_hex::decode accepts the prefix)', () => {
+    const cases: ReadonlyArray<readonly [number, number]> = [
+      [0, 16777216],
+      [1, 16777216],
+      [7, 16777216],
+      [8, 16777216],
+      [6, 16384],
+      [7, 16384],
+      [3, 1000],
+      [4, 100],
+      [0, 1],
+      [100, 16384],
+    ];
+    expect(cases.every(([n, N]) => calculatePrefixLength(n, N, maxLength) % 2 === 0)).toBe(true);
+  });
+
+  it('never returns below the 2-hex-char (1-byte, non-empty) minimum, even for N<=1 / N<=0', () => {
+    // N=0 -> maxCommitmentEndIndex can be -1; must never produce NaN/negative/odd. Floor to the safe 2-char min.
+    expect(calculatePrefixLength(4, 0, maxLength)).toBe(2);
+    expect(calculatePrefixLength(4, -1, maxLength)).toBe(2);
+    expect(calculatePrefixLength(0, 1, maxLength)).toBe(2);
+  });
+
+  it('returns the minimum prefix when the requested set is larger than the population (n >> log2(N))', () => {
+    // populationBits=14; prefixBits=max(0,14-100)=0 -> min-1-byte floor -> 2 hex chars. No negative/NaN.
+    expect(calculatePrefixLength(100, 16384, maxLength)).toBe(2);
+  });
+
+  it('clamps down to maxLength when the ideal hex length would exceed it', () => {
+    // N=2^24, n=0 -> idealHexChars=6, but maxLength=4 forces Math.min => 4.
+    expect(calculatePrefixLength(0, 16777216, 4)).toBe(4);
   });
 
   describe('bigintToLeHex()', () => {
