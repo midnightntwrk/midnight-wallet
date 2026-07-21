@@ -11,9 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /**
- * Mixed shielded/unshielded swaps are not supported: `initSwap` used to build only the leg matching
- * the input kind and silently drop the counter-leg's requested output, returning a partial transaction
- * that still signed, proved and submitted. It must reject such requests explicitly instead (issue #291).
+ * Mixed shielded/unshielded swaps are not supported: `initSwap` used to build only the leg matching the input kind and
+ * silently drop the counter-leg's requested output, returning a partial transaction that still signed, proved and
+ * submitted. It must reject such requests explicitly instead (issue #291).
  *
  * The guard fires before any sync/proving/submission, so these run as fast unit tests in simulation mode.
  */
@@ -66,12 +66,20 @@ describe('WalletFacade.initSwap mixed-swap rejection', () => {
 
       const desiredInputs: CombinedSwapInputs = { shielded: { [shieldedTokenType]: tokenValue(1n) } };
       const desiredOutputs: CombinedSwapOutputs[] = [
-        { type: 'unshielded', outputs: [{ type: unshieldedTokenType, amount: tokenValue(1n), receiverAddress: unshieldedAddress }] },
+        {
+          type: 'unshielded',
+          outputs: [{ type: unshieldedTokenType, amount: tokenValue(1n), receiverAddress: unshieldedAddress }],
+        },
       ];
 
       const keys = deriveWalletKeys(SEED, NETWORK_ID);
       await expect(
-        facade.initSwap(desiredInputs, desiredOutputs, { shieldedSecretKeys: keys.shieldedKeys, dustSecretKey: keys.dustKey }, { ttl }),
+        facade.initSwap(
+          desiredInputs,
+          desiredOutputs,
+          { shieldedSecretKeys: keys.shieldedKeys, dustSecretKey: keys.dustKey },
+          { ttl },
+        ),
       ).rejects.toThrow('Mixed shielded/unshielded swaps are not supported.');
     }));
 
@@ -82,12 +90,20 @@ describe('WalletFacade.initSwap mixed-swap rejection', () => {
 
       const desiredInputs: CombinedSwapInputs = { unshielded: { [unshieldedTokenType]: tokenValue(1n) } };
       const desiredOutputs: CombinedSwapOutputs[] = [
-        { type: 'shielded', outputs: [{ type: shieldedTokenType, amount: tokenValue(1n), receiverAddress: shieldedAddress }] },
+        {
+          type: 'shielded',
+          outputs: [{ type: shieldedTokenType, amount: tokenValue(1n), receiverAddress: shieldedAddress }],
+        },
       ];
 
       const keys = deriveWalletKeys(SEED, NETWORK_ID);
       await expect(
-        facade.initSwap(desiredInputs, desiredOutputs, { shieldedSecretKeys: keys.shieldedKeys, dustSecretKey: keys.dustKey }, { ttl }),
+        facade.initSwap(
+          desiredInputs,
+          desiredOutputs,
+          { shieldedSecretKeys: keys.shieldedKeys, dustSecretKey: keys.dustKey },
+          { ttl },
+        ),
       ).rejects.toThrow('Mixed shielded/unshielded swaps are not supported.');
     }));
 });
