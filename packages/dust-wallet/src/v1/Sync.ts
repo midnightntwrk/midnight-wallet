@@ -640,9 +640,9 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
     blockData: (height?: number): Effect.Effect<BlockData, WalletError, Scope.Scope | QueryClient> => {
       return pipe(
         BlockHash.run({ offset: height !== undefined ? { height } : null }),
-        Effect.flatMap((result) => {
+        Effect.flatMap((result): Effect.Effect<BlockData, WalletError> => {
           if (!result.block) {
-            throw new OtherWalletError({ message: 'Unable to fetch block data' });
+            return Effect.fail(new OtherWalletError({ message: 'Unable to fetch block data' }));
           }
           return pipe(
             Schema.decodeUnknownEither(BlockDataSchema)(result.block),

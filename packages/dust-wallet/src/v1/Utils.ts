@@ -61,15 +61,34 @@ export const bigintToLeHex = (n: bigint, byteLength: number): string =>
 
 export const uniqueArray = <T>(arr: ReadonlyArray<T>): T[] => Array.from(HashSet.fromIterable(arr));
 
+/**
+ * Length (in HEX CHARACTERS) of the nullifier prefix to query the indexer with so it returns an anonymity set of
+ * ~2^anonymityLevel out of a population of `totalItems` commitments, per the ledger dust.md "Wallet recovery" math: a
+ * prefix of (log2(N) - anonymityLevel) BITS leaves a set of 2^anonymityLevel.
+ *
+ * BIT -> BYTE -> HEX-CHAR conversion: the indexer decodes each prefix with const_hex::decode, which accepts WHOLE BYTES
+ * only (8 bits/step, 4 bits per hex char, so 2 hex chars per byte). The returned value is consumed as `.substring(0,
+ * n)` on a hex string, hence it is a hex-char count and must be even.
+ *
+ * Rounding favours privacy: floor(log2(N)) under-estimates the population's entropy and floor(prefixBits/8) truncates
+ * the byte count DOWN, so the realized prefix is never LONGER than ideal — a shorter prefix yields a LARGER anonymity
+ * set, never dropping below 2^anonymityLevel.
+ *
+ * BYTE-GRANULARITY LIMITATION: because prefixes must be whole bytes and non-empty (min 1 byte = 2 hex chars), the exact
+ * 2^anonymityLevel target cannot always be hit. Where the min-1-byte floor is binding (small or low-entropy
+ * populations) it forces an 8-bit prefix that can make the realized set SMALLER than 2^anonymityLevel (e.g. N=2^14,
+ * n=7: ideal 7 bits, floor forces 8 bits -> set 2^6=64 < 128). This is an unavoidable protocol constraint (the indexer
+ * rejects empty prefixes) and is accepted.
+ */
 export const calculatePrefixLength = (anonymityLevel: number, totalItems: number, maxLength: number): number => {
-  const itemPower = totalItems <= 0 ? 1 : Math.round(Math.log2(totalItems));
-  const rawLength = Math.max(0, itemPower - anonymityLevel);
+  const populationBits = totalItems <= 1 ? 0 : Math.floor(Math.log2(totalItems));
+  const prefixBits = Math.max(0, populationBits - anonymityLevel);
 
-  // as we work with hex values, we need to ensure the length is even
-  const evenLength = rawLength % 2 === 1 ? rawLength - 1 : rawLength;
+  const prefixBytes = Math.floor(prefixBits / 8);
+  const idealHexChars = prefixBytes * 2;
 
-  // force it to be between 2 (indexer's min length) and maxLength
-  return Math.min(maxLength, Math.max(2, evenLength));
+  // clamp into [2, maxLength]; both bounds are even (min 1 byte, max = NULLIFIER_BYTE_LENGTH*2) so even-ness holds
+  return Math.min(maxLength, Math.max(2, idealHexChars));
 };
 
 // The index ranges of [lastAppliedIndex + 1, maxIndex] left uncovered by the (sorted, ascending) skipIndexes.
