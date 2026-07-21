@@ -1,0 +1,7 @@
+# Editable config for scripts/schema-sync — where the indexer GraphQL schema is fetched from.
+# Change these only if the upstream repo or schema file moves, then re-lock with:
+#   yarn schema:sync --filter=@midnightntwrk/wallet-sdk-indexer-client -- --update
+# The pinned version and its hash live in schema.lock (tool-managed — do not hand-edit that one).
+
+repo: midnightntwrk/midnight-indexer
+path: indexer-api/graphql/schema-v4.graphql
