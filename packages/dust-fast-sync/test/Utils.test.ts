@@ -13,7 +13,7 @@
 
 import { describe, it } from '@vitest/runner';
 import { expect } from 'vitest';
-import { bigintToLeHex, calculatePrefixLength, gapRanges, leBigintToHex } from '../src/v1/Utils.js';
+import { bigintToLeHex, calculatePrefixLength, gapRanges, leBigintToHex } from '../src/Utils.js';
 
 describe('Utils', () => {
   // calculatePrefixLength returns a HEX-CHARACTER count consumed as `.substring(0, prefixLength)` on a

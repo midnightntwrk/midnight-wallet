@@ -10,20 +10,39 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { DustSecretKey, dustFirstNonce, dustNullifier, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import {
+  DustSecretKey as BaseDustSecretKey,
+  LedgerParameters as BaseLedgerParameters,
+} from '@midnight-ntwrk/ledger-v8';
+import { DustSecretKey, dustFirstNonce, dustNullifier } from '@midnight-ntwrk/ledger-v8-rc';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { CoreWallet } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { describe, expect, it } from 'vitest';
-import { CoreWallet } from '../CoreWallet.js';
 import { type NewDustGeneration, DustUtxoMap } from '../SyncSchema.js';
+import {
+  applyDustCommitments,
+  applyDustGenerations,
+  applyNewDustUtxos,
+  applySpentNullifiers,
+  toBaseState,
+  toRcState,
+} from '../StateOps.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
-const dustParameters = LedgerParameters.initialParameters().dust;
 const seedHex = '0000000000000000000000000000000000000000000000000000000000000001';
 
 // Characterization coverage for the pure state-apply functions used by the projections sync capability. The
 // collapsed-update paths need indexer-produced merkle payloads and stay covered by the projections e2e suite.
-describe('CoreWallet dust apply functions', () => {
+describe('projections state apply functions', () => {
   const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const emptyState = () =>
+    toRcState(
+      CoreWallet.initEmpty(
+        BaseLedgerParameters.initialParameters().dust,
+        BaseDustSecretKey.fromSeed(Buffer.from(seedHex, 'hex')),
+        networkId,
+      ).state,
+    );
 
   const generation = (backingNightByte: string, mtIndex: bigint, generationMtIndex: number): NewDustGeneration => {
     const backingNight = backingNightByte.repeat(32);
@@ -47,28 +66,44 @@ describe('CoreWallet dust apply functions', () => {
   };
 
   it('applies new utxos and their commitments, then removes spent nullifiers', () => {
-    const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const state = emptyState();
     const generations = [generation('ab', 0n, 0), generation('ba', 1n, 1)];
     const utxoMap = DustUtxoMap.create(generations);
 
-    const withUtxos = CoreWallet.applyNewDustUtxos(state, utxoMap);
-    const withCommitments = CoreWallet.applyDustCommitments(withUtxos, utxoMap, []);
+    const withUtxos = applyNewDustUtxos(state, utxoMap);
+    const withCommitments = applyDustCommitments(withUtxos, utxoMap, []);
 
-    expect(withCommitments.state.utxos).toHaveLength(2);
-    expect(withCommitments.state.commitmentTreeFirstFree).toBe(2n);
+    expect(withCommitments.utxos).toHaveLength(2);
+    expect(withCommitments.commitmentTreeFirstFree).toBe(2n);
 
-    const afterSpend = CoreWallet.applySpentNullifiers(withCommitments, [generations[0].dustNullifier]);
-    expect(afterSpend.state.utxos).toHaveLength(1);
-    expect(afterSpend.state.utxos[0].backingNight).toBe(generations[1].qdo.backingNight);
+    const afterSpend = applySpentNullifiers(withCommitments, [generations[0].dustNullifier]);
+    expect(afterSpend.utxos).toHaveLength(1);
+    expect(afterSpend.utxos[0].backingNight).toBe(generations[1].qdo.backingNight);
   });
 
   it('inserts generation info for new generations', () => {
-    const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const state = emptyState();
     const generations = [generation('ab', 0n, 0), generation('ba', 1n, 1)];
 
-    const withGenerations = CoreWallet.applyDustGenerations(state, [], generations, []);
+    const withGenerations = applyDustGenerations(state, [], generations, []);
 
-    expect(withGenerations.state.generatingTreeFirstFree).toBe(2n);
-    expect(state.state.generatingTreeFirstFree).toBe(0n);
+    expect(withGenerations.generatingTreeFirstFree).toBe(2n);
+    expect(state.generatingTreeFirstFree).toBe(0n);
+  });
+
+  it('round-trips a state through both ledger modules without changing its serialized form', () => {
+    const state = emptyState();
+    const generations = [generation('ab', 0n, 0), generation('ba', 1n, 1)];
+    const withUtxos = applyDustCommitments(
+      applyNewDustUtxos(state, DustUtxoMap.create(generations)),
+      DustUtxoMap.create(generations),
+      [],
+    );
+
+    const baseState = toBaseState(withUtxos);
+    const roundTripped = toRcState(baseState);
+
+    expect(baseState.utxos).toHaveLength(2);
+    expect(Buffer.from(roundTripped.serialize())).toEqual(Buffer.from(withUtxos.serialize()));
   });
 });

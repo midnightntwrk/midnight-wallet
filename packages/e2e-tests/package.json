@@ -16,10 +16,11 @@
   },
   "devDependencies": {
     "@cardano-sdk/key-management": "0.29.15",
-    "@midnight-ntwrk/ledger-v8": "^8.2.0-rc.1",
+    "@midnight-ntwrk/ledger-v8": "^8.1.0",
     "@midnightntwrk/wallet-sdk-abstractions": "workspace:*",
     "@midnightntwrk/wallet-sdk-address-format": "workspace:*",
     "@midnightntwrk/wallet-sdk-capabilities": "workspace:^",
+    "@midnightntwrk/wallet-sdk-dust-fast-sync": "workspace:^",
     "@midnightntwrk/wallet-sdk-dust-wallet": "workspace:^",
     "@midnightntwrk/wallet-sdk-facade": "workspace:^",
     "@midnightntwrk/wallet-sdk-hd": "workspace:^",

@@ -1373,7 +1373,7 @@ export class WalletFacade {
    * @param dustSecretKey - Secret key for the dust wallet
    * @param manualSync - When true, the dust wallet is not started in the background; drive it explicitly with
    *   {@link doSync} instead (requires a dust wallet built with the projections sync service, see
-   *   `makeEventLessSyncService`)
+   *   `makeEventLessSyncService` in `@midnightntwrk/wallet-sdk-dust-fast-sync`)
    */
   async start(
     shieldedSecretKeys: ledger.ZswapSecretKeys,

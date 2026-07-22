@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@midnightntwrk/wallet-sdk": "workspace:*",
+    "@midnightntwrk/wallet-sdk-dust-fast-sync": "workspace:*",
     "buffer": "^6.0.3",
     "lodash-es": "^4.17.23"
   },

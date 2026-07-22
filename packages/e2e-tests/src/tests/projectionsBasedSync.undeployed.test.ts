@@ -20,13 +20,9 @@ import { logger } from './logger.js';
 import { type CombinedTokenTransfer, type FacadeState, type UtxoWithMeta } from '@midnightntwrk/wallet-sdk-facade';
 import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
-import {
-  CustomDustWallet,
-  type DefaultDustConfiguration,
-  makeEventLessSyncCapability,
-  makeEventLessSyncService,
-} from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { CustomDustWallet, type DefaultDustConfiguration } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { makeEventLessSyncCapability, makeEventLessSyncService } from '@midnightntwrk/wallet-sdk-dust-fast-sync';
 
 /** @group undeployed */
 
@@ -39,9 +35,11 @@ describe('Projections-based synchronisation model', () => {
   const timeout = 300_000;
   const outputValue = utils.tNightAmount(1000n);
 
-  const eventLessDustWallet = (config: DefaultDustConfiguration) =>
+  const eventLessDustWallet = (config: DefaultDustConfiguration, dustSeed: Uint8Array) =>
     CustomDustWallet(
-      config,
+      // The projections sync runs on its own ledger copy (8.2.0-rc.1); it re-derives the dust key from this seed
+      // because WASM key instances cannot cross between the two loaded ledger modules.
+      { ...config, dustKeySeed: dustSeed },
       new V1Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
     );
 
