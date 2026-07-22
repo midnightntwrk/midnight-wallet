@@ -606,6 +606,9 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
           fromBlock: 0,
           toBlock,
         }),
+        Stream.filter((subscription) =>
+          HashSet.has(hexedNullifiers, subscription.dustNullifierTransactions.nullifierLeBytes),
+        ),
         Stream.mapEffect((subscription) => {
           return pipe(
             Schema.decodeUnknownEither(DustNullifierTransactionSubscriptionSchema)(
@@ -615,7 +618,6 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
             EitherOps.toEffect,
           );
         }),
-        Stream.filter((record) => HashSet.has(hexedNullifiers, record.nullifierLeBytes)),
         Stream.mapError((error) => new SyncWalletError(error)),
       );
     },
@@ -640,6 +642,9 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
     blockData: (height?: number): Effect.Effect<BlockData, WalletError, Scope.Scope | QueryClient> => {
       return pipe(
         BlockHash.run({ offset: height !== undefined ? { height } : null }),
+        Effect.mapError(
+          (err) => new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err }),
+        ),
         Effect.flatMap((result): Effect.Effect<BlockData, WalletError> => {
           if (!result.block) {
             return Effect.fail(new OtherWalletError({ message: 'Unable to fetch block data' }));
@@ -650,9 +655,6 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
             EitherOps.toEffect,
           );
         }),
-        Effect.catchAll((err) =>
-          Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
-        ),
       );
     },
   };

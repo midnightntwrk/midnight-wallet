@@ -27,7 +27,7 @@ import type {
   DustNullifierTransactionsSubscriptionVariables,
 } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Cause, Chunk, Effect, Exit, Option, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
@@ -227,6 +227,42 @@ describe('V1 projections nullifier subscription', () => {
     expect(recorded.value?.nullifierLeBytesPrefixes).toHaveLength(2);
     expect(recorded.value?.nullifierLeBytesPrefixes).toEqual(expect.arrayContaining(['12', '0c']));
   });
+
+  it("drops a foreign malformed transaction without letting it break this wallet's sync", async () => {
+    const walletNullifier = 0x12n;
+    const walletNullifierHex = '12' + '00'.repeat(31);
+    const foreignNullifierHex = '12' + 'ff'.repeat(31);
+    const malformedForeignRecord = {
+      ...wireRecord(foreignNullifierHex),
+      transaction: { __typename: 'SystemTransaction', block: { ledgerParameters: 'not-hex' } } as const,
+    };
+    const stub = (_variables: DustNullifierTransactionsSubscriptionVariables) =>
+      Stream.fromIterable([
+        { dustNullifierTransactions: wireRecord(walletNullifierHex) },
+        { dustNullifierTransactions: malformedForeignRecord },
+      ]);
+
+    const service = makeIndexerSyncService({
+      indexerClientConnection: {
+        indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+        indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+      },
+      networkId,
+    });
+
+    const records = await service
+      .subscribeDustNullifierTransactions([walletNullifier], 100, 1)
+      .pipe(
+        Stream.runCollect,
+        Effect.map(Chunk.toArray),
+        Effect.provideService(DustNullifierTransactions.tag, stub),
+        Effect.provide(service.connectionLayer()),
+        Effect.scoped,
+        Effect.runPromise,
+      );
+
+    expect(records.map((record) => record.nullifierLeBytes)).toEqual([walletNullifierHex]);
+  });
 });
 
 describe('V1 projections blockData', () => {
@@ -264,9 +300,43 @@ describe('V1 projections blockData', () => {
       const failure = Cause.failureOption(exit.cause);
       expect(Option.isSome(failure)).toBe(true);
       if (Option.isSome(failure)) {
-        // Outer catchAll wraps the OtherWalletError into the 'unexpected error' shape, message preserved.
         expect(failure.value._tag).toBe('Wallet.Other');
-        expect(failure.value.message).toContain('Unable to fetch block data');
+        expect(failure.value.message).toBe('Unable to fetch block data');
+        expect(failure.value.cause).toBeUndefined();
+      }
+    }
+  });
+
+  it('wraps a transport failure as an unexpected WalletError with the original cause', async () => {
+    const transportError = new ServerError({ message: 'indexer unavailable' });
+    const stub = (_variables: BlockHashQueryVariables): Effect.Effect<BlockHashQuery, ServerError> =>
+      Effect.fail(transportError);
+
+    const service = makeIndexerSyncService({
+      indexerClientConnection: {
+        indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+        indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+      },
+      networkId,
+    });
+
+    const exit = await service
+      .blockData(undefined)
+      .pipe(
+        Effect.provideService(BlockHash.tag, stub),
+        Effect.provide(service.queryClient()),
+        Effect.scoped,
+        Effect.runPromiseExit,
+      );
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      const failure = Cause.failureOption(exit.cause);
+      expect(Option.isSome(failure)).toBe(true);
+      if (Option.isSome(failure)) {
+        expect(failure.value._tag).toBe('Wallet.Other');
+        expect(failure.value.message).toBe('Encountered unexpected error: indexer unavailable');
+        expect(failure.value.cause).toBe(transportError);
       }
     }
   });
