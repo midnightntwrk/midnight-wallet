@@ -74,7 +74,7 @@ export type DefaultSubmissionConfiguration = {
 };
 
 export const makeDefaultSubmissionServiceEffect = <
-  TTransaction extends { serialize: () => Uint8Array } = FinalizedTransaction,
+  TTransaction extends { serialize: () => Uint8Array; toString: () => string } = FinalizedTransaction,
 >(
   config: DefaultSubmissionConfiguration,
 ): SubmissionServiceEffect<TTransaction> => {

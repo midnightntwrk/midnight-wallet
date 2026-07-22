@@ -12,17 +12,19 @@
 // limitations under the License.
 import { DustSecretKey, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { DustLedgerEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
+import { BlockHash, DustLedgerEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import type {
+  BlockHashQuery,
+  BlockHashQueryVariables,
   DustLedgerEventsSubscription,
   DustLedgerEventsSubscriptionVariables,
 } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Effect, Stream } from 'effect';
+import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { Cause, Effect, Exit, Option, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
-import { makeDefaultSyncService } from '../Sync.js';
+import { makeDefaultSyncService, makeIndexerSyncService } from '../Sync.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const dustParameters = LedgerParameters.initialParameters().dust;
@@ -85,5 +87,82 @@ describe('V1 dust wallet subscription', () => {
 
       expect(variables).toEqual({ id: 4 });
     });
+  });
+});
+
+describe('V1 blockData', () => {
+  it('fails with a typed WalletError (not a defect) when the indexer returns no block', async () => {
+    // Cold indexer / reorg: the indexer resolves the query but with `block: null`. This is an EXPECTED
+    // condition and must surface as a typed FAILURE in the error channel, never as a defect (die) that
+    // bypasses catchAll and crashes the wallet. A synchronous `throw` inside the flatMap callback is
+    // captured by Effect as a defect; the fix must place the error in the typed channel via Effect.fail.
+    const noBlock: BlockHashQuery = { block: null };
+    // Hand-written stub (no vi.fn / vi.mock): the query tag is (variables) => Effect<BlockHashQuery>.
+    const stub = (_variables: BlockHashQueryVariables): Effect.Effect<BlockHashQuery> => Effect.succeed(noBlock);
+
+    const service = makeIndexerSyncService({
+      indexerClientConnection: {
+        indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+        indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+      },
+      networkId,
+    });
+
+    const exit = await service
+      .blockData(undefined)
+      .pipe(
+        Effect.provideService(BlockHash.tag, stub),
+        Effect.provide(service.queryClient()),
+        Effect.scoped,
+        Effect.runPromiseExit,
+      );
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      // Must be a typed failure, NOT a defect: with the current synchronous `throw` this is a die and both
+      // assertions below fail (RED). After the throw -> Effect.fail fix it is a typed failure (GREEN).
+      expect(Cause.isDie(exit.cause)).toBe(false);
+      const failure = Cause.failureOption(exit.cause);
+      expect(Option.isSome(failure)).toBe(true);
+      if (Option.isSome(failure)) {
+        expect(failure.value._tag).toBe('Wallet.Other');
+        expect(failure.value.message).toBe('Unable to fetch block data');
+        expect(failure.value.cause).toBeUndefined();
+      }
+    }
+  });
+
+  it('wraps a transport failure as an unexpected WalletError with the original cause', async () => {
+    const transportError = new ServerError({ message: 'indexer unavailable' });
+    const stub = (_variables: BlockHashQueryVariables): Effect.Effect<BlockHashQuery, ServerError> =>
+      Effect.fail(transportError);
+
+    const service = makeIndexerSyncService({
+      indexerClientConnection: {
+        indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+        indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+      },
+      networkId,
+    });
+
+    const exit = await service
+      .blockData(undefined)
+      .pipe(
+        Effect.provideService(BlockHash.tag, stub),
+        Effect.provide(service.queryClient()),
+        Effect.scoped,
+        Effect.runPromiseExit,
+      );
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      const failure = Cause.failureOption(exit.cause);
+      expect(Option.isSome(failure)).toBe(true);
+      if (Option.isSome(failure)) {
+        expect(failure.value._tag).toBe('Wallet.Other');
+        expect(failure.value.message).toBe('Encountered unexpected error: indexer unavailable');
+        expect(failure.value.cause).toBe(transportError);
+      }
+    }
   });
 });

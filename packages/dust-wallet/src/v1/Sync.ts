@@ -10,25 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import {
-  Effect,
-  Either,
-  Layer,
-  ParseResult,
-  pipe,
-  Schema,
-  type Scope,
-  Stream,
-  Duration,
-  Chunk,
-  Schedule,
-} from 'effect';
-import {
-  type DustSecretKey,
-  type DustStateChanges,
-  Event as LedgerEvent,
-  LedgerParameters,
-} from '@midnight-ntwrk/ledger-v8';
+import { Effect, Either, Layer, pipe, Schema, type Scope, Stream, Duration, Chunk, Schedule } from 'effect';
+import { type DustSecretKey, type DustStateChanges } from '@midnight-ntwrk/ledger-v8';
 import { BlockHash, DustLedgerEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
@@ -37,7 +20,7 @@ import {
   type SubscriptionClient,
   type QueryClient,
 } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { EitherOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type URLError, WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { OtherWalletError, SyncWalletError, type WalletError } from './WalletError.js';
 import {
@@ -48,19 +31,17 @@ import {
 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from './types/ledger.js';
-import { Uint8ArraySchema } from './Serialization.js';
+import {
+  SyncEventsUpdateSchema,
+  type WalletSyncSubscription,
+  WalletSyncUpdate,
+  BlockDataSchema,
+  type BlockData,
+} from './SyncSchema.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
-  blockData: () => Effect.Effect<BlockData, WalletError>;
-}
-
-// TODO: use schema instead
-export interface BlockData {
-  hash: string;
-  height: number;
-  ledgerParameters: LedgerParameters;
-  timestamp: Date;
+  blockData: (height?: number) => Effect.Effect<BlockData, WalletError>;
 }
 
 export type ChangesResult = {
@@ -132,54 +113,6 @@ export const SecretKeysResource = {
   },
 };
 
-const LedgerEventSchema = Schema.declare(
-  (input: unknown): input is LedgerEvent => input instanceof LedgerEvent,
-).annotations({
-  identifier: 'ledger.Event',
-});
-
-const LedgerEventFromUInt8Array: Schema.Schema<LedgerEvent, Uint8Array> = Schema.asSchema(
-  Schema.transformOrFail(Uint8ArraySchema, LedgerEventSchema, {
-    encode: (e) =>
-      Effect.try({
-        try: () => e.serialize(),
-        catch: (err) => new ParseResult.Unexpected(err, 'Could not serialize Ledger Event'),
-      }),
-    decode: (bytes) =>
-      Effect.try({
-        try: () => LedgerEvent.deserialize(bytes),
-        catch: (err) => new ParseResult.Unexpected(err, 'Could not deserialize Ledger Event'),
-      }),
-  }),
-);
-
-const HexedEvent: Schema.Schema<LedgerEvent, string> = pipe(
-  Schema.Uint8ArrayFromHex,
-  Schema.compose(LedgerEventFromUInt8Array),
-);
-
-export const SyncEventsUpdateSchema = Schema.Struct({
-  id: Schema.Number,
-  raw: HexedEvent,
-  maxId: Schema.Number,
-});
-
-export type WalletSyncSubscription = Schema.Schema.Type<typeof SyncEventsUpdateSchema>;
-
-export type WalletSyncUpdate = {
-  updates: WalletSyncSubscription[];
-  secretKey: DustSecretKey;
-  timestamp: Date;
-};
-export const WalletSyncUpdate = {
-  create: (updates: WalletSyncSubscription[], secretKey: DustSecretKey, timestamp: Date): WalletSyncUpdate => {
-    return {
-      updates,
-      secretKey,
-      timestamp,
-    };
-  },
-};
 export const makeDefaultSyncService = (
   config: DefaultSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, WalletSyncUpdate> => {
@@ -204,29 +137,12 @@ export const makeDefaultSyncService = (
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },
-    blockData: (): Effect.Effect<BlockData, WalletError> => {
-      return Effect.gen(function* () {
-        const query = yield* BlockHash;
-        const result = yield* query({ offset: null });
-        return result.block;
-      }).pipe(
+
+    blockData: (height?: number): Effect.Effect<BlockData, WalletError> => {
+      return pipe(
+        indexerSyncService.blockData(height),
         Effect.provide(indexerSyncService.queryClient()),
         Effect.scoped,
-        Effect.catchAll((err) =>
-          Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
-        ),
-        Effect.flatMap((blockData) => {
-          if (!blockData) {
-            throw new OtherWalletError({ message: 'Unable to fetch block data' });
-          }
-          // TODO: convert to schema
-          return LedgerOps.ledgerTry(() => ({
-            hash: blockData.hash,
-            height: blockData.height,
-            ledgerParameters: LedgerParameters.deserialize(Buffer.from(blockData.ledgerParameters, 'hex')),
-            timestamp: new Date(blockData.timestamp),
-          }));
-        }),
       );
     },
   };
@@ -238,6 +154,7 @@ export type IndexerSyncService = {
     state: CoreWallet,
   ) => Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   queryClient: () => Layer.Layer<QueryClient, WalletError, Scope.Scope>;
+  blockData: (height?: number) => Effect.Effect<BlockData, WalletError, Scope.Scope | QueryClient>;
 };
 
 export const makeIndexerSyncService = (config: DefaultSyncConfiguration): IndexerSyncService => {
@@ -264,7 +181,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
             WsSubscriptionClient.layer({ url, keepAlive: indexerClientConnection.keepAlive }),
         }),
         Layer.mapError(
-          (e: URLError) => new SyncWalletError({ message: 'Failed to to obtain correct indexer URLs', cause: e }),
+          (e: URLError) => new SyncWalletError({ message: 'Failed to obtain correct indexer URLs', cause: e }),
         ),
       );
     },
@@ -309,6 +226,24 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
           ),
         ),
         Stream.mapError((error) => new SyncWalletError(error)),
+      );
+    },
+    blockData: (height?: number): Effect.Effect<BlockData, WalletError, Scope.Scope | QueryClient> => {
+      return pipe(
+        BlockHash.run({ offset: height !== undefined ? { height } : null }),
+        Effect.mapError(
+          (err) => new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err }),
+        ),
+        Effect.flatMap((result): Effect.Effect<BlockData, WalletError> => {
+          if (!result.block) {
+            return Effect.fail(new OtherWalletError({ message: 'Unable to fetch block data' }));
+          }
+          return pipe(
+            Schema.decodeUnknownEither(BlockDataSchema)(result.block),
+            Either.mapLeft((err) => new SyncWalletError(err)),
+            EitherOps.toEffect,
+          );
+        }),
       );
     },
   };
@@ -391,6 +326,11 @@ export const makeSimulatorSyncService = (
           height: Number(lastBlock.number),
           ledgerParameters: state.ledger.parameters,
           timestamp: state.currentTime,
+          zswapEndIndex: 1, // NOTE: not implemented
+          dustCommitmentEndIndex: 1, // NOTE: not implemented
+          dustGenerationEndIndex: 1, // NOTE: not implemented
+          dustCommitmentMerkleTreeRoot: '', // NOTE: not implemented
+          dustGenerationMerkleTreeRoot: '', // NOTE: not implemented
         };
       });
     },

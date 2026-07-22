@@ -20,6 +20,7 @@
     "@midnightntwrk/wallet-sdk-abstractions": "workspace:*",
     "@midnightntwrk/wallet-sdk-address-format": "workspace:*",
     "@midnightntwrk/wallet-sdk-capabilities": "workspace:^",
+    "@midnightntwrk/wallet-sdk-dust-fast-sync": "workspace:^",
     "@midnightntwrk/wallet-sdk-dust-wallet": "workspace:^",
     "@midnightntwrk/wallet-sdk-facade": "workspace:^",
     "@midnightntwrk/wallet-sdk-hd": "workspace:^",

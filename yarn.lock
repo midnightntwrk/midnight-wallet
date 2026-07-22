@@ -2201,6 +2201,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@midnight-ntwrk/ledger-v8-rc@npm:@midnight-ntwrk/ledger-v8@8.2.0-rc.1":
+  version: 8.2.0-rc.1
+  resolution: "@midnight-ntwrk/ledger-v8@npm:8.2.0-rc.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fledger-v8%2F8.2.0-rc.1%2F312e265079bcb69de287604c94bfa54f4518accf"
+  checksum: 10c0/08d06f8c6ea39436519538fe17b91925e0ef9f7a6eba0dc083447e3c7046fa64cc064e0b9895c58f10c0895731a82fe694c9ed3ed87d0f6b8ada7dfab6b5d68c
+  languageName: node
+  linkType: hard
+
 "@midnight-ntwrk/ledger-v8@npm:^8.1.0":
   version: 8.1.0
   resolution: "@midnight-ntwrk/ledger-v8@npm:8.1.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fledger-v8%2F8.1.0%2Fc42ed442b6c8c79e28ca5fc13a8764f31eab2f73"
@@ -2264,6 +2271,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-abstractions": "workspace:*"
     "@midnightntwrk/wallet-sdk-address-format": "workspace:*"
     "@midnightntwrk/wallet-sdk-capabilities": "workspace:^"
+    "@midnightntwrk/wallet-sdk-dust-fast-sync": "workspace:^"
     "@midnightntwrk/wallet-sdk-dust-wallet": "workspace:^"
     "@midnightntwrk/wallet-sdk-facade": "workspace:^"
     "@midnightntwrk/wallet-sdk-hd": "workspace:^"
@@ -2331,10 +2339,26 @@ __metadata:
   resolution: "@midnightntwrk/wallet-sdk-docs-snippets@workspace:packages/docs-snippets"
   dependencies:
     "@midnightntwrk/wallet-sdk": "workspace:*"
+    "@midnightntwrk/wallet-sdk-dust-fast-sync": "workspace:*"
     "@types/lodash-es": "npm:4.17.12"
     buffer: "npm:^6.0.3"
     lodash-es: "npm:^4.17.23"
     vitest: "npm:4.1.10"
+  languageName: unknown
+  linkType: soft
+
+"@midnightntwrk/wallet-sdk-dust-fast-sync@workspace:*, @midnightntwrk/wallet-sdk-dust-fast-sync@workspace:^, @midnightntwrk/wallet-sdk-dust-fast-sync@workspace:packages/dust-fast-sync":
+  version: 0.0.0-use.local
+  resolution: "@midnightntwrk/wallet-sdk-dust-fast-sync@workspace:packages/dust-fast-sync"
+  dependencies:
+    "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
+    "@midnight-ntwrk/ledger-v8-rc": "npm:@midnight-ntwrk/ledger-v8@8.2.0-rc.1"
+    "@midnightntwrk/wallet-sdk-abstractions": "npm:2.1.0"
+    "@midnightntwrk/wallet-sdk-address-format": "npm:3.1.2"
+    "@midnightntwrk/wallet-sdk-dust-wallet": "npm:4.2.0"
+    "@midnightntwrk/wallet-sdk-indexer-client": "npm:1.2.3"
+    "@midnightntwrk/wallet-sdk-utilities": "npm:1.2.1"
+    effect: "npm:^3.19.19"
   languageName: unknown
   linkType: soft
 

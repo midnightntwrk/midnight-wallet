@@ -263,7 +263,7 @@ export class PendingTransactionsServiceEffectImpl<
       return pipe(
         result.transactions,
         Iterable.filterMap((res): Option.Option<PendingTransactions.TransactionResult> => {
-          if (res.__typename == 'SystemTransaction') {
+          if (res.__typename !== 'RegularTransaction') {
             return Option.none();
           }
 

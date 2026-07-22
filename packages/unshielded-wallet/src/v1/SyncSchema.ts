@@ -79,7 +79,7 @@ export const UnshieldedTransactionSchema = Schema.Data(
   Schema.Struct({
     id: Schema.Number,
     hash: Schema.String,
-    type: Schema.Literal('RegularTransaction', 'SystemTransaction'),
+    type: Schema.Literal('RegularTransaction', 'SystemTransaction', 'BridgeClaimTransaction'),
     protocolVersion: Schema.Number,
     identifiers: Schema.optional(Schema.Array(Schema.String)),
     block: Schema.Struct({
@@ -132,10 +132,10 @@ export const UnshieldedUpdateSchema = Schema.transform(
   {
     strict: true,
     decode: (wire) => {
-      const isSystemTransaction = wire.transaction.type === 'SystemTransaction';
+      const hasTransactionResult = wire.transaction.type === 'RegularTransaction';
       return {
         ...wire,
-        status: isSystemTransaction ? 'SUCCESS' : wire.transaction.transactionResult!.status,
+        status: hasTransactionResult ? wire.transaction.transactionResult!.status : 'SUCCESS',
       };
     },
     encode: ({ status: _status, ...rest }) => rest,
