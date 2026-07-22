@@ -44,6 +44,18 @@ export const waitForFacadePending = (wallet: WalletFacade) =>
         logger.info(`Unshielded wallet pending coins: ${unshieldedPending}, waiting for pending coins...`);
       }),
       rx.filter((state) => state.shielded.pendingCoins.length > 0 || state.unshielded.pendingCoins.length > 0),
+      // Pending coins are a transient state: if the tx confirms before it is observed here, the filter never matches and
+      // the wait would otherwise hang until the whole-test timeout. Bound it so a missed window fails fast and legibly.
+      rx.timeout({
+        first: 120_000,
+        with: () =>
+          rx.throwError(
+            () =>
+              new Error(
+                'waitForFacadePending: no pending coins observed within 120s — the pending window was likely missed (tx confirmed before it was observed) or the transaction was never submitted.',
+              ),
+          ),
+      }),
     ),
   );
 
@@ -86,6 +98,10 @@ export const waitForFinalizedShieldedBalance = (wallet: ShieldedWalletAPI) =>
         const pending = state.pendingCoins.length;
         logger.info(`Wallet pending coins: ${pending}, waiting for pending coins cleared...`);
       }),
+      // `pendingCoins.length === 0` is also the resting condition, so without a settle window `firstValueFrom` resolves
+      // on the pre-transaction emission. Debounce until the state stops changing so we capture the settled post-tx
+      // state rather than the stale one.
+      rx.debounceTime(10_000),
       rx.filter((state) => state.pendingCoins.length === 0),
     ),
   );
@@ -113,10 +129,10 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
 
         return {
           state,
-          txFound: txInHistory !== undefined,
+          txConfirmed: txInHistory !== undefined && txInHistory.status === 'SUCCESS',
         };
       }),
-      rx.filter(({ state, txFound }) => txFound && state.isSynced && state.dust.availableCoins.length > 0),
+      rx.filter(({ state, txConfirmed }) => txConfirmed && state.isSynced && state.dust.availableCoins.length > 0),
       rx.map(({ state }) => state),
     ),
   );
@@ -144,18 +160,20 @@ export const waitForTxInHistory = async (
   const isReady = ready ?? (() => true);
   const describeSections = (e: WalletEntry): string =>
     (['shielded', 'unshielded', 'dust'] as const).filter((k) => e[k] !== undefined).join(',');
+  const isTerminalFailure = (e: WalletEntry): boolean =>
+    e.lifecycle.status === 'rejected' || e.status === 'FAILURE' || e.status === 'PARTIAL_SUCCESS';
   let pollsSinceDump = 0;
   const txEntry = await rx.firstValueFrom(
     rx.merge(wallet.state().pipe(rx.filter((state) => state.isSynced)), rx.interval(500)).pipe(
       rx.mergeMap(async () => {
         const entry = await wallet.queryTxHistoryByHash(txHash);
-        if (entry !== undefined && entry.status !== 'SUCCESS') {
+        if (entry !== undefined && isTerminalFailure(entry)) {
           logger.info(
-            `Waiting for tx ${txHash} in history: found, status=${entry.status}, sections=[${describeSections(entry)}] — non-SUCCESS, aborting wait`,
+            `Waiting for tx ${txHash} in history: found, status=${entry.status}, lifecycle=${entry.lifecycle.status}, sections=[${describeSections(entry)}] — terminal non-SUCCESS, aborting wait`,
           );
           return entry;
         }
-        const notReady = entry === undefined || !isReady(entry);
+        const notReady = entry === undefined || entry.status !== 'SUCCESS' || !isReady(entry);
         const needsDump = notReady && pollsSinceDump >= 20;
         if (entry === undefined) {
           logger.info(`Waiting for tx ${txHash} in history: not found yet`);
@@ -177,7 +195,10 @@ export const waitForTxInHistory = async (
         }
         return entry;
       }),
-      rx.filter((entry): entry is WalletEntry => entry !== undefined && (entry.status !== 'SUCCESS' || isReady(entry))),
+      rx.filter(
+        (entry): entry is WalletEntry =>
+          entry !== undefined && (isTerminalFailure(entry) || (entry.status === 'SUCCESS' && isReady(entry))),
+      ),
     ),
   );
   expect(txEntry).toBeDefined();
