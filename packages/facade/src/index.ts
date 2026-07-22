@@ -1246,6 +1246,13 @@ export class WalletFacade {
       throw Error('At least one shielded or unshielded swap is required.');
     }
 
+    // Mixed shielded/unshielded swaps are not supported yet: initSwap would build only the leg
+    // matching the input kind and silently drop the counter-leg's requested output. Reject explicitly
+    // rather than return a partial transaction that signs, proves and submits (issue #291).
+    if (hasShieldedPart && hasUnshieldedPart) {
+      throw Error('Mixed shielded/unshielded swaps are not supported.');
+    }
+
     const shieldedTx =
       hasShieldedPart && shieldedInputs !== undefined
         ? await this.shielded.initSwap(shieldedSecretKeys, shieldedInputs, shieldedOutputs)
