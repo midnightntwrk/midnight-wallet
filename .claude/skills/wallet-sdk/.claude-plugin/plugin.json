@@ -1,0 +1,8 @@
+{
+  "name": "wallet-sdk",
+  "description": "Team skills for the Midnight Wallet SDK — development workflows shared by everyone who clones this repo",
+  "version": "1.0.0",
+  "author": {
+    "name": "Midnight Wallet SDK team"
+  }
+}
