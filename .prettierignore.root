@@ -13,3 +13,8 @@ reports/
 .turbo/
 .yarn/
 packages/
+
+# Tool config + vendored AI skill (matches .prettierignore) and graphify's
+# generated output (also gitignored) — none of this is hand-authored, don't lint it.
+.claude/
+graphify-out/

@@ -63,3 +63,7 @@ CLAUDE.local.md
 
 # Claude Code — per-session runtime lock files (e.g. scheduled_tasks.lock)
 .claude/*.lock
+
+# graphify — optional AI knowledge-graph tool (see DEV_GUIDE.md). The Claude
+# skill and .graphifyignore config are committed; only the generated graph is ignored.
+graphify-out/

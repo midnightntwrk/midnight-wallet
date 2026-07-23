@@ -6,3 +6,4 @@ reports/
 .turbo/
 .yarn/
 .claude/
+graphify-out/

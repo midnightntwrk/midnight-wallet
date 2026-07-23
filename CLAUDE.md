@@ -106,7 +106,7 @@ yarn dist
 yarn dist --filter=@midnightntwrk/wallet-sdk-facade
 
 # Build and watch for changes
-yarn watch
+yarn dist:watch
 
 # Run the full suite (unit + integration)
 yarn test
@@ -1123,3 +1123,17 @@ Browser builds require polyfills for Node's `Buffer` and `assert`.
 - **But Turbo caching can bite you.** If Turbo thinks nothing changed (cache hit), it won't rebuild. After switching
   branches, rebasing, or making changes Turbo doesn't track, use `--force` to bypass the cache: `yarn dist --force`,
   `yarn test --force`.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use
+  `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a
+  scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough
+  context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

@@ -83,10 +83,13 @@
     "test:integration": "turbo run test:integration",
     "dist": "turbo run dist",
     "schema:sync": "turbo run schema:sync",
-    "watch": "turbo watch dist",
+    "dist:watch": "turbo watch dist",
     "dist:publish": "turbo run dist:publish",
     "changeset:version": "yarn changeset version && yarn install --mode=update-lockfile",
     "changeset:check": "yarn changeset status --verbose",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+    "graphify:update": "node scripts/graphify.mjs",
+    "graphify:update:force": "node scripts/graphify.mjs --force",
+    "graphify:watch": "node scripts/graphify.mjs --watch"
   }
 }

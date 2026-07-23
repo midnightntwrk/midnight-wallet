@@ -1,0 +1,16 @@
+# .graphifyignore — extends .gitignore for graphify scans (gitignore syntax).
+# node_modules/, dist/, build artifacts etc. are already excluded twice over:
+# graphify respects .gitignore and has them hardcoded as skip dirs.
+
+# CI/repo plumbing — no graph value
+.github/
+.claude/
+
+# Release tooling output — auto-generated noise
+.changeset/
+release-notes/
+CHANGELOG.md
+
+# Prose docs (Design.md, ADRs) — excluded for a code-only graph.
+# Remove this line if you later want design rationale in the graph.
+docs/
