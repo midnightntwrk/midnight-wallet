@@ -4,6 +4,9 @@ This document is intended for maintainers and contributors to the **Midnight Wal
 It describes the internal development and **release management** process used to maintain consistent, automated
 versioning and publishing.
 
+> 🤖 **Using [Claude Code](https://claude.ai/code)?** Check **[CLAUDE_GUIDE.md](CLAUDE_GUIDE.md)** — it covers the
+> Claude-specific setup for this repo, and there's configuration there worth knowing about before you start.
+
 ---
 
 ## 📚 Overview

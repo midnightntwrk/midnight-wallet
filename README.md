@@ -124,7 +124,7 @@ Build the project and watch for changes to automatically rebuild. Generated Java
 `dist` directory
 
 ```shell
-yarn watch
+yarn dist:watch
 ```
 
 ## Clean
