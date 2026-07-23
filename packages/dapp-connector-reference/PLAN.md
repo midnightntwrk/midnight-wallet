@@ -1,5 +1,35 @@
 # DApp Connector Reference Implementation Plan
 
+**Workflow:** development follows the multi-agent process + engineering mandates in
+[`WORKFLOW.md`](./WORKFLOW.md) (orchestrator · researcher · architect · builder · tester ·
+reviewer/auditor; Definition→Build→Review; the conformance suite in `src/test/suites/` is the shared
+builder+tester deliverable, sealed against implementation internals so it stays pluggable).
+
+## Current Step
+
+### Phase 15: Merge `main` & reconciliation (in progress)
+
+**Goal:** bring the branch up to date with `origin/main` (it was ~56 commits / ~5 weeks behind) and
+reconcile the reference impl + conformance suite against everything that landed on `main` since the
+merge-base.
+
+**Steps:**
+
+- Merge `origin/main` into `akopec/reference-dapp-connector`; resolve conflicts (watch
+  `address-format/test/addresses.json`, `yarn.lock`, and any Wallet Facade / capabilities API drift).
+- `yarn install`, build, run the conformance suite; fix breakage introduced by upstream API changes.
+- **Do not assume the remaining work is docs-only.** Main's changes (facade, capabilities, ledger
+  bindings, test infra) may require code adjustments here — the re-assessment below determines scope.
+
+**Then — re-assessment (per `WORKFLOW.md` Review, run in parallel once the merge builds):**
+
+- **tester** — run the conformance suite against the merged code; report failures/skips + any spec
+  requirements now uncovered.
+- **architect** — spec-conformance review against the current DApp Connector API spec; flag drift
+  introduced by the merge.
+- **reviewer/auditor** — independently challenge code + suite; confirm whether the outstanding work is
+  only docs (Phase 12) or also code reconciliation.
+
 ## Completed Phases
 
 ### Phase 1-2: Foundation
