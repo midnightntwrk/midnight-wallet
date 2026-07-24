@@ -185,7 +185,7 @@ jobs:
           UNDEPLOYED_MODIFIER: ${{ inputs.undeployed_modifier }}
         run: |
           set -uo pipefail
-          yarn turbo test-undeployed -- $UNDEPLOYED_MODIFIER
+          yarn turbo test-undeployed --filter=@midnight/wallet-e2e-tests -- $UNDEPLOYED_MODIFIER
           cp packages/e2e-tests/reports/test-report.json packages/e2e-tests/reports/undeployed.json
 
       - name: Run remote suite
@@ -202,7 +202,7 @@ jobs:
           REMOTE_MODIFIER: ${{ inputs.remote_modifier }}
         run: |
           set -uo pipefail
-          yarn turbo test-remote -- $REMOTE_MODIFIER
+          yarn turbo test-remote --filter=@midnight/wallet-e2e-tests -- $REMOTE_MODIFIER
           cp packages/e2e-tests/reports/test-report.json packages/e2e-tests/reports/remote-smoke.json
 
       # A second, independently-targeted remote run — e.g. a specific test file on
@@ -222,7 +222,7 @@ jobs:
           REMOTE_MODIFIER: ${{ inputs.remote_modifier_extra }}
         run: |
           set -uo pipefail
-          yarn turbo test-remote -- $REMOTE_MODIFIER
+          yarn turbo test-remote --filter=@midnight/wallet-e2e-tests -- $REMOTE_MODIFIER
           cp packages/e2e-tests/reports/test-report.json packages/e2e-tests/reports/remote-extra.json
 
       - name: Upload raw test reports
