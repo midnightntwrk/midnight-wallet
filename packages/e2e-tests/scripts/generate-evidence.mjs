@@ -107,7 +107,11 @@ const parseRun = (spec) => {
     const count = (status) => tests.filter((t) => t.status === status).length;
     return {
       name: basename(file.name),
-      durationMs: file.endTime && file.startTime ? file.endTime - file.startTime : undefined,
+      // Numeric check, not truthiness: a startTime of 0 is a valid timestamp.
+      durationMs:
+        typeof file.endTime === 'number' && typeof file.startTime === 'number'
+          ? file.endTime - file.startTime
+          : undefined,
       total: tests.length,
       passed: count('passed'),
       failed: count('failed'),
