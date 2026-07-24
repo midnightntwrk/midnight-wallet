@@ -198,6 +198,13 @@ export const findAvailableSegmentId = (transaction: AnyTransaction): Option.Opti
 };
 
 /**
+ * Backstop cap on {@link TransactingCapabilityImplementation.computeBalancingRecipe}'s fixed-point iteration. Correct
+ * convergence needs at most one round per selectable dust coin (each round covers a strictly larger fee), so this bound
+ * is only reached if the fee/coverage relationship fails to settle — in which case we fail fast rather than spin.
+ */
+const MAX_DUST_BALANCING_ITERATIONS = 1000;
+
+/**
  * Distributes the fee across multiple inputs, draining smaller inputs first when the fee exceeds any single input's
  * value.
  */
@@ -631,23 +638,42 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
     return pipe(
       Effect.iterate(
-        { currentFee: initialFees, recipeInputs: [] as ReadonlyArray<CoinWithValue<Dust>>, converged: false } as {
-          currentFee: bigint;
+        {
+          // `imbalance` is the outstanding dust deficit fed to the balancer. It must stay NEGATIVE every iteration: the
+          // balancer reads a negative fee-token imbalance as "select inputs to cover" and a non-negative one as
+          // "surplus, add an output". `initialFees` (from `feeImbalance`) is already negative; each subsequent round
+          // must re-negate the freshly computed positive `fee` (see below).
+          imbalance: initialFees,
+          // Positive fee magnitude from the latest dry run — the value actually returned to callers.
+          fee: 0n,
+          recipeInputs: [] as ReadonlyArray<CoinWithValue<Dust>>,
+          converged: false,
+          iterations: 0,
+        } as {
+          imbalance: bigint;
+          fee: bigint;
           recipeInputs: ReadonlyArray<CoinWithValue<Dust>>;
           converged: boolean;
+          iterations: number;
         },
         {
           while: (s) => !s.converged,
-          body: ({ currentFee }) =>
+          body: ({ imbalance, iterations }) =>
             Effect.try({
               try: () => {
+                if (iterations >= MAX_DUST_BALANCING_ITERATIONS) {
+                  throw new Error(
+                    `Dust balancing did not converge after ${MAX_DUST_BALANCING_ITERATIONS} iterations`,
+                  );
+                }
+
                 const recipe = getBalanceRecipe({
                   coins: dust.map((coin) => ({
                     type: 'dust',
                     value: coin.value,
                     token: coin.token,
                   })),
-                  initialImbalances: CapImbalances.fromEntry('dust', currentFee),
+                  initialImbalances: CapImbalances.fromEntry('dust', imbalance),
                   feeTokenType: 'dust',
                   coinSelection: this.getCoinSelection(),
                   transactionCostModel: {
@@ -672,7 +698,15 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
                 const recipeAmountCoverage = recipeInputs.reduce((sum, input) => sum + input.value, 0n);
 
-                return { currentFee: newFee, recipeInputs, converged: newFee <= recipeAmountCoverage };
+                return {
+                  // Feed the fee back as a negative deficit so the next round keeps selecting inputs. Passing the raw
+                  // positive `newFee` would read as surplus, select zero inputs (coverage 0), and loop forever.
+                  imbalance: -newFee,
+                  fee: newFee,
+                  recipeInputs,
+                  converged: newFee <= recipeAmountCoverage,
+                  iterations: iterations + 1,
+                };
               },
               catch: (err) => {
                 if (err instanceof BalancingInsufficientFundsError) {
@@ -692,9 +726,9 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       ),
       Effect.either,
       Effect.runSync,
-      Either.map(({ currentFee, recipeInputs }) => ({
-        fee: currentFee,
-        recipeInputs: distributeFeeAcrossInputs(recipeInputs, currentFee),
+      Either.map(({ fee, recipeInputs }) => ({
+        fee,
+        recipeInputs: distributeFeeAcrossInputs(recipeInputs, fee),
       })),
     );
   }

@@ -16,6 +16,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { exit } from 'node:process';
+import { randomBytes } from 'node:crypto';
 import { logger } from './logger.js';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { inspect } from 'node:util';
@@ -24,15 +25,18 @@ import { inspect } from 'node:util';
 
 // Purpose of this script is to setup up the test wallets used for remote tests.
 // SEED should be a wallet with funds e.g. faucet wallet
-// SEED2 should be a wallet to receive funds to be used for testting
+// The receiver wallet is generated fresh each run (a random hex seed, logged in beforeAll) so a new
+// funded test wallet can be provisioned and its seed captured from the logs — no SEED2 required.
 describe('Set up test wallet', () => {
-  if (process.env['SEED2'] === undefined || process.env['SEED'] === undefined) {
-    logger.info('SEED or SEED2 or SEED_STABLE env vars not set');
+  if (process.env['SEED'] === undefined) {
+    logger.info('SEED env var not set');
     exit(1);
   }
   const getFixture = useTestContainersFixture();
   const fundedSeed = process.env['SEED'];
-  const ReceiverSeed = process.env['SEED2'];
+  // Fresh random receiver wallet; its seed is logged so it can be reused as a provisioned test wallet.
+  // const ReceiverSeed = randomBytes(32).toString('hex');
+  const ReceiverSeed = process.env['SEED2'] ?? randomBytes(32).toString('hex');
   const shieldedTokenRaw = ledger.shieldedToken().raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const nativeToken1Raw = '0000000000000000000000000000000000000000000000000000000000000001';
@@ -40,6 +44,10 @@ describe('Set up test wallet', () => {
   const syncTimeout = (1 * 60 + 30) * 60 * 1000; // 1 hour + 30 minutes in milliseconds
   const timeout = 600_000;
   const outputValue = utils.tNightAmount(10n);
+  // The receiver must self-fund its dust registration from the grace-period dust its Night UTxO
+  // projects; that fee (~0.3 DUST) accrues at ~35,900 / tNight seconds, so the registerable Night
+  // must be a large single UTxO (well above the ~600 tNight floor) to self-fund in reasonable time.
+  const receiverNightFunding = utils.tNightAmount(5000n);
 
   let sender: utils.WalletInit;
   let receiver: utils.WalletInit;
@@ -52,6 +60,7 @@ describe('Set up test wallet', () => {
 
     sender = await utils.initWalletWithSeed(fundedSeed, fixture);
     receiver = await utils.initWalletWithSeed(ReceiverSeed, fixture);
+    logger.info(`Generated receiver wallet seed (save this to reuse the provisioned wallet): ${ReceiverSeed}`);
     logger.info('Two wallets started');
   }, syncTimeout);
 
@@ -105,7 +114,37 @@ describe('Set up test wallet', () => {
           outputs: [
             {
               type: unshieldedTokenRaw,
-              amount: outputValue,
+              amount: receiverNightFunding * 1000n,
+              receiverAddress: receiverUnshieldedAddress,
+            },
+          ],
+        },
+        {
+          type: 'unshielded',
+          outputs: [
+            {
+              type: unshieldedTokenRaw,
+              amount: receiverNightFunding,
+              receiverAddress: receiverUnshieldedAddress,
+            },
+          ],
+        },
+        {
+          type: 'unshielded',
+          outputs: [
+            {
+              type: unshieldedTokenRaw,
+              amount: receiverNightFunding,
+              receiverAddress: receiverUnshieldedAddress,
+            },
+          ],
+        },
+        {
+          type: 'unshielded',
+          outputs: [
+            {
+              type: unshieldedTokenRaw,
+              amount: receiverNightFunding,
               receiverAddress: receiverUnshieldedAddress,
             },
           ],
@@ -141,8 +180,18 @@ describe('Set up test wallet', () => {
         (coin) => coin.utxo.type === unshieldedTokenRaw && coin.meta.registeredForDustGeneration === false,
       );
       expect(unregisteredNightUtxos.length, 'No unregistered UTXOs found').toBeGreaterThan(0);
+      const nightUtxoToRegister = unregisteredNightUtxos.reduce((largest, coin) =>
+        coin.utxo.value > largest.utxo.value ? coin : largest,
+      );
+
+      const { fee: estimatedRegistrationFee } = await receiver.wallet.estimateRegistration([nightUtxoToRegister]);
+      logger.info(`Estimated dust registration fee: ${estimatedRegistrationFee}; waiting for generated dust...`);
+      await receiver.wallet.waitForGeneratedDust([nightUtxoToRegister], estimatedRegistrationFee, {
+        timeoutMs: syncTimeout,
+      });
+
       const dustRegistrationRecipe = await receiver.wallet.registerNightUtxosForDustGeneration(
-        [unregisteredNightUtxos[0]],
+        [nightUtxoToRegister],
         receiver.unshieldedKeystore.getPublicKey(),
         receiver.unshieldedKeystore.signDataAsync,
       );
