@@ -9,6 +9,7 @@
     "test-e2e": "NODE_OPTIONS='--experimental-vm-modules --experimental-specifier-resolution=node --max-old-space-size=16384 --heapsnapshot-near-heap-limit=1' vitest run",
     "test-undeployed": "docker compose -f ../../infra/compose/docker-compose-dynamic.yml pull && yarn test-e2e --project undeployed",
     "test-remote": "docker compose -f ../../infra/compose/docker-compose-remote-dynamic.yml pull && yarn test-e2e --project remote",
+    "generate-evidence": "node ./scripts/generate-evidence.mjs",
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",

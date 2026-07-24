@@ -1,0 +1,253 @@
+name: QA Release Evidence
+
+# Semi-automated release test evidence.
+#
+# A QA engineer manually dispatches this workflow when preparing a release. It
+# runs the release test suites (by default: ALL undeployed tests + the remote
+# `@smoke` subset), renders a human-readable evidence README, and opens a PR
+# adding it under qa/evidence/wallet-sdk-<version>/. The QA engineer reviews the
+# PR, flips the "QA Sign-off" field to ✅, and merges — that merge is the human
+# sign-off. On the next release, cd.yml surfaces the committed evidence in the
+# @midnightntwrk/wallet-sdk GitHub Release notes.
+#
+# The suite selection is not hard-coded to smoke: `run_undeployed` / `run_remote`
+# toggles plus the free-form `*_modifier` inputs (Vitest `-t` tag/name filters or
+# a file path, exactly like e2e-tests.yml's `modifier`) let QA capture evidence
+# for an individual new test on either environment, outside the smoke set.
+
+env:
+  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
+  APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
+  SYNC_CACHE: ${{ github.workspace }}/packages/e2e-tests/.sync_cache
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        type: choice
+        description: Remote network for the remote suite
+        required: true
+        default: 'preview'
+        options:
+          - devnet
+          - qanet
+          - preview
+          - prepod
+      wallet_sdk_version:
+        type: string
+        description:
+          Wallet SDK version key for the evidence folder (leave empty to read packages/wallet-sdk/package.json)
+        required: false
+      run_undeployed:
+        type: boolean
+        description: Run the undeployed suite
+        required: false
+        default: true
+      undeployed_modifier:
+        type: string
+        description: 'Undeployed selection (Vitest -t filter or file path; empty = all undeployed)'
+        required: false
+      undeployed_suite_label:
+        type: string
+        description: Suite label for the undeployed row in the evidence
+        required: false
+        default: 'e2e'
+      run_remote:
+        type: boolean
+        description: Run the remote suite
+        required: false
+        default: true
+      remote_modifier:
+        type: string
+        description: 'Remote selection (Vitest -t filter or file path; default = the @smoke subset)'
+        required: false
+        default: '-t @smoke'
+      remote_suite_label:
+        type: string
+        description: Suite label for the remote row in the evidence
+        required: false
+        default: 'smoke'
+      qa_contact:
+        type: string
+        description: QA contact "Name <email>" (optional; can also be filled in the PR)
+        required: false
+      branch:
+        type: string
+        description:
+          Branch to run against and base the evidence PR on (normally main — release code == main; only version bumps
+          live in the release PR)
+        required: false
+        default: 'main'
+
+permissions: {}
+
+jobs:
+  evidence:
+    name: Generate release evidence
+    runs-on: ubuntu-latest-8-core-x64
+    timeout-minutes: 120
+    permissions:
+      contents: write # push the evidence branch
+      pull-requests: write # open the sign-off PR
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ inputs.branch }}
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Log in to GitHub Container registry
+        uses: docker/login-action@9fe7774c8f8ebfade96f0a62aa10f3882309d517
+        with:
+          registry: 'https://ghcr.io'
+          username: ${{ env.MIDNIGHT_GH_USER }}
+          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Build wallet and install dependencies
+        run: |
+          yarn install
+          yarn turbo dist
+
+      # Key the evidence to the version that is ABOUT to be released, not the
+      # one currently on main. With Changesets the new version only lives in the
+      # unmerged "Version Packages" release PR, so we derive it from the pending
+      # changesets — the same `changeset status` signal cd.yml's version job uses.
+      # Precedence: explicit input → upcoming version from changesets → current
+      # package.json (fallback, e.g. re-running evidence after a release).
+      - name: Resolve wallet-sdk version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.wallet_sdk_version }}
+        run: |
+          set -uo pipefail
+          if [ -n "${INPUT_VERSION}" ]; then
+            VERSION="${INPUT_VERSION}"
+            echo "Using explicit version input: ${VERSION}"
+          else
+            rm -f changeset-status.json
+            yarn changeset status --output=changeset-status.json || true
+            VERSION=$(node -e "try{const r=require('./changeset-status.json');const w=(r.releases||[]).find(x=>x.name==='@midnightntwrk/wallet-sdk');process.stdout.write(w&&w.newVersion?w.newVersion:'')}catch(e){process.stdout.write('')}")
+            rm -f changeset-status.json
+            if [ -z "${VERSION}" ]; then
+              VERSION=$(node -p "require('./packages/wallet-sdk/package.json').version")
+              echo "::warning::No pending wallet-sdk changeset; falling back to current version ${VERSION}."
+            else
+              echo "Upcoming release version from pending changesets: ${VERSION}"
+            fi
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Run undeployed suite
+        id: undeployed
+        if: inputs.run_undeployed
+        continue-on-error: true # capture failures as evidence rather than aborting
+        env:
+          NETWORK: undeployed
+          UNDEPLOYED_MODIFIER: ${{ inputs.undeployed_modifier }}
+        run: |
+          set -uo pipefail
+          yarn turbo test-undeployed -- $UNDEPLOYED_MODIFIER
+          cp packages/e2e-tests/reports/test-report.json packages/e2e-tests/reports/undeployed.json
+
+      - name: Run remote suite
+        id: remote
+        if: inputs.run_remote
+        continue-on-error: true # capture failures as evidence rather than aborting
+        env:
+          NETWORK: ${{ inputs.network }}
+          SEED: ${{ secrets.E2E_TESTS_SEED }}
+          SEED2: ${{ secrets.E2E_TESTS_SEED2 }}
+          NT_SEED: ${{ secrets.E2E_TESTS_NT_SEED }}
+          NT_SEED2: ${{ secrets.E2E_TESTS_NT_SEED2 }}
+          APP_INFRA_SECRET: ${{ env.APP_INFRA_SECRET }}
+          REMOTE_MODIFIER: ${{ inputs.remote_modifier }}
+        run: |
+          set -uo pipefail
+          yarn turbo test-remote -- $REMOTE_MODIFIER
+          cp packages/e2e-tests/reports/test-report.json packages/e2e-tests/reports/remote-smoke.json
+
+      - name: Upload raw test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qa-evidence-reports-${{ steps.version.outputs.version }}
+          path: |
+            packages/e2e-tests/reports/*.json
+            packages/e2e-tests/reports/*.xml
+            packages/e2e-tests/reports/html
+            packages/e2e-tests/reports/allure-results
+          include-hidden-files: true
+
+      - name: Generate evidence README
+        id: generate
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          NETWORK: ${{ inputs.network }}
+          QA_CONTACT: ${{ inputs.qa_contact }}
+          UNDEPLOYED_LABEL: ${{ inputs.undeployed_suite_label }}
+          REMOTE_LABEL: ${{ inputs.remote_suite_label }}
+        run: |
+          set -euo pipefail
+          NODE_TAG=$(grep -oE 'midnight-node:[^"'"'"' ]+' infra/compose/docker-compose-dynamic.yml | head -n1 | cut -d: -f2 || echo "n/a")
+
+          # Build the run-spec argument list only for suites that actually produced a report.
+          SPECS=()
+          NETWORKS=()
+          if [ -f packages/e2e-tests/reports/undeployed.json ]; then
+            SPECS+=("undeployed:${UNDEPLOYED_LABEL}:packages/e2e-tests/reports/undeployed.json")
+            NETWORKS+=("undeployed")
+          fi
+          if [ -f packages/e2e-tests/reports/remote-smoke.json ]; then
+            SPECS+=("${NETWORK}:${REMOTE_LABEL}:packages/e2e-tests/reports/remote-smoke.json")
+            NETWORKS+=("${NETWORK}")
+          fi
+          if [ ${#SPECS[@]} -eq 0 ]; then
+            echo "::error::No test reports were produced — nothing to generate."
+            exit 1
+          fi
+          NETWORKS_CSV=$(IFS=', '; echo "${NETWORKS[*]}")
+
+          node packages/e2e-tests/scripts/generate-evidence.mjs "${SPECS[@]}" \
+            --version "${VERSION}" \
+            --networks "${NETWORKS_CSV}" \
+            --node-version "${NODE_TAG}" \
+            ${QA_CONTACT:+--qa-contact "${QA_CONTACT}"}
+
+      - name: Open evidence sign-off PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          BASE: ${{ inputs.branch }}
+        run: |
+          set -euo pipefail
+          BRANCH="qa/evidence-wallet-sdk-${VERSION}"
+          EVIDENCE="qa/evidence/wallet-sdk-${VERSION}/README.md"
+
+          git config user.name "MidnightCI"
+          git config user.email "midnight-automation+midnightci@iohk.io"
+          git checkout -b "${BRANCH}"
+          git add "${EVIDENCE}"
+          git commit -m "qa: test evidence for wallet-sdk@${VERSION}"
+          git push --force-with-lease origin "${BRANCH}"
+
+          gh pr create \
+            --base "${BASE}" \
+            --head "${BRANCH}" \
+            --title "qa: release test evidence for wallet-sdk@${VERSION}" \
+            --body "Automated release test evidence for \`wallet-sdk@${VERSION}\`.
+
+          **QA action required:** review the results in \`${EVIDENCE}\`, set the **QA Sign-off** field to ✅ (and fill **QA Contact** if blank), then merge. Raw reports (HTML / Allure / JUnit / JSON) are attached to run ${{ github.run_id }} as the \`qa-evidence-reports-${VERSION}\` artifact." \
+            || echo "PR may already exist for ${BRANCH}; branch has been updated."
