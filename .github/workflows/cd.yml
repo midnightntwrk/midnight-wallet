@@ -212,6 +212,43 @@ jobs:
       - name: Publish @midnight-ntwrk alias
         run: node scripts/publish-alias.mjs
 
+      # Surface QA test evidence (if a signed-off README was committed for this
+      # release via the QA Release Evidence workflow) into the wallet-sdk GitHub
+      # Release notes. Best-effort: a missing evidence file or release only logs
+      # a warning and never fails publishing.
+      - name: Attach QA evidence to wallet-sdk release notes
+        env:
+          GH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -uo pipefail
+          VERSION=$(node -p "require('./packages/wallet-sdk/package.json').version")
+          EVIDENCE="qa/evidence/wallet-sdk-${VERSION}/README.md"
+          TAG="@midnightntwrk/wallet-sdk@${VERSION}"
+
+          if [ ! -f "${EVIDENCE}" ]; then
+            echo "::warning::No QA evidence at ${EVIDENCE}; skipping release-notes injection."
+            exit 0
+          fi
+          if ! gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "::warning::GitHub Release ${TAG} not found; skipping evidence injection."
+            exit 0
+          fi
+
+          # Metadata + Test Execution Summary (everything before "## Results by File").
+          SUMMARY=$(awk '/^## Release Metadata/{f=1} /^## Results by File/{f=0} f' "${EVIDENCE}")
+          LINK="${SERVER_URL}/${REPO}/blob/main/${EVIDENCE}"
+
+          {
+            gh release view "${TAG}" --json body -q .body
+            printf '\n\n---\n\n## QA Test Evidence\n\n%s\n\n[Full evidence report](%s)\n' "${SUMMARY}" "${LINK}"
+          } > release-notes.md
+
+          gh release edit "${TAG}" --notes-file release-notes.md
+          rm -f release-notes.md
+          echo "Injected QA evidence into ${TAG} release notes."
+
   canary:
     name: Canary (snapshot publish)
     needs: [version]
