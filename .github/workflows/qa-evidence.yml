@@ -69,6 +69,31 @@ on:
         description: Suite label for the remote row in the evidence
         required: false
         default: 'smoke'
+      run_remote_extra:
+        type: boolean
+        description: Run a second, independently-targeted remote suite (e.g. a specific test on a different network)
+        required: false
+        default: false
+      network_extra:
+        type: choice
+        description: Network for the extra remote suite
+        required: false
+        default: 'stagenet'
+        options:
+          - devnet
+          - qanet
+          - preview
+          - prepod
+          - stagenet
+      remote_modifier_extra:
+        type: string
+        description: 'Extra remote selection (Vitest -t filter or file path; e.g. ecdsaSpend.remote)'
+        required: false
+      remote_suite_label_extra:
+        type: string
+        description: Suite label for the extra remote row in the evidence
+        required: false
+        default: 'targeted'
       qa_contact:
         type: string
         description: QA contact "Name <email>" (optional; can also be filled in the PR)
@@ -180,6 +205,26 @@ jobs:
           yarn turbo test-remote -- $REMOTE_MODIFIER
           cp packages/e2e-tests/reports/test-report.json packages/e2e-tests/reports/remote-smoke.json
 
+      # A second, independently-targeted remote run — e.g. a specific test file on
+      # a different network (ecdsaSpend.remote on stagenet) captured in the same
+      # evidence document as the primary remote smoke run.
+      - name: Run extra remote suite
+        id: remote_extra
+        if: inputs.run_remote_extra
+        continue-on-error: true # capture failures as evidence rather than aborting
+        env:
+          NETWORK: ${{ inputs.network_extra }}
+          SEED: ${{ secrets.E2E_TESTS_SEED }}
+          SEED2: ${{ secrets.E2E_TESTS_SEED2 }}
+          NT_SEED: ${{ secrets.E2E_TESTS_NT_SEED }}
+          NT_SEED2: ${{ secrets.E2E_TESTS_NT_SEED2 }}
+          APP_INFRA_SECRET: ${{ env.APP_INFRA_SECRET }}
+          REMOTE_MODIFIER: ${{ inputs.remote_modifier_extra }}
+        run: |
+          set -uo pipefail
+          yarn turbo test-remote -- $REMOTE_MODIFIER
+          cp packages/e2e-tests/reports/test-report.json packages/e2e-tests/reports/remote-extra.json
+
       - name: Upload raw test reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -197,9 +242,11 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
           NETWORK: ${{ inputs.network }}
+          NETWORK_EXTRA: ${{ inputs.network_extra }}
           QA_CONTACT: ${{ inputs.qa_contact }}
           UNDEPLOYED_LABEL: ${{ inputs.undeployed_suite_label }}
           REMOTE_LABEL: ${{ inputs.remote_suite_label }}
+          REMOTE_LABEL_EXTRA: ${{ inputs.remote_suite_label_extra }}
         run: |
           set -euo pipefail
           NODE_TAG=$(grep -oE 'midnight-node:[^"'"'"' ]+' infra/compose/docker-compose-dynamic.yml | head -n1 | cut -d: -f2 || echo "n/a")
@@ -214,6 +261,10 @@ jobs:
           if [ -f packages/e2e-tests/reports/remote-smoke.json ]; then
             SPECS+=("${NETWORK}:${REMOTE_LABEL}:packages/e2e-tests/reports/remote-smoke.json")
             NETWORKS+=("${NETWORK}")
+          fi
+          if [ -f packages/e2e-tests/reports/remote-extra.json ]; then
+            SPECS+=("${NETWORK_EXTRA}:${REMOTE_LABEL_EXTRA}:packages/e2e-tests/reports/remote-extra.json")
+            NETWORKS+=("${NETWORK_EXTRA}")
           fi
           if [ ${#SPECS[@]} -eq 0 ]; then
             echo "::error::No test reports were produced — nothing to generate."
