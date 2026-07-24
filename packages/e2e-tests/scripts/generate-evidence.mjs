@@ -151,8 +151,11 @@ const resolveLedgerVersion = () => {
   if (flags['ledger-version']) return flags['ledger-version'];
   try {
     const pkg = JSON.parse(readFileSync(join(repoRoot, 'packages', 'e2e-tests', 'package.json'), 'utf8'));
-    const dep = pkg.devDependencies?.['@midnight-ntwrk/ledger-v8'] ?? pkg.dependencies?.['@midnight-ntwrk/ledger-v8'];
-    return dep ? dep.replace(/^[\^~]/, '') : 'n/a';
+    // Match any ledger-v<n> dependency under either scope (e.g. @midnight-ntwrk/ledger-v8
+    // on main, @midnightntwrk/ledger-v9 on v2) so this works across branches.
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+    const ledgerKey = Object.keys(deps).find((k) => /^@midnight-?ntwrk\/ledger-v\d+$/.test(k));
+    return ledgerKey ? deps[ledgerKey].replace(/^[\^~]/, '') : 'n/a';
   } catch {
     return 'n/a';
   }
