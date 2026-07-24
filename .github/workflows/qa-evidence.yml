@@ -34,6 +34,7 @@ on:
           - qanet
           - preview
           - prepod
+          - stagenet
       wallet_sdk_version:
         type: string
         description:
