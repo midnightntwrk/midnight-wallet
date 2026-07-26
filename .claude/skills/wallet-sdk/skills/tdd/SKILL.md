@@ -9,7 +9,7 @@ description: >
 # TDD Loop — Wallet SDK
 
 **The test is the specification.** Once a test fails for the right reason, it must not be weakened to accommodate the
-implementation. Work one test at a time.
+implementation. Consult the user for the feedback loop size. It might be one test at a time, but also a full suite prepared ahead of time. It all depends on context and the task at hand. If unsure - prefer less tests in one cycle. 
 
 ## 0. Choose the test type — the filename suffix decides the CI lane
 
