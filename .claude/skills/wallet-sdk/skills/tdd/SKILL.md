@@ -33,7 +33,7 @@ One behavior, precise assertions — exactly what was designed in step 1.
 ## 3. Observe RED
 
 ```bash
-yarn test --filter=@midnightntwrk/wallet-sdk-<package> -- test/<File>.test.ts
+yarn test --filter=@midnightntwrk/wallet-sdk-<package> --<File>.test.ts
 ```
 
 Confirm it fails **for the expected reason** — a failed assertion on the behavior under test. A type error, bad import,
