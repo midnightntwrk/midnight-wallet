@@ -42,7 +42,7 @@
     "@graphql-codegen/cli": "7.2.0",
     "@graphql-codegen/client-preset": "6.1.0",
     "tsx": "4.23.0",
-    "yaml": "^2.8.3"
+    "yaml": "2.9.0"
   },
   "scripts": {
     "gql:codegen": "graphql-codegen --clean --config codegen.ts",

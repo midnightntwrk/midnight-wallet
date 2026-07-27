@@ -2399,7 +2399,7 @@ __metadata:
     graphql-http: "npm:^1.22.4"
     graphql-ws: "npm:^6.0.7"
     tsx: "npm:4.23.0"
-    yaml: "npm:^2.8.3"
+    yaml: "npm:2.9.0"
   languageName: unknown
   linkType: soft
 
