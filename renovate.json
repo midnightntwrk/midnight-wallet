@@ -25,7 +25,7 @@
     },
     {
       "groupName": "Midnight libraries and docker images",
-      "matchPackageNames": ["@midnight-ntwrk/**", "ghcr.io/midnight-ntwrk/**"]
+      "matchPackageNames": ["@midnightntwrk/**", "@midnight-ntwrk/**", "ghcr.io/midnight-ntwrk/**"]
     }
   ]
 }
