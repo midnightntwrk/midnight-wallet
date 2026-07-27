@@ -30,6 +30,25 @@ export default defineConfig({
     ],
     projects: [
       {
+        // Pure unit tests for the package's own tooling scripts (no docker, no
+        // network). Overrides the e2e defaults: no env setup, no retry, short
+        // timeouts.
+        //
+        // Note: `reporters` is a root-level-only option, so a unit run still
+        // rewrites reports/test-report.json. That is harmless here — the QA
+        // evidence workflow only ever runs test-undeployed / test-remote, and
+        // copies the report to a per-suite filename immediately after each run.
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['scripts/**/*.test.ts'],
+          setupFiles: [],
+          retry: 0,
+          testTimeout: 30_000,
+          hookTimeout: 30_000,
+        },
+      },
+      {
         extends: true,
         test: {
           name: 'undeployed',
