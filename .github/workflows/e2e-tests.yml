@@ -193,7 +193,7 @@ jobs:
           APP_INFRA_SECRET: ${{ env.APP_INFRA_SECRET }}
           TEST_MODIFIER: ${{ inputs.modifier }}
         run: |
-          yarn turbo test-remote -- $TEST_MODIFIER
+          yarn turbo test:e2e:remote -- $TEST_MODIFIER
 
       - name: Upload sync cache
         if: success()

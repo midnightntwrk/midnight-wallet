@@ -12,7 +12,8 @@
     "@midnight-ntwrk/wallet-integration-tests",
     "@midnightntwrk/wallet-sdk-docs-snippets",
     "@midnight-ntwrk/wallet-test-website",
-    "@midnightntwrk/wallet-sdk-spec-reference"
+    "@midnightntwrk/wallet-sdk-spec-reference",
+    "@midnight/wallet-serialization-tests"
   ],
   "snapshot": {
     "useCalculatedVersion": true,

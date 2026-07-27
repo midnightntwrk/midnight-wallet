@@ -22,6 +22,62 @@ import {
 } from './TransactionHistoryStorage.js';
 
 /**
+ * On-disk version of the serialized tx-history envelope. Bumped whenever the persisted format changes in a way
+ * `restore` must migrate from. v1 wraps the entries in `{ version, entries }` and requires a `lifecycle` on every
+ * entry; pre-v1 payloads (abstractions ≤ 2.1.0) are bare arrays whose entries have no `lifecycle` and may omit
+ * `identifiers`.
+ */
+const CURRENT_SCHEMA_VERSION = 1;
+
+type SerializedEnvelope = { readonly version: number; readonly entries: readonly unknown[] };
+
+const isEnvelope = (parsed: unknown): parsed is SerializedEnvelope =>
+  typeof parsed === 'object' &&
+  parsed !== null &&
+  !Array.isArray(parsed) &&
+  Array.isArray((parsed as { entries?: unknown }).entries);
+
+/** Pull the entry list out of either a v1 `{ version, entries }` envelope or a pre-v1 bare array. */
+const extractEncodedEntries = (parsed: unknown): readonly unknown[] => {
+  if (Array.isArray(parsed)) return parsed;
+  if (isEnvelope(parsed)) return parsed.entries;
+  throw new Error(
+    'Unrecognized transaction history payload: expected a JSON array (pre-v1) or a { version, entries } envelope',
+  );
+};
+
+// NOTE: pre-lifecycle entries never persisted a block hash/height, so a synthesized `finalized`
+// lifecycle uses a sentinel block (empty hash, height 0) and the entry's own timestamp. The
+// historical `status`/`timestamp`/`fees` fields stay optional in the current schema and are retained
+// untouched — only the new `lifecycle` discriminator (and `identifiers`, if absent) is inferred. If a
+// real block ever needs backfilling, do it from the indexer, not here.
+const EPOCH_ISO = new Date(0).toISOString();
+
+const synthesizeEncodedLifecycle = (raw: Record<string, unknown>): Record<string, unknown> => {
+  const at = typeof raw['timestamp'] === 'string' ? raw['timestamp'] : EPOCH_ISO;
+  return raw['status'] === 'FAILURE'
+    ? { status: 'rejected', rejectedAt: at }
+    : { status: 'finalized', finalizedBlock: { hash: '', height: 0, timestamp: at } };
+};
+
+/**
+ * Migrate a single ENCODED (JSON) entry to the current schema's encoded shape. Idempotent: entries that already carry a
+ * `lifecycle` (v1 payloads) pass through untouched. Pre-`lifecycle` entries get a lifecycle synthesized from their
+ * `status`/`timestamp`, and an empty `identifiers` when absent.
+ */
+const migrateEncodedEntry = (raw: unknown): unknown => {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw; // let the schema reject non-objects
+  // Cast required because: indexing an `object` by string needs a record type; the runtime guard
+  // above has already established `raw` is a non-null, non-array object.
+  const entry = raw as Record<string, unknown>;
+  return {
+    ...entry,
+    identifiers: Array.isArray(entry['identifiers']) ? entry['identifiers'] : [],
+    lifecycle: entry['lifecycle'] ?? synthesizeEncodedLifecycle(entry),
+  };
+};
+
+/**
  * In-memory implementation of the TransactionHistoryStorage interface.
  *
  * `T` is the entry shape — a {@link TransactionHistoryEntryCommon} extension carrying any wallet-specific sections. The
@@ -89,7 +145,8 @@ export class InMemoryTransactionHistoryStorage<
   serialize(): Promise<SerializedTransactionHistory> {
     const allEntries = [...this.#storage.values()];
     const encode = Schema.encodeSync(Schema.Array(this.#schema));
-    return Promise.resolve(JSON.stringify(encode(allEntries)));
+    const envelope: SerializedEnvelope = { version: CURRENT_SCHEMA_VERSION, entries: encode(allEntries) };
+    return Promise.resolve(JSON.stringify(envelope));
   }
 
   static restore<T extends TransactionHistoryEntryCommon, Encoded>(
@@ -97,8 +154,12 @@ export class InMemoryTransactionHistoryStorage<
     schema: Schema.Schema<T, Encoded>,
     merge?: (existing: T, incoming: T) => T,
   ): InMemoryTransactionHistoryStorage<T, Encoded> {
+    // Accept both the v1 envelope and pre-v1 bare arrays, migrating each entry (synthesize
+    // `lifecycle`/`identifiers` when absent) BEFORE decoding, so payloads written by abstractions
+    // ≤ 2.1.0 — which predate the required `lifecycle` field — still load.
+    const migrated = extractEncodedEntries(JSON.parse(serialized)).map(migrateEncodedEntry);
     const decode = Schema.decodeUnknownSync(Schema.Array(schema));
-    const decoded = decode(JSON.parse(serialized));
+    const decoded = decode(migrated);
     const storage = new InMemoryTransactionHistoryStorage<T, Encoded>(schema, merge);
     for (const entry of decoded) {
       storage.#storage.set(entry.hash, entry);

@@ -1,0 +1,23 @@
+{
+  "train": "facade-unreleased",
+  "name": "@midnightntwrk/wallet-sdk-abstractions",
+  "version": "4.1.0",
+  "schemaFrom": {
+    "name": "@midnightntwrk/wallet-sdk-facade",
+    "version": "4.1.0",
+    "ledgerDep": "@midnight-ntwrk/ledger-v8@^8.1.0"
+  },
+  "expected": {
+    "entryCount": 3,
+    "hashes": [
+      "c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0",
+      "d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1",
+      "e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2"
+    ],
+    "statuses": ["SUCCESS", "FAILURE", "PARTIAL_SUCCESS"],
+    "fees": ["1234", null, null],
+    "identifiersPresent": [true, true, false]
+  },
+  "serialized": "{\"version\":1,\"entries\":[{\"hash\":\"c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0\",\"identifiers\":[\"identifier-1\",\"identifier-2\"],\"protocolVersion\":1,\"status\":\"SUCCESS\",\"timestamp\":\"2026-03-01T12:00:00.000Z\",\"fees\":\"1234\",\"lifecycle\":{\"status\":\"finalized\",\"finalizedBlock\":{\"hash\":\"\",\"height\":0,\"timestamp\":\"2026-03-01T12:00:00.000Z\"}},\"shielded\":{\"receivedCoins\":[{\"type\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"nonce\":\"abababababababababababababababababababababababababababababababab\",\"value\":\"100\",\"mtIndex\":\"0\"}],\"spentCoins\":[{\"type\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"nonce\":\"cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd\",\"value\":\"250\",\"mtIndex\":\"1\"}]}},{\"hash\":\"d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1d1\",\"identifiers\":[\"identifier-3\"],\"protocolVersion\":1,\"status\":\"FAILURE\",\"timestamp\":\"2026-03-01T12:00:00.000Z\",\"fees\":null,\"lifecycle\":{\"status\":\"rejected\",\"rejectedAt\":\"2026-03-01T12:00:00.000Z\"},\"unshielded\":{\"id\":7,\"createdUtxos\":[{\"value\":\"1000\",\"owner\":\"owner-address\",\"tokenType\":\"3333333333333333333333333333333333333333333333333333333333333333\",\"intentHash\":\"5555555555555555555555555555555555555555555555555555555555555555\",\"outputIndex\":0}],\"spentUtxos\":[]}},{\"hash\":\"e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2\",\"identifiers\":[],\"protocolVersion\":1,\"status\":\"PARTIAL_SUCCESS\",\"lifecycle\":{\"status\":\"finalized\",\"finalizedBlock\":{\"hash\":\"\",\"height\":0,\"timestamp\":\"1970-01-01T00:00:00.000Z\"}},\"dust\":{\"receivedUtxos\":[{\"initialValue\":\"0\",\"nonce\":\"42\",\"seq\":0,\"backingNight\":\"6666666666666666666666666666666666666666666666666666666666666666\",\"mtIndex\":\"0\"}],\"spentUtxos\":[]}}]}",
+  "capturedFrom": "facade-4.1.0"
+}

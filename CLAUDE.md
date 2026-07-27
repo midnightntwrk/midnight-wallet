@@ -311,6 +311,7 @@ glob. Commands:
 - `yarn test` — full suite (both projects).
 - `yarn test:unit` — unit only (fast gate; no Docker).
 - `yarn test:integration` — integration only.
+- `yarn test:serialization` — the serialization backward-compat gate (see its tier below; no Docker).
 
 In CI, unit tests run as a fast early gate; integration tests run as a **matrix with one job per file** (own runner +
 own Docker stack) so no two files contend for infra and a failing file never cancels the rest. The file list is
@@ -320,12 +321,27 @@ a reusable workflow (`.github/workflows/integration.yml`) invoked as a single `I
 the per-file jobs under one collapsible check.
 
 The required status check for merge is the aggregate **`Tests`** job, which passes only when **all** tiers pass — it
-gates on unit, integration, and smoke e2e (`needs: [test-unit, integration, e2e-smoke]`).
+gates on unit, integration, smoke e2e, and serialization
+(`needs: [test-unit, test-integration, test-e2e-smoke, test-serialization]`).
 
 **End-to-end tests** are a separate tier: full wallet flows through the public API against real infra are e2e, not
-integration. They live in the `e2e-tests` package as `*.undeployed.test.ts` and run via `turbo test-undeployed` (smoke
-subset on PRs, full suite nightly) — not in the integration matrix. The docs-snippets runner is also e2e and runs in
-that lane while staying in its own package.
+integration. They live in the `e2e-tests` package, split by target network via file suffix into two vitest projects:
+`*.undeployed.test.ts` (a local ephemeral stack) and `*.remote.test.ts` (a real deployed network), with
+`*.universal.test.ts` running in both. Commands follow the `test:e2e:*` convention:
+
+- `turbo test:e2e:undeployed` — the local-stack lane; the PR **Smoke E2E** job runs its `@smoke` subset
+  (`turbo test:e2e:undeployed -- -t @smoke`), and the nightly `E2E tests - local` workflow runs it in full.
+- `turbo test:e2e:remote` — the deployed-network lane; run manually via the `E2E tests` workflow.
+- `turbo test:e2e` — the raw runner both wrap (used directly only by the `Fund test wallets` utility workflow).
+
+Neither the full-undeployed nor the remote lane runs in the PR gate — only the smoke subset does. The docs-snippets
+runner is also e2e and rides the `test:e2e:undeployed` lane while staying in its own package.
+
+**Serialization tests** are their own tier (`packages/serialization-tests`): they restore fixtures written by previously
+published SDK versions through current code (backward-compat), plus a format-drift gate. Pure unit tests (no Docker),
+but the package deliberately has **no `test:unit` task** — it never runs under `yarn test:unit`. Run the whole gate with
+`yarn test:serialization`; CI runs the two halves as separately-named checks (`test:serialization:compat`,
+`test:serialization:drift`) under the **Serialization Tests** job. See `packages/serialization-tests/README.md`.
 
 ### Test-Driven Development (MANDATORY)
 

@@ -55,6 +55,24 @@
       "outputLogs": "new-only",
       "dependsOn": ["^dist", "typecheck"]
     },
+    "test:serialization": {
+      "outputs": ["coverage/**", "reports/**"],
+      "env": ["DEBUG"],
+      "outputLogs": "new-only",
+      "dependsOn": ["^dist", "typecheck"]
+    },
+    "test:serialization:compat": {
+      "outputs": ["coverage/**", "reports/**"],
+      "env": ["DEBUG"],
+      "outputLogs": "new-only",
+      "dependsOn": ["^dist", "typecheck"]
+    },
+    "test:serialization:drift": {
+      "outputs": ["coverage/**", "reports/**"],
+      "env": ["DEBUG"],
+      "outputLogs": "new-only",
+      "dependsOn": ["^dist", "typecheck"]
+    },
     "typecheck": {
       "inputs": [
         "test/**/*.{ts,tsx}",
@@ -66,11 +84,11 @@
       "outputLogs": "new-only",
       "dependsOn": ["^dist"]
     },
-    "test-undeployed": {
+    "test:e2e:undeployed": {
       "cache": false,
       "env": ["NETWORK", "APP_INFRA_SECRET"]
     },
-    "test-remote": {
+    "test:e2e:remote": {
       "cache": false,
       "env": [
         "NETWORK",
@@ -169,7 +187,7 @@
       "dependsOn": ["typecheck", "format:check", "lint", "//#check-barrel-exports"]
     },
     "verify:test": {
-      "dependsOn": ["test:unit"]
+      "dependsOn": ["test:unit", "test:serialization"]
     },
     "verify:integration": {
       "dependsOn": ["test:integration"]
