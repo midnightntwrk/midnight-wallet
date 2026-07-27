@@ -25,7 +25,12 @@
 //   node generate-evidence.mjs <env>:<suite>:<jsonPath> [more runs...] \
 //     --version 1.2.0 [--out <dir>] [--qa-contact "Name <email>"] \
 //     [--networks "undeployed, preview"] [--node-version 1.0.0] \
-//     [--ledger-version 8.1.0]
+//     [--ledger-version 8.1.0] [--outcomes "success,failure"]
+//
+// --outcomes takes one success/failure entry per run, in the same order as the
+// run specs, and should carry each test step's real exit status. It exists
+// because a crashed Vitest run still reports `success: true` (see below), which
+// would otherwise be rendered as a passing release.
 //
 // Example:
 //   node packages/e2e-tests/scripts/generate-evidence.mjs \
@@ -85,8 +90,18 @@ const fmtDuration = (ms) => {
   return `${mins}m ${rem}s`;
 };
 
+// Ground truth for whether a run actually succeeded. Vitest's JSON reporter has
+// no field for unhandled errors, so a crashed worker still yields
+// `success: true` with zero failing tests -- only the process exit code reveals
+// it. The workflow passes each run step's outcome, positionally aligned with the
+// run specs, so process reality can override the report's claim.
+const runOutcomes = (flags.outcomes ?? '')
+  .split(',')
+  .map((entry) => entry.trim().toLowerCase())
+  .filter((entry) => entry.length > 0);
+
 // Parse one `<env>:<suite>:<path>` spec into a structured run summary.
-const parseRun = (spec) => {
+const parseRun = (spec, index) => {
   const firstColon = spec.indexOf(':');
   const secondColon = spec.indexOf(':', firstColon + 1);
   if (firstColon < 0 || secondColon < 0) {
@@ -103,6 +118,9 @@ const parseRun = (spec) => {
       title: a.title ?? a.fullName ?? '(unnamed)',
       status: a.status,
       duration: a.duration,
+      // Why a test failed matters as much as that it failed -- without this the
+      // evidence names the test and stops, sending QA to the raw artifact.
+      failureMessages: Array.isArray(a.failureMessages) ? a.failureMessages : [],
     }));
     const count = (status) => tests.filter((t) => t.status === status).length;
     return {
@@ -127,6 +145,9 @@ const parseRun = (spec) => {
     };
   });
 
+  const reportedSuccess = report.success ?? report.numFailedTests === 0;
+  const processFailed = runOutcomes[index] === 'failure';
+
   return {
     env,
     suite,
@@ -135,12 +156,16 @@ const parseRun = (spec) => {
     failed: report.numFailedTests ?? 0,
     skipped: report.numPendingTests ?? 0,
     todo: report.numTodoTests ?? 0,
-    success: report.success ?? report.numFailedTests === 0,
+    success: reportedSuccess && !processFailed,
+    // The run's process failed, yet the report claims success and shows no
+    // failing tests: it crashed or aborted, so none of its counts can be
+    // trusted. Distinct from a run that simply has failing tests.
+    unreportedFailure: processFailed && reportedSuccess && (report.numFailedTests ?? 0) === 0,
     files,
   };
 };
 
-const parsedRuns = runSpecs.map(parseRun);
+const parsedRuns = runSpecs.map((spec, index) => parseRun(spec, index));
 
 const totals = parsedRuns.reduce(
   (acc, r) => ({
@@ -190,6 +215,21 @@ const suiteLabel = (r) => (r.suite === 'e2e' ? 'e2e (all)' : r.suite);
 const isFailedSuite = (f) => f.total === 0 && (f.status === 'failed' || f.message.length > 0);
 
 const failedSuites = parsedRuns.flatMap((r) => r.files.filter(isFailedSuite));
+
+const unreportedFailures = parsedRuns.filter((r) => r.unreportedFailure);
+
+// One reason line per distinct failure: assertion messages repeat across a
+// test's assertions, and the stack frames below the first line belong in the
+// raw report, not in a sign-off document.
+const MAX_FAILURE_REASONS = 3;
+
+const failureReasons = (t) => {
+  const headlines = t.failureMessages
+    .map((message) => String(message).split('\n')[0].trim())
+    .filter((line) => line.length > 0);
+  const distinct = Array.from(new Set(headlines)).slice(0, MAX_FAILURE_REASONS);
+  return distinct.map((line) => `\n  - \`${line}\``).join('');
+};
 
 // Keep the evidence readable: the raw JSON report is attached to the run as an
 // artifact, so a long stack trace belongs there, not in the sign-off document.
@@ -247,7 +287,8 @@ const detailSection = parsedRuns
             const emoji = STATUS_EMOJI[t.status] ?? '•';
             const suffix =
               t.status === 'passed' || t.status === 'failed' ? ` (${fmtDuration(t.duration)})` : ` — **${t.status}**`;
-            return `- ${emoji} ${t.title}${suffix}`;
+            const reasons = t.status === 'failed' ? failureReasons(t) : '';
+            return `- ${emoji} ${t.title}${suffix}${reasons}`;
           })
           .join('\n');
         return `#### \`${f.name}\`\n${isFailedSuite(f) ? suiteFailureBlock(f) : testLines}`;
@@ -261,6 +302,13 @@ const failedSuiteWarning =
   failedSuites.length > 0
     ? `\n> ⚠️ ${failedSuites.length} suite${failedSuites.length === 1 ? '' : 's'} failed to run before executing ` +
       `any test, so the counts above understate the failure. See **Detail** below.\n`
+    : '';
+
+const unreportedFailureWarning =
+  unreportedFailures.length > 0
+    ? `\n> ⚠️ ${unreportedFailures.length} run(s) exited non-zero but reported no failing tests ` +
+      `(${unreportedFailures.map((r) => `${r.env}/${suiteLabel(r)}`).join(', ')}) — the run crashed or aborted ` +
+      `before finishing, so the counts above are unreliable. Check the raw report artifact.\n`
     : '';
 
 const skipped = parsedRuns.flatMap((r) =>
@@ -311,7 +359,7 @@ ${metadataTable}
 ${summaryTable}
 
 > ${totals.passed} passed, ${totals.failed} failed, ${totals.skipped} skipped across ${totals.total} total tests.
-${failedSuiteWarning}
+${failedSuiteWarning}${unreportedFailureWarning}
 ## Results by File
 
 ${resultsByFileTable}
