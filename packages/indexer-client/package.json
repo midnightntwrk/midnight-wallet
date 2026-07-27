@@ -37,11 +37,11 @@
     "graphql-ws": "^6.0.7"
   },
   "devDependencies": {
-    "@effect/platform": "0.96.2",
-    "@effect/platform-node": "0.107.0",
+    "@effect/platform": "0.97.0",
+    "@effect/platform-node": "0.108.0",
     "@graphql-codegen/cli": "7.2.0",
     "@graphql-codegen/client-preset": "6.1.0",
-    "tsx": "4.23.0",
+    "tsx": "4.23.1",
     "yaml": "^2.8.3"
   },
   "scripts": {

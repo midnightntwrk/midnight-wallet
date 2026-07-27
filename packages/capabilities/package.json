@@ -61,13 +61,13 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@effect/cluster": "0.59.0",
-    "@effect/experimental": "0.60.0",
-    "@effect/platform": "0.96.2",
-    "@effect/platform-node": "0.107.0",
-    "@effect/rpc": "0.75.1",
-    "@effect/sql": "0.51.1",
-    "@effect/workflow": "0.18.2"
+    "@effect/cluster": "0.60.0",
+    "@effect/experimental": "0.61.0",
+    "@effect/platform": "0.97.0",
+    "@effect/platform-node": "0.108.0",
+    "@effect/rpc": "0.76.0",
+    "@effect/sql": "0.52.0",
+    "@effect/workflow": "0.19.0"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
