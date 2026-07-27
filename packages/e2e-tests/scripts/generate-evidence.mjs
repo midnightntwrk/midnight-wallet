@@ -112,6 +112,12 @@ const parseRun = (spec) => {
         typeof file.endTime === 'number' && typeof file.startTime === 'number'
           ? file.endTime - file.startTime
           : undefined,
+      // A suite that fails to load (import error, top-level throw) reports zero
+      // assertions, so the per-test counters are all 0 and `success: false` is
+      // the only signal. The cause lives on the file-level `message` — keep it,
+      // otherwise the evidence renders a failure with no explanation.
+      status: file.status,
+      message: typeof file.message === 'string' ? file.message.trim() : '',
       total: tests.length,
       passed: count('passed'),
       failed: count('failed'),
@@ -178,6 +184,29 @@ const meta = {
 
 const suiteLabel = (r) => (r.suite === 'e2e' ? 'e2e (all)' : r.suite);
 
+// A file that executed no tests AND failed is a suite-level abort, not an
+// empty file — it needs its own rendering, since the per-test tables are all
+// zeroes and would otherwise say nothing at all.
+const isFailedSuite = (f) => f.total === 0 && (f.status === 'failed' || f.message.length > 0);
+
+const failedSuites = parsedRuns.flatMap((r) => r.files.filter(isFailedSuite));
+
+// Keep the evidence readable: the raw JSON report is attached to the run as an
+// artifact, so a long stack trace belongs there, not in the sign-off document.
+const MAX_MESSAGE_LINES = 20;
+
+const suiteFailureBlock = (f) => {
+  const marker = '- ❌ **Suite failed to run — no tests executed**';
+  if (f.message.length === 0) return marker;
+  const lines = f.message.split('\n');
+  const shown = lines.slice(0, MAX_MESSAGE_LINES).join('\n');
+  const elided =
+    lines.length > MAX_MESSAGE_LINES
+      ? `\n… ${lines.length - MAX_MESSAGE_LINES} more line(s) — see the raw JSON report artifact.`
+      : '';
+  return `${marker}\n\n\`\`\`text\n${shown}${elided}\n\`\`\``;
+};
+
 const metadataTable = [
   '| Field | Value |',
   '| --- | --- |',
@@ -221,12 +250,18 @@ const detailSection = parsedRuns
             return `- ${emoji} ${t.title}${suffix}`;
           })
           .join('\n');
-        return `#### \`${f.name}\`\n${testLines}`;
+        return `#### \`${f.name}\`\n${isFailedSuite(f) ? suiteFailureBlock(f) : testLines}`;
       })
       .join('\n\n');
     return `${heading}\n\n${fileBlocks}`;
   })
   .join('\n\n');
+
+const failedSuiteWarning =
+  failedSuites.length > 0
+    ? `\n> ⚠️ ${failedSuites.length} suite${failedSuites.length === 1 ? '' : 's'} failed to run before executing ` +
+      `any test, so the counts above understate the failure. See **Detail** below.\n`
+    : '';
 
 const skipped = parsedRuns.flatMap((r) =>
   r.files.flatMap((f) =>
@@ -276,7 +311,7 @@ ${metadataTable}
 ${summaryTable}
 
 > ${totals.passed} passed, ${totals.failed} failed, ${totals.skipped} skipped across ${totals.total} total tests.
-
+${failedSuiteWarning}
 ## Results by File
 
 ${resultsByFileTable}
