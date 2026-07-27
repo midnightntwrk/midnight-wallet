@@ -4,7 +4,7 @@
 // to "off": main has pre-existing violations whose fix renames runtime `_tag` strings
 // (a breaking API change) — cleanup tracked in issue #577. Remove the override once it lands.
 import { execFileSync, spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import ts from 'typescript';
 
 const changed = execFileSync('node', ['scripts/changed-files.mjs'], { encoding: 'utf8' })
   .split('\n')
@@ -12,7 +12,13 @@ const changed = execFileSync('node', ['scripts/changed-files.mjs'], { encoding: 
 
 if (changed.length === 0) process.exit(0);
 
-const baseConfig = JSON.parse(readFileSync('tsconfig.base.json', 'utf8').replace(/^\s*\/\/.*$/gm, ''));
+// Parse with TypeScript's own tsconfig reader (JSONC-aware: comments, trailing commas) —
+// the same parser tsc uses, so it can never disagree with how the config is interpreted.
+const { config: baseConfig, error } = ts.readConfigFile('tsconfig.base.json', ts.sys.readFile);
+if (error) {
+  console.error(ts.flattenDiagnosticMessageText(error.messageText, '\n'));
+  process.exit(1);
+}
 const plugin = baseConfig.compilerOptions.plugins.find((p) => p.name === '@effect/language-service');
 const lspConfig = {
   ...plugin,
