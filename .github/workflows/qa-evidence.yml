@@ -14,6 +14,14 @@ name: QA Release Evidence
 # toggles plus the free-form `*_modifier` inputs (Vitest `-t` tag/name filters or
 # a file path, exactly like e2e-tests.yml's `modifier`) let QA capture evidence
 # for an individual new test on either environment, outside the smoke set.
+#
+# Releasing from a non-default branch (e.g. the 2.x line on v2): dispatch this
+# workflow from main — GitHub only registers workflow_dispatch for workflows on
+# the default branch — and set `branch: v2`. The workflow YAML then comes from
+# main while the checked-out code, the test suites, the evidence script and the
+# sign-off PR base all come from v2. Note that v2 is in Changesets pre mode, so
+# the auto-derived version resolves to the next beta: pin `wallet_sdk_version`
+# explicitly (e.g. 2.0.0, after `changeset pre exit`).
 
 env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
@@ -101,8 +109,8 @@ on:
       branch:
         type: string
         description:
-          Branch to run against and base the evidence PR on (normally main — release code == main; only version bumps
-          live in the release PR)
+          Branch to run against and base the evidence PR on. main for 1.x releases (release code == main; only version
+          bumps live in the release PR). Set to v2 for the 2.x line, which is cut from v2 and never merged to main.
         required: false
         default: 'main'
 
@@ -270,7 +278,10 @@ jobs:
             echo "::error::No test reports were produced — nothing to generate."
             exit 1
           fi
-          NETWORKS_CSV=$(IFS=', '; echo "${NETWORKS[*]}")
+          # Note: `IFS=', '` would join on ',' alone — bash uses only the first
+          # character of IFS — so build the ", " separated list explicitly.
+          NETWORKS_CSV=$(printf '%s, ' "${NETWORKS[@]}")
+          NETWORKS_CSV="${NETWORKS_CSV%, }"
 
           node packages/e2e-tests/scripts/generate-evidence.mjs "${SPECS[@]}" \
             --version "${VERSION}" \
