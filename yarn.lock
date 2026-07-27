@@ -758,7 +758,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@effect/platform@npm:0.96.2, @effect/platform@npm:^0.96.0":
+"@effect/platform@npm:0.96.2":
   version: 0.96.2
   resolution: "@effect/platform@npm:0.96.2"
   dependencies:
@@ -768,6 +768,19 @@ __metadata:
   peerDependencies:
     effect: ^3.21.4
   checksum: 10c0/4a982ea71f890f661f6870ab791d8bd97c93fcfdf2864a09607102aac09e375b774cc680a3fc07824516b71c2cc74fee954fa995508641a710f76e6830255165
+  languageName: node
+  linkType: hard
+
+"@effect/platform@npm:^0.97.0":
+  version: 0.97.0
+  resolution: "@effect/platform@npm:0.97.0"
+  dependencies:
+    find-my-way-ts: "npm:^0.1.6"
+    msgpackr: "npm:^1.11.10"
+    multipasta: "npm:^0.2.7"
+  peerDependencies:
+    effect: ^3.22.0
+  checksum: 10c0/0715e1105950a2275026f659fe11617690e697d356f5d6b87629ecc01d6afcd30b1d0bbba027dd98137147ee5890fde3c6b3dad24997465712846abf09352557
   languageName: node
   linkType: hard
 
@@ -2473,7 +2486,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-prover-client@workspace:packages/prover-client"
   dependencies:
-    "@effect/platform": "npm:^0.96.0"
+    "@effect/platform": "npm:^0.97.0"
     "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
     "@midnight-ntwrk/zkir-v2": "npm:^2.1.0"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.2.1"
