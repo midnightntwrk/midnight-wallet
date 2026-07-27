@@ -221,6 +221,9 @@ jobs:
           GH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
           REPO: ${{ github.repository }}
           SERVER_URL: ${{ github.server_url }}
+          # The evidence lives on the branch being published, which is not
+          # always main — v2 releases are cut from v2 and never merge to main.
+          BRANCH: ${{ github.ref_name }}
         run: |
           set -uo pipefail
           VERSION=$(node -p "require('./packages/wallet-sdk/package.json').version")
@@ -238,7 +241,7 @@ jobs:
 
           # Metadata + Test Execution Summary (everything before "## Results by File").
           SUMMARY=$(awk '/^## Release Metadata/{f=1} /^## Results by File/{f=0} f' "${EVIDENCE}")
-          LINK="${SERVER_URL}/${REPO}/blob/main/${EVIDENCE}"
+          LINK="${SERVER_URL}/${REPO}/blob/${BRANCH}/${EVIDENCE}"
 
           {
             gh release view "${TAG}" --json body -q .body
