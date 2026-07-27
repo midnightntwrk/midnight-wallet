@@ -4809,10 +4809,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"bn.js@npm:^4.12.3":
-  version: 4.12.4
-  resolution: "bn.js@npm:4.12.4"
-  checksum: 10c0/27e773799df0701b4da72f9b18440afb6867c8e95b44dc1df91a03229f2f11429040faf292aeed08db699885252a823c32215daaf6917750649efb3e689695e8
+"bn.js@npm:^5.0.0":
+  version: 5.2.5
+  resolution: "bn.js@npm:5.2.5"
+  checksum: 10c0/4c47bcb261950086a9d5d311bea97197b5950703e0a80caf6e226f3bb049954a864c80b0fca7f70149c74c2e255cb4a63d0da2c425d7b15f9051a042a4e12095
   languageName: node
   linkType: hard
 
