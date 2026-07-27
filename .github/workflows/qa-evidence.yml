@@ -255,24 +255,36 @@ jobs:
           UNDEPLOYED_LABEL: ${{ inputs.undeployed_suite_label }}
           REMOTE_LABEL: ${{ inputs.remote_suite_label }}
           REMOTE_LABEL_EXTRA: ${{ inputs.remote_suite_label_extra }}
+          # Each suite's real exit status. Vitest's JSON reporter cannot express
+          # an unhandled error, so a crashed run still reports `success: true`
+          # with zero failing tests -- without these the evidence would render a
+          # crashed release run as a pass.
+          UNDEPLOYED_OUTCOME: ${{ steps.undeployed.outcome }}
+          REMOTE_OUTCOME: ${{ steps.remote.outcome }}
+          REMOTE_EXTRA_OUTCOME: ${{ steps.remote_extra.outcome }}
         run: |
           set -euo pipefail
           NODE_TAG=$(grep -oE 'midnight-node:[^"'"'"' ]+' infra/compose/docker-compose-dynamic.yml | head -n1 | cut -d: -f2 || echo "n/a")
 
-          # Build the run-spec argument list only for suites that actually produced a report.
+          # Build the run-spec argument list only for suites that actually produced a
+          # report. OUTCOMES stays positionally aligned with SPECS.
           SPECS=()
           NETWORKS=()
+          OUTCOMES=()
           if [ -f packages/e2e-tests/reports/undeployed.json ]; then
             SPECS+=("undeployed:${UNDEPLOYED_LABEL}:packages/e2e-tests/reports/undeployed.json")
             NETWORKS+=("undeployed")
+            OUTCOMES+=("${UNDEPLOYED_OUTCOME}")
           fi
           if [ -f packages/e2e-tests/reports/remote-smoke.json ]; then
             SPECS+=("${NETWORK}:${REMOTE_LABEL}:packages/e2e-tests/reports/remote-smoke.json")
             NETWORKS+=("${NETWORK}")
+            OUTCOMES+=("${REMOTE_OUTCOME}")
           fi
           if [ -f packages/e2e-tests/reports/remote-extra.json ]; then
             SPECS+=("${NETWORK_EXTRA}:${REMOTE_LABEL_EXTRA}:packages/e2e-tests/reports/remote-extra.json")
             NETWORKS+=("${NETWORK_EXTRA}")
+            OUTCOMES+=("${REMOTE_EXTRA_OUTCOME}")
           fi
           if [ ${#SPECS[@]} -eq 0 ]; then
             echo "::error::No test reports were produced — nothing to generate."
@@ -282,11 +294,14 @@ jobs:
           # character of IFS — so build the ", " separated list explicitly.
           NETWORKS_CSV=$(printf '%s, ' "${NETWORKS[@]}")
           NETWORKS_CSV="${NETWORKS_CSV%, }"
+          OUTCOMES_CSV=$(printf '%s,' "${OUTCOMES[@]}")
+          OUTCOMES_CSV="${OUTCOMES_CSV%,}"
 
           node packages/e2e-tests/scripts/generate-evidence.mjs "${SPECS[@]}" \
             --version "${VERSION}" \
             --networks "${NETWORKS_CSV}" \
             --node-version "${NODE_TAG}" \
+            --outcomes "${OUTCOMES_CSV}" \
             ${QA_CONTACT:+--qa-contact "${QA_CONTACT}"}
 
       - name: Open evidence sign-off PR
