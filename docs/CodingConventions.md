@@ -377,13 +377,13 @@ Effect.gen(function* () {
 // Both run concurrently
 Effect.all([fetchA(), fetchB()], { concurrency: 'unbounded' });
 
-// Or with Do notation for named results
-pipe(
-  Effect.Do,
-  Effect.bind('a', () => fetchA()), // starts immediately
-  Effect.bind('b', () => fetchB()), // starts immediately (parallel)
-);
+// Object form for named results — also concurrent
+Effect.all({ a: fetchA(), b: fetchB() }, { concurrency: 'unbounded' }); // → { a, b }
 ```
+
+> Note: `Effect.Do` + `Effect.bind` is **sequential** (do-notation / monadic sequencing) — each `bind` waits for the
+> previous one, exactly like the `Effect.gen` example above. It does not run in parallel; reach for `Effect.all` when
+> you want concurrency.
 
 **Rule**: Use parallel execution when operations don't depend on each other's results.
 
