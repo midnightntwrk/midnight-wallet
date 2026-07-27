@@ -77,6 +77,9 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
       key: Schema.String,
       value: Schema.Struct({ nullifier: Schema.String, commitment: Schema.String }),
     }),
+    // Legacy shielded@1.0.0 embedded the tx history here; 2.0.0+ omit it. Optional so both round-trip:
+    // present -> preserved on restore and re-emitted; absent -> never written.
+    txHistory: Schema.optional(Schema.Array(Schema.String)),
   });
 
   type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
@@ -89,6 +92,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         networkId: w.networkId,
         offset: w.progress?.appliedIndex,
         coinHashes: w.coinHashes,
+        txHistory: w.legacyTxHistory,
       });
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
@@ -112,6 +116,10 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
             },
             snapshot.protocolVersion,
             snapshot.networkId,
+          ).pipe(
+            Either.map((wallet) =>
+              snapshot.txHistory !== undefined ? { ...wallet, legacyTxHistory: snapshot.txHistory } : wallet,
+            ),
           ),
         ),
       );
