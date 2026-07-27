@@ -43,7 +43,7 @@
     "protobufjs": "^8.0.0",
     "flatted": "^3.4.2",
     "immutable": "^5.0.0",
-    "picomatch@npm:^2.3.1": "^2.3.2",
+    "picomatch@npm:^2.3.1": "^4.0.0",
     "picomatch@npm:^4.0.2": "^4.0.4",
     "picomatch@npm:^4.0.3": "^4.0.4",
     "rollup": "^4.60.2",
