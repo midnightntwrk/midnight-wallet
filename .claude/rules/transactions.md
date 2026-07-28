@@ -16,8 +16,10 @@ When building or inspecting transactions, consult the spec — don't guess proto
 
 ## Type and spec sources
 
-- **Ledger types**: `node_modules/@midnight-ntwrk/ledger-v8/ledger-v8.d.ts` — `Transaction`, `Intent`, `ZswapOffer`,
-  `DustActions`, etc.
+- **Ledger types**: `node_modules/@midnight*ntwrk/ledger-v*/*.d.ts` — `Transaction`, `Intent`, `ZswapOffer`,
+  `DustActions`, etc. Both the scope and the major version move, so glob rather than hardcode: upstream publishes under
+  `@midnight-ntwrk` (dashed, current) and `@midnightntwrk` (dashless, where it's heading), and the ledger major is part
+  of the package name. Check the depending package's `package.json` for what's actually installed.
 - **Ledger spec** (midnight-ledger repo, `spec/`): `intents-transactions.md` (structure, intents, segments, binding),
   `zswap.md` (shielded protocol), `dust.md` (fee mechanics), `night.md` (unshielded), `cost-model.md` (fees).
 - **Wallet spec** (in-repo): `docs/spec/Specification.md` — transaction lifecycle (pending → confirmed →
