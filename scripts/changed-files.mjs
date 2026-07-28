@@ -15,13 +15,26 @@
 //      the right semantics for "format what I'm about to commit".
 // `--affected` IS the right fit for package-level tasks — see lint:changed.
 import { execFileSync } from 'node:child_process';
+import { lstatSync } from 'node:fs';
 
 const git = (args) => execFileSync('git', args, { encoding: 'utf8' }).split('\n').filter(Boolean);
+
+// Skip symlinks: prettier/eslint throw on them ("Explicitly specified pattern … is a symbolic
+// link"), and a symlink has no content of its own to format — its target, if tracked, is
+// handled on its own. Tool-managed skills (e.g. .agents/ + .claude/skills/<name> symlinks) are
+// a common source of these in an otherwise-clean tree.
+const isRealFile = (file) => {
+  try {
+    return !lstatSync(file).isSymbolicLink();
+  } catch {
+    return false; // vanished between git listing and stat — nothing to format
+  }
+};
 
 const files = [
   ...git(['diff', '--name-only', '--diff-filter=ACMR', 'HEAD']),
   ...git(['ls-files', '--others', '--exclude-standard']),
-];
+].filter(isRealFile);
 
 if (files.length > 0) {
   process.stdout.write(files.join('\n') + '\n');
