@@ -1246,15 +1246,17 @@ export class WalletFacade {
       throw Error('At least one shielded or unshielded swap is required.');
     }
 
-    const shieldedTx =
-      hasShieldedPart && shieldedInputs !== undefined
-        ? await this.shielded.initSwap(shieldedSecretKeys, shieldedInputs, shieldedOutputs)
-        : undefined;
+    // Build each leg whenever its part is present — a leg may be all give (inputs, no outputs) or all
+    // want (outputs, no inputs). Gating on inputs alone dropped the want-only counter-leg of a mixed
+    // swap, silently returning a one-legged transaction (issue #291 / #554). The underlying initSwaps
+    // accept an empty input set and build an output-only offer.
+    const shieldedTx = hasShieldedPart
+      ? await this.shielded.initSwap(shieldedSecretKeys, shieldedInputs ?? {}, shieldedOutputs)
+      : undefined;
 
-    const unshieldedTx =
-      hasUnshieldedPart && unshieldedInputs !== undefined
-        ? await this.unshielded.initSwap(unshieldedInputs, unshieldedOutputs, ttl)
-        : undefined;
+    const unshieldedTx = hasUnshieldedPart
+      ? await this.unshielded.initSwap(unshieldedInputs ?? {}, unshieldedOutputs, ttl)
+      : undefined;
 
     const combinedTx = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx);
 
