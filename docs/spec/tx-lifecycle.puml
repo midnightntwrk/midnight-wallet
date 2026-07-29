@@ -1,0 +1,30 @@
+@startuml
+
+'skinparam linetype polyline
+skinparam nodesep 100
+skinparam ranksep 100
+
+state confirmed as "Confirmed" {
+  state success as "Success"
+  state partialSuccess as "Partial Success"
+  state failure as "Failure"
+}
+state pending as "Pending"
+
+state final as "Final" {
+  state successF as "Success"
+  state partialSuccessF as "Partial Success"
+  state failureF as "Failure"
+}
+
+state rejected as "Rejected"
+
+[*] --> pending : spend | watch_for
+[*] --> confirmed : apply
+pending --> confirmed : apply
+confirmed --> final : finalize
+confirmed --> pending : rollback
+pending ---> rejected : discard
+confirmed --> rejected : discard
+
+@enduml

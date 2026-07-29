@@ -29,8 +29,7 @@ type CompositeDerivationResult<T extends readonly Role[]> =
   | { readonly type: 'keysDerived'; readonly keys: Record<T[number], Uint8Array> }
   | { readonly type: 'keyOutOfBounds'; readonly roles: readonly Role[] };
 type HDWalletResult =
-  | { readonly type: 'seedOk'; readonly hdWallet: HDWallet }
-  | { readonly type: 'seedError'; readonly error: unknown };
+  { readonly type: 'seedOk'; readonly hdWallet: HDWallet } | { readonly type: 'seedError'; readonly error: unknown };
 
 const PURPOSE = 44;
 const COIN_TYPE = 2400;

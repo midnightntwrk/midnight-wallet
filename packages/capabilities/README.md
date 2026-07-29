@@ -87,9 +87,7 @@ const recipe = getBalanceRecipe({
 import { getBalanceRecipe, InsufficientFundsError } from '@midnightntwrk/wallet-sdk-capabilities';
 
 try {
-  const recipe = getBalanceRecipe({
-    /* ... */
-  });
+  const recipe = getBalanceRecipe({/* ... */});
 } catch (error) {
   if (error instanceof InsufficientFundsError) {
     console.log(`Cannot balance: insufficient ${error.tokenType}`);

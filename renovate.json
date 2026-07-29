@@ -7,6 +7,7 @@
   "dependencyDashboard": true,
   "semanticCommits": "enabled",
   "rebaseWhen": "conflicted",
+  "minimumReleaseAge": "7 days",
   "hostRules": [
     {
       "hostType": "npm",
@@ -16,17 +17,16 @@
   ],
   "packageRules": [
     {
-      "matchManagers": ["npm"],
-      "enabled": true
+      "groupName": "All dependencies (non-major)",
+      "matchUpdateTypes": ["patch", "minor"]
+    },
+    {
+      "groupName": "All dependencies (major)",
+      "matchUpdateTypes": ["major"]
     },
     {
       "groupName": "Midnight libraries and docker images",
-      "matchPackageNames": ["@midnight-ntwrk/**", "ghcr.io/midnight-ntwrk/**"]
-    },
-    {
-      "groupName": "devDependencies (non-major)",
-      "matchDepTypes": ["devDependencies"],
-      "matchUpdateTypes": ["patch", "minor"]
+      "matchPackageNames": ["@midnightntwrk/**", "@midnight-ntwrk/**", "ghcr.io/midnight-ntwrk/**"]
     }
   ]
 }
