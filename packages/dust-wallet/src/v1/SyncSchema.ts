@@ -23,7 +23,7 @@ import {
   dustNullifier,
   type TransactionHash,
   LedgerParameters,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v9';
 import { Uint8ArraySchema } from './Serialization.js';
 import { type DustGenerationInfo } from './types/index.js';
 import { type PublicKey } from './CoreWallet.js';

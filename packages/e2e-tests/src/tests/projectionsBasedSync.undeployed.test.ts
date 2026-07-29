@@ -14,7 +14,7 @@ import { describe, test, expect } from 'vitest';
 import * as rx from 'rxjs';
 import { Array as Arr } from 'effect';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { type CombinedTokenTransfer, type FacadeState, type UtxoWithMeta } from '@midnightntwrk/wallet-sdk-facade';
@@ -197,9 +197,7 @@ describe('Projections-based synchronisation model', () => {
       },
       { ttl },
     );
-    const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
-      funded.unshieldedKeystore.signData(payload),
-    );
+    const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
     const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
     const txId = await funded.wallet.submitTransaction(finalizedTx);
     logger.info('Transaction id: ' + txId);
@@ -236,7 +234,7 @@ describe('Projections-based synchronisation model', () => {
     const dustRegistrationRecipe = await receiver.wallet.registerNightUtxosForDustGeneration(
       nightUtxos,
       receiver.unshieldedKeystore.getPublicKey(),
-      (payload) => receiver.unshieldedKeystore.signData(payload),
+      receiver.unshieldedKeystore.signDataAsync,
     );
 
     const finalizedDustTx = await receiver.wallet.finalizeRecipe(dustRegistrationRecipe);

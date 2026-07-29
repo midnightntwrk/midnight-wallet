@@ -15,7 +15,7 @@ import {
   type DustStateChanges,
   type FinalizedTransaction,
   LedgerParameters,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Duration, Effect, Exit, Ref, Scope, Stream, SubscriptionRef, TestClock, TestContext } from 'effect';
 import { describe, expect, it } from 'vitest';
