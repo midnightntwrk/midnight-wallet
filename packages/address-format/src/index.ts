@@ -326,6 +326,10 @@ export class DustAddress {
     return ScaleBigInt.encode(this.data);
   }
 
+  get hexString(): string {
+    return this.serialize().toString('hex');
+  }
+
   equals(other: bigint): boolean;
   equals(other: DustAddress): boolean;
   equals(other: bigint | DustAddress): boolean {

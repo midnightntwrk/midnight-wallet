@@ -36,7 +36,7 @@
     "@midnightntwrk/wallet-sdk-capabilities": "4.0.0-beta.2",
     "@midnightntwrk/wallet-sdk-indexer-client": "1.3.0-beta.1",
     "@midnightntwrk/wallet-sdk-runtime": "1.0.6-beta.0",
-    "@midnightntwrk/wallet-sdk-utilities": "1.2.0",
+    "@midnightntwrk/wallet-sdk-utilities": "1.2.1",
     "effect": "^3.19.19",
     "rxjs": "^7.8.2"
   },
