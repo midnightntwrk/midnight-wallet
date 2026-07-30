@@ -13,20 +13,15 @@
 import { Query } from '../../effect/index.js';
 import { gql } from '../generated/index.js';
 
-export const BlockHash = Query.make(
-  'BlockHash',
+export const DustCommitmentMerkleTreeUpdate = Query.make(
+  'DustCommitmentMerkleTreeUpdate',
   gql(`
-    query BlockHash($offset: BlockOffset) {
-      block(offset: $offset) {
-        height
-        hash
-        ledgerParameters
-        timestamp
-        zswapEndIndex
-        dustCommitmentEndIndex
-        dustGenerationEndIndex
-        dustCommitmentMerkleTreeRoot
-        dustGenerationMerkleTreeRoot
+    query DustCommitmentMerkleTreeUpdate($startIndex: Int!, $endIndex: Int!) {
+      dustCommitmentMerkleTreeUpdate(startIndex: $startIndex, endIndex: $endIndex) {
+        startIndex
+        endIndex
+        update
+        protocolVersion
       }
     }
   `),

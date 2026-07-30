@@ -10,7 +10,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, SubscriptionRef, Stream, pipe, Scope, Sink, Console, Duration, Schedule, Array as Arr } from 'effect';
+import {
+  Effect,
+  SubscriptionRef,
+  Stream,
+  pipe,
+  Scope,
+  Sink,
+  Console,
+  Duration,
+  Schedule,
+  Array as Arr,
+  Ref,
+} from 'effect';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import {
   type DustSecretKey,
@@ -31,9 +43,14 @@ import {
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
-import { type BlockData, type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
+import { type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
+import { type BlockData } from './SyncSchema.js';
 import { type SimulatorState } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { type CoinsAndBalancesCapability, type CoinSelection } from './CoinsAndBalances.js';
+import {
+  type CoinsAndBalancesCapability,
+  type CoinSelection,
+  type UtxoWithFullDustDetails,
+} from './CoinsAndBalances.js';
 import { type NightUtxoSplitForDustRegistration, type TransactingCapability } from './Transacting.js';
 import { type CoreWallet } from './CoreWallet.js';
 import { type SerializationCapability } from './Serialization.js';
@@ -97,6 +114,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   readonly #txHistoryPermits = Effect.makeSemaphore(8).pipe(Effect.runSync);
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
+  #syncLock: Ref.Ref<boolean>;
 
   constructor(
     scope: Scope.Scope,
@@ -106,6 +124,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     this.#scope = scope;
     this.#context = context;
     this.#v1Context = v1Context;
+    this.#syncLock = Effect.runSync(Ref.make(false));
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
         context.stateRef.changes.pipe(
@@ -129,70 +148,6 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
 
   startSyncInBackground(startAux: TStartAux): Effect.Effect<void> {
     return this.startSync(startAux).pipe(
-      Stream.runScoped(Sink.drain),
-      Effect.forkScoped,
-      Effect.provideService(Scope.Scope, this.#scope),
-    );
-  }
-
-  startSync(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
-    return pipe(
-      SubscriptionRef.get(this.#context.stateRef),
-      Stream.fromEffect,
-      Stream.flatMap((state) => this.#v1Context.syncService.updates(state, startAux)),
-      Stream.mapEffect((update) =>
-        SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
-          Effect.try({
-            try: () => {
-              const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(state, update);
-              return [changesResult, newState] as const;
-            },
-            catch: (err) =>
-              new OtherWalletError({
-                message: 'Error while applying sync update',
-                cause: err,
-              }),
-          }),
-        ).pipe(
-          Effect.flatMap(({ changes, protocolVersion }) =>
-            // Skip the tx-history fork entirely when there are no changes.
-            // Forking unconditionally allocates a fiber per apply call (one
-            // for every batch the sync emits, even the all-progress ones),
-            // which adds up fast during catch-up.
-            changes.length === 0
-              ? Effect.void
-              : pipe(
-                  Effect.forEach(
-                    changes,
-                    (change) =>
-                      pipe(
-                        this.#txHistoryPermits.withPermits(1)(
-                          pipe(
-                            this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
-                            Effect.flatMap((metadata) =>
-                              this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
-                            ),
-                          ),
-                        ),
-                        Effect.catchAllCause((cause) =>
-                          // A sustained indexer outage (longer than getTransactionDetails' retry window) still lands
-                          // here. applyUpdate has already advanced appliedIndex, so this change.source won't be
-                          // re-processed — the dust section is permanently lost. Surface that as a structured error
-                          // carrying the tx hash, not a silent Console.error defect.
-                          Effect.logError(cause, `Failed to record dust tx-history section for ${change.source}`),
-                        ),
-                      ),
-                    // `concurrency` only bounds fiber creation within this one batch; the real cap on simultaneous
-                    // indexer queries is the variant-wide semaphore acquired around each lookup above.
-                    { discard: true, concurrency: 8 },
-                  ),
-                  Effect.forkScoped,
-                ),
-          ),
-          Effect.provideService(Scope.Scope, this.#scope),
-        ),
-      ),
-      Stream.tapError((error) => Console.error(error)),
       Stream.retry(
         pipe(
           Schedule.exponential(Duration.seconds(1), 2),
@@ -205,6 +160,84 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
           }),
         ),
       ),
+      Stream.runScoped(Sink.drain),
+      Effect.forkScoped,
+      Effect.provideService(Scope.Scope, this.#scope),
+    );
+  }
+
+  sync(startAux: TStartAux): Effect.Effect<void, WalletError> {
+    return this.startSync(startAux).pipe(Stream.runScoped(Sink.drain), Effect.scoped);
+  }
+
+  startSync(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
+    return pipe(
+      Ref.modify(this.#syncLock, (isLocked) => [!isLocked, true] as const),
+      Stream.fromEffect,
+      Stream.flatMap((acquired) => {
+        if (!acquired) {
+          return Stream.empty;
+        }
+        return pipe(
+          SubscriptionRef.get(this.#context.stateRef),
+          Stream.fromEffect,
+          Stream.flatMap((state) => this.#v1Context.syncService.updates(state, startAux)),
+          Stream.mapEffect((update) =>
+            SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
+              Effect.try({
+                try: () => {
+                  const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(state, update);
+                  return [changesResult, newState] as const;
+                },
+                catch: (err) =>
+                  new OtherWalletError({
+                    message: 'Error while applying sync update',
+                    cause: err,
+                  }),
+              }),
+            ).pipe(
+              Effect.flatMap(({ changes, protocolVersion }) =>
+                // Skip the tx-history fork entirely when there are no changes.
+                // Forking unconditionally allocates a fiber per apply call (one
+                // for every batch the sync emits, even the all-progress ones),
+                // which adds up fast during catch-up.
+                changes.length === 0
+                  ? Effect.void
+                  : pipe(
+                      Effect.forEach(
+                        changes,
+                        (change) =>
+                          pipe(
+                            this.#txHistoryPermits.withPermits(1)(
+                              pipe(
+                                this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
+                                Effect.flatMap((metadata) =>
+                                  this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                                ),
+                              ),
+                            ),
+                            Effect.catchAllCause((cause) =>
+                              // A sustained indexer outage (longer than getTransactionDetails' retry window) still lands
+                              // here. applyUpdate has already advanced appliedIndex, so this change.source won't be
+                              // re-processed — the dust section is permanently lost. Surface that as a structured error
+                              // carrying the tx hash, not a silent Console.error defect.
+                              Effect.logError(cause, `Failed to record dust tx-history section for ${change.source}`),
+                            ),
+                          ),
+                        // `concurrency` only bounds fiber creation within this one batch; the real cap on simultaneous
+                        // indexer queries is the variant-wide semaphore acquired around each lookup above.
+                        { discard: true, concurrency: 8 },
+                      ),
+                      Effect.forkScoped,
+                    ),
+              ),
+              Effect.provideService(Scope.Scope, this.#scope),
+            ),
+          ),
+          Stream.tapError((error) => Console.error(error)),
+          Stream.ensuring(Ref.set(this.#syncLock, false)),
+        );
+      }),
     );
   }
 
@@ -218,19 +251,29 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
       return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
     }
-    return Effect.gen(this, function* () {
-      const currentState = yield* SubscriptionRef.get(this.#context.stateRef);
-      const blockData = yield* this.#v1Context.syncService.blockData();
-      const resolvedTime = currentTime ?? blockData.timestamp;
-      const utxosWithDustValue = this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(
-        currentState,
-        nightUtxos,
-        resolvedTime,
-      );
-      return yield* this.#v1Context.transactingCapability
-        .createDustGenerationTransaction(resolvedTime, ttl, utxosWithDustValue, nightVerifyingKey, dustReceiverAddress)
-        .pipe(EitherOps.toEffect);
-    });
+    return Effect.Do.pipe(
+      Effect.bind('currentState', () => SubscriptionRef.get(this.#context.stateRef)),
+      Effect.bind('blockData', () => this.#v1Context.syncService.blockData()),
+      Effect.let('resolvedTime', ({ blockData }): Date => currentTime ?? blockData.timestamp),
+      Effect.let('utxosWithDustValue', ({ currentState, resolvedTime }): ReadonlyArray<UtxoWithFullDustDetails> => {
+        return this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(
+          currentState,
+          nightUtxos,
+          resolvedTime,
+        );
+      }),
+      Effect.flatMap(({ utxosWithDustValue, resolvedTime }) => {
+        return this.#v1Context.transactingCapability
+          .createDustGenerationTransaction(
+            resolvedTime,
+            ttl,
+            utxosWithDustValue,
+            nightVerifyingKey,
+            dustReceiverAddress,
+          )
+          .pipe(EitherOps.toEffect);
+      }),
+    );
   }
 
   splitNightUtxosForDustRegistration(

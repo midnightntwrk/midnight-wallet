@@ -51,6 +51,11 @@ const syncServiceOf = (batches: readonly FakeSyncUpdate[]): SyncService<CoreWall
       height: 1,
       ledgerParameters: LedgerParameters.initialParameters(),
       timestamp: new Date(0),
+      zswapEndIndex: 0,
+      dustCommitmentEndIndex: 0,
+      dustGenerationEndIndex: 0,
+      dustCommitmentMerkleTreeRoot: 'dust-commitment-root',
+      dustGenerationMerkleTreeRoot: 'dust-generation-root',
     }),
 });
 

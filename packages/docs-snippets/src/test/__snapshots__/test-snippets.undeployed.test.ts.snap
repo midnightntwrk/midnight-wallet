@@ -34,6 +34,198 @@ Generating dust after designation: true
 ]
 `;
 
+exports[`Snippet outputs > with network > should output the correct result for 'dust-fast-sync' 1`] = `
+[
+  "Dust state after projections-based fast sync:
+{
+  totalCoins: [
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 24034453359289059849897357334564325073097009103426486395115878951231362120630n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '10ba51819808fc09897af46574aa37b3fee89f7dc0dde00cae2924d09d3c33b5',
+        mtIndex: 1n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 31442200660458619681158617659182332215873696935192568222776955722661365985367n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'adde850d59eb29dfe814ef592dcbdb5589841a219d37d9adbfccef7049323761',
+        mtIndex: 4n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 32085853901361226275975148233968772158240692306844594632853942642512958619094n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'adf6979ee2caf3662dabe4588eb2311de04e97293c6f96e366bd4a67034d87e7',
+        mtIndex: 0n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 50586679687627173730485799926282314706847051589385752828012176203617501615946n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '35c11fc00b7f242d172ebade4edbb1d123134b444f6562ecfa80feb76eda126a',
+        mtIndex: 2n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 39236833992364654568272956423128803082965139162007277965439978026566466488297n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '15b3234d60a4ed3adefcc87dd4673c738a40455848a52787079dabddc072cbde',
+        mtIndex: 3n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    }
+  ],
+  availableCoins: [
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 24034453359289059849897357334564325073097009103426486395115878951231362120630n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '10ba51819808fc09897af46574aa37b3fee89f7dc0dde00cae2924d09d3c33b5',
+        mtIndex: 1n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 31442200660458619681158617659182332215873696935192568222776955722661365985367n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'adde850d59eb29dfe814ef592dcbdb5589841a219d37d9adbfccef7049323761',
+        mtIndex: 4n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 32085853901361226275975148233968772158240692306844594632853942642512958619094n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'adf6979ee2caf3662dabe4588eb2311de04e97293c6f96e366bd4a67034d87e7',
+        mtIndex: 0n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 50586679687627173730485799926282314706847051589385752828012176203617501615946n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '35c11fc00b7f242d172ebade4edbb1d123134b444f6562ecfa80feb76eda126a',
+        mtIndex: 2n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 39236833992364654568272956423128803082965139162007277965439978026566466488297n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '15b3234d60a4ed3adefcc87dd4673c738a40455848a52787079dabddc072cbde',
+        mtIndex: 3n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    }
+  ],
+  pendingCoins: [],
+  progress: {
+    appliedIndex: 133n,
+    highestRelevantWalletIndex: 133n,
+    highestIndex: 1n,
+    highestRelevantIndex: 0n,
+    isConnected: true,
+    isStrictlyComplete: [Function: isStrictlyComplete],
+    isCompleteWithin: [Function: isCompleteWithin]
+  },
+  publicKey: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+  address: DustAddress {
+    data: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+    Symbol(MidnightBech32m): Bech32mCodec {
+      type: 'dust',
+      dataToBytes: [Function (anonymous)],
+      dataFromBytes: [Function (anonymous)]
+    }
+  }
+}
+",
+]
+`;
+
 exports[`Snippet outputs > with network > should output the correct result for 'dust-sponsorship' 1`] = `
 [
   "User received night for main transaction 1000000000n
