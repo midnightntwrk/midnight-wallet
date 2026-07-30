@@ -1,0 +1,33 @@
+{
+  "name": "@midnightntwrk/wallet-sdk-spec-reference",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "author": "Midnight Foundation",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/midnightntwrk/midnight-wallet.git",
+    "directory": "packages/spec-reference"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/ledger-v8": "^8.1.0",
+    "@noble/curves": "^1.8.1",
+    "@scure/base": "^2.0.0",
+    "@subsquid/scale-codec": "^4.0.1",
+    "commander": "^14.0.0"
+  },
+  "devDependencies": {
+    "tsx": "4.22.4"
+  },
+  "scripts": {
+    "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
+    "test": "vitest run",
+    "lint": "eslint --max-warnings 0",
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "gen": "tsx ./src/cli.ts gen --dir ./test-vectors",
+    "find-seeds-esk": "tsx ./src/cli.ts find-seeds --key shield-esk",
+    "find-seeds-dust": "tsx ./src/cli.ts find-seeds --key dust-pk --number 3"
+  }
+}

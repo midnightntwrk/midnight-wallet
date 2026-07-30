@@ -546,8 +546,7 @@ declare namespace V1Builder {
     TStartAux = object,
   > = {
     [K in keyof FullBuildState<never, never, never, never, never, never>]?:
-      | FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux>[K]
-      | undefined;
+      FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux>[K] | undefined;
   };
 
   /** Utility interface that manages the type variance of {@link V1Builder}. */

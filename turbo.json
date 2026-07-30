@@ -129,6 +129,9 @@
       "outputs": [],
       "outputLogs": "new-only"
     },
+    "schema:sync": {
+      "cache": false
+    },
     "//#format:root": {
       "cache": false,
       "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore.root"],

@@ -39,12 +39,19 @@ import * as PendingTransactions from '../pendingTransactions.js';
 import * as fc from 'fast-check';
 import { type Query, QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import {
-  type TransactionResult,
   TransactionStatus,
   type TransactionStatusQuery,
   type TransactionStatusQueryVariables,
 } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+
+// indexer-client's codegen uses the operation-scoped `client` preset, which inlines
+// object types rather than emitting them by name — so there is no standalone
+// `TransactionResult` export. Derive its shape from the operation type instead.
+type TransactionResult = Omit<
+  Extract<TransactionStatusQuery['transactions'][number], { __typename: 'RegularTransaction' }>['transactionResult'],
+  '__typename'
+>;
 
 fc.configureGlobal({ numRuns: 5 });
 
