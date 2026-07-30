@@ -83,6 +83,7 @@ Contains working code examples for common wallet operations:
 - `swap.ts` - Token swap (intent creation)
 - `balancing.ts` - Transaction balancing
 - `initialization.ts` - Wallet initialization
+- `dust-fast-sync.ts` - Wallet initialization with projections-based dust fast sync
 
 **IMPORTANT:** Always refer to docs-snippets for API usage patterns when implementing new features.
 
