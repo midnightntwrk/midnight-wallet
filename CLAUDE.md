@@ -5,9 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Overview
 
 The Midnight Wallet SDK is a TypeScript implementation of the
-[Midnight Wallet Specification](https://github.com/midnightntwrk/midnight-architecture/blob/main/components/WalletEngine/Specification.md).
-It provides key generation, address formatting, transaction building, state syncing with the indexer, and testing
-utilities for the Midnight privacy-focused blockchain.
+[Midnight Wallet Specification](docs/spec/Specification.md). It provides key generation, address formatting, transaction
+building, state syncing with the indexer, and testing utilities for the Midnight privacy-focused blockchain. Both the
+specification and its executable [reference implementation](packages/spec-reference) — which generates and verifies the
+spec's test vectors — live in this repository, at `docs/spec/` and `packages/spec-reference/`.
 
 ## Claude Code Settings
 
@@ -20,8 +21,7 @@ When working on wallet functionality, always consult these specifications:
 
 ### Wallet Specification
 
-**Repository:** [midnight-architecture](https://github.com/midnightntwrk/midnight-architecture) **Path:**
-`components/WalletEngine/Specification.md`
+**Path:** [`docs/spec/Specification.md`](docs/spec/Specification.md) (now maintained in this repository)
 
 Key sections:
 
@@ -30,6 +30,14 @@ Key sections:
 - Balance types: available, pending, total
 - State operations: apply_transaction, finalize_transaction, discard_transaction, spend
 - Synchronization process and indexing services
+
+### Wallet Reference Implementation
+
+**Path:** [`packages/spec-reference/`](packages/spec-reference) (in this repository)
+
+The executable reference for key derivation and address formatting. It generates and verifies the spec's test vectors
+(`packages/spec-reference/test-vectors/`). After any change to derivation or address formatting, regenerate them with
+`yarn workspace @midnightntwrk/wallet-sdk-spec-reference run gen`.
 
 ### DApp Connector API Specification
 

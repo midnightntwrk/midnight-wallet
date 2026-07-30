@@ -53,6 +53,11 @@ it if it's relevant. Ensure the title is a clear summary of the requirement and 
 - **Coding Standards:** Code must adhere to the coding style guides defined in our documentation
 - **Testing:** New functionality must include corresponding unit tests and integration tests.
 - **Documentation:** Code changes should be accompanied by proposed relevant documentation updates.
+- **Specification parity:** Wallet key derivation and address formatting are governed by the
+  [Wallet Specification](./docs/spec/Specification.md) and its executable
+  [reference implementation](./packages/spec-reference). Changes affecting derivation or address formatting must update
+  the reference and regenerate its [test vectors](./packages/spec-reference/test-vectors) via
+  `yarn workspace @midnightntwrk/wallet-sdk-spec-reference run gen`.
 - **License:** All contributions must be compatible with the project's license. Where possible all files should have
   this license header:
 

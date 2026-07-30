@@ -222,9 +222,8 @@ export const parseArgs = (argv: ReadonlyArray<string>): Either.Either<SyncComman
     return Either.left(`Unknown argument: ${arg}`);
   }, Either.right(empty));
 
-  return Either.map(
-    folded,
-    (acc): SyncCommand => (acc.update ? SyncCommand.Update({ tag: acc.tag }) : SyncCommand.Verify()),
+  return Either.map(folded, (acc): SyncCommand =>
+    acc.update ? SyncCommand.Update({ tag: acc.tag }) : SyncCommand.Verify(),
   );
 };
 
