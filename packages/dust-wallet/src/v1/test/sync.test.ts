@@ -12,6 +12,7 @@
 // limitations under the License.
 import {
   type DustGenerationTreeInsertionPath,
+  DustLocalState,
   DustSecretKey,
   dustFirstNonce,
   dustNullifier,
@@ -28,13 +29,14 @@ import type {
   DustLedgerEventsSubscriptionVariables,
   DustNullifierTransactionsSubscriptionVariables,
 } from '@midnightntwrk/wallet-sdk-indexer-client';
-import { SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { QueryClient, SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Cause, Chunk, Effect, Exit, HashMap, Option, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import {
   createDustUtxoUpdates,
+  doEventlessSync,
   type IndexerSyncService,
   makeDefaultSyncService,
   makeEventLessSyncCapability,
@@ -469,10 +471,10 @@ describe('nullifierPhaseProgress', () => {
 });
 
 describe('V1 projections nullifier resolution loop', () => {
-  // Issue #288 step 3: the wallet re-queries the indexer with the *still-live* nullifiers until a round comes back
-  // empty. Every other test in this file feeds the loop exactly one round, so nothing pins the loop itself. A
-  // 50-deep chain is the ticket's own third test case ("~50 Dust spends from one Night UTXO") and is what catches
-  // the loop re-querying settled nullifiers, running unbounded, or stopping at the first successor.
+  // The wallet re-queries the indexer with the *still-live* nullifiers until a round comes back empty. Every other
+  // test in this file feeds the loop exactly one round, so nothing pins the loop itself. A 50-deep chain — a very
+  // active user making repeated Dust spends from a single Night UTXO — is what catches the loop re-querying
+  // settled nullifiers, running unbounded, or stopping at the first successor.
   const CHAIN_DEPTH = 50;
   const initialParameters = LedgerParameters.initialParameters();
   const backingNight = 'ab'.repeat(32);
@@ -658,12 +660,11 @@ describe('V1 projections nullifier resolution loop', () => {
 });
 
 describe('V1 projections cNight generation discovery', () => {
-  // Issue #288 case 2: "a Dust wallet containing only cNight-based Dust (ideally coming from multiple registrations
-  // and utxos) - this is the case on Mainnet". In the projections model that case lands entirely on
-  // `DustGenerationsSyncUpdate.create`, the counterpart of the spec's `apply_system_transaction`
-  // (docs/spec/Specification.md): a cNight registration becomes an own generation plus the first Dust output of its
-  // chain, and a deregistration carries the dtime for the generation it backs. Nothing exercised this function
-  // before, so registration fan-out — the shape mainnet actually has — was completely unpinned.
+  // A Dust wallet backed only by cNight, coming from multiple registrations and UTXOs, is the shape mainnet
+  // actually has. In the projections model that case lands entirely on `DustGenerationsSyncUpdate.create`, the
+  // counterpart of the spec's `apply_system_transaction` (docs/spec/Specification.md): a cNight registration
+  // becomes an own generation plus the first Dust output of its chain, and a deregistration carries the dtime for
+  // the generation it backs. Nothing exercised this function before, so registration fan-out was fully unpinned.
   type GenerationItem = Extract<DustGenerationsSubscription, { __typename: 'DustGenerationsItem' }>;
   type DtimeUpdateItem = Extract<DustGenerationsSubscription, { __typename: 'DustGenerationDtimeUpdateItem' }>;
 
@@ -802,5 +803,133 @@ describe('V1 projections cNight generation discovery', () => {
     expect(result.generationDtimeUpdates).toHaveLength(0);
     // The capability replays rawUpdates to rebuild the generations Merkle tree, so nothing may be dropped here.
     expect(result.rawUpdates).toEqual(updates);
+  });
+});
+
+describe('V1 projections progress monotonicity', () => {
+  // Sync progress is reported as a single figure that advances as the sync proceeds; a progress figure that goes
+  // *backwards* is a defect regardless of the weighting chosen. This drives the real
+  // `doEventlessSync` (previously untested end-to-end) with a wallet that already holds a Dust UTxO — i.e. the
+  // restored case, which is the only shape where the two `appliedIndex` formulas disagree.
+  //
+  //   emission 1 (Sync.ts:376) = lastSyncedGenerationIndex + lastSyncedCommitmentIndex
+  //                              + nullifiers.size * maxCommitmentTreeIndex
+  //   emission 2 (Sync.ts:406) = maxGeneratingTreeIndex
+  //
+  // Emission 2 drops both the commitment term and the nullifier term. A fresh wallet hides this (its emission 1 is
+  // negative), which is why every existing test misses it.
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const backingNight = 'ab'.repeat(32);
+  // The local commitment tree is already filled to this height, and the block reports the same end index. That
+  // equality is deliberate: it makes the commitment phase short-circuit without a single indexer call, so the sync
+  // runs to completion. Emissions cannot be observed past a producer failure — they are buffered, and the failure
+  // discards the buffer — so the run has to succeed for the reported sequence to be visible at all.
+  const COMMITMENT_END_INDEX = 8;
+  const GENERATION_END_INDEX = 4;
+
+  const latestBlock: BlockData = {
+    height: 100,
+    hash: 'ab'.repeat(32),
+    ledgerParameters: LedgerParameters.initialParameters(),
+    timestamp: new Date(3_000_000),
+    zswapEndIndex: 0,
+    dustCommitmentEndIndex: COMMITMENT_END_INDEX,
+    dustGenerationEndIndex: GENERATION_END_INDEX,
+    dustCommitmentMerkleTreeRoot: '',
+    dustGenerationMerkleTreeRoot: '',
+  };
+
+  const notCalled = (name: string) => (): never => {
+    throw new Error(`${name} must not be called in this scenario`);
+  };
+
+  const qdoFor = (night: string, mtIndex: bigint) => ({
+    initialValue: 1_000_000_000n,
+    owner: secretKey.publicKey,
+    nonce: dustFirstNonce(night, secretKey.publicKey),
+    seq: 0,
+    ctime: new Date(1_000_000),
+    backingNight: night,
+    mtIndex,
+  });
+
+  /**
+   * A wallet as it looks after a restore: its commitment tree is already populated (with other people's commitments,
+   * inserted linearly as the ledger requires) and it tracks one Dust UTXO of its own, so `state.nullifiers` is
+   * non-empty. Both are what make the two progress formulas disagree.
+   */
+  const restoredWallet = () => {
+    const withCommitments = Array.from({ length: COMMITMENT_END_INDEX }).reduce<DustLocalState>(
+      (acc, _, i) =>
+        acc.insertCommitment(BigInt(i), qdoFor(i.toString(16).padStart(2, '0').repeat(32), BigInt(i)), false),
+      new DustLocalState(dustParameters),
+    );
+    const own = qdoFor(backingNight, 4n);
+    return CoreWallet.init(withCommitments.addUtxo(dustNullifier(own, secretKey), own), secretKey, networkId);
+  };
+
+  /** Runs one full projections sync against the stubs and returns every appliedIndex it reported, in order. */
+  const reportedAppliedIndexes = async (): Promise<number[]> => {
+    const state = restoredWallet();
+
+    const indexerSyncService: IndexerSyncService = {
+      blockData: () => Effect.succeed(latestBlock),
+      // No new generations and no spends, so the sync walks straight through to the end.
+      subscribeDustGenerations: () => Stream.empty,
+      subscribeDustNullifierTransactions: () => Stream.empty,
+      // Never reached: the commitment phase short-circuits because the local tree is already filled to the
+      // block's end index. A call here means that short-circuit broke and this is no longer the scenario above.
+      dustCommitmentMerkleTreeUpdate: notCalled('dustCommitmentMerkleTreeUpdate'),
+      connectionLayer: notCalled('connectionLayer'),
+      subscribeWallet: notCalled('subscribeWallet'),
+      queryClient: notCalled('queryClient'),
+    };
+
+    return doEventlessSync(state, secretKey, 7, indexerSyncService).pipe(
+      Stream.filterMap((update) =>
+        update._tag === 'ProgressUpdate' && update.appliedIndex !== undefined
+          ? Option.some(update.appliedIndex)
+          : Option.none(),
+      ),
+      Stream.runCollect,
+      Effect.map(Chunk.toArray),
+      Effect.provideService(QueryClient, { query: notCalled('QueryClient.query') }),
+      Effect.provideService(SubscriptionClient, {
+        subscribe: notCalled('SubscriptionClient.subscribe'),
+        subscribeWithBackpressure: notCalled('SubscriptionClient.subscribeWithBackpressure'),
+      }),
+      Effect.scoped,
+      Effect.runPromise,
+    );
+  };
+
+  it('reports progress four times on a wallet that already tracks a Dust UTXO', async () => {
+    const state = restoredWallet();
+    expect(state.state.nullifiers.size).toBe(1);
+    expect(state.state.commitmentTreeFirstFree).toBe(BigInt(COMMITMENT_END_INDEX));
+
+    // This pins the scenario itself. The known-defect test below is expected to throw, and *any* throw satisfies
+    // it — including the sync quietly reporting nothing at all — so the report count is asserted here instead,
+    // where a broken harness still surfaces as a real failure.
+    expect(await reportedAppliedIndexes()).toHaveLength(4);
+  });
+
+  // KNOWN DEFECT, deliberately left failing. `.fails` inverts the expectation so runs stay green while the defect
+  // is outstanding, without weakening the assertion below.
+  //
+  // The four reports are computed on three different bases, and the first one over-counts: it credits the
+  // already-synced commitment tree, while the two that follow do not count the commitment tree at all. So the
+  // opening report can exceed a later one, and progress visibly jumps backwards. Note this cannot be repaired by
+  // adjusting the second report alone — report 1 already exceeds report 3 — so all four need a common basis.
+  //
+  // Fixing it makes this test *pass*, which makes `.fails` report a failure. That is the intended signal to delete
+  // `.fails` and keep it as an ordinary regression guard.
+  it.fails('never reports an appliedIndex lower than one it already reported', async () => {
+    const appliedIndexes = await reportedAppliedIndexes();
+
+    const regressions = appliedIndexes.flatMap((value, i) =>
+      i > 0 && value < appliedIndexes[i - 1] ? [{ step: i, from: appliedIndexes[i - 1], to: value }] : [],
+    );
+    expect(regressions).toEqual([]);
   });
 });
