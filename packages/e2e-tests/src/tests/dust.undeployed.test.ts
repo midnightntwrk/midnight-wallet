@@ -146,7 +146,7 @@ describe('Dust tests', () => {
   };
 
   test(
-    'Able to register Night tokens for Dust generation after receiving unshielded tokens @healthcheck',
+    'Able to register Night tokens for Dust generation after receiving unshielded tokens',
     async () => {
       await sendAndRegisterNightUtxos();
       const initialWalletState = await receiver.wallet.waitForSyncedState();

@@ -62,7 +62,7 @@ describe('Smoke tests', () => {
   }, 20_000);
 
   test(
-    'Valid transfer of shielded and unshielded token @healthcheck',
+    'Valid transfer of shielded and unshielded token',
     async () => {
       logger.info(`shielded token type: ${shieldedTokenRaw}`);
       logger.info(`unshielded token type: ${unshieldedTokenRaw}`);
