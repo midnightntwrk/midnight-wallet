@@ -256,6 +256,11 @@ describe('Projections-based synchronisation model', () => {
   };
 
   const submitHistoryBuildingTransfer = async (receiverAddress: FacadeState['shielded']['address']) => {
+    // Each transfer spends Dust on its fee, and Dust regenerates per block. Without waiting the second call in the
+    // chain loop has nothing left to balance with.
+    await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+    await fundedEventsSynced.wallet.waitForSyncedState();
+
     const txRecipe = await fundedEventsSynced.wallet.transferTransaction(
       [
         {
