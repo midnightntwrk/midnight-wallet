@@ -265,7 +265,9 @@ export const nullifierPhaseProgress = (
     totalNullifiers * maxCommitmentEndIndex,
   );
 
-const resolveNullifierSpends = (
+// Exported for test: this is the ticket's step 3 ("repeatedly query until the indexer returns empty"), and the
+// only way to exercise the loop past one round is to drive it directly with a stubbed nullifier subscription.
+export const resolveNullifierSpends = (
   initialNullifiers: DustNullifier[],
   initialNewUtxos: DustUtxoMap,
   pendingDust: Map<DustNullifier, Dust>,

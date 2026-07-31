@@ -280,7 +280,9 @@ describe('Projections-based synchronisation model', () => {
   };
 
   test(
-    'Projections-based sync recovers a pre-funded wallet with a multi-spend Dust nullifier chain',
+    // @smoke: this is the only assertion anywhere that the projections sync and the event-based sync
+    // agree on the resulting dust state, so it is the feature's sole PR-lane regression gate.
+    'Projections-based sync recovers a pre-funded wallet with a multi-spend Dust nullifier chain @smoke',
     async () => {
       const receiverState = await receiverEventsSynced.wallet.waitForSyncedState();
       await fundedEventsSynced.wallet.waitForSyncedState();

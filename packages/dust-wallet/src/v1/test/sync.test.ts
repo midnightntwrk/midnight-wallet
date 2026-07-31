@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
+  type DustGenerationTreeInsertionPath,
   DustSecretKey,
   dustFirstNonce,
   dustNullifier,
@@ -18,6 +19,7 @@ import {
   LedgerParameters,
 } from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { BlockHash, DustLedgerEvents, DustNullifierTransactions } from '@midnightntwrk/wallet-sdk-indexer-client';
 import type {
   BlockHashQuery,
@@ -26,20 +28,26 @@ import type {
   DustLedgerEventsSubscriptionVariables,
   DustNullifierTransactionsSubscriptionVariables,
 } from '@midnightntwrk/wallet-sdk-indexer-client';
-import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Cause, Chunk, Effect, Exit, Option, Stream } from 'effect';
+import { Cause, Chunk, Effect, Exit, HashMap, Option, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { CoreWallet } from '../CoreWallet.js';
+import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import {
   createDustUtxoUpdates,
+  type IndexerSyncService,
   makeDefaultSyncService,
   makeEventLessSyncCapability,
   makeIndexerSyncService,
   nullifierPhaseProgress,
+  resolveNullifierSpends,
 } from '../Sync.js';
 import {
+  type BlockData,
+  type DustGenerationsSubscription,
+  DustGenerationsSyncUpdate,
   type DustNullifierTransactionsSubscription,
+  type DustProjectionsUpdate,
   type DustSpendProcessedEvent,
   DustUtxoMap,
   StateUpdate,
@@ -457,5 +465,342 @@ describe('nullifierPhaseProgress', () => {
 
   it('never exceeds the phase ceiling', () => {
     expect(nullifierPhaseProgress(600n, 5, 2, 100)).toBe(500);
+  });
+});
+
+describe('V1 projections nullifier resolution loop', () => {
+  // Issue #288 step 3: the wallet re-queries the indexer with the *still-live* nullifiers until a round comes back
+  // empty. Every other test in this file feeds the loop exactly one round, so nothing pins the loop itself. A
+  // 50-deep chain is the ticket's own third test case ("~50 Dust spends from one Night UTXO") and is what catches
+  // the loop re-querying settled nullifiers, running unbounded, or stopping at the first successor.
+  const CHAIN_DEPTH = 50;
+  const initialParameters = LedgerParameters.initialParameters();
+  const backingNight = 'ab'.repeat(32);
+  const GENESIS_MT_INDEX = 4n;
+  // Successor commitment indices start above GENESIS_MT_INDEX so every qdo in the chain is distinct, which is what
+  // makes each round's nullifier distinct.
+  const firstSuccessorIndex = 10n;
+
+  const latestBlock: BlockData = {
+    height: 100,
+    hash: 'ab'.repeat(32),
+    ledgerParameters: initialParameters,
+    timestamp: new Date(3_000_000),
+    zswapEndIndex: 0,
+    dustCommitmentEndIndex: 4096,
+    dustGenerationEndIndex: 8,
+    dustCommitmentMerkleTreeRoot: '',
+    dustGenerationMerkleTreeRoot: '',
+  };
+
+  const notCalled = (name: string) => (): never => {
+    throw new Error(`${name} must not be called during nullifier resolution`);
+  };
+
+  const spendTransaction = (nullifier: bigint, commitmentIndex: bigint): DustNullifierTransactionsSubscription => ({
+    nullifierLeBytes: '00'.repeat(32),
+    commitmentLeBytes: '00'.repeat(32),
+    transactionId: Number(commitmentIndex),
+    transactionHash: 'ee'.repeat(32),
+    blockHeight: 10,
+    blockHash: 'dd'.repeat(32),
+    transaction: {
+      __typename: 'RegularTransaction',
+      block: { ledgerParameters: initialParameters },
+      id: Number(commitmentIndex),
+      hash: 'ee'.repeat(32),
+      dustLedgerEvents: [
+        {
+          id: 1,
+          maxId: 1,
+          protocolVersion: 1,
+          // Type cast required because: constructing a real ledger Event needs a serialized on-chain event; the
+          // code under test only reads `raw.content`, so a structural fake keeps this test free of live infra.
+          raw: {
+            content: {
+              tag: 'dustSpendProcessed',
+              commitment: commitmentIndex,
+              commitmentIndex,
+              nullifier,
+              vFee: 100n,
+              declaredTime: new Date(2_000_000),
+              blockTime: new Date(2_000_000),
+            } satisfies DustSpendProcessedEvent,
+          } as unknown as LedgerEvent,
+        },
+      ],
+      zswapLedgerEvents: [],
+    },
+  });
+
+  /**
+   * Drives the real loop over a `depth`-long spend chain rooted in a single Night-backed generation. The recording stub
+   * answers each round by spending exactly the nullifiers it was asked for, then reports the chain exhausted; the round
+   * number is `queried.length`, so no mutable counter is needed.
+   */
+  const runChain = async (depth: number) => {
+    const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+    const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const genesisQdo = {
+      initialValue: 1_000_000_000n,
+      owner: secretKey.publicKey,
+      nonce: dustFirstNonce(backingNight, secretKey.publicKey),
+      seq: 0,
+      ctime: new Date(1_000_000),
+      backingNight,
+      mtIndex: GENESIS_MT_INDEX,
+    };
+    const genesisNullifier = dustNullifier(genesisQdo, secretKey);
+    const initialUtxos = DustUtxoMap.create([
+      {
+        dustNullifier: genesisNullifier,
+        genInfo: { value: 5_000_000_000n, owner: secretKey.publicKey, nonce: backingNight, dtime: undefined },
+        generationMtIndex: 0,
+        qdo: genesisQdo,
+        transactionId: 7,
+        transactionHash: 'cd'.repeat(32),
+      },
+    ]);
+
+    const queried: bigint[][] = [];
+    const emitted: DustProjectionsUpdate[] = [];
+
+    const indexerSyncService: IndexerSyncService = {
+      subscribeDustNullifierTransactions: (dustNullifiers) => {
+        queried.push([...dustNullifiers]);
+        return queried.length <= depth
+          ? Stream.fromIterable(
+              dustNullifiers.map((n) => spendTransaction(n, firstSuccessorIndex + BigInt(queried.length - 1))),
+            )
+          : Stream.empty;
+      },
+      // Nothing else belongs in this phase; a call here fails loudly instead of silently widening the test.
+      connectionLayer: notCalled('connectionLayer'),
+      subscribeWallet: notCalled('subscribeWallet'),
+      subscribeDustGenerations: notCalled('subscribeDustGenerations'),
+      dustCommitmentMerkleTreeUpdate: notCalled('dustCommitmentMerkleTreeUpdate'),
+      queryClient: notCalled('queryClient'),
+      blockData: notCalled('blockData'),
+    };
+
+    const unusedSubscriptionClient: SubscriptionClient.Service = {
+      subscribe: notCalled('SubscriptionClient.subscribe'),
+      subscribeWithBackpressure: notCalled('SubscriptionClient.subscribeWithBackpressure'),
+    };
+
+    const noGenerationUpdates: DustGenerationsSyncUpdate = {
+      rawUpdates: [],
+      newGenerations: [],
+      generationDtimeUpdates: [],
+    };
+
+    const { nextUtxos, nextSpentUtxos } = await resolveNullifierSpends(
+      [genesisNullifier],
+      initialUtxos,
+      new Map(),
+      state.state,
+      secretKey,
+      latestBlock,
+      noGenerationUpdates,
+      indexerSyncService,
+      7,
+      {
+        single: (update) => {
+          emitted.push(update);
+          return Promise.resolve();
+        },
+      },
+    ).pipe(Effect.provideService(SubscriptionClient, unusedSubscriptionClient), Effect.scoped, Effect.runPromise);
+
+    return { genesisNullifier, queried, emitted, nextUtxos, nextSpentUtxos };
+  };
+
+  it('re-queries only the still-live nullifier each round and terminates when the chain runs out', async () => {
+    const { genesisNullifier, queried } = await runChain(CHAIN_DEPTH);
+
+    // CHAIN_DEPTH productive rounds, plus the one round that comes back empty and ends the loop.
+    expect(queried).toHaveLength(CHAIN_DEPTH + 1);
+    expect(queried[0]).toEqual([genesisNullifier]);
+    // One nullifier per round: a settled nullifier is never re-sent, so the query never grows with chain depth.
+    expect(queried.map((round) => round.length)).toEqual(new Array(CHAIN_DEPTH + 1).fill(1));
+    // ...and every round asks about a nullifier it has never asked about before.
+    expect(new Set(queried.flat()).size).toBe(CHAIN_DEPTH + 1);
+  });
+
+  it('records every spend and leaves exactly one live UTXO at the chain tip', async () => {
+    const { nextUtxos, nextSpentUtxos } = await runChain(CHAIN_DEPTH);
+
+    expect(HashMap.size(nextSpentUtxos)).toBe(CHAIN_DEPTH);
+    // Spent entries are accumulated alongside the live ones here; pruning is the capability's job, not this loop's.
+    expect(HashMap.size(nextUtxos)).toBe(CHAIN_DEPTH + 1);
+
+    const live = Array.from(HashMap.entries(nextUtxos)).filter(
+      ([nullifier]) => !HashMap.has(nextSpentUtxos, nullifier),
+    );
+    expect(live).toHaveLength(1);
+    expect(live[0][1].qdo.seq).toBe(CHAIN_DEPTH);
+    expect(live[0][1].qdo.mtIndex).toBe(firstSuccessorIndex + BigInt(CHAIN_DEPTH - 1));
+  });
+
+  it('reports progress once per productive round, never going backwards', async () => {
+    const { emitted } = await runChain(CHAIN_DEPTH);
+
+    // The exhausted round finds no fresh UTXO, so it reports nothing.
+    expect(emitted).toHaveLength(CHAIN_DEPTH);
+    const appliedIndexes = emitted.flatMap((update) =>
+      update._tag === 'ProgressUpdate' && update.appliedIndex !== undefined ? [update.appliedIndex] : [],
+    );
+    // Every emission is a ProgressUpdate carrying an appliedIndex — nothing else is reported in this phase.
+    expect(appliedIndexes).toHaveLength(CHAIN_DEPTH);
+    expect(appliedIndexes).toEqual([...appliedIndexes].sort((a, b) => a - b));
+    expect(new Set(appliedIndexes).size).toBe(CHAIN_DEPTH);
+  });
+});
+
+describe('V1 projections cNight generation discovery', () => {
+  // Issue #288 case 2: "a Dust wallet containing only cNight-based Dust (ideally coming from multiple registrations
+  // and utxos) - this is the case on Mainnet". In the projections model that case lands entirely on
+  // `DustGenerationsSyncUpdate.create`, the counterpart of the spec's `apply_system_transaction`
+  // (docs/spec/Specification.md): a cNight registration becomes an own generation plus the first Dust output of its
+  // chain, and a deregistration carries the dtime for the generation it backs. Nothing exercised this function
+  // before, so registration fan-out — the shape mainnet actually has — was completely unpinned.
+  type GenerationItem = Extract<DustGenerationsSubscription, { __typename: 'DustGenerationsItem' }>;
+  type DtimeUpdateItem = Extract<DustGenerationsSubscription, { __typename: 'DustGenerationDtimeUpdateItem' }>;
+
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const publicKey = PublicKey.fromSecretKey(secretKey);
+  const ownAddress = new DustAddress(publicKey.publicKey).hexString;
+  const foreignAddress = new DustAddress(
+    DustSecretKey.fromSeed(Buffer.from(seedHex.slice(0, -1) + '2', 'hex')).publicKey,
+  ).hexString;
+
+  const NIGHT_A = '11'.repeat(32);
+  const NIGHT_B = '22'.repeat(32);
+  const NIGHT_C = '33'.repeat(32);
+
+  // One cNight registration as the indexer projects it. A distinct backingNight per registration is what makes each
+  // generation — and therefore each first-in-chain nullifier — distinct.
+  const registration = (
+    generationMtIndex: number,
+    backingNight: string,
+    overrides: Partial<GenerationItem> = {},
+  ): GenerationItem => ({
+    __typename: 'DustGenerationsItem',
+    commitmentMtIndex: 1000 + generationMtIndex,
+    generationMtIndex,
+    owner: ownAddress,
+    value: '250',
+    initialValue: '5000',
+    backingNight,
+    ctime: new Date(1_700_000_000_000),
+    transactionId: 40 + generationMtIndex,
+    transactionHash: 'aa'.repeat(32),
+    collapsedMerkleTree: null,
+    ...overrides,
+  });
+
+  const dtimeUpdate = (generationMtIndex: number, nightUtxoHash: string, newDtime: Date): DtimeUpdateItem => ({
+    __typename: 'DustGenerationDtimeUpdateItem',
+    generationMtIndex,
+    nightUtxoHash,
+    newDtime,
+    // Type cast required because: a real DustGenerationTreeInsertionPath can only be built from a populated
+    // DustGenerationState — the ledger throws "invalid index into sparse merkle tree" on an empty one — which needs
+    // live ledger state this unit test deliberately avoids. `create` treats the field as an opaque passthrough, so a
+    // sentinel object is enough to prove it is handed through unchanged.
+    treeInsertionPath: { sentinel: generationMtIndex } as unknown as DustGenerationTreeInsertionPath,
+  });
+
+  // Deliberately out of generation-index order: the indexer gives no ordering guarantee.
+  const threeRegistrations = [registration(9, NIGHT_C), registration(3, NIGHT_A), registration(5, NIGHT_B)];
+  // A fresh wallet's generating tree is empty, so firstFree - 1 is -1 and every index is new.
+  const FRESH_WALLET = -1n;
+
+  it('turns each cNight registration into the first Dust output of its own chain, ordered by generation index', () => {
+    const { newGenerations } = DustGenerationsSyncUpdate.create(threeRegistrations, secretKey, publicKey, FRESH_WALLET);
+
+    expect(newGenerations.map((g) => g.generationMtIndex)).toEqual([3, 5, 9]);
+    expect(newGenerations.map((g) => g.qdo.backingNight)).toEqual([NIGHT_A, NIGHT_B, NIGHT_C]);
+    // Spec `apply_system_transaction`: a registration yields the *first* output of the chain — seq 0, nonce derived
+    // from the backing Night UTxO.
+    expect(newGenerations.map((g) => g.qdo.seq)).toEqual([0, 0, 0]);
+    // commitmentMtIndex is where that first Dust output sits in the commitments tree.
+    expect(newGenerations.map((g) => g.qdo.mtIndex)).toEqual([1003n, 1005n, 1009n]);
+    newGenerations.forEach((g) => {
+      expect(g.qdo.nonce).toEqual(dustFirstNonce(g.qdo.backingNight, publicKey.publicKey));
+      expect(g.qdo.owner).toEqual(publicKey.publicKey);
+      expect(g.qdo.initialValue).toBe(5000n);
+      expect(g.genInfo.value).toBe(250n);
+      expect(g.genInfo.nonce).toBe(g.qdo.backingNight);
+      // A live registration has no dtime — the backing cNight has not been deregistered.
+      expect(g.genInfo.dtime).toBeUndefined();
+    });
+  });
+
+  it('derives a distinct nullifier per registration so one query round covers every chain', () => {
+    const { newGenerations } = DustGenerationsSyncUpdate.create(threeRegistrations, secretKey, publicKey, FRESH_WALLET);
+
+    newGenerations.forEach((g) => {
+      expect(g.dustNullifier).toEqual(dustNullifier(g.qdo, secretKey));
+    });
+    // Multiple registrations are the mainnet shape. If they collapsed onto one nullifier the resolution phase would
+    // silently follow a single chain and under-report the wallet's Dust.
+    expect(new Set(newGenerations.map((g) => g.dustNullifier)).size).toBe(3);
+  });
+
+  it("ignores registrations belonging to another wallet's Dust address", () => {
+    const updates = [...threeRegistrations, registration(11, '44'.repeat(32), { owner: foreignAddress })];
+
+    const { newGenerations } = DustGenerationsSyncUpdate.create(updates, secretKey, publicKey, FRESH_WALLET);
+
+    expect(newGenerations.map((g) => g.generationMtIndex)).toEqual([3, 5, 9]);
+  });
+
+  it('skips registrations already covered by the restored generation tree', () => {
+    // firstFree - 1 == 5 means generation 5 is already in the local tree; only strictly greater indices are new.
+    const { newGenerations } = DustGenerationsSyncUpdate.create(threeRegistrations, secretKey, publicKey, 5n);
+
+    expect(newGenerations.map((g) => g.generationMtIndex)).toEqual([9]);
+  });
+
+  it('extracts deregistration dtime updates in index order without mistaking them for new generations', () => {
+    const later = dtimeUpdate(9, NIGHT_C, new Date(1_800_000_000_000));
+    const earlier = dtimeUpdate(3, NIGHT_A, new Date(1_750_000_000_000));
+
+    const { newGenerations, generationDtimeUpdates } = DustGenerationsSyncUpdate.create(
+      [...threeRegistrations, later, earlier],
+      secretKey,
+      publicKey,
+      FRESH_WALLET,
+    );
+
+    // Deregistrations must not create generations...
+    expect(newGenerations.map((g) => g.generationMtIndex)).toEqual([3, 5, 9]);
+    // ...they are surfaced separately and sorted, so the wallet can stamp dtime on the generation each one backs.
+    expect(generationDtimeUpdates.map((u) => u.generationMtIndex)).toEqual([3, 9]);
+    expect(generationDtimeUpdates.map((u) => u.nightUtxoHash)).toEqual([NIGHT_A, NIGHT_C]);
+    expect(generationDtimeUpdates.map((u) => u.newDtime)).toEqual([
+      new Date(1_750_000_000_000),
+      new Date(1_800_000_000_000),
+    ]);
+    // The GraphQL discriminator is stripped, and the insertion path is handed through untouched.
+    expect(generationDtimeUpdates.every((u) => !('__typename' in u))).toBe(true);
+    expect(generationDtimeUpdates[0].treeInsertionPath).toBe(earlier.treeInsertionPath);
+  });
+
+  it('ignores progress items while preserving every raw update for the tree rebuild', () => {
+    const progress: DustGenerationsSubscription = {
+      __typename: 'DustGenerationsProgress',
+      highestIndex: 9,
+      collapsedMerkleTree: null,
+    };
+    const updates = [...threeRegistrations, progress];
+
+    const result = DustGenerationsSyncUpdate.create(updates, secretKey, publicKey, FRESH_WALLET);
+
+    expect(result.newGenerations).toHaveLength(3);
+    expect(result.generationDtimeUpdates).toHaveLength(0);
+    // The capability replays rawUpdates to rebuild the generations Merkle tree, so nothing may be dropped here.
+    expect(result.rawUpdates).toEqual(updates);
   });
 });
