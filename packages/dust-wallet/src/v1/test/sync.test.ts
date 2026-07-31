@@ -14,6 +14,7 @@ import {
   type DustGenerationTreeInsertionPath,
   DustLocalState,
   DustSecretKey,
+  type DustStateMerkleTreeCollapsedUpdate,
   dustFirstNonce,
   dustNullifier,
   type Event as LedgerEvent,
@@ -46,6 +47,7 @@ import {
 } from '../Sync.js';
 import {
   type BlockData,
+  type CollapsedMerkleTree,
   type DustGenerationsSubscription,
   DustGenerationsSyncUpdate,
   type DustNullifierTransactionsSubscription,
@@ -931,5 +933,141 @@ describe('V1 projections progress monotonicity', () => {
       i > 0 && value < appliedIndexes[i - 1] ? [{ step: i, from: appliedIndexes[i - 1], to: value }] : [],
     );
     expect(regressions).toEqual([]);
+  });
+});
+
+describe('V1 projections indexer request shape', () => {
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const ownAddress = new DustAddress(PublicKey.fromSecretKey(secretKey).publicKey).hexString;
+
+  const blockWith = (dustCommitmentEndIndex: number, dustGenerationEndIndex = 4): BlockData => ({
+    height: 100,
+    hash: 'ab'.repeat(32),
+    ledgerParameters: LedgerParameters.initialParameters(),
+    timestamp: new Date(3_000_000),
+    zswapEndIndex: 0,
+    dustCommitmentEndIndex,
+    dustGenerationEndIndex,
+    dustCommitmentMerkleTreeRoot: '',
+    dustGenerationMerkleTreeRoot: '',
+  });
+
+  const notCalled = (name: string) => (): never => {
+    throw new Error(`${name} must not be called`);
+  };
+
+  const collapsedFor = (startIndex: number, endIndex: number): CollapsedMerkleTree => ({
+    startIndex,
+    endIndex,
+    // Type cast required because: a real DustStateMerkleTreeCollapsedUpdate can only be built from live ledger
+    // tree state, and the sync forwards this value into StateUpdate without reading it.
+    update: { startIndex, endIndex } as unknown as DustStateMerkleTreeCollapsedUpdate,
+    protocolVersion: 1,
+  });
+
+  const registration = (
+    generationMtIndex: number,
+    commitmentMtIndex: number,
+    backingNight: string,
+  ): DustGenerationsSubscription => ({
+    __typename: 'DustGenerationsItem',
+    commitmentMtIndex,
+    generationMtIndex,
+    owner: ownAddress,
+    value: '250',
+    initialValue: '5000',
+    backingNight,
+    ctime: new Date(1_700_000_000_000),
+    transactionId: 1,
+    transactionHash: 'aa'.repeat(32),
+    collapsedMerkleTree: null,
+  });
+
+  type Recorded = {
+    blockData: number;
+    generations: number;
+    nullifierQueries: { nullifierCount: number; prefixLength: number }[];
+    commitmentRanges: { start: number; end: number }[];
+  };
+
+  const runSync = async (
+    latestBlock: BlockData,
+    anonymityLevel: number,
+    generations: DustGenerationsSubscription[] = [],
+  ): Promise<Recorded> => {
+    const recorded: Recorded = { blockData: 0, generations: 0, nullifierQueries: [], commitmentRanges: [] };
+
+    const indexerSyncService: IndexerSyncService = {
+      blockData: () => {
+        recorded.blockData += 1;
+        return Effect.succeed(latestBlock);
+      },
+      subscribeDustGenerations: () => {
+        recorded.generations += 1;
+        return Stream.fromIterable(generations);
+      },
+      subscribeDustNullifierTransactions: (nullifiers, _height, prefixLength) => {
+        recorded.nullifierQueries.push({ nullifierCount: nullifiers.length, prefixLength });
+        return Stream.empty;
+      },
+      dustCommitmentMerkleTreeUpdate: (start, end) => {
+        recorded.commitmentRanges.push({ start, end });
+        return Effect.succeed(collapsedFor(start, end));
+      },
+      connectionLayer: notCalled('connectionLayer'),
+      subscribeWallet: notCalled('subscribeWallet'),
+      queryClient: notCalled('queryClient'),
+    };
+
+    await doEventlessSync(
+      CoreWallet.initEmpty(dustParameters, secretKey, networkId),
+      secretKey,
+      anonymityLevel,
+      indexerSyncService,
+    ).pipe(
+      Stream.runDrain,
+      Effect.provideService(QueryClient, { query: notCalled('QueryClient.query') }),
+      Effect.provideService(SubscriptionClient, {
+        subscribe: notCalled('SubscriptionClient.subscribe'),
+        subscribeWithBackpressure: notCalled('SubscriptionClient.subscribeWithBackpressure'),
+      }),
+      Effect.scoped,
+      Effect.runPromise,
+    );
+
+    return recorded;
+  };
+
+  it('short-circuits an empty wallet to one block query, one generations subscription and one commitment update', async () => {
+    const recorded = await runSync(blockWith(4096), 7);
+
+    expect(recorded.blockData).toBe(1);
+    expect(recorded.generations).toBe(1);
+    // Nothing to chase: an empty wallet has no nullifiers, so the resolution phase must not reach the indexer.
+    expect(recorded.nullifierQueries).toEqual([]);
+    expect(recorded.commitmentRanges).toEqual([{ start: 0, end: 4095 }]);
+  });
+
+  it.each([
+    [0, 6],
+    [8, 4],
+    [24, 2],
+  ])('sends a nullifier prefix of %i anonymity level as %i hex chars', async (anonymityLevel, expectedPrefixLength) => {
+    const recorded = await runSync(blockWith(2 ** 24 + 1), anonymityLevel, [registration(0, 5, '11'.repeat(32))]);
+
+    expect(recorded.nullifierQueries).toEqual([{ nullifierCount: 1, prefixLength: expectedPrefixLength }]);
+  });
+
+  it("leaves the wallet's own commitment indexes out of the collapsed-update ranges", async () => {
+    const recorded = await runSync(blockWith(12), 7, [
+      registration(0, 5, '11'.repeat(32)),
+      registration(1, 9, '22'.repeat(32)),
+    ]);
+
+    expect(recorded.commitmentRanges).toEqual([
+      { start: 0, end: 4 },
+      { start: 6, end: 8 },
+      { start: 10, end: 11 },
+    ]);
   });
 });

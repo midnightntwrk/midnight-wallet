@@ -280,8 +280,6 @@ describe('Projections-based synchronisation model', () => {
   };
 
   test(
-    // @smoke: this is the only assertion anywhere that the projections sync and the event-based sync
-    // agree on the resulting dust state, so it is the feature's sole PR-lane regression gate.
     'Projections-based sync recovers a pre-funded wallet with a multi-spend Dust nullifier chain @smoke',
     async () => {
       const receiverState = await receiverEventsSynced.wallet.waitForSyncedState();
@@ -349,7 +347,7 @@ describe('Projections-based synchronisation model', () => {
   );
 
   test(
-    'Able to register Night tokens for Dust generation after receiving unshielded tokens using projections sync model @healthcheck',
+    'Able to register Night tokens for Dust generation after receiving unshielded tokens using projections sync model @smoke',
     async () => {
       const { receiverState } = await sendAndRegisterNightUtxos();
       const receiverDustBalance = await rx.firstValueFrom(
