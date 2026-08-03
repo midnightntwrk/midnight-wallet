@@ -63,11 +63,3 @@ export {
 
 // Re-export from Simulator
 export { Simulator, immediateBlockProducer, type SimulatorConfig } from './Simulator.js';
-
-/**
- * The pre-fork (ledger-v8) simulator twin.
- *
- * Exposed as a namespace because it exports the same names as the post-fork (ledger-v9) simulator above, over
- * structurally distinct ledger types. Use it to drive a pre-fork chain, standalone or via {@link ForkSimulator}.
- */
-export * as V8 from './v8/index.js';

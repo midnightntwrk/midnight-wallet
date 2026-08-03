@@ -50,6 +50,7 @@
     }
   },
   "dependencies": {
+    "@midnight-ntwrk/ledger-v8": "^8.1.0",
     "@midnight-ntwrk/zkir-v2": "^2.1.0",
     "@midnightntwrk/ledger-v9": "1.0.0-rc.3",
     "@midnightntwrk/wallet-sdk-abstractions": "3.0.0-beta.0",
@@ -67,8 +68,7 @@
     "@effect/platform-node": "0.107.0",
     "@effect/rpc": "0.75.1",
     "@effect/sql": "0.51.1",
-    "@effect/workflow": "0.18.2",
-    "@midnight-ntwrk/ledger-v8": "^8.1.0"
+    "@effect/workflow": "0.18.2"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
