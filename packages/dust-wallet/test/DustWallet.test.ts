@@ -49,7 +49,7 @@ import {
   DustTransactionHistoryEntrySchema,
   makeSimulatorTransactionHistoryService,
 } from '../src/v1/TransactionHistory.js';
-import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { createUnshieldedKeystore, type UnshieldedKeystore } from './UnshieldedKeyStore.js';
 import { getDustSeed, sumUtxos } from './utils.js';
 
@@ -219,7 +219,15 @@ describe('DustWallet', () => {
 
       const initialState = CoreWallet.initEmpty(dustParameters, dustSecretKey, NETWORK);
       stateRef = yield* SubscriptionRef.make(initialState);
-      wallet = yield* walletVariant.start({ stateRef }).pipe(Effect.provideService(Scope.Scope, scope));
+      wallet = yield* walletVariant
+        .start({
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+        })
+        .pipe(Effect.provideService(Scope.Scope, scope));
       yield* wallet.startSyncInBackground(dustSecretKey);
 
       submissionService = Submission.makeSimulatorSubmissionService<ProofErasedTransaction>('InBlock')({ simulator });

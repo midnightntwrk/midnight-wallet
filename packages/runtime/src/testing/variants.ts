@@ -187,14 +187,11 @@ export class InterceptingVariant<TTag extends string | symbol, TState> implement
     this.#options = options;
   }
 
-  migrateState(previousState: TState): Effect.Effect<TState> {
+  migrateState(previousState: TState): Effect.Effect<TState, WalletRuntimeError> {
     const override = this.#options.migrateState;
-    // Type cast required because: Variant.migrateState still declares a `never` error channel;
-    // the hard-fork foundation work widens it to WalletRuntimeError, at which point this cast
-    // disappears. Effect error channels are type-level only, so the failure injected by the
-    // override still propagates at runtime — which is exactly what the RED test observes.
-    return override === undefined ? Effect.succeed(previousState) : (override(previousState) as Effect.Effect<TState>);
+    return override === undefined ? Effect.succeed(previousState) : override(previousState);
   }
+
   start(
     context: Variant.VariantContext<TState>,
   ): Effect.Effect<InterceptingRunningVariant<TTag, TState>, WalletRuntimeError, Scope.Scope> {

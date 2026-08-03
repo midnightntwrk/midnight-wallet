@@ -21,6 +21,16 @@ import type * as StateChange from './StateChange.js';
 
 export interface VariantContext<TState> {
   stateRef: SubscriptionRef.SubscriptionRef<TState>;
+  /**
+   * The half-open protocol version range `[sinceVersion, nextVariantSinceVersion)` the variant is active for, derived
+   * from the registration order of the variants.
+   *
+   * @remarks
+   *   A variant uses it to recognize data that belongs to another variant: observing a protocol version outside of this
+   *   range is what makes it emit a {@link StateChange.VersionChange}, so the runtime can migrate to the variant that
+   *   owns that version.
+   */
+  activationRange: ProtocolVersion.ProtocolVersion.Range;
 }
 
 /**
@@ -38,7 +48,7 @@ export type Variant<
 > = Poly.WithTag<TTag> & {
   start(context: VariantContext<TState>): Effect<TRunning, WalletRuntimeError, Scope.Scope>;
 
-  migrateState(previousState: TPreviousState): Effect<TState>;
+  migrateState(previousState: TPreviousState): Effect<TState, WalletRuntimeError>;
 };
 
 export type RunningVariant<TTag extends symbol | string, TState> = Poly.WithTag<TTag> & {

@@ -27,16 +27,6 @@ import {
 import { WalletBuilder } from '../WalletBuilder.js';
 
 /**
- * Typed probe for the `Runtime.onVariantActivation` API introduced by the hard-fork foundation work — these tests are
- * the RED phase driving its implementation. Once the method lands on the `Runtime` interface, this probe is replaced by
- * direct typed calls and deleted.
- */
-const onVariantActivation = <TImpl extends object>(runtime: object, impl: TImpl): Effect.Effect<void> =>
-  // Type cast required because: onVariantActivation is the API under test (TDD red phase) and is
-  // not on the Runtime interface until the implementation lands.
-  (runtime as { onVariantActivation: (impl: TImpl) => Effect.Effect<void> }).onVariantActivation(impl);
-
-/**
  * Records variant-activation notifications: `record(tag)` appends the tag and completes `done` once `expectedCount`
  * activations have been observed.
  */
@@ -390,10 +380,12 @@ describe('Variant activation and context', () => {
     const wallet = Wallet.startEmpty(Wallet);
     const recorder = await Effect.runPromise(makeActivationRecorder(1));
 
-    await onVariantActivation(wallet.runtime, {
-      [First]: () => recorder.record(First),
-      [Second]: () => recorder.record(Second),
-    }).pipe(Effect.runPromise);
+    await wallet.runtime
+      .onVariantActivation({
+        [First]: () => recorder.record(First),
+        [Second]: () => recorder.record(Second),
+      })
+      .pipe(Effect.runPromise);
 
     // Wait for the first variant to be initiated before driving it
     await rx.firstValueFrom(wallet.rawState);
@@ -426,10 +418,12 @@ describe('Variant activation and context', () => {
     const wallet = Wallet.startEmpty(Wallet);
     const recorder = await Effect.runPromise(makeActivationRecorder(1));
 
-    await onVariantActivation(wallet.runtime, {
-      [First]: () => recorder.record(First),
-      [Second]: () => recorder.record(Second),
-    }).pipe(Effect.runPromise);
+    await wallet.runtime
+      .onVariantActivation({
+        [First]: () => recorder.record(First),
+        [Second]: () => recorder.record(Second),
+      })
+      .pipe(Effect.runPromise);
 
     await rx.firstValueFrom(wallet.rawState);
 
@@ -460,14 +454,18 @@ describe('Variant activation and context', () => {
     const wallet = Wallet.startEmpty(Wallet);
     const recorder = await Effect.runPromise(makeActivationRecorder(2));
 
-    await onVariantActivation(wallet.runtime, {
-      [A]: () => recorder.record(A),
-      // The first activation handler fails AFTER recording — the subscription must survive
-      // and still observe the second migration.
-      [B]: () =>
-        recorder.record(B).pipe(Effect.flatMap(() => Effect.fail(new WalletRuntimeError({ message: 'handler boom' })))),
-      [C]: () => recorder.record(C),
-    }).pipe(Effect.runPromise);
+    await wallet.runtime
+      .onVariantActivation({
+        [A]: () => recorder.record(A),
+        // The first activation handler fails AFTER recording — the subscription must survive
+        // and still observe the second migration.
+        [B]: () =>
+          recorder
+            .record(B)
+            .pipe(Effect.flatMap(() => Effect.fail(new WalletRuntimeError({ message: 'handler boom' })))),
+        [C]: () => recorder.record(C),
+      })
+      .pipe(Effect.runPromise);
 
     await rx.firstValueFrom(wallet.rawState);
 
@@ -509,10 +507,12 @@ describe('Variant activation and context', () => {
     const wallet = Wallet.startEmpty(Wallet);
     const recorder = await Effect.runPromise(makeActivationRecorder(1));
 
-    await onVariantActivation(wallet.runtime, {
-      [First]: () => recorder.record(First),
-      [Second]: () => recorder.record(Second),
-    }).pipe(Effect.runPromise);
+    await wallet.runtime
+      .onVariantActivation({
+        [First]: () => recorder.record(First),
+        [Second]: () => recorder.record(Second),
+      })
+      .pipe(Effect.runPromise);
 
     // Trigger the migration immediately after registration returns — no other synchronization.
     // If the subscription were established lazily, this activation could be missed.
