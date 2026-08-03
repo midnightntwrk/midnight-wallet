@@ -167,6 +167,10 @@ export type InterceptingRunningVariant<TTag extends string | symbol, TState> = V
   emitProtocolVersionChange: (change: VersionChangeType.VersionChangeType) => Effect.Effect<void>;
   emit: (change: StateChange.StateChange<TState>) => Effect.Effect<void>;
 };
+export type InterceptingVariantOptions<TState> = {
+  /** Replaces the default identity migration, e.g. to simulate a failing state migration. */
+  migrateState?: (previousState: TState) => Effect.Effect<TState, WalletRuntimeError>;
+};
 export class InterceptingVariant<TTag extends string | symbol, TState> implements Variant.Variant<
   TTag,
   TState,
@@ -174,16 +178,27 @@ export class InterceptingVariant<TTag extends string | symbol, TState> implement
   InterceptingRunningVariant<TTag, TState>
 > {
   __polyTag__: TTag;
-  constructor(tag: TTag) {
+  /** The context the runtime handed to {@link start} — recorded for test assertions. */
+  receivedContext: Variant.VariantContext<TState> | undefined;
+  readonly #options: InterceptingVariantOptions<TState>;
+
+  constructor(tag: TTag, options: InterceptingVariantOptions<TState> = {}) {
     this.__polyTag__ = tag;
+    this.#options = options;
   }
 
   migrateState(previousState: TState): Effect.Effect<TState> {
-    return Effect.succeed(previousState);
+    const override = this.#options.migrateState;
+    // Type cast required because: Variant.migrateState still declares a `never` error channel;
+    // the hard-fork foundation work widens it to WalletRuntimeError, at which point this cast
+    // disappears. Effect error channels are type-level only, so the failure injected by the
+    // override still propagates at runtime — which is exactly what the RED test observes.
+    return override === undefined ? Effect.succeed(previousState) : (override(previousState) as Effect.Effect<TState>);
   }
   start(
     context: Variant.VariantContext<TState>,
   ): Effect.Effect<InterceptingRunningVariant<TTag, TState>, WalletRuntimeError, Scope.Scope> {
+    this.receivedContext = context;
     const tag = this.__polyTag__;
     return Effect.gen(this, function* () {
       const pubsub = yield* PubSub.bounded<StateChange.StateChange<TState>>({
@@ -216,10 +231,17 @@ export class InterceptingVariantBuilder<TTag extends string | symbol, TState> im
   object
 > {
   tag: TTag;
-  constructor(tag: TTag) {
+  /** Every variant instance produced by {@link build} — lets tests inspect recorded contexts. */
+  readonly built: InterceptingVariant<TTag, TState>[] = [];
+  readonly #options: InterceptingVariantOptions<TState>;
+  constructor(tag: TTag, options: InterceptingVariantOptions<TState> = {}) {
     this.tag = tag;
+    this.#options = options;
   }
   build(): InterceptingVariant<TTag, TState> {
-    return new InterceptingVariant(this.tag);
+    const variant = new InterceptingVariant(this.tag, this.#options);
+    // Test-harness bookkeeping: mutation is confined to test tooling by design.
+    this.built.push(variant);
+    return variant;
   }
 }
