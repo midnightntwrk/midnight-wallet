@@ -20,13 +20,6 @@ import { logger } from './logger.js';
 import { type CombinedTokenTransfer, type FacadeState, type UtxoWithMeta } from '@midnightntwrk/wallet-sdk-facade';
 import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
-import {
-  CustomDustWallet,
-  type DefaultDustConfiguration,
-  makeEventLessSyncCapability,
-  makeEventLessSyncService,
-} from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 
 /** @group undeployed */
 
@@ -39,12 +32,6 @@ describe('Projections-based synchronisation model', () => {
   const timeout = 300_000;
   const outputValue = utils.tNightAmount(1000n);
 
-  const eventLessDustWallet = (config: DefaultDustConfiguration) =>
-    CustomDustWallet(
-      config,
-      new V1Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
-    );
-
   let fixture: TestContainersFixture;
   let fundedEventsSynced: utils.WalletInit;
   let funded: utils.WalletInit;
@@ -55,12 +42,12 @@ describe('Projections-based synchronisation model', () => {
     fixture = getFixture();
     fundedEventsSynced = await utils.initWalletWithSeed(seedFunded, fixture);
     funded = await utils.initWalletWithSeed(seedFunded, fixture, 'schnorr', {
-      dustWallet: eventLessDustWallet,
+      dustWallet: utils.eventLessDustWallet,
       manualSync: true,
     });
     receiverEventsSynced = await utils.initWalletWithSeed(seed, fixture);
     receiver = await utils.initWalletWithSeed(seed, fixture, 'schnorr', {
-      dustWallet: eventLessDustWallet,
+      dustWallet: utils.eventLessDustWallet,
       manualSync: true,
     });
     logger.info('Two wallets started');

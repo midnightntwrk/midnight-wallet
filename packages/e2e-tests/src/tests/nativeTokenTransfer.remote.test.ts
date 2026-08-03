@@ -47,8 +47,8 @@ describe('Token transfer', () => {
   beforeEach(async () => {
     fixture = getFixture();
 
-    wallet = await utils.provideWallet(filenameWallet, fundedSeed, fixture);
-    wallet2 = await utils.provideWallet(filenameWallet2, receivingSeed, fixture);
+    wallet = await utils.provideWallet(filenameWallet, fundedSeed, fixture, utils.remoteDustSyncOptions);
+    wallet2 = await utils.provideWallet(filenameWallet2, receivingSeed, fixture, utils.remoteDustSyncOptions);
 
     const [state1, state2] = await Promise.all([
       wallet.wallet.waitForSyncedState(),

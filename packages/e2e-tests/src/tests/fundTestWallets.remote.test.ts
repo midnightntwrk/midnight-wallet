@@ -50,8 +50,8 @@ describe('Set up test wallet', () => {
     fixture = getFixture();
     networkId = fixture.getNetworkId();
 
-    sender = await utils.initWalletWithSeed(fundedSeed, fixture);
-    receiver = await utils.initWalletWithSeed(ReceiverSeed, fixture);
+    sender = await utils.initWalletWithSeed(fundedSeed, fixture, 'schnorr', utils.remoteDustSyncOptions);
+    receiver = await utils.initWalletWithSeed(ReceiverSeed, fixture, 'schnorr', utils.remoteDustSyncOptions);
     logger.info('Two wallets started');
   }, syncTimeout);
 

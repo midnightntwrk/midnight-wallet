@@ -20,7 +20,8 @@ import { inspect } from 'node:util';
 import * as rx from 'rxjs';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type WalletTestEnvironment } from '../types.js';
-import { provideWallet, saveState, type WalletInit } from '../wallet.js';
+import { provideWallet, type ProvideWalletOptions, saveState, type WalletInit } from '../wallet.js';
+import { eventLessDustWallet } from '../dust-sync.js';
 import { logger } from '../logger.js';
 
 /** Dependencies the dust scenarios need from the consumer. */
@@ -33,10 +34,22 @@ export interface DustScenarioDeps {
   syncCacheDir?: string | undefined;
   /** Per-test timeout in ms. Defaults to the upstream value of 1 hour. */
   timeout?: number | undefined;
+  /**
+   * Selects the dust sync model. Defaults to the projections-based (event-less) sync with background syncing, so the
+   * monitored network is exercised against the sync model the wallet actually ships to users. Pass `{ dustWallet:
+   * eventBasedDustWallet }` to opt back out to the event stream.
+   */
+  walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }
 
 /** Registers the dust register/deregister healthchecks under a `describe('Dust tests')` block. */
-export function registerDustHealthchecks({ getEnv, seed, syncCacheDir, timeout = 3_600_000 }: DustScenarioDeps): void {
+export function registerDustHealthchecks({
+  getEnv,
+  seed,
+  syncCacheDir,
+  timeout = 3_600_000,
+  walletOptions = { dustWallet: eventLessDustWallet },
+}: DustScenarioDeps): void {
   describe('Dust tests', () => {
     const unshieldedTokenRaw = ledger.unshieldedToken().raw;
     let wallet: WalletInit;
@@ -45,7 +58,7 @@ export function registerDustHealthchecks({ getEnv, seed, syncCacheDir, timeout =
     beforeEach(async () => {
       const env = getEnv();
       filenameWallet = `${seed.substring(0, 7)}-${env.network}.state`;
-      wallet = await provideWallet(env, { seed, syncCacheDir, filename: filenameWallet });
+      wallet = await provideWallet(env, { ...walletOptions, seed, syncCacheDir, filename: filenameWallet });
     });
 
     afterEach(async () => {

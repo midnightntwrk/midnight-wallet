@@ -15,6 +15,7 @@
 // `import * as utils from './utils.js'` namespace import unchanged.
 // Prefer importing directly from `./helpers/<module>` in new code.
 export * from './helpers/walletInit.js';
+export * from './helpers/dustSync.js';
 export * from './helpers/seeds.js';
 export * from './helpers/addresses.js';
 export * from './helpers/stateWaiters.js';
