@@ -33,7 +33,7 @@ import {
   type SignatureVerifyingKey,
 } from '@midnight-ntwrk/ledger-v8';
 import { DateOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 
 // =============================================================================
 // Types
@@ -57,6 +57,25 @@ export type Block = Readonly<{
   timestamp: Date;
   /** Transactions in this block, ordered by execution */
   transactions: readonly BlockTransaction[];
+  /**
+   * Protocol version this block was produced under. Stamped at production time and never revised afterwards, so the
+   * chain's history records which version each block belongs to — exactly what a syncing wallet reads to decide which
+   * codec applies and when to migrate.
+   */
+  protocolVersion: ProtocolVersion.ProtocolVersion;
+}>;
+
+/**
+ * A protocol version scheduled to activate at a block height — a fork on the simulated chain.
+ *
+ * The version itself is always supplied by the caller: the protocol version of the real fork is not final, so nothing
+ * in the simulator may assume a particular value.
+ */
+export type ScheduledFork = Readonly<{
+  /** Height of the first block produced under {@link version}. */
+  atBlock: bigint;
+  /** Version that activates at {@link atBlock}. */
+  version: ProtocolVersion.ProtocolVersion;
 }>;
 
 /**
@@ -89,6 +108,10 @@ export type SimulatorState = Readonly<{
   mempool: readonly PendingTransaction[];
   /** Current simulator time (independent of block numbers) */
   currentTime: Date;
+  /** Protocol version the chain is currently on — stamped onto blocks as they are produced */
+  protocolVersion: ProtocolVersion.ProtocolVersion;
+  /** Version activations scheduled at block heights, applied when those heights are produced */
+  scheduledForks: readonly ScheduledFork[];
 }>;
 
 /** Result of a successful block production. */
@@ -338,6 +361,29 @@ export const hasPendingTransactions = (state: SimulatorState): boolean => state.
 /** Get the current simulator time. */
 export const getCurrentTime = (state: SimulatorState): Date => state.currentTime;
 
+/** Get the protocol version the chain is currently on. */
+export const getProtocolVersion = (state: SimulatorState): ProtocolVersion.ProtocolVersion => state.protocolVersion;
+
+/**
+ * Resolve the protocol version a block of the given height is produced under: the highest scheduled version whose
+ * activation height has been reached, or the chain's current version when no schedule applies.
+ *
+ * Scheduling a version at a height the chain has already passed therefore activates it on the next block rather than
+ * rewriting history — produced blocks keep the version they were produced under.
+ *
+ * @param state - Current simulator state
+ * @param blockNumber - Height of the block being produced
+ */
+export const protocolVersionAt: {
+  (blockNumber: bigint): (state: SimulatorState) => ProtocolVersion.ProtocolVersion;
+  (state: SimulatorState, blockNumber: bigint): ProtocolVersion.ProtocolVersion;
+} = EFunction.dual(2, (state: SimulatorState, blockNumber: bigint): ProtocolVersion.ProtocolVersion =>
+  state.scheduledForks.reduce(
+    (version, fork) => (fork.atBlock <= blockNumber && fork.version > version ? fork.version : version),
+    state.protocolVersion,
+  ),
+);
+
 // =============================================================================
 // State Transformations (Pure Functions)
 // =============================================================================
@@ -356,22 +402,74 @@ export const allMempoolTransactions = (
   fullness,
 });
 
-/** Create a blank initial state. */
-export const blankState = async (networkId: NetworkId.NetworkId): Promise<SimulatorState> => {
+/**
+ * Create a blank initial state.
+ *
+ * @param networkId - Network identifier
+ * @param options - Optional genesis parameters
+ * @param options.protocolVersion - Version the chain starts on (defaults to the minimum supported version)
+ * @param options.genesisBlockNumber - Height of the genesis block (defaults to 0; a post-fork chain continues numbering
+ *   from the fork height instead)
+ * @param options.genesisTime - Timestamp of the genesis block (defaults to the epoch)
+ */
+export const blankState = async (
+  networkId: NetworkId.NetworkId,
+  options?: {
+    protocolVersion?: ProtocolVersion.ProtocolVersion;
+    genesisBlockNumber?: bigint;
+    genesisTime?: Date;
+  },
+): Promise<SimulatorState> => {
+  const protocolVersion = options?.protocolVersion ?? ProtocolVersion.MinSupportedVersion;
+  const genesisBlockNumber = options?.genesisBlockNumber ?? 0n;
+  const genesisTime = options?.genesisTime ?? new Date(0);
   const blankGenesis: Block = {
-    number: 0n,
-    hash: await blockHash(0n),
-    timestamp: new Date(0),
+    number: genesisBlockNumber,
+    hash: await blockHash(genesisBlockNumber),
+    timestamp: genesisTime,
     transactions: [],
+    protocolVersion,
   };
   return {
     networkId,
     ledger: LedgerState.blank(networkId),
     blocks: [blankGenesis],
     mempool: [],
-    currentTime: new Date(0),
+    currentTime: genesisTime,
+    protocolVersion,
+    scheduledForks: [],
   };
 };
+
+/**
+ * Set the protocol version blocks produced from now on are stamped with. Already-produced blocks are untouched.
+ *
+ * @param state - Current simulator state
+ * @param version - Version to switch the chain to
+ */
+export const setProtocolVersion = (
+  state: SimulatorState,
+  version: ProtocolVersion.ProtocolVersion,
+): SimulatorState => ({
+  ...state,
+  protocolVersion: version,
+});
+
+/**
+ * Schedule a protocol version to activate at a block height — a fork on the simulated chain.
+ *
+ * @param state - Current simulator state
+ * @param atBlock - Height of the first block produced under `version`
+ * @param version - Version that activates at `atBlock`
+ */
+export const scheduleFork = (
+  state: SimulatorState,
+  atBlock: bigint,
+  version: ProtocolVersion.ProtocolVersion,
+): SimulatorState => ({
+  ...state,
+  scheduledForks: [...state.scheduledForks, { atBlock, version }],
+});
 
 /** Add a pending transaction to the mempool. */
 export const addToMempool = (state: SimulatorState, pendingTx: PendingTransaction): SimulatorState => ({
@@ -446,6 +544,7 @@ export const applyTransaction = (
       );
 
     const blockNumber = options?.blockNumber ?? getCurrentBlockNumber(state) + 1n;
+    const protocolVersion = protocolVersionAt(state, blockNumber);
     const blockTime = state.currentTime;
     const verifiedTransaction = tx.wellFormed(state.ledger, strictness, blockTime);
     const transactionContext = new TransactionContext(state.ledger, blockContext);
@@ -456,12 +555,14 @@ export const applyTransaction = (
       hash: blockContext.parentBlockHash,
       timestamp: blockTime,
       transactions: [{ tx, result: txResult }],
+      protocolVersion,
     };
 
     const newState: SimulatorState = {
       ...state,
       ledger: newLedgerState.postBlockUpdate(blockTime, detailedBlockFullness, computedBlockFullness),
       blocks: [...state.blocks, newBlock],
+      protocolVersion,
     };
 
     return [newBlock, newState];
@@ -571,12 +672,15 @@ export const createBlock = (
   processedTxs: readonly ReadyTransaction[],
 ): [Block, SimulatorState] => {
   const nextBlockNumber = getCurrentBlockNumber(state) + 1n;
+  // Resolved once, at production time: the block and the chain's current version cannot disagree.
+  const protocolVersion = protocolVersionAt(state, nextBlockNumber);
 
   const block: Block = {
     number: nextBlockNumber,
     hash: blockHashValue,
     timestamp: blockTime,
     transactions: blockTransactions,
+    protocolVersion,
   };
 
   const txsToRemove = new Set(processedTxs.map((t) => t.tx));
@@ -586,6 +690,7 @@ export const createBlock = (
     blocks: [...state.blocks, block],
     mempool: state.mempool.filter((pending) => !txsToRemove.has(pending.tx)),
     currentTime: blockTime,
+    protocolVersion,
   };
 
   return [block, newState];
@@ -647,13 +752,16 @@ export const blockHash = async (blockNumber: bigint): Promise<string> => {
  *
  * @param previousBlock - The previous block (or undefined for genesis)
  * @param blockTime - The timestamp for the new block
+ * @param blockNumber - Height of the new block, overriding the height derived from `previousBlock`. Needed for a
+ *   genesis block that continues an existing chain's numbering, as a post-fork chain's does.
  * @returns A BlockContext suitable for transaction processing
  */
 export const nextBlockContextFromBlock = async (
   previousBlock: Block | undefined,
   blockTime: Date,
+  blockNumber?: bigint,
 ): Promise<BlockContext> => {
-  const nextBlockNumber = previousBlock !== undefined ? previousBlock.number + 1n : 0n;
+  const nextBlockNumber = blockNumber ?? (previousBlock !== undefined ? previousBlock.number + 1n : 0n);
   const hash = await blockHash(nextBlockNumber);
   const blockSeconds = DateOps.dateToSeconds(blockTime);
   const previousSeconds =

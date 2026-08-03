@@ -17,6 +17,8 @@ export {
   getLastBlock,
   getCurrentBlockNumber,
   getCurrentTime,
+  getProtocolVersion,
+  protocolVersionAt,
   getBlockByNumber,
   getLastBlockResults,
   getLastBlockEvents,
@@ -33,6 +35,8 @@ export {
   updateLedger,
   appendBlock,
   applyTransaction,
+  setProtocolVersion,
+  scheduleFork,
   // Block production functions
   processTransaction,
   processTransactions,
@@ -58,6 +62,7 @@ export {
   type BlockProducer,
   type FullnessSpec,
   type GenesisMint,
+  type ScheduledFork,
   type StrictnessConfig,
 } from './SimulatorState.js';
 

@@ -48,7 +48,7 @@ import {
   type ZswapSecretKeys,
 } from '@midnight-ntwrk/ledger-v8';
 import { DateOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 
 import {
   addToMempool,
@@ -72,6 +72,8 @@ import {
   processTransactions,
   removeFromMempool,
   resolveFullness,
+  scheduleFork,
+  setProtocolVersion,
   type ShieldedGenesisMint,
   type SimulatorState,
   type StrictnessConfig,
@@ -105,6 +107,7 @@ export type {
   BlockProducer,
   FullnessSpec,
   GenesisMint,
+  ScheduledFork,
   StrictnessConfig,
 } from './SimulatorState.js';
 
@@ -117,6 +120,8 @@ export {
   getLastBlockEvents,
   hasPendingTransactions,
   getCurrentTime,
+  getProtocolVersion,
+  protocolVersionAt,
   applyTransaction,
   defaultStrictness,
   genesisStrictness,
@@ -148,6 +153,13 @@ export const immediateBlockProducer =
 // Simulator Configuration
 // =============================================================================
 
+/** Genesis parameters resolved from {@link SimulatorConfig}, so every initialization path shares one set of defaults. */
+type GenesisParams = Readonly<{
+  protocolVersion: ProtocolVersion.ProtocolVersion;
+  blockNumber: bigint;
+  time: Date;
+}>;
+
 /** Simulator initialization configuration. */
 export type SimulatorConfig = Readonly<{
   /**
@@ -159,6 +171,25 @@ export type SimulatorConfig = Readonly<{
   networkId?: NetworkId.NetworkId;
   /** Custom block producer. Defaults to immediateBlockProducer(). */
   blockProducer?: BlockProducer;
+  /**
+   * Protocol version the chain starts on. Defaults to {@link ProtocolVersion.MinSupportedVersion}.
+   *
+   * The version a fork activates is never built in — schedule it with {@link Simulator.scheduleFork} or switch to it
+   * with {@link Simulator.setProtocolVersion}.
+   */
+  protocolVersion?: ProtocolVersion.ProtocolVersion;
+  /**
+   * Height of the genesis block. Defaults to 0.
+   *
+   * Set this to continue an existing chain's numbering, as a post-fork chain does from the fork height.
+   */
+  genesisBlockNumber?: bigint;
+  /**
+   * Timestamp of the genesis block, from which simulator time advances. Defaults to the epoch.
+   *
+   * Set this to continue an existing chain's timeline, so that time-sensitive behaviour does not restart at the epoch.
+   */
+  genesisTime?: Date;
 }>;
 
 // =============================================================================
@@ -212,18 +243,30 @@ export class Simulator {
    */
   static init(config: SimulatorConfig = {}): Effect.Effect<Simulator, never, Scope.Scope> {
     const networkId = config.networkId ?? NetworkId.NetworkId.Undeployed;
+    const genesis: GenesisParams = {
+      protocolVersion: config.protocolVersion ?? ProtocolVersion.MinSupportedVersion,
+      blockNumber: config.genesisBlockNumber ?? 0n,
+      time: config.genesisTime ?? new Date(0),
+    };
     return config.genesisMints !== undefined && config.genesisMints.length > 0
-      ? Simulator.initWithGenesis(config.genesisMints, networkId, config.blockProducer)
-      : Simulator.initBlank(networkId, config.blockProducer);
+      ? Simulator.initWithGenesis(config.genesisMints, networkId, genesis, config.blockProducer)
+      : Simulator.initBlank(networkId, genesis, config.blockProducer);
   }
 
   /** Initialize simulator with blank ledger state. */
   private static initBlank(
     networkId: NetworkId.NetworkId,
+    genesis: GenesisParams,
     blockProducer?: BlockProducer,
   ): Effect.Effect<Simulator, never, Scope.Scope> {
     return pipe(
-      Effect.promise(() => blankState(networkId)),
+      Effect.promise(() =>
+        blankState(networkId, {
+          protocolVersion: genesis.protocolVersion,
+          genesisBlockNumber: genesis.blockNumber,
+          genesisTime: genesis.time,
+        }),
+      ),
       Effect.flatMap((state) => Simulator.fromState(state, blockProducer)),
     );
   }
@@ -235,6 +278,7 @@ export class Simulator {
   private static initWithGenesis(
     genesisMints: Arr.NonEmptyArray<GenesisMint>,
     networkId: NetworkId.NetworkId = NetworkId.NetworkId.Undeployed,
+    genesis: GenesisParams,
     blockProducer?: BlockProducer,
   ): Effect.Effect<Simulator, never, Scope.Scope> {
     const noStrictness = createStrictness();
@@ -346,9 +390,11 @@ export class Simulator {
     };
 
     return Effect.gen(function* () {
-      const genesisTime = new Date(0);
+      const genesisTime = genesis.time;
       const emptyState = LedgerState.blank(networkId);
-      const context = yield* Effect.promise(() => nextBlockContextFromBlock(undefined, genesisTime));
+      const context = yield* Effect.promise(() =>
+        nextBlockContextFromBlock(undefined, genesisTime, genesis.blockNumber),
+      );
 
       // Process shielded and unshielded mints first
       const init = makeInitialTransactions(emptyState, context, genesisTime);
@@ -381,10 +427,11 @@ export class Simulator {
 
       // Create genesis block with all transactions
       const genesisBlock: Block = {
-        number: 0n,
+        number: genesis.blockNumber,
         hash: context.parentBlockHash,
         timestamp: genesisTime,
         transactions: allTransactions,
+        protocolVersion: genesis.protocolVersion,
       };
 
       const initialState: SimulatorState = {
@@ -393,13 +440,23 @@ export class Simulator {
         blocks: [genesisBlock],
         mempool: [],
         currentTime: genesisTime, // Time stays at genesis; next block will advance it
+        protocolVersion: genesis.protocolVersion,
+        scheduledForks: [],
       };
       return yield* Simulator.fromState(initialState, blockProducer);
     });
   }
 
-  /** Create a Simulator from an initial state with proper stream setup. */
-  private static fromState(
+  /**
+   * Create a Simulator from an initial state with proper stream setup.
+   *
+   * The low-level constructor behind {@link Simulator.init}. Use it when the initial state cannot be expressed as a
+   * config — most importantly a post-fork chain, whose ledger is handed over from the chain before it.
+   *
+   * @param initialState - State the simulator starts from
+   * @param blockProducer - Custom block producer (defaults to immediateBlockProducer())
+   */
+  static fromState(
     initialState: SimulatorState,
     blockProducer?: BlockProducer,
   ): Effect.Effect<Simulator, never, Scope.Scope> {
@@ -577,6 +634,39 @@ export class Simulator {
       options?.strictness !== undefined ? { tx, strictness: createStrictness(options.strictness) } : { tx };
 
     return SubscriptionRef.update(this.#stateRef, (s) => addToMempool(s, pendingTx));
+  }
+
+  /**
+   * Produce a block with no transactions, advancing the chain by one height.
+   *
+   * Bypasses the configured block producer, which only produces when there is something in the mempool. Use it to reach
+   * a given height without traffic — a fork happens at a height whether or not transactions were submitted.
+   *
+   * @returns The produced block
+   */
+  produceEmptyBlock(): Effect.Effect<Block, LedgerOps.LedgerError> {
+    return this.#produceBlock({ transactions: [], fullness: 0 });
+  }
+
+  /**
+   * Switch the chain to a protocol version, effective for blocks produced from now on. Already-produced blocks keep the
+   * version they were produced under.
+   *
+   * @param version - Version to switch the chain to
+   */
+  setProtocolVersion(version: ProtocolVersion.ProtocolVersion): Effect.Effect<void> {
+    return SubscriptionRef.update(this.#stateRef, (state) => setProtocolVersion(state, version));
+  }
+
+  /**
+   * Schedule a protocol version to activate at a block height — a fork on the simulated chain. The block produced at
+   * that height, and every block after it, is stamped with `version`.
+   *
+   * @param atBlock - Height of the first block produced under `version`
+   * @param version - Version that activates at `atBlock`
+   */
+  scheduleFork(atBlock: bigint, version: ProtocolVersion.ProtocolVersion): Effect.Effect<void> {
+    return SubscriptionRef.update(this.#stateRef, (state) => scheduleFork(state, atBlock, version));
   }
 
   /**

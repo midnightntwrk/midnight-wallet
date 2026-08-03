@@ -17,6 +17,8 @@ export {
   getLastBlock,
   getCurrentBlockNumber,
   getCurrentTime,
+  getProtocolVersion,
+  protocolVersionAt,
   getBlockByNumber,
   getLastBlockResults,
   getLastBlockEvents,
@@ -33,6 +35,8 @@ export {
   updateLedger,
   appendBlock,
   applyTransaction,
+  setProtocolVersion,
+  scheduleFork,
   // Block production functions
   processTransaction,
   processTransactions,
@@ -58,6 +62,7 @@ export {
   type BlockProducer,
   type FullnessSpec,
   type GenesisMint,
+  type ScheduledFork,
   type StrictnessConfig,
 } from './SimulatorState.js';
 
@@ -71,3 +76,6 @@ export { Simulator, immediateBlockProducer, type SimulatorConfig } from './Simul
  * structurally distinct ledger types. Use it to drive a pre-fork chain, standalone or via {@link ForkSimulator}.
  */
 export * as V8 from './v8/index.js';
+
+// Re-export from ForkSimulator
+export { ForkHandover, ForkSimulator, type ForkSimulatorConfig } from './ForkSimulator.js';
