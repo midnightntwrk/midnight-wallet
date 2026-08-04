@@ -21,7 +21,6 @@
 import { Either, Function as EFunction, type Stream, Array as EArray } from 'effect';
 import {
   LedgerState,
-  type BlockContext,
   WellFormedStrictness,
   type TransactionResult,
   TransactionContext,
@@ -34,6 +33,29 @@ import {
 } from '@midnightntwrk/ledger-v9';
 import { DateOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+
+import {
+  type BlockContext,
+  blockHash,
+  protocolVersionAt,
+  type ScheduledFork,
+  type StrictnessConfig,
+} from '../core/index.js';
+
+// Version-agnostic simulator internals, re-exported so each version's barrel presents one complete surface.
+export {
+  blockHash,
+  defaultStrictness,
+  genesisStrictness,
+  getProtocolVersion,
+  nextBlockContextFromBlock,
+  protocolVersionAt,
+  scheduleFork,
+  setProtocolVersion,
+  type BlockContext,
+  type ScheduledFork,
+  type StrictnessConfig,
+} from '../core/index.js';
 
 // =============================================================================
 // Types
@@ -63,19 +85,6 @@ export type Block = Readonly<{
    * codec applies and when to migrate.
    */
   protocolVersion: ProtocolVersion.ProtocolVersion;
-}>;
-
-/**
- * A protocol version scheduled to activate at a block height — a fork on the simulated chain.
- *
- * The version itself is always supplied by the caller: the protocol version of the real fork is not final, so nothing
- * in the simulator may assume a particular value.
- */
-export type ScheduledFork = Readonly<{
-  /** Height of the first block produced under {@link version}. */
-  atBlock: bigint;
-  /** Version that activates at {@link atBlock}. */
-  version: ProtocolVersion.ProtocolVersion;
 }>;
 
 /**
@@ -236,44 +245,6 @@ export type UnshieldedGenesisMint = Readonly<{
  */
 export type GenesisMint = ShieldedGenesisMint | UnshieldedGenesisMint;
 
-/** Configuration for well-formedness strictness checks. All options default to false for testing flexibility. */
-export type StrictnessConfig = Readonly<{
-  enforceBalancing?: boolean;
-  verifyNativeProofs?: boolean;
-  verifyContractProofs?: boolean;
-  enforceLimits?: boolean;
-  verifySignatures?: boolean;
-}>;
-
-/**
- * Default strictness for post-genesis blocks.
- *
- * In a realistic simulation:
- *
- * - Signatures should be verified (verifySignatures: true)
- * - Proofs cannot be verified because they're erased (verifyNativeProofs/verifyContractProofs: false)
- * - Limits should be enforced (enforceLimits: true)
- * - Balancing must be enforced (enforceBalancing: true) - transactions must pay fees
- *
- * Note: Genesis blocks typically disable all strictness to allow initial token distribution.
- */
-export const defaultStrictness: StrictnessConfig = {
-  enforceBalancing: true,
-  verifyNativeProofs: false,
-  verifyContractProofs: false,
-  enforceLimits: true,
-  verifySignatures: true,
-};
-
-/** Strictness for genesis blocks - all checks disabled to allow initial token distribution. */
-export const genesisStrictness: StrictnessConfig = {
-  enforceBalancing: false,
-  verifyNativeProofs: false,
-  verifyContractProofs: false,
-  enforceLimits: false,
-  verifySignatures: false,
-};
-
 /**
  * Assign strictness to a pending transaction, creating a ready transaction. If the pending transaction already has
  * strictness, use it; otherwise use the provided default.
@@ -361,29 +332,6 @@ export const hasPendingTransactions = (state: SimulatorState): boolean => state.
 /** Get the current simulator time. */
 export const getCurrentTime = (state: SimulatorState): Date => state.currentTime;
 
-/** Get the protocol version the chain is currently on. */
-export const getProtocolVersion = (state: SimulatorState): ProtocolVersion.ProtocolVersion => state.protocolVersion;
-
-/**
- * Resolve the protocol version a block of the given height is produced under: the highest scheduled version whose
- * activation height has been reached, or the chain's current version when no schedule applies.
- *
- * Scheduling a version at a height the chain has already passed therefore activates it on the next block rather than
- * rewriting history — produced blocks keep the version they were produced under.
- *
- * @param state - Current simulator state
- * @param blockNumber - Height of the block being produced
- */
-export const protocolVersionAt: {
-  (blockNumber: bigint): (state: SimulatorState) => ProtocolVersion.ProtocolVersion;
-  (state: SimulatorState, blockNumber: bigint): ProtocolVersion.ProtocolVersion;
-} = EFunction.dual(2, (state: SimulatorState, blockNumber: bigint): ProtocolVersion.ProtocolVersion =>
-  state.scheduledForks.reduce(
-    (version, fork) => (fork.atBlock <= blockNumber && fork.version > version ? fork.version : version),
-    state.protocolVersion,
-  ),
-);
-
 // =============================================================================
 // State Transformations (Pure Functions)
 // =============================================================================
@@ -440,36 +388,6 @@ export const blankState = async (
     scheduledForks: [],
   };
 };
-
-/**
- * Set the protocol version blocks produced from now on are stamped with. Already-produced blocks are untouched.
- *
- * @param state - Current simulator state
- * @param version - Version to switch the chain to
- */
-export const setProtocolVersion = (
-  state: SimulatorState,
-  version: ProtocolVersion.ProtocolVersion,
-): SimulatorState => ({
-  ...state,
-  protocolVersion: version,
-});
-
-/**
- * Schedule a protocol version to activate at a block height — a fork on the simulated chain.
- *
- * @param state - Current simulator state
- * @param atBlock - Height of the first block produced under `version`
- * @param version - Version that activates at `atBlock`
- */
-export const scheduleFork = (
-  state: SimulatorState,
-  atBlock: bigint,
-  version: ProtocolVersion.ProtocolVersion,
-): SimulatorState => ({
-  ...state,
-  scheduledForks: [...state.scheduledForks, { atBlock, version }],
-});
 
 /** Add a pending transaction to the mempool. */
 export const addToMempool = (state: SimulatorState, pendingTx: PendingTransaction): SimulatorState => ({
@@ -732,46 +650,4 @@ export const createStrictness = (config: StrictnessConfig = {}): WellFormedStric
   strictness.enforceLimits = config.enforceLimits ?? false;
   strictness.verifySignatures = config.verifySignatures ?? false;
   return strictness;
-};
-
-/**
- * Compute block hash from block number. Uses a deterministic hash based on block number for easy recomputation.
- *
- * @param blockNumber - The block number to compute hash for
- * @returns A deterministic 64-character hex hash
- */
-export const blockHash = async (blockNumber: bigint): Promise<string> => {
-  const input = `block-${blockNumber.toString()}`;
-  const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
-  const { Encoding } = await import('effect');
-  return Encoding.encodeHex(new Uint8Array(hashBuffer));
-};
-
-/**
- * Create the next block context from the previous block.
- *
- * @param previousBlock - The previous block (or undefined for genesis)
- * @param blockTime - The timestamp for the new block
- * @param blockNumber - Height of the new block, overriding the height derived from `previousBlock`. Needed for a
- *   genesis block that continues an existing chain's numbering, as a post-fork chain's does.
- * @returns A BlockContext suitable for transaction processing
- */
-export const nextBlockContextFromBlock = async (
-  previousBlock: Block | undefined,
-  blockTime: Date,
-  blockNumber?: bigint,
-): Promise<BlockContext> => {
-  const nextBlockNumber = blockNumber ?? (previousBlock !== undefined ? previousBlock.number + 1n : 0n);
-  const hash = await blockHash(nextBlockNumber);
-  const blockSeconds = DateOps.dateToSeconds(blockTime);
-  const previousSeconds =
-    previousBlock !== undefined ? DateOps.dateToSeconds(previousBlock.timestamp) : blockSeconds - 1n;
-  const timeSinceLastBlock = blockSeconds - previousSeconds;
-
-  return {
-    parentBlockHash: hash,
-    secondsSinceEpoch: blockSeconds,
-    secondsSinceEpochErr: 1, // Clock error tolerance in seconds (reasonable default for simulator)
-    lastBlockTime: timeSinceLastBlock > 0n ? timeSinceLastBlock : 1n,
-  };
 };

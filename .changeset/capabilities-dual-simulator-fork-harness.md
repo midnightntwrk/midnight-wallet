@@ -5,10 +5,11 @@
 Add a dual-ledger simulator and a fork harness, so wallet behaviour across a hard fork can be tested against real ledger
 bytes on both sides of the boundary.
 
-The existing simulator, which is built on ledger-v9, gains a pre-fork twin under the `V8` namespace of the `simulation`
-entry point. It is the same simulator over ledger-v8, so a pre-fork chain can be driven with exactly the API the
-post-fork one exposes. This makes `@midnight-ntwrk/ledger-v8` a runtime dependency of this package: consumers now
-install two ledger WASM modules, which matters for browser bundle size.
+The `simulation` entry point now holds one simulator per ledger version. The existing ledger-v9 simulator is joined by a
+pre-fork ledger-v8 twin — the same simulator over the other ledger, so a chain on either side of the fork is driven with
+the same API. Each is reachable by version, as `V8` and `V9`, and the v9 names stay exported unqualified, so existing
+code is unaffected. This makes `@midnight-ntwrk/ledger-v8` a runtime dependency of this package: consumers now install
+two ledger WASM modules, which matters for browser bundle size.
 
 Both simulators now carry a protocol-version timeline. `SimulatorConfig.protocolVersion` sets the version a chain starts
 on, every produced block records the version it was produced under, and `Simulator.setProtocolVersion(version)` /

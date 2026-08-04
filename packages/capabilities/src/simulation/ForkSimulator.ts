@@ -23,8 +23,8 @@ import { type LedgerState } from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 
-import { Simulator } from './Simulator.js';
-import { blankState, updateLedger, type BlockProducer, type GenesisMint } from './SimulatorState.js';
+import { Simulator } from './v9/Simulator.js';
+import { blankState, updateLedger, type BlockProducer, type GenesisMint } from './v9/SimulatorState.js';
 import * as V8 from './v8/index.js';
 
 // =============================================================================
