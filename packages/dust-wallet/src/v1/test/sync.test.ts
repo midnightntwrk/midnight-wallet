@@ -1071,3 +1071,151 @@ describe('V1 projections indexer request shape', () => {
     ]);
   });
 });
+
+// A projections sync emits once per productive nullifier round on top of five fixed updates, so a wallet that has
+// spent Dust more than a handful of times emits well past twenty updates in a single pass. `doEventlessSync` runs the
+// whole pass inside `Stream.asyncEffect`'s register effect, and Effect does not begin draining until that effect
+// returns, so every emission of a pass has to fit in the stream's buffer at once. The default buffer is bounded, which
+// caps how deep a Dust chain the sync can handle before it stops making progress — silently, with no error, because a
+// suspended emission is indistinguishable from slow work.
+describe('V1 projections sync over a deep spend chain', () => {
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const publicKey = PublicKey.fromSecretKey(secretKey);
+  const chainNight = '11'.repeat(32);
+  // The local commitment tree is already filled to the block's end index, so the commitment phase short-circuits
+  // without an indexer call and the emission count is the only thing under test.
+  const COMMITMENT_END_INDEX = 8;
+
+  const latestBlock: BlockData = {
+    height: 100,
+    hash: 'ab'.repeat(32),
+    ledgerParameters: LedgerParameters.initialParameters(),
+    timestamp: new Date(3_000_000),
+    zswapEndIndex: 0,
+    dustCommitmentEndIndex: COMMITMENT_END_INDEX,
+    dustGenerationEndIndex: 4,
+    dustCommitmentMerkleTreeRoot: '',
+    dustGenerationMerkleTreeRoot: '',
+  };
+
+  const mustNotBeCalled = (name: string) => (): never => {
+    throw new Error(`${name} must not be called in this scenario`);
+  };
+
+  const filler = (i: number) => ({
+    initialValue: 1_000_000_000n,
+    owner: secretKey.publicKey,
+    nonce: dustFirstNonce(i.toString(16).padStart(2, '0').repeat(32), secretKey.publicKey),
+    seq: 0,
+    ctime: new Date(1_000_000),
+    backingNight: i.toString(16).padStart(2, '0').repeat(32),
+    mtIndex: BigInt(i),
+  });
+
+  /** One cNight registration as the indexer projects it — the root of the spend chain, and what carries genInfo. */
+  const registration: DustGenerationsSubscription = {
+    __typename: 'DustGenerationsItem',
+    commitmentMtIndex: 1001,
+    generationMtIndex: 1,
+    owner: new DustAddress(publicKey.publicKey).hexString,
+    value: '250',
+    initialValue: '5000',
+    backingNight: chainNight,
+    ctime: new Date(1_700_000_000_000),
+    transactionId: 41,
+    transactionHash: 'aa'.repeat(32),
+    collapsedMerkleTree: null,
+  };
+
+  const spendOf = (nullifier: bigint, commitmentIndex: bigint): DustNullifierTransactionsSubscription => ({
+    nullifierLeBytes: '00'.repeat(32),
+    commitmentLeBytes: '00'.repeat(32),
+    transactionId: Number(commitmentIndex),
+    transactionHash: 'ee'.repeat(32),
+    blockHeight: 10,
+    blockHash: 'dd'.repeat(32),
+    transaction: {
+      __typename: 'RegularTransaction',
+      block: { ledgerParameters: LedgerParameters.initialParameters() },
+      id: Number(commitmentIndex),
+      hash: 'ee'.repeat(32),
+      dustLedgerEvents: [
+        {
+          id: 1,
+          maxId: 1,
+          protocolVersion: 1,
+          // Type cast required because: a real ledger Event needs a serialized on-chain event, and the code under
+          // test only reads `raw.content`.
+          raw: {
+            content: {
+              tag: 'dustSpendProcessed',
+              commitment: commitmentIndex,
+              commitmentIndex,
+              nullifier,
+              vFee: 100n,
+              declaredTime: new Date(2_000_000),
+              blockTime: new Date(2_000_000),
+            } satisfies DustSpendProcessedEvent,
+          } as unknown as LedgerEvent,
+        },
+      ],
+      zswapLedgerEvents: [],
+    },
+  });
+
+  /**
+   * Runs one full pass over a `depth`-deep spend chain and returns how many updates it emitted, or `'timeout'` if the
+   * pass never finished. A pass emits `depth + 5`: the initial update, one after the generation phase, one per
+   * productive nullifier round, one after the loop, the state update, and the terminal one.
+   */
+  const runPass = (depth: number): Promise<number | 'timeout'> => {
+    const withCommitments = Array.from({ length: COMMITMENT_END_INDEX }).reduce<DustLocalState>(
+      (acc, _, i) => acc.insertCommitment(BigInt(i), filler(i), false),
+      new DustLocalState(dustParameters),
+    );
+    const state = CoreWallet.init(withCommitments, secretKey, networkId);
+    const rounds: bigint[][] = [];
+
+    const indexerSyncService: IndexerSyncService = {
+      blockData: () => Effect.succeed(latestBlock),
+      subscribeDustGenerations: () => Stream.make(registration),
+      // Each round spends exactly what it was asked about and hands back a successor, so the chain keeps going until
+      // `depth` rounds have run. The round number is `rounds.length`, so no mutable counter is needed.
+      subscribeDustNullifierTransactions: (dustNullifiers) => {
+        rounds.push([...dustNullifiers]);
+        return rounds.length <= depth
+          ? Stream.fromIterable(dustNullifiers.map((n) => spendOf(n, BigInt(1000 + rounds.length))))
+          : Stream.empty;
+      },
+      dustCommitmentMerkleTreeUpdate: mustNotBeCalled('dustCommitmentMerkleTreeUpdate'),
+      connectionLayer: mustNotBeCalled('connectionLayer'),
+      subscribeWallet: mustNotBeCalled('subscribeWallet'),
+      queryClient: mustNotBeCalled('queryClient'),
+    };
+
+    return doEventlessSync(state, secretKey, 7, indexerSyncService).pipe(
+      Stream.runCollect,
+      Effect.map((updates) => Chunk.toArray(updates).length),
+      // A deadlocked pass never fails, so only a timeout can distinguish it from a slow one.
+      Effect.timeoutOption('5 seconds'),
+      Effect.map(Option.getOrElse(() => 'timeout' as const)),
+      Effect.provideService(QueryClient, { query: mustNotBeCalled('QueryClient.query') }),
+      Effect.provideService(SubscriptionClient, {
+        subscribe: mustNotBeCalled('SubscriptionClient.subscribe'),
+        subscribeWithBackpressure: mustNotBeCalled('SubscriptionClient.subscribeWithBackpressure'),
+      }),
+      Effect.scoped,
+      Effect.runPromise,
+    );
+  };
+
+  it('emits one update per productive round on a shallow chain', async () => {
+    // Pins the harness: without this, the deep-chain expectation below could be satisfied by a pass that never
+    // resolves any spend at all.
+    await expect(runPass(3)).resolves.toBe(8);
+  }, 30_000);
+
+  it('completes a pass that emits more updates than the stream buffer holds', async () => {
+    await expect(runPass(20)).resolves.toBe(25);
+  }, 30_000);
+});
