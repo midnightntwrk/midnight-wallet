@@ -365,4 +365,50 @@ describe('Projections-based synchronisation model', () => {
     },
     timeout,
   );
+
+  test(
+    'Projections-based sync resumes correctly from a restored snapshot',
+    async () => {
+      // Everything the projections sync does differently on a restored wallet is driven by a non-zero baseline:
+      // it resumes from `appliedIndex - 1`, filters generations to those above the last synced generation index,
+      // and asks for commitment ranges starting above the last synced commitment. A wallet built from scratch has
+      // that baseline at -1, so no other test in this suite reaches any of it. This is also the hard-fork
+      // migration shape, since `restore()` is how a wallet crosses a protocol version.
+      const { receiverState: stateBeforeSnapshot } = await sendAndRegisterNightUtxos();
+      const dustUtxosBeforeSnapshot = stateBeforeSnapshot.dust.state.state.utxos.length;
+      expect(dustUtxosBeforeSnapshot).toBeGreaterThan(0);
+
+      // Snapshot the projections-synced receiver, then restore it into a fresh facade. Writing the snapshot inside
+      // the test keeps it hermetic: an undeployed chain is new each run, so a snapshot left behind by a previous
+      // run would describe a different chain.
+      const filename = `projections-restore-${seed.substring(0, 7)}.state`;
+      await utils.saveState(receiver.wallet, filename);
+      const restored = await utils.provideWallet(filename, seed, fixture, utils.projectionsDustSyncOptions);
+
+      try {
+        // `provideWallet` silently falls back to building from scratch when a restore fails, which would leave this
+        // test asserting nothing about the resume path. The restored wallet is started with `manualSync`, so before
+        // the first `doSync` its Dust state is exactly what came off disk — a non-zero baseline proves the snapshot
+        // was actually used.
+        const restoredBeforeSync = await rx.firstValueFrom(restored.wallet.state());
+        expect(restoredBeforeSync.dust.state.state.utxos.length).toBe(dustUtxosBeforeSnapshot);
+        expect(restoredBeforeSync.dust.state.state.commitmentTreeFirstFree).toBeGreaterThan(0n);
+        expect(restoredBeforeSync.dust.state.state.generatingTreeFirstFree).toBeGreaterThan(0n);
+
+        // Advance the chain so the resumed pass has a real delta to apply rather than short-circuiting on an
+        // unchanged tip.
+        await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+        await restored.wallet.doSync(restored.dustSecretKey);
+
+        const restoredState = await restored.wallet.waitForSyncedState();
+        const eventsState = await receiverEventsSynced.wallet.waitForSyncedState();
+
+        // The resumed wallet must land on the same Dust state as one that replayed the whole event history.
+        expectSameSyncState(eventsState, restoredState);
+      } finally {
+        await restored.wallet.stop();
+      }
+    },
+    timeout * 2,
+  );
 });
