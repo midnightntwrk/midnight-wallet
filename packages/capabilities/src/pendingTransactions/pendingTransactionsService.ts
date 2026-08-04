@@ -263,7 +263,11 @@ export class PendingTransactionsServiceEffectImpl<
       return pipe(
         result.transactions,
         Iterable.filterMap((res): Option.Option<PendingTransactions.TransactionResult> => {
-          if (res.__typename == 'SystemTransaction') {
+          // Only RegularTransaction carries the identifiers and transactionResult this matching
+          // needs — and wallet-submitted transactions are always regular. Narrowing to it (rather
+          // than excluding known other variants) keeps future schema variants ignored instead of
+          // breaking compilation, as BridgeClaimTransaction (indexer 4.4.0) once did.
+          if (res.__typename != 'RegularTransaction') {
             return Option.none();
           }
 
