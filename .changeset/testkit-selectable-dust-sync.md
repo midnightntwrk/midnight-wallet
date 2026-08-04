@@ -2,25 +2,21 @@
 '@midnightntwrk/wallet-sdk-testkit': minor
 ---
 
-feat(testkit): sync dust from projections by default in the healthcheck scenarios
+feat(testkit): let consumers select the dust sync model
 
-**Behaviour change for consumers of `registerDustHealthchecks` and `useTokenTransferWallets`/
-`registerTokenTransferHealthchecks`.** Both now build their wallets with the projections-based (event-less) dust sync
-instead of the event stream, so the networks they monitor are exercised against it. Background syncing stays enabled,
-so no consumer has to drive `doSync()`.
+`provideWallet` and `initWalletWithSeed` accept an optional `dustWallet` factory and a `manualSync` flag, and the
+dust and token-transfer scenarios forward them via a new `walletOptions` dep. New exports from the root and `/core`:
+`eventLessDustWallet`, `eventBasedDustWallet`, `projectionsDustSyncOptions` and the `DustWalletFactory` type.
 
-To keep the previous behaviour, pass the new `walletOptions` dep explicitly:
+Purely additive — every default is unchanged, so existing consumers are unaffected. The scenarios and both wallet
+builders still use the event-based dust wallet with background syncing.
 
-```ts
-registerDustHealthchecks({ getEnv, seed, walletOptions: { dustWallet: eventBasedDustWallet } });
-```
+The `dustWallet` factory applies to the restored and the built-from-scratch paths alike, so a cold state cache
+cannot silently fall back to a different sync model than the caller asked for.
 
-Supporting API, all additive:
-
-- `eventLessDustWallet`, `eventBasedDustWallet` and the `DustWalletFactory` type are exported from the root and
-  `/core` entry points.
-- `provideWallet` and `initWalletWithSeed` accept an optional `dustWallet` factory and a `manualSync` flag. These
-  still default to the event-based wallet with background syncing, so direct callers are unaffected — only the
-  scenarios' default changed.
-- The `dustWallet` factory applies to the restored and the built-from-scratch paths alike, so a cold state cache
-  cannot silently fall back to a different sync model than the caller asked for.
+Note that the projections-based sync is a **one-shot** sync: where the event-based service's `updates` is a
+long-lived indexer subscription, the projections service does one pass up to the block it read at the start and then
+ends its stream, and the variant's background retry only re-runs it on failure, not on completion. Opting in
+therefore means `projectionsDustSyncOptions` (factory plus `manualSync: true`) *and* driving
+`facade.doSync(dustSecretKey)` at every point that would otherwise wait for background convergence — swapping only
+the factory leaves a wallet that converges once and then never observes anything again.

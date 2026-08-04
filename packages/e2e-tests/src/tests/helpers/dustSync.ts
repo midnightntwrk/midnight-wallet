@@ -10,21 +10,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type DustWalletFactory, eventLessDustWallet } from '@midnightntwrk/wallet-sdk-testkit/core';
 
+/**
+ * Dust sync model selection for tests.
+ *
+ * `projectionsDustSyncOptions` pairs the projections factory with `manualSync: true`, which is the only correct way to
+ * use it: the projections sync is a single pass that ends its own stream, so a test must call
+ * `wallet.doSync(dustSecretKey)` at every point it would otherwise wait for background convergence. A test that merely
+ * swaps the factory and keeps waiting on `waitForSyncedState()` will hang once it needs to observe state produced after
+ * the first pass.
+ *
+ * `projectionsBasedSync.undeployed.test.ts` is the worked example — every checkpoint there drives `doSync`.
+ */
 export {
   eventBasedDustWallet,
   type DustWalletFactory,
   eventLessDustWallet,
+  projectionsDustSyncOptions,
 } from '@midnightntwrk/wallet-sdk-testkit/core';
-
-/**
- * Options selecting the projections-based dust sync, for the remote tests that build wallets through this package's own
- * helpers rather than through a testkit scenario.
- *
- * The testkit scenarios already default to this factory, so `dust.remote` and `tokenTransfer.remote` do not pass it —
- * leaving that default load-bearing means our own remote lane exercises what downstream consumers get.
- */
-export const remoteDustSyncOptions: { readonly dustWallet: DustWalletFactory } = {
-  dustWallet: eventLessDustWallet,
-};

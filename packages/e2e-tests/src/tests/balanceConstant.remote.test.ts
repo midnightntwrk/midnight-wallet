@@ -44,7 +44,7 @@ describe('Balance constant', () => {
   beforeEach(async () => {
     fixture = getFixture();
 
-    wallet = await utils.initWalletWithSeed(seed, fixture, 'schnorr', utils.remoteDustSyncOptions);
+    wallet = await utils.initWalletWithSeed(seed, fixture);
   }, syncTimeout);
 
   afterEach(async () => {
@@ -73,7 +73,7 @@ describe('Balance constant', () => {
     'Balance is constant when syncing from a restored state @healthcheck',
     async () => {
       await utils.saveState(wallet.wallet, filename);
-      const restoredWallet = await utils.provideWallet(filename, seed, fixture, utils.remoteDustSyncOptions);
+      const restoredWallet = await utils.provideWallet(filename, seed, fixture);
       const syncedState = await restoredWallet.wallet.waitForSyncedState();
 
       expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);

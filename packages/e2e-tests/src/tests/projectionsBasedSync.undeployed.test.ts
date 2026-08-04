@@ -41,15 +41,9 @@ describe('Projections-based synchronisation model', () => {
   beforeEach(async () => {
     fixture = getFixture();
     fundedEventsSynced = await utils.initWalletWithSeed(seedFunded, fixture);
-    funded = await utils.initWalletWithSeed(seedFunded, fixture, 'schnorr', {
-      dustWallet: utils.eventLessDustWallet,
-      manualSync: true,
-    });
+    funded = await utils.initWalletWithSeed(seedFunded, fixture, 'schnorr', utils.projectionsDustSyncOptions);
     receiverEventsSynced = await utils.initWalletWithSeed(seed, fixture);
-    receiver = await utils.initWalletWithSeed(seed, fixture, 'schnorr', {
-      dustWallet: utils.eventLessDustWallet,
-      manualSync: true,
-    });
+    receiver = await utils.initWalletWithSeed(seed, fixture, 'schnorr', utils.projectionsDustSyncOptions);
     logger.info('Two wallets started');
   });
 

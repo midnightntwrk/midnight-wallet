@@ -26,12 +26,15 @@ export type DustWalletFactory = (config: DefaultDustConfiguration) => DustWallet
 /**
  * A dust sub-wallet that syncs from indexer projections instead of the event stream.
  *
- * This is the default for the healthcheck scenarios, so the networks they monitor are exercised against the projections
- * sync. The sync service has to be swapped in at build time, so a wallet built without this factory gets the
- * event-based sync no matter what else it configures.
+ * The sync service is swapped in at build time, so a wallet built without this factory gets the event-based sync no
+ * matter what else it configures.
  *
- * Background syncing is left enabled — the facade's `manualSync` flag would additionally require the caller to drive
- * `doSync()` by hand.
+ * **This is a one-shot sync and must be driven explicitly.** Where the event-based service's `updates` is a long-lived
+ * indexer subscription, the projections service does a single pass up to the block it read at the start and then ends
+ * its stream. Background syncing therefore converges once and never observes anything afterwards, and the variant's
+ * background retry only re-runs the pass on _failure_, not on completion. Pair this factory with `manualSync: true` —
+ * see {@link projectionsDustSyncOptions} — and call `facade.doSync(dustSecretKey)` at every point that would otherwise
+ * wait for background convergence.
  */
 export const eventLessDustWallet: DustWalletFactory = (config) =>
   CustomDustWallet(
@@ -39,5 +42,21 @@ export const eventLessDustWallet: DustWalletFactory = (config) =>
     new V1Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
   );
 
-/** The event-stream dust sub-wallet. Pass this to opt a scenario back out of the projections sync. */
+/** The event-stream dust sub-wallet, with the long-lived subscription. This is the default everywhere. */
 export const eventBasedDustWallet: DustWalletFactory = DustWallet;
+
+/**
+ * The correct way to opt a wallet into the projections-based dust sync: the factory plus `manualSync`, so the caller
+ * owns when each snapshot is taken.
+ *
+ * A caller that spreads this in still has to drive `facade.doSync(dustSecretKey)` itself — after start, and again after
+ * anything that changes dust state. Waiting on `waitForSyncedState()` alone will block, because with `manualSync`
+ * nothing advances the dust wallet until `doSync` runs.
+ */
+export const projectionsDustSyncOptions: {
+  readonly dustWallet: DustWalletFactory;
+  readonly manualSync: true;
+} = {
+  dustWallet: eventLessDustWallet,
+  manualSync: true,
+};

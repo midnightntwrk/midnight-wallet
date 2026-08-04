@@ -23,7 +23,6 @@ import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { type WalletTestEnvironment } from '../types.js';
 import { provideWallet, type ProvideWalletOptions, saveState, type WalletInit } from '../wallet.js';
-import { eventLessDustWallet } from '../dust-sync.js';
 import { tNightAmount } from '../primitives.js';
 import { getShieldedAddress, getUnshieldedAddress } from '../addresses.js';
 import { waitForTxInHistory } from '../state-waiters.js';
@@ -50,9 +49,11 @@ export interface TokenTransferScenarioDeps {
   /** Timeout for the `afterEach` teardown in ms. Defaults to 10 minutes. */
   timeout?: number | undefined;
   /**
-   * Selects the dust sync model for both wallets. Defaults to the projections-based (event-less) sync with background
-   * syncing, so these transfers' fees are paid out of a projections-synced dust wallet. Pass `{ dustWallet:
-   * eventBasedDustWallet }` to opt back out to the event stream.
+   * Selects the dust sync model. Defaults to the event-based wallet with background syncing.
+   *
+   * Passing `projectionsDustSyncOptions` is NOT enough on its own: the projections sync is a one-shot snapshot, so the
+   * scenario body must also drive `facade.doSync(dustSecretKey)` at every point it currently relies on background
+   * convergence. These scenarios do not, so they stay on the event-based sync.
    */
   walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }
@@ -78,7 +79,7 @@ export function useTokenTransferWallets({
   syncCacheDir,
   syncTimeout = 60 * 60 * 1000,
   timeout = 600_000,
-  walletOptions = { dustWallet: eventLessDustWallet },
+  walletOptions,
 }: TokenTransferScenarioDeps): TokenTransferWallets {
   const shieldedTokenRaw = ledger.shieldedToken().raw;
 

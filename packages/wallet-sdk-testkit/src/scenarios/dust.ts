@@ -21,7 +21,6 @@ import * as rx from 'rxjs';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type WalletTestEnvironment } from '../types.js';
 import { provideWallet, type ProvideWalletOptions, saveState, type WalletInit } from '../wallet.js';
-import { eventLessDustWallet } from '../dust-sync.js';
 import { logger } from '../logger.js';
 
 /** Dependencies the dust scenarios need from the consumer. */
@@ -35,9 +34,11 @@ export interface DustScenarioDeps {
   /** Per-test timeout in ms. Defaults to the upstream value of 1 hour. */
   timeout?: number | undefined;
   /**
-   * Selects the dust sync model. Defaults to the projections-based (event-less) sync with background syncing, so the
-   * monitored network is exercised against the sync model the wallet actually ships to users. Pass `{ dustWallet:
-   * eventBasedDustWallet }` to opt back out to the event stream.
+   * Selects the dust sync model. Defaults to the event-based wallet with background syncing.
+   *
+   * Passing `projectionsDustSyncOptions` is NOT enough on its own: the projections sync is a one-shot snapshot, so the
+   * scenario body must also drive `facade.doSync(dustSecretKey)` at every point it currently relies on background
+   * convergence. These scenarios do not, so they stay on the event-based sync.
    */
   walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }
@@ -48,7 +49,7 @@ export function registerDustHealthchecks({
   seed,
   syncCacheDir,
   timeout = 3_600_000,
-  walletOptions = { dustWallet: eventLessDustWallet },
+  walletOptions,
 }: DustScenarioDeps): void {
   describe('Dust tests', () => {
     const unshieldedTokenRaw = ledger.unshieldedToken().raw;
