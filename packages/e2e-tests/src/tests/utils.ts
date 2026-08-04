@@ -15,7 +15,10 @@
 // `import * as utils from './utils.js'` namespace import unchanged.
 // Prefer importing directly from `./helpers/<module>` in new code.
 export * from './helpers/walletInit.js';
-export * from './helpers/dustSync.js';
+// Dust sync model selection lives in the testkit, which documents the one-shot contract that makes
+// `manualSync` mandatory. Only the ready-made options object is needed here; import the factories from
+// `@midnightntwrk/wallet-sdk-testkit/core` directly if a test ever needs to build its own pairing.
+export { projectionsDustSyncOptions } from '@midnightntwrk/wallet-sdk-testkit/core';
 export * from './helpers/seeds.js';
 export * from './helpers/addresses.js';
 export * from './helpers/stateWaiters.js';

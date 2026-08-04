@@ -28,7 +28,8 @@ import {
   type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { type DefaultDustConfiguration, DustWallet, type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { type DustWalletFactory } from '@midnightntwrk/wallet-sdk-testkit/core';
 import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { Roles } from '@midnightntwrk/wallet-sdk-hd';
 import { type TestContainersFixture } from '../test-fixture.js';
@@ -261,7 +262,7 @@ export const saveState = async (wallet: WalletFacade, filename: string) => {
 };
 
 export type CustomWallets = {
-  dustWallet?: (config: DefaultDustConfiguration) => DustWalletClass;
+  dustWallet?: DustWalletFactory;
   manualSync?: boolean;
 };
 

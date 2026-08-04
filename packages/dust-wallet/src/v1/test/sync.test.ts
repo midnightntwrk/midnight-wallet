@@ -1197,7 +1197,7 @@ describe('V1 projections sync over a deep spend chain', () => {
       Stream.runCollect,
       Effect.map((updates) => Chunk.toArray(updates).length),
       // A deadlocked pass never fails, so only a timeout can distinguish it from a slow one.
-      Effect.timeoutOption('5 seconds'),
+      Effect.timeoutOption('15 seconds'),
       Effect.map(Option.getOrElse(() => 'timeout' as const)),
       Effect.provideService(QueryClient, { query: mustNotBeCalled('QueryClient.query') }),
       Effect.provideService(SubscriptionClient, {

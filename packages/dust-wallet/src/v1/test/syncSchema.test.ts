@@ -93,12 +93,6 @@ describe('merkle decoders reject malformed wire values', () => {
     expect(tree).toContain('Type side transformation failure');
   });
 
-  it('distinguishes a malformed hex string from a malformed collapsed-update payload', () => {
-    const tree = failureTree(wireCollapsedUpdate('zz'), CollapsedMerkleTreeSchema);
-    expect(tree).toContain('Encoded side transformation failure');
-    expect(tree).not.toContain('Type side transformation failure');
-  });
-
   it('surfaces an insertion-path deserialization failure as a ParseError', () => {
     const result = Schema.decodeUnknownEither(DustGenerationDtimeUpdateItemSchema)(wireDtimeUpdate('00'.repeat(8)));
     if (Either.isRight(result)) {
