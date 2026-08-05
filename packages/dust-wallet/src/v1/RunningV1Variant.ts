@@ -21,6 +21,7 @@ import {
   Duration,
   Schedule,
   Array as Arr,
+  identity,
   Ref,
 } from 'effect';
 import { type TransactionHistoryService } from './TransactionHistory.js';
@@ -147,6 +148,8 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   }
 
   startSyncInBackground(startAux: TStartAux): Effect.Effect<void> {
+    const repeatDelay = this.#v1Context.syncService.backgroundRepeatDelay;
+
     return this.startSync(startAux).pipe(
       Stream.retry(
         pipe(
@@ -160,6 +163,13 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
           }),
         ),
       ),
+      // A sync service whose `updates` is finite — the projections service ends its stream after one pass — would
+      // otherwise leave the wallet frozen at whatever that first pass saw. Repeating re-runs `startSync`, which
+      // re-reads the wallet state, so each pass resumes from what the previous one applied. The retry above cannot
+      // serve this purpose: it re-runs a pass on failure, not on completion. Repeating outside the retry keeps a
+      // transient failure to the pass it happened in, rather than restarting the whole cycle. A service with a
+      // long-lived `updates` declares no delay, and is left exactly as it was.
+      repeatDelay === undefined ? identity : Stream.repeat(Schedule.spaced(repeatDelay)),
       Stream.runScoped(Sink.drain),
       Effect.forkScoped,
       Effect.provideService(Scope.Scope, this.#scope),
