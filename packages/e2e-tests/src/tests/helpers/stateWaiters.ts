@@ -19,6 +19,7 @@ import { type UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wall
 import {
   type WalletFacade,
   type WalletEntry,
+  type FinalizedWalletEntry,
   isPendingWalletEntry,
   isFinalizedWalletEntry,
 } from '@midnightntwrk/wallet-sdk-facade';
@@ -285,4 +286,38 @@ export async function waitForTxInHistory(
     );
   }
   return txEntry;
+}
+
+/**
+ * Polls a wallet's transaction history until at least one finalized entry satisfies `matches`, and returns every
+ * finalized entry that does.
+ *
+ * Use this when the transaction of interest has no hash to hand — a freshly built wallet rediscovers history by
+ * syncing, so a test that asserts on what it found cannot name the entry it is waiting for. Reaching a synced state is
+ * not enough on its own: history entries are written by a fan-out that runs alongside the sync rather than as part of
+ * it, so a wallet can report itself synced with its history still empty.
+ *
+ * @param wallet - The wallet whose transaction history is polled.
+ * @param matches - Predicate selecting the entries of interest, applied only to finalized entries.
+ * @param description - Included in the progress logs, so a stalled wait says what it was waiting for.
+ */
+export async function waitForFinalizedTxHistoryEntries(
+  wallet: WalletFacade,
+  matches: (entry: WalletEntry) => boolean,
+  description: string,
+): Promise<readonly FinalizedWalletEntry[]> {
+  return await rx.firstValueFrom(
+    rx.merge(wallet.state().pipe(rx.filter((state) => state.isSynced)), rx.interval(500)).pipe(
+      rx.mergeMap(async () => {
+        const all = await wallet.getAllFromTxHistory();
+        const found = all.filter(isFinalizedWalletEntry).filter(matches);
+        logger.info(
+          `Waiting for ${description} in tx history: ${found.length} match of ${all.length} entries ` +
+            `(${all.filter(isPendingWalletEntry).length} still pending)`,
+        );
+        return found.length > 0 ? found : undefined;
+      }),
+      rx.filter((found): found is FinalizedWalletEntry[] => found !== undefined),
+    ),
+  );
 }
