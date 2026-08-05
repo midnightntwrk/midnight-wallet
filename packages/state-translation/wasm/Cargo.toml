@@ -1,0 +1,65 @@
+# WASM bindings for the ledger's v8-to-v9 ledger state translation.
+#
+# A standalone Cargo project, not part of any Rust workspace — the wallet SDK is a TypeScript monorepo, and this exists
+# only to produce the WASM artifact `@midnightntwrk/wallet-sdk-state-translation` loads. See ./README.md.
+[workspace]
+
+[package]
+name = "v8-to-v9-state-translation-wasm"
+version = "0.0.1"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# The translation itself, consumed as a crate. Pinned to the branch it currently lives on; swap to a plain
+# `version = "0.1.0"` once it is released to crates.io. To iterate against a local checkout instead, see the
+# `.cargo/config.toml` note in ./README.md rather than editing this line.
+v8-to-v9-state-translation = { git = "https://github.com/midnightntwrk/midnight-ledger", branch = "tkerber/state-translation/v8-to-v9" }
+
+# Both ledgers, for the two `LedgerState` types the translation goes between. Feature sets mirror the translation
+# crate's own, so Cargo's feature unification does not silently widen either side.
+ledger-v8 = { version = "8.1.0", package = "midnight-ledger", features = ["proving"] }
+ledger-v9 = { version = "1.0.0", package = "midnight-ledger-v9", features = ["proving"] }
+
+storage = { version = "2.0.1", package = "midnight-storage", features = ["state-translation"] }
+serialize = { version = "1.1.0", package = "midnight-serialize" }
+base-crypto = { version = "1.0.0", package = "midnight-base-crypto" }
+
+wasm-bindgen = "=0.2.104"
+js-sys = "^0.3.77"
+console_error_panic_hook = "^0.1.7"
+
+# Nothing here asks for randomness, but the crypto crates below do, and on wasm32-unknown-unknown `getrandom` needs to
+# be told where to find it.
+getrandom_2 = { package = "getrandom", version = "^0.2.16", features = ["js"] }
+getrandom_3 = { package = "getrandom", version = "^0.3.4", features = ["wasm_js"] }
+
+# The ledger's v9 line is in pre-release and is not on crates.io. Its own workspace redirects these to git tags, and
+# `[patch]` only applies from the top-level manifest — so consuming the translation from outside that workspace means
+# replicating the block. Copied verbatim from midnight-ledger's root Cargo.toml; keep it in step when the tags move.
+[patch.crates-io]
+midnight-base-crypto = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "base-crypto-1.1.0-rc.2" }
+midnight-base-crypto-derive = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "base-crypto-derive-1.1.0-rc.2" }
+midnight-ledger-v9 = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "crate-ledger-9.1.0.0-rc.3" }
+midnight-zswap = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "zswap-9.0.0-rc.3" }
+midnight-coin-structure = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "coin-structure-3.0.0-rc.1" }
+midnight-transient-crypto = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "transient-crypto-3.0.0-rc.2" }
+midnight-transient-crypto-old = { package = "midnight-transient-crypto", git = "https://github.com/midnightntwrk/midnight-ledger", tag = "transient-crypto-2.2.0-rc.1" }
+midnight-onchain-state = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "onchain-state-4.0.0-rc.3" }
+midnight-onchain-vm = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "onchain-vm-4.0.0-rc.2" }
+midnight-onchain-runtime = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "onchain-runtime-4.0.0-rc.2" }
+midnight-zkir = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "zkir-2.2.0-rc.3" }
+midnight-serialize = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "serialize-1.2.0-rc.1" }
+
+# Size over speed: this is a one-shot migration tool loaded into a JS runtime, so the artifact's bytes cost more than
+# its cycles. Mirrors midnight-ledger's own `wasm` profile.
+[profile.wasm]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

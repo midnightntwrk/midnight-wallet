@@ -2523,6 +2523,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-indexer-client": "npm:1.3.0-beta.1"
     "@midnightntwrk/wallet-sdk-node-client": "npm:2.0.0-beta.2"
     "@midnightntwrk/wallet-sdk-prover-client": "npm:2.0.0-beta.2"
+    "@midnightntwrk/wallet-sdk-state-translation": "npm:0.0.1"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.2.1"
     effect: "npm:^3.19.19"
     rxjs: "npm:^7.8.2"
@@ -2722,6 +2723,12 @@ __metadata:
     "@subsquid/scale-codec": "npm:^4.0.1"
     commander: "npm:^14.0.0"
     tsx: "npm:4.22.4"
+  languageName: unknown
+  linkType: soft
+
+"@midnightntwrk/wallet-sdk-state-translation@npm:0.0.1, @midnightntwrk/wallet-sdk-state-translation@workspace:packages/state-translation":
+  version: 0.0.0-use.local
+  resolution: "@midnightntwrk/wallet-sdk-state-translation@workspace:packages/state-translation"
   languageName: unknown
   linkType: soft
 

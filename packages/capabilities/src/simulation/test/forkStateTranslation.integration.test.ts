@@ -1,0 +1,206 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * A fork whose handover is the real ledger-side v8-to-v9 state translation.
+ *
+ * `forkSimulator.test.ts` specifies the seam with test-supplied translations, which is what pins its shape. This file
+ * is the other half: the actual WASM translation in that slot, so the post-fork chain starts from the pre-fork chain's
+ * own state rather than from an approximation of it.
+ *
+ * **Integration tier, and skipped unless the translation has been built.** The translation is Rust — the ledger's
+ * translation crate behind WASM bindings that live in `packages/state-translation/wasm` — so it has to be compiled with
+ * `yarn workspace @midnightntwrk/wallet-sdk-state-translation build:wasm` before these can run. That build step is why
+ * these are integration tests and not unit ones: nothing here needs Docker or a network, but it does not run anywhere
+ * with zero setup either.
+ */
+
+import * as v8 from '@midnight-ntwrk/ledger-v8';
+import * as v9 from '@midnightntwrk/ledger-v9';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  TranslationModuleEnvVar,
+  isLedgerStateTranslationAvailable,
+  translateLedgerState,
+} from '@midnightntwrk/wallet-sdk-state-translation';
+import { Effect, type Array as Arr } from 'effect';
+import { describe, expect, it } from 'vitest';
+
+import {
+  ForkHandover,
+  ForkSimulator,
+  V8,
+  genesisStrictness,
+  getCurrentBlockNumber,
+  getLastBlock,
+  immediateBlockProducer,
+  translatorFromAsync,
+} from '../index.js';
+
+const networkId = NetworkId.NetworkId.Undeployed;
+
+const preForkVersion = ProtocolVersion.ProtocolVersion(3n);
+const forkVersion = ProtocolVersion.ProtocolVersion(4242n);
+const forkBlock = 3n;
+
+const v8Keys = v8.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+const v9Keys = v9.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+const v8TokenType = v8.shieldedToken().raw;
+const v9TokenType = v9.shieldedToken().raw;
+
+/** A shielded transfer on each chain: one new coin output, built straight from ledger primitives. */
+const v8Transfer = (): v8.ProofErasedTransaction => {
+  const coin = v8.createShieldedCoinInfo(v8TokenType, 100n);
+  const output = v8.ZswapOutput.new(coin, 0, v8Keys.coinPublicKey, v8Keys.encryptionPublicKey);
+  const offer = v8.ZswapOffer.fromOutput<v8.PreProof>(output, v8TokenType, 100n);
+  return v8.Transaction.fromParts(networkId, offer).eraseProofs();
+};
+
+const v9Transfer = (): v9.ProofErasedTransaction => {
+  const coin = v9.createShieldedCoinInfo(v9TokenType, 100n);
+  const output = v9.ZswapOutput.new(coin, 0, v9Keys.coinPublicKey, v9Keys.encryptionPublicKey);
+  const offer = v9.ZswapOffer.fromOutput<v9.PreProof>(output, v9TokenType, 100n);
+  return v9.Transaction.fromParts(networkId, offer).eraseProofs();
+};
+
+/** The whole of the wiring: the WASM translation adapted into the seam's `Effect` shape. */
+const handover = ForkHandover.TranslateLedger({ translator: translatorFromAsync(translateLedgerState) });
+
+const baseConfig = {
+  networkId,
+  forkBlock,
+  forkVersion,
+  preForkVersion,
+  preForkBlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
+  postForkBlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+  handover,
+};
+
+/** Pre-fork genesis funding, so the pre-fork ledger holds something worth carrying across. */
+const v8GenesisMints: Arr.NonEmptyArray<V8.GenesisMint> = [
+  { type: 'shielded', tokenType: v8TokenType, amount: 1_000_000n, recipient: v8Keys },
+];
+
+/**
+ * Size of a ledger's coin commitment tree, read straight out of serialized state.
+ *
+ * Both ledgers expose this the same way, over their own bytes, which makes it the one measure that can be compared
+ * across the boundary without either side's state objects being in the other's WASM module.
+ */
+const v8CommitmentCount = (ledger: Uint8Array): bigint =>
+  v8.ZswapChainState.deserializeFromLedgerState(ledger).firstFree;
+const v9CommitmentCount = (ledger: Uint8Array): bigint =>
+  v9.ZswapChainState.deserializeFromLedgerState(ledger).firstFree;
+
+const available = await isLedgerStateTranslationAvailable();
+
+if (!available) {
+  // Said out loud, because the default state of this file is skipped: a bare skip count reads like a test that was
+  // switched off rather than one waiting on an artifact.
+  // eslint-disable-next-line no-console
+  console.warn(
+    `Skipping the real v8-to-v9 state translation tests: no translation module found. Build it with ` +
+      `'yarn workspace @midnightntwrk/wallet-sdk-state-translation build:wasm', or set ${TranslationModuleEnvVar} ` +
+      `to an artifact built elsewhere.`,
+  );
+}
+
+describe.skipIf(!available)('ForkSimulator over the real v8-to-v9 state translation', () => {
+  it('accepts a translated pre-fork ledger as post-fork state', async () =>
+    Effect.gen(function* () {
+      // The load-bearing check: whether the bytes a ledger-v8 `LedgerState.serialize()` produces survive the
+      // translation as bytes ledger-v9 will deserialize. Both sides use the same tagged framing, so they should — and
+      // if they ever do not, this fails first and unambiguously, before anything downstream depends on it.
+      const fork = yield* ForkSimulator.init(baseConfig);
+
+      const postFork = yield* fork.advanceToFork();
+      const state = yield* postFork.getLatestState();
+
+      expect(state.ledger).toBeInstanceOf(v9.LedgerState);
+      // Boundary invariants hold on the translation path exactly as on the re-mint one.
+      expect(getCurrentBlockNumber(state)).toBe(forkBlock);
+      expect(getLastBlock(state).protocolVersion).toBe(forkVersion);
+      expect(state.protocolVersion).toBe(forkVersion);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it("carries the pre-fork chain's own coin commitments across the fork", async () =>
+    Effect.gen(function* () {
+      // A blank state would translate identically under a no-op, so the state has to hold something. Minted value plus
+      // a transfer means the commitment tree is non-empty and has grown through real block application.
+      const fork = yield* ForkSimulator.init({ ...baseConfig, preForkGenesisMints: v8GenesisMints });
+      yield* fork.preFork.submitTransaction(v8Transfer());
+
+      const postFork = yield* fork.advanceToFork();
+      const preState = yield* fork.preFork.getLatestState();
+      const postState = yield* postFork.getLatestState();
+
+      const carried = v8CommitmentCount(preState.ledger.serialize());
+      expect(carried).toBeGreaterThan(0n);
+      // Every commitment the pre-fork chain accumulated is present post-fork: the state crossed, it was not rebuilt.
+      expect(v9CommitmentCount(postState.ledger.serialize())).toBe(carried);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('applies a post-fork transaction on top of the translated state', async () =>
+    Effect.gen(function* () {
+      // Deserializing proves the bytes parse; this proves the state is *usable*. A translation could yield something
+      // structurally valid that the post-fork ledger then refuses to build on, and nothing above would catch it.
+      const fork = yield* ForkSimulator.init({ ...baseConfig, preForkGenesisMints: v8GenesisMints });
+      yield* fork.preFork.submitTransaction(v8Transfer());
+
+      const postFork = yield* fork.advanceToFork();
+      const carried = v9CommitmentCount((yield* postFork.getLatestState()).ledger.serialize());
+      // Without this, a translation that carried nothing would still satisfy the count below as 0 + 1, and "on top of
+      // the translated state" would not actually be what was tested.
+      expect(carried).toBeGreaterThan(0n);
+
+      const block = yield* postFork.submitTransaction(v9Transfer());
+      const after = yield* postFork.getLatestState();
+
+      // The transaction was included in a block past the boundary...
+      expect(block.number).toBeGreaterThan(forkBlock);
+      // ...and its commitment was appended to the tree the translation produced, rather than to a fresh one. The exact
+      // count is what makes this load-bearing: `carried + 1` can only hold if the post-fork chain grew the carried tree.
+      expect(v9CommitmentCount(after.ledger.serialize())).toBe(carried + 1n);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('translates a state the pre-fork chain never touched', async () =>
+    Effect.gen(function* () {
+      // No mints, no transactions: the smallest state there is. It has to translate too, and to translate to something
+      // recognisably empty rather than to whatever the post-fork ledger's own blank state happens to be.
+      const fork = yield* ForkSimulator.init(baseConfig);
+
+      const postFork = yield* fork.advanceToFork();
+      const postState = yield* postFork.getLatestState();
+
+      expect(v9CommitmentCount(postState.ledger.serialize())).toBe(0n);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('translates the same state to the same bytes', async () =>
+    Effect.gen(function* () {
+      // The translation is a pure function of its input, so the same pre-fork bytes must translate identically —
+      // otherwise nothing downstream of it can be asserted on.
+      //
+      // The same bytes, deliberately, rather than two independently-driven chains: genesis mints carry random coin
+      // nonces, so two pre-fork chains built from an identical config do *not* produce identical ledgers. That is the
+      // harness being nondeterministic, which says nothing either way about the translation.
+      const fork = yield* ForkSimulator.init({ ...baseConfig, preForkGenesisMints: v8GenesisMints });
+      yield* fork.advanceToFork();
+      const preForkLedger = (yield* fork.preFork.getLatestState()).ledger.serialize();
+
+      const first = yield* Effect.promise(() => translateLedgerState(preForkLedger));
+      const second = yield* Effect.promise(() => translateLedgerState(preForkLedger));
+
+      expect(first.length).toBeGreaterThan(0);
+      expect(first).toEqual(second);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});

@@ -63,3 +63,8 @@ CLAUDE.local.md
 
 # Claude Code — per-session runtime lock files (e.g. scheduled_tasks.lock)
 .claude/*.lock
+
+# WASM build output and local Cargo overrides for packages/state-translation/wasm
+# ('target' is already ignored globally above)
+packages/state-translation/wasm/pkg/
+packages/state-translation/wasm/.cargo/

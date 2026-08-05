@@ -1,0 +1,5 @@
+dist/
+coverage/
+reports/
+wasm/pkg/
+wasm/target/
