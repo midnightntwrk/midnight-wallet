@@ -21,6 +21,12 @@ supplied by the caller.
 `ForkSimulator` composes the two into a single chain that crosses a fork. It runs the pre-fork chain up to the
 configured fork block, stamps that block with the fork version — the signal a wallet's pre-fork variant migrates on —
 and then constructs the post-fork chain, numbered so that the boundary height is re-delivered with post-fork content.
-How value crosses the boundary is the `ForkHandover` seam: `ForkHandover.ReMint` recreates it from the final pre-fork
-state (what tests use today, and what a resync-style wallet migration expects), while `ForkHandover.MigrateLedger`
-supplies a converted post-fork ledger directly and is where a ledger-provided v8-to-v9 state migration will drop in.
+How value crosses the boundary is the `ForkHandover` seam. `ForkHandover.ReMint` recreates it from the final pre-fork
+state — machinery-faithful and content-approximate, and what a resync-style wallet migration expects.
+`ForkHandover.TranslateLedger` is the faithful path: it carries the pre-fork chain's own ledger state across via a
+`LedgerStateTranslator`, and is where the ledger-side v8-to-v9 state translation tool drops in. That translator is stated
+in serialized bytes and returns an `Effect`, because the tool is reached across a WASM boundary and has to be loaded and
+run to completion. Deserializing its result belongs to the harness, so bytes the post-fork ledger rejects surface as a
+`LedgerTranslationError` rather than a crash — as does any failure of the translation itself, reported to whoever is
+awaiting the fork. `translatorFromAsync` adapts an async function into a translator, and `unavailableTranslator` is an
+explicit placeholder that fails at the boundary until the real tool is wired up.

@@ -19,10 +19,11 @@
  */
 
 import { Data, Deferred, Effect, Option, pipe, Scope, Stream, SubscriptionRef, type Array as Arr } from 'effect';
-import { type LedgerState } from '@midnightntwrk/ledger-v9';
+import { LedgerState } from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 
+import { LedgerTranslationError, type LedgerStateTranslator } from './LedgerTranslation.js';
 import { Simulator } from './v9/Simulator.js';
 import { blankState, updateLedger, type BlockProducer, type GenesisMint } from './v9/SimulatorState.js';
 import * as V8 from './v8/index.js';
@@ -35,28 +36,31 @@ import * as V8 from './v8/index.js';
  * How value crosses the fork boundary — the seam between the two chains.
  *
  * Both branches receive the final pre-fork state, complete with its ledger-v8 ledger, and produce the post-fork chain's
- * starting point. They exist because the mechanism is an open question: today a hard fork is expected to be crossed by
- * rebuilding state with the new ledger, but if the ledger team ships a v8-to-v9 state migration it becomes the other
- * branch, with nothing else about the harness changing.
+ * starting point. They differ in how faithful that starting point is: {@link ForkHandover.ReMint} approximates the
+ * carried value's content while exercising the same machinery, whereas {@link ForkHandover.TranslateLedger} carries the
+ * pre-fork chain's own state across.
  */
 export type ForkHandover = Data.TaggedEnum<{
   /**
    * Recreate carried value on a fresh post-fork ledger, by minting it into the post-fork chain's genesis block.
    *
-   * This is what a resync-style wallet migration expects to see: coin commitments are deterministic in the coin and the
-   * owner's key, so re-minting identical coins reproduces identical commitments in the new chain's tree, and a wallet
-   * replaying post-fork events with its own keys rediscovers them.
+   * Machinery-faithful and content-approximate: nothing of the pre-fork ledger crosses, but what appears post-fork is
+   * built the way real value is. This is what a resync-style wallet migration expects to see — coin commitments are
+   * deterministic in the coin and the owner's key, so re-minting identical coins reproduces identical commitments in
+   * the new chain's tree, and a wallet replaying post-fork events with its own keys rediscovers them.
    */
   ReMint: {
     readonly mints: (preForkState: V8.SimulatorState) => Arr.NonEmptyArray<GenesisMint>;
   };
   /**
-   * Convert the pre-fork ledger into a post-fork one, which the post-fork chain then starts from directly.
+   * Translate the pre-fork chain's own ledger state into post-fork form, and start the post-fork chain from it.
    *
-   * The slot a ledger-provided v8-to-v9 state migration drops into.
+   * The faithful path, and the slot the ledger-side v8-to-v9 state translation tool drops into: see
+   * {@link LedgerStateTranslator} for why the seam is stated in bytes. Until that tool is wired up, callers supply the
+   * translation.
    */
-  MigrateLedger: {
-    readonly convert: (preForkState: V8.SimulatorState) => LedgerState;
+  TranslateLedger: {
+    readonly translator: LedgerStateTranslator;
   };
 }>;
 
@@ -157,7 +161,7 @@ export class ForkSimulator {
       yield* preFork.scheduleFork(config.forkBlock, config.forkVersion);
 
       const postForkRef = yield* SubscriptionRef.make(Option.none<Simulator>());
-      const postForkReady = yield* Deferred.make<Simulator>();
+      const postForkReady = yield* Deferred.make<Simulator, LedgerTranslationError>();
 
       const forkSimulator = new ForkSimulator(config, networkId, preFork, postForkRef, postForkReady);
 
@@ -193,7 +197,7 @@ export class ForkSimulator {
   readonly #config: ForkSimulatorConfig;
   readonly #networkId: NetworkId.NetworkId;
   readonly #postForkRef: SubscriptionRef.SubscriptionRef<Option.Option<Simulator>>;
-  readonly #postForkReady: Deferred.Deferred<Simulator>;
+  readonly #postForkReady: Deferred.Deferred<Simulator, LedgerTranslationError>;
 
   /** The pre-fork (ledger-v8) chain. */
   readonly preFork: V8.Simulator;
@@ -209,7 +213,7 @@ export class ForkSimulator {
     networkId: NetworkId.NetworkId,
     preFork: V8.Simulator,
     postForkRef: SubscriptionRef.SubscriptionRef<Option.Option<Simulator>>,
-    postForkReady: Deferred.Deferred<Simulator>,
+    postForkReady: Deferred.Deferred<Simulator, LedgerTranslationError>,
   ) {
     this.#config = config;
     this.#networkId = networkId;
@@ -236,9 +240,12 @@ export class ForkSimulator {
   /**
    * Wait until the fork has happened, however the pre-fork chain is driven to it.
    *
+   * Fails with the handover's own failure if it could not produce a post-fork chain, so a broken handover surfaces here
+   * rather than leaving waiters blocked forever.
+   *
    * @returns The post-fork chain
    */
-  awaitPostFork(): Effect.Effect<Simulator> {
+  awaitPostFork(): Effect.Effect<Simulator, LedgerTranslationError> {
     return Deferred.await(this.#postForkReady);
   }
 
@@ -250,7 +257,7 @@ export class ForkSimulator {
    *
    * @returns The post-fork chain
    */
-  advanceToFork(): Effect.Effect<Simulator, LedgerOps.LedgerError> {
+  advanceToFork(): Effect.Effect<Simulator, LedgerOps.LedgerError | LedgerTranslationError> {
     const preFork = this.preFork;
     const forkBlock = this.forkBlock;
 
@@ -301,7 +308,7 @@ export class ForkSimulator {
   }
 
   /** Run the handover and construct the post-fork chain, numbered and timed to continue from the fork point. */
-  #handover(preForkState: V8.SimulatorState): Effect.Effect<Simulator, never, Scope.Scope> {
+  #handover(preForkState: V8.SimulatorState): Effect.Effect<Simulator, LedgerTranslationError, Scope.Scope> {
     const { forkVersion, forkBlock, postForkBlockProducer } = this.#config;
     const networkId = this.#networkId;
     // Genesis parameters shared by both branches: the post-fork chain resumes the pre-fork chain's height and clock.
@@ -310,22 +317,39 @@ export class ForkSimulator {
       protocolVersion: forkVersion,
       genesisBlockNumber: forkBlock,
       genesisTime: preForkState.currentTime,
-      ...(postForkBlockProducer !== undefined ? { blockProducer: postForkBlockProducer } : {}),
     };
 
+    /** A post-fork chain whose genesis block already holds the given ledger, rather than one built by minting into it. */
+    const chainStartingFrom = (ledger: LedgerState): Effect.Effect<Simulator, never, Scope.Scope> =>
+      pipe(
+        Effect.promise(() => blankState(networkId, genesis)),
+        Effect.map((state) => updateLedger(state, ledger)),
+        Effect.flatMap((state) => Simulator.fromState(state, postForkBlockProducer)),
+      );
+
     return ForkHandover.$match(this.#config.handover, {
-      ReMint: ({ mints }) => Simulator.init({ ...genesis, genesisMints: mints(preForkState) }),
-      MigrateLedger: ({ convert }) =>
+      ReMint: ({ mints }) =>
+        Simulator.init({
+          ...genesis,
+          genesisMints: mints(preForkState),
+          ...(postForkBlockProducer !== undefined ? { blockProducer: postForkBlockProducer } : {}),
+        }),
+      TranslateLedger: ({ translator }) =>
         pipe(
-          Effect.promise(() =>
-            blankState(networkId, {
-              protocolVersion: forkVersion,
-              genesisBlockNumber: forkBlock,
-              genesisTime: preForkState.currentTime,
+          translator(preForkState.ledger.serialize()),
+          // Deserializing is the harness's job, not the translator's, so bytes the post-fork ledger rejects are a
+          // translation failure rather than a crash out of the handover fiber.
+          Effect.flatMap((translated) =>
+            Effect.try({
+              try: () => LedgerState.deserialize(translated),
+              catch: (cause) =>
+                new LedgerTranslationError({
+                  message: 'Translated bytes are not a valid post-fork ledger state',
+                  cause,
+                }),
             }),
           ),
-          Effect.map((state) => updateLedger(state, convert(preForkState))),
-          Effect.flatMap((state) => Simulator.fromState(state, postForkBlockProducer)),
+          Effect.flatMap(chainStartingFrom),
         ),
     });
   }

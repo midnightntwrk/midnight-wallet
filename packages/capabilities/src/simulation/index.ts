@@ -39,3 +39,11 @@ export * as V8 from './v8/index.js';
 
 // A chain that crosses the fork, built from both twins.
 export { ForkHandover, ForkSimulator, type ForkSimulatorConfig } from './ForkSimulator.js';
+
+// Carrying ledger state across the fork.
+export {
+  LedgerTranslationError,
+  translatorFromAsync,
+  unavailableTranslator,
+  type LedgerStateTranslator,
+} from './LedgerTranslation.js';
