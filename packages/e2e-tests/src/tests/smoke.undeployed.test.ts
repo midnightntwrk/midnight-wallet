@@ -62,7 +62,7 @@ describe('Smoke tests', () => {
   }, 20_000);
 
   test(
-    'Valid transfer of shielded and unshielded token @healthcheck',
+    'Valid transfer of shielded and unshielded token',
     async () => {
       logger.info(`shielded token type: ${shieldedTokenRaw}`);
       logger.info(`unshielded token type: ${unshieldedTokenRaw}`);
@@ -208,10 +208,15 @@ describe('Smoke tests', () => {
       expect(typeof stateObject.state).toBe('string');
       expect(stateObject.state).toBeTruthy();
 
-      // Verify tx history has shielded entries before serialization
-      const txHistoryBeforeSerialize = await funded.wallet.getAllFromTxHistory();
-      const confirmedBeforeSerialize = txHistoryBeforeSerialize.filter(isFinalizedWalletEntry);
-      const shieldedEntries = confirmedBeforeSerialize.filter((e) => e.shielded !== undefined);
+      // Verify tx history has shielded entries before serialization. `beforeEach` builds this wallet fresh, so its
+      // history starts empty and is rediscovered by syncing — and the entries are written by a fan-out that runs
+      // alongside the sync rather than as part of it, so a synced state does not imply a populated history. Reading it
+      // straight after `waitForSyncedState()` is a race, and one this test lost more often than not.
+      const shieldedEntries = await utils.waitForFinalizedTxHistoryEntries(
+        funded.wallet,
+        (entry) => entry.shielded !== undefined,
+        'a finalized shielded entry',
+      );
       expect(shieldedEntries.length).toBeGreaterThan(0);
 
       const walletConfig = fixture.getWalletConfig();

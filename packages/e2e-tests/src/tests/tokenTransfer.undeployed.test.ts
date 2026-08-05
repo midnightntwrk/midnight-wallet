@@ -52,7 +52,7 @@ describe('Token transfer', () => {
   });
 
   test(
-    'Is working for shielded token transfer @smoke @healthcheck',
+    'Is working for shielded token transfer @smoke',
     async () => {
       logger.info('Funding wallet 1 with native tokens...');
       await utils.waitForBlockAdvancement(fixture.getIndexerUri());
@@ -157,7 +157,7 @@ describe('Token transfer', () => {
     timeout,
   );
   test(
-    'Is working for unshielded token transfer @smoke @healthcheck',
+    'Is working for unshielded token transfer @smoke',
     async () => {
       await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       logger.info('Funding wallet 1 with native tokens...');
@@ -265,7 +265,7 @@ describe('Token transfer', () => {
   );
 
   test(
-    'Is working for native token transfer @smoke @healthcheck',
+    'Is working for native token transfer @smoke',
     async () => {
       const nativeToken1Raw = '0000000000000000000000000000000000000000000000000000000000000001';
       const nativeToken2Raw = '0000000000000000000000000000000000000000000000000000000000000002';

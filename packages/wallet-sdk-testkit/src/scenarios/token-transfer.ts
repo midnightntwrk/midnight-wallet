@@ -22,7 +22,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { type WalletTestEnvironment } from '../types.js';
-import { provideWallet, saveState, type WalletInit } from '../wallet.js';
+import { provideWallet, type ProvideWalletOptions, saveState, type WalletInit } from '../wallet.js';
 import { tNightAmount } from '../primitives.js';
 import { getShieldedAddress, getUnshieldedAddress } from '../addresses.js';
 import { waitForTxInHistory } from '../state-waiters.js';
@@ -48,6 +48,14 @@ export interface TokenTransferScenarioDeps {
   syncTimeout?: number | undefined;
   /** Timeout for the `afterEach` teardown in ms. Defaults to 10 minutes. */
   timeout?: number | undefined;
+  /**
+   * Selects the dust sync model. Defaults to the event-based wallet with background syncing.
+   *
+   * Passing `projectionsDustSyncOptions` is NOT enough on its own: the projections sync is a one-shot snapshot, so the
+   * scenario body must also drive `facade.doSync(dustSecretKey)` at every point it currently relies on background
+   * convergence. These scenarios do not, so they stay on the event-based sync.
+   */
+  walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }
 
 /** Accessors returned by {@link useTokenTransferWallets}, valid inside `test`/`it` bodies. */
@@ -71,6 +79,7 @@ export function useTokenTransferWallets({
   syncCacheDir,
   syncTimeout = 60 * 60 * 1000,
   timeout = 600_000,
+  walletOptions,
 }: TokenTransferScenarioDeps): TokenTransferWallets {
   const shieldedTokenRaw = ledger.shieldedToken().raw;
 
@@ -88,8 +97,13 @@ export function useTokenTransferWallets({
     filenameWallet = `${fundedSeed.substring(0, 7)}-${env.network}.state`;
     filenameWallet2 = `${secondSeed.substring(0, 7)}-${env.network}.state`;
 
-    wallet = await provideWallet(env, { seed: fundedSeed, syncCacheDir, filename: filenameWallet });
-    wallet2 = await provideWallet(env, { seed: secondSeed, syncCacheDir, filename: filenameWallet2 });
+    wallet = await provideWallet(env, { ...walletOptions, seed: fundedSeed, syncCacheDir, filename: filenameWallet });
+    wallet2 = await provideWallet(env, {
+      ...walletOptions,
+      seed: secondSeed,
+      syncCacheDir,
+      filename: filenameWallet2,
+    });
     logger.info('Two wallets started');
 
     const [state1, state2] = await Promise.all([
