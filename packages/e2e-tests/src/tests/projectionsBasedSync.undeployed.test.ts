@@ -374,16 +374,22 @@ describe('Projections-based synchronisation model', () => {
       // and asks for commitment ranges starting above the last synced commitment. A wallet built from scratch has
       // that baseline at -1, so no other test in this suite reaches any of it. This is also the hard-fork
       // migration shape, since `restore()` is how a wallet crosses a protocol version.
-      const { receiverState: stateBeforeSnapshot } = await sendAndRegisterNightUtxos();
+      //
+      // The pre-funded wallet is the subject rather than the receiver: its Dust comes from genesis, so this test
+      // neither needs a registration flow nor cares what the tests before it did to the chain. Registering the
+      // receiver's Night UTxOs is a one-shot resource — the test above consumes it — so a second registration here
+      // would depend on execution order.
+      await funded.wallet.doSync(funded.dustSecretKey);
+      const stateBeforeSnapshot = await funded.wallet.waitForSyncedState();
       const dustUtxosBeforeSnapshot = stateBeforeSnapshot.dust.state.state.utxos.length;
       expect(dustUtxosBeforeSnapshot).toBeGreaterThan(0);
 
-      // Snapshot the projections-synced receiver, then restore it into a fresh facade. Writing the snapshot inside
+      // Snapshot the projections-synced wallet, then restore it into a fresh facade. Writing the snapshot inside
       // the test keeps it hermetic: an undeployed chain is new each run, so a snapshot left behind by a previous
       // run would describe a different chain.
-      const filename = `projections-restore-${seed.substring(0, 7)}.state`;
-      await utils.saveState(receiver.wallet, filename);
-      const restored = await utils.provideWallet(filename, seed, fixture, utils.projectionsDustSyncOptions);
+      const filename = `projections-restore-${seedFunded.substring(0, 7)}.state`;
+      await utils.saveState(funded.wallet, filename);
+      const restored = await utils.provideWallet(filename, seedFunded, fixture, utils.projectionsDustSyncOptions);
 
       try {
         // `provideWallet` silently falls back to building from scratch when a restore fails, which would leave this
@@ -401,7 +407,7 @@ describe('Projections-based synchronisation model', () => {
         await restored.wallet.doSync(restored.dustSecretKey);
 
         const restoredState = await restored.wallet.waitForSyncedState();
-        const eventsState = await receiverEventsSynced.wallet.waitForSyncedState();
+        const eventsState = await fundedEventsSynced.wallet.waitForSyncedState();
 
         // The resumed wallet must land on the same Dust state as one that replayed the whole event history.
         expectSameSyncState(eventsState, restoredState);
