@@ -164,15 +164,23 @@ export class ForkSimulator {
       // The handover must outlive the watcher fiber, so it is built in the simulator's own scope.
       const scope = yield* Effect.scope;
 
-      yield* Effect.forkScoped(
-        Effect.gen(function* () {
-          const atFork = yield* forkSimulator.#awaitForkBlock();
-          const postFork = yield* Scope.extend(forkSimulator.#handover(atFork), scope);
-          // The reference is set first: anything woken by the deferred must already see the post-fork chain.
-          yield* SubscriptionRef.set(postForkRef, Option.some(postFork));
-          yield* Deferred.succeed(postForkReady, postFork);
-        }),
-      );
+      const runHandover = Effect.gen(function* () {
+        const atFork = yield* forkSimulator.#awaitForkBlock();
+        const postFork = yield* Scope.extend(
+          // Suspended so that a handover built from a throwing caller-supplied callback fails this effect rather than
+          // escaping as a synchronous exception.
+          Effect.suspend(() => forkSimulator.#handover(atFork)),
+          scope,
+        );
+        // The reference is set first: anything woken by the deferred must already see the post-fork chain.
+        yield* SubscriptionRef.set(postForkRef, Option.some(postFork));
+        return postFork;
+      });
+
+      // The handover runs detached, so its outcome has to be handed to whoever is waiting for the fork — including when
+      // it fails or dies. `intoDeferred` transfers the whole exit; completing the deferred by hand on the success path
+      // only would leave every waiter blocked forever on a broken handover, which reads as a hang rather than an error.
+      yield* Effect.forkScoped(Effect.intoDeferred(runHandover, postForkReady));
 
       return forkSimulator;
     });
