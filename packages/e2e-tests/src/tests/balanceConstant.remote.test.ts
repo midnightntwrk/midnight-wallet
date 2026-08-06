@@ -74,7 +74,7 @@ describe('Balance constant', () => {
     async () => {
       // Deliberate save inside the test body: this test's subject is save-then-restore, and it only reaches this line
       // on the passing path. It is not the `afterEach` persistence that the poisoning guard exists for.
-      await utils.saveState(wallet.wallet, filename);
+      await utils.saveState(wallet, filename);
       const restoredWallet = await utils.provideWallet(filename, seed, fixture);
       const syncedState = await restoredWallet.wallet.waitForSyncedState();
 

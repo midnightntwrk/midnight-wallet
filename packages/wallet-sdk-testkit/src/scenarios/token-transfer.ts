@@ -23,7 +23,7 @@ import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { type WalletTestEnvironment } from '../types.js';
 import { provideWallet, type ProvideWalletOptions, saveState, shouldPersistState, type WalletInit } from '../wallet.js';
-import { eventLessDustWallet } from '../dust-sync.js';
+import { projectionsDustSyncOptions } from '../dust-sync.js';
 import { tNightAmount } from '../primitives.js';
 import { getShieldedAddress, getUnshieldedAddress } from '../addresses.js';
 import { waitForTxInHistory } from '../state-waiters.js';
@@ -56,10 +56,9 @@ export interface TokenTransferScenarioDeps {
    * Selects the dust sync model for both wallets. Defaults to the projections sync with background synchronization, so
    * these transfers' fees are paid out of a projections-synced dust wallet.
    *
-   * Pass `{ dustWallet: eventBasedDustWallet }` to use the event-stream sync instead. Clear `syncCacheDir` when you do:
-   * a snapshot written by the projections sync resumes the event subscription from a cursor that is not an event id,
-   * which silently skips events. See {@link eventBasedDustWallet}. Avoid adding `manualSync` here: these scenarios wait
-   * on the state stream rather than driving passes themselves, so they need background synchronization to be running.
+   * Pass `{ dustWallet: eventBasedDustWallet }` to use the event-stream sync instead; dust snapshots are namespaced per
+   * sync model, so there is no cache to clear when switching. Avoid adding `manualSync` here: these scenarios wait on
+   * the state stream rather than driving passes themselves, so they need background synchronization to be running.
    */
   walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }
@@ -85,7 +84,7 @@ export function useTokenTransferWallets({
   syncCacheDir,
   syncTimeout = 15 * 60 * 1000,
   timeout = 600_000,
-  walletOptions = { dustWallet: eventLessDustWallet },
+  walletOptions = projectionsDustSyncOptions,
 }: TokenTransferScenarioDeps): TokenTransferWallets {
   const shieldedTokenRaw = ledger.shieldedToken().raw;
 
@@ -134,8 +133,8 @@ export function useTokenTransferWallets({
   afterEach(async (context) => {
     // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
     if (syncCacheDir && shouldPersistState(context)) {
-      await saveState(wallet.wallet, syncCacheDir, filenameWallet);
-      await saveState(wallet2.wallet, syncCacheDir, filenameWallet2);
+      await saveState(wallet, syncCacheDir, filenameWallet);
+      await saveState(wallet2, syncCacheDir, filenameWallet2);
     }
     await sender.wallet.stop();
     await receiver.wallet.stop();

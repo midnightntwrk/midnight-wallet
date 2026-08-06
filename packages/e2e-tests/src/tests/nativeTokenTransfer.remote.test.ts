@@ -75,8 +75,8 @@ describe('Token transfer', () => {
   afterEach(async (context) => {
     // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
     if (shouldPersistState(context)) {
-      await utils.saveState(wallet.wallet, filenameWallet);
-      await utils.saveState(wallet2.wallet, filenameWallet2);
+      await utils.saveState(wallet, filenameWallet);
+      await utils.saveState(wallet2, filenameWallet2);
     }
     await sender.wallet.stop();
     await receiver.wallet.stop();

@@ -15,10 +15,18 @@
 // `import * as utils from './utils.js'` namespace import unchanged.
 // Prefer importing directly from `./helpers/<module>` in new code.
 export * from './helpers/walletInit.js';
-// Dust sync model selection lives in the testkit, which documents the one-shot contract that makes
-// `manualSync` mandatory. Only the ready-made options object is needed here; import the factories from
-// `@midnightntwrk/wallet-sdk-testkit/core` directly if a test ever needs to build its own pairing.
-export { projectionsDustSyncOptions } from '@midnightntwrk/wallet-sdk-testkit/core';
+// Dust sync model selection lives in the testkit, which documents how the two models differ and why their
+// snapshots are kept apart. Re-exported here so a test can pin a model without reaching past this barrel:
+// spread `projectionsDustSyncOptions` for the plain background case, `manualProjectionsDustSyncOptions` when
+// the test drives each pass itself, or pass a factory as `{ dustWallet }` directly.
+export {
+  type DustSyncModel,
+  dustWalletFor,
+  eventBasedDustWallet,
+  eventLessDustWallet,
+  manualProjectionsDustSyncOptions,
+  projectionsDustSyncOptions,
+} from '@midnightntwrk/wallet-sdk-testkit/core';
 export * from './helpers/seeds.js';
 export * from './helpers/addresses.js';
 export * from './helpers/stateWaiters.js';

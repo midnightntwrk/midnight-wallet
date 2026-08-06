@@ -19,6 +19,6 @@ To keep monitoring the event-stream sync instead, pass the dep explicitly:
 registerDustHealthchecks({ getEnv, seed, walletOptions: { dustWallet: eventBasedDustWallet } });
 ```
 
-`projectionsDustSyncOptions` is unchanged and still pairs the factory with `manualSync`, for a caller that wants to
-decide when each pass runs. It is not what these scenarios use, because they wait on the state stream rather than
-driving passes themselves.
+These scenarios use `projectionsDustSyncOptions`, which leaves background synchronization on. A caller that wants to
+decide when each pass runs wants `manualProjectionsDustSyncOptions` instead — but not for these scenarios, which wait on
+the state stream rather than driving passes themselves.

@@ -21,7 +21,7 @@ import * as rx from 'rxjs';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type WalletTestEnvironment } from '../types.js';
 import { provideWallet, type ProvideWalletOptions, saveState, shouldPersistState, type WalletInit } from '../wallet.js';
-import { eventLessDustWallet } from '../dust-sync.js';
+import { projectionsDustSyncOptions } from '../dust-sync.js';
 import { logger } from '../logger.js';
 
 /** Dependencies the dust scenarios need from the consumer. */
@@ -38,11 +38,9 @@ export interface DustScenarioDeps {
    * Selects the dust sync model. Defaults to the projections sync with background synchronization, so the network being
    * monitored is exercised against the sync model the wallet ships to users.
    *
-   * Pass `{ dustWallet: eventBasedDustWallet }` to monitor the event-stream sync instead. Clear `syncCacheDir` when you
-   * do: a snapshot written by the projections sync resumes the event subscription from a cursor that is not an event
-   * id, which silently skips events. See {@link eventBasedDustWallet}. Avoid adding `manualSync` here: these scenarios
-   * wait on the state stream rather than driving passes themselves, so they need background synchronization to be
-   * running.
+   * Pass `{ dustWallet: eventBasedDustWallet }` to monitor the event-stream sync instead; dust snapshots are namespaced
+   * per sync model, so there is no cache to clear when switching. Avoid adding `manualSync` here: these scenarios wait
+   * on the state stream rather than driving passes themselves, so they need background synchronization to be running.
    */
   walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }
@@ -53,7 +51,7 @@ export function registerDustHealthchecks({
   seed,
   syncCacheDir,
   timeout = 900_000,
-  walletOptions = { dustWallet: eventLessDustWallet },
+  walletOptions = projectionsDustSyncOptions,
 }: DustScenarioDeps): void {
   describe('Dust tests', () => {
     const unshieldedTokenRaw = ledger.unshieldedToken().raw;
@@ -69,7 +67,7 @@ export function registerDustHealthchecks({
     afterEach(async (context) => {
       // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
       if (syncCacheDir && shouldPersistState(context)) {
-        await saveState(wallet.wallet, syncCacheDir, filenameWallet);
+        await saveState(wallet, syncCacheDir, filenameWallet);
       }
       await wallet.wallet.stop();
       logger.info('Wallet stopped');

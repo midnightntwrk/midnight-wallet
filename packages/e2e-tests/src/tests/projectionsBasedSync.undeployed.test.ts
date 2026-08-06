@@ -41,9 +41,9 @@ describe('Projections-based synchronisation model', () => {
   beforeEach(async () => {
     fixture = getFixture();
     fundedEventsSynced = await utils.initWalletWithSeed(seedFunded, fixture);
-    funded = await utils.initWalletWithSeed(seedFunded, fixture, 'schnorr', utils.projectionsDustSyncOptions);
+    funded = await utils.initWalletWithSeed(seedFunded, fixture, 'schnorr', utils.manualProjectionsDustSyncOptions);
     receiverEventsSynced = await utils.initWalletWithSeed(seed, fixture);
-    receiver = await utils.initWalletWithSeed(seed, fixture, 'schnorr', utils.projectionsDustSyncOptions);
+    receiver = await utils.initWalletWithSeed(seed, fixture, 'schnorr', utils.manualProjectionsDustSyncOptions);
     logger.info('Two wallets started');
   });
 
@@ -388,8 +388,8 @@ describe('Projections-based synchronisation model', () => {
       // the test keeps it hermetic: an undeployed chain is new each run, so a snapshot left behind by a previous
       // run would describe a different chain.
       const filename = `projections-restore-${seedFunded.substring(0, 7)}.state`;
-      await utils.saveState(funded.wallet, filename);
-      const restored = await utils.provideWallet(filename, seedFunded, fixture, utils.projectionsDustSyncOptions);
+      await utils.saveState(funded, filename);
+      const restored = await utils.provideWallet(filename, seedFunded, fixture, utils.manualProjectionsDustSyncOptions);
 
       try {
         // `provideWallet` silently falls back to building from scratch when a restore fails, which would leave this

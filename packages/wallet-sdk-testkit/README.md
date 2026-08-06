@@ -61,6 +61,32 @@ import { createTestContainersEnvironment } from '@midnightntwrk/wallet-sdk-testk
 const getEnv = useWalletTestEnvironment(() => createTestContainersEnvironment({ network: 'undeployed' }));
 ```
 
+## Choosing the Dust sync model
+
+Dust can sync from the indexer's event stream or from its projections. The testkit builds the event-based sync by
+default and takes `DUST_SYNC=projections` to switch a whole run to the other one:
+
+```bash
+DUST_SYNC=projections yarn test-remote -- -t @healthcheck
+```
+
+An unrecognized value is rejected rather than defaulted, so a typo cannot report a run as covering one sync model while
+it actually covered the other.
+
+A test that needs a specific model regardless of the environment pins it in code, which overrides `DUST_SYNC`:
+
+```ts
+provideWallet(env, { ...projectionsDustSyncOptions, seed, syncCacheDir, filename });
+```
+
+Use `manualProjectionsDustSyncOptions` instead when the test drives each sync pass itself with `facade.doSync()`; the
+plain `projectionsDustSyncOptions` leaves background synchronization on, so the usual state waiters work unchanged.
+
+The two models disagree about the meaning of the single progress value a Dust snapshot carries, so a snapshot written by
+one must never be restored into the other. Dust snapshots are therefore stored per model — switching models finds no
+snapshot and rebuilds from scratch, rather than resuming from a position that is not a valid cursor. There is no cache
+to clear by hand. The shielded and unshielded snapshots are model-independent and shared.
+
 ## Peer dependencies
 
 - `vitest` — required (assertions and the environment hooks use it).
