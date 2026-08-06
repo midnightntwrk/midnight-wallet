@@ -22,7 +22,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { type WalletTestEnvironment } from '../types.js';
-import { provideWallet, type ProvideWalletOptions, saveState, type WalletInit } from '../wallet.js';
+import { provideWallet, type ProvideWalletOptions, saveState, shouldPersistState, type WalletInit } from '../wallet.js';
 import { eventLessDustWallet } from '../dust-sync.js';
 import { tNightAmount } from '../primitives.js';
 import { getShieldedAddress, getUnshieldedAddress } from '../addresses.js';
@@ -45,7 +45,10 @@ export interface TokenTransferScenarioDeps {
   secondSeed: string;
   /** Optional dir to persist/restore wallet state across runs. (Was the `SYNC_CACHE` env var.) */
   syncCacheDir?: string | undefined;
-  /** Timeout for the sync-heavy `beforeEach` and the healthcheck test in ms. Defaults to 1 hour. */
+  /**
+   * Timeout for the sync-heavy `beforeEach` and the healthcheck test in ms. Defaults to 15 minutes — a longer bound
+   * does not rescue a wedged wallet, it only spends lane time before reporting.
+   */
   syncTimeout?: number | undefined;
   /** Timeout for the `afterEach` teardown in ms. Defaults to 10 minutes. */
   timeout?: number | undefined;
@@ -79,7 +82,7 @@ export function useTokenTransferWallets({
   fundedSeed,
   secondSeed,
   syncCacheDir,
-  syncTimeout = 60 * 60 * 1000,
+  syncTimeout = 15 * 60 * 1000,
   timeout = 600_000,
   walletOptions = { dustWallet: eventLessDustWallet },
 }: TokenTransferScenarioDeps): TokenTransferWallets {
@@ -127,8 +130,9 @@ export function useTokenTransferWallets({
     }
   }, syncTimeout);
 
-  afterEach(async () => {
-    if (syncCacheDir) {
+  afterEach(async (context) => {
+    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
+    if (syncCacheDir && shouldPersistState(context)) {
       await saveState(wallet.wallet, syncCacheDir, filenameWallet);
       await saveState(wallet2.wallet, syncCacheDir, filenameWallet2);
     }
@@ -161,7 +165,7 @@ export function registerTokenTransferHealthchecks(deps: TokenTransferScenarioDep
     const shieldedTokenRaw = ledger.shieldedToken().raw;
     const unshieldedTokenRaw = ledger.unshieldedToken().raw;
     const outputValue = tNightAmount(10n);
-    const syncTimeout = deps.syncTimeout ?? 60 * 60 * 1000;
+    const syncTimeout = deps.syncTimeout ?? 15 * 60 * 1000;
 
     test(
       'Is working for valid transfer @healthcheck',

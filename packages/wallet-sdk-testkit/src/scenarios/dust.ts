@@ -20,7 +20,7 @@ import { inspect } from 'node:util';
 import * as rx from 'rxjs';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type WalletTestEnvironment } from '../types.js';
-import { provideWallet, type ProvideWalletOptions, saveState, type WalletInit } from '../wallet.js';
+import { provideWallet, type ProvideWalletOptions, saveState, shouldPersistState, type WalletInit } from '../wallet.js';
 import { eventLessDustWallet } from '../dust-sync.js';
 import { logger } from '../logger.js';
 
@@ -32,7 +32,7 @@ export interface DustScenarioDeps {
   seed: string;
   /** Optional dir to persist/restore wallet state across runs. (Was the `SYNC_CACHE` env var.) */
   syncCacheDir?: string | undefined;
-  /** Per-test timeout in ms. Defaults to the upstream value of 1 hour. */
+  /** Per-test timeout in ms. Defaults to 15 minutes; a longer bound only spends lane time on a wedged wallet. */
   timeout?: number | undefined;
   /**
    * Selects the dust sync model. Defaults to the projections sync with background synchronization, so the network being
@@ -50,7 +50,7 @@ export function registerDustHealthchecks({
   getEnv,
   seed,
   syncCacheDir,
-  timeout = 3_600_000,
+  timeout = 900_000,
   walletOptions = { dustWallet: eventLessDustWallet },
 }: DustScenarioDeps): void {
   describe('Dust tests', () => {
@@ -64,8 +64,9 @@ export function registerDustHealthchecks({
       wallet = await provideWallet(env, { ...walletOptions, seed, syncCacheDir, filename: filenameWallet });
     });
 
-    afterEach(async () => {
-      if (syncCacheDir) {
+    afterEach(async (context) => {
+      // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
+      if (syncCacheDir && shouldPersistState(context)) {
         await saveState(wallet.wallet, syncCacheDir, filenameWallet);
       }
       await wallet.wallet.stop();

@@ -233,6 +233,20 @@ export const provideWallet = async (env: WalletTestEnvironment, options: Provide
   }
 };
 
+/**
+ * Whether the test that has just finished is safe to persist wallet state from.
+ *
+ * State written by a failed or timed-out test is worse than no state at all: the next run restores it, resumes from
+ * whatever partial position the failure left behind, and fails in turn — so one transient failure becomes permanent and
+ * every later run inherits it. Only a test that passed is known to have left its wallets in a position the chain can be
+ * resumed from.
+ *
+ * Pass the `afterEach` context: `afterEach((ctx) => { if (shouldPersistState(ctx)) await saveState(...) })`.
+ */
+export const shouldPersistState = (context: {
+  readonly task: { readonly result?: { readonly state?: string } };
+}): boolean => context.task.result?.state === 'pass';
+
 /** Serializes all three sub-wallet states into `syncCacheDir`, keyed by `filename`. */
 export const saveState = async (wallet: WalletFacade, syncCacheDir: string, filename: string): Promise<void> => {
   logger.info(`Saving state in ${syncCacheDir}/${filename}`);
