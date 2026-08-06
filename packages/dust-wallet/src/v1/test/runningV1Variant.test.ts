@@ -17,7 +17,7 @@ import {
   LedgerParameters,
 } from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Duration, Effect, Exit, Ref, Scope, Stream, SubscriptionRef, TestClock, TestContext } from 'effect';
+import { Duration, Effect, Exit, pipe, Ref, Scope, Stream, SubscriptionRef, TestClock, TestContext } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { chooseCoin, makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
@@ -156,5 +156,116 @@ describe('RunningV1Variant.startSync tx-history fan-out', () => {
     expect(result.maxInFlight).toBe(8);
     // The cap only queues work, it never drops it.
     expect(result.recorded).toBe(12);
+  });
+});
+
+/**
+ * The projections sync service ends its `updates` stream after a single pass, where the event-based service's is a
+ * long-lived subscription. Background sync must therefore re-run a finite `updates`, or a wallet built on the
+ * projections service converges once and never observes anything again — and the existing `Stream.retry` does not help,
+ * because it re-runs on failure, not on completion.
+ *
+ * A service declares that it needs this by setting `backgroundRepeatDelay`; a service with a long-lived `updates` omits
+ * it and must be unaffected.
+ */
+describe('RunningV1Variant background sync of a finite updates stream', () => {
+  /**
+   * A service whose `updates` completes after emitting once. It records the `appliedIndex` of the state each pass was
+   * handed, so a test can tell whether later passes see the state earlier ones produced or a stale snapshot.
+   */
+  const finiteSyncServiceOf = (
+    seenAppliedIndexes: Ref.Ref<readonly number[]>,
+    backgroundRepeatDelay?: Duration.DurationInput,
+  ): SyncService<CoreWallet, null, FakeSyncUpdate> => ({
+    ...syncServiceOf([]),
+    updates: (state) =>
+      pipe(
+        Ref.update(seenAppliedIndexes, (seen) => [...seen, Number(state.progress.appliedIndex)]),
+        Stream.fromEffect,
+        Stream.as(['tx'] as FakeSyncUpdate),
+      ),
+    ...(backgroundRepeatDelay !== undefined ? { backgroundRepeatDelay } : {}),
+  });
+
+  /** Advances the applied index by one per pass, so the next pass can be seen to start from the new value. */
+  const advancingCapability: SyncCapability<CoreWallet, FakeSyncUpdate, ChangesResult> = {
+    applyUpdate: (state, sources) => [
+      CoreWallet.updateProgress(state, { appliedIndex: state.progress.appliedIndex + 1n }),
+      { changes: sources.map(changeOf), protocolVersion: 1 },
+    ],
+  };
+
+  const runBackgroundFor = async (
+    backgroundRepeatDelay: Duration.DurationInput | undefined,
+    elapsed: Duration.DurationInput,
+  ): Promise<readonly number[]> =>
+    Effect.gen(function* () {
+      const seen = yield* Ref.make<readonly number[]>([]);
+      const secretKey = DustSecretKey.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.initEmpty(LedgerParameters.initialParameters().dust, secretKey, networkId),
+      );
+      const scope = yield* Scope.make();
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef },
+        {
+          ...variantContextOf([], { getTransactionDetails: () => Effect.die('unused'), put: () => Effect.void }),
+          syncService: finiteSyncServiceOf(seen, backgroundRepeatDelay),
+          syncCapability: advancingCapability,
+        },
+      );
+
+      yield* variant.startSyncInBackground(null);
+      yield* TestClock.adjust(elapsed);
+      const result = yield* Ref.get(seen);
+      yield* Scope.close(scope, Exit.void);
+      return result;
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+  it('re-runs the pass on the declared delay, each pass starting from the state the last one produced', async () => {
+    // 5s delay over 12s of clock: the initial pass plus two repeats. Each pass must observe the applied index the
+    // previous pass advanced, which is only true if the repeat re-reads state rather than reusing a snapshot.
+    const seen = await runBackgroundFor(Duration.seconds(5), Duration.seconds(12));
+
+    expect(seen).toEqual([0, 1, 2]);
+  });
+
+  it('leaves a service that declares no delay running exactly one pass', async () => {
+    // Guards the event-based service: its `updates` never completes in production, and nothing here may start
+    // re-running passes behind its back.
+    const seen = await runBackgroundFor(undefined, Duration.minutes(5));
+
+    expect(seen).toEqual([0]);
+  });
+
+  it('keeps an explicitly driven sync to a single pass even when a repeat delay is declared', async () => {
+    // `sync()` backs `facade.doSync()`, which must return. If the repeat leaked into it, the caller would never be
+    // handed control back.
+    const seen = await Effect.gen(function* () {
+      const seenRef = yield* Ref.make<readonly number[]>([]);
+      const secretKey = DustSecretKey.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.initEmpty(LedgerParameters.initialParameters().dust, secretKey, networkId),
+      );
+      const scope = yield* Scope.make();
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef },
+        {
+          ...variantContextOf([], { getTransactionDetails: () => Effect.die('unused'), put: () => Effect.void }),
+          syncService: finiteSyncServiceOf(seenRef, Duration.seconds(5)),
+          syncCapability: advancingCapability,
+        },
+      );
+
+      yield* variant.sync(null);
+      yield* TestClock.adjust(Duration.minutes(5));
+      const result = yield* Ref.get(seenRef);
+      yield* Scope.close(scope, Exit.void);
+      return result;
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(seen).toEqual([0]);
   });
 });

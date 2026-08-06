@@ -29,12 +29,10 @@ export type DustWalletFactory = (config: DefaultDustConfiguration) => DustWallet
  * The sync service is swapped in at build time, so a wallet built without this factory gets the event-based sync no
  * matter what else it configures.
  *
- * **This is a one-shot sync and must be driven explicitly.** Where the event-based service's `updates` is a long-lived
- * indexer subscription, the projections service does a single pass up to the block it read at the start and then ends
- * its stream. Background syncing therefore converges once and never observes anything afterwards, and the variant's
- * background retry only re-runs the pass on _failure_, not on completion. Pair this factory with `manualSync: true` —
- * see {@link projectionsDustSyncOptions} — and call `facade.doSync(dustSecretKey)` at every point that would otherwise
- * wait for background convergence.
+ * The projections sync synchronizes in finite passes rather than over a live subscription, but background
+ * synchronization re-runs those passes on an interval, so this factory can be used on its own and the usual state
+ * waiters behave as they do for the event-based sync. Pair it with `manualSync` — see {@link projectionsDustSyncOptions}
+ * — only when a caller wants to decide when each pass happens.
  */
 export const eventLessDustWallet: DustWalletFactory = (config) =>
   CustomDustWallet(
@@ -46,12 +44,15 @@ export const eventLessDustWallet: DustWalletFactory = (config) =>
 export const eventBasedDustWallet: DustWalletFactory = DustWallet;
 
 /**
- * The correct way to opt a wallet into the projections-based dust sync: the factory plus `manualSync`, so the caller
- * owns when each snapshot is taken.
+ * The projections dust sync with background synchronization switched off, so the caller decides when each pass runs.
  *
- * A caller that spreads this in still has to drive `facade.doSync(dustSecretKey)` itself — after start, and again after
- * anything that changes dust state. Waiting on `waitForSyncedState()` alone will block, because with `manualSync`
+ * Use this when a test needs passes to happen at known points — asserting on the state a specific pass produced, for
+ * instance. A caller that spreads this in must drive `facade.doSync(dustSecretKey)` itself, after start and again after
+ * anything that changes dust state; waiting on `waitForSyncedState()` alone will block, because with `manualSync`
  * nothing advances the dust wallet until `doSync` runs.
+ *
+ * For a test that just wants the wallet to keep up on its own, pass `{ dustWallet: eventLessDustWallet }` instead and
+ * let background synchronization run the passes.
  */
 export const projectionsDustSyncOptions: {
   readonly dustWallet: DustWalletFactory;
