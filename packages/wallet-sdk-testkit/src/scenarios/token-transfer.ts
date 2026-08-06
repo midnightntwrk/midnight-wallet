@@ -56,9 +56,10 @@ export interface TokenTransferScenarioDeps {
    * Selects the dust sync model for both wallets. Defaults to the projections sync with background synchronization, so
    * these transfers' fees are paid out of a projections-synced dust wallet.
    *
-   * Pass `{ dustWallet: eventBasedDustWallet }` to use the event-stream sync instead. Avoid adding `manualSync` here:
-   * these scenarios wait on the state stream rather than driving passes themselves, so they need background
-   * synchronization to be running.
+   * Pass `{ dustWallet: eventBasedDustWallet }` to use the event-stream sync instead. Clear `syncCacheDir` when you do:
+   * a snapshot written by the projections sync resumes the event subscription from a cursor that is not an event id,
+   * which silently skips events. See {@link eventBasedDustWallet}. Avoid adding `manualSync` here: these scenarios wait
+   * on the state stream rather than driving passes themselves, so they need background synchronization to be running.
    */
   walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }

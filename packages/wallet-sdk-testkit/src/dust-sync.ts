@@ -40,7 +40,19 @@ export const eventLessDustWallet: DustWalletFactory = (config) =>
     new V1Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
   );
 
-/** The event-stream dust sub-wallet, with the long-lived subscription. This is the default everywhere. */
+/**
+ * The event-stream dust sub-wallet, with the long-lived subscription.
+ *
+ * **Clear the state cache when switching a wallet from the projections sync back to this one.** A dust snapshot stores
+ * one progress value, `appliedIndex`, and the two sync models mean different things by it: this service treats it as a
+ * ledger-event cursor to resume its subscription from, while the projections service writes a composite of tree indices
+ * and nullifier count. Restoring a projections-written snapshot here therefore resumes the subscription from a position
+ * that is not an event id at all, and because the cursor is trusted rather than validated, the effect is silently
+ * skipped events rather than an error.
+ *
+ * The reverse direction is safe: the projections sync takes its resume points from the ledger state in the snapshot and
+ * ignores `appliedIndex`, so a snapshot written by this service restores into it correctly.
+ */
 export const eventBasedDustWallet: DustWalletFactory = DustWallet;
 
 /**

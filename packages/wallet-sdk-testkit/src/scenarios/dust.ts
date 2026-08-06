@@ -38,9 +38,11 @@ export interface DustScenarioDeps {
    * Selects the dust sync model. Defaults to the projections sync with background synchronization, so the network being
    * monitored is exercised against the sync model the wallet ships to users.
    *
-   * Pass `{ dustWallet: eventBasedDustWallet }` to monitor the event-stream sync instead. Avoid adding `manualSync`
-   * here: these scenarios wait on the state stream rather than driving passes themselves, so they need background
-   * synchronization to be running.
+   * Pass `{ dustWallet: eventBasedDustWallet }` to monitor the event-stream sync instead. Clear `syncCacheDir` when you
+   * do: a snapshot written by the projections sync resumes the event subscription from a cursor that is not an event
+   * id, which silently skips events. See {@link eventBasedDustWallet}. Avoid adding `manualSync` here: these scenarios
+   * wait on the state stream rather than driving passes themselves, so they need background synchronization to be
+   * running.
    */
   walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }
