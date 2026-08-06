@@ -77,6 +77,100 @@ jobs:
             packages/*/dist/**
             packages/*/tsconfig.*.tsbuildinfo
 
+  # The only Rust in this repository. `packages/state-translation/wasm` wraps the ledger's v8-to-v9 translation crate,
+  # and the fork tests that use it skip unless the artifact exists — so without this job they would silently never run.
+  # Building here rather than committing the 1.7 MB binary keeps it honest: it cannot go stale against the crate.
+  build-wasm:
+    name: Build WASM Translation
+    needs: [build]
+    runs-on: ubuntu-latest
+    # A cold build compiles both ledgers with LTO; ~6 min observed, and the cargo cache takes most runs well under it.
+    timeout-minutes: 30
+    env:
+      # Ubuntu's clang can target wasm32 (Apple's cannot). The stack protector pulls in OS code that does not exist on
+      # wasm — the same reason midnight-ledger's nix build disables it.
+      CC_wasm32_unknown_unknown: clang
+      CFLAGS_wasm32_unknown_unknown: -fno-stack-protector
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      # The verification step imports the loader from dist, and the ledger packages to build a state to translate.
+      # Extracted into packages/ rather than the repository root: upload-artifact strips the common `packages/` prefix,
+      # and nothing in this job runs turbo, so — as in e2e-smoke — there is no `^dist` rebuild to paper over a wrong
+      # path. It would surface as ERR_MODULE_NOT_FOUND in the verify step.
+      - name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: build-artifacts-${{ github.run_id }}
+          path: packages
+
+      # Keyed on Cargo.lock: the dependency set is what decides how much has to be recompiled, and it only moves when
+      # the translation crate or the patched storage version does.
+      - name: Cache cargo registry and build
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            packages/state-translation/wasm/target
+          key: cargo-wasm-${{ runner.os }}-${{ hashFiles('packages/state-translation/wasm/Cargo.lock') }}
+          restore-keys: |
+            cargo-wasm-${{ runner.os }}-
+
+      - name: Install Rust wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      # Prebuilt binaries rather than `cargo install`, which would compile wasm-bindgen-cli from source on every cache
+      # miss. The wasm-bindgen version must match the crate pin in Cargo.toml exactly or the CLI rejects the .wasm.
+      - name: Install wasm-bindgen and wasm-opt
+        env:
+          WASM_BINDGEN_VERSION: '0.2.104'
+          BINARYEN_VERSION: '131'
+        run: |
+          curl -sSfL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${WASM_BINDGEN_VERSION}/wasm-bindgen-${WASM_BINDGEN_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar xz -C /tmp
+          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
+            | tar xz -C /tmp
+          echo "/tmp/wasm-bindgen-${WASM_BINDGEN_VERSION}-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
+          echo "/tmp/binaryen-version_${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Check tool versions
+        run: |
+          rustc --version
+          wasm-bindgen --version
+          wasm-opt --version
+
+      - name: Build WASM translation
+        run: yarn workspace @midnightntwrk/wallet-sdk-state-translation build:wasm
+
+      # Compiling proves very little on its own: an artifact built against an unpatched `midnight-storage` links fine
+      # and then traps on the first real state. This translates one, so that failure is named here.
+      - name: Verify the artifact translates
+        run: yarn workspace @midnightntwrk/wallet-sdk-state-translation verify:wasm
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wasm-translation-${{ github.run_id }}
+          path: packages/state-translation/wasm/pkg/**
+
   general-checks:
     name: General Checks
     needs: [build]
@@ -225,9 +319,10 @@ jobs:
   # secrets: inherit passes APP_INFRA_SECRET and the GH tokens to the called workflow.
   integration:
     name: Integration Tests
-    # Runs in parallel with test-unit and e2e-smoke (all gated only on general-checks)
-    # to minimise wall-clock. build-publish still waits for all three.
-    needs: [general-checks]
+    # Runs in parallel with test-unit and e2e-smoke. build-wasm is gated only on build, so it runs alongside
+    # general-checks rather than extending the chain; the fork state-translation file needs its artifact, and without
+    # the dependency that file would quietly skip instead of failing.
+    needs: [general-checks, build-wasm]
     # Grant here too: a reusable workflow's token is capped by the caller job's
     # permissions, so checks: write must be granted at the call site as well.
     permissions:

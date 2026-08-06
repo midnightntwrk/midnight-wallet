@@ -69,7 +69,7 @@
     "@effect/rpc": "0.75.1",
     "@effect/sql": "0.51.1",
     "@effect/workflow": "0.18.2",
-    "@midnightntwrk/wallet-sdk-state-translation": "0.0.1"
+    "@midnightntwrk/wallet-sdk-state-translation": "workspace:^"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",

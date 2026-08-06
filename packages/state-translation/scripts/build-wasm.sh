@@ -10,6 +10,7 @@ set -euo pipefail
 package_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 crate_dir="$package_dir/wasm"
 out_dir="$crate_dir/pkg"
+vendor_dir="$crate_dir/.vendor"
 crate_lib=v8_to_v9_state_translation_wasm
 
 # `wasm-bindgen` must match the `wasm-bindgen` crate version pinned in Cargo.toml exactly; it rejects a .wasm produced
@@ -28,8 +29,46 @@ have_bindgen="$(wasm-bindgen --version | awk '{print $2}')"
   exit 1
 }
 
-# Apple's clang cannot target wasm32, so the C dependencies (blst) need an LLVM that can. The stack protector pulls in
-# OS code that does not exist on wasm — the same reason midnight-ledger's nix build disables it.
+# ---------------------------------------------------------------------------
+# Vendor `midnight-storage` with the wasm-safe clock patch.
+#
+# Its metered translation loop calls `std::time::Instant::now()`, which is unimplemented on wasm32-unknown-unknown and
+# traps. Until a release carries the fix, the published source is fetched and patched here, and `Cargo.toml`'s
+# `[patch.crates-io]` points at the result. Delete all of this — the patch, this block, and that `[patch]` entry — once
+# a published `midnight-storage` has it.
+#
+# The version comes from Cargo.lock, so this tracks whatever is actually resolved. If the patch stops applying, the
+# crate has moved and the patch needs regenerating; that is a hard failure rather than a silently unpatched build.
+# ---------------------------------------------------------------------------
+storage_patch="$crate_dir/patches/midnight-storage-wasm-instant.patch"
+storage_version="$(awk '/^name = "midnight-storage"$/ { found = 1; next }
+                        found && /^version = / { gsub(/[",]/, "", $3); print $3; exit }' "$crate_dir/Cargo.lock")"
+[ -n "$storage_version" ] || {
+  echo "error: could not read the midnight-storage version from $crate_dir/Cargo.lock" >&2
+  exit 1
+}
+
+storage_dir="$vendor_dir/midnight-storage"
+stamp="$storage_dir/.patched-version"
+if [ "$(cat "$stamp" 2>/dev/null || true)" != "$storage_version" ]; then
+  echo "vendoring midnight-storage $storage_version with the wasm clock patch"
+  rm -rf "$storage_dir"
+  mkdir -p "$vendor_dir"
+  curl -sSfL "https://static.crates.io/crates/midnight-storage/midnight-storage-${storage_version}.crate" \
+    | tar xz -C "$vendor_dir"
+  mv "$vendor_dir/midnight-storage-${storage_version}" "$storage_dir"
+  patch -p1 -s -d "$storage_dir" <"$storage_patch" || {
+    echo "error: $storage_patch does not apply to midnight-storage $storage_version." >&2
+    echo "       The crate has moved; regenerate the patch (see ../README.md) or drop it if the fix is now released." >&2
+    exit 1
+  }
+  echo "$storage_version" >"$stamp"
+fi
+
+# The stack protector pulls in OS code that does not exist on wasm — the same reason midnight-ledger's nix build
+# disables it. Apple's clang additionally cannot target wasm32 at all, so the C dependencies (blst) need an LLVM that
+# can; Linux distributions' clang already does.
+export CFLAGS_wasm32_unknown_unknown="${CFLAGS_wasm32_unknown_unknown:--fno-stack-protector}"
 if [ "$(uname -s)" = "Darwin" ] && [ -z "${CC_wasm32_unknown_unknown:-}" ]; then
   llvm_prefix="$(brew --prefix llvm 2>/dev/null || true)"
   [ -x "$llvm_prefix/bin/clang" ] || {
@@ -38,12 +77,11 @@ if [ "$(uname -s)" = "Darwin" ] && [ -z "${CC_wasm32_unknown_unknown:-}" ]; then
   }
   export CC_wasm32_unknown_unknown="$llvm_prefix/bin/clang"
   export AR_wasm32_unknown_unknown="$llvm_prefix/bin/llvm-ar"
-  export CFLAGS_wasm32_unknown_unknown="-fno-stack-protector"
 fi
 
 echo "building $crate_lib for wasm32-unknown-unknown"
 # Run from the crate directory, not with --manifest-path: Cargo discovers `.cargo/config.toml` from the working
-# directory, and the crate's config carries any local dependency overrides.
+# directory, and the crate's config may carry local dependency overrides.
 (cd "$crate_dir" && cargo build --target wasm32-unknown-unknown --profile wasm)
 
 rm -rf "$out_dir"
@@ -52,6 +90,6 @@ wasm-bindgen "$crate_dir/target/wasm32-unknown-unknown/wasm/$crate_lib.wasm" \
 
 wasm-opt "$out_dir/${crate_lib}_bg.wasm" -Os --enable-reference-types -o "$out_dir/${crate_lib}_bg.wasm"
 
-cp "$package_dir/wasm/v8-to-v9-state-translation.d.ts" "$out_dir/$crate_lib.d.ts" 2>/dev/null || true
+cp "$crate_dir/v8-to-v9-state-translation.d.ts" "$out_dir/$crate_lib.d.ts"
 
-echo "built $out_dir ($(du -h "$out_dir/${crate_lib}_bg.wasm" | cut -f1) of wasm)"
+echo "built $out_dir ($(wc -c <"$out_dir/${crate_lib}_bg.wasm" | tr -d ' ') bytes of wasm)"

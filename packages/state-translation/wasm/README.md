@@ -39,42 +39,38 @@ here:
 paths = ["/path/to/midnight-ledger/v8-to-v9-state-translation"]
 ```
 
-## Prerequisite: `midnight-storage` needs a wasm-safe clock
+## The vendored `midnight-storage` patch — temporary, and why it exists
 
-**This crate compiles today but traps at runtime with an unpatched `midnight-storage`**, and the fix is not in this
-crate.
+`midnight-storage`'s `src/state_translation.rs` imports `std::time::Instant` and calls `Instant::now()` at eight sites
+in the metered loop, including inside `run()`. That intrinsic is unimplemented on `wasm32-unknown-unknown` and traps, so
+the first `run()` takes the translation down as `RuntimeError: unreachable` — the crate links fine and then dies on the
+first real state. Verified in isolation: a wasm export whose whole body is `Instant::now()` traps identically.
 
-`storage/src/state_translation.rs` imports `std::time::Instant` and calls `Instant::now()` at eight sites in the metered
-loop, including inside `run()`. That intrinsic is unimplemented on `wasm32-unknown-unknown` and traps, so the first
-`run()` takes the translation down as `RuntimeError: unreachable`. Verified in isolation: a wasm export whose whole body
-is `Instant::now()` traps identically.
+`patches/midnight-storage-wasm-instant.patch` is a 24-line, cfg-gated switch to
+[`web-time`](https://crates.io/crates/web-time), which re-exports `std::time` on non-wasm targets and backs `Instant`
+with `performance.now()` on wasm — so every other target is byte-identical.
 
-The fix is a drop-in, cfg-gated to wasm only, leaving every other target byte-identical:
+`../scripts/build-wasm.sh` applies it: it reads the resolved version from `Cargo.lock`, fetches that exact published
+source from crates.io, patches it into `.vendor/midnight-storage` (gitignored), and `Cargo.toml`'s `[patch.crates-io]`
+points there. **Drive cargo through the script**; a bare `cargo build` fails on the missing directory, which is
+deliberate — the alternative is silently producing a wasm that traps.
 
-```rust
-// storage/src/state_translation.rs
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-use std::time::Instant;
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-use web_time::Instant;
+If the patch stops applying, the crate has moved. Regenerate it against the new version rather than working around it:
+
+```bash
+cd wasm/.vendor && curl -sSfL https://static.crates.io/crates/midnight-storage/midnight-storage-<version>.crate | tar xz
+# edit the extracted copy, then:
+diff -u --label a/src/state_translation.rs --label b/src/state_translation.rs <pristine> <edited>
 ```
 
-```toml
-# storage/Cargo.toml
-[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
-web-time = "^1.1.0"
-```
+**The real fix has to be published, not just committed to the ledger repository** — this crate takes `midnight-storage`
+from crates.io, and redirecting it to a local checkout does not work: the git-tagged v9 crates fail against the ledger
+workspace's copy with 151 trait-mismatch errors in `midnight-onchain-state`, that copy having drifted past the released
+one. Note this crate resolves **2.0.2**, which is newer than the 2.0.1 the ledger workspace pins, and 2.0.2 does not
+contain the fix either.
 
-`web-time` re-exports `std::time` on non-wasm targets and backs `Instant` with `performance.now()` on wasm.
-
-**It has to be published, not just committed** — this crate takes `midnight-storage` from crates.io, and redirecting it
-to a local checkout does not work: the git-tagged v9 crates fail against the ledger workspace's copy with 151
-trait-mismatch errors in `midnight-onchain-state`, that copy having drifted past the released one.
-
-Until a release carries the fix, use a `paths` override in the gitignored `.cargo/config.toml` above, pointing at a
-patched copy of whichever published version `Cargo.lock` resolves — `paths` requires an exact name _and_ version match,
-so re-copy it after any resolution change. Note this crate currently resolves **2.0.2**, which is newer than the 2.0.1
-the ledger workspace pins, and 2.0.2 does not contain the fix either.
+Once a release does carry it, delete three things: this section, `patches/`, the `[patch.crates-io]` entry for
+`midnight-storage`, and the vendoring block in the build script.
 
 ## Two things worth knowing before editing `src/lib.rs`
 

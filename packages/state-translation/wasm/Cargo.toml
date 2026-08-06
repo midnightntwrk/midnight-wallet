@@ -42,6 +42,12 @@ getrandom_3 = { package = "getrandom", version = "^0.3.4", features = ["wasm_js"
 # `[patch]` only applies from the top-level manifest — so consuming the translation from outside that workspace means
 # replicating the block. Copied verbatim from midnight-ledger's root Cargo.toml; keep it in step when the tags move.
 [patch.crates-io]
+# TEMPORARY. `midnight-storage`'s metered translation loop calls `std::time::Instant::now()`, which is unimplemented on
+# wasm32-unknown-unknown and traps. `../scripts/build-wasm.sh` materializes this directory by fetching the published
+# source and applying `patches/midnight-storage-wasm-instant.patch`, so cargo has to be driven through that script — a
+# missing directory is a hard error here, which is the point: the alternative is silently shipping a wasm that traps.
+# Delete this entry, the patch, and the vendoring block in the script once a published release carries the fix.
+midnight-storage = { path = ".vendor/midnight-storage" }
 midnight-base-crypto = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "base-crypto-1.1.0-rc.2" }
 midnight-base-crypto-derive = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "base-crypto-derive-1.1.0-rc.2" }
 midnight-ledger-v9 = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "crate-ledger-9.1.0.0-rc.3" }

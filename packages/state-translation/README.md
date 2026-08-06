@@ -46,8 +46,19 @@ That is the whole local flow — no environment variable. Output lands in `wasm/
 anything that needs the translation just works afterwards. Roughly 1.7 MB of wasm after `wasm-opt`.
 
 It needs a Rust toolchain and, on macOS, Homebrew's LLVM; the script checks for each and says what is missing. See
-[`wasm/README.md`](./wasm/README.md) for the toolchain, and for the one prerequisite the script cannot check —
-`midnight-storage` needs a wasm-safe `Instant`, without which the translation compiles but traps at runtime.
+[`wasm/README.md`](./wasm/README.md) for the toolchain and for the vendored `midnight-storage` patch the script applies
+on the way through.
+
+```bash
+yarn workspace @midnightntwrk/wallet-sdk-state-translation verify:wasm
+```
+
+confirms a built artifact actually translates. Worth running after any change to the crate: compiling proves less than
+it looks like, since an artifact built against an unpatched `midnight-storage` links fine and then traps on the first
+real state.
+
+CI builds and verifies the artifact in the `Build WASM Translation` job and hands it to the integration matrix, so the
+fork tests run there rather than skipping.
 
 `MIDNIGHT_V8_TO_V9_STATE_TRANSLATION` overrides the default with a module specifier, for an artifact built somewhere
 else.

@@ -1949,8 +1949,6 @@ dependencies = [
 [[package]]
 name = "midnight-storage"
 version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13f3f6a6f45732db644df3eb723a9fc3877490d47f937ea833609ed6cb1508cf"
 dependencies = [
  "crypto",
  "derive-where",
@@ -1964,6 +1962,7 @@ dependencies = [
  "sha2 0.10.9",
  "sysinfo",
  "tempfile",
+ "web-time",
 ]
 
 [[package]]
