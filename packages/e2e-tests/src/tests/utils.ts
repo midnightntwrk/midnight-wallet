@@ -22,6 +22,7 @@ export * from './helpers/walletInit.js';
 export {
   type DustSyncModel,
   dustWalletFor,
+  dustWalletFromEnv,
   eventBasedDustWallet,
   eventLessDustWallet,
   manualProjectionsDustSyncOptions,
