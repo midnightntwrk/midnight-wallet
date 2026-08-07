@@ -11,7 +11,8 @@ files.
 | -------------------- | ------------------------------------------------------------------------------------------------------------- |
 | Environment          | `createRemoteEnvironment`, `NETWORK_PRESETS`, `makeEnvironment`, `WalletTestEnvironment`, `ResolvedEndpoints` |
 | Environment (Docker) | `createTestContainersEnvironment` — from `@midnightntwrk/wallet-sdk-testkit/testcontainers`                   |
-| Wallet               | `provideWallet`, `initWalletWithSeed`, `saveState`, `WalletInit`                                              |
+| Wallet               | `provideWallet`, `initWalletWithSeed`, `saveState`, `shouldPersistState`, `WalletInit`                        |
+| Dust sync model      | `dustWalletFromEnv`, `dustWalletFor`, `DustSyncModel`, `projectionsDustSyncOptions`, … — see below            |
 | Seeds                | `getShieldedSeed`, `getUnshieldedSeed`, `getDustSeed`                                                         |
 | Sync waiters         | `waitForSyncUnshielded`, `waitForDustBalance`, `waitForTxInHistory`, …                                        |
 | Assertions           | `expectSenderShieldedTxHistory`, `expectReceiverUnshieldedTxHistory`, …                                       |
