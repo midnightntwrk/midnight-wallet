@@ -14,6 +14,18 @@ unrecognized value throws rather than falling back — a typo must not report a 
 covered the other. New exports: `DustSyncModel`, `dustWalletFor`, `parseDustSyncModel`, `dustSyncModelFromEnv`,
 `dustWalletFromEnv`.
 
+`parseDustSyncModel`, `dustSyncModelFromEnv` and `dustWalletFromEnv` take an optional `fallback` model, applied only when
+`DUST_SYNC` is unset. It lets a caller choose what applies by default **without** taking the choice away from the
+environment — which is how the healthcheck scenarios default to projections while staying switchable. Pinning a model via
+an explicit `dustWallet` does opt that wallet out of `DUST_SYNC`, so it should be reserved for tests that genuinely
+require one model: a pinned wallet is left behind when a lane is switched by environment.
+
+A test that builds a Dust wallet itself, rather than through these helpers, must resolve it the same way —
+`dustWalletFromEnv()(config)` — or it will disagree with the rest of the run. This matters most for serialize/restore
+tests: state written by one model and restored into the other resumes from a value that is not a cursor in that model,
+and the wallet never reports synced. Snapshot namespacing protects state on disk but not state serialized and restored in
+memory within a test.
+
 **Dust snapshots are namespaced per sync model.** A snapshot carries one progress value, `appliedIndex`, and the two
 models disagree about what it means: the event-based service treats it as a ledger-event cursor, the projections service
 writes a composite of tree indices and nullifier count. Restoring across models therefore resumed an event subscription

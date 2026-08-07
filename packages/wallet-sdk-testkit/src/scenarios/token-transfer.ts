@@ -23,10 +23,10 @@ import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { type WalletTestEnvironment } from '../types.js';
 import { provideWallet, type ProvideWalletOptions, saveState, shouldPersistState, type WalletInit } from '../wallet.js';
-import { projectionsDustSyncOptions } from '../dust-sync.js';
+import { dustWalletFromEnv } from '../dust-sync.js';
 import { tNightAmount } from '../primitives.js';
 import { getShieldedAddress, getUnshieldedAddress } from '../addresses.js';
-import { waitForTxInHistory } from '../state-waiters.js';
+import { waitForFacadePendingClear, waitForTxInHistory } from '../state-waiters.js';
 import {
   expectReceiverShieldedTxHistory,
   expectReceiverUnshieldedTxHistory,
@@ -56,9 +56,11 @@ export interface TokenTransferScenarioDeps {
    * Selects the dust sync model for both wallets. Defaults to the projections sync with background synchronization, so
    * these transfers' fees are paid out of a projections-synced dust wallet.
    *
-   * Pass `{ dustWallet: eventBasedDustWallet }` to use the event-stream sync instead; dust snapshots are namespaced per
-   * sync model, so there is no cache to clear when switching. Avoid adding `manualSync` here: these scenarios wait on
-   * the state stream rather than driving passes themselves, so they need background synchronization to be running.
+   * Left unset, the model still follows `DUST_SYNC` when that is configured, so a whole lane can be switched by
+   * environment; projections is only the fallback for when nothing is. Pass `{ dustWallet: eventBasedDustWallet }` to
+   * pin the event-stream sync regardless of the environment — dust snapshots are namespaced per sync model, so there is
+   * no cache to clear when switching. Avoid adding `manualSync` here: these scenarios wait on the state stream rather
+   * than driving passes themselves, so they need background synchronization to be running.
    */
   walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }
@@ -84,7 +86,7 @@ export function useTokenTransferWallets({
   syncCacheDir,
   syncTimeout = 15 * 60 * 1000,
   timeout = 600_000,
-  walletOptions = projectionsDustSyncOptions,
+  walletOptions = { dustWallet: dustWalletFromEnv(process.env, 'projections') },
 }: TokenTransferScenarioDeps): TokenTransferWallets {
   const shieldedTokenRaw = ledger.shieldedToken().raw;
 
@@ -258,6 +260,7 @@ export function registerTokenTransferHealthchecks(deps: TokenTransferScenarioDep
           sender.wallet,
           (e) => e.shielded !== undefined && e.unshielded !== undefined,
         );
+        await waitForFacadePendingClear(sender.wallet);
         const senderFinalState = await sender.wallet.waitForSyncedState();
         const senderFinalShieldedBalance = senderFinalState.shielded.balances[shieldedTokenRaw];
         const senderFinalUnshieldedBalance = senderFinalState.unshielded.balances[unshieldedTokenRaw];
@@ -291,6 +294,7 @@ export function registerTokenTransferHealthchecks(deps: TokenTransferScenarioDep
         expectSenderShieldedTxHistory(senderTxEntry);
         expectSenderUnshieldedTxHistory(senderTxEntry);
 
+        await waitForFacadePendingClear(receiver.wallet);
         const receiverFinalState = await receiver.wallet.waitForSyncedState();
         const receiverFinalShieldedBalance = receiverFinalState.shielded.balances[shieldedTokenRaw] ?? 0n;
         const receiverFinalUnshieldedBalance = receiverFinalState.unshielded.balances[unshieldedTokenRaw] ?? 0n;

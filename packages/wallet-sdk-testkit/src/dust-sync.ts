@@ -78,32 +78,41 @@ export const dustSyncModelOf = (factory: DustWalletFactory): DustSnapshotModel =
 export const DUST_SYNC_ENV_VAR = 'DUST_SYNC';
 
 /**
- * Reads a dust sync model from its environment-variable spelling, defaulting to the event-based sync when unset.
+ * Reads a dust sync model from its environment-variable spelling, falling back to `fallback` when unset or empty.
  *
  * An unrecognized value is rejected rather than defaulted. A silent fallback would mean a typo in `DUST_SYNC` reports a
  * run as covering one sync model while it actually covered the other, which is worse than not running at all.
  *
  * @throws Error if `raw` is neither empty nor a known model
  */
-export const parseDustSyncModel = (raw: string | undefined): DustSyncModel => {
+export const parseDustSyncModel = (raw: string | undefined, fallback: DustSyncModel = 'events'): DustSyncModel => {
   const value = raw?.trim();
-  if (value === undefined || value === '') return 'events';
+  if (value === undefined || value === '') return fallback;
   if (value === 'events' || value === 'projections') return value;
   throw new Error(`${DUST_SYNC_ENV_VAR} must be 'events' or 'projections', got '${raw}'`);
 };
 
-/** The dust sync model selected by `DUST_SYNC`, defaulting to the event-based sync. */
-export const dustSyncModelFromEnv = (env: Record<string, string | undefined> = process.env): DustSyncModel =>
-  parseDustSyncModel(env[DUST_SYNC_ENV_VAR]);
+/** The dust sync model selected by `DUST_SYNC`, or `fallback` when it is unset. */
+export const dustSyncModelFromEnv = (
+  env: Record<string, string | undefined> = process.env,
+  fallback: DustSyncModel = 'events',
+): DustSyncModel => parseDustSyncModel(env[DUST_SYNC_ENV_VAR], fallback);
 
 /**
- * The dust sub-wallet factory selected by `DUST_SYNC`.
+ * The dust sub-wallet factory selected by `DUST_SYNC`, or the one for `fallback` when it is unset.
  *
  * This is the default an explicit `dustWallet` option overrides, so a whole lane can be switched between the two sync
  * models by configuration while individual tests that need a specific model keep pinning it in code.
+ *
+ * `fallback` lets a caller choose which model applies when nothing is configured **without** taking the choice away
+ * from `DUST_SYNC`. Passing an explicit `dustWallet` instead would pin the model outright and make the variable
+ * ineffective for that wallet — which silently splits a lane, since some of its tests would switch and others would
+ * not.
  */
-export const dustWalletFromEnv = (env: Record<string, string | undefined> = process.env): DustWalletFactory =>
-  dustWalletFor(dustSyncModelFromEnv(env));
+export const dustWalletFromEnv = (
+  env: Record<string, string | undefined> = process.env,
+  fallback: DustSyncModel = 'events',
+): DustWalletFactory => dustWalletFor(dustSyncModelFromEnv(env, fallback));
 
 /**
  * Where the dust sub-wallet's snapshot lives, namespaced by the sync model that wrote it.

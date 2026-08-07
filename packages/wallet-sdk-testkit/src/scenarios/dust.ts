@@ -21,7 +21,7 @@ import * as rx from 'rxjs';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type WalletTestEnvironment } from '../types.js';
 import { provideWallet, type ProvideWalletOptions, saveState, shouldPersistState, type WalletInit } from '../wallet.js';
-import { projectionsDustSyncOptions } from '../dust-sync.js';
+import { dustWalletFromEnv } from '../dust-sync.js';
 import { logger } from '../logger.js';
 
 /** Dependencies the dust scenarios need from the consumer. */
@@ -38,9 +38,11 @@ export interface DustScenarioDeps {
    * Selects the dust sync model. Defaults to the projections sync with background synchronization, so the network being
    * monitored is exercised against the sync model the wallet ships to users.
    *
-   * Pass `{ dustWallet: eventBasedDustWallet }` to monitor the event-stream sync instead; dust snapshots are namespaced
-   * per sync model, so there is no cache to clear when switching. Avoid adding `manualSync` here: these scenarios wait
-   * on the state stream rather than driving passes themselves, so they need background synchronization to be running.
+   * Left unset, the model still follows `DUST_SYNC` when that is configured, so a whole lane can be switched by
+   * environment; projections is only the fallback for when nothing is. Pass `{ dustWallet: eventBasedDustWallet }` to
+   * pin the event-stream sync regardless of the environment — dust snapshots are namespaced per sync model, so there is
+   * no cache to clear when switching. Avoid adding `manualSync` here: these scenarios wait on the state stream rather
+   * than driving passes themselves, so they need background synchronization to be running.
    */
   walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }
@@ -51,7 +53,7 @@ export function registerDustHealthchecks({
   seed,
   syncCacheDir,
   timeout = 900_000,
-  walletOptions = projectionsDustSyncOptions,
+  walletOptions = { dustWallet: dustWalletFromEnv(process.env, 'projections') },
 }: DustScenarioDeps): void {
   describe('Dust tests', () => {
     const unshieldedTokenRaw = ledger.unshieldedToken().raw;

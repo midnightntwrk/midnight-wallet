@@ -19,6 +19,11 @@ To keep monitoring the event-stream sync instead, pass the dep explicitly:
 registerDustHealthchecks({ getEnv, seed, walletOptions: { dustWallet: eventBasedDustWallet } });
 ```
 
-These scenarios use `projectionsDustSyncOptions`, which leaves background synchronization on. A caller that wants to
-decide when each pass runs wants `manualProjectionsDustSyncOptions` instead — but not for these scenarios, which wait on
-the state stream rather than driving passes themselves.
+Projections is a **fallback, not a pin**: the scenarios resolve their model through `dustWalletFromEnv`, so `DUST_SYNC`
+still overrides it. Without that, setting `DUST_SYNC=events` would switch the wallets built by `provideWallet` and
+`initWalletWithSeed` while silently leaving these scenarios on projections — a lane half on each model, reporting
+coverage the run did not have.
+
+These scenarios leave background synchronization on. A caller that wants to decide when each pass runs wants
+`manualProjectionsDustSyncOptions` instead — but not for these scenarios, which wait on the state stream rather than
+driving passes themselves.

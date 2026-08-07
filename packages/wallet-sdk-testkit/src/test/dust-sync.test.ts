@@ -58,6 +58,25 @@ describe('dustSyncModelFromEnv', () => {
     expect(dustWalletFromEnv({ [DUST_SYNC_ENV_VAR]: 'projections' })).toBe(eventLessDustWallet);
     expect(dustWalletFromEnv({})).toBe(eventBasedDustWallet);
   });
+
+  it('applies the caller-chosen fallback only when the environment is silent', () => {
+    expect(dustSyncModelFromEnv({}, 'projections')).toBe('projections');
+    expect(dustSyncModelFromEnv({ [DUST_SYNC_ENV_VAR]: '' }, 'projections')).toBe('projections');
+  });
+
+  it.each([
+    ['events', eventBasedDustWallet],
+    ['projections', eventLessDustWallet],
+  ])('lets DUST_SYNC=%s override the fallback', (configured, expected) => {
+    // A fallback that could not be overridden would silently split a lane: tests carrying it would keep one model while
+    // the rest of the run switched, so `DUST_SYNC` would report coverage the run did not have.
+    expect(dustWalletFromEnv({ [DUST_SYNC_ENV_VAR]: configured }, 'projections')).toBe(expected);
+    expect(dustWalletFromEnv({ [DUST_SYNC_ENV_VAR]: configured }, 'events')).toBe(expected);
+  });
+
+  it('still rejects an unrecognized value rather than using the fallback', () => {
+    expect(() => dustSyncModelFromEnv({ [DUST_SYNC_ENV_VAR]: 'projection' }, 'projections')).toThrow(DUST_SYNC_ENV_VAR);
+  });
 });
 
 describe('dustSyncModelOf', () => {

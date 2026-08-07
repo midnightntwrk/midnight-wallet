@@ -150,6 +150,7 @@ describe('Token transfer', () => {
         ready: (entry) => entry.shielded !== undefined,
       });
       utils.expectSenderShieldedTxHistory(senderTxEntry);
+      await utils.waitForFacadePendingClear(sender.wallet);
       const finalState = await sender.wallet.waitForSyncedState();
       const senderFinalShieldedBalance1 = finalState.shielded.balances[nativeToken1Raw];
       const senderFinalShieldedBalance2 = finalState.shielded.balances[nativeToken2Raw];
