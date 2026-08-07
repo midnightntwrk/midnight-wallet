@@ -14,6 +14,7 @@ import * as rx from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import * as utils from './utils.js';
+import { shouldPersistState } from '@midnightntwrk/wallet-sdk-testkit/core';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
@@ -41,7 +42,9 @@ describe('Token transfer', () => {
   let wallet: utils.WalletInit;
   let wallet2: utils.WalletInit;
   let fixture: TestContainersFixture;
-  const syncTimeout = 60 * 60 * 1000; // 60 minutes in milliseconds
+  // A remote sync from scratch takes tens of seconds and the transfer itself a couple of minutes, so a bound in the
+  // tens of minutes only ever means something has wedged. An hour just turns one wedge into an hour of lane time.
+  const syncTimeout = 15 * 60 * 1000; // 15 minutes
   const timeout = 600_000;
 
   beforeEach(async () => {
@@ -69,9 +72,12 @@ describe('Token transfer', () => {
     }
   }, syncTimeout);
 
-  afterEach(async () => {
-    await utils.saveState(wallet.wallet, filenameWallet);
-    await utils.saveState(wallet2.wallet, filenameWallet2);
+  afterEach(async (context) => {
+    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
+    if (shouldPersistState(context)) {
+      await utils.saveState(wallet, filenameWallet);
+      await utils.saveState(wallet2, filenameWallet2);
+    }
     await sender.wallet.stop();
     await receiver.wallet.stop();
     logger.info('Wallets stopped');
@@ -144,6 +150,7 @@ describe('Token transfer', () => {
         ready: (entry) => entry.shielded !== undefined,
       });
       utils.expectSenderShieldedTxHistory(senderTxEntry);
+      await utils.waitForFacadePendingClear(sender.wallet);
       const finalState = await sender.wallet.waitForSyncedState();
       const senderFinalShieldedBalance1 = finalState.shielded.balances[nativeToken1Raw];
       const senderFinalShieldedBalance2 = finalState.shielded.balances[nativeToken2Raw];

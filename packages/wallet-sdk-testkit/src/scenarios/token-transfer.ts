@@ -22,10 +22,11 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { type WalletTestEnvironment } from '../types.js';
-import { provideWallet, type ProvideWalletOptions, saveState, type WalletInit } from '../wallet.js';
+import { provideWallet, type ProvideWalletOptions, saveState, shouldPersistState, type WalletInit } from '../wallet.js';
+import { dustWalletFromEnv } from '../dust-sync.js';
 import { tNightAmount } from '../primitives.js';
 import { getShieldedAddress, getUnshieldedAddress } from '../addresses.js';
-import { waitForTxInHistory } from '../state-waiters.js';
+import { waitForFacadePendingClear, waitForTxInHistory } from '../state-waiters.js';
 import {
   expectReceiverShieldedTxHistory,
   expectReceiverUnshieldedTxHistory,
@@ -44,16 +45,22 @@ export interface TokenTransferScenarioDeps {
   secondSeed: string;
   /** Optional dir to persist/restore wallet state across runs. (Was the `SYNC_CACHE` env var.) */
   syncCacheDir?: string | undefined;
-  /** Timeout for the sync-heavy `beforeEach` and the healthcheck test in ms. Defaults to 1 hour. */
+  /**
+   * Timeout for the sync-heavy `beforeEach` and the healthcheck test in ms. Defaults to 15 minutes — a longer bound
+   * does not rescue a wedged wallet, it only spends lane time before reporting.
+   */
   syncTimeout?: number | undefined;
   /** Timeout for the `afterEach` teardown in ms. Defaults to 10 minutes. */
   timeout?: number | undefined;
   /**
-   * Selects the dust sync model. Defaults to the event-based wallet with background syncing.
+   * Selects the dust sync model for both wallets. Defaults to the projections sync with background synchronization, so
+   * these transfers' fees are paid out of a projections-synced dust wallet.
    *
-   * Passing `projectionsDustSyncOptions` is NOT enough on its own: the projections sync is a one-shot snapshot, so the
-   * scenario body must also drive `facade.doSync(dustSecretKey)` at every point it currently relies on background
-   * convergence. These scenarios do not, so they stay on the event-based sync.
+   * Left unset, the model still follows `DUST_SYNC` when that is configured, so a whole lane can be switched by
+   * environment; projections is only the fallback for when nothing is. Pass `{ dustWallet: eventBasedDustWallet }` to
+   * pin the event-stream sync regardless of the environment — dust snapshots are namespaced per sync model, so there is
+   * no cache to clear when switching. Avoid adding `manualSync` here: these scenarios wait on the state stream rather
+   * than driving passes themselves, so they need background synchronization to be running.
    */
   walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }
@@ -77,9 +84,9 @@ export function useTokenTransferWallets({
   fundedSeed,
   secondSeed,
   syncCacheDir,
-  syncTimeout = 60 * 60 * 1000,
+  syncTimeout = 15 * 60 * 1000,
   timeout = 600_000,
-  walletOptions,
+  walletOptions = { dustWallet: dustWalletFromEnv(process.env, 'projections') },
 }: TokenTransferScenarioDeps): TokenTransferWallets {
   const shieldedTokenRaw = ledger.shieldedToken().raw;
 
@@ -125,10 +132,11 @@ export function useTokenTransferWallets({
     }
   }, syncTimeout);
 
-  afterEach(async () => {
-    if (syncCacheDir) {
-      await saveState(wallet.wallet, syncCacheDir, filenameWallet);
-      await saveState(wallet2.wallet, syncCacheDir, filenameWallet2);
+  afterEach(async (context) => {
+    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
+    if (syncCacheDir && shouldPersistState(context)) {
+      await saveState(wallet, syncCacheDir, filenameWallet);
+      await saveState(wallet2, syncCacheDir, filenameWallet2);
     }
     await sender.wallet.stop();
     await receiver.wallet.stop();
@@ -159,7 +167,7 @@ export function registerTokenTransferHealthchecks(deps: TokenTransferScenarioDep
     const shieldedTokenRaw = ledger.shieldedToken().raw;
     const unshieldedTokenRaw = ledger.unshieldedToken().raw;
     const outputValue = tNightAmount(10n);
-    const syncTimeout = deps.syncTimeout ?? 60 * 60 * 1000;
+    const syncTimeout = deps.syncTimeout ?? 15 * 60 * 1000;
 
     test(
       'Is working for valid transfer @healthcheck',
@@ -252,6 +260,7 @@ export function registerTokenTransferHealthchecks(deps: TokenTransferScenarioDep
           sender.wallet,
           (e) => e.shielded !== undefined && e.unshielded !== undefined,
         );
+        await waitForFacadePendingClear(sender.wallet);
         const senderFinalState = await sender.wallet.waitForSyncedState();
         const senderFinalShieldedBalance = senderFinalState.shielded.balances[shieldedTokenRaw];
         const senderFinalUnshieldedBalance = senderFinalState.unshielded.balances[unshieldedTokenRaw];
@@ -285,6 +294,7 @@ export function registerTokenTransferHealthchecks(deps: TokenTransferScenarioDep
         expectSenderShieldedTxHistory(senderTxEntry);
         expectSenderUnshieldedTxHistory(senderTxEntry);
 
+        await waitForFacadePendingClear(receiver.wallet);
         const receiverFinalState = await receiver.wallet.waitForSyncedState();
         const receiverFinalShieldedBalance = receiverFinalState.shielded.balances[shieldedTokenRaw] ?? 0n;
         const receiverFinalUnshieldedBalance = receiverFinalState.unshielded.balances[unshieldedTokenRaw] ?? 0n;

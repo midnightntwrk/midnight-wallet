@@ -28,8 +28,13 @@ import {
   type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { type DustWalletFactory } from '@midnightntwrk/wallet-sdk-testkit/core';
+import {
+  type DustSnapshotModel,
+  dustSnapshotPath,
+  dustSyncModelOf,
+  type DustWalletFactory,
+  dustWalletFromEnv,
+} from '@midnightntwrk/wallet-sdk-testkit/core';
 import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { Roles } from '@midnightntwrk/wallet-sdk-hd';
 import { type TestContainersFixture } from '../test-fixture.js';
@@ -41,6 +46,12 @@ export type WalletInit = {
   shieldedSecretKeys: ledger.ZswapSecretKeys;
   dustSecretKey: ledger.DustSecretKey;
   unshieldedKeystore: UnshieldedKeystore;
+  /**
+   * The dust sync model this wallet was actually built with, whether it came from an explicit option or from the
+   * environment. {@link saveState} reads it so a snapshot is always written to the namespace of the model that produced
+   * it.
+   */
+  dustSyncModel: DustSnapshotModel;
 };
 
 const waitForSyncProgress = async (wallet: WalletFacade) =>
@@ -107,9 +118,7 @@ const restoreDustWallet = async (
   path: string,
   walletConfig: DefaultV1Configuration,
   readIfExists: (path: string) => Promise<string | undefined>,
-  // Defaults to the event-based DustWallet. Pass a factory (e.g. one built with makeEventLessSyncService) to
-  // restore the snapshot into a projections-synced wallet instead.
-  dustWallet: CustomWallets['dustWallet'] = DustWallet,
+  dustWallet: DustWalletFactory,
 ) => {
   try {
     const serialized = await readIfExists(path);
@@ -137,6 +146,12 @@ export const provideWallet = async (
   fixture: TestContainersFixture,
   customWallets: CustomWallets = {},
 ): Promise<WalletInit> => {
+  // Resolved once, here, so the restore path, the snapshot namespace and every from-scratch fallback below all agree on
+  // which sync model was asked for.
+  const dustWallet = customWallets.dustWallet ?? dustWalletFromEnv();
+  const dustSyncModel = dustSyncModelOf(dustWallet);
+  const resolvedWallets = { ...customWallets, dustWallet };
+
   // Single shared tx-history storage so all three sub-wallets and the facade read/write
   // the same instance; otherwise shielded/unshielded writes go to a storage the facade
   // never queries.
@@ -172,17 +187,17 @@ export const provideWallet = async (
     restoreShieldedWallet(`${directoryPath}/shielded-${filename}`, Wallet, readIfExists),
     restoreUnshieldedWallet(`${directoryPath}/unshielded-${filename}`, seed, fixture, readIfExists, txHistoryStorage),
     restoreDustWallet(
-      `${directoryPath}/dust-${filename}`,
+      dustSnapshotPath(directoryPath, filename, dustSyncModel),
       { ...walletConfig, ...dustWalletConfig },
       readIfExists,
-      customWallets.dustWallet,
+      dustWallet,
     ),
   ]);
 
   if (!restoredShielded || !restoredUnshielded || !restoredDust) {
     // A cold cache must not silently downgrade to the default sync — the caller asked for a specific one.
     logger.info('Building wallet facade from scratch');
-    return initWalletWithSeed(seed, fixture, 'schnorr', customWallets);
+    return initWalletWithSeed(seed, fixture, 'schnorr', resolvedWallets);
   } else {
     const restoredWallet = await WalletFacade.init({
       configuration: {
@@ -203,15 +218,21 @@ export const provideWallet = async (
     if ((applyGap ?? 0) < 0) {
       logger.warn('Unable to sync restored wallet. Building wallet facade from scratch');
       await restoredWallet.stop();
-      return initWalletWithSeed(seed, fixture, 'schnorr', customWallets);
+      return initWalletWithSeed(seed, fixture, 'schnorr', resolvedWallets);
     } else {
       logger.info('Successfully restored wallet facade.');
-      return { wallet: restoredWallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
+      return { wallet: restoredWallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore, dustSyncModel };
     }
   }
 };
 
-export const saveState = async (wallet: WalletFacade, filename: string) => {
+/**
+ * Serializes all three sub-wallet states into `SYNC_CACHE`, keyed by `filename`.
+ *
+ * Takes the whole {@link WalletInit} rather than the facade alone so the dust snapshot is always written to the
+ * namespace of the sync model that produced it — a model and a facade passed separately could disagree.
+ */
+export const saveState = async (walletInit: Pick<WalletInit, 'wallet' | 'dustSyncModel'>, filename: string) => {
   const directoryPath = process.env['SYNC_CACHE'];
   if (!directoryPath) {
     logger.warn('SYNC_CACHE env var not set');
@@ -225,23 +246,21 @@ export const saveState = async (wallet: WalletFacade, filename: string) => {
 
     // Serialize all three states
     const [shieldedSerializedState, unshieldedSerializedState, dustSerializedState] = await Promise.all([
-      wallet.shielded.serializeState(),
-      wallet.unshielded.serializeState(),
-      wallet.dust.serializeState(),
+      walletInit.wallet.shielded.serializeState(),
+      walletInit.wallet.unshielded.serializeState(),
+      walletInit.wallet.dust.serializeState(),
     ]);
 
     const files = [
-      { suffix: 'shielded-', data: shieldedSerializedState },
-      { suffix: 'unshielded-', data: unshieldedSerializedState },
-      { suffix: 'dust-', data: dustSerializedState },
+      { path: `${directoryPath}/shielded-${filename}`, data: shieldedSerializedState },
+      { path: `${directoryPath}/unshielded-${filename}`, data: unshieldedSerializedState },
+      { path: dustSnapshotPath(directoryPath, filename, walletInit.dustSyncModel), data: dustSerializedState },
     ];
 
-    const results = await Promise.allSettled(
-      files.map((f) => fsAsync.writeFile(`${directoryPath}/${f.suffix}${filename}`, f.data, 'utf-8')),
-    );
+    const results = await Promise.allSettled(files.map((f) => fsAsync.writeFile(f.path, f.data, 'utf-8')));
 
     for (const [i, res] of results.entries()) {
-      const pathWritten = `${directoryPath}/${files[i].suffix}${filename}`;
+      const pathWritten = files[i].path;
       if (res.status === 'fulfilled') {
         logger.info(`State written to file ${pathWritten}`);
       } else {
@@ -262,6 +281,11 @@ export const saveState = async (wallet: WalletFacade, filename: string) => {
 };
 
 export type CustomWallets = {
+  /**
+   * Replaces the dust sub-wallet factory. Defaults to whatever `DUST_SYNC` selects (the event-based sync when unset) —
+   * see `dustWalletFromEnv` — so a lane can be switched between sync models by configuration while a test that needs a
+   * specific model pins it here.
+   */
   dustWallet?: DustWalletFactory;
   manualSync?: boolean;
 };
@@ -285,7 +309,7 @@ export const initWalletWithSeed = async (
     fixture.getNetworkId(),
   );
 
-  const dustWalletClass = customWallets?.dustWallet ?? DustWallet;
+  const dustWalletClass = customWallets?.dustWallet ?? dustWalletFromEnv();
   const manualSync = customWallets?.manualSync ?? false;
 
   const facade: WalletFacade = await WalletFacade.init({
@@ -300,5 +324,11 @@ export const initWalletWithSeed = async (
       dustWalletClass(config).startWithSeed(getDustSeed(seed), ledger.LedgerParameters.initialParameters().dust),
   });
   await facade.start(shieldedSecretKeys, dustSecretKey, manualSync);
-  return { wallet: facade, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
+  return {
+    wallet: facade,
+    shieldedSecretKeys,
+    dustSecretKey,
+    unshieldedKeystore,
+    dustSyncModel: dustSyncModelOf(dustWalletClass),
+  };
 };

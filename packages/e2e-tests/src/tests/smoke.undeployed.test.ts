@@ -27,7 +27,7 @@ import {
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet, type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
 
 /** Smoke tests */
 
@@ -47,7 +47,11 @@ describe('Smoke tests', () => {
 
   beforeEach(async () => {
     fixture = getFixture();
-    Dust = DustWallet({
+    // Built with the same sync model `initWalletWithSeed` uses below, so the serialize/restore test round-trips within
+    // one model. A dust snapshot carries one progress value whose meaning differs between the two — an event cursor to
+    // the event-stream sync, a composite metric to the projections sync — so restoring across models resumes from a
+    // position that is not a cursor at all and the wallet never reports synced.
+    Dust = utils.dustWalletFromEnv()({
       ...fixture.getWalletConfig(),
       ...fixture.getDustWalletConfig(),
     });
@@ -152,6 +156,7 @@ describe('Smoke tests', () => {
       expect(finalState.unshielded.availableCoins.length).toBe(5);
       expect(finalState.shielded.pendingCoins.length).toBe(0);
       expect(finalState.unshielded.pendingCoins.length).toBe(0);
+      expect(finalState.dust.pendingCoins.length).toBe(0);
 
       await utils.waitForFinalizedShieldedBalance(receiver.wallet.shielded);
       const finalState2 = await receiver.wallet.waitForSyncedState();
