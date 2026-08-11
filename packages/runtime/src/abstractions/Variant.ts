@@ -29,6 +29,12 @@ export interface VariantContext<TState> {
    *   A variant uses it to recognize data that belongs to another variant: observing a protocol version outside of this
    *   range is what makes it emit a {@link StateChange.VersionChange}, so the runtime can migrate to the variant that
    *   owns that version.
+   *
+   *   The runtime keeps the same range on its own `RunningVariant` record, but that record is built _from_ the result of
+   *   {@link Variant.start} and a variant holds no back-reference to the runtime, so it is unreachable from inside a
+   *   starting variant. Handing it over through the context keeps `withVariant(sinceVersion)` the single source of
+   *   truth, so the migration boundary the runtime enforces and the boundary a variant splits its sync batches on
+   *   cannot drift apart.
    */
   activationRange: ProtocolVersion.ProtocolVersion.Range;
 }
@@ -48,6 +54,20 @@ export type Variant<
 > = Poly.WithTag<TTag> & {
   start(context: VariantContext<TState>): Effect<TRunning, WalletRuntimeError, Scope.Scope>;
 
+  /**
+   * Produces this variant's initial state from the previous variant's state, at the protocol version boundary.
+   *
+   * @remarks
+   *   An implementation is expected to be written so that it succeeds: a migration that fails leaves the wallet unable to
+   *   follow the chain past the fork, so re-shaping state must not be able to reject state a previous variant
+   *   considered valid.
+   *
+   *   The error channel is not an invitation to weaken that; it exists because part of the migration is not the variant's
+   *   own code. The v8-to-v9 state translation is a ledger-side tool reached across a WASM boundary
+   *   (`LedgerStateTranslator` in `capabilities`): it is loaded at that moment, run to completion, and signals failure
+   *   by throwing. A typed failure surfaces that on the state stream — which is what already happened at runtime before
+   *   this signature said so — instead of turning it into a defect that tears the runtime down with no diagnosis.
+   */
   migrateState(previousState: TPreviousState): Effect<TState, WalletRuntimeError>;
 };
 

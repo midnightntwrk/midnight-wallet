@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Deferred, Effect, Ref } from 'effect';
+import { Deferred, Effect, Either, Option, Ref } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { StateChange, VersionChangeType, WalletRuntimeError } from '../abstractions/index.js';
@@ -363,6 +363,18 @@ describe('Variant activation and context', () => {
   const First = 'first' as const;
   const Second = 'second' as const;
 
+  /** Awaits the first state emission matching `predicate` (any emission by default) as an effect. */
+  const firstStateWhere = <TState>(
+    states: rx.Observable<ProtocolState.ProtocolState<TState>>,
+    predicate: (state: ProtocolState.ProtocolState<TState>) => boolean = () => true,
+  ): Effect.Effect<ProtocolState.ProtocolState<TState>> =>
+    Effect.promise(() => rx.firstValueFrom(states.pipe(rx.filter(predicate))));
+
+  const atVersion =
+    (version: ProtocolVersion.ProtocolVersion) =>
+    ({ version: emitted }: ProtocolState.ProtocolState<unknown>): boolean =>
+      emitted === version;
+
   const makeTwoVariantWallet = (secondBuilder?: InterceptingVariantBuilder<typeof Second, number>) => {
     const firstBuilder = new InterceptingVariantBuilder<typeof First, number>(First);
     const Wallet = WalletBuilder.init()
@@ -375,87 +387,88 @@ describe('Variant activation and context', () => {
     return { Wallet, firstBuilder };
   };
 
-  it('invokes onVariantActivation exactly once, with the newly activated variant, after a migration', async () => {
-    const { Wallet } = makeTwoVariantWallet();
-    const wallet = Wallet.startEmpty(Wallet);
-    const recorder = await Effect.runPromise(makeActivationRecorder(1));
+  /** Starts a two-variant wallet, stopping it when the surrounding scope closes. */
+  const startTwoVariantWallet = (secondBuilder?: InterceptingVariantBuilder<typeof Second, number>) => {
+    const { Wallet } = makeTwoVariantWallet(secondBuilder);
+    return Effect.acquireRelease(
+      Effect.sync(() => Wallet.startEmpty(Wallet)),
+      (wallet) => Effect.promise(() => wallet.stop()),
+    );
+  };
 
-    await wallet.runtime
-      .onVariantActivation({
+  it('invokes onVariantActivation exactly once, with the newly activated variant, after a migration', () =>
+    Effect.gen(function* () {
+      const wallet = yield* startTwoVariantWallet();
+      const recorder = yield* makeActivationRecorder(1);
+
+      yield* wallet.runtime.onVariantActivation({
         [First]: () => recorder.record(First),
         [Second]: () => recorder.record(Second),
-      })
-      .pipe(Effect.runPromise);
+      });
 
-    // Wait for the first variant to be initiated before driving it
-    await rx.firstValueFrom(wallet.rawState);
+      // Wait for the first variant to be initiated before driving it
+      yield* firstStateWhere(wallet.rawState);
 
-    await wallet.runtime
-      .dispatch({
+      yield* wallet.runtime.dispatch({
         [First]: (variant: InterceptingRunningVariant<typeof First, number>) =>
           variant.emitProtocolVersionChange(
             VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(100n) }),
           ),
         [Second]: () => Effect.void,
-      })
-      .pipe(Effect.runPromise);
+      });
 
-    await Effect.runPromise(recorder.done);
-    // Exactly one activation — for the migration target, never for the initially started variant
-    expect(await Effect.runPromise(recorder.tags)).toEqual([Second]);
+      yield* recorder.done;
+      // Exactly one activation — for the migration target, never for the initially started variant
+      expect(yield* recorder.tags).toEqual([Second]);
 
-    // Sanity: dispatch reaches the migrated-to variant
-    const nowSecond = await wallet.runtime
-      .dispatch({ [First]: () => Effect.succeed(false), [Second]: () => Effect.succeed(true) })
-      .pipe(Effect.runPromise);
-    expect(nowSecond).toBe(true);
+      // Sanity: dispatch reaches the migrated-to variant
+      const nowSecond = yield* wallet.runtime.dispatch({
+        [First]: () => Effect.succeed(false),
+        [Second]: () => Effect.succeed(true),
+      });
+      expect(nowSecond).toBe(true);
+    }).pipe(Effect.scoped, Effect.runPromise));
 
-    await wallet.stop();
-  });
+  it('does not invoke onVariantActivation when no migration occurs', () =>
+    Effect.gen(function* () {
+      const wallet = yield* startTwoVariantWallet();
+      const recorder = yield* makeActivationRecorder(1);
 
-  it('does not invoke onVariantActivation when no migration occurs', async () => {
-    const { Wallet } = makeTwoVariantWallet();
-    const wallet = Wallet.startEmpty(Wallet);
-    const recorder = await Effect.runPromise(makeActivationRecorder(1));
-
-    await wallet.runtime
-      .onVariantActivation({
+      yield* wallet.runtime.onVariantActivation({
         [First]: () => recorder.record(First),
         [Second]: () => recorder.record(Second),
-      })
-      .pipe(Effect.runPromise);
+      });
 
-    await rx.firstValueFrom(wallet.rawState);
+      yield* firstStateWhere(wallet.rawState);
 
-    // Plain state emission — no version change, no migration
-    await wallet.runtime
-      .dispatch({
+      // Plain state emission — no version change, no migration
+      yield* wallet.runtime.dispatch({
         [First]: (variant: InterceptingRunningVariant<typeof First, number>) =>
           variant.emit(StateChange.State({ state: 42 })),
         [Second]: () => Effect.void,
-      })
-      .pipe(Effect.runPromise);
-    await rx.firstValueFrom(wallet.rawState.pipe(rx.filter(({ state }) => state === 42)));
+      });
+      yield* firstStateWhere(wallet.rawState, ({ state }) => state === 42);
 
-    expect(await Effect.runPromise(recorder.tags)).toEqual([]);
+      expect(yield* recorder.tags).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
 
-    await wallet.stop();
-  });
+  it('observes every migration of a chain in order, surviving a failing handler', () =>
+    Effect.gen(function* () {
+      const A = 'a' as const;
+      const B = 'b' as const;
+      const C = 'c' as const;
+      const Wallet = WalletBuilder.init()
+        .withVariant(ProtocolVersion.MinSupportedVersion, new InterceptingVariantBuilder<typeof A, number>(A))
+        .withVariant(ProtocolVersion.ProtocolVersion(50n), new InterceptingVariantBuilder<typeof B, number>(B))
+        .withVariant(ProtocolVersion.ProtocolVersion(100n), new InterceptingVariantBuilder<typeof C, number>(C))
+        .build();
+      const wallet = yield* Effect.acquireRelease(
+        Effect.sync(() => Wallet.startEmpty(Wallet)),
+        (started) => Effect.promise(() => started.stop()),
+      );
+      const recorder = yield* makeActivationRecorder(2);
 
-  it('observes every migration of a chain in order, surviving a failing handler', async () => {
-    const A = 'a' as const;
-    const B = 'b' as const;
-    const C = 'c' as const;
-    const Wallet = WalletBuilder.init()
-      .withVariant(ProtocolVersion.MinSupportedVersion, new InterceptingVariantBuilder<typeof A, number>(A))
-      .withVariant(ProtocolVersion.ProtocolVersion(50n), new InterceptingVariantBuilder<typeof B, number>(B))
-      .withVariant(ProtocolVersion.ProtocolVersion(100n), new InterceptingVariantBuilder<typeof C, number>(C))
-      .build();
-    const wallet = Wallet.startEmpty(Wallet);
-    const recorder = await Effect.runPromise(makeActivationRecorder(2));
-
-    await wallet.runtime
-      .onVariantActivation({
+      yield* wallet.runtime.onVariantActivation({
         [A]: () => recorder.record(A),
         // The first activation handler fails AFTER recording — the subscription must survive
         // and still observe the second migration.
@@ -464,158 +477,131 @@ describe('Variant activation and context', () => {
             .record(B)
             .pipe(Effect.flatMap(() => Effect.fail(new WalletRuntimeError({ message: 'handler boom' })))),
         [C]: () => recorder.record(C),
-      })
-      .pipe(Effect.runPromise);
+      });
 
-    await rx.firstValueFrom(wallet.rawState);
+      yield* firstStateWhere(wallet.rawState);
 
-    await wallet.runtime
-      .dispatch({
+      yield* wallet.runtime.dispatch({
         [A]: (variant: InterceptingRunningVariant<typeof A, number>) =>
           variant.emitProtocolVersionChange(
             VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(50n) }),
           ),
         [B]: () => Effect.void,
         [C]: () => Effect.void,
-      })
-      .pipe(Effect.runPromise);
+      });
 
-    // Wait until the second variant is live (its start() re-publishes the migrated state at version 50n)
-    await rx.firstValueFrom(
-      wallet.rawState.pipe(rx.filter(({ version }) => version === ProtocolVersion.ProtocolVersion(50n))),
-    );
+      // Wait until the second variant is live (its start() re-publishes the migrated state at version 50n)
+      yield* firstStateWhere(wallet.rawState, atVersion(ProtocolVersion.ProtocolVersion(50n)));
 
-    await wallet.runtime
-      .dispatch({
+      yield* wallet.runtime.dispatch({
         [A]: () => Effect.void,
         [B]: (variant: InterceptingRunningVariant<typeof B, number>) =>
           variant.emitProtocolVersionChange(
             VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(100n) }),
           ),
         [C]: () => Effect.void,
-      })
-      .pipe(Effect.runPromise);
+      });
 
-    await Effect.runPromise(recorder.done);
-    expect(await Effect.runPromise(recorder.tags)).toEqual([B, C]);
+      yield* recorder.done;
+      expect(yield* recorder.tags).toEqual([B, C]);
+    }).pipe(Effect.scoped, Effect.runPromise));
 
-    await wallet.stop();
-  });
+  it('has the activation subscription live as soon as onVariantActivation resolves', () =>
+    Effect.gen(function* () {
+      const wallet = yield* startTwoVariantWallet();
+      const recorder = yield* makeActivationRecorder(1);
 
-  it('has the activation subscription live as soon as onVariantActivation resolves', async () => {
-    const { Wallet } = makeTwoVariantWallet();
-    const wallet = Wallet.startEmpty(Wallet);
-    const recorder = await Effect.runPromise(makeActivationRecorder(1));
-
-    await wallet.runtime
-      .onVariantActivation({
+      yield* wallet.runtime.onVariantActivation({
         [First]: () => recorder.record(First),
         [Second]: () => recorder.record(Second),
-      })
-      .pipe(Effect.runPromise);
+      });
 
-    // Trigger the migration immediately after registration returns — no other synchronization.
-    // If the subscription were established lazily, this activation could be missed.
-    await wallet.runtime
-      .dispatch({
+      // Trigger the migration immediately after registration returns — no other synchronization.
+      // If the subscription were established lazily, this activation could be missed.
+      yield* wallet.runtime.dispatch({
         [First]: (variant: InterceptingRunningVariant<typeof First, number>) =>
           variant.emitProtocolVersionChange(
             VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(100n) }),
           ),
         [Second]: () => Effect.void,
-      })
-      .pipe(Effect.runPromise);
+      });
 
-    await Effect.runPromise(recorder.done);
-    expect(await Effect.runPromise(recorder.tags)).toEqual([Second]);
+      yield* recorder.done;
+      expect(yield* recorder.tags).toEqual([Second]);
+    }).pipe(Effect.scoped, Effect.runPromise));
 
-    await wallet.stop();
-  });
+  it('passes the activation range derived from registration into each variant start context', () =>
+    Effect.gen(function* () {
+      const A = 'a' as const;
+      const B = 'b' as const;
+      const C = 'c' as const;
+      const builderA = new InterceptingVariantBuilder<typeof A, number>(A);
+      const builderB = new InterceptingVariantBuilder<typeof B, number>(B);
+      const builderC = new InterceptingVariantBuilder<typeof C, number>(C);
+      const Wallet = WalletBuilder.init()
+        .withVariant(ProtocolVersion.MinSupportedVersion, builderA)
+        .withVariant(ProtocolVersion.ProtocolVersion(50n), builderB)
+        .withVariant(ProtocolVersion.ProtocolVersion(100n), builderC)
+        .build();
+      const wallet = yield* Effect.acquireRelease(
+        Effect.sync(() => Wallet.startEmpty(Wallet)),
+        (started) => Effect.promise(() => started.stop()),
+      );
 
-  it('passes the activation range derived from registration into each variant start context', async () => {
-    const A = 'a' as const;
-    const B = 'b' as const;
-    const C = 'c' as const;
-    const builderA = new InterceptingVariantBuilder<typeof A, number>(A);
-    const builderB = new InterceptingVariantBuilder<typeof B, number>(B);
-    const builderC = new InterceptingVariantBuilder<typeof C, number>(C);
-    const Wallet = WalletBuilder.init()
-      .withVariant(ProtocolVersion.MinSupportedVersion, builderA)
-      .withVariant(ProtocolVersion.ProtocolVersion(50n), builderB)
-      .withVariant(ProtocolVersion.ProtocolVersion(100n), builderC)
-      .build();
-    const wallet = Wallet.startEmpty(Wallet);
-
-    await rx.firstValueFrom(wallet.rawState);
-    await wallet.runtime
-      .dispatch({
+      yield* firstStateWhere(wallet.rawState);
+      yield* wallet.runtime.dispatch({
         [A]: (variant: InterceptingRunningVariant<typeof A, number>) =>
           variant.emitProtocolVersionChange(
             VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(50n) }),
           ),
         [B]: () => Effect.void,
         [C]: () => Effect.void,
-      })
-      .pipe(Effect.runPromise);
-    await rx.firstValueFrom(
-      wallet.rawState.pipe(rx.filter(({ version }) => version === ProtocolVersion.ProtocolVersion(50n))),
-    );
-    await wallet.runtime
-      .dispatch({
+      });
+      yield* firstStateWhere(wallet.rawState, atVersion(ProtocolVersion.ProtocolVersion(50n)));
+      yield* wallet.runtime.dispatch({
         [A]: () => Effect.void,
         [B]: (variant: InterceptingRunningVariant<typeof B, number>) =>
           variant.emitProtocolVersionChange(
             VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(100n) }),
           ),
         [C]: () => Effect.void,
-      })
-      .pipe(Effect.runPromise);
-    await rx.firstValueFrom(
-      wallet.rawState.pipe(rx.filter(({ version }) => version === ProtocolVersion.ProtocolVersion(100n))),
-    );
+      });
+      yield* firstStateWhere(wallet.rawState, atVersion(ProtocolVersion.ProtocolVersion(100n)));
 
-    // Each variant's half-open range [sinceVersion_N, sinceVersion_N+1) — the last one is
-    // open-ended up to MaxSupportedVersion. Derived from registration, delivered via context.
-    expect(builderA.built[0]?.receivedContext).toMatchObject({
-      activationRange: [ProtocolVersion.MinSupportedVersion, ProtocolVersion.ProtocolVersion(50n)],
-    });
-    expect(builderB.built[0]?.receivedContext).toMatchObject({
-      activationRange: [ProtocolVersion.ProtocolVersion(50n), ProtocolVersion.ProtocolVersion(100n)],
-    });
-    expect(builderC.built[0]?.receivedContext).toMatchObject({
-      activationRange: [ProtocolVersion.ProtocolVersion(100n), ProtocolVersion.MaxSupportedVersion],
-    });
+      // Each variant's half-open range [sinceVersion_N, sinceVersion_N+1) — the last one is
+      // open-ended up to MaxSupportedVersion. Derived from registration, delivered via context.
+      expect(builderA.built[0]?.receivedContext).toMatchObject({
+        activationRange: [ProtocolVersion.MinSupportedVersion, ProtocolVersion.ProtocolVersion(50n)],
+      });
+      expect(builderB.built[0]?.receivedContext).toMatchObject({
+        activationRange: [ProtocolVersion.ProtocolVersion(50n), ProtocolVersion.ProtocolVersion(100n)],
+      });
+      expect(builderC.built[0]?.receivedContext).toMatchObject({
+        activationRange: [ProtocolVersion.ProtocolVersion(100n), ProtocolVersion.MaxSupportedVersion],
+      });
+    }).pipe(Effect.scoped, Effect.runPromise));
 
-    await wallet.stop();
-  });
+  it('surfaces a migrateState failure as a WalletRuntimeError on the state stream', () =>
+    Effect.gen(function* () {
+      const failingSecond = new InterceptingVariantBuilder<typeof Second, number>(Second, {
+        migrateState: () => Effect.fail(new WalletRuntimeError({ message: 'migration boom' })),
+      });
+      const wallet = yield* startTwoVariantWallet(failingSecond);
 
-  it('surfaces a migrateState failure as a WalletRuntimeError on the state stream', async () => {
-    const failingSecond = new InterceptingVariantBuilder<typeof Second, number>(Second, {
-      migrateState: () => Effect.fail(new WalletRuntimeError({ message: 'migration boom' })),
-    });
-    const { Wallet } = makeTwoVariantWallet(failingSecond);
-    const wallet = Wallet.startEmpty(Wallet);
+      // Subscribed here, before the migration is triggered, so the terminal failure cannot be missed
+      const terminalOutcome = rx.lastValueFrom(wallet.rawState).then(Either.right, Either.left);
 
-    const terminalOutcome = rx.lastValueFrom(wallet.rawState).then(
-      (value) => ({ kind: 'completed' as const, value }),
-      (error: unknown) => ({ kind: 'errored' as const, error }),
-    );
-
-    await rx.firstValueFrom(wallet.rawState);
-    await wallet.runtime
-      .dispatch({
+      yield* firstStateWhere(wallet.rawState);
+      yield* wallet.runtime.dispatch({
         [First]: (variant: InterceptingRunningVariant<typeof First, number>) =>
           variant.emitProtocolVersionChange(
             VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(100n) }),
           ),
         [Second]: () => Effect.void,
-      })
-      .pipe(Effect.runPromise);
+      });
 
-    const outcome = await terminalOutcome;
-    expect(outcome.kind).toBe('errored');
-    expect((outcome as { kind: 'errored'; error: unknown }).error).toBeInstanceOf(WalletRuntimeError);
-
-    await wallet.stop();
-  });
+      const outcome = yield* Effect.promise(() => terminalOutcome);
+      expect(Either.isLeft(outcome)).toBe(true);
+      expect(Either.getLeft(outcome)).toEqual(Option.some(expect.any(WalletRuntimeError)));
+    }).pipe(Effect.scoped, Effect.runPromise));
 });
