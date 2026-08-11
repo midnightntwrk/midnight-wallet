@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Duration, Effect, Exit, Ref, Scope, Stream, SubscriptionRef, TestClock, TestContext } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
@@ -118,7 +118,13 @@ describe('RunningV1Variant.startSync tx-history fan-out', () => {
       const scope = yield* Scope.make();
       const variant = new RunningV1Variant(
         scope,
-        { stateRef },
+        {
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+        },
         variantContextOf(batches, trackingHistoryService(counters)),
       );
 
