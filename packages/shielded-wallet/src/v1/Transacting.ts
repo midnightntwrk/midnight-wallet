@@ -1,0 +1,506 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Array as Arr, Either, Option, pipe, Record } from 'effect';
+import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { CoreWallet } from './CoreWallet.js';
+import { InsufficientFundsError, OtherWalletError, type WalletError } from './WalletError.js';
+import {
+  type BalanceRecipe,
+  type CoinSelection,
+  getBalanceRecipe,
+  Imbalances,
+  InsufficientFundsError as BalancingInsufficientFundsError,
+} from '@midnightntwrk/wallet-sdk-capabilities';
+import { type ShieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { ShieldedCostModel, TransactionImbalances } from './TransactionImbalances.js';
+import { TransactionOps } from './TransactionOps.js';
+import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { type KeysCapability } from './Keys.js';
+
+export interface TokenTransfer {
+  readonly amount: bigint;
+  readonly type: ledger.RawTokenType;
+  readonly receiverAddress: ShieldedAddress;
+}
+
+export type BalancingResult = ledger.UnprovenTransaction | undefined;
+
+// This interface should abstract over the transaction types used
+// It does not do so now for historical reasons
+export interface TransactingCapability<TSecrets, TState, _TTransaction> {
+  balanceTransaction(
+    secrets: TSecrets,
+    state: TState,
+    // That's definitely fine for now, question is whether it is worth bastracting over in general case
+    tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+  ): Either.Either<[BalancingResult, TState], WalletError>;
+
+  makeTransfer(
+    secrets: TSecrets,
+    state: TState,
+    outputs: ReadonlyArray<TokenTransfer>,
+  ): Either.Either<[ledger.UnprovenTransaction, TState], WalletError>;
+
+  initSwap(
+    secrets: TSecrets,
+    state: TState,
+    desiredInputs: Record<ledger.RawTokenType, bigint>,
+    desiredOutputs: ReadonlyArray<TokenTransfer>,
+  ): Either.Either<[ledger.UnprovenTransaction, TState], WalletError>;
+
+  //These functions below do not exactly match here, but also seem to be somewhat good place to put
+  //The reason is that they primarily make sense in a wallet flavour only able to issue transactions
+  revertTransaction(
+    state: TState,
+    transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+  ): Either.Either<TState, WalletError>;
+}
+
+export type DefaultTransactingConfiguration = {
+  networkId: NetworkId.NetworkId;
+};
+
+export type DefaultTransactingContext = {
+  coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>;
+  coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
+  keysCapability: KeysCapability<CoreWallet>;
+};
+
+export const makeDefaultTransactingCapability = (
+  config: DefaultTransactingConfiguration,
+  getContext: () => DefaultTransactingContext,
+): TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, ledger.FinalizedTransaction> => {
+  return new TransactingCapabilityImplementation(
+    config.networkId,
+    () => getContext().coinSelection,
+    () => getContext().coinsAndBalancesCapability,
+    () => getContext().keysCapability,
+    TransactionOps.default,
+  );
+};
+
+export const makeSimulatorTransactingCapability = (
+  config: DefaultTransactingConfiguration,
+  getContext: () => DefaultTransactingContext,
+): TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, ledger.ProofErasedTransaction> => {
+  return new TransactingCapabilityImplementation(
+    config.networkId,
+    () => getContext().coinSelection,
+    () => getContext().coinsAndBalancesCapability,
+    () => getContext().keysCapability,
+    TransactionOps.proofErased,
+  );
+};
+
+export class TransactingCapabilityImplementation<
+  TTransaction extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+> implements TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction> {
+  public readonly networkId: NetworkId.NetworkId;
+  public readonly getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>;
+  public readonly txOps: TransactionOps<TTransaction>;
+  readonly getCoins: () => CoinsAndBalancesCapability<CoreWallet>;
+  readonly getKeys: () => KeysCapability<CoreWallet>;
+
+  constructor(
+    networkId: NetworkId.NetworkId,
+    getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>,
+    getCoins: () => CoinsAndBalancesCapability<CoreWallet>,
+    getKeys: () => KeysCapability<CoreWallet>,
+    txOps: TransactionOps<TTransaction>,
+  ) {
+    this.getCoins = getCoins;
+    this.networkId = networkId;
+    this.getCoinSelection = getCoinSelection;
+    this.getKeys = getKeys;
+    this.txOps = txOps;
+  }
+
+  balanceTransaction(
+    secretKeys: ledger.ZswapSecretKeys,
+    state: CoreWallet,
+    tx: TTransaction,
+  ): Either.Either<[BalancingResult, CoreWallet], WalletError> {
+    return Either.gen(this, function* () {
+      const coinSelection = this.getCoinSelection();
+      const initialImbalances = this.txOps.getImbalances(tx);
+
+      if (TransactionImbalances.areBalanced(initialImbalances)) {
+        return [undefined, state];
+      }
+
+      const { newState: afterFallible, fallibleOffers } = yield* this.balanceFallibleSection(
+        secretKeys,
+        state,
+        initialImbalances,
+        coinSelection,
+      );
+
+      const { newState: afterGuaranteed, offer: guaranteed } = yield* this.#balanceGuaranteedSection(
+        secretKeys,
+        afterFallible,
+        initialImbalances,
+        coinSelection,
+        Imbalances.empty(),
+      );
+
+      const balancedTx = Array.from(fallibleOffers.entries()).reduce(
+        (tx, [segment, offer]) => tx.addZswapOffer({ tag: 'specific', value: segment }, offer),
+        ledger.Transaction.fromParts(this.networkId, guaranteed),
+      );
+      return [balancedTx, afterGuaranteed];
+    });
+  }
+
+  makeTransfer(
+    secretKeys: ledger.ZswapSecretKeys,
+    state: CoreWallet,
+    transfers: Arr.NonEmptyReadonlyArray<TokenTransfer>,
+  ): Either.Either<[ledger.UnprovenTransaction, CoreWallet], WalletError> {
+    return Either.gen(this, function* () {
+      const positiveTransfers = yield* pipe(
+        transfers,
+        Arr.filter((t) => t.amount > 0n),
+        Arr.match({
+          onEmpty: () =>
+            Either.left(
+              new OtherWalletError({
+                message: 'The amount needs to be positive',
+              }),
+            ),
+          onNonEmpty: (nonEmpty) => Either.right(nonEmpty),
+        }),
+      );
+
+      const networkId = this.networkId;
+      const { initialOffersAndCoins, selfCoins } = yield* this.#processDesiredOutputs(state, positiveTransfers);
+      const offerToBalance = pipe(
+        initialOffersAndCoins,
+        Arr.map((o) => o.outputOffer),
+        ArrayOps.fold((a, b) => a.merge(b)),
+      );
+      const unprovenTxToBalance = ledger.Transaction.fromParts(networkId, offerToBalance);
+      const imbalances = TransactionOps.unproven.getImbalances(unprovenTxToBalance);
+      const { offer, newState } = yield* this.#balanceGuaranteedSection(
+        secretKeys,
+        state,
+        imbalances,
+        this.getCoinSelection(),
+        Imbalances.empty(),
+      );
+      const finalState = CoreWallet.watchCoins(newState, secretKeys, selfCoins);
+      const finalTx = unprovenTxToBalance.merge(ledger.Transaction.fromParts(networkId, offer));
+
+      return [finalTx, finalState];
+    });
+  }
+
+  initSwap(
+    secretKeys: ledger.ZswapSecretKeys,
+    state: CoreWallet,
+    desiredInputs: Record<ledger.RawTokenType, bigint>,
+    desiredOutputs: ReadonlyArray<TokenTransfer>,
+  ): Either.Either<[ledger.UnprovenTransaction, CoreWallet], WalletError> {
+    return Either.gen(this, function* () {
+      const outputsValid = desiredOutputs.every((output) => output.amount > 0n);
+      if (!outputsValid) {
+        return yield* Either.left(
+          new OtherWalletError({
+            message: 'The amount needs to be positive',
+          }),
+        );
+      }
+
+      const inputsValid = Object.entries(desiredInputs).every(([, amount]) => amount > 0n);
+      if (!inputsValid) {
+        return yield* Either.left(
+          new OtherWalletError({
+            message: 'The input amounts need to be positive',
+          }),
+        );
+      }
+
+      const outputsParseResult = yield* this.#processDesiredOutputsPossiblyEmpty(state, desiredOutputs);
+      const inputsParseResult = Imbalances.fromEntries(Record.toEntries(desiredInputs));
+      const networkId = this.networkId;
+
+      const { offer, newState } = yield* this.#balanceGuaranteedSection(
+        secretKeys,
+        state,
+        TransactionImbalances.empty(),
+        this.getCoinSelection(),
+        inputsParseResult,
+      );
+      const finalState = CoreWallet.watchCoins(newState, secretKeys, outputsParseResult.selfCoins);
+      const balancingTx = ledger.Transaction.fromParts(networkId, offer);
+      const finalTx = outputsParseResult.unprovenTxToBalance
+        ? outputsParseResult.unprovenTxToBalance.merge(balancingTx)
+        : balancingTx;
+
+      return [finalTx, finalState];
+    });
+  }
+
+  revertTransaction(
+    state: CoreWallet,
+    transaction: TTransaction | ledger.UnprovenTransaction,
+  ): Either.Either<CoreWallet, WalletError> {
+    return Either.try({
+      try: () => {
+        return CoreWallet.revertTransaction(state, transaction);
+      },
+      catch: (err) => {
+        return new OtherWalletError({
+          message: `Error while reverting transaction ${transaction.identifiers().at(0)!}`,
+          cause: err,
+        });
+      },
+    });
+  }
+
+  #prepareOffer(
+    secretKeys: ledger.ZswapSecretKeys,
+    state: CoreWallet,
+    recipe: BalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>,
+    segment: number,
+  ): Option.Option<{ newState: CoreWallet; offer: ledger.ZswapOffer<ledger.PreProof> }> {
+    const [inputOffers, stateAfterSpends] = CoreWallet.spendCoins(state, secretKeys, recipe.inputs, segment);
+    const stateAfterWatches = CoreWallet.watchCoins(stateAfterSpends, secretKeys, recipe.outputs);
+    const outputOffers = recipe.outputs.map((coin) => {
+      const output = ledger.ZswapOutput.new(
+        coin,
+        segment,
+        this.getKeys().getCoinPublicKey(state).toHexString(),
+        this.getKeys().getEncryptionPublicKey(state).toHexString(),
+      );
+      return ledger.ZswapOffer.fromOutput(output, coin.type, coin.value);
+    });
+
+    return pipe(
+      Arr.appendAll(inputOffers, outputOffers),
+      Arr.match({
+        onEmpty: () => Option.none<ledger.ZswapOffer<ledger.PreProof>>(),
+        onNonEmpty: (nonEmpty) =>
+          pipe(
+            nonEmpty,
+            ArrayOps.fold((a, b) => a.merge(b)),
+            Option.some,
+          ),
+      }),
+      Option.map((offer) => ({ offer, newState: stateAfterWatches })),
+    );
+  }
+
+  balanceFallibleSection(
+    secretKeys: ledger.ZswapSecretKeys,
+    state: CoreWallet,
+    imbalances: TransactionImbalances,
+    coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
+  ): Either.Either<
+    {
+      fallibleOffers: Map<number, ledger.ZswapOffer<ledger.PreProof>>;
+      newState: CoreWallet;
+    },
+    WalletError
+  > {
+    return Array.from(imbalances.fallible.entries()).reduce<
+      Either.Either<
+        { fallibleOffers: Map<number, ledger.ZswapOffer<ledger.PreProof>>; newState: CoreWallet },
+        WalletError
+      >
+    >(
+      (acc, [segment, segmentImbalances]) =>
+        Either.flatMap(acc, ({ fallibleOffers, newState }) =>
+          pipe(
+            Either.try({
+              try: () => {
+                const fallibleBalanceRecipe = getBalanceRecipe<
+                  ledger.QualifiedShieldedCoinInfo,
+                  ledger.ShieldedCoinInfo
+                >({
+                  coins: this.getCoins()
+                    .getAvailableCoins(newState)
+                    .map((c) => c.coin),
+                  initialImbalances: segmentImbalances,
+                  transactionCostModel: ShieldedCostModel,
+                  feeTokenType: '',
+                  coinSelection,
+                  createOutput: (coin) => ledger.createShieldedCoinInfo(coin.type, coin.value),
+                  isCoinEqual: (a, b) => a.type === b.type && a.value === b.value,
+                });
+                return this.#prepareOffer(secretKeys, newState, fallibleBalanceRecipe, segment);
+              },
+              catch: (err) => {
+                if (err instanceof BalancingInsufficientFundsError) {
+                  return new InsufficientFundsError({
+                    message: `Insufficient funds for fallible segment ${segment}`,
+                    tokenType: err.tokenType,
+                    amount: segmentImbalances.get(err.tokenType) ?? 0n,
+                  });
+                }
+                return new OtherWalletError({
+                  message: `Balancing fallible segment ${segment} failed`,
+                  cause: err,
+                });
+              },
+            }),
+            Either.map(
+              Option.match({
+                onNone: () => ({ fallibleOffers, newState }),
+                onSome: (res) => ({
+                  fallibleOffers: new Map([...fallibleOffers, [segment, res.offer]]),
+                  newState: res.newState,
+                }),
+              }),
+            ),
+          ),
+        ),
+      Either.right({
+        fallibleOffers: new Map<number, ledger.ZswapOffer<ledger.PreProof>>(),
+        newState: state,
+      }),
+    );
+  }
+
+  #balanceGuaranteedSection(
+    secretKeys: ledger.ZswapSecretKeys,
+    state: CoreWallet,
+    imbalances: TransactionImbalances,
+    coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
+    targetImbalances: Imbalances,
+  ): Either.Either<{ offer: ledger.ZswapOffer<ledger.PreProof> | undefined; newState: CoreWallet }, WalletError> {
+    return Either.gen(this, function* () {
+      const balanceRecipe = yield* Either.try({
+        try: () =>
+          getBalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>({
+            coins: this.getCoins()
+              .getAvailableCoins(state)
+              .map((c) => c.coin),
+            initialImbalances: imbalances.guaranteed,
+            transactionCostModel: ShieldedCostModel,
+            feeTokenType: '',
+            coinSelection,
+            createOutput: (coin) => ledger.createShieldedCoinInfo(coin.type, coin.value),
+            isCoinEqual: (a, b) => a.nonce === b.nonce,
+            targetImbalances,
+          }),
+        catch: (err) => {
+          if (err instanceof BalancingInsufficientFundsError) {
+            return new InsufficientFundsError({
+              message: 'Insufficient funds',
+              tokenType: err.tokenType,
+              amount: imbalances.guaranteed.get(err.tokenType) ?? 0n,
+            });
+          } else {
+            return new OtherWalletError({
+              message: 'Balancing guaranteed section failed',
+              cause: err,
+            });
+          }
+        },
+      });
+
+      // An empty recipe (e.g. the guaranteed section is already balanced) yields no offer.
+      // Treat that as "nothing to add" rather than a failure, mirroring the fallible section.
+      return pipe(
+        this.#prepareOffer(secretKeys, state, balanceRecipe, 0),
+        Option.match({
+          onNone: () => ({ offer: undefined, newState: state }),
+          onSome: (result) => result,
+        }),
+      );
+    });
+  }
+
+  #processDesiredOutputs(state: CoreWallet, transfers: Arr.NonEmptyReadonlyArray<TokenTransfer>) {
+    return Either.try({
+      try: () => {
+        const initialOffersAndCoins = pipe(
+          transfers,
+          Arr.map((transfer) => {
+            const { receiverAddress, type, amount } = transfer;
+            const coin = ledger.createShieldedCoinInfo(type, amount);
+            const output = ledger.ZswapOutput.new(
+              coin,
+              0,
+              receiverAddress.coinPublicKey.toHexString(),
+              receiverAddress.encryptionPublicKey.toHexString(),
+            );
+            const outputOffer = ledger.ZswapOffer.fromOutput(output, type, amount);
+
+            return {
+              coin,
+              outputOffer,
+              isForSelf: receiverAddress.coinPublicKey.equals(this.getKeys().getCoinPublicKey(state)),
+            };
+          }),
+        );
+        const selfCoins = Arr.flatMap(
+          initialOffersAndCoins,
+          ({ coin, isForSelf }): readonly ledger.ShieldedCoinInfo[] => {
+            if (isForSelf) {
+              return [coin];
+            } else {
+              return [];
+            }
+          },
+        );
+
+        return { initialOffersAndCoins, selfCoins };
+      },
+      catch: (err) => {
+        return new OtherWalletError({
+          message: 'Failed to process desired outputs',
+          cause: err,
+        });
+      },
+    });
+  }
+
+  #processDesiredOutputsPossiblyEmpty(state: CoreWallet, desiredOutputs: ReadonlyArray<TokenTransfer>) {
+    return pipe(
+      desiredOutputs,
+      Arr.match({
+        onEmpty: () => {
+          return Either.right({
+            imbalances: TransactionImbalances.empty(),
+            selfCoins: [],
+            unprovenTxToBalance: null,
+          });
+        },
+        onNonEmpty: (desiredOutputs) => {
+          return pipe(
+            this.#processDesiredOutputs(state, desiredOutputs),
+            Either.map(({ initialOffersAndCoins, selfCoins }) => {
+              const networkId = this.networkId;
+              const offerToBalance = pipe(
+                initialOffersAndCoins,
+                Arr.map((o) => o.outputOffer),
+                ArrayOps.fold((a, b) => a.merge(b)),
+              );
+              const unprovenTxToBalance = ledger.Transaction.fromParts(networkId, offerToBalance);
+              const imbalances = TransactionOps.unproven.getImbalances(unprovenTxToBalance);
+
+              return {
+                imbalances,
+                selfCoins,
+                unprovenTxToBalance,
+              };
+            }),
+          );
+        },
+      }),
+    );
+  }
+}

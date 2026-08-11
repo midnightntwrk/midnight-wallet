@@ -11,4 +11,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export * from '@midnightntwrk/wallet-sdk-shielded/v2';
+export * from '@midnightntwrk/wallet-sdk-shielded/v1';

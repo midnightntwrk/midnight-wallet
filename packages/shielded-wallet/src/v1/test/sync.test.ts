@@ -1,0 +1,425 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import { vi } from 'vitest';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
+import {
+  Effect,
+  Stream,
+  Scope,
+  pipe,
+  Chunk,
+  Option,
+  Duration,
+  TestClock,
+  TestContext,
+  Fiber,
+  Ref,
+  Number as Num,
+} from 'effect';
+import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { describe, expect, it } from 'vitest';
+import { ZswapEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
+import type {
+  ZswapEventsSubscription,
+  ZswapEventsSubscriptionVariables,
+} from '@midnightntwrk/wallet-sdk-indexer-client';
+import { makeEventsSyncService } from '../Sync.js';
+import { CoreWallet } from '../CoreWallet.js';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+
+vi.setConfig({
+  testTimeout: 60_000,
+});
+
+// Helper to create a valid hex-encoded ledger event
+const createMockEventHex = async (): Promise<string> => {
+  // Use Simulator to generate a real event, then serialize it
+  return await Effect.gen(function* () {
+    const scope = yield* Scope.make();
+    const simulator = yield* V8.Simulator.init({
+      genesisMints: [
+        {
+          type: 'shielded',
+          tokenType: ledger.shieldedToken().raw,
+          amount: 1000n,
+          recipient: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
+        },
+      ],
+    }).pipe(Effect.provideService(Scope.Scope, scope));
+
+    const stateOption = yield* simulator.state$.pipe(Stream.take(1), Stream.runHead);
+    const state = Option.match(stateOption, {
+      onNone: () => {
+        throw new Error('No state from simulator');
+      },
+      onSome: (s) => s,
+    });
+
+    const lastBlock = V8.getLastBlock(state);
+    if (lastBlock === undefined) {
+      throw new Error('No block from simulator');
+    }
+    const events = V8.getLastBlockEvents(state);
+    if (events.length === 0) {
+      throw new Error('No events generated from simulator');
+    }
+
+    const event = events[0];
+    if (!event) {
+      throw new Error('No event at index 0');
+    }
+
+    const serialized = event.serialize();
+    return Buffer.from(serialized).toString('hex');
+  }).pipe(Effect.scoped, Effect.runPromise);
+};
+
+type TimingOptions = {
+  delayEvents?: boolean;
+  minDelay?: Duration.Duration;
+  maxDelay?: Duration.Duration;
+  useTestClock?: boolean;
+};
+
+const createMockSubscriptionFn = (
+  totalRecords: number,
+  mockEventHex: string,
+  timingOptions?: TimingOptions,
+): ((
+  _variables: ZswapEventsSubscriptionVariables,
+) => Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient>) => {
+  const { delayEvents = false, minDelay, maxDelay, useTestClock = false } = timingOptions ?? {};
+
+  return (_variables: ZswapEventsSubscriptionVariables) => {
+    const baseStream = pipe(
+      Stream.range(1, totalRecords),
+      Stream.map((id) => ({
+        zswapLedgerEvents: {
+          id,
+          raw: mockEventHex,
+          protocolVersion: 1,
+          maxId: totalRecords,
+        },
+      })),
+    );
+
+    if (delayEvents) {
+      if (minDelay === undefined || maxDelay === undefined) {
+        throw new Error('minDelay and maxDelay are required when delayEvents is true');
+      }
+
+      const minDelayMillis = Duration.toMillis(minDelay);
+      const maxDelayMillis = Duration.toMillis(maxDelay);
+
+      return pipe(
+        baseStream,
+        Stream.tap(() => {
+          // Generate a random delay between minDelay and maxDelay
+          const randomDelayMillis = Math.floor(Math.random() * (maxDelayMillis - minDelayMillis + 1)) + minDelayMillis;
+
+          const delay = Duration.millis(randomDelayMillis);
+
+          // Use TestClock.sleep when in test clock context, otherwise use Effect.sleep
+          return useTestClock ? TestClock.sleep(delay) : Effect.sleep(delay);
+        }),
+      );
+    }
+
+    return baseStream;
+  };
+};
+
+// Helper to capture batch information at the consumer and log it
+const withBatchLogging = <A, E, R>(
+  stream: Stream.Stream<A, E, R>,
+  batchSize: number,
+  batchTimeout: Duration.Duration,
+): Effect.Effect<{ stream: Stream.Stream<A, E, R>; batches: Ref.Ref<readonly number[]> }, never, R> => {
+  return Effect.gen(function* () {
+    const batchesRef = yield* Ref.make<readonly number[]>([]);
+
+    // Re-group the stream to detect batches (using same params as Sync.ts)
+    // This will create batches that match the original batching behavior
+    const groupedStream = stream.pipe(
+      Stream.groupedWithin(batchSize, batchTimeout),
+      Stream.tap((chunk) => {
+        const chunkSize = Chunk.size(chunk);
+        const isSizeBased = chunkSize === batchSize;
+        return pipe(
+          Ref.update(batchesRef, (batches) => [...batches, chunkSize]),
+          Effect.flatMap(() =>
+            Effect.log(`Batch released: ${chunkSize} records (${isSizeBased ? 'size-based' : 'timeout-based'})`),
+          ),
+        );
+      }),
+      Stream.flatMap((chunk) => Stream.fromIterable(chunk)),
+    );
+
+    return { stream: groupedStream, batches: batchesRef };
+  });
+};
+
+describe('Wallet subscription', () => {
+  const batchSize = 50;
+  const batchTimeout = Duration.seconds(10);
+
+  // number of events should not be divisible by batchSize so we can test
+  // the case where we have a partial batch
+  const numberOfEventsToProduce = 333;
+
+  describe('should stream GraphQL subscription', () => {
+    it('should handle batching events into multiples of batch size config with no delay', async () => {
+      const mockEventHex = await createMockEventHex();
+      const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHex);
+
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
+
+      await Effect.gen(function* () {
+        const syncService = makeEventsSyncService({
+          indexerClientConnection: {
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+          },
+          batchUpdates: { size: batchSize },
+        });
+
+        const updates = yield* syncService.updates(initialState, secretKeys).pipe(Stream.runCollect);
+        const batchSizes = pipe(
+          updates,
+          Chunk.map((update) => update.updates.length),
+        );
+
+        // Verify size-based batching: should have full batches of batchSize, plus possibly a final partial batch
+        const expectedFullBatches = Math.floor(numberOfEventsToProduce / batchSize);
+        const lastBatchSize = numberOfEventsToProduce % batchSize;
+        const expectedBatchSizes = Chunk.makeBy(expectedFullBatches, () => batchSize).pipe(Chunk.append(lastBatchSize));
+
+        expect(Num.sumAll(batchSizes)).toEqual(numberOfEventsToProduce);
+        expect(Chunk.size(updates)).toBe(Math.ceil(numberOfEventsToProduce / batchSize));
+        expect(batchSizes).toEqual(expectedBatchSizes);
+      }).pipe(Effect.provideService(ZswapEvents.tag, mockSubscriptionFn), Effect.scoped, Effect.runPromise);
+    });
+
+    it('should respect custom batchUpdates.timeout configuration', async () => {
+      const mockEventHex = await createMockEventHex();
+      const eventCount = 20;
+
+      // Events arrive one-by-one with a 5ms delay between each
+      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex, {
+        delayEvents: true,
+        minDelay: Duration.millis(5),
+        maxDelay: Duration.millis(5),
+        useTestClock: true,
+      });
+
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
+
+      // With a large timeout (10s) and large batch size (100), all 20 events
+      // should accumulate into a single batch since neither the size nor
+      // the timeout threshold is reached before the stream ends.
+      await Effect.gen(function* () {
+        const syncService = makeEventsSyncService({
+          indexerClientConnection: {
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+          },
+          batchUpdates: { size: 100, timeout: 10_000 },
+        });
+
+        const streamFiber = yield* Effect.fork(syncService.updates(initialState, secretKeys).pipe(Stream.runCollect));
+
+        // Advance clock enough for all events to arrive (20 * 5ms = 100ms)
+        // plus spacing and timeout
+        yield* TestClock.adjust(Duration.seconds(30));
+
+        const updates = yield* Fiber.join(streamFiber);
+
+        // All events should land in a single batch because the timeout (10s)
+        // is much larger than the total event delivery time
+        expect(Chunk.size(updates)).toBe(1);
+        expect(updates.pipe(Chunk.unsafeHead).updates.length).toBe(eventCount);
+      }).pipe(
+        Effect.provideService(ZswapEvents.tag, mockSubscriptionFn),
+        Effect.provide(TestContext.TestContext),
+        Effect.scoped,
+        Effect.runPromise,
+      );
+    });
+
+    it('should respect custom batchUpdates.spacing configuration', async () => {
+      const mockEventHex = await createMockEventHex();
+      const eventCount = 30;
+
+      // Events arrive instantly (no delay)
+      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex);
+
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
+
+      // With batch size 10 and 30 events, we get 3 batches.
+      // With spacing of 500ms, the stream needs at least 1000ms (2 gaps between 3 batches)
+      // to emit all batches. Advancing only 400ms should yield fewer than 3 batches.
+      await Effect.gen(function* () {
+        const syncService = makeEventsSyncService({
+          indexerClientConnection: {
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+          },
+          batchUpdates: { size: 10, spacing: 500 },
+        });
+
+        // Fork stream and only advance clock partially
+        const streamFiber = yield* Effect.fork(syncService.updates(initialState, secretKeys).pipe(Stream.runCollect));
+
+        // Advance just enough for the first batch but not all spacing gaps
+        yield* TestClock.adjust(Duration.millis(400));
+        const partialFiber = yield* Effect.fork(Fiber.poll(streamFiber));
+        const partialResult = yield* Fiber.join(partialFiber);
+
+        // Stream should still be running (not all batches emitted yet)
+        expect(Option.isNone(partialResult)).toBe(true);
+
+        // Now advance enough for all batches to complete
+        yield* TestClock.adjust(Duration.seconds(5));
+        const updates = yield* Fiber.join(streamFiber);
+
+        expect(Chunk.size(updates)).toBe(3);
+      }).pipe(
+        Effect.provideService(ZswapEvents.tag, mockSubscriptionFn),
+        Effect.provide(TestContext.TestContext),
+        Effect.scoped,
+        Effect.runPromise,
+      );
+    });
+
+    it('should handle batching events by introducing a random delay', async () => {
+      const minDelay = Duration.millis(500);
+      const maxDelay = Duration.millis(1500);
+
+      const mockEventHex = await createMockEventHex();
+      const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHex, {
+        delayEvents: true,
+        minDelay,
+        maxDelay,
+        useTestClock: true,
+      });
+
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
+
+      // Use TestClock to speed up the test - fork the stream, advance time, then join
+      await Effect.gen(function* () {
+        const syncService = makeEventsSyncService({
+          indexerClientConnection: {
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+          },
+        });
+
+        const { stream, batches } = yield* withBatchLogging(
+          syncService.updates(initialState, secretKeys),
+          batchSize,
+          batchTimeout,
+        );
+
+        // Fork the stream to allow us to advance the test clock
+        const streamFiber = yield* Effect.fork(stream.pipe(Stream.take(numberOfEventsToProduce), Stream.runCollect));
+
+        // Calculate the total time needed, worst case scenario.
+        const timePerEvent = Duration.millis(Duration.toMillis(maxDelay) + Duration.toMillis(batchTimeout));
+        const totalTimeNeeded = Duration.millis(Duration.toMillis(timePerEvent) * numberOfEventsToProduce);
+
+        yield* TestClock.adjust(totalTimeNeeded);
+
+        // Get the results
+        const updates = yield* Fiber.join(streamFiber);
+        const batchSizes = yield* Ref.get(batches);
+
+        const updatesArray = Chunk.toArray(updates);
+        expect(updatesArray.length).toBe(numberOfEventsToProduce);
+
+        // Verify we got timeout-based batches (not all size 50)
+        const timeoutBasedBatches = batchSizes.filter((size) => size < 50);
+        expect(timeoutBasedBatches.length).toBeGreaterThan(0);
+
+        const totalFromBatches = batchSizes.reduce((sum, size) => sum + size, 0);
+        expect(totalFromBatches).toBeGreaterThanOrEqual(numberOfEventsToProduce);
+
+        // Verify we have multiple batches (batching is working)
+        expect(batchSizes.length).toBeGreaterThan(1);
+
+        yield* Effect.log(
+          `Processed ${updatesArray.length} updates in ${batchSizes.length} batches (${timeoutBasedBatches.length} timeout-based)`,
+        );
+      }).pipe(
+        Effect.provideService(ZswapEvents.tag, mockSubscriptionFn),
+        Effect.provide(TestContext.TestContext),
+        Effect.scoped,
+        Effect.runPromise,
+      );
+    });
+  });
+
+  describe('initial subscription cursor', () => {
+    // Open one subscription against a recording stub and return the variables it was opened with. The
+    // stub yields nothing, so the surrounding pipeline drains immediately.
+    const cursorFor = async (
+      state: CoreWallet,
+      secretKeys: ledger.ZswapSecretKeys,
+    ): Promise<ZswapEventsSubscriptionVariables | undefined> => {
+      const recorded: { value?: ZswapEventsSubscriptionVariables } = {};
+      const recordingFn = (variables: ZswapEventsSubscriptionVariables) => {
+        recorded.value = variables;
+        return Stream.empty as Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient>;
+      };
+
+      const syncService = makeEventsSyncService({
+        indexerClientConnection: {
+          indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+          indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+        },
+      });
+
+      await syncService
+        .updates(state, secretKeys)
+        .pipe(Stream.runDrain, Effect.provideService(ZswapEvents.tag, recordingFn), Effect.scoped, Effect.runPromise);
+
+      return recorded.value;
+    };
+
+    it('omits the id (null) for a fresh wallet so the indexer streams from the very start', async () => {
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const state = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
+
+      const variables = await cursorFor(state, secretKeys);
+
+      expect(variables).toEqual({ id: null });
+    });
+
+    it('requests one below the applied index for a restored wallet so the boundary event is re-delivered', async () => {
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const state = CoreWallet.updateProgress(CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed), {
+        appliedIndex: 5n,
+      });
+
+      const variables = await cursorFor(state, secretKeys);
+
+      expect(variables).toEqual({ id: 4 });
+    });
+  });
+});
