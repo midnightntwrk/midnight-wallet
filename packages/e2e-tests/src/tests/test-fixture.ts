@@ -19,7 +19,7 @@ import { type MidnightNetwork, sleep } from './helpers/network.js';
 import { logger } from './logger.js';
 import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
-import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { type DefaultV2Configuration } from '@midnightntwrk/wallet-sdk-shielded/v2';
 import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { type DefaultProvingConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/proving';
@@ -234,7 +234,7 @@ export class TestContainersFixture {
     }
   }
 
-  public getWalletConfig(): DefaultV1Configuration & DefaultSubmissionConfiguration & DefaultProvingConfiguration {
+  public getWalletConfig(): DefaultV2Configuration & DefaultSubmissionConfiguration & DefaultProvingConfiguration {
     return {
       indexerClientConnection: {
         indexerHttpUrl: this.getIndexerUri(),

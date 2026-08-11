@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { type DefaultV2Configuration } from '@midnightntwrk/wallet-sdk-shielded/v2';
 import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { type DefaultProvingConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { type DefaultSubmissionConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/submission';
@@ -38,7 +38,7 @@ export interface ResolvedEndpoints {
 }
 
 /** Shielded + submission + proving configuration consumed by `ShieldedWallet`/`WalletFacade`. */
-export type WalletConfiguration = DefaultV1Configuration & DefaultSubmissionConfiguration & DefaultProvingConfiguration;
+export type WalletConfiguration = DefaultV2Configuration & DefaultSubmissionConfiguration & DefaultProvingConfiguration;
 
 /** Dust wallet configuration consumed by `DustWallet`. */
 export type DustWalletConfiguration = DefaultDustV1Configuration;

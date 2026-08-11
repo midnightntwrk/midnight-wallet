@@ -63,7 +63,7 @@ const StateFromUInt8Array = (): Schema.Schema<ledger.ZswapLocalState, Uint8Array
 const HexedState = (): Schema.Schema<ledger.ZswapLocalState, string> =>
   pipe(Schema.Uint8ArrayFromHex, Schema.compose(StateFromUInt8Array()));
 
-export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
+export const makeDefaultV2SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   const SnapshotSchema = Schema.Struct({
     publicKeys: Schema.Struct({
       coinPublicKey: Schema.String,

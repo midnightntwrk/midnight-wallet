@@ -15,4 +15,4 @@ export {
   type ShieldedTransactionHistoryEntry,
   ShieldedSectionSchema,
   mergeShieldedSections,
-} from './v1/TransactionHistory.js';
+} from './v2/TransactionHistory.js';

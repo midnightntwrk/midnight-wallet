@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import { V1Builder } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { V2Builder } from '@midnightntwrk/wallet-sdk-shielded/v2';
 import { CustomShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { PublicKey, UnshieldedWallet, createKeystore } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
@@ -114,7 +114,7 @@ describe('Swaps', () => {
     walletAFacade = await WalletFacade.init({
       configuration,
       shielded: (config) =>
-        CustomShieldedWallet(config, new V1Builder().withDefaults()).startWithSeed(shieldedWalletASeed),
+        CustomShieldedWallet(config, new V2Builder().withDefaults()).startWithSeed(shieldedWalletASeed),
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
@@ -125,7 +125,7 @@ describe('Swaps', () => {
     walletBFacade = await WalletFacade.init({
       configuration,
       shielded: (config) =>
-        CustomShieldedWallet(config, new V1Builder().withDefaults()).startWithSeed(shieldedWalletBSeed),
+        CustomShieldedWallet(config, new V2Builder().withDefaults()).startWithSeed(shieldedWalletBSeed),
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,

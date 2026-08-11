@@ -129,7 +129,7 @@ const makeTransferOutput = (args: {
  TODO: these tests work too much against zswap.LocalState
  Instead, they should be using coins and balances capabilities more, to not depend much on the underlying data
 */
-describe('V1 Wallet Transacting', () => {
+describe('V2 Wallet Transacting', () => {
   describe('when balancing', () => {
     it('balances a transaction containing just outputs', async () => {
       const wallets = prepareWallets({

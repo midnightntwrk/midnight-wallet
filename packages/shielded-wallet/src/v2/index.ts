@@ -10,14 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './V1Builder.js';
+export * from './V2Builder.js';
 export * as Sync from './Sync.js';
 export * as Transacting from './Transacting.js';
 export * as TransactionHistory from './TransactionHistory.js';
 export * as Serialization from './Serialization.js';
 export * as CoinsAndBalances from './CoinsAndBalances.js';
 export * as Keys from './Keys.js';
-export * from './RunningV1Variant.js';
+export * from './RunningV2Variant.js';
 export * as Simulator from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 export * as WalletError from './WalletError.js';
 export * from './CoreWallet.js';

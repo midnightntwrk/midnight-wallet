@@ -12,28 +12,28 @@
 // limitations under the License.
 import { type ProtocolState, ProtocolVersion, type SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
-  type BaseV1Configuration,
-  type DefaultV1Configuration,
-  V1Builder,
-  V1Tag,
-  type V1Variant,
+  type BaseV2Configuration,
+  type DefaultV2Configuration,
+  V2Builder,
+  V2Tag,
+  type V2Variant,
   CoreWallet,
-} from './v1/index.js';
+} from './v2/index.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
-import { type BalancingResult } from './v1/Transacting.js';
-import { type SerializationCapability } from './v1/Serialization.js';
-import { type TransactionHistoryService } from './v1/TransactionHistory.js';
-import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v1/CoinsAndBalances.js';
-import { type KeysCapability } from './v1/Keys.js';
+import { type BalancingResult } from './v2/Transacting.js';
+import { type SerializationCapability } from './v2/Serialization.js';
+import { type TransactionHistoryService } from './v2/TransactionHistory.js';
+import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v2/CoinsAndBalances.js';
+import { type KeysCapability } from './v2/Keys.js';
 import {
   type ShieldedAddress,
   type ShieldedCoinPublicKey,
   type ShieldedEncryptionPublicKey,
 } from '@midnightntwrk/wallet-sdk-address-format';
-import { type TokenTransfer } from './v1/Transacting.js';
-import { type WalletSyncUpdate } from './v1/Sync.js';
+import { type TokenTransfer } from './v2/Transacting.js';
+import { type WalletSyncUpdate } from './v2/Sync.js';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 
@@ -170,18 +170,18 @@ export type CustomizedShieldedWallet<
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
 > = ShieldedWalletAPI<TStartAux, TTransaction, TSerialized> &
-  WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
+  WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
-export type DefaultShieldedConfiguration = DefaultV1Configuration;
+export type DefaultShieldedConfiguration = DefaultV2Configuration;
 
 export interface CustomizedShieldedWalletClass<
   TStartAux = ledger.ZswapSecretKeys,
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-  TConfig extends BaseV1Configuration = DefaultShieldedConfiguration,
+  TConfig extends BaseV2Configuration = DefaultShieldedConfiguration,
 > extends WalletLike.BaseWalletClass<
-  [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
+  [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
 > {
   configuration: TConfig;
   startWithSeed(seed: Uint8Array): CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
@@ -191,31 +191,31 @@ export interface CustomizedShieldedWalletClass<
   restore(serializedState: TSerialized): CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
 }
 
-export function ShieldedWallet(configuration: DefaultV1Configuration): ShieldedWalletClass {
-  return CustomShieldedWallet(configuration, new V1Builder().withDefaults());
+export function ShieldedWallet(configuration: DefaultV2Configuration): ShieldedWalletClass {
+  return CustomShieldedWallet(configuration, new V2Builder().withDefaults());
 }
 
 export function CustomShieldedWallet<
-  TConfig extends BaseV1Configuration = DefaultV1Configuration,
+  TConfig extends BaseV2Configuration = DefaultV2Configuration,
   TStartAux = ledger.ZswapSecretKeys,
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
 >(
   configuration: TConfig,
-  builder: VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>,
+  builder: VariantBuilder.VariantBuilder<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>,
 ): CustomizedShieldedWalletClass<TStartAux, TTransaction, TSyncUpdate, TSerialized, TConfig> {
   const buildArgs = [configuration] as WalletBuilder.BuildArguments<
     [
       VariantBuilder.VersionedVariantBuilder<
-        VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>
+        VariantBuilder.VariantBuilder<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>
       >,
     ]
   >;
   const BaseWallet = WalletBuilder.init()
     .withVariant(ProtocolVersion.MinSupportedVersion, builder)
     .build(...buildArgs) as WalletLike.BaseWalletClass<
-    [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>],
+    [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>],
     TConfig
   >;
 
@@ -237,7 +237,7 @@ export function CustomShieldedWallet<
 
     static restore(serializedState: TSerialized): CustomShieldedWalletImplementation {
       const deserialized: CoreWallet = CustomShieldedWalletImplementation.allVariantsRecord()
-        [V1Tag].variant.deserializeState(serializedState)
+        [V2Tag].variant.deserializeState(serializedState)
         .pipe(Either.getOrThrow);
       return CustomShieldedWalletImplementation.startFirst(CustomShieldedWalletImplementation, deserialized);
     }
@@ -246,7 +246,7 @@ export function CustomShieldedWallet<
 
     constructor(
       runtime: Runtime.Runtime<
-        [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
+        [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
       >,
       scope: Scope.CloseableScope,
     ) {
@@ -254,7 +254,7 @@ export function CustomShieldedWallet<
       this.state = this.rawState.pipe(
         rx.map(
           ShieldedWalletState.mapState<TSerialized>(
-            CustomShieldedWalletImplementation.allVariantsRecord()[V1Tag].variant,
+            CustomShieldedWalletImplementation.allVariantsRecord()[V2Tag].variant,
           ),
         ),
         rx.shareReplay({ refCount: true, bufferSize: 1 }),
@@ -262,7 +262,7 @@ export function CustomShieldedWallet<
     }
 
     start(secretKeys: TStartAux): Promise<void> {
-      return this.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(secretKeys) }).pipe(Effect.runPromise);
+      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground(secretKeys) }).pipe(Effect.runPromise);
     }
 
     balanceTransaction(
@@ -271,7 +271,7 @@ export function CustomShieldedWallet<
     ): Promise<BalancingResult> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.balanceTransaction(secretKeys, tx),
+          [V2Tag]: (v2) => v2.balanceTransaction(secretKeys, tx),
         })
         .pipe(Effect.runPromise);
     }
@@ -282,7 +282,7 @@ export function CustomShieldedWallet<
     ): Promise<ledger.UnprovenTransaction> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.transferTransaction(secretKeys, outputs),
+          [V2Tag]: (v2) => v2.transferTransaction(secretKeys, outputs),
         })
         .pipe(Effect.runPromise);
     }
@@ -293,7 +293,7 @@ export function CustomShieldedWallet<
       desiredOutputs: readonly TokenTransfer[],
     ): Promise<ledger.UnprovenTransaction> {
       return this.runtime
-        .dispatch({ [V1Tag]: (v1) => v1.initSwap(secretKeys, desiredInputs, desiredOutputs) })
+        .dispatch({ [V2Tag]: (v2) => v2.initSwap(secretKeys, desiredInputs, desiredOutputs) })
         .pipe(Effect.runPromise);
     }
 
@@ -302,7 +302,7 @@ export function CustomShieldedWallet<
     ): Promise<void> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.revertTransaction(transaction),
+          [V2Tag]: (v2) => v2.revertTransaction(transaction),
         })
         .pipe(Effect.runPromise);
     }

@@ -24,9 +24,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./v1": {
-      "types": "./dist/v1/index.d.ts",
-      "import": "./dist/v1/index.js"
+    "./v2": {
+      "types": "./dist/v2/index.d.ts",
+      "import": "./dist/v2/index.js"
     }
   },
   "dependencies": {

@@ -16,7 +16,7 @@ import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as Arr, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
-import { makeDefaultV1SerializationCapability } from '../Serialization.js';
+import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 import { Either } from 'effect';
 import { CoreWallet } from '../CoreWallet.js';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -106,7 +106,7 @@ const walletArbitrary = (txDepth: number) => {
     });
 };
 
-describe('V1 Wallet serialization', () => {
+describe('V2 Wallet serialization', () => {
   it.each([
     { seed: '0000000000000000000000000000000000000000000000000000000000000001' },
     { seed: '0000000000000000000000000000000000000000000000000000000000000002' },
@@ -114,7 +114,7 @@ describe('V1 Wallet serialization', () => {
     { seed: '0000000000000000000000000000000000000000000000000000000000000004' },
   ])('maintains serialize ◦ deserialize == id property, including transaction history', ({ seed }) => {
     const networkId = NetworkId.NetworkId.Undeployed;
-    const capability = makeDefaultV1SerializationCapability();
+    const capability = makeDefaultV2SerializationCapability();
     const keys = ledger.ZswapSecretKeys.fromSeed(Buffer.from(seed, 'hex'));
     const wallet = CoreWallet.initEmpty(keys, networkId);
 
@@ -126,7 +126,7 @@ describe('V1 Wallet serialization', () => {
     expect(firstIteration).toEqual(secondIteration);
   });
   it('maintains serialize ◦ deserialize == id property', () => {
-    const capability = makeDefaultV1SerializationCapability();
+    const capability = makeDefaultV2SerializationCapability();
     fc.assert(
       fc.property(walletArbitrary(10), ({ wallet }) => {
         const firstIteration = capability.serialize(wallet);
@@ -143,7 +143,7 @@ describe('V1 Wallet serialization', () => {
   });
 
   it('handles invalid JSON strings gracefully', () => {
-    const capability = makeDefaultV1SerializationCapability();
+    const capability = makeDefaultV2SerializationCapability();
 
     fc.assert(
       fc.property(fc.string(), (invalidJson) => {
@@ -158,7 +158,7 @@ describe('V1 Wallet serialization', () => {
   });
 
   it('handles random valid JSON strings gracefully', () => {
-    const capability = makeDefaultV1SerializationCapability();
+    const capability = makeDefaultV2SerializationCapability();
 
     fc.assert(
       fc.property(fc.json(), (randomJsonValue) => {

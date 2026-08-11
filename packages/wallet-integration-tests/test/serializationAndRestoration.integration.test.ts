@@ -13,7 +13,7 @@
 import { ShieldedWallet, type ShieldedWalletClass, type ShieldedWalletState } from '@midnightntwrk/wallet-sdk-shielded';
 import { UnshieldedWallet, createKeystore, PublicKey } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { type DefaultV2Configuration } from '@midnightntwrk/wallet-sdk-shielded/v2';
 import { type DefaultV1Configuration as UnshieldedV1Configuration } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -43,7 +43,7 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
 
 describe('Wallet serialization and restoration', () => {
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let shieldedConfiguration: DefaultV1Configuration;
+  let shieldedConfiguration: DefaultV2Configuration;
   let unshieldedConfiguration: UnshieldedV1Configuration;
   let indexerPort: number;
 

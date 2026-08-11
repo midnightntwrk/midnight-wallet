@@ -17,8 +17,8 @@ import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnightntwrk/wal
 import {
   Sync as ShieldedSync,
   TransactionHistory as ShieldedTransactionHistory,
-  V1Builder as ShieldedV1Builder,
-} from '@midnightntwrk/wallet-sdk-shielded/v1';
+  V2Builder as ShieldedV2Builder,
+} from '@midnightntwrk/wallet-sdk-shielded/v2';
 import { CustomDustWallet, type DustWalletAPI } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import {
   SyncService as DustSyncService,
@@ -195,7 +195,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
       txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>(),
       indexerClientConnection: { indexerHttpUrl: 'http://unused:0' },
     },
-    new ShieldedV1Builder()
+    new ShieldedV2Builder()
       .withDefaultTransactionType()
       .withSync(ShieldedSync.makeSimulatorSyncService, ShieldedSync.makeSimulatorSyncCapability)
       .withSerializationDefaults()

@@ -117,6 +117,10 @@
       "types": "./dist/shielded/v1.d.ts",
       "import": "./dist/shielded/v1.js"
     },
+    "./shielded/v2": {
+      "types": "./dist/shielded/v2.d.ts",
+      "import": "./dist/shielded/v2.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
