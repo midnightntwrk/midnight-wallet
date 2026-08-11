@@ -117,7 +117,8 @@ While still proving:
 
 - `ShieldedWallet` - Main wallet class
 - `ShieldedWalletState` - Wallet state type
-- Version 1 exports via `@midnightntwrk/wallet-sdk-shielded/v1`
+- Current (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-shielded/v2`
+- Pre-fork (ledger-v8) variant internals via `@midnightntwrk/wallet-sdk-shielded/v1`
 
 ## License
 
