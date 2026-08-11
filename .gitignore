@@ -66,6 +66,9 @@ CLAUDE.local.md
 
 # WASM build output and local Cargo overrides for packages/state-translation/wasm
 # ('target' is already ignored globally above)
-packages/state-translation/wasm/pkg/
+# Generated WASM output, except the hand-written .d.ts the loader's static import types against — that is committed so
+# typecheck/lint/dist need no Rust toolchain. Ignore the contents, not the directory, or the negation cannot apply.
+packages/state-translation/wasm/pkg/*
+!packages/state-translation/wasm/pkg/*.d.ts
 packages/state-translation/wasm/.cargo/
 packages/state-translation/wasm/.vendor/

@@ -1,0 +1,11 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "test:integration": {
+      // forkStateTranslation.integration.test.ts runs the real v8-to-v9 translation, which is a WASM artifact built from
+      // packages/state-translation/wasm. Declared so turbo builds it first rather than leaving the ordering to CI —
+      // which is why running any integration test in this package needs a Rust toolchain.
+      "dependsOn": ["$TURBO_EXTENDS$", "@midnightntwrk/wallet-sdk-state-translation#build:wasm"]
+    }
+  }
+}

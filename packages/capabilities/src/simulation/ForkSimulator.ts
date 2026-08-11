@@ -18,54 +18,15 @@
  * wallet under test to observe the version change, migrate, and go on transacting.
  */
 
-import { Data, Deferred, Effect, Option, pipe, Scope, Stream, SubscriptionRef, type Array as Arr } from 'effect';
+import { Deferred, Effect, Option, pipe, Scope, Stream, SubscriptionRef, type Array as Arr } from 'effect';
 import { LedgerState } from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 import { LedgerTranslationError, type LedgerStateTranslator } from './LedgerTranslation.js';
 import { Simulator } from './v9/Simulator.js';
-import { blankState, updateLedger, type BlockProducer, type GenesisMint } from './v9/SimulatorState.js';
+import { blankState, updateLedger, type BlockProducer } from './v9/SimulatorState.js';
 import * as V8 from './v8/index.js';
-
-// =============================================================================
-// Fork Handover
-// =============================================================================
-
-/**
- * How value crosses the fork boundary — the seam between the two chains.
- *
- * Both branches receive the final pre-fork state, complete with its ledger-v8 ledger, and produce the post-fork chain's
- * starting point. They differ in how faithful that starting point is: {@link ForkHandover.ReMint} approximates the
- * carried value's content while exercising the same machinery, whereas {@link ForkHandover.TranslateLedger} carries the
- * pre-fork chain's own state across.
- */
-export type ForkHandover = Data.TaggedEnum<{
-  /**
-   * Recreate carried value on a fresh post-fork ledger, by minting it into the post-fork chain's genesis block.
-   *
-   * Machinery-faithful and content-approximate: nothing of the pre-fork ledger crosses, but what appears post-fork is
-   * built the way real value is. This is what a resync-style wallet migration expects to see — coin commitments are
-   * deterministic in the coin and the owner's key, so re-minting identical coins reproduces identical commitments in
-   * the new chain's tree, and a wallet replaying post-fork events with its own keys rediscovers them.
-   */
-  ReMint: {
-    readonly mints: (preForkState: V8.SimulatorState) => Arr.NonEmptyArray<GenesisMint>;
-  };
-  /**
-   * Translate the pre-fork chain's own ledger state into post-fork form, and start the post-fork chain from it.
-   *
-   * The faithful path, and the slot the ledger-side v8-to-v9 state translation tool drops into: see
-   * {@link LedgerStateTranslator} for why the seam is stated in bytes. Until that tool is wired up, callers supply the
-   * translation.
-   */
-  TranslateLedger: {
-    readonly translator: LedgerStateTranslator;
-  };
-}>;
-
-/** Constructors and matchers for {@link ForkHandover}. */
-export const ForkHandover = Data.taggedEnum<ForkHandover>();
 
 // =============================================================================
 // Configuration
@@ -89,8 +50,13 @@ export type ForkSimulatorConfig = Readonly<{
    * version it means.
    */
   forkVersion: ProtocolVersion.ProtocolVersion;
-  /** How value crosses the boundary. */
-  handover: ForkHandover;
+  /**
+   * How the pre-fork chain's ledger state becomes the post-fork chain's starting point.
+   *
+   * Receives the final pre-fork ledger, serialized, and returns the post-fork one. See {@link LedgerStateTranslator} for
+   * why the seam is stated in bytes rather than state objects.
+   */
+  translator: LedgerStateTranslator;
   /** Protocol version the pre-fork chain runs on. Defaults to {@link ProtocolVersion.MinSupportedVersion}. */
   preForkVersion?: ProtocolVersion.ProtocolVersion;
   /** Network identifier, shared by both chains. Defaults to Undeployed. */
@@ -123,9 +89,7 @@ export type ForkSimulatorConfig = Readonly<{
  *     forkBlock: 3n,
  *     forkVersion: ProtocolVersion.ProtocolVersion(7n),
  *     preForkGenesisMints: [{ type: 'shielded', tokenType, amount: 1_000n, recipient: v8Keys }],
- *     handover: ForkHandover.ReMint({
- *       mints: () => [{ type: 'shielded', tokenType, amount: 1_000n, recipient: v9Keys }],
- *     }),
+ *     translator: translatorFromAsync(translateLedgerState),
  *   });
  *
  *   yield* fork.preFork.submitTransaction(preForkTransfer);
@@ -311,9 +275,9 @@ export class ForkSimulator {
   #handover(preForkState: V8.SimulatorState): Effect.Effect<Simulator, LedgerTranslationError, Scope.Scope> {
     const { forkVersion, forkBlock, postForkBlockProducer } = this.#config;
     const networkId = this.#networkId;
-    // Genesis parameters shared by both branches: the post-fork chain resumes the pre-fork chain's height and clock.
+    // The post-fork chain resumes the pre-fork chain's height and clock, so the boundary is re-delivered rather than
+    // restarted. `blankState` takes the network id positionally, so it is not part of this.
     const genesis = {
-      networkId,
       protocolVersion: forkVersion,
       genesisBlockNumber: forkBlock,
       genesisTime: preForkState.currentTime,
@@ -327,30 +291,21 @@ export class ForkSimulator {
         Effect.flatMap((state) => Simulator.fromState(state, postForkBlockProducer)),
       );
 
-    return ForkHandover.$match(this.#config.handover, {
-      ReMint: ({ mints }) =>
-        Simulator.init({
-          ...genesis,
-          genesisMints: mints(preForkState),
-          ...(postForkBlockProducer !== undefined ? { blockProducer: postForkBlockProducer } : {}),
-        }),
-      TranslateLedger: ({ translator }) =>
-        pipe(
-          translator(preForkState.ledger.serialize()),
-          // Deserializing is the harness's job, not the translator's, so bytes the post-fork ledger rejects are a
-          // translation failure rather than a crash out of the handover fiber.
-          Effect.flatMap((translated) =>
-            Effect.try({
-              try: () => LedgerState.deserialize(translated),
-              catch: (cause) =>
-                new LedgerTranslationError({
-                  message: 'Translated bytes are not a valid post-fork ledger state',
-                  cause,
-                }),
+    return pipe(
+      this.#config.translator(preForkState.ledger.serialize()),
+      // Deserializing is the harness's job, not the translator's, so bytes the post-fork ledger rejects are a
+      // translation failure rather than a crash out of the handover fiber.
+      Effect.flatMap((translated) =>
+        Effect.try({
+          try: () => LedgerState.deserialize(translated),
+          catch: (cause) =>
+            new LedgerTranslationError({
+              message: 'Translated bytes are not a valid post-fork ledger state',
+              cause,
             }),
-          ),
-          Effect.flatMap(chainStartingFrom),
-        ),
-    });
+        }),
+      ),
+      Effect.flatMap(chainStartingFrom),
+    );
   }
 }

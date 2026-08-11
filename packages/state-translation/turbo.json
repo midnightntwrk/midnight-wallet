@@ -1,0 +1,9 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "test:integration": {
+      // These import the built WASM statically, so the artifact has to exist before they run.
+      "dependsOn": ["$TURBO_EXTENDS$", "build:wasm"]
+    }
+  }
+}

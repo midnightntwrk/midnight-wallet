@@ -77,9 +77,9 @@ jobs:
             packages/*/dist/**
             packages/*/tsconfig.*.tsbuildinfo
 
-  # The only Rust in this repository. `packages/state-translation/wasm` wraps the ledger's v8-to-v9 translation crate,
-  # and the fork tests that use it skip unless the artifact exists — so without this job they would silently never run.
-  # Building here rather than committing the 1.7 MB binary keeps it honest: it cannot go stale against the crate.
+  # The only Rust in this repository. `packages/state-translation/wasm` wraps the ledger's v8-to-v9 translation crate.
+  # Built here rather than committing the 1.7 MB binary, so it cannot go stale against the crate — and verified here, so
+  # a broken artifact fails in one obvious place instead of across the integration matrix.
   build-wasm:
     name: Build WASM Translation
     needs: [build]
@@ -129,13 +129,11 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            packages/state-translation/wasm/target
-          key: cargo-wasm-${{ runner.os }}-${{ hashFiles('packages/state-translation/wasm/Cargo.lock') }}
+            ~/.rustup/toolchains
+            target
+          key: cargo-wasm-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
           restore-keys: |
             cargo-wasm-${{ runner.os }}-
-
-      - name: Install Rust wasm target
-        run: rustup target add wasm32-unknown-unknown
 
       # Prebuilt binaries rather than `cargo install`, which would compile wasm-bindgen-cli from source on every cache
       # miss. The wasm-bindgen version must match the crate pin in Cargo.toml exactly or the CLI rejects the .wasm.
@@ -158,18 +156,22 @@ jobs:
           wasm-opt --version
 
       - name: Build WASM translation
-        run: yarn workspace @midnightntwrk/wallet-sdk-state-translation build:wasm
+        run: yarn turbo run build:wasm --filter=@midnightntwrk/wallet-sdk-state-translation
 
       # Compiling proves very little on its own: an artifact built against an unpatched `midnight-storage` links fine
       # and then traps on the first real state. This translates one, so that failure is named here.
       - name: Verify the artifact translates
         run: yarn workspace @midnightntwrk/wallet-sdk-state-translation verify:wasm
 
-      - name: Upload WASM artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      # The integration matrix restores this rather than rebuilding. `test:integration` in `capabilities` and
+      # `state-translation` declares a dependency on `build:wasm`, so without a cache hit each of those jobs would
+      # recompile the crate from scratch.
+      - name: Save turbo cache
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          name: wasm-translation-${{ github.run_id }}
-          path: packages/state-translation/wasm/pkg/**
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-wasm-${{ github.run_attempt }}
 
   general-checks:
     name: General Checks

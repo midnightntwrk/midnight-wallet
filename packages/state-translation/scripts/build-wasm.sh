@@ -9,6 +9,8 @@ set -euo pipefail
 
 package_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 crate_dir="$package_dir/wasm"
+# The crate is a member of the repository-root Cargo workspace, so the lockfile and target directory are the root's.
+repo_root="$(cd "$package_dir/../.." && pwd)"
 out_dir="$crate_dir/pkg"
 vendor_dir="$crate_dir/.vendor"
 crate_lib=v8_to_v9_state_translation_wasm
@@ -42,15 +44,18 @@ have_bindgen="$(wasm-bindgen --version | awk '{print $2}')"
 # ---------------------------------------------------------------------------
 storage_patch="$crate_dir/patches/midnight-storage-wasm-instant.patch"
 storage_version="$(awk '/^name = "midnight-storage"$/ { found = 1; next }
-                        found && /^version = / { gsub(/[",]/, "", $3); print $3; exit }' "$crate_dir/Cargo.lock")"
+                        found && /^version = / { gsub(/[",]/, "", $3); print $3; exit }' "$repo_root/Cargo.lock")"
 [ -n "$storage_version" ] || {
-  echo "error: could not read the midnight-storage version from $crate_dir/Cargo.lock" >&2
+  echo "error: could not read the midnight-storage version from $repo_root/Cargo.lock" >&2
   exit 1
 }
 
+# The stamp covers the patch as well as the version: editing the patch without the version moving would otherwise keep
+# building from the previously patched tree until `.vendor` was deleted by hand.
+patch_digest="$({ sha256sum "$storage_patch" 2>/dev/null || shasum -a 256 "$storage_patch"; } | awk '{print $1}')"
 storage_dir="$vendor_dir/midnight-storage"
 stamp="$storage_dir/.patched-version"
-if [ "$(cat "$stamp" 2>/dev/null || true)" != "$storage_version" ]; then
+if [ "$(cat "$stamp" 2>/dev/null || true)" != "$storage_version $patch_digest" ]; then
   echo "vendoring midnight-storage $storage_version with the wasm clock patch"
   rm -rf "$storage_dir"
   mkdir -p "$vendor_dir"
@@ -62,7 +67,7 @@ if [ "$(cat "$stamp" 2>/dev/null || true)" != "$storage_version" ]; then
     echo "       The crate has moved; regenerate the patch (see ../README.md) or drop it if the fix is now released." >&2
     exit 1
   }
-  echo "$storage_version" >"$stamp"
+  echo "$storage_version $patch_digest" >"$stamp"
 fi
 
 # The stack protector pulls in OS code that does not exist on wasm — the same reason midnight-ledger's nix build
@@ -84,12 +89,12 @@ echo "building $crate_lib for wasm32-unknown-unknown"
 # directory, and the crate's config may carry local dependency overrides.
 (cd "$crate_dir" && cargo build --target wasm32-unknown-unknown --profile wasm)
 
-rm -rf "$out_dir"
-wasm-bindgen "$crate_dir/target/wasm32-unknown-unknown/wasm/$crate_lib.wasm" \
+# Clear the generated files only. `$out_dir` also holds the hand-written `.d.ts` that the loader's static import types
+# against, which is committed (see .gitignore) so `typecheck`, `lint` and `dist` need no Rust toolchain.
+rm -f "$out_dir"/*.js "$out_dir"/*.wasm "$out_dir"/package.json
+wasm-bindgen "$repo_root/target/wasm32-unknown-unknown/wasm/$crate_lib.wasm" \
   --out-dir "$out_dir" --target experimental-nodejs-module --weak-refs --reference-types --no-typescript
 
 wasm-opt "$out_dir/${crate_lib}_bg.wasm" -Os --enable-reference-types -o "$out_dir/${crate_lib}_bg.wasm"
-
-cp "$crate_dir/v8-to-v9-state-translation.d.ts" "$out_dir/$crate_lib.d.ts"
 
 echo "built $out_dir ($(wc -c <"$out_dir/${crate_lib}_bg.wasm" | tr -d ' ') bytes of wasm)"

@@ -11,17 +11,17 @@ const postFork = v9.LedgerState.deserialize(await translateLedgerState(preForkLe
 ```
 
 **This package is private and test-only.** No wallet runtime path translates ledger state — a resync with the post-fork
-ledger is the wallet's migration mechanism. What this exists for is testing a fork faithfully: a
-`ForkHandover.TranslateLedger` in `@midnightntwrk/wallet-sdk-capabilities` can carry the pre-fork chain's own state
-across the boundary instead of approximating it by re-minting.
+ledger is the wallet's migration mechanism. What this exists for is testing a fork faithfully: a `ForkSimulator` in
+`@midnightntwrk/wallet-sdk-capabilities` can carry the pre-fork chain's own state across the boundary instead of
+approximating it.
 
 ## Layout
 
 ```
-src/          this loader: resolve the WASM module, check it, hand it bytes
+src/          the adapter: hand the WASM bytes, hand bytes back
 wasm/         the wasm-bindgen crate that produces the module (see wasm/README.md)
-wasm/pkg/     its build output — gitignored, and where the loader looks by default
-scripts/      build-wasm.sh
+wasm/pkg/     its build output — gitignored, apart from the committed .d.ts
+scripts/      build-wasm.sh, verify-wasm.mjs
 ```
 
 The translation itself is Rust and stays in the ledger repository as an ordinary crate. It links **both** ledgers at
@@ -42,8 +42,12 @@ Keeping all of this out of `capabilities` keeps a WASM blob out of a published p
 yarn workspace @midnightntwrk/wallet-sdk-state-translation build:wasm
 ```
 
-That is the whole local flow — no environment variable. Output lands in `wasm/pkg/`, which is the loader's default, so
-anything that needs the translation just works afterwards. Roughly 1.7 MB of wasm after `wasm-opt`.
+Output lands in `wasm/pkg/`, which `src/` imports directly. Roughly 1.7 MB of wasm after `wasm-opt`.
+
+You rarely need to run it by hand: `turbo` builds it before any `test:integration` in this package or in
+`@midnightntwrk/wallet-sdk-capabilities`, which declare a dependency on the `build:wasm` task. That is also why running
+those integration tests needs a Rust toolchain, while `dist`, `typecheck`, `lint` and `test:unit` do not — the `.d.ts`
+the import types against is committed.
 
 It needs a Rust toolchain and, on macOS, Homebrew's LLVM; the script checks for each and says what is missing. See
 [`wasm/README.md`](./wasm/README.md) for the toolchain and for the vendored `midnight-storage` patch the script applies
@@ -57,22 +61,19 @@ confirms a built artifact actually translates. Worth running after any change to
 it looks like, since an artifact built against an unpatched `midnight-storage` links fine and then traps on the first
 real state.
 
-CI builds and verifies the artifact in the `Build WASM Translation` job and hands it to the integration matrix, so the
-fork tests run there rather than skipping.
+CI builds and verifies the artifact in the `Build WASM Translation` job, and the integration matrix reuses that build
+through the turbo cache.
 
-`MIDNIGHT_V8_TO_V9_STATE_TRANSLATION` overrides the default with a module specifier, for an artifact built somewhere
-else.
-
-`isLedgerStateTranslationAvailable()` reports whether either is in place, which is how tests needing the translation
-decide to skip. They live in `packages/capabilities/src/simulation/test/forkStateTranslation.integration.test.ts` —
-integration tier precisely because of the build step above.
+The import is static and there is no fallback: this package and the crate it wraps are the same unit, so a missing
+artifact is a broken build rather than a state worth modelling. Tests that exercise the real translation live in
+`src/test/stateTranslation.integration.test.ts` here (the adapter) and
+`packages/capabilities/src/simulation/test/forkStateTranslation.integration.test.ts` (the fork).
 
 ## Errors
 
-| Error                              | Means                                                                                |
-| ---------------------------------- | ------------------------------------------------------------------------------------ |
-| `StateTranslationUnavailableError` | The module could not be loaded, or exposes no translation. Nothing was attempted.    |
-| `StateTranslationFailedError`      | The translation ran and did not produce bytes. Its own error is kept as the `cause`. |
+| Error                         | Means                                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------------ |
+| `StateTranslationFailedError` | The translation ran and did not produce bytes. Its own error is kept as the `cause`. |
 
 Whether the returned bytes are a _valid_ post-fork state is decided by whoever deserializes them — in the fork harness,
 that surfaces as a `LedgerTranslationError`.

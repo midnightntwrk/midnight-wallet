@@ -2729,6 +2729,9 @@ __metadata:
 "@midnightntwrk/wallet-sdk-state-translation@workspace:^, @midnightntwrk/wallet-sdk-state-translation@workspace:packages/state-translation":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-state-translation@workspace:packages/state-translation"
+  dependencies:
+    "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.3"
   languageName: unknown
   linkType: soft
 

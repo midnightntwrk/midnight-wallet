@@ -18,26 +18,20 @@
  * is the other half: the actual WASM translation in that slot, so the post-fork chain starts from the pre-fork chain's
  * own state rather than from an approximation of it.
  *
- * **Integration tier, and skipped unless the translation has been built.** The translation is Rust — the ledger's
- * translation crate behind WASM bindings that live in `packages/state-translation/wasm` — so it has to be compiled with
- * `yarn workspace @midnightntwrk/wallet-sdk-state-translation build:wasm` before these can run. That build step is why
- * these are integration tests and not unit ones: nothing here needs Docker or a network, but it does not run anywhere
- * with zero setup either.
+ * **Integration tier because of a build step, not infra.** The translation is Rust — the ledger's translation crate
+ * behind WASM bindings in `packages/state-translation/wasm` — so it has to be compiled first. `turbo` does that
+ * automatically: `test:integration` depends on that package's `build:wasm`, so the artifact is always present here and
+ * there is nothing to skip on. Nothing in this file needs Docker or a network.
  */
 
 import * as v8 from '@midnight-ntwrk/ledger-v8';
 import * as v9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import {
-  TranslationModuleEnvVar,
-  isLedgerStateTranslationAvailable,
-  translateLedgerState,
-} from '@midnightntwrk/wallet-sdk-state-translation';
+import { translateLedgerState } from '@midnightntwrk/wallet-sdk-state-translation';
 import { Effect, type Array as Arr } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
-  ForkHandover,
   ForkSimulator,
   V8,
   genesisStrictness,
@@ -74,7 +68,7 @@ const v9Transfer = (): v9.ProofErasedTransaction => {
 };
 
 /** The whole of the wiring: the WASM translation adapted into the seam's `Effect` shape. */
-const handover = ForkHandover.TranslateLedger({ translator: translatorFromAsync(translateLedgerState) });
+const translator = translatorFromAsync(translateLedgerState);
 
 const baseConfig = {
   networkId,
@@ -83,7 +77,7 @@ const baseConfig = {
   preForkVersion,
   preForkBlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
   postForkBlockProducer: immediateBlockProducer(undefined, genesisStrictness),
-  handover,
+  translator,
 };
 
 /** Pre-fork genesis funding, so the pre-fork ledger holds something worth carrying across. */
@@ -102,20 +96,7 @@ const v8CommitmentCount = (ledger: Uint8Array): bigint =>
 const v9CommitmentCount = (ledger: Uint8Array): bigint =>
   v9.ZswapChainState.deserializeFromLedgerState(ledger).firstFree;
 
-const available = await isLedgerStateTranslationAvailable();
-
-if (!available) {
-  // Said out loud, because the default state of this file is skipped: a bare skip count reads like a test that was
-  // switched off rather than one waiting on an artifact.
-  // eslint-disable-next-line no-console
-  console.warn(
-    `Skipping the real v8-to-v9 state translation tests: no translation module found. Build it with ` +
-      `'yarn workspace @midnightntwrk/wallet-sdk-state-translation build:wasm', or set ${TranslationModuleEnvVar} ` +
-      `to an artifact built elsewhere.`,
-  );
-}
-
-describe.skipIf(!available)('ForkSimulator over the real v8-to-v9 state translation', () => {
+describe('ForkSimulator over the real v8-to-v9 state translation', () => {
   it('accepts a translated pre-fork ledger as post-fork state', async () =>
     Effect.gen(function* () {
       // The load-bearing check: whether the bytes a ledger-v8 `LedgerState.serialize()` produces survive the
@@ -127,7 +108,7 @@ describe.skipIf(!available)('ForkSimulator over the real v8-to-v9 state translat
       const state = yield* postFork.getLatestState();
 
       expect(state.ledger).toBeInstanceOf(v9.LedgerState);
-      // Boundary invariants hold on the translation path exactly as on the re-mint one.
+      // The boundary invariants hold on the translated state, not just its parseability.
       expect(getCurrentBlockNumber(state)).toBe(forkBlock);
       expect(getLastBlock(state).protocolVersion).toBe(forkVersion);
       expect(state.protocolVersion).toBe(forkVersion);

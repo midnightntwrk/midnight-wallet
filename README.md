@@ -91,6 +91,30 @@ See the [Test Environment Setup](#test) section below for setup instructions.
 Additionally, it is worth installing turborepo as a global npm package (`npm install -g turbo`), for easier access for
 turbo command.
 
+#### Rust (only for `packages/state-translation`)
+
+The repository is TypeScript apart from one Rust crate, `packages/state-translation/wasm`, which compiles the ledger's
+v8-to-v9 state translation to WASM. **Most work needs none of this**: `yarn dist`, `typecheck`, `lint` and `test:unit`
+have no Rust dependency. It is required to run the **integration tests** in `packages/capabilities` and
+`packages/state-translation`, whose `test:integration` declares a turbo dependency on the `build:wasm` task.
+
+```shell
+brew install rustup binaryen llvm          # or your platform's equivalents
+rustup default stable
+cargo install wasm-bindgen-cli --version 0.2.104 --locked
+```
+
+- The wasm32 target installs itself: [`rust-toolchain.toml`](rust-toolchain.toml) pins the toolchain and lists it.
+- `wasm-bindgen` must be **exactly 0.2.104**, matching the crate pin — the CLI rejects a `.wasm` built by any other
+  version. Homebrew's is newer, hence `cargo install`.
+- `llvm` is required **on macOS only**: Apple's clang cannot target wasm32, so the crate's C dependencies fail without a
+  clang that can. Linux distributions' clang already does.
+- The Nix devshell does **not** currently provide any of this.
+
+`scripts/build-wasm.sh` checks for each tool and says what is missing. See
+[`packages/state-translation/wasm/README.md`](packages/state-translation/wasm/README.md) for what the crate does, and
+for the vendored `midnight-storage` patch it applies on the way through.
+
 ### Internal private registry and credentials
 
 Follow all authentication steps from the
@@ -105,6 +129,10 @@ yarn
 ```
 
 ## Build
+
+> **Note:** `yarn dist` does not build the Rust/WASM artifact in `packages/state-translation`. That has its own task,
+> `yarn turbo run build:wasm`, which `turbo` runs automatically before the integration tests that need it. See
+> [Rust](#rust-only-for-packagesstate-translation) above.
 
 Build the projects once, generated Javascript code is written to the project's `dist` directory.
 

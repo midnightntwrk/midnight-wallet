@@ -6,8 +6,8 @@ WASM bindings for the ledger's v8-to-v9 ledger state translation. One export:
 export function translate_ledger_state(v8_bytes: Uint8Array): Uint8Array;
 ```
 
-Built by `../scripts/build-wasm.sh` into `pkg/`, which is where the parent package's loader looks by default. This is a
-standalone Cargo project — the wallet SDK has no Rust workspace, and nothing here is published.
+Built by `../scripts/build-wasm.sh` into `pkg/`, which `../src/` imports directly. A member of the workspace defined by
+the repository-root `Cargo.toml`; nothing here is published.
 
 ## Why the bindings live here and not in `midnight-ledger`
 
@@ -25,15 +25,16 @@ v8-to-v9-state-translation = { git = "...", branch = "tkerber/state-translation/
 
 Once it reaches crates.io that becomes `version = "0.1.0"` and nothing else changes.
 
-Note the `[patch.crates-io]` block: the ledger's v9 line is in pre-release and not on crates.io, its own workspace
-redirects those crates to git tags, and Cargo only honours `[patch]` from the top-level manifest. Consuming the
-translation from outside that workspace means replicating the block, which is what the standalone
-`v8-to-v9-state-translation-replay` crate does too. **It has to be kept in step when those tags move.**
+Note the `[patch.crates-io]` block in the **repository-root `Cargo.toml`** — Cargo only honours `[patch]` there, which
+is also why the `wasm` profile lives at the root. The ledger's v9 line is in pre-release and not on crates.io, its own
+workspace redirects those crates to git tags, and consuming the translation from outside that workspace means
+replicating the block. The standalone `v8-to-v9-state-translation-replay` crate does the same. **It has to be kept in
+step when those tags move.**
 
 ## Iterating against a local checkout
 
 Cargo's `paths` override swaps in a local copy without touching `Cargo.toml`. Create a gitignored `.cargo/config.toml`
-here:
+here (the build script runs cargo from this directory, so it is picked up):
 
 ```toml
 paths = ["/path/to/midnight-ledger/v8-to-v9-state-translation"]
@@ -50,10 +51,10 @@ first real state. Verified in isolation: a wasm export whose whole body is `Inst
 [`web-time`](https://crates.io/crates/web-time), which re-exports `std::time` on non-wasm targets and backs `Instant`
 with `performance.now()` on wasm — so every other target is byte-identical.
 
-`../scripts/build-wasm.sh` applies it: it reads the resolved version from `Cargo.lock`, fetches that exact published
-source from crates.io, patches it into `.vendor/midnight-storage` (gitignored), and `Cargo.toml`'s `[patch.crates-io]`
-points there. **Drive cargo through the script**; a bare `cargo build` fails on the missing directory, which is
-deliberate — the alternative is silently producing a wasm that traps.
+`../scripts/build-wasm.sh` applies it: it reads the resolved version from the root `Cargo.lock`, fetches that exact
+published source from crates.io, patches it into `.vendor/midnight-storage` (gitignored), and the root `Cargo.toml`'s
+`[patch.crates-io]` points there. **Drive cargo through the script**; a bare `cargo build` fails on the missing
+directory, which is deliberate — the alternative is silently producing a wasm that traps.
 
 If the patch stops applying, the crate has moved. Regenerate it against the new version rather than working around it:
 
@@ -69,8 +70,8 @@ workspace's copy with 151 trait-mismatch errors in `midnight-onchain-state`, tha
 one. Note this crate resolves **2.0.2**, which is newer than the 2.0.1 the ledger workspace pins, and 2.0.2 does not
 contain the fix either.
 
-Once a release does carry it, delete three things: this section, `patches/`, the `[patch.crates-io]` entry for
-`midnight-storage`, and the vendoring block in the build script.
+Once a release does carry it, delete four things: this section, `patches/`, the `midnight-storage` entry in the root
+`Cargo.toml`'s `[patch.crates-io]`, and the vendoring block in the build script.
 
 ## Two things worth knowing before editing `src/lib.rs`
 
@@ -87,11 +88,13 @@ Once a release does carry it, delete three things: this section, `patches/`, the
 
 ```bash
 brew install rustup binaryen llvm
-rustup default stable && rustup target add wasm32-unknown-unknown
+rustup default stable
 cargo install wasm-bindgen-cli --version 0.2.104 --locked
 ```
 
-- `rustup`, not brew's `rust` — the latter has no `rustup target add`, so no `wasm32-unknown-unknown` std.
+- `rustup`, not brew's `rust` — the latter cannot add targets, so no `wasm32-unknown-unknown` std.
+- No `rustup target add` needed: the root `rust-toolchain.toml` pins the toolchain and lists the target, so rustup
+  installs both on the first `cargo` invocation.
 - `wasm-bindgen` must be exactly `0.2.104`, matching the `Cargo.toml` pin; the CLI rejects a `.wasm` built by another
   version. Brew's is newer, so install it via cargo.
 - **`llvm` is required on macOS.** Apple's clang has no wasm32 target, so `blst`'s C build fails with

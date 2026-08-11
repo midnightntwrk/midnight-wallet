@@ -140,6 +140,14 @@ yarn changeset add
 # Check for missing changesets
 yarn changeset:check
 
+# --- Rust / WASM (only packages/state-translation) ---
+# Build the v8-to-v9 state translation WASM. NOT part of `yarn dist`; turbo runs it automatically before the
+# integration tests in capabilities and state-translation, which declare a dependency on it.
+yarn turbo run build:wasm --filter=@midnightntwrk/wallet-sdk-state-translation
+
+# Confirm a built artifact actually translates (compiling proves little — see the package's wasm/README.md)
+yarn workspace @midnightntwrk/wallet-sdk-state-translation verify:wasm
+
 # --- Effect Language Service (see section below) ---
 # Run Effect diagnostics on a specific file
 yarn effect-language-service diagnostics --file "$(pwd)/path/to/file.ts" --format pretty
@@ -151,6 +159,20 @@ yarn effect-language-service diagnostics --project "$(pwd)/packages/dust-wallet/
 yarn effect-language-service quickfixes --file "$(pwd)/path/to/file.ts"
 
 ```
+
+### Rust toolchain
+
+The repo is TypeScript apart from one crate, `packages/state-translation/wasm`, which wraps the ledger's v8-to-v9 state
+translation. **`dist`, `typecheck`, `lint` and `test:unit` need no Rust**; only the integration tests in `capabilities`
+and `state-translation` do, because their `test:integration` declares a turbo dependency on `build:wasm`.
+
+Requires `rustup` (the toolchain and wasm32 target come from the root `rust-toolchain.toml`), `wasm-bindgen-cli` at
+**exactly 0.2.104**, `binaryen` for `wasm-opt`, and on macOS Homebrew's `llvm` — Apple's clang cannot target wasm32.
+
+The root `Cargo.toml` is the Rust workspace; it holds the `[patch.crates-io]` block and the `wasm` profile, because
+Cargo only honours those in a workspace root. **Do not run `cargo` directly** — the build script materializes a
+vendored, patched `midnight-storage` that the `[patch]` points at, so a bare `cargo build` fails on the missing
+directory. See `packages/state-translation/wasm/README.md`.
 
 ### Effect Language Service
 

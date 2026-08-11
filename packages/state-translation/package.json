@@ -35,5 +35,9 @@
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
     "dist": "tsc -b ./tsconfig.build.json",
     "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp"
+  },
+  "devDependencies": {
+    "@midnight-ntwrk/ledger-v8": "^8.1.0",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.3"
   }
 }

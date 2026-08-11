@@ -84,6 +84,22 @@
         "APP_INFRA_SECRET"
       ]
     },
+    "build:wasm": {
+      // The one Rust task in the repo: compiles packages/state-translation/wasm and emits the WASM package the loader
+      // imports. Cached on the Cargo inputs, so a repeat build is instant rather than another six minutes of LTO.
+      "inputs": [
+        "wasm/src/**",
+        "wasm/Cargo.toml",
+        "wasm/patches/**",
+        "scripts/build-wasm.sh",
+        "$TURBO_ROOT$/Cargo.toml",
+        "$TURBO_ROOT$/Cargo.lock",
+        "$TURBO_ROOT$/rust-toolchain.toml"
+      ],
+      // The hand-written .d.ts in there is committed, not generated, so turbo must not own it.
+      "outputs": ["wasm/pkg/**", "!wasm/pkg/*.d.ts"],
+      "outputLogs": "new-only"
+    },
     "dist": {
       "inputs": [
         "index.html",
