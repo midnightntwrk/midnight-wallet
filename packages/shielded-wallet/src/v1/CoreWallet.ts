@@ -145,6 +145,60 @@ export const CoreWallet = {
     return this.empty(PublicKeys.fromSecretKeys(keys), networkId);
   },
 
+  /**
+   * Records an observed protocol version on the wallet, never going backwards.
+   *
+   * @remarks
+   *   The version is a signal, not a measurement: writing one outside the running variant's activation range is what
+   *   makes it hand over to the next variant. A source that briefly reports an older version — a reconnect replaying
+   *   from an earlier cursor, say — must therefore not be able to drag the wallet back below a boundary it has already
+   *   crossed, which would ask the runtime to migrate backwards. Taking the maximum makes that unrepresentable.
+   * @param wallet The wallet to annotate.
+   * @param version The protocol version just observed.
+   * @returns `wallet` unchanged if it already records `version` or a later one, otherwise a copy recording `version`.
+   */
+  withProtocolVersion(wallet: CoreWallet, version: ProtocolVersion.ProtocolVersion): CoreWallet {
+    return version > wallet.protocolVersion ? { ...wallet, protocolVersion: version } : wallet;
+  },
+
+  /**
+   * Projects a wallet inherited from the previous ledger version onto a fresh state of this one.
+   *
+   * @remarks
+   *   Nothing but identity crosses the boundary. Serialized local state is not readable by this ledger version, and it
+   *   does not need to be: the indexer replays the timeline after the fork, so this variant re-discovers the same coins
+   *   by ordinary sync of the replayed events, decrypting them with the keys the sync restart supplies. Carrying coins
+   *   across would duplicate what the replay is about to deliver.
+   *
+   *   What crosses is therefore the public keys — which decide what the replay can be decrypted into — the network, and
+   *   the protocol version that triggered the hand-over, kept so the new variant starts inside its own activation range
+   *   rather than immediately signalling backwards.
+   *
+   *   **Sync progress is reset, not carried**, on the assumption that the replayed timeline restarts its event ids: a
+   *   migrated wallet must re-read it from the beginning. Should the indexer instead continue ids past the boundary,
+   *   this becomes `SyncProgress.createSyncProgress({ ...previous.progress, isConnected: false })` — parking at the
+   *   fork rather than rewinding — and nothing else changes. See the cursor-semantics question in the hard-fork plan.
+   *
+   *   Coin hashes start empty for the same reason the tree does: they are commitments and nullifiers computed under the
+   *   previous ledger's codec, and this version recomputes its own as the replayed coins arrive.
+   * @param previous The plain data read off the previous ledger version's wallet.
+   * @returns A wallet of this ledger version holding no coins and no progress, ready to sync the replayed timeline.
+   */
+  fromPreviousVersion(previous: {
+    readonly publicKeys: PublicKeys;
+    readonly networkId: string;
+    readonly protocolVersion: bigint;
+  }): CoreWallet {
+    return {
+      state: new ledger.ZswapLocalState(),
+      publicKeys: previous.publicKeys,
+      networkId: previous.networkId,
+      coinHashes: CoinHashesMap.empty,
+      progress: SyncProgress.createSyncProgress(),
+      protocolVersion: ProtocolVersion.ProtocolVersion(previous.protocolVersion),
+    };
+  },
+
   applyCollapsedUpdate(wallet: CoreWallet, collapsed: ledger.MerkleTreeCollapsedUpdate): CoreWallet {
     const newState = wallet.state.applyCollapsedUpdate(collapsed);
     return { ...wallet, state: newState };

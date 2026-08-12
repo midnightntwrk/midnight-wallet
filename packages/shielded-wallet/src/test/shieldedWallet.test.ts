@@ -14,7 +14,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Scope, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { ShieldedWallet, type ShieldedWalletClass } from '../ShieldedWallet.js';
+import { type CustomizedShieldedWallet, ShieldedWallet } from '../ShieldedWallet.js';
 import { type DefaultV2Configuration, TransactionHistory, V2Tag } from '../v2/index.js';
 
 const configuration: DefaultV2Configuration = {
@@ -27,10 +27,10 @@ const configuration: DefaultV2Configuration = {
  * What the wallet asked of its runtime.
  *
  * @remarks
- *   The runtime is stubbed rather than driven through a real migration because the behaviour under test is entirely
- *   the wallet's: which keys it holds on to, and how many watchers it registers. Registering two variants to provoke a
- *   real activation would test the runtime — which already has its own coverage — and would need the multi-variant
- *   wallet type that is deliberately still deferred.
+ *   The runtime is stubbed rather than driven through a real migration because the behaviour under test is entirely the
+ *   wallet's: which keys it holds on to, and how many watchers it registers. Registering two variants to provoke a real
+ *   activation would test the runtime — which already has its own coverage — and would need the multi-variant wallet
+ *   type that is deliberately still deferred.
  */
 type RuntimeRecorder = {
   /** The start-aux each `dispatch` to `startSyncInBackground` was given, in order. */
@@ -38,14 +38,16 @@ type RuntimeRecorder = {
   /** The start-aux the activation watcher restarted sync with, in order. */
   readonly resumed: ledger.ZswapSecretKeys[];
   /** One entry per `onVariantActivation` registration. */
-  readonly watchers: ((variant: { startSyncInBackground: (aux: ledger.ZswapSecretKeys) => Effect.Effect<void> }) => Effect.Effect<void>)[];
+  readonly watchers: ((variant: {
+    startSyncInBackground: (aux: ledger.ZswapSecretKeys) => Effect.Effect<void>;
+  }) => Effect.Effect<void>)[];
 };
 
 const makeRecorder = (): RuntimeRecorder => ({ dispatched: [], resumed: [], watchers: [] });
 
 const walletWith = (
   recorder: RuntimeRecorder,
-): Effect.Effect<{ wallet: InstanceType<ShieldedWalletClass>; scope: Scope.CloseableScope }> =>
+): Effect.Effect<{ wallet: CustomizedShieldedWallet; scope: Scope.CloseableScope }> =>
   Effect.gen(function* () {
     const scope = yield* Scope.make();
     const WalletClass = ShieldedWallet(configuration);
@@ -63,17 +65,19 @@ const walletWith = (
       progress: Effect.succeed({ sourceGap: 0n, applyGap: 0n }),
       currentVariant: Effect.succeed(runningVariant),
       dispatch: (impl: Record<symbol, (variant: typeof runningVariant) => Effect.Effect<unknown>>) =>
-        impl[V2Tag]!(runningVariant),
+        impl[V2Tag](runningVariant),
       onVariantActivation: (impl: Record<symbol, RuntimeRecorder['watchers'][number]>) =>
         Effect.sync(() => {
-          recorder.watchers.push(impl[V2Tag]!);
+          recorder.watchers.push(impl[V2Tag]);
         }),
     };
 
-    // Type cast required because: `Runtime.Runtime` is parameterised over the variant HList and its members are typed
-    // with `Poly.PolyFunction`, which no structural stub can be inferred into. The five members above are the whole
-    // interface, and each is exercised by the assertions below.
-    const wallet = new WalletClass(stub as never, scope);
+    // Type casts required because: `Runtime.Runtime` is parameterised over the variant HList and its members are
+    // typed with `Poly.PolyFunction`, which no structural stub can be inferred into — the five members above are the
+    // whole interface, and each is exercised by the assertions below. The result is narrowed because
+    // `BaseWalletClass`'s construct signature is declared to return the base `WalletLike`, so `new` on the class type
+    // loses the shielded API; the production static factories narrow at exactly the same point.
+    const wallet = new WalletClass(stub as never, scope) as CustomizedShieldedWallet;
     return { wallet, scope };
   });
 

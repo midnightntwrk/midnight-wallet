@@ -15,6 +15,7 @@ export * as Sync from './Sync.js';
 export * as Transacting from './Transacting.js';
 export * as TransactionHistory from './TransactionHistory.js';
 export * as Serialization from './Serialization.js';
+export * as Migration from './Migration.js';
 export * as CoinsAndBalances from './CoinsAndBalances.js';
 export * as Keys from './Keys.js';
 export * from './RunningV2Variant.js';

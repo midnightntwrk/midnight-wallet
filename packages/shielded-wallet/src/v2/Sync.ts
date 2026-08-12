@@ -12,14 +12,22 @@
 // limitations under the License.
 
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { Chunk, Duration, Effect, Either, ParseResult, pipe, Schedule, Schema, type Scope, Stream } from 'effect';
-import { CoreWallet } from './CoreWallet.js';
 import {
-  type Simulator,
-  type SimulatorState,
-  getLastBlock,
-  getBlockEventsFrom,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+  Chunk,
+  Duration,
+  Effect,
+  Either,
+  Option,
+  ParseResult,
+  pipe,
+  Schedule,
+  Schema,
+  type Scope,
+  Stream,
+} from 'effect';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { CoreWallet } from './CoreWallet.js';
+import { type Simulator, type SimulatorState, getLastBlock } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { ZswapEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { ConnectionHelper, WsSubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, type WalletError } from './WalletError.js';
@@ -37,8 +45,79 @@ export type ChangesResult = {
 };
 
 export interface SyncCapability<TState, TUpdate, TResult> {
-  applyUpdate: (state: TState, update: TUpdate) => [TState, TResult];
+  /**
+   * Folds a sync update into the wallet state.
+   *
+   * @param state The state to fold into.
+   * @param update The update to apply.
+   * @param activeRange The half-open protocol version range the running variant owns. Anything the source reports at or
+   *   beyond its end belongs to a later variant and must be left unapplied for that variant to fetch.
+   */
+  applyUpdate: (
+    state: TState,
+    update: TUpdate,
+    activeRange: ProtocolVersion.ProtocolVersion.Range,
+  ) => [TState, TResult];
 }
+
+/** The result of splitting a batch of version-tagged items at a variant's activation boundary. */
+export type BoundarySplit<T> = {
+  /** The leading items this variant owns, in source order. */
+  readonly applied: readonly T[];
+  /** The trailing items belonging to a later protocol version, left for the next variant to re-fetch. */
+  readonly deferred: readonly T[];
+  /**
+   * The protocol version to record on the state: the first deferred item's version when there is one — that is the
+   * signal that triggers migration — otherwise the last applied item's version. `None` for an empty batch.
+   */
+  readonly observedVersion: Option.Option<ProtocolVersion.ProtocolVersion>;
+};
+
+/**
+ * Splits a batch of version-tagged items at the end of a variant's activation range.
+ *
+ * @remarks
+ *   The split is positional, not a filter: everything from the first out-of-range item onwards is deferred, even if a
+ *   later item reports an in-range version again. A batch is a contiguous slice of one timeline, so applying past a
+ *   boundary and then resuming behind it would leave a hole no cursor can describe.
+ *
+ *   This is the one place the boundary rule lives; both the indexer capability (per event) and the simulator capability
+ *   (per block) go through it, so they cannot drift apart.
+ * @param items The batch, in source order.
+ * @param versionOf Reads the protocol version an item was reported at.
+ * @param activeRange The variant's half-open activation range.
+ * @returns The applied/deferred split and the version to record.
+ */
+export const splitAtVersionBoundary = <T>(
+  items: readonly T[],
+  versionOf: (item: T) => number,
+  activeRange: ProtocolVersion.ProtocolVersion.Range,
+): BoundarySplit<T> => {
+  const [, end] = activeRange;
+  const boundary = items.findIndex((item) => BigInt(versionOf(item)) >= end);
+  const [applied, deferred] =
+    boundary < 0 ? [items, [] as readonly T[]] : [items.slice(0, boundary), items.slice(boundary)];
+  const signalling = deferred.at(0) ?? applied.at(-1);
+
+  return {
+    applied,
+    deferred,
+    observedVersion:
+      signalling === undefined
+        ? Option.none()
+        : Option.some(ProtocolVersion.ProtocolVersion(BigInt(versionOf(signalling)))),
+  };
+};
+
+/** Records a batch's observed protocol version on the state, monotonically. A batch that observed none is a no-op. */
+export const annotateVersion = (
+  state: CoreWallet,
+  observedVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
+): CoreWallet =>
+  Option.match(observedVersion, {
+    onNone: () => state,
+    onSome: (version) => CoreWallet.withProtocolVersion(state, version),
+  });
 
 export type IndexerClientConnection = {
   indexerHttpUrl: string;
@@ -275,7 +354,11 @@ export const makeEventsSyncService = (
 
 export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
   return {
-    applyUpdate: (state: CoreWallet, wrappedUpdate: WalletSyncUpdate): [CoreWallet, ChangesResult] => {
+    applyUpdate: (
+      state: CoreWallet,
+      wrappedUpdate: WalletSyncUpdate,
+      activeRange: ProtocolVersion.ProtocolVersion.Range,
+    ): [CoreWallet, ChangesResult] => {
       if (wrappedUpdate.updates.length === 0) {
         return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
@@ -289,25 +372,43 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
       const appliedIndex = state.progress?.appliedIndex ?? 0n;
       const freshUpdates = wrappedUpdate.updates.filter((u) => BigInt(u.id) > appliedIndex);
 
+      // The tip is a property of the source, not of what this variant chose to apply, so it is read from
+      // the batch tail even when the tail belongs to the next protocol version.
       const lastUpdate = wrappedUpdate.updates.at(-1)!;
       const highestRelevantWalletIndex = BigInt(lastUpdate.maxId);
 
+      const { applied, observedVersion } = splitAtVersionBoundary(
+        freshUpdates,
+        (update) => update.protocolVersion,
+        activeRange,
+      );
+
       const [newState, newChanges]: [CoreWallet, ledger.ZswapStateChanges[]] =
-        freshUpdates.length === 0
+        applied.length === 0
           ? [state, []]
           : CoreWallet.replayEventsWithChanges(
               state,
               wrappedUpdate.secretKeys,
-              freshUpdates.map((u) => u.event),
+              applied.map((u) => u.event),
             );
 
-      const updatedState = CoreWallet.updateProgress(newState, {
+      // `appliedIndex` stops at the last event this variant actually replayed. The next variant resumes one
+      // below it on an inclusive cursor, so the deferred suffix is re-fetched rather than skipped.
+      const updatedState = CoreWallet.updateProgress(annotateVersion(newState, observedVersion), {
         highestRelevantWalletIndex,
-        appliedIndex: freshUpdates.length === 0 ? appliedIndex : BigInt(freshUpdates.at(-1)!.id),
+        appliedIndex: applied.length === 0 ? appliedIndex : BigInt(applied.at(-1)!.id),
         isConnected: true,
       });
 
-      return [updatedState, { changes: newChanges, protocolVersion: lastUpdate.protocolVersion }];
+      return [
+        updatedState,
+        {
+          changes: newChanges,
+          // Tags the changes that were actually produced, so tx-history records the version they were applied
+          // under rather than the one that is about to trigger the hand-over.
+          protocolVersion: applied.at(-1)?.protocolVersion ?? Number(state.protocolVersion),
+        },
+      ];
     },
   };
 };
@@ -355,24 +456,45 @@ export const makeSimulatorSyncService = (
 
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate, ChangesResult> => {
   return {
-    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): [CoreWallet, ChangesResult] => {
+    applyUpdate: (
+      state: CoreWallet,
+      update: SimulatorSyncUpdate,
+      activeRange: ProtocolVersion.ProtocolVersion.Range,
+    ): [CoreWallet, ChangesResult] => {
       const { update: simulatorState, secretKeys } = update;
       const lastBlock = getLastBlock(simulatorState);
       if (lastBlock === undefined) {
         return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
 
-      // Get all events from blocks starting at appliedIndex (the next block to process).
       // appliedIndex semantics: the first block number we haven't processed yet.
       // Initial: appliedIndex = 0 (haven't processed any blocks)
       // After processing block N: appliedIndex = N + 1 (next block to process)
-      const events = [...getBlockEventsFrom(simulatorState, state.progress.appliedIndex)];
-      const [newState, newChanges] = CoreWallet.replayEventsWithChanges(state, secretKeys, events);
+      //
+      // The boundary is applied at block granularity here — a block carries exactly one protocol version,
+      // stamped when it was produced — but it is the same rule and the same helper the indexer path uses.
+      const pending = simulatorState.blocks.filter((block) => block.number >= state.progress.appliedIndex);
+      const { applied, observedVersion } = splitAtVersionBoundary(
+        pending,
+        (block) => Number(block.protocolVersion),
+        activeRange,
+      );
+
+      const events = applied.flatMap((block) => block.transactions.flatMap((tx) => tx.result.events));
+
+      const [newState, newChanges]: [CoreWallet, ledger.ZswapStateChanges[]] =
+        applied.length === 0 ? [state, []] : CoreWallet.replayEventsWithChanges(state, secretKeys, events);
+
+      const lastAppliedBlock = applied.at(-1);
       return [
-        CoreWallet.updateProgress(newState, {
-          appliedIndex: lastBlock.number + 1n,
+        CoreWallet.updateProgress(annotateVersion(newState, observedVersion), {
+          appliedIndex: lastAppliedBlock === undefined ? state.progress.appliedIndex : lastAppliedBlock.number + 1n,
         }),
-        { changes: newChanges, protocolVersion: Number(state.protocolVersion) },
+        {
+          changes: newChanges,
+          protocolVersion:
+            lastAppliedBlock === undefined ? Number(state.protocolVersion) : Number(lastAppliedBlock.protocolVersion),
+        },
       ];
     },
   };

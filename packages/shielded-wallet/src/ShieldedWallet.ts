@@ -14,13 +14,14 @@ import { type ProtocolState, ProtocolVersion, type SyncProgress } from '@midnigh
 import {
   type BaseV2Configuration,
   type DefaultV2Configuration,
+  type RunningV2Variant,
   V2Builder,
   V2Tag,
   type V2Variant,
   CoreWallet,
 } from './v2/index.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { Effect, Either, type Scope } from 'effect';
+import { Effect, Either, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type BalancingResult } from './v2/Transacting.js';
 import { type SerializationCapability } from './v2/Serialization.js';
@@ -244,6 +245,27 @@ export function CustomShieldedWallet<
 
     readonly state: rx.Observable<ShieldedWalletState<TSerialized>>;
 
+    /**
+     * The start-aux the application last called {@link start} with.
+     *
+     * @remarks
+     *   Sync needs the secret keys, and a migration starts a fresh variant whose sync has never been started. The keys
+     *   cannot come from the state — they are deliberately absent from anything serialized — and they do not exist yet
+     *   when the wallet is first constructed, so they are held here, in memory, for the lifetime of the wallet. Cleared
+     *   by {@link stop} so a stopped wallet cannot be silently resurrected by a late activation.
+     */
+    readonly #retainedAux = Ref.unsafeMake<Option.Option<TStartAux>>(Option.none());
+
+    /**
+     * Whether the activation watcher has been registered.
+     *
+     * @remarks
+     *   Registration is per wallet, not per `start`: watchers accumulate, so registering on every call would restart sync
+     *   once per historical `start` on the next activation. Flipped with `getAndSet` so concurrent `start` calls cannot
+     *   both observe it unset.
+     */
+    readonly #watcherRegistered = Ref.unsafeMake(false);
+
     constructor(
       runtime: Runtime.Runtime<
         [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
@@ -262,7 +284,35 @@ export function CustomShieldedWallet<
     }
 
     start(secretKeys: TStartAux): Promise<void> {
-      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground(secretKeys) }).pipe(Effect.runPromise);
+      return Effect.gen(this, function* () {
+        yield* Ref.set(this.#retainedAux, Option.some(secretKeys));
+
+        // Registered before the first dispatch, and only once: `onVariantActivation` resolves only after its
+        // subscription is live, so an activation racing this call is queued rather than missed.
+        const alreadyRegistered = yield* Ref.getAndSet(this.#watcherRegistered, true);
+        if (!alreadyRegistered) {
+          yield* this.runtime.onVariantActivation({
+            [V2Tag]: (v2: RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>) =>
+              Ref.get(this.#retainedAux).pipe(
+                Effect.flatMap(
+                  Option.match({
+                    // Stopped, or never started: there is nothing to resume and no keys to resume it with.
+                    onNone: () => Effect.void,
+                    onSome: (retained: TStartAux) => v2.startSyncInBackground(retained),
+                  }),
+                ),
+              ),
+          });
+        }
+
+        yield* this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground(secretKeys) });
+      }).pipe(Effect.runPromise);
+    }
+
+    async stop(): Promise<void> {
+      // Released before the runtime is torn down: the keys outlive neither the wallet nor an in-flight activation.
+      Ref.set(this.#retainedAux, Option.none()).pipe(Effect.runSync);
+      await super.stop();
     }
 
     balanceTransaction(

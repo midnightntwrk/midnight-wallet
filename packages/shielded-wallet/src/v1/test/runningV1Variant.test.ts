@@ -188,7 +188,7 @@ describe('RunningV1Variant.state protocol version signalling', () => {
 
   /**
    * Drains the variant's state stream for a fixed window and returns everything it emitted. A bounded window rather
-   * than `Stream.take(n)` on purpose: the point of these tests is *how many* version changes appear, so a missing one
+   * than `Stream.take(n)` on purpose: the point of these tests is _how many_ version changes appear, so a missing one
    * has to surface as a failed assertion, not as a hang.
    */
   const emissionsWithin = (
@@ -201,11 +201,14 @@ describe('RunningV1Variant.state protocol version signalling', () => {
       const variant = new RunningV1Variant(
         scope,
         { stateRef, activationRange },
-        variantContextOf([], trackingHistoryService({
-          inFlight: yield* Ref.make(0),
-          maxInFlight: yield* Ref.make(0),
-          recorded: yield* Ref.make(0),
-        })),
+        variantContextOf(
+          [],
+          trackingHistoryService({
+            inFlight: yield* Ref.make(0),
+            maxInFlight: yield* Ref.make(0),
+            recorded: yield* Ref.make(0),
+          }),
+        ),
       );
 
       const collector = yield* Effect.fork(

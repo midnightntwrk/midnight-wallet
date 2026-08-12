@@ -13,7 +13,7 @@
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { Effect, Option, Scope, Stream } from 'effect';
+import { Effect, Option, Stream } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
 import {
@@ -72,15 +72,13 @@ beforeAll(async () => {
 /** Builds a batch of sync updates, one per `(id, protocolVersion)` pair, each carrying its own fresh event instance. */
 const batch = (items: readonly (readonly [id: number, protocolVersion: number])[]): WalletSyncUpdate =>
   WalletSyncUpdate.create(
-    items.map(
-      ([id, protocolVersion]): EventsSyncUpdate => ({
-        _tag: 'EventsSyncUpdate',
-        id,
-        protocolVersion,
-        maxId: MINT_COUNT,
-        event: ledger.Event.deserialize(eventBytes[id - 1]!),
-      }),
-    ),
+    items.map(([id, protocolVersion]): EventsSyncUpdate => ({
+      _tag: 'EventsSyncUpdate',
+      id,
+      protocolVersion,
+      maxId: MINT_COUNT,
+      event: ledger.Event.deserialize(eventBytes[id - 1]),
+    })),
     secretKeys(),
   );
 
@@ -116,7 +114,7 @@ describe('makeEventsSyncCapability.applyUpdate boundary handling', () => {
     expect(totalValue(state)).toBe(MINT_TOTAL);
     expect(state.state.firstFree).toBe(6n);
     expect(result.changes.length).toBe(1);
-    expect(result.changes[0]!.receivedCoins.length).toBe(MINT_COUNT);
+    expect(result.changes[0].receivedCoins.length).toBe(MINT_COUNT);
     expect(result.protocolVersion).toBe(3);
   });
 
@@ -147,7 +145,7 @@ describe('makeEventsSyncCapability.applyUpdate boundary handling', () => {
     expect(coinIndices(state)).toEqual([0n, 1n, 2n, 3n, 4n, 5n]);
     expect(totalValue(state)).toBe(MINT_TOTAL);
     expect(result.changes.length).toBe(1);
-    expect(result.changes[0]!.receivedCoins.length).toBe(3);
+    expect(result.changes[0].receivedCoins.length).toBe(3);
   });
 
   it('applies only the prefix of a straddling batch and takes the version from the first suffix item', () => {
@@ -172,7 +170,7 @@ describe('makeEventsSyncCapability.applyUpdate boundary handling', () => {
     expect(state.state.firstFree).toBe(3n);
     // Changes come from the prefix alone.
     expect(result.changes.length).toBe(1);
-    expect(result.changes[0]!.receivedCoins.length).toBe(3);
+    expect(result.changes[0].receivedCoins.length).toBe(3);
     // The reported version tags the applied changes, so it is the prefix's version.
     expect(result.protocolVersion).toBe(3);
     // The tip is a property of the source, so it still comes from the batch tail.
