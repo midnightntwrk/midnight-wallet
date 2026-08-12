@@ -115,16 +115,16 @@ jobs:
           name: build-artifacts-${{ github.run_id }}
           path: .
 
-      # `test:integration` in `capabilities` and `state-translation` declares a turbo dependency on the translation
-      # WASM, so those files — and only those — need the Rust toolchain and the build's turbo cache. Three of the
-      # thirteen integration files, so this is gated rather than paid everywhere.
+      # `test:integration` in `capabilities`, `state-translation` and `shielded-wallet` declares a turbo dependency on
+      # the translation WASM, so those files — and only those — need the Rust toolchain and the build's turbo cache.
+      # A minority of the integration files, so this is gated rather than paid everywhere.
       - name: Does this file need the translation WASM?
         id: wasm
         env:
           WALLET_TEST_FILE: ${{ matrix.test-file }}
         run: |
           case "$WALLET_TEST_FILE" in
-            packages/capabilities/*|packages/state-translation/*) needed=true ;;
+            packages/capabilities/*|packages/state-translation/*|packages/shielded-wallet/*) needed=true ;;
             *) needed=false ;;
           esac
           echo "needed=$needed" >> "$GITHUB_OUTPUT"
