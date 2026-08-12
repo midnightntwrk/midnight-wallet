@@ -57,3 +57,13 @@ export const totalValue = (wallet: EitherWallet): bigint =>
  * reconstructed and not merely populated with the leaves the wallet cares about.
  */
 export const treeSize = (wallet: EitherWallet): bigint => wallet.state.firstFree;
+
+/**
+ * The root of the wallet's own commitment tree.
+ *
+ * @remarks
+ *   The single value that says whether a wallet's tree is the chain's tree. Comparing it to a root taken from a chain
+ *   state is how a proof states that what the wallet rebuilt from replayed events is byte-for-byte the tree the ledger
+ *   translation produced — not merely a tree with the same leaves in it.
+ */
+export const merkleRoot = (wallet: EitherWallet): bigint | undefined => wallet.state.merkleTreeRoot;

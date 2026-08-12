@@ -43,7 +43,7 @@
 import * as v8 from '@midnight-ntwrk/ledger-v8';
 import * as v9 from '@midnightntwrk/ledger-v9';
 import { type NetworkId, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type BlockProducer, Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { type BlockProducer, Simulator, type SimulatorState } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, type Scope } from 'effect';
 
@@ -134,3 +134,13 @@ export const makeReplayChain = (
 
     return chain;
   });
+
+/** The Merkle root of a chain's commitment tree, read through a local state — the chain state does not expose one. */
+export const chainMerkleRoot = (chain: v9.ZswapChainState): bigint | undefined =>
+  chain.firstFree === 0n
+    ? new v9.ZswapLocalState().merkleTreeRoot
+    : new v9.ZswapLocalState().applyCollapsedUpdate(new v9.MerkleTreeCollapsedUpdate(chain, 0n, chain.firstFree - 1n))
+        .merkleTreeRoot;
+
+/** The commitment tree of a simulated chain, as a root. */
+export const simulatedChainRoot = (state: SimulatorState): bigint | undefined => chainMerkleRoot(state.ledger.zswap);
