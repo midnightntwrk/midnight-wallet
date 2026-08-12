@@ -98,6 +98,11 @@ const createMockSubscriptionFn = (
   totalRecords: number,
   mockEventHex: string,
   timingOptions?: TimingOptions,
+  /**
+   * The protocol version the indexer reports for each event id. Defaults to a constant 1. Per-item versions are what
+   * the boundary split in `applyUpdate` keys off, so they have to survive batching intact.
+   */
+  protocolVersionOf: (id: number) => number = () => 1,
 ): ((
   _variables: ZswapEventsSubscriptionVariables,
 ) => Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient>) => {
@@ -110,7 +115,7 @@ const createMockSubscriptionFn = (
         zswapLedgerEvents: {
           id,
           raw: mockEventHex,
-          protocolVersion: 1,
+          protocolVersion: protocolVersionOf(id),
           maxId: totalRecords,
         },
       })),
@@ -420,6 +425,52 @@ describe('Wallet subscription', () => {
       const variables = await cursorFor(state, secretKeys);
 
       expect(variables).toEqual({ id: 4 });
+    });
+  });
+
+  describe('per-item protocol version decoding', () => {
+    // The version reported for a single event is what decides which side of the fork boundary that event falls on, so
+    // it has to arrive at `applyUpdate` per item — a batch-level summary would erase exactly the transition being
+    // looked for.
+    const versionOf = (id: number): number => (id <= 3 ? 3 : id <= 5 ? 9 : 11);
+
+    const collectUpdates = async (eventCount: number, batchSize: number) => {
+      const mockEventHex = await createMockEventHex();
+      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex, undefined, versionOf);
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
+
+      return await Effect.gen(function* () {
+        const syncService = makeEventsSyncService({
+          indexerClientConnection: {
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+          },
+          batchUpdates: { size: batchSize, spacing: 0 },
+        });
+
+        return yield* syncService.updates(initialState, secretKeys).pipe(Stream.runCollect);
+      }).pipe(Effect.provideService(ZswapEvents.tag, mockSubscriptionFn), Effect.scoped, Effect.runPromise);
+    };
+
+    it('carries the indexer-reported version of every event through a single batch', async () => {
+      const updates = await collectUpdates(6, 10);
+
+      expect(Chunk.size(updates)).toBe(1);
+      const batch = updates.pipe(Chunk.unsafeHead);
+      expect(batch.updates.map((u) => u.id)).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(batch.updates.map((u) => u.protocolVersion)).toEqual([3, 3, 3, 9, 9, 11]);
+    });
+
+    it('keeps each event paired with its own version when the batch boundary splits them', async () => {
+      const updates = await collectUpdates(6, 2);
+
+      expect(Chunk.size(updates)).toBe(3);
+      expect(Chunk.toArray(updates).map((batch) => batch.updates.map((u) => u.protocolVersion))).toEqual([
+        [3, 3],
+        [3, 9],
+        [9, 11],
+      ]);
     });
   });
 });
