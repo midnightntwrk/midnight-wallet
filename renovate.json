@@ -1,5 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "labels": ["bot:renovate"],
   "nix": {
     "enabled": true
   },
