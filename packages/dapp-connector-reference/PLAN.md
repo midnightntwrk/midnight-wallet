@@ -1,71 +1,68 @@
 # DApp Connector Reference Implementation Plan
 
-**Workflow:** development follows the multi-agent process + engineering mandates in
-[`WORKFLOW.md`](./WORKFLOW.md) (orchestrator · researcher · architect · builder · tester ·
-reviewer/auditor; Definition→Build→Review; the conformance suite in `src/test/suites/` is the shared
-builder+tester deliverable, sealed against implementation internals so it stays pluggable).
+**Workflow:** development follows the multi-agent process + engineering mandates in [`WORKFLOW.md`](./WORKFLOW.md)
+(orchestrator · researcher · architect · builder · tester · reviewer/auditor; Definition→Build→Review; the conformance
+suite in `src/test/suites/` is the shared builder+tester deliverable, sealed against implementation internals so it
+stays pluggable).
 
 ## Current Step
 
 ### Phase 15: Merge `main` & reconciliation (in progress)
 
-**Goal:** bring the branch up to date with `origin/main` (it was ~56 commits / ~5 weeks behind) and
-reconcile the reference impl + conformance suite against everything that landed on `main` since the
-merge-base.
+**Goal:** bring the branch up to date with `origin/main` (it was ~56 commits / ~5 weeks behind) and reconcile the
+reference impl + conformance suite against everything that landed on `main` since the merge-base.
 
 **Steps:**
 
 - Merge `origin/main` into `akopec/reference-dapp-connector`; resolve conflicts (watch
   `address-format/test/addresses.json`, `yarn.lock`, and any Wallet Facade / capabilities API drift).
 - `yarn install`, build, run the conformance suite; fix breakage introduced by upstream API changes.
-- **Do not assume the remaining work is docs-only.** Main's changes (facade, capabilities, ledger
-  bindings, test infra) may require code adjustments here — the re-assessment below determines scope.
+- **Do not assume the remaining work is docs-only.** Main's changes (facade, capabilities, ledger bindings, test infra)
+  may require code adjustments here — the re-assessment below determines scope.
 
 **Then — re-assessment (per `WORKFLOW.md` Review, run in parallel once the merge builds):**
 
-- **tester** — run the conformance suite against the merged code; report failures/skips + any spec
-  requirements now uncovered.
-- **architect** — spec-conformance review against the current DApp Connector API spec; flag drift
-  introduced by the merge.
-- **reviewer/auditor** — independently challenge code + suite; confirm whether the outstanding work is
-  only docs (Phase 12) or also code reconciliation.
+- **tester** — run the conformance suite against the merged code; report failures/skips + any spec requirements now
+  uncovered.
+- **architect** — spec-conformance review against the current DApp Connector API spec; flag drift introduced by the
+  merge.
+- **reviewer/auditor** — independently challenge code + suite; confirm whether the outstanding work is only docs
+  (Phase 12) or also code reconciliation.
 
-**Merge status (done so far):** conflicts resolved (`package.json` unioned; `bech32.test.ts` took
-main's authoritative rewrite; `yarn.lock` regenerated). Reconciliation applied: npm scope rename
-`@midnight-ntwrk/wallet-sdk-*` → `@midnightntwrk/wallet-sdk-*` (main renamed the whole scope);
-`dapp-connector-api` portal `dist` built. Merge is **not yet committed** (left for signed commit).
+**Merge status (done so far):** conflicts resolved (`package.json` unioned; `bech32.test.ts` took main's authoritative
+rewrite; `yarn.lock` regenerated). Reconciliation applied: npm scope rename `@midnight-ntwrk/wallet-sdk-*` →
+`@midnightntwrk/wallet-sdk-*` (main renamed the whole scope); `dapp-connector-api` portal `dist` built. Merge is **not
+yet committed** (left for signed commit).
 
 **Review-gate outcome (tester · architect · auditor, unanimous): NOT docs-only — docs + code.**
 
-- **Production `src/*.ts` typechecks clean and is still spec-conformant** — the merge did not touch the
-  external API contract; `ConnectedAPI` reads history through its own narrow view, decoupled from the
-  facade `WalletEntry`.
-- **The conformance suite is currently NON-EXECUTING.** All drift is in one file,
-  `src/test/simulatorTestUtils.ts`, from main's `TransactionHistory`/`Clock` redesign. It is not just a
-  typecheck error: `txHistoryStorage.upsert` is now private, so `reference.test.ts` throws in
-  `beforeAll` (`upsert is not a function`, via `WalletFacade.submitTransaction`) — **187 tests don't
-  run** (register as skipped); only 53 static-context tests pass. Fix = migrate the history-write path
-  to the new lifecycle-aware writers `gotPending`/`gotFinalized`/`gotRejected` (attach `lifecycle`),
-  use `Clock.Clock` type, handle now-optional `status`. ~3 edits, one file, zero production changes.
+- **Production `src/*.ts` typechecks clean and is still spec-conformant** — the merge did not touch the external API
+  contract; `ConnectedAPI` reads history through its own narrow view, decoupled from the facade `WalletEntry`.
+- **The conformance suite is currently NON-EXECUTING.** All drift is in one file, `src/test/simulatorTestUtils.ts`, from
+  main's `TransactionHistory`/`Clock` redesign. It is not just a typecheck error: `txHistoryStorage.upsert` is now
+  private, so `reference.test.ts` throws in `beforeAll` (`upsert is not a function`, via
+  `WalletFacade.submitTransaction`) — **187 tests don't run** (register as skipped); only 53 static-context tests pass.
+  Fix = migrate the history-write path to the new lifecycle-aware writers `gotPending`/`gotFinalized`/`gotRejected`
+  (attach `lifecycle`), use `Clock.Clock` type, handle now-optional `status`. ~3 edits, one file, zero production
+  changes.
 - **Two gaps the merge surfaced that were not in the original list:**
-  - **Undeclared deps:** the package imports `@midnightntwrk/wallet-sdk-address-format` +
-    `@midnight-ntwrk/zkir-v2` but does not declare them (resolve only via hoisting; `publint --strict`
-    catches). Add to `dependencies`.
-  - **Portal is load-bearing:** published `dapp-connector-api@4.0.1` lacks `ErrorCodes.InsufficientFunds`
-    (used in `errors.ts:36` + suites) and the `/globals` export subpath (`index.ts:1`). The connector
-    depends on **unpublished** `dapp-connector-api` changes — publishing this package is gated on
-    releasing a new `dapp-connector-api` first, then removing the portal.
-- `address-format` reconciliation confirmed clean: branch's `Bech32mSymbol` additions (ESK/CPK/EPK)
-  coexist with main's (ShieldedAddress/Unshielded/Dust); main's `spec-reference` test vectors supersede
-  the branch's dropped roundtrip blocks (nit: no explicit EPK roundtrip `it`, covered by vectors).
+  - **Undeclared deps:** the package imports `@midnightntwrk/wallet-sdk-address-format` + `@midnight-ntwrk/zkir-v2` but
+    does not declare them (resolve only via hoisting; `publint --strict` catches). Add to `dependencies`.
+  - **Portal is load-bearing:** published `dapp-connector-api@4.0.1` lacks `ErrorCodes.InsufficientFunds` (used in
+    `errors.ts:36` + suites) and the `/globals` export subpath (`index.ts:1`). The connector depends on **unpublished**
+    `dapp-connector-api` changes — publishing this package is gated on releasing a new `dapp-connector-api` first, then
+    removing the portal.
+- `address-format` reconciliation confirmed clean: branch's `Bech32mSymbol` additions (ESK/CPK/EPK) coexist with main's
+  (ShieldedAddress/Unshielded/Dust); main's `spec-reference` test vectors supersede the branch's dropped roundtrip
+  blocks (nit: no explicit EPK roundtrip `it`, covered by vectors).
 
 **Open decisions for the human (batched at gate):**
-1. `TxStatus` mapping source: derive from the new `lifecycle` discriminator (spec-faithful; closes the
-   documented status-model-mismatch gap; touches `suites/history.ts` assertions) vs `status ?? 'SUCCESS'`
-   (minimal diff).
-2. Is the Phase-9.10 submit-bridge (`upsertHistoryEntry`) now redundant — does simulator-backed sync
-   write history natively via the new lifecycle methods? (check `unshielded-wallet/src/v1/Sync.ts`
-   post-merge.) If so, **delete** the bridge rather than port it.
+
+1. `TxStatus` mapping source: derive from the new `lifecycle` discriminator (spec-faithful; closes the documented
+   status-model-mismatch gap; touches `suites/history.ts` assertions) vs `status ?? 'SUCCESS'` (minimal diff).
+2. Is the Phase-9.10 submit-bridge (`upsertHistoryEntry`) now redundant — does simulator-backed sync write history
+   natively via the new lifecycle methods? (check `unshielded-wallet/src/v1/Sync.ts` post-merge.) If so, **delete** the
+   bridge rather than port it.
 3. Apply the `simulatorTestUtils.ts` fix before the merge commit, or as a follow-up commit?
 
 ## Completed Phases
@@ -280,21 +277,22 @@ no `any`, no new `as unknown as ...` casts. 240/240 tests passing, lint and type
 
 - `intentIdPlacementSupported`: removed. The SDK ignores the caller's `intentId` at the facade/wallet boundary; the
   connector's `placeIntentAtSegment` helper (`ConnectedAPI.ts:131`) attempts to compensate by post-processing the
-  recipe. The two non-property tests (`intentId is 1`, `intentId is arbitrary value`) pass via this. The property
-  test (`should place intent in exact segment specified by numeric intentId`) is `it.skip` and the assertion is
-  correct — see the rewritten skip comment for the full root-cause chain.
-- `crossKindIntentSupported`: removed. Three tests touching cross-kind layouts (`should create swap with shielded
-  input and unshielded output`, `should create swap with unshielded input and shielded output`, `should create exact
-  imbalances matching desired inputs/outputs`) are `it.skip` pointing at the SDK gap. Property arbitraries were
-  tightened to `minLength: 1` on inputs and a filter requiring each output's kind to be present in inputs —
-  same-kind / both-kinds coverage stays intact.
+  recipe. The two non-property tests (`intentId is 1`, `intentId is arbitrary value`) pass via this. The property test
+  (`should place intent in exact segment specified by numeric intentId`) is `it.skip` and the assertion is correct — see
+  the rewritten skip comment for the full root-cause chain.
+- `crossKindIntentSupported`: removed. Three tests touching cross-kind layouts
+  (`should create swap with shielded input and unshielded output`,
+  `should create swap with unshielded input and shielded output`,
+  `should create exact imbalances matching desired inputs/outputs`) are `it.skip` pointing at the SDK gap. Property
+  arbitraries were tightened to `minLength: 1` on inputs and a filter requiring each output's kind to be present in
+  inputs — same-kind / both-kinds coverage stays intact.
 
-**Capability flags after Phase 13:** **none.** `TestEnvironment` no longer carries any implementation-specific
-escape hatches. The conformance suite expresses what the spec says; per-implementation gaps live as `it.skip` markers
-with pointers to the upstream fix needed.
+**Capability flags after Phase 13:** **none.** `TestEnvironment` no longer carries any implementation-specific escape
+hatches. The conformance suite expresses what the spec says; per-implementation gaps live as `it.skip` markers with
+pointers to the upstream fix needed.
 
-**Final state:** 240/240 tests passing (4 skipped — one per genuine gap), lint and typecheck clean, no
-`eslint-disable` added, no `any`, no new `as unknown as` casts.
+**Final state:** 240/240 tests passing (4 skipped — one per genuine gap), lint and typecheck clean, no `eslint-disable`
+added, no `any`, no new `as unknown as` casts.
 
 ### Phase 13.1: Cross-kind investigation (corrects Phase 13's attribution)
 
