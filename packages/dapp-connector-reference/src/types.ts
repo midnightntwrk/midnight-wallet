@@ -1,12 +1,12 @@
 import type { Configuration, TxStatus, KeyMaterialProvider, ProvingProvider } from '@midnight-ntwrk/dapp-connector-api';
 import type { Observable } from 'rxjs';
-import type { ShieldedAddress, UnshieldedAddress, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import type { ShieldedAddress, UnshieldedAddress, DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 
 // =============================================================================
 // Transaction Recipe Types
 // =============================================================================
-// These types mirror the recipe types from @midnight-ntwrk/wallet-sdk-facade.
+// These types mirror the recipe types from @midnightntwrk/wallet-sdk-facade.
 // The WalletFacade uses a recipe-based workflow for building transactions:
 // 1. transferTransaction/initSwap → UnprovenTransactionRecipe
 // 2. signRecipe → signed recipe
@@ -181,14 +181,14 @@ export interface DustWalletView {
 /**
  * Minimal wallet facade interface required by the DApp Connector.
  *
- * This is a narrowed-down view of WalletFacade from @midnight-ntwrk/wallet-sdk-facade, capturing only the subset of
+ * This is a narrowed-down view of WalletFacade from @midnightntwrk/wallet-sdk-facade, capturing only the subset of
  * functionality that the DApp Connector actually uses. The full WalletFacade implements this interface.
  *
  * IMPORTANT: If WalletFacade changes in ways that affect the shielded/unshielded/dust wallet APIs used here (state
  * observable, getAddress method, or state properties like balances and availableCoins), this interface must be updated
  * accordingly.
  *
- * @see WalletFacade in @midnight-ntwrk/wallet-sdk-facade for the full implementation
+ * @see WalletFacade in @midnightntwrk/wallet-sdk-facade for the full implementation
  */
 export interface WalletFacadeView {
   readonly shielded: ShieldedWalletView;
@@ -374,7 +374,7 @@ export const toAPIConfiguration = (config: ConnectorConfiguration): Configuratio
 // =============================================================================
 // The following types define the "ideal" API for transaction history that the
 // DApp Connector expects. The current wallet facade (WalletFacade from
-// @midnight-ntwrk/wallet-sdk-facade) does not fully support this API.
+// @midnightntwrk/wallet-sdk-facade) does not fully support this API.
 //
 // Critical gaps in current WalletFacade:
 // 1. Status model mismatch: Wallet uses execution result ('SUCCESS'|'FAILURE'|

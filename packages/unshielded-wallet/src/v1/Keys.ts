@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import type { CoreWallet } from './CoreWallet.js';
 import { type SignatureVerifyingKey } from '@midnight-ntwrk/ledger-v8';
 

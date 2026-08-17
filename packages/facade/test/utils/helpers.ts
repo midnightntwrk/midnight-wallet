@@ -11,40 +11,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
+import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
 import { WalletFacade, type Clock } from '../../src/index.js';
-import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   Sync as ShieldedSync,
   TransactionHistory as ShieldedTransactionHistory,
   V1Builder as ShieldedV1Builder,
-} from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { CustomDustWallet, type DustWalletAPI } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+} from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { CustomDustWallet, type DustWalletAPI } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import {
   SyncService as DustSyncService,
   TransactionHistory as DustTransactionHistory,
   V1Builder as DustV1Builder,
-} from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+} from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import {
   CustomUnshieldedWallet,
   createKeystore,
   PublicKey,
   type UnshieldedWalletAPI,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { NoOpTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type WalletEntry } from '../../src/index.js';
 import {
   Sync as UnshieldedSync,
   V1Builder as UnshieldedV1Builder,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet/v1';
-import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import {
   makeSimulatorProvingServiceEffect,
   type ProvingService,
   type UnboundTransaction,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
-import { type Simulator } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
-import type { SubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
+} from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import { type Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { makeSimulatorBlockDataFetcher } from '@midnightntwrk/wallet-sdk-capabilities/validation';
+import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { Effect, type Scope } from 'effect';
 import * as rx from 'rxjs';
 
@@ -112,7 +114,7 @@ export const sleep = (secs: number): Promise<void> => {
 export const waitForDustGenerated = (seconds: number = 10): Promise<void> => sleep(seconds);
 
 /** Creates a clock backed by the simulator's current time. Reads time synchronously from the simulator's state ref. */
-export const simulatorClock = (simulator: Simulator): Clock => ({
+export const simulatorClock = (simulator: Simulator): Clock.Clock => ({
   now: () => Effect.runSync(simulator.query((s) => s.currentTime)),
 });
 
@@ -184,7 +186,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
   const ShieldedWalletFactory = CustomShieldedWallet(
     {
       ...config,
-      txHistoryStorage: new NoOpTransactionHistoryStorage(),
+      txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>(),
       indexerClientConnection: { indexerHttpUrl: 'http://unused:0' },
     },
     new ShieldedV1Builder()
@@ -214,7 +216,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
 
   // Unshielded wallet: all defaults except sync (uses simulator sync)
   const UnshieldedWalletFactory = CustomUnshieldedWallet(
-    { ...config, txHistoryStorage: new NoOpTransactionHistoryStorage() },
+    { ...config, txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>() },
     new UnshieldedV1Builder()
       .withSync(UnshieldedSync.makeSimulatorSyncService, UnshieldedSync.makeSimulatorSyncCapability)
       .withSerializationDefaults()
@@ -226,10 +228,9 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
   );
 
   return {
-    createShieldedWallet: (keys) => ShieldedWalletFactory.startWithSecretKeys(keys) as unknown as ShieldedWalletAPI,
-    createDustWallet: (key, params) => DustWalletFactory.startWithSecretKey(key, params) as unknown as DustWalletAPI,
-    createUnshieldedWallet: (keystore) =>
-      UnshieldedWalletFactory.startWithPublicKey(PublicKey.fromKeyStore(keystore)) as unknown as UnshieldedWalletAPI,
+    createShieldedWallet: (keys) => ShieldedWalletFactory.startWithSecretKeys(keys),
+    createDustWallet: (key, params) => DustWalletFactory.startWithSecretKey(key, params),
+    createUnshieldedWallet: (keystore) => UnshieldedWalletFactory.startWithPublicKey(PublicKey.fromKeyStore(keystore)),
   };
 };
 
@@ -280,13 +281,14 @@ export const makeSimulatorFacade = (
           // Dummy values - not used in simulation mode
           indexerClientConnection: { indexerHttpUrl: 'http://unused' },
           relayURL: new URL('ws://unused'),
-          txHistoryStorage: new NoOpTransactionHistoryStorage(),
+          txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>(),
         },
         shielded: () => factories.createShieldedWallet(keys.shieldedKeys),
         unshielded: () => factories.createUnshieldedWallet(keys.unshieldedKeystore),
         dust: () => factories.createDustWallet(keys.dustKey, dustParameters),
         provingService: () => provingService,
         submissionService: () => submissionService,
+        fetchBlockData: () => makeSimulatorBlockDataFetcher(config.simulator),
         clock: () => simulatorClock(config.simulator),
       });
 

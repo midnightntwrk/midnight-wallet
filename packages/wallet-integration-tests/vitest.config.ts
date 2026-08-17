@@ -21,7 +21,6 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     retry: 1,
-    include: ['test/*.test.ts'],
     coverage: {
       provider: 'v8',
       enabled: true,
@@ -31,6 +30,23 @@ export default defineConfig({
       reporter: ['clover', 'json', 'json-summary', 'lcov', 'text'],
       reportsDirectory: './coverage',
     },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['test/**/*.test.ts'],
+          exclude: [...configDefaults.exclude, '**/dist/**', '**/*.integration.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'integration',
+          include: ['test/**/*.integration.test.ts'],
+        },
+      },
+    ],
     reporters: [
       'default',
       ['junit', { outputFile: `reports/report/test-report.xml` }],

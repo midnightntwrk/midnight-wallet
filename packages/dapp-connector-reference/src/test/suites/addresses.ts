@@ -9,7 +9,7 @@ import {
   ShieldedEncryptionPublicKey,
   UnshieldedAddress,
   DustAddress,
-} from '@midnight-ntwrk/wallet-sdk-address-format';
+} from '@midnightntwrk/wallet-sdk-address-format';
 import type { ConnectedAPITestContext } from '../context.js';
 
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });

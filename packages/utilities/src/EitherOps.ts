@@ -44,3 +44,18 @@ export const getOrThrowLeft = <L, R>(either: Either.Either<R, L>): R => {
     },
   });
 };
+
+export class RightError<R> extends Data.TaggedError('RightError')<{ message: string; cause: R }> {
+  constructor({ cause }: { cause: R }) {
+    super({ message: 'Unexpected right value', cause });
+  }
+}
+
+export const getOrThrowRight = <L, R>(either: Either.Either<R, L>): L => {
+  return Either.match(either, {
+    onLeft: (l) => l,
+    onRight: (r) => {
+      throw new RightError({ cause: r });
+    },
+  });
+};

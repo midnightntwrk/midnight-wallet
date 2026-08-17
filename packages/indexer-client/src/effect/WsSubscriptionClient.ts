@@ -10,17 +10,40 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Stream, type Context, Layer, type Scope } from 'effect';
+import { Effect, Stream, type Context, Layer, type Scope, Array as Arr } from 'effect';
 import { createClient, type Client, type SubscribePayload } from 'graphql-ws';
 import { type GraphQLError, print } from 'graphql';
 import { SubscriptionClient } from './SubscriptionClient.js';
 import { type Query } from './Query.js';
+import { withBackpressure, type Source } from './Backpressure.js';
 import {
   type InvalidProtocolSchemeError,
   WsURL,
   ClientError,
   ServerError,
-} from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+} from '@midnightntwrk/wallet-sdk-utilities/networking';
+
+// ============================================================================
+// Error classification
+// ============================================================================
+
+// graphql-ws delivers a subscription sink error as one of: `Error`, `CloseEvent`,
+// or `readonly GraphQLError[]` (per its Sink docs). Only the array form should
+// surface as a ClientError; everything else is a transport/server failure.
+const isGraphQLErrorArray = (err: unknown): err is readonly GraphQLError[] => {
+  if (!Arr.isArray(err) || err.length === 0) return false;
+  const first: unknown = err[0];
+  return typeof first === 'object' && first !== null && 'message' in first && typeof first.message === 'string';
+};
+
+const toClientOrServerError = (err: unknown): ClientError | ServerError =>
+  isGraphQLErrorArray(err)
+    ? new ClientError({ message: err.map((e) => e.message).join('; '), cause: err })
+    : new ServerError({ message: String(err) });
+
+// ============================================================================
+// Layer / class
+// ============================================================================
 
 export const layer: (
   config: SubscriptionClient.ServerConfig,
@@ -51,30 +74,70 @@ class WebSocketSubscriptionClientImpl implements Context.Tag.Service<Subscriptio
     document: T,
     variables: V,
   ): Stream.Stream<Query.Result<T>, ClientError | ServerError> {
-    return Stream.async((emit) => {
-      const dispose = this.client.subscribe<Query.Result<T>>(
+    // Stream.async forks a top-level fiber per emit.single (via
+    // Runtime.runPromiseExit), which leaks into Effect's Global.roots at the
+    // ~1k msg/sec rate the indexer pushes. Stream.asyncPush writes straight
+    // to an internal queue and tears it down with the surrounding scope.
+    return Stream.asyncPush<Query.Result<T>, ClientError | ServerError>(
+      (emit) =>
+        Effect.acquireRelease(
+          Effect.sync(() =>
+            this.client.subscribe<Query.Result<T>>(
+              { query: print(document), variables: variables as SubscribePayload['variables'] },
+              {
+                next: (data) => {
+                  if (data.errors) {
+                    emit.fail(
+                      new ClientError({
+                        message: data.errors.map((e) => e.message).join('; '),
+                        cause: data.errors,
+                      }),
+                    );
+                  } else {
+                    emit.single(data.data!);
+                  }
+                },
+                error: (err: unknown) => {
+                  if (isGraphQLErrorArray(err)) {
+                    emit.fail(new ClientError({ message: err.map((e) => e.message).join('; '), cause: err }));
+                  } else {
+                    emit.fail(new ServerError({ message: String(err) }));
+                  }
+                },
+                complete: () => {
+                  emit.end();
+                },
+              },
+            ),
+          ),
+          (dispose) => Effect.sync(() => dispose()),
+        ),
+      { bufferSize: 'unbounded' },
+    );
+  }
+
+  subscribeWithBackpressure<R, V, T extends Query.Document<R, V> = Query.Document<R, V>>(
+    document: T,
+    options: SubscriptionClient.BackpressureOptions<Query.Result<T>, V>,
+  ): Stream.Stream<Query.Result<T>, ClientError | ServerError> {
+    type Item = Query.Result<T>;
+    const client = this.client;
+
+    // Adapt graphql-ws's Sink callbacks to the generic Source contract; the
+    // backpressure/lifecycle logic lives in `withBackpressure`.
+    const source: Source<Item, V, ClientError | ServerError> = ({ variables, onItem, onError, onComplete }) =>
+      client.subscribe<Item>(
         { query: print(document), variables: variables as SubscribePayload['variables'] },
         {
           next: (data) => {
-            if (data.errors) {
-              return void emit.fail(new ClientError({ message: data.errors[0].message, cause: data.errors }));
-            }
-
-            void emit.single(data.data!);
+            if (data.errors) onError(toClientOrServerError(data.errors));
+            else onItem(data.data!);
           },
-          error: (err: unknown) => {
-            void emit.fail(
-              Array.isArray(err)
-                ? new ClientError({ message: (err as readonly GraphQLError[])[0].message })
-                : new ServerError({ message: String(err) }),
-            );
-          },
-          complete: () => void emit.end(),
+          error: (err) => onError(toClientOrServerError(err)),
+          complete: onComplete,
         },
       );
 
-      // Ensure we dispose of the query if the running Fiber is terminated.
-      return Effect.sync(dispose);
-    });
+    return withBackpressure(source, options);
   }
 }

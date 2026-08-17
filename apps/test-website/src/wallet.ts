@@ -26,27 +26,50 @@ import {
   type UnshieldedKeystore,
   UnshieldedWallet,
   mergeWalletEntries,
-} from '@midnight-ntwrk/wallet-sdk';
+} from '@midnightntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
 
 const PROOF_SERVER_PORT = Number.parseInt(globalThis.process?.env?.['PROOF_SERVER_PORT'] ?? '6300', 10);
-const INDEXER_HTTP_URL = `https://indexer.preview.midnight.network/api/v3/graphql`;
-const INDEXER_WS_URL = `wss://indexer.preview.midnight.network/api/v3/graphql/ws`;
+const LOCAL_INDEXER_PORT = 8088;
+const LOCAL_NODE_PORT_RPC = 9944;
+
+export const KNOWN_NETWORKS = ['preview', 'preprod', 'devnet', 'qanet', 'undeployed'] as const;
+export type KnownNetwork = (typeof KNOWN_NETWORKS)[number];
+
+const indexerHttpUrl = (network: KnownNetwork): string =>
+  network === 'undeployed'
+    ? `http://localhost:${LOCAL_INDEXER_PORT}/api/v4/graphql`
+    : `https://indexer.${network}.midnight.network/api/v4/graphql`;
+
+// qanet's ws endpoint lives on the blue deployment, unlike its http endpoint.
+const indexerWsUrl = (network: KnownNetwork): string =>
+  network === 'undeployed'
+    ? `ws://localhost:${LOCAL_INDEXER_PORT}/api/v4/graphql/ws`
+    : `wss://${network === 'qanet' ? 'indexer-blue.qanet' : `indexer.${network}`}.midnight.network/api/v4/graphql/ws`;
+
+const relayUrl = (network: KnownNetwork): string =>
+  network === 'undeployed' ? `ws://localhost:${LOCAL_NODE_PORT_RPC}` : `wss://rpc.${network}.midnight.network`;
 
 export type Configuration = DefaultConfiguration;
-export const defaultConfiguration: Configuration = {
-  networkId: 'preview',
+
+export const configurationFor = (network: KnownNetwork): Configuration => ({
+  networkId: network,
   costParameters: {
     feeBlocksMargin: 5,
   },
-  relayURL: new URL(`wss://rpc.preview.midnight.network`),
+  relayURL: new URL(relayUrl(network)),
   provingServerUrl: new URL(`http://localhost:${PROOF_SERVER_PORT}`),
   indexerClientConnection: {
-    indexerHttpUrl: INDEXER_HTTP_URL,
-    indexerWsUrl: INDEXER_WS_URL,
+    indexerHttpUrl: indexerHttpUrl(network),
+    indexerWsUrl: indexerWsUrl(network),
+  },
+  batchUpdates: {
+    size: 50,
   },
   txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
-};
+});
+
+export const defaultConfiguration: Configuration = configurationFor('preview');
 
 export const init = async (
   seed: Buffer,

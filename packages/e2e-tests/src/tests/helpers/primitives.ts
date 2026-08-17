@@ -14,4 +14,7 @@
 
 export const tNightAmount = (amount: bigint): bigint => amount * 10n ** 6n;
 
+/** Scales a token amount by the standard 6-decimal factor. Generic across token types. */
+export const tokenValue = (value: bigint): bigint => value * 10n ** 6n;
+
 export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length; // eslint-disable-line @typescript-eslint/no-explicit-any

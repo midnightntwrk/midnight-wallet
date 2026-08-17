@@ -1,11 +1,11 @@
-# @midnight-ntwrk/wallet-sdk-shielded
+# @midnightntwrk/wallet-sdk-shielded
 
 Manages shielded tokens on the Midnight network using zero-knowledge proofs.
 
 ## Installation
 
 ```bash
-npm install @midnight-ntwrk/wallet-sdk-shielded
+npm install @midnightntwrk/wallet-sdk-shielded
 ```
 
 ## Overview
@@ -24,7 +24,7 @@ while maintaining verifiability. It provides:
 ### Starting the Wallet
 
 ```typescript
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { randomBytes } from 'node:crypto';
 
@@ -117,7 +117,7 @@ While still proving:
 
 - `ShieldedWallet` - Main wallet class
 - `ShieldedWalletState` - Wallet state type
-- Version 1 exports via `@midnight-ntwrk/wallet-sdk-shielded/v1`
+- Version 1 exports via `@midnightntwrk/wallet-sdk-shielded/v1`
 
 ## License
 

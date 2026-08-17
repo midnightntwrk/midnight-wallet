@@ -14,7 +14,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { makeSimulatorProvingServiceEffect } from '../provingService.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 
 const getNonDustImbalance = (imbalances: Map<ledger.TokenType, bigint>, rawTokenType: ledger.RawTokenType): bigint => {
   const [, value] = Array.from(imbalances.entries()).find(([t, value]) =>

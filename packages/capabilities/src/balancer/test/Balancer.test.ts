@@ -40,7 +40,7 @@ const transactionCostModel = {
   outputFeeOverhead: 19708n,
 };
 
-const nativeTokenType = (shieldedToken() as { tag: 'shielded'; raw: string }).raw;
+const nativeTokenType = shieldedToken().raw;
 
 const qualifiedCoinArbitrary = (typeArbitrary: fc.Arbitrary<RawTokenType>): fc.Arbitrary<QualifiedShieldedCoinInfo> => {
   return fc.record({

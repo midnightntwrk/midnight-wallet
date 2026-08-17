@@ -8,7 +8,7 @@
  */
 
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
+import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
 import {
   type FacadeState,
   WalletFacade,
@@ -16,43 +16,39 @@ import {
   mergeWalletEntries,
   type WalletEntry,
   type Clock,
-} from '@midnight-ntwrk/wallet-sdk-facade';
-import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
+} from '@midnightntwrk/wallet-sdk-facade';
+import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   Sync as ShieldedSync,
   TransactionHistory as ShieldedTransactionHistory,
   V1Builder as ShieldedV1Builder,
-} from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { CustomDustWallet, type DustWalletAPI } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+} from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { CustomDustWallet, type DustWalletAPI } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import {
   SyncService as DustSyncService,
   TransactionHistory as DustTransactionHistory,
   V1Builder as DustV1Builder,
-} from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+} from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import {
   CustomUnshieldedWallet,
   createKeystore,
   PublicKey,
   type UnshieldedWalletAPI,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   Sync as UnshieldedSync,
   V1Builder as UnshieldedV1Builder,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet/v1';
-import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
-import type { SubmitTransactionMethod, SubmissionEvent } from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
+import type { SubmitTransactionMethod, SubmissionEvent } from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import {
   makeSimulatorProvingServiceEffect,
   type ProvingService,
   type UnboundTransaction,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
-import {
-  Simulator,
-  immediateBlockProducer,
-  type GenesisMint,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
-import type { SubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
+} from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { Effect, Exit, Scope } from 'effect';
 import * as rx from 'rxjs';
 
@@ -83,7 +79,7 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
   UnshieldedAddress,
-} from '@midnight-ntwrk/wallet-sdk-address-format';
+} from '@midnightntwrk/wallet-sdk-address-format';
 import { defaultConnectorMetadataArbitrary, randomValue } from '../testing.js';
 import {
   testShieldedWithKeys,
@@ -156,7 +152,7 @@ type SimulatorConfig = {
   costParameters: { feeBlocksMargin: number };
 };
 
-const simulatorClock = (simulator: Simulator): Clock => ({
+const simulatorClock = (simulator: Simulator): Clock.Clock => ({
   now: () => Effect.runSync(simulator.query((s) => s.currentTime)),
 });
 
@@ -190,26 +186,26 @@ const createSimulatorSubmissionService = (
     simulator: adaptedSimulator,
   });
 
-  // The simulator-backed sync capabilities don't write to txHistoryStorage on update (only the indexer-backed default
-  // sync does — see unshielded-wallet/src/v1/Sync.ts:135). To make history queries work end-to-end in the simulator
-  // setup, we upsert a minimal WalletEntry here after each successful submission. The entry uses the tx's last
-  // identifier as the hash (matching what `facade.submitTransaction` returns).
-  const upsertHistoryEntry = async (tx: ledger.FinalizedTransaction): Promise<void> => {
-    const identifiers = tx.identifiers();
-    if (identifiers.length === 0) return;
-    // The connector view's `getHistory` (see createTransactionHistoryView below) returns `entry.hash` as the txHash.
-    // The spec says txHash must be a 64-char hex string. `tx.identifiers().at(-1)` is the segment identifier (also hex
-    // but not necessarily 64 chars); the actual tx hash comes from serializing the tx and hashing it. The simulator
-    // doesn't expose tx hashes directly, so we compute one here that matches the spec's format.
-    const txHash = createHash('sha256').update(Buffer.from(tx.serialize())).digest('hex');
-    const entry: WalletEntry = {
-      hash: txHash,
+  // Submit-time history bridge. The simulator-backed shielded/dust transaction-history services don't *originate* the
+  // finalized entry — their `getTransactionDetails` reads an already-finalized entry back out of storage and their `put`
+  // only *enriches* it with wallet-section data. On a deployed network the indexer originates that finalized record; in
+  // the simulator nothing does, so we seed it here on successful submission via the lifecycle writer `gotFinalized`.
+  // The connector view returns `entry.hash` as `txHash`, which the spec requires to be a 64-char hex string; the
+  // submission event's `txHash` (a proof-erased tx has no computable `transactionHash()`) satisfies that.
+  const seedFinalizedHistoryEntry = async (
+    transaction: ledger.FinalizedTransaction,
+    event: SubmissionEvent,
+  ): Promise<void> => {
+    if (event._tag !== 'InBlock' && event._tag !== 'Finalized') return;
+    const timestamp = Effect.runSync(simulator.query((s) => s.currentTime));
+    await txHistoryStorage.gotFinalized({
+      hash: event.txHash,
       protocolVersion: 0,
-      status: 'SUCCESS' as const,
-      identifiers,
-      timestamp: new Date(),
-    };
-    await txHistoryStorage.upsert(entry);
+      status: 'SUCCESS',
+      identifiers: transaction.identifiers(),
+      timestamp,
+      finalizedBlock: { hash: event.blockHash, height: Number(event.blockHeight), timestamp },
+    });
   };
 
   const submitWithHistory = async (
@@ -217,7 +213,7 @@ const createSimulatorSubmissionService = (
     waitForStatus: SubmissionEvent['_tag'] = 'InBlock',
   ): Promise<SubmissionEvent> => {
     const result = await effectService.submitTransaction(transaction, waitForStatus).pipe(Effect.runPromise);
-    await upsertHistoryEntry(transaction);
+    await seedFinalizedHistoryEntry(transaction, result);
     return result;
   };
 
@@ -484,10 +480,22 @@ export const initSimulatorEnv = async (): Promise<SimulatorEnv> => {
 // Transaction History adapter (WalletFacade.getAllFromTxHistory → connector view)
 // =============================================================================
 
-const mapWalletEntryStatus = (status: 'SUCCESS' | 'FAILURE' | 'PARTIAL_SUCCESS'): TxStatus => ({
-  status: 'finalized',
-  executionStatus: { 0: status === 'FAILURE' ? 'Failure' : 'Success' },
-});
+// Derive the connector's TxStatus from the entry's lifecycle discriminator (the source of truth), per the DApp Connector
+// API spec (finalized | confirmed | pending | discarded). The optional `entry.status` (SUCCESS/FAILURE/PARTIAL_SUCCESS)
+// only refines the per-segment executionStatus of a finalized entry.
+const mapWalletEntryStatus = (entry: WalletEntry): TxStatus => {
+  switch (entry.lifecycle.status) {
+    case 'finalized':
+      return {
+        status: 'finalized',
+        executionStatus: { 0: entry.status === 'FAILURE' ? 'Failure' : 'Success' },
+      };
+    case 'pending':
+      return { status: 'pending' };
+    case 'rejected':
+      return { status: 'discarded' };
+  }
+};
 
 const createTransactionHistoryView = (facade: WalletFacade): TransactionHistoryServiceView => ({
   getHistory: async (pageNumber: number, pageSize: number): Promise<PaginatedHistoryResult> => {
@@ -496,7 +504,7 @@ const createTransactionHistoryView = (facade: WalletFacade): TransactionHistoryS
     const page = allEntries.slice(start, start + pageSize);
     const entries: readonly TransactionHistoryEntryView[] = page.map((entry) => ({
       txHash: entry.hash,
-      txStatus: mapWalletEntryStatus(entry.status),
+      txStatus: mapWalletEntryStatus(entry),
     }));
     return { entries, totalCount: allEntries.length };
   },

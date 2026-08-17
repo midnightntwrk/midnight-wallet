@@ -1,11 +1,11 @@
-# @midnight-ntwrk/wallet-sdk-prover-client
+# @midnightntwrk/wallet-sdk-prover-client
 
 Client for interacting with the Midnight ZK proof generation service.
 
 ## Installation
 
 ```bash
-npm install @midnight-ntwrk/wallet-sdk-prover-client
+npm install @midnightntwrk/wallet-sdk-prover-client
 ```
 
 ## Overview
@@ -18,7 +18,7 @@ used to finalize shielded transactions by converting unproven transactions into 
 ### Basic Usage
 
 ```typescript
-import { HttpProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client';
+import { HttpProverClient } from '@midnightntwrk/wallet-sdk-prover-client';
 
 // Initialize the client with the Proof Server URL
 const proverClient = new HttpProverClient({
@@ -61,7 +61,7 @@ class HttpProverClient {
 Effect.ts-based implementation:
 
 ```typescript
-import { ProverClient, HttpProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
+import { ProverClient, HttpProverClient } from '@midnightntwrk/wallet-sdk-prover-client/effect';
 ```
 
 ## Error Handling

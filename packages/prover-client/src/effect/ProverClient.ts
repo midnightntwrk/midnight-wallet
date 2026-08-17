@@ -12,7 +12,7 @@
 // limitations under the License.
 import { type Effect, Context } from 'effect';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
 
 /** A client that provides proof services for unproven transactions. */

@@ -5,7 +5,7 @@
  * into internal types, throwing APIError on validation failures.
  */
 import type { DesiredInput, DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
-import { MidnightBech32m, ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { MidnightBech32m, ShieldedAddress, UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import type {
   CombinedTokenTransfer,

@@ -24,8 +24,8 @@ import {
   PublicKey,
   UnshieldedWallet,
   mergeWalletEntries,
-} from '@midnight-ntwrk/wallet-sdk';
-import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk/capabilities';
+} from '@midnightntwrk/wallet-sdk';
+import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk/capabilities';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
 

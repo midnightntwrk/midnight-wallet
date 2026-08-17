@@ -24,7 +24,7 @@
 import { DateTime, Duration, Effect, Option, pipe } from 'effect';
 import { FileSystem } from '@effect/platform';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
-import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { TestContainers } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import * as TestTransactions from '../src/testing/test-transactions.js';
 import { Wait } from 'testcontainers';
 

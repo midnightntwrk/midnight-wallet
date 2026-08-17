@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Schema } from 'effect';
-import { SafeBigInt } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { SafeBigInt } from '@midnightntwrk/wallet-sdk-utilities';
 
 const DateFromMillis = Schema.transform(Schema.Number, Schema.DateFromSelf, {
   strict: true,
@@ -83,6 +83,8 @@ export const UnshieldedTransactionSchema = Schema.Data(
     protocolVersion: Schema.Number,
     identifiers: Schema.optional(Schema.Array(Schema.String)),
     block: Schema.Struct({
+      hash: Schema.String,
+      height: Schema.Number,
       timestamp: DateFromMillis,
     }),
     fees: Schema.optional(

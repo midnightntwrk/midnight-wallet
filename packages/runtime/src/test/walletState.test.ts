@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { toProtocolStateArray } from '../testing/utils.js';

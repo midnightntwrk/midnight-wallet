@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
+import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
 
 /**
  * Temporary function until the ledger fixes imbalances.get()

@@ -1,8 +1,6 @@
 # Midnight Wallet SDK
 
-Implementation of
-[Midnight Wallet Specification](https://github.com/midnightntwrk/midnight-architecture/blob/main/components/WalletEngine/Specification.md).
-It provides components for:
+Implementation of [Midnight Wallet Specification](./docs/spec/Specification.md). It provides components for:
 
 - generating keys and addresses
 - formatting keys and addresses
@@ -15,6 +13,11 @@ It provides components for:
 ## Examples and documentation
 
 [Docs](./docs) directory features some design documentation and development guidelines.
+
+The canonical [Wallet Specification](./docs/spec/Specification.md) lives in [`docs/spec/`](./docs/spec), and its
+executable [reference implementation](./packages/spec-reference) — which generates and verifies the spec's
+[test vectors](./packages/spec-reference/test-vectors) — lives in
+[`packages/spec-reference/`](./packages/spec-reference).
 
 Example usage can be found at [docs snippets](./packages/docs-snippets/src/snippets) (always up-to-date with the recent
 changes) or at the [SDK documentation site](https://docs.midnight.network/sdks/official/wallet-developer-guide) (aligned
@@ -46,6 +49,9 @@ applications under `apps/`. Main packages are:
 - `wallet-integration-tests` - tests examining public APIs
 - `e2e-tests` - end-to-end integration tests
 - `docs-snippets` - documentation code examples
+- `spec-reference` - executable reference implementation of the [Wallet Specification](./docs/spec/Specification.md)'s
+  key derivation and address formatting; generates and verifies the spec
+  [test vectors](./packages/spec-reference/test-vectors)
 
 Applications:
 
@@ -109,7 +115,7 @@ yarn dist
 To build a specific package, use the `--filter` flag:
 
 ```shell
-yarn dist --filter=@midnight-ntwrk/wallet-sdk-facade
+yarn dist --filter=@midnightntwrk/wallet-sdk-facade
 ```
 
 ## Build and watch
@@ -169,13 +175,13 @@ yarn test
 To run tests for a specific package:
 
 ```shell
-yarn test --filter=@midnight-ntwrk/wallet-sdk-unshielded-wallet
+yarn test --filter=@midnightntwrk/wallet-sdk-unshielded-wallet
 ```
 
 To run a specific test file:
 
 ```shell
-yarn test --filter=@midnight-ntwrk/wallet-sdk-unshielded-wallet -- test/UnshieldedWallet.test.ts
+yarn test --filter=@midnightntwrk/wallet-sdk-unshielded-wallet -- test/UnshieldedWallet.test.ts
 ```
 
 ### CI verification

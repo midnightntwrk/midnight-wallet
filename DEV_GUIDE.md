@@ -148,7 +148,7 @@ For example:
 
 ```markdown
 ---
-'@midnight-ntwrk/wallet-sdk-shielded': patch
+'@midnightntwrk/wallet-sdk-shielded': patch
 ---
 
 feat: remove new coins from shielded tx balancer api
@@ -186,17 +186,17 @@ When prompted, you’ll see two groups: `changed packages` and `unchanged packag
 ```
 🦋  Which packages would you like to include? …
 ◉ changed packages
-  ◉ @midnight-ntwrk/wallet-sdk-shielded
+  ◉ @midnightntwrk/wallet-sdk-shielded
 ◯ unchanged packages
-  ◯ @midnight-ntwrk/wallet-sdk-abstractions
-  ◯ @midnight-ntwrk/wallet-sdk-address-format
-  ◯ @midnight-ntwrk/wallet-sdk-capabilities
-  ◯ @midnight-ntwrk/wallet-sdk-dust-wallet
-  ◯ @midnight-ntwrk/wallet-sdk-facade
-  ◯ @midnight-ntwrk/wallet-sdk-hd
-  ◯ @midnight-ntwrk/wallet-sdk-indexer-client
-  ◯ @midnight-ntwrk/wallet-sdk-node-client
-  ◯ @midnight-ntwrk/wallet-sdk-prover-client
+  ◯ @midnightntwrk/wallet-sdk-abstractions
+  ◯ @midnightntwrk/wallet-sdk-address-format
+  ◯ @midnightntwrk/wallet-sdk-capabilities
+  ◯ @midnightntwrk/wallet-sdk-dust-wallet
+  ◯ @midnightntwrk/wallet-sdk-facade
+  ◯ @midnightntwrk/wallet-sdk-hd
+  ◯ @midnightntwrk/wallet-sdk-indexer-client
+  ◯ @midnightntwrk/wallet-sdk-node-client
+  ◯ @midnightntwrk/wallet-sdk-prover-client
 ```
 
 You should generally select only the main parent changed packages. Changesets automatically includes all dependent

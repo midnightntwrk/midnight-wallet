@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type Effect, Context } from 'effect';
-import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import type { Query } from './Query.js';
 
 export class QueryClient extends Context.Tag('@midnight-ntwrk/indexer-client#QueryClient')<

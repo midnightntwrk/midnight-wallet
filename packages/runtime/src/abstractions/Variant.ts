@@ -14,8 +14,8 @@
 import { type Scope, type SubscriptionRef } from 'effect';
 import type { Effect } from 'effect/Effect';
 import type { Stream } from 'effect/Stream';
-import { Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
-import type { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Poly } from '@midnightntwrk/wallet-sdk-utilities';
+import type { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type WalletRuntimeError } from './WalletRuntimeError.js';
 import type * as StateChange from './StateChange.js';
 

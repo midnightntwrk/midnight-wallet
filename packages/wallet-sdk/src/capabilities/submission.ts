@@ -11,4 +11,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export * from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
+export * from '@midnightntwrk/wallet-sdk-capabilities/submission';

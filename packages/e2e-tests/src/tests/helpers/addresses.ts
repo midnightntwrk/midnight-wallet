@@ -12,8 +12,8 @@
 // limitations under the License.
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { expect } from 'vitest';
-import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { MidnightBech32m, ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { MidnightBech32m, ShieldedAddress, UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { TestContainersFixture } from '../test-fixture.js';
 
 export function validateNetworkInAddress(address: string) {

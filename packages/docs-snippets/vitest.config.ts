@@ -30,6 +30,33 @@ export default defineConfig({
       reporter: ['clover', 'json', 'json-summary', 'lcov', 'text'],
       reportsDirectory: './coverage',
     },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['**/*.test.ts'],
+          exclude: [...configDefaults.exclude, '**/dist/**', '**/*.integration.test.ts', '**/*.undeployed.test.ts'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'integration',
+          include: ['**/*.integration.test.ts'],
+        },
+      },
+      {
+        // The snippet runner is an e2e test (full stack via the public SDK), kept here
+        // because it executes the example scripts that live in this package. It runs in
+        // the e2e/undeployed lane (turbo test-undeployed), not the integration matrix.
+        extends: true,
+        test: {
+          name: 'undeployed',
+          include: ['**/*.undeployed.test.ts'],
+        },
+      },
+    ],
     reporters: [
       'default',
       ['junit', { outputFile: `reports/report/test-report.xml` }],

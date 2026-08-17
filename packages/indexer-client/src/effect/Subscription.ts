@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, Stream, Context, Effectable, Option, identity } from 'effect';
-import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { SubscriptionClient } from './SubscriptionClient.js';
 import type { Query } from './Query.js';
 
@@ -23,6 +23,14 @@ export interface Subscription<
 > extends Effect.Effect<F> {
   readonly tag: Context.Tag<Subscription<R, V>, F>;
   readonly run: F;
+  /**
+   * Like {@link run}, but caps the in-flight item count by disposing the underlying GraphQL subscription when the
+   * consumer can't keep up, and re-opens it with `variables(cursor)` for the running monotonic cursor once the queue
+   * drains. Items are never dropped.
+   */
+  readonly runWithBackpressure: (
+    options: SubscriptionClient.BackpressureOptions<R, V>,
+  ) => Stream.Stream<R, ClientError | ServerError, SubscriptionClient>;
 }
 
 export declare namespace Subscription {
@@ -79,6 +87,30 @@ class SubscriptionImpl<
         onNone: () => self.defaultFn.bind(self) as F,
       });
     });
+  }
+
+  runWithBackpressure(
+    options: SubscriptionClient.BackpressureOptions<R, V>,
+  ): Stream.Stream<R, ClientError | ServerError, SubscriptionClient> {
+    const self = this; // eslint-disable-line @typescript-eslint/no-this-alias
+    // Mirror the `run`/`commit` dispatch: if a caller has provided an override
+    // via `self.tag` (test mocks do this), fall back to it — those overrides
+    // can't speak backpressure, but tests don't need to. The override is
+    // invoked with the initial variables derived from the cursor, since the
+    // override doesn't know the cursor protocol. Without an override, take the
+    // bounded pause/resume path against the underlying client.
+    return Stream.unwrap(
+      Effect.gen(function* () {
+        const tagged = yield* Effect.serviceOption(self.tag);
+        return Option.match(tagged, {
+          onSome: (fn) => fn(options.variables(options.from)),
+          onNone: () =>
+            SubscriptionClient.pipe(
+              Stream.flatMap((client) => client.subscribeWithBackpressure(self.document, options)),
+            ),
+        });
+      }),
+    );
   }
 
   private defaultFn(variables: V): Stream.Stream<R, ClientError | ServerError, SubscriptionClient> {

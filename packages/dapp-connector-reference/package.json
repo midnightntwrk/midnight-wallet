@@ -1,5 +1,5 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-dapp-connector-reference",
+  "name": "@midnightntwrk/wallet-sdk-dapp-connector-reference",
   "description": "Reference implementation of the Dapp Connector API",
   "version": "1.0.0-beta.1",
   "type": "module",
@@ -27,17 +27,19 @@
   "dependencies": {
     "@midnight-ntwrk/dapp-connector-api": "^4.0.1",
     "@midnight-ntwrk/ledger-v8": "^8.0.3",
-    "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-facade": "workspace:*",
+    "@midnight-ntwrk/zkir-v2": "^2.1.0",
+    "@midnightntwrk/wallet-sdk-address-format": "3.1.2",
+    "@midnightntwrk/wallet-sdk-capabilities": "workspace:*",
+    "@midnightntwrk/wallet-sdk-facade": "workspace:*",
     "effect": "^3.19.19",
     "semver": "^7.7.3"
   },
   "devDependencies": {
-    "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-dust-wallet": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-hd": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-shielded": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:*",
+    "@midnightntwrk/wallet-sdk-abstractions": "workspace:*",
+    "@midnightntwrk/wallet-sdk-dust-wallet": "workspace:*",
+    "@midnightntwrk/wallet-sdk-hd": "workspace:*",
+    "@midnightntwrk/wallet-sdk-shielded": "workspace:*",
+    "@midnightntwrk/wallet-sdk-unshielded-wallet": "workspace:*",
     "@types/semver": "^7.7.1",
     "rxjs": "^7.8.1"
   },

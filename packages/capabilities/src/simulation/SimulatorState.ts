@@ -32,8 +32,8 @@ import {
   type UserAddress,
   type SignatureVerifyingKey,
 } from '@midnight-ntwrk/ledger-v8';
-import { DateOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { DateOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 
 // =============================================================================
 // Types

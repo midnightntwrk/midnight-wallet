@@ -24,7 +24,7 @@ import {
   PublicKey,
   UnshieldedWallet,
   mergeWalletEntries,
-} from '@midnight-ntwrk/wallet-sdk';
+} from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
 

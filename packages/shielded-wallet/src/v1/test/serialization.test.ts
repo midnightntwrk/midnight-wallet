@@ -12,14 +12,14 @@
 // limitations under the License.
 import { OtherWalletError } from '../WalletError.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as Arr, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { Either } from 'effect';
 import { CoreWallet } from '../CoreWallet.js';
-import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 const minutes = (mins: number) => 1_000 * 60 * mins;
 vi.setConfig({ testTimeout: minutes(1) });
@@ -29,7 +29,7 @@ const tokenTypeArbitrary = (maxSize: number) => {
   const types = Array(number).map(() => ledger.sampleRawTokenType());
   const tokenTypeArbitrary = fc.constantFrom(...types);
 
-  const nativeTokenTypeArbitrary = fc.constant((ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw);
+  const nativeTokenTypeArbitrary = fc.constant(ledger.shieldedToken().raw);
   return fc.oneof({ weight: 1, arbitrary: nativeTokenTypeArbitrary }, { weight: 1, arbitrary: tokenTypeArbitrary });
 };
 const secretKeysArbitrary: fc.Arbitrary<ledger.ZswapSecretKeys> = fc

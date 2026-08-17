@@ -11,7 +11,7 @@ import type {
   SignDataOptions,
   WalletConnectedAPI,
 } from '@midnight-ntwrk/dapp-connector-api';
-import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { MidnightBech32m } from '@midnightntwrk/wallet-sdk-address-format';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Cause, Option, Runtime } from 'effect';
 import * as rx from 'rxjs';
@@ -32,7 +32,7 @@ import { parseDesiredOutputs, parseDesiredInputs, parseIntentId } from './parsin
 
 /** Tag names for the various InsufficientFunds error shapes across the wallet SDK. */
 const INSUFFICIENT_FUNDS_TAGS = new Set([
-  // Legacy plain class from @midnight-ntwrk/wallet-sdk-capabilities/balancer
+  // Legacy plain class from @midnightntwrk/wallet-sdk-capabilities/balancer
   'InsufficientFundsError',
   // Data.TaggedError variant used by shielded, unshielded, and dust wallets
   'Wallet.InsufficientFunds',

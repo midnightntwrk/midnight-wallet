@@ -13,7 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { makeDefaultKeysCapability } from '../Keys.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { CoreWallet } from '../CoreWallet.js';
 import * as fc from 'fast-check';
 

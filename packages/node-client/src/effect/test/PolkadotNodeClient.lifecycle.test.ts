@@ -13,7 +13,7 @@
 import { describe, it, vi, expect, beforeEach } from 'vitest';
 import BN from 'bn.js';
 import { Effect, pipe, Scope, Stream } from 'effect';
-import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 
 const mockApi = {
   isConnected: false,

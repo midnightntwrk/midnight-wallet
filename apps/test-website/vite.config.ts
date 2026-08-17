@@ -13,15 +13,51 @@
  * limitations under the License.
  */
 
-import { defineConfig } from 'vite';
+import { defineConfig, type Connect, type Plugin } from 'vite';
 import wasm from 'vite-plugin-wasm';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
+import { type ServerResponse } from 'node:http';
+
+// Cross-origin isolation makes Chrome report precise (non-quantized)
+// performance.memory numbers. Scoped to the memory test page only, so the
+// other pages keep default (non-isolated) behavior. COOP/COEP are
+// document-level headers, so they only need to be set on the HTML response.
+const ISOLATED_PAGES = ['/memory', '/memory.html'];
+
+const isolationMiddleware: Connect.NextHandleFunction = (req, res: ServerResponse, next) => {
+  const path = req.url?.split('?')[0] ?? '';
+  if (ISOLATED_PAGES.includes(path)) {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+  }
+  next();
+};
+
+const crossOriginIsolateMemoryPage = (): Plugin => ({
+  name: 'cross-origin-isolate-memory-page',
+  configureServer: (server) => {
+    server.middlewares.use(isolationMiddleware);
+  },
+  configurePreviewServer: (server) => {
+    server.middlewares.use(isolationMiddleware);
+  },
+});
 
 export default defineConfig({
   root: new URL('./', import.meta.url).pathname,
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      input: {
+        main: new URL('./index.html', import.meta.url).pathname,
+        memory: new URL('./memory.html', import.meta.url).pathname,
+      },
+    },
   },
-  // @ts-expect-error - vite-plugin-wasm is not typed
-  plugins: [wasm(), nodePolyfills({ include: ['buffer', 'assert'], globals: { Buffer: true }, protocolImports: true })],
+  plugins: [
+    // @ts-expect-error - vite-plugin-wasm is not typed
+    wasm(),
+    nodePolyfills({ include: ['buffer', 'assert'], globals: { Buffer: true }, protocolImports: true }),
+    crossOriginIsolateMemoryPage(),
+  ],
 });

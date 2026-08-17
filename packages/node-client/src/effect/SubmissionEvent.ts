@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
-import { type SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export type HexString = string;
 

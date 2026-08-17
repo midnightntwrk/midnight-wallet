@@ -5,7 +5,7 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
   UnshieldedAddress,
-} from '@midnight-ntwrk/wallet-sdk-address-format';
+} from '@midnightntwrk/wallet-sdk-address-format';
 
 export const expectMatchObjectTyped = <T>(actual: T, expected: Partial<T>): void => {
   expect(actual).toMatchObject(expected);

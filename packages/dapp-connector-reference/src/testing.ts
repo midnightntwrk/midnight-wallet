@@ -114,7 +114,7 @@ import {
   ShieldedEncryptionPublicKey,
   UnshieldedAddress,
   MidnightBech32m,
-} from '@midnight-ntwrk/wallet-sdk-address-format';
+} from '@midnightntwrk/wallet-sdk-address-format';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 
 // =============================================================================

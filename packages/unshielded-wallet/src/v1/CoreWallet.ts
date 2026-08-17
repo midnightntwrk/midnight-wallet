@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { createSyncProgress, type SyncProgress, type SyncProgressData } from './SyncProgress.js';
 import { type PublicKey } from '../KeyStore.js';
 import { UnshieldedState, type UnshieldedUpdate } from './UnshieldedState.js';
