@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
+import * as rx from 'rxjs';
 import { firstValueFrom } from 'rxjs';
 import { randomUUID } from 'node:crypto';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
@@ -19,7 +20,7 @@ import { UnshieldedWallet } from '../src/index.js';
 import { getUnshieldedSeed, createWalletConfig, waitForCoins } from './testUtils.js';
 import { createKeystore, PublicKey } from '../src/KeyStore.js';
 import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
-import { NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { IndexerLiveness, NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 
 vi.setConfig({ testTimeout: 100_000, hookTimeout: 100_000 });
 
@@ -38,12 +39,45 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
 
 describe('UnshieldedWallet', () => {
   let indexerPort: number;
+  let nodePort: number;
   let startedEnvironment: StartedDockerComposeEnvironment;
   const unshieldedSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
     indexerPort = startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088);
+    nodePort = startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944);
+  });
+
+  it('should cross-check the indexer against the node using only the submission relay URL', async () => {
+    // The check reads its endpoint from `relayURL` — the node a wallet already names for submission — so no second
+    // endpoint is configured here. That is the wiring that shipped switched off: it needed a `nodeClientConnection`
+    // nobody set. This runs it against a real indexer and a real node and waits for an actual verdict, which is the only
+    // way to show the poll loop runs and its result reaches the wallet's progress.
+    const config = createWalletConfig(indexerPort, {
+      relayURL: new URL(`ws://localhost:${nodePort}`),
+      // The default 30-second cadence leaves roughly three polls inside this file's 100s timeout, and the first one
+      // usually lands before the indexer has ingested anything. Two seconds makes the verdict a certainty rather than
+      // a race against the clock.
+      livenessPollInterval: '2 seconds',
+    });
+    const keystore = createKeystore(unshieldedSeed, config.networkId);
+    const wallet = UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(keystore));
+
+    await wallet.start();
+
+    try {
+      const state = await firstValueFrom(
+        wallet.state.pipe(rx.filter((state) => IndexerLiveness.isInSync(state.progress.indexerLiveness))),
+      );
+
+      const verdict = state.progress.indexerLiveness;
+      expect(IndexerLiveness.isInSync(verdict)).toBe(true);
+      // `Skipped` would mean the endpoint never resolved; `Unknown` that no poll completed.
+      expect(verdict._tag).toBe('InSync');
+    } finally {
+      await wallet.stop();
+    }
   });
 
   it('should build', async () => {

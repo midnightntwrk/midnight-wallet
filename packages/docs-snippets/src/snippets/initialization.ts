@@ -39,6 +39,9 @@ const configuration: DefaultConfiguration = {
   costParameters: {
     feeBlocksMargin: 5,
   },
+  // Transactions are submitted through this node. Syncing also needs a node — it cross-checks the indexer's reported
+  // position against the chain's finalized head — and rather than name the same endpoint twice, this one is used. A
+  // wallet built without submission configuration names its own under `nodeClientConnection` instead.
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
   provingServerUrl: new URL(`http://localhost:${PROOF_SERVER_PORT}`),
   indexerClientConnection: {
