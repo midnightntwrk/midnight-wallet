@@ -1,5 +1,5 @@
 import * as fc from 'fast-check';
-import type { DesiredOutput, DesiredInput } from '@midnight-ntwrk/dapp-connector-api';
+import type { DesiredOutput, DesiredInput } from '@midnightntwrk/dapp-connector-api';
 import { ConnectorMetadata } from './index.js';
 import type { ConnectorConfiguration } from './types.js';
 import { SemVer } from 'semver';

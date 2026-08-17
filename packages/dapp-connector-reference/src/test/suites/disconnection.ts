@@ -1,7 +1,7 @@
 /** Disconnection behavior test suite. Tests behavior of API methods after disconnect. */
 
 import { describe, expect, it, vi } from 'vitest';
-import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
+import type { ConnectedAPI } from '@midnightntwrk/dapp-connector-api';
 import { APIError, ErrorCodes } from '../../errors.js';
 import type { ConnectedAPITestContext } from '../context.js';
 

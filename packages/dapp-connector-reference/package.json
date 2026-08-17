@@ -25,9 +25,9 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/dapp-connector-api": "^4.0.1",
     "@midnight-ntwrk/ledger-v8": "^8.0.3",
     "@midnight-ntwrk/zkir-v2": "^2.1.0",
+    "@midnightntwrk/dapp-connector-api": "4.1.0-canary.20260805041554-9e03b1e",
     "@midnightntwrk/wallet-sdk-address-format": "3.1.2",
     "@midnightntwrk/wallet-sdk-capabilities": "workspace:*",
     "@midnightntwrk/wallet-sdk-facade": "workspace:*",

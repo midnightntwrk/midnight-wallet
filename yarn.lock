@@ -2201,12 +2201,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/dapp-connector-api@portal:/home/akopec/mn/task_worktrees/midnight-dapp-connector-api-nodenext-imports::locator=%40midnightntwrk%2Fwallet-sdk-monorepo%40workspace%3A.":
-  version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/dapp-connector-api@portal:/home/akopec/mn/task_worktrees/midnight-dapp-connector-api-nodenext-imports::locator=%40midnightntwrk%2Fwallet-sdk-monorepo%40workspace%3A."
-  languageName: node
-  linkType: soft
-
 "@midnight-ntwrk/ledger-v8@npm:^8.0.3, @midnight-ntwrk/ledger-v8@npm:^8.1.0":
   version: 8.1.0
   resolution: "@midnight-ntwrk/ledger-v8@npm:8.1.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fledger-v8%2F8.1.0%2Fc42ed442b6c8c79e28ca5fc13a8764f31eab2f73"
@@ -2291,6 +2285,13 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@midnightntwrk/dapp-connector-api@npm:4.1.0-canary.20260805041554-9e03b1e":
+  version: 4.1.0-canary.20260805041554-9e03b1e
+  resolution: "@midnightntwrk/dapp-connector-api@npm:4.1.0-canary.20260805041554-9e03b1e"
+  checksum: 10c0/b8ab0055cb64351938d26023b95e75e6facbce96086aa701f2b17ac1fa54d4fdf95bcbe8a175eb404c324888ea2de79b2ef01c44cd7543481d0919233ff7c2f9
+  languageName: node
+  linkType: hard
+
 "@midnightntwrk/wallet-sdk-abstractions@npm:2.1.0, @midnightntwrk/wallet-sdk-abstractions@npm:^2.1.0, @midnightntwrk/wallet-sdk-abstractions@workspace:*, @midnightntwrk/wallet-sdk-abstractions@workspace:packages/abstractions":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-abstractions@workspace:packages/abstractions"
@@ -2336,9 +2337,9 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-dapp-connector-reference@workspace:packages/dapp-connector-reference"
   dependencies:
-    "@midnight-ntwrk/dapp-connector-api": "npm:^4.0.1"
     "@midnight-ntwrk/ledger-v8": "npm:^8.0.3"
     "@midnight-ntwrk/zkir-v2": "npm:^2.1.0"
+    "@midnightntwrk/dapp-connector-api": "npm:4.1.0-canary.20260805041554-9e03b1e"
     "@midnightntwrk/wallet-sdk-abstractions": "workspace:*"
     "@midnightntwrk/wallet-sdk-address-format": "npm:3.1.2"
     "@midnightntwrk/wallet-sdk-capabilities": "workspace:*"

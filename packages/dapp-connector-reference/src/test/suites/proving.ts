@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { ErrorCodes } from '../../errors.js';
 import type { ConnectedAPITestContext } from '../context.js';
-import type { KeyMaterialProvider } from '@midnight-ntwrk/dapp-connector-api';
+import type { KeyMaterialProvider } from '@midnightntwrk/dapp-connector-api';
 
 /** Mock KeyMaterialProvider for testing. In production, DApps provide this to resolve circuit keys. */
 const createMockKeyMaterialProvider = (): KeyMaterialProvider => ({

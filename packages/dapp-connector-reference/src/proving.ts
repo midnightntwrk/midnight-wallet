@@ -9,7 +9,7 @@
  * - Mock proving (testing)
  */
 
-import type { KeyMaterialProvider, ProvingProvider } from '@midnight-ntwrk/dapp-connector-api';
+import type { KeyMaterialProvider, ProvingProvider } from '@midnightntwrk/dapp-connector-api';
 import * as zkir from '@midnight-ntwrk/zkir-v2';
 import type { ProvingProviderFactory } from './types.js';
 

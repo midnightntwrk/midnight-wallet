@@ -5,7 +5,7 @@
  * browser extension with real wallet).
  */
 
-import type { ConnectedAPI, InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
+import type { ConnectedAPI, InitialAPI } from '@midnightntwrk/dapp-connector-api';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import type { Connector } from '../index.js';
 import type { ShieldedAddressWithKeys, UnshieldedAddressWithKeys } from './testUtils.js';

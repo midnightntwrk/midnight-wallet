@@ -1,5 +1,5 @@
-/// <reference types="@midnight-ntwrk/dapp-connector-api/globals" />
-import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
+/// <reference types="@midnightntwrk/dapp-connector-api/globals" />
+import type { InitialAPI } from '@midnightntwrk/dapp-connector-api';
 import { Data } from 'effect';
 import { SemVer } from 'semver';
 import type { ConnectorConfiguration, WalletFacadeView, WalletKeystore } from './types.js';

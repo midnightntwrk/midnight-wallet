@@ -1,7 +1,7 @@
 /** Balance retrieval test suite. Tests getShieldedBalances, getUnshieldedBalances, and getDustBalance. */
 
 import { describe, expect, it, vi } from 'vitest';
-import type { DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
+import type { DesiredOutput } from '@midnightntwrk/dapp-connector-api';
 import type { DappConnectorTestContext } from '../context.js';
 
 /** The simulator backend mints in raw subunits (6 decimals). Tests pass token amounts; balances come back in subunits. */

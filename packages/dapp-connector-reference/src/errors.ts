@@ -1,5 +1,5 @@
-import type { APIError as APIErrorType, ErrorCode } from '@midnight-ntwrk/dapp-connector-api';
-import { ErrorCodes as APIErrorCodes } from '@midnight-ntwrk/dapp-connector-api';
+import type { APIError as APIErrorType, ErrorCode } from '@midnightntwrk/dapp-connector-api';
+import { ErrorCodes as APIErrorCodes } from '@midnightntwrk/dapp-connector-api';
 
 /** Re-export error codes from the DApp Connector API specification. */
 export const ErrorCodes = APIErrorCodes;

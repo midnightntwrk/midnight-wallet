@@ -4,7 +4,7 @@
  * These are standalone pure functions that can be reused by any DApp Connector implementation. They parse API inputs
  * into internal types, throwing APIError on validation failures.
  */
-import type { DesiredInput, DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
+import type { DesiredInput, DesiredOutput } from '@midnightntwrk/dapp-connector-api';
 import { MidnightBech32m, ShieldedAddress, UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import type {

@@ -1,7 +1,7 @@
 /** Transaction submission test suite. Tests submitTransaction method. */
 
 import { describe, expect, it, vi } from 'vitest';
-import type { DesiredInput, DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
+import type { DesiredInput, DesiredOutput } from '@midnightntwrk/dapp-connector-api';
 import { ErrorCodes } from '../../errors.js';
 import type { DappConnectorTestContext } from '../context.js';
 import { containsString } from './_matchers.js';

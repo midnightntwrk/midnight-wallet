@@ -1,4 +1,4 @@
-import type { Configuration, TxStatus, KeyMaterialProvider, ProvingProvider } from '@midnight-ntwrk/dapp-connector-api';
+import type { Configuration, TxStatus, KeyMaterialProvider, ProvingProvider } from '@midnightntwrk/dapp-connector-api';
 import type { Observable } from 'rxjs';
 import type { ShieldedAddress, UnshieldedAddress, DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
@@ -393,7 +393,7 @@ export type TransactionHash = string;
 
 /**
  * A single transaction history entry as expected by the DApp Connector API. This matches the HistoryEntry type from
- * @midnight-ntwrk/dapp-connector-api.
+ * @midnightntwrk/dapp-connector-api.
  */
 export interface TransactionHistoryEntryView {
   /** Hex-encoded transaction hash. */

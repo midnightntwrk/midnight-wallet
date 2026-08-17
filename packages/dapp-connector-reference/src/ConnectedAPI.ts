@@ -10,7 +10,7 @@ import type {
   Signature,
   SignDataOptions,
   WalletConnectedAPI,
-} from '@midnight-ntwrk/dapp-connector-api';
+} from '@midnightntwrk/dapp-connector-api';
 import { MidnightBech32m } from '@midnightntwrk/wallet-sdk-address-format';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Cause, Option, Runtime } from 'effect';

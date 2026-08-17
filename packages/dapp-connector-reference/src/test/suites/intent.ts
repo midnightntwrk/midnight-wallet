@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import * as fc from 'fast-check';
-import type { DesiredInput, DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
+import type { DesiredInput, DesiredOutput } from '@midnightntwrk/dapp-connector-api';
 import { deserializeTransaction, verifyTransaction, hasDustSpend } from '../../testing.js';
 import type { DappConnectorTestContext } from '../context.js';
 import { matchesString } from './_matchers.js';

@@ -1,7 +1,7 @@
 /** Balancing test suite. Tests balanceUnsealedTransaction and balanceSealedTransaction methods. */
 
 import { describe, expect, it, vi } from 'vitest';
-import type { ConnectedAPI, DesiredInput, DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
+import type { ConnectedAPI, DesiredInput, DesiredOutput } from '@midnightntwrk/dapp-connector-api';
 import { deserializeTransaction, verifyTransaction, hasDustSpend } from '../../testing.js';
 import type { DappConnectorTestContext } from '../context.js';
 import { containsString, matchesString } from './_matchers.js';

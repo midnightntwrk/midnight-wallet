@@ -72,7 +72,7 @@ import type {
   TransactionHistoryEntryView,
   WalletFacadeView,
 } from '../types.js';
-import type { TxStatus } from '@midnight-ntwrk/dapp-connector-api';
+import type { TxStatus } from '@midnightntwrk/dapp-connector-api';
 import {
   MidnightBech32m,
   ShieldedAddress,

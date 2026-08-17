@@ -1,7 +1,7 @@
 /** Input validation test suite. Tests validation of makeTransfer and makeIntent inputs. */
 
 import { describe, expect, it, vi } from 'vitest';
-import type { DesiredInput, DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
+import type { DesiredInput, DesiredOutput } from '@midnightntwrk/dapp-connector-api';
 import type { TransactionTestContext } from '../context.js';
 import { containsString, matchesString } from './_matchers.js';
 

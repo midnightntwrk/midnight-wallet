@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fc from 'fast-check';
-import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
+import type { InitialAPI } from '@midnightntwrk/dapp-connector-api';
 import { InstallationError } from '../../index.js';
 import { expectMatchObjectTyped } from '../testUtils.js';
 import type { InstallationTestContext } from '../context.js';
