@@ -33,7 +33,7 @@ import {
   type UnboundTransactionBalanceResult,
   type UnprovenTransactionBalanceResult,
 } from './v1/Transacting.js';
-import { type WalletSyncUpdate } from './v1/SyncSchema.js';
+import { type SyncUpdate } from './v1/SyncSchema.js';
 import { type UtxoWithMeta } from './v1/UnshieldedState.js';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
@@ -105,15 +105,11 @@ export class UnshieldedWalletState<TSerialized = string> {
   }
 }
 
-export type UnshieldedWallet = CustomizedUnshieldedWallet<WalletSyncUpdate, string>;
+export type UnshieldedWallet = CustomizedUnshieldedWallet<SyncUpdate, string>;
 
 export type DefaultUnshieldedConfiguration = DefaultV1Configuration;
 
-export type UnshieldedWalletClass = CustomizedUnshieldedWalletClass<
-  WalletSyncUpdate,
-  string,
-  DefaultUnshieldedConfiguration
->;
+export type UnshieldedWalletClass = CustomizedUnshieldedWalletClass<SyncUpdate, string, DefaultUnshieldedConfiguration>;
 
 export type UnshieldedWalletAPI<TSerialized = string> = {
   readonly state: rx.Observable<UnshieldedWalletState<TSerialized>>;
@@ -171,13 +167,13 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
 };
 
 export type CustomizedUnshieldedWallet<
-  TSyncUpdate = WalletSyncUpdate,
+  TSyncUpdate = SyncUpdate,
   TSerialized = string,
 > = UnshieldedWalletAPI<TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate>>]>;
 
 export interface CustomizedUnshieldedWalletClass<
-  TSyncUpdate = WalletSyncUpdate,
+  TSyncUpdate = SyncUpdate,
   TSerialized = string,
   TConfig extends BaseV1Configuration = DefaultV1Configuration,
 > extends WalletLike.BaseWalletClass<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate>>]> {
@@ -192,7 +188,7 @@ export function UnshieldedWallet(configuration: DefaultV1Configuration): Unshiel
 
 export function CustomUnshieldedWallet<
   TConfig extends BaseV1Configuration = DefaultV1Configuration,
-  TSyncUpdate = WalletSyncUpdate,
+  TSyncUpdate = SyncUpdate,
   TSerialized = string,
 >(
   configuration: TConfig,
