@@ -58,8 +58,10 @@ import * as V2 from '../v2/index.js';
  *   ledger's wasm objects, whose lifetime ends with the variant scope the migration closes.
  *
  *   The `from` side is what the projection was allowed to see; the `to` side is what it produced. Under the replay design
- *   the interesting claim is on the `to` side — that a wallet crossing a fork starts _empty_, and re-earns its coins by
- *   syncing.
+ *   the interesting claim is on the `to` side — that a wallet crossing a fork starts with no coins at all and re-earns
+ *   them by syncing, keeping only its identity and the cursor it inherited. `appliedIndex` is captured on both sides
+ *   because comparing them is the only place the parked cursor is directly observable: once sync runs, a wallet that
+ *   had rewound instead would read the same replay anyway and converge on the same state.
  */
 export type CapturedMigration = Readonly<{
   from: Readonly<{

@@ -16,6 +16,12 @@ pre-fork commitment as a post-fork transaction. A commitment is a function of th
 re-paying the same coin reproduces it exactly, and replaying the whole sequence in order reproduces the tree. No state
 translation is needed to model that, so the crossing is proven **unit tier**, with no toolchain.
 
+That chain is numbered as a continuation of the pre-fork one, opening at the boundary height rather than at zero,
+because block numbers stand in for the indexer's event ids and the indexer counts its replay on from the id the fork
+found it at. The migrated wallet's cursor is parked on that same height, and the proof pins it there — on the state the
+migration produced, before any sync has touched it. The pairing is what makes the timeline work: a wallet parked at the
+fork in front of a replay numbered from zero syncs nothing at all.
+
 **The fidelity link is integration tier.** What a unit test cannot say is whether the model is faithful. So the same
 crossing runs again with the pre-fork chain handing its own serialized ledger to the ledger team's real v8-to-v9 state
 translation, and the two reconstructions are checked against each other: the tree the wallet rebuilds from replayed
