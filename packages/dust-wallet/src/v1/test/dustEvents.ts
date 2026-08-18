@@ -54,8 +54,16 @@ const NETWORK: NetworkId.NetworkId = 'undeployed';
  */
 export const DUST_EVENT_COUNT = 4;
 
-/** The dust HD key for {@link SEED} — the same derivation the wallet itself uses. */
-const dustSeed = (): Uint8Array => {
+/**
+ * The dust HD key for {@link SEED} — the same derivation the wallet itself uses.
+ *
+ * @remarks
+ *   Exported as well as used here because a wallet crossing a hard fork needs the seed rather than a key: the two
+ *   variants speak different ledger modules, so each derives its own `DustSecretKey` from this (see
+ *   `src/test/forkWallet.ts`). Only the dust this fixture's events are addressed to can decrypt them, so the fork proof
+ *   has to derive from exactly this seed.
+ */
+export const dustSeed = (): Uint8Array => {
   const result = HDWallet.fromSeed(Buffer.from(SEED, 'hex'));
   const { hdWallet } = result as { type: 'seedOk'; hdWallet: HDWallet };
   const derived = hdWallet.selectAccount(0).selectRole(Roles.Dust).deriveKeyAt(0);
