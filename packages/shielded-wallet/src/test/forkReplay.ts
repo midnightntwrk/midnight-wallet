@@ -28,13 +28,19 @@
  *
  *   Two modelling choices are load-bearing and deliberate:
  *
- *   - **The replayed chain is numbered from zero.** Block numbers stand in for the indexer's event ids, and the migration
- *       resets sync progress on the assumption that a replayed timeline restarts them. Numbering the replay from zero
- *       is what makes that reset observable: a wallet that instead parked its cursor at the fork height would skip the
- *       replayed prefix and come out short. Should the indexer turn out to continue ids past the boundary, this genesis
- *       number becomes the fork height and the migration parks instead of resetting — the same one-line pair.
- *   - **It carries the post-fork protocol version**, so every replayed block sits inside the new variant's activation range
- *       and none of it is deferred back.
+ *   - **The replayed chain continues the pre-fork chain's numbering.** Block numbers stand in for the indexer's event ids,
+ *       and the indexer numbers its replay onwards from whatever id it had reached when the fork happened — never from
+ *       zero. So the replay opens at the boundary height, the same convention the {@link ForkSimulator}'s own post-fork
+ *       chain follows, and a migrated wallet parks its cursor there and meets the replay head-on. This is the half of
+ *       the design that is behaviourally load-bearing in the harness: number the replay from zero while the migration
+ *       parks and every replayed event falls behind the cursor, leaving the wallet with nothing. (The mirror image is
+ *       not symmetric — a cursor behind the replay reads all of it anyway — so what separates parking from resetting is
+ *       the migrated cursor itself, asserted where the migration produced it.)
+ *   - **Every replayed block carries the post-fork protocol version**, the genesis one included. That block sits at the
+ *       boundary height, which the pre-fork variant observed, annotated and deliberately left unapplied; re-delivering
+ *       it as post-fork content is what hands that height to the new variant. Tagging the whole replay inside the new
+ *       variant's activation range is what keeps any of it from being deferred back to a variant that has already
+ *       handed over.
  *
  *   The chain the _ledger_ continues as is a different object: the {@link ForkSimulator}'s post-fork side, which holds the
  *   translated state and announces nothing. Sync reads the replay; spends are validated against the translation.
@@ -98,6 +104,13 @@ export type ReplayChainConfig = Readonly<{
   networkId: NetworkId.NetworkId;
   /** The version the post-fork variant is registered at: every replayed block must sit inside its range. */
   protocolVersion: ProtocolVersion.ProtocolVersion;
+  /**
+   * The boundary height — the replay continues the pre-fork chain's numbering rather than restarting it.
+   *
+   * Block numbers stand in for the indexer's event ids here, and the indexer's replay counts on from the id it had
+   * reached at the fork. This is therefore where a migrated wallet's parked cursor expects to find it.
+   */
+  genesisBlockNumber: bigint;
   /** The pre-fork chain's clock at the boundary — the replay continues time rather than restarting it. */
   genesisTime: Date;
   blockProducer: BlockProducer;
@@ -112,7 +125,8 @@ export type ReplayChainConfig = Readonly<{
  *   Submitted one at a time and awaited, so each transaction gets a block of its own and the commitments land in exactly
  *   the order they did before the fork. Batching them would leave the within-block ordering to the block producer, and
  *   the Merkle indices are the whole point.
- * @param config The network, the post-fork version, the inherited clock, the producer and the coins to replay.
+ * @param config The network, the post-fork version, the inherited numbering and clock, the producer and the coins to
+ *   replay.
  * @returns The chain, once every coin has been re-announced.
  */
 export const makeReplayChain = (
@@ -122,8 +136,9 @@ export const makeReplayChain = (
     const chain = yield* Simulator.init({
       networkId: config.networkId,
       protocolVersion: config.protocolVersion,
-      // Zero, not the fork height: see the file's remarks — this is an event-id cursor, and the replay restarts it.
-      genesisBlockNumber: 0n,
+      // The fork height, not zero: see the file's remarks — this is an event-id cursor, and the replay counts on from
+      // where the fork found it.
+      genesisBlockNumber: config.genesisBlockNumber,
       genesisTime: config.genesisTime,
       blockProducer: config.blockProducer,
     });
