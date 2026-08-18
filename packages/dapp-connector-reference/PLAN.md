@@ -5,65 +5,29 @@
 suite in `src/test/suites/` is the shared builder+tester deliverable, sealed against implementation internals so it
 stays pluggable).
 
-## Current Step
+## Current State
 
-### Phase 15: Merge `main` & reconciliation (in progress)
+**Branch:** `akopec/reference-dapp-connector` · **PR:** #60 (still a draft, `[WIP] Reference dapp connector`).
 
-**Goal:** bring the branch up to date with `origin/main` (it was ~56 commits / ~5 weeks behind) and reconcile the
-reference impl + conformance suite against everything that landed on `main` since the merge-base.
+**CI is fully green** — 23 checks pass as of `c9e8fbc4`, including `Unit Tests`, the whole 11-job integration matrix,
+and Smoke E2E. The conformance suite stands at **240 tests: 236 passed, 4 skipped, 0 failed**, and — as of Phase 16 —
+actually runs inside the required `Tests` gate.
 
-**Steps:**
+Phases 1–11, 13, 13.1, 15 and 16 are complete (below). What remains before this PR is mergeable:
 
-- Merge `origin/main` into `akopec/reference-dapp-connector`; resolve conflicts (watch
-  `address-format/test/addresses.json`, `yarn.lock`, and any Wallet Facade / capabilities API drift).
-- `yarn install`, build, run the conformance suite; fix breakage introduced by upstream API changes.
-- **Do not assume the remaining work is docs-only.** Main's changes (facade, capabilities, ledger bindings, test infra)
-  may require code adjustments here — the re-assessment below determines scope.
+- **Phase 12 — conformance-suite documentation.** Not started. The deliverable that makes the suite genuinely pluggable
+  by external implementations (browser extensions). This is the main outstanding piece of work.
+- **Phase 14 — real proving integration.** Not started.
+- **Publishing is gated externally.** `@midnightntwrk/wallet-sdk-dapp-connector-reference` depends on the unreleased
+  `dapp-connector-api` — currently `4.1.0-beta.1`, in changesets beta pre-release mode with only canaries on npm. This
+  package pins the canary `4.1.0-canary.20260805041554-9e03b1e`. A stable `4.1.0` must ship first.
+- **Bug tickets from Phase 13.1 are still unfiled.** The skip comments in `suites/intent.ts` were written to be
+  paste-ready: the facade `initSwap` cross-kind gap and `placeIntentAtSegment` no-oping whenever a fee intent exists.
 
-**Then — re-assessment (per `WORKFLOW.md` Review, run in parallel once the merge builds):**
-
-- **tester** — run the conformance suite against the merged code; report failures/skips + any spec requirements now
-  uncovered.
-- **architect** — spec-conformance review against the current DApp Connector API spec; flag drift introduced by the
-  merge.
-- **reviewer/auditor** — independently challenge code + suite; confirm whether the outstanding work is only docs
-  (Phase 12) or also code reconciliation.
-
-**Merge status (done so far):** conflicts resolved (`package.json` unioned; `bech32.test.ts` took main's authoritative
-rewrite; `yarn.lock` regenerated). Reconciliation applied: npm scope rename `@midnight-ntwrk/wallet-sdk-*` →
-`@midnightntwrk/wallet-sdk-*` (main renamed the whole scope); `dapp-connector-api` portal `dist` built. Merge is **not
-yet committed** (left for signed commit).
-
-**Review-gate outcome (tester · architect · auditor, unanimous): NOT docs-only — docs + code.**
-
-- **Production `src/*.ts` typechecks clean and is still spec-conformant** — the merge did not touch the external API
-  contract; `ConnectedAPI` reads history through its own narrow view, decoupled from the facade `WalletEntry`.
-- **The conformance suite is currently NON-EXECUTING.** All drift is in one file, `src/test/simulatorTestUtils.ts`, from
-  main's `TransactionHistory`/`Clock` redesign. It is not just a typecheck error: `txHistoryStorage.upsert` is now
-  private, so `reference.test.ts` throws in `beforeAll` (`upsert is not a function`, via
-  `WalletFacade.submitTransaction`) — **187 tests don't run** (register as skipped); only 53 static-context tests pass.
-  Fix = migrate the history-write path to the new lifecycle-aware writers `gotPending`/`gotFinalized`/`gotRejected`
-  (attach `lifecycle`), use `Clock.Clock` type, handle now-optional `status`. ~3 edits, one file, zero production
-  changes.
-- **Two gaps the merge surfaced that were not in the original list:**
-  - **Undeclared deps:** the package imports `@midnightntwrk/wallet-sdk-address-format` + `@midnight-ntwrk/zkir-v2` but
-    does not declare them (resolve only via hoisting; `publint --strict` catches). Add to `dependencies`.
-  - **Portal is load-bearing:** published `dapp-connector-api@4.0.1` lacks `ErrorCodes.InsufficientFunds` (used in
-    `errors.ts:36` + suites) and the `/globals` export subpath (`index.ts:1`). The connector depends on **unpublished**
-    `dapp-connector-api` changes — publishing this package is gated on releasing a new `dapp-connector-api` first, then
-    removing the portal.
-- `address-format` reconciliation confirmed clean: branch's `Bech32mSymbol` additions (ESK/CPK/EPK) coexist with main's
-  (ShieldedAddress/Unshielded/Dust); main's `spec-reference` test vectors supersede the branch's dropped roundtrip
-  blocks (nit: no explicit EPK roundtrip `it`, covered by vectors).
-
-**Open decisions for the human (batched at gate):**
-
-1. `TxStatus` mapping source: derive from the new `lifecycle` discriminator (spec-faithful; closes the documented
-   status-model-mismatch gap; touches `suites/history.ts` assertions) vs `status ?? 'SUCCESS'` (minimal diff).
-2. Is the Phase-9.10 submit-bridge (`upsertHistoryEntry`) now redundant — does simulator-backed sync write history
-   natively via the new lifecycle methods? (check `unshielded-wallet/src/v1/Sync.ts` post-merge.) If so, **delete** the
-   bridge rather than port it.
-3. Apply the `simulatorTestUtils.ts` fix before the merge commit, or as a follow-up commit?
+**Deferred, tracked outside this plan:** every package's `vitest.config.ts` hardcodes `coverage.reportsDirectory` and
+the junit `outputFile` per _package_ rather than per _project_, so the `test:unit` and `test:integration` runs that
+`turbo verify` legitimately parallelizes clobber each other (`ENOENT … coverage/.tmp`, malformed junit XML).
+Pre-existing across all 16 split packages, never reaches CI. Fix the paths, not the parallelism.
 
 ## Completed Phases
 
@@ -220,23 +184,6 @@ Driven by a deep review of assertion specificity, FP style, and spec coverage:
 
 ---
 
-## Upcoming Phases
-
-### Phase 12: Conformance Suite Documentation
-
-**Goal:** Make the conformance suite genuinely pluggable by external DApp Connector implementations (browser extensions,
-future native clients).
-
-**Deliverables:**
-
-- README (or `CONFORMANCE.md`) in `packages/dapp-connector-reference` explaining:
-  - The `DappConnectorTestContext` contract and its specialised subtypes
-  - How to implement `setupWallets` for a backend that supports it (or skip it cleanly)
-  - The capability flags, what each gates, and what a real backend should set them to
-  - How to run the suite against an external implementation (entry point script / pattern)
-- An example skeleton (`example-external-context.ts`?) showing the minimum surface a browser-extension implementor must
-  provide.
-
 ### Phase 13: Capability-Flag Reduction — `submissionRoundTripSupported` (completed)
 
 **Root cause (after diagnostic):** the connector's `createDefaultTTL` used real wall-clock time (`Date.now() + 1h`)
@@ -325,6 +272,75 @@ Skip comments on all four `it.skip` tests and the property-test filter in `suite
 the corrected root-cause analysis and file:line pointers — they're sized to be copy-pasted into bug tickets.
 
 No code changes here — Phase 13.1 is investigation only, captured for the record before the bug tickets get filed.
+
+### Phase 15: Merge `main` & reconciliation (completed)
+
+The branch was ~56 commits / ~5 weeks behind. Merged as `45027bef`; `main`'s changes to `TransactionHistory`/`Clock`,
+the npm scope, and the test infra all required code reconciliation, exactly as the review gate predicted (it was **not**
+docs-only).
+
+Resolutions to the three decisions the gate escalated:
+
+1. **`TxStatus` is derived from the `lifecycle` discriminator** — the spec-faithful option, closing the documented
+   status-model-mismatch gap rather than taking the `status ?? 'SUCCESS'` minimal diff.
+2. **The Phase-9.10 submit bridge was ported, not deleted.** Simulator-backed sync still does not write history
+   natively, so the bridge remains — now via the lifecycle writer `gotFinalized` instead of the now-private
+   `txHistoryStorage.upsert`.
+3. The `simulatorTestUtils.ts` fix was applied **before** the merge commit, so the merge landed green.
+
+Also in this phase: undeclared deps (`wallet-sdk-address-format`, `zkir-v2`) added to `dependencies`, and the
+load-bearing `dapp-connector-api` portal replaced with the published canary (`1b78c82f`) —
+`ErrorCodes.InsufficientFunds` and the `/globals` subpath have both since landed on that repo's `main`.
+
+A second merge of `origin/main` (17 further commits, up to `aa1cd45a`) landed cleanly with no conflicts. `main` has
+since codified the testing convention Phase 16 implements — see `.claude/rules/testing.md` and `DEV_GUIDE.md` → Testing
+Tiers.
+
+### Phase 16: Subject the branch's additions to the repo's own gates (completed)
+
+Ran as a lightweight def-build-review cycle (researcher → architect rulings → builder → tester · auditor · architect
+review, all three review sub-steps passing).
+
+- **The conformance suite was invisible to CI.** The package declared only a `test` script and no vitest `projects`,
+  while `verify` and the required `Tests` gate drive `test:unit`/`test:integration`. Turbo silently synthesises an empty
+  node for a task a package does not implement, so all 240 tests were unguarded and a regression would have merged
+  clean. Fixed with the canonical `unit`/`integration` projects split plus matching scripts.
+- **Removed `packages/docs-snippets/test-site`**, superseded by `apps/test-website`. It was never reconciled with the
+  scope rename, still importing `@midnight-ntwrk/wallet-sdk-*` and `ledger-v6`, and was failing `docs-snippets`
+  typecheck. Its `turbo.json` declared a `serve:test-site` task with no backing script.
+- **Apache-2.0 headers** added to 29 connector sources and to `.claude/bin/verify-after-turn.sh` — a tracked `.sh` added
+  by this branch and matched by `.licenserc.yaml`, which the original `.ts`-only sweep missed. One `Copyright (C) 2025`
+  variant normalised. `license-eye` now reports `invalid: 0` across 721 files.
+- **Prettier** on `PLAN.md`, `WORKFLOW.md`, and `address-format/test/addresses.json` (a trailing newline only;
+  test-vector data verified byte-identical).
+
+Zero behavior change, proven rather than asserted: the diff over `src/` is empty once added header lines are filtered,
+and `intent.ts` hashes identical to its pre-change state after stripping exactly the 12 prepended lines. The four
+`it.skip` markers and their root-cause comments are byte-identical.
+
+Deliberately left alone: `packages/spec-reference` has the identical wiring gap but is pre-existing on `main`, so it is
+out of this branch's scope; and the shared coverage/junit report paths (see **Current State**).
+
+---
+
+## Upcoming Phases
+
+### Phase 12: Conformance Suite Documentation
+
+**Goal:** Make the conformance suite genuinely pluggable by external DApp Connector implementations (browser extensions,
+future native clients).
+
+**Deliverables:**
+
+- README (or `CONFORMANCE.md`) in `packages/dapp-connector-reference` explaining:
+  - The `DappConnectorTestContext` contract and its specialised subtypes
+  - How to implement `setupWallets` for a backend that supports it (or skip it cleanly)
+  - The four `it.skip` markers, what each documents, and what a real backend should expect (capability flags were
+    removed in Phase 13 — per-implementation gaps are now `it.skip` with root-caused pointers, so the docs must explain
+    that convention rather than a flag table)
+  - How to run the suite against an external implementation (entry point script / pattern)
+- An example skeleton (`example-external-context.ts`?) showing the minimum surface a browser-extension implementor must
+  provide.
 
 ### Phase 14: Real Proving Integration (was Phase 10 in earlier plan)
 
