@@ -15,7 +15,14 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { type CoreWallet } from '../CoreWallet.js';
 import { makeDefaultSyncCapability, makeSimulatorSyncCapability } from '../Sync.js';
 import { type WalletSyncSubscription, WalletSyncUpdate } from '../SyncSchema.js';
-import { DUST_EVENT_COUNT, type DustChain, buildDustChain, eventAt, freshWallet, fixtureSecretKey } from './dustEvents.js';
+import {
+  DUST_EVENT_COUNT,
+  type DustChain,
+  buildDustChain,
+  eventAt,
+  freshWallet,
+  fixtureSecretKey,
+} from './dustEvents.js';
 
 vi.setConfig({ testTimeout: 60000 });
 
@@ -40,14 +47,12 @@ beforeAll(async () => {
  */
 const batch = (items: readonly (readonly [id: number, protocolVersion: number | undefined])[]): WalletSyncUpdate =>
   WalletSyncUpdate.create(
-    items.map(
-      ([id, protocolVersion]): WalletSyncSubscription => ({
-        id,
-        maxId: DUST_EVENT_COUNT,
-        raw: eventAt(chain.eventBytes, id - 1),
-        ...(protocolVersion === undefined ? {} : { protocolVersion }),
-      }),
-    ),
+    items.map(([id, protocolVersion]): WalletSyncSubscription => ({
+      id,
+      maxId: DUST_EVENT_COUNT,
+      raw: eventAt(chain.eventBytes, id - 1),
+      ...(protocolVersion === undefined ? {} : { protocolVersion }),
+    })),
     fixtureSecretKey(),
     chain.syncTime,
   );

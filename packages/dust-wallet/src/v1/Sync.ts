@@ -128,8 +128,7 @@ export const splitAtVersionBoundary = <T>(
     boundary < 0 ? [items, [] as readonly T[]] : [items.slice(0, boundary), items.slice(boundary)];
   // The first deferred item is the hand-over signal. Failing that, the last applied item that actually reported a
   // version — searching backwards so a trailing untagged item does not erase an earlier tagged one.
-  const signalling =
-    deferred.at(0) ?? [...applied].reverse().find((item) => versionOf(item) !== undefined);
+  const signalling = deferred.at(0) ?? [...applied].reverse().find((item) => versionOf(item) !== undefined);
   const signalledVersion = signalling === undefined ? undefined : versionOf(signalling);
 
   return {
@@ -151,7 +150,6 @@ export const annotateVersion = (
     onNone: () => state,
     onSome: (version) => CoreWallet.withProtocolVersion(state, version),
   });
-
 
 export type IndexerClientConnection = {
   indexerHttpUrl: string;

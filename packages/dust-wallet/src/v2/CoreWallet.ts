@@ -101,8 +101,8 @@ export const CoreWallet = {
    *
    * @remarks
    *   Only ever raises it. A stale lower report — a late batch from behind the tip, a source that rewound — would
-   *   otherwise look like a downward version change and send the runtime migrating backwards into a variant this
-   *   wallet has already left.
+   *   otherwise look like a downward version change and send the runtime migrating backwards into a variant this wallet
+   *   has already left.
    */
   withProtocolVersion(wallet: CoreWallet, version: ProtocolVersion.ProtocolVersion): CoreWallet {
     return version > wallet.protocolVersion ? { ...wallet, protocolVersion: version } : wallet;

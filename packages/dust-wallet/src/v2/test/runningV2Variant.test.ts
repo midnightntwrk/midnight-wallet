@@ -18,7 +18,19 @@ import {
   LedgerParameters,
 } from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Chunk, Duration, Effect, Exit, Fiber, Ref, Scope, Stream, SubscriptionRef, TestClock, TestContext } from 'effect';
+import {
+  Chunk,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Ref,
+  Scope,
+  Stream,
+  SubscriptionRef,
+  TestClock,
+  TestContext,
+} from 'effect';
 import { describe, expect, it } from 'vitest';
 import { chooseCoin, makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet, PublicKey } from '../CoreWallet.js';

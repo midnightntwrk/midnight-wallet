@@ -48,9 +48,9 @@ import {
 const networkId = NetworkId.NetworkId.Undeployed;
 
 /**
- * The projections capability takes an activation range like every other sync capability, but has nothing to apply it
- * to — see the note on `makeEventLessSyncCapability`. A full span is passed here so these tests keep asserting what
- * they always asserted.
+ * The projections capability takes an activation range like every other sync capability, but has nothing to apply it to
+ * — see the note on `makeEventLessSyncCapability`. A full span is passed here so these tests keep asserting what they
+ * always asserted.
  */
 const fullSpan = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion);
 const dustParameters = LedgerParameters.initialParameters().dust;
@@ -151,7 +151,11 @@ describe('V2 projections sync capability', () => {
     const inputSyncTime = state.state.syncTime;
     const timestamp = new Date('2026-07-14T10:00:00.000Z');
 
-    const [updatedState, result] = makeEventLessSyncCapability().applyUpdate(state, projectionUpdate(timestamp), fullSpan);
+    const [updatedState, result] = makeEventLessSyncCapability().applyUpdate(
+      state,
+      projectionUpdate(timestamp),
+      fullSpan,
+    );
 
     expect(updatedState.state).not.toBe(state.state);
     expect(updatedState.state.syncTime).toEqual(timestamp);
@@ -168,7 +172,10 @@ describe('V2 projections sync capability', () => {
     // version on the projections format; until then this test is what keeps the gap visible.
     const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
     const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
-    const narrowRange = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.ProtocolVersion(1n));
+    const narrowRange = ProtocolVersion.makeRange(
+      ProtocolVersion.MinSupportedVersion,
+      ProtocolVersion.ProtocolVersion(1n),
+    );
 
     const [updatedState, result] = makeEventLessSyncCapability().applyUpdate(
       state,
@@ -191,7 +198,11 @@ describe('V2 projections sync capability', () => {
     const timestamp = new Date('2026-07-14T10:00:00.000Z');
 
     expect(() =>
-      makeEventLessSyncCapability().applyUpdate(state, projectionUpdate(timestamp, 'unexpected-commitment-root'), fullSpan),
+      makeEventLessSyncCapability().applyUpdate(
+        state,
+        projectionUpdate(timestamp, 'unexpected-commitment-root'),
+        fullSpan,
+      ),
     ).toThrow('Root hashes don`t match');
 
     expect(state.state.syncTime).toEqual(inputSyncTime);

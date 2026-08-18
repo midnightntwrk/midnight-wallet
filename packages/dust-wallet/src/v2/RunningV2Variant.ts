@@ -73,11 +73,11 @@ const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
  * The version signals this variant puts on its state stream.
  *
  * @remarks
- *   Two of them, for two different situations. A transition is the ordinary one: the state moved to a version the
- *   variant may or may not own, and the runtime decides. The healing emission covers restore: a snapshot taken between
- *   the moment sync annotated an out-of-range version and the moment the runtime acted on it comes back with a version
- *   this variant does not own and no transition to announce it, so it would sit there forever. Announcing it on the
- *   first observation is what forward-migrates such a snapshot.
+ *   Two of them, for two different situations. A transition is the ordinary one: the state moved to a version the variant
+ *   may or may not own, and the runtime decides. The healing emission covers restore: a snapshot taken between the
+ *   moment sync annotated an out-of-range version and the moment the runtime acted on it comes back with a version this
+ *   variant does not own and no transition to announce it, so it would sit there forever. Announcing it on the first
+ *   observation is what forward-migrates such a snapshot.
  */
 const protocolVersionChange = (
   previous: CoreWallet,
@@ -214,10 +214,10 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
               Effect.try({
                 try: () => {
                   const [newState, changesResult] = this.#v2Context.syncCapability.applyUpdate(
-                state,
-                update,
-                this.#context.activationRange,
-              );
+                    state,
+                    update,
+                    this.#context.activationRange,
+                  );
                   return [changesResult, newState] as const;
                 },
                 catch: (err) =>

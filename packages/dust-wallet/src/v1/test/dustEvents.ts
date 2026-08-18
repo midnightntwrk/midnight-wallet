@@ -23,7 +23,11 @@ import {
   signData,
   signatureVerifyingKey,
 } from '@midnight-ntwrk/ledger-v8';
-import { InMemoryTransactionHistoryStorage, type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  type NetworkId,
+  ProtocolVersion,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
@@ -38,12 +42,12 @@ import { V1Builder } from '../V1Builder.js';
 
 const NIGHT_TOKEN_TYPE = nativeToken().raw;
 const SEED = '0000000000000000000000000000000000000000000000000000000000000001';
-const NETWORK: NetworkId.NetworkId = 'undeployed' as NetworkId.NetworkId;
+const NETWORK: NetworkId.NetworkId = 'undeployed';
 
 /**
  * How many Night UTXOs are rewarded, and therefore how many dust events the fixture produces.
  *
- * One reward per block, then one *separate* registration transaction per Night UTXO, so every registration block
+ * One reward per block, then one _separate_ registration transaction per Night UTXO, so every registration block
  * carries exactly one `dustInitialUtxo` event. Registering several UTXOs in a single transaction does not work for this
  * purpose: the registration splits them across the guaranteed and fallible sections and only some of them produce an
  * event, so the event count stops tracking the input count.
@@ -117,7 +121,8 @@ export type DustChain = {
  *
  *   Each call builds a fresh chain. The simulator's blocks hold the only live `Event` instances, and replaying them
  *   consumes them, so a state cannot be shared between two tests that both apply it.
- * @param protocolVersion The version every block of this chain is stamped with. Defaults to the simulator's own default.
+ * @param protocolVersion The version every block of this chain is stamped with. Defaults to the simulator's own
+ *   default.
  */
 export const buildDustChain = (protocolVersion?: ProtocolVersion.ProtocolVersion): Promise<DustChain> =>
   Effect.gen(function* () {

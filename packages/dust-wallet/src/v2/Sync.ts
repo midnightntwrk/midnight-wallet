@@ -53,12 +53,7 @@ import {
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type URLError, WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { OtherWalletError, SyncWalletError, type WalletError } from './WalletError.js';
-import {
-  type Simulator,
-  type SimulatorState,
-  getBlockEventsFrom,
-  getLastBlock,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { type Simulator, type SimulatorState, getLastBlock } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from './types/ledger.js';
 import {
@@ -167,8 +162,7 @@ export const splitAtVersionBoundary = <T>(
     boundary < 0 ? [items, [] as readonly T[]] : [items.slice(0, boundary), items.slice(boundary)];
   // The first deferred item is the hand-over signal. Failing that, the last applied item that actually reported a
   // version — searching backwards so a trailing untagged item does not erase an earlier tagged one.
-  const signalling =
-    deferred.at(0) ?? [...applied].reverse().find((item) => versionOf(item) !== undefined);
+  const signalling = deferred.at(0) ?? [...applied].reverse().find((item) => versionOf(item) !== undefined);
   const signalledVersion = signalling === undefined ? undefined : versionOf(signalling);
 
   return {
@@ -190,7 +184,6 @@ export const annotateVersion = (
     onNone: () => state,
     onSome: (version) => CoreWallet.withProtocolVersion(state, version),
   });
-
 
 export type IndexerClientConnection = {
   indexerHttpUrl: string;
@@ -810,10 +803,10 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
  *
  * @remarks
  *   **This path does not implement the fork boundary, and cannot yet.** It takes `activeRange` for signature parity with
- *   the other capabilities and deliberately ignores it: a projections update is a folded snapshot of dust state — Merkle
- *   tree updates, new and spent UTXOs, a block header — not a sequence of version-tagged timeline items, so there is
- *   nothing in it to split and nothing that reports the protocol version a piece of it belongs to. `BlockData` carries
- *   height, hash, timestamp and ledger parameters, but no version.
+ *   the other capabilities and deliberately ignores it: a projections update is a folded snapshot of dust state —
+ *   Merkle tree updates, new and spent UTXOs, a block header — not a sequence of version-tagged timeline items, so
+ *   there is nothing in it to split and nothing that reports the protocol version a piece of it belongs to. `BlockData`
+ *   carries height, hash, timestamp and ledger parameters, but no version.
  *
  *   A wallet syncing through this path therefore never annotates a version and never hands over. Closing that needs a
  *   version on the projections wire format, which is the same deferred indexer question as the one on

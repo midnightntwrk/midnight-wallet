@@ -13,7 +13,7 @@
 import { type DustParameters, DustSecretKey } from '@midnight-ntwrk/ledger-v8';
 import { type SyncProgress, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect } from 'effect';
-import { CoreWallet, PublicKey } from './CoreWallet.js';
+import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from './types/ledger.js';
 import { type WalletError } from './WalletError.js';
 
@@ -118,16 +118,16 @@ export type CrossLedgerMigrationConfiguration = {
  *
  * @remarks
  *   The indexer replays the timeline after the hard fork, re-emitting the wallet's history as events of the new ledger
- *   version. A migrated wallet therefore does not need — and must not attempt — to carry its dust: exactly the same dust
- *   is generated again by ordinary sync, from the replayed registration events, and valued against this version's
+ *   version. A migrated wallet therefore does not need — and must not attempt — to carry its dust: exactly the same
+ *   dust is generated again by ordinary sync, from the replayed registration events, and valued against this version's
  *   parameters. Carrying it across as well would double-count what the replay is about to deliver, on top of requiring
  *   generation and commitment trees that this ledger's WASM module cannot read.
  *
  *   So what crosses is the dust public key, the network, the protocol version that triggered the hand-over, and the
- *   cursor. Sync progress is **parked at the fork** rather than rewound: the indexer numbers the replayed events onwards
- *   from whatever id it had reached when the fork happened, never from zero, so the inherited cursor is exactly where
- *   the replay begins. A wallet that rewound to zero would wait on a stretch of the timeline this ledger version's
- *   events do not occupy.
+ *   cursor. Sync progress is **parked at the fork** rather than rewound: the indexer numbers the replayed events
+ *   onwards from whatever id it had reached when the fork happened, never from zero, so the inherited cursor is exactly
+ *   where the replay begins. A wallet that rewound to zero would wait on a stretch of the timeline this ledger
+ *   version's events do not occupy.
  *
  *   If the ledger team ships a byte-level translation for wallet local state, it replaces this instance without touching
  *   anything around it — that is the point of the {@link StateMigration} seam.
