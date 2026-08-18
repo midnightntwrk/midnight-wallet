@@ -1,7 +1,6 @@
 name: Check for Changeset
 
 env:
-  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 on:
   pull_request:
