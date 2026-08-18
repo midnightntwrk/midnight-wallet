@@ -10,5 +10,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-export * from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+export * from './CoreWallet.js';
+export * from '../DustWallet.js';
+export * as Keys from './Keys.js';
+export { V8 as Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+export * as SyncService from './Sync.js';
+export * as Transacting from './Transacting.js';
+export * from './RunningV1Variant.js';
+export * from './V1Builder.js';
+export * from './types/index.js';
+export * as CoinsAndBalances from './CoinsAndBalances.js';
+export * as TransactionHistory from './TransactionHistory.js';
+export * as WalletError from './WalletError.js';

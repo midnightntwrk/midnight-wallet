@@ -10,5 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
 
-export * from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+export type AnyTransaction =
+  | ledger.UnprovenTransaction
+  | ledger.FinalizedTransaction
+  | ledger.ProofErasedTransaction
+  | ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
+export type UnprovenDustSpend = ledger.DustSpend<ledger.PreProof>;
+
+export type NetworkId = string;

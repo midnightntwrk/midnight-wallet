@@ -10,5 +10,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { type DustPublicKey } from '@midnight-ntwrk/ledger-v8';
+import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { type CoreWallet } from './CoreWallet.js';
 
-export * from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+export type KeysCapability<TState> = {
+  getPublicKey(state: TState): DustPublicKey;
+  getAddress(state: TState): DustAddress;
+};
+
+export const makeDefaultKeysCapability = (): KeysCapability<CoreWallet> => {
+  return {
+    getPublicKey: (state: CoreWallet): DustPublicKey => {
+      return state.publicKey.publicKey;
+    },
+    getAddress: (state: CoreWallet): DustAddress => {
+      return new DustAddress(state.publicKey.publicKey);
+    },
+  };
+};

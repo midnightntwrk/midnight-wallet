@@ -10,5 +10,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+export const SignatureMarker = {
+  signature: 'signature',
+  signatureErased: 'signature-erased',
+} as const;
 
-export * from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+export const ProofMarker = {
+  proof: 'proof',
+  preProof: 'pre-proof',
+  noProof: 'no-proof',
+} as const;
+
+export const BindingMarker = {
+  binding: 'binding',
+  preBinding: 'pre-binding',
+  noBinding: 'no-binding',
+} as const;
