@@ -144,6 +144,19 @@ describe('Swaps', () => {
     await Promise.all([walletAFacade.stop(), walletBFacade.stop()]);
   });
 
+  const settled = (facade: WalletFacade) =>
+    rx.firstValueFrom(
+      facade
+        .state()
+        .pipe(
+          rx.filter(
+            ({ shielded, unshielded }) => shielded.pendingCoins.length === 0 && unshielded.pendingCoins.length === 0,
+          ),
+        ),
+    );
+
+  const swapTtl = () => new Date(Date.now() + 60 * 60 * 1000); // 1h from now
+
   it('can perform a shielded swap', async () => {
     const provingService = makeWasmProvingService();
 
@@ -159,7 +172,7 @@ describe('Swaps', () => {
     const shieldedTokenType = ledger.shieldedToken().raw;
     const shieldedTokenAmount = tokenValue(10n);
 
-    const ttl = new Date(Date.now() + 60 * 60 * 1000);
+    const ttl = swapTtl();
 
     const shieldedWalletAAddress = await walletAFacade.shielded.getAddress();
 
@@ -206,7 +219,7 @@ describe('Swaps', () => {
         dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       },
       {
-        ttl: new Date(Date.now() + 60 * 60 * 1000),
+        ttl: swapTtl(),
       },
     );
 
@@ -247,7 +260,7 @@ describe('Swaps', () => {
   it.skip('can perform an unshielded swap', async () => {
     await Promise.all([walletAFacade.waitForSyncedState(), walletBFacade.waitForSyncedState()]);
 
-    const ttl = new Date(Date.now() + 60 * 60 * 1000);
+    const ttl = swapTtl();
 
     const { unshielded: walletAUnshieldedStateBefore } = await rx.firstValueFrom(walletAFacade.state());
     const { unshielded: walletBUnshieldedStateBefore } = await rx.firstValueFrom(walletBFacade.state());
@@ -336,7 +349,167 @@ describe('Swaps', () => {
     );
   });
 
-  it.skip('can perform a combined shielded and unshielded swap', () => {
-    throw new Error('Not supported yet. Will be implemented in future PR.');
+  it('mixed shielded->unshielded swap: delivers the unshielded NIGHT want', async () => {
+    const provingService = makeWasmProvingService();
+
+    const facadeAState = await walletAFacade.waitForSyncedState();
+    const facadeBState = await walletBFacade.waitForSyncedState();
+
+    const shieldedTokenType = ledger.shieldedToken().raw;
+    const unshieldedTokenType = ledger.unshieldedToken().raw;
+    const giveShieldedAmount = tokenValue(1n);
+    const wantNightAmount = tokenValue(1n);
+    const ttl = swapTtl();
+
+    const makerNightBefore = facadeAState.unshielded.balances[unshieldedTokenType] ?? 0n;
+    const makerShieldedBefore = facadeAState.shielded.balances[shieldedTokenType] ?? 0n;
+    const takerNightBefore = facadeBState.unshielded.balances[unshieldedTokenType] ?? 0n;
+    const takerShieldedBefore = facadeBState.shielded.balances[shieldedTokenType] ?? 0n;
+
+    // Maker (A): give a shielded token, want unshielded NIGHT.
+    const desiredInputs: CombinedSwapInputs = { shielded: { [shieldedTokenType]: giveShieldedAmount } };
+    const desiredOutputs: CombinedSwapOutputs[] = [
+      {
+        type: 'unshielded',
+        outputs: [
+          { type: unshieldedTokenType, amount: wantNightAmount, receiverAddress: facadeAState.unshielded.address },
+        ],
+      },
+    ];
+
+    const swapTxRecipe = await walletAFacade.initSwap(
+      desiredInputs,
+      desiredOutputs,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
+      },
+      { ttl },
+    );
+
+    // Sanity: both legs of the mixed swap are present (the want-side leg used to be dropped).
+    const makerTx = swapTxRecipe.transaction;
+    expect(makerTx.guaranteedOffer).toBeDefined();
+    const wantOutputs = [...(makerTx.intents?.values() ?? [])]
+      .flatMap((intent) => [
+        ...(intent.guaranteedUnshieldedOffer?.outputs ?? []),
+        ...(intent.fallibleUnshieldedOffer?.outputs ?? []),
+      ])
+      .filter((output) => output.type === unshieldedTokenType && output.value === wantNightAmount);
+    expect(wantOutputs).toHaveLength(1);
+
+    const unboundSwapTx = await provingService.prove(swapTxRecipe.transaction);
+
+    // Taker (B): provide the NIGHT, take the shielded token, sign the unshielded spend, pay fees, submit.
+    const balanced = await walletBFacade.balanceUnboundTransaction(
+      unboundSwapTx,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
+      },
+      { ttl },
+    );
+    const signed = await walletBFacade.signRecipe(balanced, (payload) => unshieldedWalletBKeystore.signData(payload));
+    const finalized = await walletBFacade.finalizeRecipe(signed);
+    const txHash = await walletBFacade.submitTransaction(finalized);
+    expect(txHash).toBeTypeOf('string');
+
+    await Promise.all([settled(walletAFacade), settled(walletBFacade)]);
+    const { shielded: makerShieldedAfter, unshielded: makerUnshieldedAfter } = await rx.firstValueFrom(
+      walletAFacade.state(),
+    );
+    const { shielded: takerShieldedAfter, unshielded: takerUnshieldedAfter } = await rx.firstValueFrom(
+      walletBFacade.state(),
+    );
+    const nightDelta = (makerUnshieldedAfter.balances[unshieldedTokenType] ?? 0n) - makerNightBefore;
+    const shieldedDelta = (makerShieldedAfter.balances[shieldedTokenType] ?? 0n) - makerShieldedBefore;
+    const takerNightDelta = (takerUnshieldedAfter.balances[unshieldedTokenType] ?? 0n) - takerNightBefore;
+    const takerShieldedDelta = (takerShieldedAfter.balances[shieldedTokenType] ?? 0n) - takerShieldedBefore;
+
+    // Maker: the want-side leg must actually deliver — this is what silently vanished before the fix.
+    expect(nightDelta).toBe(wantNightAmount);
+    expect(shieldedDelta).toBe(-giveShieldedAmount);
+    // Taker mirror: receives exactly the shielded give, provides exactly the NIGHT want (fees are dust, not NIGHT).
+    expect(takerShieldedDelta).toBe(giveShieldedAmount);
+    expect(takerNightDelta).toBe(-wantNightAmount);
+  });
+
+  it('mixed unshielded->shielded swap: delivers the shielded want', async () => {
+    const facadeAState = await walletAFacade.waitForSyncedState();
+    const facadeBState = await walletBFacade.waitForSyncedState();
+
+    const nativeShieldedTokenType = '0000000000000000000000000000000000000000000000000000000000000002';
+    const unshieldedTokenType = ledger.unshieldedToken().raw;
+    const giveNightAmount = tokenValue(1n);
+    const wantShieldedAmount = tokenValue(1n);
+    const ttl = swapTtl();
+
+    const shieldedAAddress = await walletAFacade.shielded.getAddress();
+    const makerNightBefore = facadeAState.unshielded.balances[unshieldedTokenType] ?? 0n;
+    const makerShieldedBefore = facadeAState.shielded.balances[nativeShieldedTokenType] ?? 0n;
+    const takerNightBefore = facadeBState.unshielded.balances[unshieldedTokenType] ?? 0n;
+    const takerShieldedBefore = facadeBState.shielded.balances[nativeShieldedTokenType] ?? 0n;
+
+    // Maker (A): give unshielded NIGHT, want a shielded token.
+    const desiredInputs: CombinedSwapInputs = { unshielded: { [unshieldedTokenType]: giveNightAmount } };
+    const desiredOutputs: CombinedSwapOutputs[] = [
+      {
+        type: 'shielded',
+        outputs: [{ type: nativeShieldedTokenType, amount: wantShieldedAmount, receiverAddress: shieldedAAddress }],
+      },
+    ];
+
+    const swapTxRecipe = await walletAFacade.initSwap(
+      desiredInputs,
+      desiredOutputs,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
+      },
+      { ttl },
+    );
+
+    // Sanity: both legs of the mixed swap are present (the want-side leg used to be dropped).
+    const makerTx = swapTxRecipe.transaction;
+    expect(makerTx.intents?.size).toBe(1); // unshielded give leg
+    expect(makerTx.guaranteedOffer).toBeDefined(); // shielded want leg
+
+    // Maker signs its unshielded give, finalizes; taker balances the finalized offer.
+    const signedMaker = await walletAFacade.signRecipe(swapTxRecipe, (payload) =>
+      unshieldedWalletAKeystore.signData(payload),
+    );
+    const finalizedMaker = await walletAFacade.finalizeRecipe(signedMaker);
+
+    const balanced = await walletBFacade.balanceFinalizedTransaction(
+      finalizedMaker,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
+      },
+      { ttl },
+    );
+    const signedB = await walletBFacade.signRecipe(balanced, (payload) => unshieldedWalletBKeystore.signData(payload));
+    const finalizedB = await walletBFacade.finalizeRecipe(signedB);
+    const txHash = await walletBFacade.submitTransaction(finalizedB);
+    expect(txHash).toBeTypeOf('string');
+
+    await Promise.all([settled(walletAFacade), settled(walletBFacade)]);
+    const { shielded: makerShieldedAfter, unshielded: makerUnshieldedAfter } = await rx.firstValueFrom(
+      walletAFacade.state(),
+    );
+    const { shielded: takerShieldedAfter, unshielded: takerUnshieldedAfter } = await rx.firstValueFrom(
+      walletBFacade.state(),
+    );
+    const shieldedDelta = (makerShieldedAfter.balances[nativeShieldedTokenType] ?? 0n) - makerShieldedBefore;
+    const nightDelta = (makerUnshieldedAfter.balances[unshieldedTokenType] ?? 0n) - makerNightBefore;
+    const takerShieldedDelta = (takerShieldedAfter.balances[nativeShieldedTokenType] ?? 0n) - takerShieldedBefore;
+    const takerNightDelta = (takerUnshieldedAfter.balances[unshieldedTokenType] ?? 0n) - takerNightBefore;
+
+    // Maker: the want-side leg must actually deliver.
+    expect(shieldedDelta).toBe(wantShieldedAmount);
+    expect(nightDelta).toBe(-giveNightAmount);
+    // Taker mirror: receives exactly the NIGHT give, provides exactly the shielded want (fees are dust, not NIGHT).
+    expect(takerNightDelta).toBe(giveNightAmount);
+    expect(takerShieldedDelta).toBe(-wantShieldedAmount);
   });
 });
