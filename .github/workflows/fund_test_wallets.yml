@@ -1,7 +1,6 @@
 name: Fund test wallets
 
 env:
-  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
   SEED_STABLE: ${{ secrets.E2E_TESTS_SEED_STABLE }}
   FAUCET_SEED_HALO2: ${{ secrets.FAUCET_SEED_HALO2 }}
@@ -48,7 +47,7 @@ jobs:
         uses: docker/login-action@9fe7774c8f8ebfade96f0a62aa10f3882309d517
         with:
           registry: 'https://ghcr.io'
-          username: ${{ env.MIDNIGHT_GH_USER }}
+          username: ${{ github.actor }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Run funding script for devnet envs
