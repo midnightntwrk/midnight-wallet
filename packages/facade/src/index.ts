@@ -1246,15 +1246,14 @@ export class WalletFacade {
       throw Error('At least one shielded or unshielded swap is required.');
     }
 
-    const shieldedTx =
-      hasShieldedPart && shieldedInputs !== undefined
-        ? await this.shielded.initSwap(shieldedSecretKeys, shieldedInputs, shieldedOutputs)
-        : undefined;
+    // Build each leg if the swap involves that token kind, even when it has outputs but no inputs.
+    const shieldedTx = hasShieldedPart
+      ? await this.shielded.initSwap(shieldedSecretKeys, shieldedInputs ?? {}, shieldedOutputs)
+      : undefined;
 
-    const unshieldedTx =
-      hasUnshieldedPart && unshieldedInputs !== undefined
-        ? await this.unshielded.initSwap(unshieldedInputs, unshieldedOutputs, ttl)
-        : undefined;
+    const unshieldedTx = hasUnshieldedPart
+      ? await this.unshielded.initSwap(unshieldedInputs ?? {}, unshieldedOutputs, ttl)
+      : undefined;
 
     const combinedTx = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx);
 
