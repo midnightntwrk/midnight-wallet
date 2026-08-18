@@ -43,10 +43,11 @@ const forkVersion = ProtocolVersion.ProtocolVersion(7n);
  * A wallet of the previous ledger version, as plain data.
  *
  * @remarks
- *   Deliberately wider than {@link PreviousLedgerWallet}: it also carries the coins and the cursor that a real pre-fork
- *   wallet would be holding, so that "those do not cross" is something this file can actually observe rather than
- *   merely fail to mention. Structural because the real thing is built on the other ledger's WASM module, and a
- *   projection that reads no ledger object out of it has no reason to load one.
+ *   Deliberately wider than {@link PreviousLedgerWallet}: it also carries the coins a real pre-fork wallet would be
+ *   holding, so that "those do not cross" is something this file can actually observe rather than merely fail to
+ *   mention. Its cursor is non-zero for the opposite reason — what does cross has to be seen crossing. Structural
+ *   because the real thing is built on the other ledger's WASM module, and a projection that reads no ledger object out
+ *   of it has no reason to load one.
  */
 type PreviousWalletStandIn = PreviousLedgerWallet & {
   readonly state: {
@@ -130,18 +131,23 @@ describe('the cross-ledger migration', () => {
     expect(wallet.coinHashes).toEqual({});
   });
 
-  it('resets sync progress, so the replayed timeline is read from its start', async () => {
-    // The assumption this encodes: replayed events restart their ids. Were they to continue past the boundary, the
-    // migration would park progress at the fork instead — and this expectation would be the one that changed.
+  it('parks sync progress at the fork, because the replayed timeline continues the ids it left off at', async () => {
+    // The confirmed semantics: after the hard fork the indexer replays the events again, numbering them onwards from
+    // whatever id it had reached when the fork happened — never from zero. So the migrated wallet resumes from where
+    // its predecessor stopped. Rewinding to zero would point it at a stretch of the timeline the replay does not
+    // occupy, and it would sit there waiting for events that already went by under the previous ledger version.
     const previous = previousWallet();
     expect(previous.progress.appliedIndex).toBeGreaterThan(0n);
 
     const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previous));
 
-    expect(wallet.progress.appliedIndex).toBe(0n);
-    expect(wallet.progress.highestIndex).toBe(0n);
-    expect(wallet.progress.highestRelevantIndex).toBe(0n);
-    expect(wallet.progress.highestRelevantWalletIndex).toBe(0n);
+    expect(wallet.progress.appliedIndex).toBe(previous.progress.appliedIndex);
+    expect(wallet.progress.highestIndex).toBe(previous.progress.highestIndex);
+    expect(wallet.progress.highestRelevantIndex).toBe(previous.progress.highestRelevantIndex);
+    expect(wallet.progress.highestRelevantWalletIndex).toBe(previous.progress.highestRelevantWalletIndex);
+    // The position crosses; being connected does not. This state has no running sync behind it yet — the restart that
+    // follows the migration is what reconnects it — and claiming otherwise would report a gap that nothing is closing.
+    expect(previous.progress.isConnected).toBe(true);
     expect(wallet.progress.isConnected).toBe(false);
   });
 });
