@@ -90,15 +90,17 @@ const signedTx = await dustWallet.addDustGenerationSignature(dustGenerationTx, s
 - `SyncService` - Synchronization service
 - `Transacting` - Transaction utilities
 - `CoinsAndBalances` - Coin and balance management
+- Current (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-dust-wallet/v2`
+- Pre-fork (ledger-v8) variant internals via `@midnightntwrk/wallet-sdk-dust-wallet/v1`
 
-## V1 Builder
+## V2 Builder
 
-Use the V1 builder pattern for wallet construction:
+Use the V2 builder pattern for wallet construction:
 
 ```typescript
-import { V1Builder, RunningV1Variant } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { V2Builder, RunningV2Variant } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 
-// Build a V1 dust wallet variant
+// Build a V2 dust wallet variant
 ```
 
 ## License
