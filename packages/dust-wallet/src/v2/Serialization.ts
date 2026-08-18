@@ -71,7 +71,7 @@ const SnapshotSchema = Schema.Struct({
 
 type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
 
-export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
+export const makeDefaultV2SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({

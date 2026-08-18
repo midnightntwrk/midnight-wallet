@@ -61,6 +61,10 @@
       "types": "./dist/dust/v1.d.ts",
       "import": "./dist/dust/v1.js"
     },
+    "./dust/v2": {
+      "types": "./dist/dust/v2.d.ts",
+      "import": "./dist/dust/v2.js"
+    },
     "./facade": {
       "types": "./dist/facade.d.ts",
       "import": "./dist/facade.js"

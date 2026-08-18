@@ -81,7 +81,7 @@ const protocolVersionChange = (previous: CoreWallet, current: CoreWallet): State
     : [];
 };
 
-export declare namespace RunningV1Variant {
+export declare namespace RunningV2Variant {
   export type Context<TSerialized, TSyncUpdate, TTransaction, TStartAux> = {
     serializationCapability: SerializationCapability<CoreWallet, null, TSerialized>;
     syncService: SyncService<CoreWallet, TStartAux, TSyncUpdate>;
@@ -96,18 +96,18 @@ export declare namespace RunningV1Variant {
   export type AnyContext = Context<any, any, any, any>;
 }
 
-export const V1Tag: unique symbol = Symbol('V1');
+export const V2Tag: unique symbol = Symbol('V2');
 
-export type DefaultRunningV1 = RunningV1Variant<string, SimulatorState, FinalizedTransaction, DustSecretKey>;
+export type DefaultRunningV2 = RunningV2Variant<string, SimulatorState, FinalizedTransaction, DustSecretKey>;
 
-export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux> implements Variant.RunningVariant<
-  typeof V1Tag,
+export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux> implements Variant.RunningVariant<
+  typeof V2Tag,
   CoreWallet
 > {
-  __polyTag__: typeof V1Tag = V1Tag;
+  __polyTag__: typeof V2Tag = V2Tag;
   readonly #scope: Scope.Scope;
   readonly #context: Variant.VariantContext<CoreWallet>;
-  readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>;
+  readonly #v2Context: RunningV2Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>;
   // Variant-wide cap on concurrent tx-history lookups. Each sync batch forks its own fan-out fiber, so a per-batch
   // `concurrency` limit alone would let in-flight indexer queries grow with the number of live batches while their
   // lookups retry through the indexer-lag window. Every lookup acquires a permit here, making the cap global.
@@ -119,11 +119,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   constructor(
     scope: Scope.Scope,
     context: Variant.VariantContext<CoreWallet>,
-    v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>,
+    v2Context: RunningV2Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>,
   ) {
     this.#scope = scope;
     this.#context = context;
-    this.#v1Context = v1Context;
+    this.#v2Context = v2Context;
     this.#syncLock = Effect.runSync(Ref.make(false));
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
@@ -181,12 +181,12 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         return pipe(
           SubscriptionRef.get(this.#context.stateRef),
           Stream.fromEffect,
-          Stream.flatMap((state) => this.#v1Context.syncService.updates(state, startAux)),
+          Stream.flatMap((state) => this.#v2Context.syncService.updates(state, startAux)),
           Stream.mapEffect((update) =>
             SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
               Effect.try({
                 try: () => {
-                  const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(state, update);
+                  const [newState, changesResult] = this.#v2Context.syncCapability.applyUpdate(state, update);
                   return [changesResult, newState] as const;
                 },
                 catch: (err) =>
@@ -210,9 +210,9 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                           pipe(
                             this.#txHistoryPermits.withPermits(1)(
                               pipe(
-                                this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
+                                this.#v2Context.transactionHistoryService.getTransactionDetails(change.source),
                                 Effect.flatMap((metadata) =>
-                                  this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                                  this.#v2Context.transactionHistoryService.put(change, metadata, protocolVersion),
                                 ),
                               ),
                             ),
@@ -253,17 +253,17 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     }
     return Effect.Do.pipe(
       Effect.bind('currentState', () => SubscriptionRef.get(this.#context.stateRef)),
-      Effect.bind('blockData', () => this.#v1Context.syncService.blockData()),
+      Effect.bind('blockData', () => this.#v2Context.syncService.blockData()),
       Effect.let('resolvedTime', ({ blockData }): Date => currentTime ?? blockData.timestamp),
       Effect.let('utxosWithDustValue', ({ currentState, resolvedTime }): ReadonlyArray<UtxoWithFullDustDetails> => {
-        return this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(
+        return this.#v2Context.coinsAndBalancesCapability.estimateDustGeneration(
           currentState,
           nightUtxos,
           resolvedTime,
         );
       }),
       Effect.flatMap(({ utxosWithDustValue, resolvedTime }) => {
-        return this.#v1Context.transactingCapability
+        return this.#v2Context.transactingCapability
           .createDustGenerationTransaction(
             resolvedTime,
             ttl,
@@ -286,12 +286,12 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     }
     return Effect.gen(this, function* () {
       const currentState = yield* SubscriptionRef.get(this.#context.stateRef);
-      const utxosWithDustValue = this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(
+      const utxosWithDustValue = this.#v2Context.coinsAndBalancesCapability.estimateDustGeneration(
         currentState,
         nightUtxos,
         currentTime,
       );
-      return this.#v1Context.transactingCapability.splitNightUtxosForDustRegistration(
+      return this.#v2Context.transactingCapability.splitNightUtxosForDustRegistration(
         utxosWithDustValue,
         isRegistration,
       );
@@ -305,7 +305,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     dustReceiverAddress: DustAddress | undefined,
     feePayment: bigint,
   ): Effect.Effect<UnprovenTransaction, WalletError> {
-    return this.#v1Context.transactingCapability
+    return this.#v2Context.transactingCapability
       .attachDustRegistration(transaction, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment)
       .pipe(EitherOps.toEffect);
   }
@@ -314,7 +314,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     transaction: UnprovenTransaction,
     signature: Signature,
   ): Effect.Effect<UnprovenTransaction, WalletError> {
-    return this.#v1Context.transactingCapability
+    return this.#v2Context.transactingCapability
       .addDustGenerationSignature(transaction, signature)
       .pipe(EitherOps.toEffect);
   }
@@ -323,19 +323,19 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     transaction: UnprovenTransaction,
     signature: Signature,
   ): Effect.Effect<UnprovenTransaction, WalletError> {
-    return this.#v1Context.transactingCapability
+    return this.#v2Context.transactingCapability
       .addDustRegistrationSignature(transaction, signature)
       .pipe(EitherOps.toEffect);
   }
 
   calculateFee(transactions: ReadonlyArray<AnyTransaction>): Effect.Effect<bigint, WalletError> {
     return pipe(
-      this.#v1Context.syncService.blockData(),
+      this.#v2Context.syncService.blockData(),
       Effect.map((blockData) =>
         pipe(
           transactions,
           Arr.map((transaction) =>
-            this.#v1Context.transactingCapability.calculateFee(transaction, blockData.ledgerParameters),
+            this.#v2Context.transactingCapability.calculateFee(transaction, blockData.ledgerParameters),
           ),
           ArrayOps.sumBigInt,
         ),
@@ -350,10 +350,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     currentTime?: Date,
   ): Effect.Effect<bigint, WalletError> {
     return pipe(
-      Effect.all([SubscriptionRef.get(this.#context.stateRef), this.#v1Context.syncService.blockData()]),
+      Effect.all([SubscriptionRef.get(this.#context.stateRef), this.#v2Context.syncService.blockData()]),
       Effect.flatMap(([state, blockData]) =>
         pipe(
-          this.#v1Context.transactingCapability.estimateFee(
+          this.#v2Context.transactingCapability.estimateFee(
             secretKey,
             state,
             transactions,
@@ -374,11 +374,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     currentTime?: Date,
   ): Effect.Effect<{ transaction: UnprovenTransaction; blockData: BlockData }, WalletError> {
     return pipe(
-      this.#v1Context.syncService.blockData(),
+      this.#v2Context.syncService.blockData(),
       Effect.flatMap((blockData) =>
         pipe(
           SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
-            this.#v1Context.transactingCapability.balanceTransactions(
+            this.#v2Context.transactingCapability.balanceTransactions(
               secretKey,
               state,
               transactions,
@@ -395,7 +395,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
 
   revertTransaction(transaction: AnyTransaction): Effect.Effect<void, WalletError> {
     return SubscriptionRef.updateEffect(this.#context.stateRef, (state) => {
-      return pipe(this.#v1Context.transactingCapability.revertTransaction(state, transaction), EitherOps.toEffect);
+      return pipe(this.#v2Context.transactingCapability.revertTransaction(state, transaction), EitherOps.toEffect);
     });
   }
 }

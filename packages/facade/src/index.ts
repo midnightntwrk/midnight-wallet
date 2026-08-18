@@ -30,7 +30,7 @@ import {
 import {
   type AnyTransaction,
   type CoinsAndBalances as DustCoinsAndBalances,
-} from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+} from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
   type DefaultShieldedConfiguration,
   type ShieldedWalletAPI,

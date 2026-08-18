@@ -16,16 +16,16 @@ import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
-import { makeDefaultV1SerializationCapability } from '../Serialization.js';
+import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 import { OtherWalletError } from '../WalletError.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const dustParameters = LedgerParameters.initialParameters().dust;
 const seedHex = '0000000000000000000000000000000000000000000000000000000000000001';
 
-describe('V1 dust wallet serialization', () => {
+describe('V2 dust wallet serialization', () => {
   it('serialize ◦ deserialize == id for empty wallet', () => {
-    const capability = makeDefaultV1SerializationCapability();
+    const capability = makeDefaultV2SerializationCapability();
     const dustSecretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
     const wallet = CoreWallet.initEmpty(dustParameters, dustSecretKey, networkId);
 
@@ -37,7 +37,7 @@ describe('V1 dust wallet serialization', () => {
   });
 
   it('returns Left with OtherWalletError for input that does not match the snapshot schema', () => {
-    const capability = makeDefaultV1SerializationCapability();
+    const capability = makeDefaultV2SerializationCapability();
     const result = capability.deserialize(null, '{"not":"a snapshot"}');
 
     expect(Either.isLeft(result)).toBe(true);

@@ -26,20 +26,20 @@ import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntw
 import { type Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
-import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './v1/CoinsAndBalances.js';
-import { CoreWallet } from './v1/CoreWallet.js';
-import { type KeysCapability } from './v1/Keys.js';
-import { V1Tag } from './v1/RunningV1Variant.js';
-import { type SerializationCapability } from './v1/Serialization.js';
-import { type NightUtxoSplitForDustRegistration } from './v1/Transacting.js';
-import { type DustFullInfo, type UtxoWithMeta } from './v1/types/Dust.js';
-import { type AnyTransaction } from './v1/types/ledger.js';
-import { type BaseV1Configuration, type DefaultV1Configuration, type V1Variant, V1Builder } from './v1/V1Builder.js';
-import { type WalletSyncUpdate, type BlockData } from './v1/SyncSchema.js';
+import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './v2/CoinsAndBalances.js';
+import { CoreWallet } from './v2/CoreWallet.js';
+import { type KeysCapability } from './v2/Keys.js';
+import { V2Tag } from './v2/RunningV2Variant.js';
+import { type SerializationCapability } from './v2/Serialization.js';
+import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
+import { type DustFullInfo, type UtxoWithMeta } from './v2/types/Dust.js';
+import { type AnyTransaction } from './v2/types/ledger.js';
+import { type BaseV2Configuration, type DefaultV2Configuration, type V2Variant, V2Builder } from './v2/V2Builder.js';
+import { type WalletSyncUpdate, type BlockData } from './v2/SyncSchema.js';
 
-export type { BlockData } from './v1/SyncSchema.js';
+export type { BlockData } from './v2/SyncSchema.js';
 
-import { type TransactionHistoryService } from './v1/TransactionHistory.js';
+import { type TransactionHistoryService } from './v2/TransactionHistory.js';
 
 export type DustWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
@@ -215,18 +215,18 @@ export type CustomizedDustWallet<
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
 > = DustWalletAPI<TStartAux, TSerialized> &
-  WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
+  WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
-export type DefaultDustConfiguration = DefaultV1Configuration;
+export type DefaultDustConfiguration = DefaultV2Configuration;
 
 export interface CustomizedDustWalletClass<
   TStartAux = DustSecretKey,
   TTransaction = FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-  TConfig extends BaseV1Configuration = DefaultDustConfiguration,
+  TConfig extends BaseV2Configuration = DefaultDustConfiguration,
 > extends WalletLike.BaseWalletClass<
-  [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
+  [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
 > {
   configuration: TConfig;
   startWithSeed(
@@ -245,30 +245,30 @@ export type DustWallet = CustomizedDustWallet<DustSecretKey, FinalizedTransactio
 export type DustWalletClass = CustomizedDustWalletClass<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
 
 export function DustWallet(configuration: DefaultDustConfiguration): DustWalletClass {
-  return CustomDustWallet(configuration, new V1Builder().withDefaults());
+  return CustomDustWallet(configuration, new V2Builder().withDefaults());
 }
 
 export function CustomDustWallet<
-  TConfig extends BaseV1Configuration = DefaultDustConfiguration,
+  TConfig extends BaseV2Configuration = DefaultDustConfiguration,
   TStartAux = DustSecretKey,
   TTransaction = FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
 >(
   configuration: TConfig,
-  builder: VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>,
+  builder: VariantBuilder.VariantBuilder<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>,
 ): CustomizedDustWalletClass<TStartAux, TTransaction, TSyncUpdate, TSerialized, TConfig> {
   const buildArgs = [configuration] as WalletBuilder.BuildArguments<
     [
       VariantBuilder.VersionedVariantBuilder<
-        VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>
+        VariantBuilder.VariantBuilder<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>
       >,
     ]
   >;
   const BaseWallet = WalletBuilder.init()
     .withVariant(ProtocolVersion.MinSupportedVersion, builder)
     .build(...buildArgs) as WalletLike.BaseWalletClass<
-    [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>],
+    [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>],
     TConfig
   >;
 
@@ -296,7 +296,7 @@ export function CustomDustWallet<
 
     static restore(serializedState: TSerialized): CustomDustWalletImplementation {
       const deserialized: CoreWallet = CustomDustWalletImplementation.allVariantsRecord()
-        [V1Tag].variant.deserializeState(serializedState)
+        [V2Tag].variant.deserializeState(serializedState)
         .pipe(Either.getOrThrow);
       return CustomDustWalletImplementation.startFirst(CustomDustWalletImplementation, deserialized);
     }
@@ -305,25 +305,25 @@ export function CustomDustWallet<
 
     constructor(
       runtime: Runtime.Runtime<
-        [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
+        [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
       >,
       scope: Scope.CloseableScope,
     ) {
       super(runtime, scope);
       this.state = this.rawState.pipe(
         rx.map(
-          DustWalletState.mapState<TSerialized>(CustomDustWalletImplementation.allVariantsRecord()[V1Tag].variant),
+          DustWalletState.mapState<TSerialized>(CustomDustWalletImplementation.allVariantsRecord()[V2Tag].variant),
         ),
         rx.shareReplay({ refCount: true, bufferSize: 1 }),
       );
     }
 
     start(secretKey: TStartAux): Promise<void> {
-      return this.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(secretKey) }).pipe(Effect.runPromise);
+      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground(secretKey) }).pipe(Effect.runPromise);
     }
 
     stepSync(secretKey: TStartAux): Promise<void> {
-      return this.runtime.dispatch({ [V1Tag]: (v1) => v1.sync(secretKey) }).pipe(Effect.runPromise);
+      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.sync(secretKey) }).pipe(Effect.runPromise);
     }
 
     async createDustGenerationTransaction(
@@ -335,8 +335,8 @@ export function CustomDustWallet<
     ): Promise<UnprovenTransaction> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) =>
-            v1.createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress),
+          [V2Tag]: (v2) =>
+            v2.createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress),
         })
         .pipe(Effect.runPromise);
     }
@@ -348,7 +348,7 @@ export function CustomDustWallet<
     ): Promise<NightUtxoSplitForDustRegistration> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.splitNightUtxosForDustRegistration(currentTime, nightUtxos, isRegistration),
+          [V2Tag]: (v2) => v2.splitNightUtxosForDustRegistration(currentTime, nightUtxos, isRegistration),
         })
         .pipe(Effect.runPromise);
     }
@@ -362,8 +362,8 @@ export function CustomDustWallet<
     ): Promise<UnprovenTransaction> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) =>
-            v1.attachDustRegistration(transaction, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment),
+          [V2Tag]: (v2) =>
+            v2.attachDustRegistration(transaction, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment),
         })
         .pipe(Effect.runPromise);
     }
@@ -371,7 +371,7 @@ export function CustomDustWallet<
     addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.addDustGenerationSignature(transaction, signature),
+          [V2Tag]: (v2) => v2.addDustGenerationSignature(transaction, signature),
         })
         .pipe(Effect.runPromise);
     }
@@ -379,7 +379,7 @@ export function CustomDustWallet<
     addDustRegistrationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.addDustRegistrationSignature(transaction, signature),
+          [V2Tag]: (v2) => v2.addDustRegistrationSignature(transaction, signature),
         })
         .pipe(Effect.runPromise);
     }
@@ -387,7 +387,7 @@ export function CustomDustWallet<
     calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.calculateFee(transactions),
+          [V2Tag]: (v2) => v2.calculateFee(transactions),
         })
         .pipe(Effect.runPromise);
     }
@@ -401,7 +401,7 @@ export function CustomDustWallet<
       const effectiveTtl = ttl ?? new Date(Date.now() + 60 * 60 * 1000);
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.estimateFee(secretKey, transactions, effectiveTtl, currentTime),
+          [V2Tag]: (v2) => v2.estimateFee(secretKey, transactions, effectiveTtl, currentTime),
         })
         .pipe(Effect.runPromise);
     }
@@ -414,7 +414,7 @@ export function CustomDustWallet<
     ): Promise<{ transaction: UnprovenTransaction; blockData: BlockData }> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.balanceTransactions(secretKey, transactions, ttl, currentTime),
+          [V2Tag]: (v2) => v2.balanceTransactions(secretKey, transactions, ttl, currentTime),
         })
         .pipe(Effect.runPromise);
     }
@@ -422,7 +422,7 @@ export function CustomDustWallet<
     revertTransaction(transaction: AnyTransaction): Promise<void> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.revertTransaction(transaction),
+          [V2Tag]: (v2) => v2.revertTransaction(transaction),
         })
         .pipe(Effect.runPromise);
     }

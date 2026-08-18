@@ -22,8 +22,8 @@ import { describe, expect, it } from 'vitest';
 import { chooseCoin, makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
-import { RunningV1Variant } from '../RunningV1Variant.js';
-import { makeDefaultV1SerializationCapability } from '../Serialization.js';
+import { RunningV2Variant } from '../RunningV2Variant.js';
+import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 import { type ChangesResult, type SyncCapability, type SyncService } from '../Sync.js';
 import { makeDefaultTransactingCapability } from '../Transacting.js';
 import { type TransactionHistoryService } from '../TransactionHistory.js';
@@ -94,11 +94,11 @@ const trackingHistoryService = (counters: FanOutCounters): TransactionHistorySer
 const variantContextOf = (
   batches: readonly FakeSyncUpdate[],
   transactionHistoryService: TransactionHistoryService,
-): RunningV1Variant.Context<string, FakeSyncUpdate, FinalizedTransaction, null> => {
+): RunningV2Variant.Context<string, FakeSyncUpdate, FinalizedTransaction, null> => {
   const keysCapability = makeDefaultKeysCapability();
   const coinsAndBalancesCapability = makeDefaultCoinsAndBalancesCapability(undefined, () => ({ keysCapability }));
   return {
-    serializationCapability: makeDefaultV1SerializationCapability(),
+    serializationCapability: makeDefaultV2SerializationCapability(),
     syncService: syncServiceOf(batches),
     syncCapability: fakeSyncCapability,
     transactingCapability: makeDefaultTransactingCapability(
@@ -112,7 +112,7 @@ const variantContextOf = (
   };
 };
 
-describe('RunningV1Variant.startSync tx-history fan-out', () => {
+describe('RunningV2Variant.startSync tx-history fan-out', () => {
   it('caps in-flight lookups at 8 across overlapping sync batches, and still records every change', async () => {
     // Two batches of 6: each batch alone is below the fan-out limit of 8, so any excess concurrency can only come
     // from batches failing to share a single cap.
@@ -132,7 +132,7 @@ describe('RunningV1Variant.startSync tx-history fan-out', () => {
         CoreWallet.initEmpty(LedgerParameters.initialParameters().dust, secretKey, networkId),
       );
       const scope = yield* Scope.make();
-      const variant = new RunningV1Variant(
+      const variant = new RunningV2Variant(
         scope,
         {
           stateRef,

@@ -49,7 +49,7 @@ const networkId = NetworkId.NetworkId.Undeployed;
 const dustParameters = LedgerParameters.initialParameters().dust;
 const seedHex = '0000000000000000000000000000000000000000000000000000000000000001';
 
-describe('V1 dust wallet subscription', () => {
+describe('V2 dust wallet subscription', () => {
   describe('initial subscription cursor', () => {
     // Open one subscription against a recording stub and return the variables it was opened with. The
     // stub yields nothing, so the surrounding pipeline drains immediately.
@@ -109,7 +109,7 @@ describe('V1 dust wallet subscription', () => {
   });
 });
 
-describe('V1 projections sync capability', () => {
+describe('V2 projections sync capability', () => {
   const projectionUpdate = (
     timestamp: Date,
     dustCommitmentMerkleTreeRoot = '00',
@@ -172,7 +172,7 @@ describe('V1 projections sync capability', () => {
   });
 });
 
-describe('V1 projections nullifier subscription', () => {
+describe('V2 projections nullifier subscription', () => {
   const ledgerParametersHex = Buffer.from(LedgerParameters.initialParameters().serialize()).toString('hex');
 
   const wireRecord = (nullifierLeBytes: string) => ({
@@ -265,7 +265,7 @@ describe('V1 projections nullifier subscription', () => {
   });
 });
 
-describe('V1 projections blockData', () => {
+describe('V2 projections blockData', () => {
   it('fails with a typed WalletError (not a defect) when the indexer returns no block', async () => {
     // Cold indexer / reorg: the indexer resolves the query but with `block: null`. This is an EXPECTED
     // condition and must surface as a typed FAILURE in the error channel, never as a defect (die) that
@@ -342,7 +342,7 @@ describe('V1 projections blockData', () => {
   });
 });
 
-describe('V1 projections dust spend resolution', () => {
+describe('V2 projections dust spend resolution', () => {
   const initialParameters = LedgerParameters.initialParameters();
 
   const spendEvent = (content: DustSpendProcessedEvent) => ({

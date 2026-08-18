@@ -772,7 +772,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         newGeneratingTreeRoot !== update.latestBlock.dustGenerationMerkleTreeRoot
       ) {
         // `SyncCapability.applyUpdate` has no typed error channel, so throwing preserves its public tuple-returning API;
-        // `RunningV1Variant` catches this at the capability boundary. See #572 for the planned `Either`-based API.
+        // `RunningV2Variant` catches this at the capability boundary. See #572 for the planned `Either`-based API.
         throw new OtherWalletError({ message: 'Root hashes don`t match' });
       }
 

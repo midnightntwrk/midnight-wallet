@@ -16,7 +16,7 @@
 import { Array as Arr, DateTime, Duration, HashSet, Option, Order, pipe } from 'effect';
 import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { type AnyTransaction } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { type AnyTransaction } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 
 /**
  * The key under which a transaction's history entry is stored.

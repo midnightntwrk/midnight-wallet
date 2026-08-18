@@ -28,7 +28,7 @@ import {
   UnshieldedWallet,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk';
-import { V1Builder } from '@midnightntwrk/wallet-sdk/dust/v1';
+import { V2Builder } from '@midnightntwrk/wallet-sdk/dust/v2';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
 
@@ -63,7 +63,7 @@ const configuration: DefaultConfiguration = {
 const fastSyncDustWallet = (config: DefaultDustConfiguration) =>
   CustomDustWallet(
     { ...config, anonymityLevel: 7 },
-    new V1Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
+    new V2Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
   );
 
 const initWalletWithSeed = async (seed: Buffer) => {

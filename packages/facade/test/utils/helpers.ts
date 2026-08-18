@@ -23,8 +23,8 @@ import { CustomDustWallet, type DustWalletAPI } from '@midnightntwrk/wallet-sdk-
 import {
   SyncService as DustSyncService,
   TransactionHistory as DustTransactionHistory,
-  V1Builder as DustV1Builder,
-} from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+  V2Builder as DustV2Builder,
+} from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
   CustomUnshieldedWallet,
   createKeystore,
@@ -209,7 +209,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
   // Dust wallet: all defaults except sync (uses simulator sync)
   const DustWalletFactory = CustomDustWallet(
     config,
-    new DustV1Builder()
+    new DustV2Builder()
       .withDefaultTransactionType()
       .withSync(DustSyncService.makeSimulatorSyncService, DustSyncService.makeSimulatorSyncCapability)
       .withSerializationDefaults()

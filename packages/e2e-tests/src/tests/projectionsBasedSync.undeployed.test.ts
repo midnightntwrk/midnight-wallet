@@ -26,7 +26,7 @@ import {
   makeEventLessSyncCapability,
   makeEventLessSyncService,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 
 /** @group undeployed */
 
@@ -42,7 +42,7 @@ describe('Projections-based synchronisation model', () => {
   const eventLessDustWallet = (config: DefaultDustConfiguration) =>
     CustomDustWallet(
       config,
-      new V1Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
+      new V2Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
     );
 
   let fixture: TestContainersFixture;

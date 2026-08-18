@@ -29,7 +29,7 @@ import {
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { type DefaultDustConfiguration, DustWallet, type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { type DefaultV2Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import { Roles } from '@midnightntwrk/wallet-sdk-hd';
 import { type TestContainersFixture } from '../test-fixture.js';
 import { logger } from '../logger.js';
@@ -104,7 +104,7 @@ const restoreUnshieldedWallet = async (
 
 const restoreDustWallet = async (
   path: string,
-  walletConfig: DefaultV1Configuration,
+  walletConfig: DefaultV2Configuration,
   readIfExists: (path: string) => Promise<string | undefined>,
 ) => {
   try {
