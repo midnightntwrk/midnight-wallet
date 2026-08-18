@@ -24,12 +24,12 @@ import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Clock } from '@midnightntwrk/wallet-sdk-utilities';
-import { Effect, Either, type Scope } from 'effect';
+import { Effect, Either, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './v2/CoinsAndBalances.js';
 import { CoreWallet } from './v2/CoreWallet.js';
 import { type KeysCapability } from './v2/Keys.js';
-import { V2Tag } from './v2/RunningV2Variant.js';
+import { type RunningV2Variant, V2Tag } from './v2/RunningV2Variant.js';
 import { type SerializationCapability } from './v2/Serialization.js';
 import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
 import { type DustFullInfo, type UtxoWithMeta } from './v2/types/Dust.js';
@@ -303,6 +303,27 @@ export function CustomDustWallet<
 
     readonly state: rx.Observable<DustWalletState<TSerialized>>;
 
+    /**
+     * The start-aux the wallet was last started with.
+     *
+     * @remarks
+     *   Sync needs the dust secret key, and a migration starts a fresh variant whose sync has never been started. The key
+     *   cannot come from the state — it is deliberately absent from anything serialized — and it does not exist yet
+     *   when the wallet is first constructed, so it is held here, in memory, for the lifetime of the wallet. Cleared by
+     *   {@link stop} so a stopped wallet cannot be silently resurrected by a late activation.
+     */
+    readonly #retainedAux = Ref.unsafeMake<Option.Option<TStartAux>>(Option.none());
+
+    /**
+     * Whether the activation watcher has been registered.
+     *
+     * @remarks
+     *   Registration is per wallet, not per `start`: watchers accumulate, so registering on every call would restart sync
+     *   once per historical `start` on the next activation. Flipped with `getAndSet` so concurrent `start` calls cannot
+     *   both observe it unset.
+     */
+    readonly #watcherRegistered = Ref.unsafeMake(false);
+
     constructor(
       runtime: Runtime.Runtime<
         [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
@@ -319,7 +340,35 @@ export function CustomDustWallet<
     }
 
     start(secretKey: TStartAux): Promise<void> {
-      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground(secretKey) }).pipe(Effect.runPromise);
+      return Effect.gen(this, function* () {
+        yield* Ref.set(this.#retainedAux, Option.some(secretKey));
+
+        // Registered before the first dispatch, and only once: `onVariantActivation` resolves only after its
+        // subscription is live, so an activation racing this call is queued rather than missed.
+        const alreadyRegistered = yield* Ref.getAndSet(this.#watcherRegistered, true);
+        if (!alreadyRegistered) {
+          yield* this.runtime.onVariantActivation({
+            [V2Tag]: (v2: RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>) =>
+              Ref.get(this.#retainedAux).pipe(
+                Effect.flatMap(
+                  Option.match({
+                    // Stopped, or never started: there is nothing to resume and no key to resume it with.
+                    onNone: () => Effect.void,
+                    onSome: (retained: TStartAux) => v2.startSyncInBackground(retained),
+                  }),
+                ),
+              ),
+          });
+        }
+
+        yield* this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground(secretKey) });
+      }).pipe(Effect.runPromise);
+    }
+
+    override async stop(): Promise<void> {
+      // Released before the runtime is torn down: the key outlives neither the wallet nor an in-flight activation.
+      Ref.set(this.#retainedAux, Option.none()).pipe(Effect.runSync);
+      await super.stop();
     }
 
     stepSync(secretKey: TStartAux): Promise<void> {
