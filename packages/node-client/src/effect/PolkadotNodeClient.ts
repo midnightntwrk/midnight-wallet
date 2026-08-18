@@ -65,7 +65,19 @@ export class PolkadotNodeClient implements NodeClient.Service {
         // Disconnect immediately after loading metadata to avoid keeping the WebSocket open.
         // The health-check timer (10s interval) and timeout handler (5s interval) are cleared on disconnect.
         // Metadata and type registry remain cached in memory for subsequent on-demand connections.
-        await api.disconnect();
+        //
+        // WsProvider.disconnect() is fire-and-forget: it dispatches the close frame and returns while the socket is
+        // still CLOSING. `isConnected` only flips false once #onSocketClose fires, so returning here without waiting
+        // leaves ensureConnection() reading a stale `true`, skipping the reconnect, and sending on a dying socket.
+        // Locally the close-ack lands fast enough to hide this; against a remote node it does not.
+        await new Promise<void>((resolve) => {
+          if (!api.isConnected) {
+            resolve();
+            return;
+          }
+          api.once('disconnected', () => resolve());
+          void api.disconnect();
+        });
         return api;
       }),
       (api) => Effect.promise(() => api.disconnect()),
@@ -80,6 +92,8 @@ export class PolkadotNodeClient implements NodeClient.Service {
 
   readonly config: Config;
   readonly api: ApiPromise;
+  /** Operations currently holding the shared connection open. */
+  #activeOperations = 0;
 
   constructor(config: Config, api: ApiPromise) {
     this.config = config;
@@ -111,11 +125,40 @@ export class PolkadotNodeClient implements NodeClient.Service {
       Effect.mapError(
         (timeout) =>
           new NodeClientError.ConnectionError({
-            message: 'Could not connect within specified time range (5s)',
+            message: `Could not establish a usable connection within ${Duration.format(
+              this.config.reconnectionTimeout,
+            )}`,
             cause: timeout,
           }),
       ),
     );
+  }
+
+  /** Takes a hold on the shared connection for the duration of one operation. */
+  #acquire(): Effect.Effect<void, NodeClientError.NodeClientError> {
+    return pipe(
+      this.ensureConnection(),
+      Effect.tap(() =>
+        Effect.sync(() => {
+          this.#activeOperations += 1;
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Drops one hold, disconnecting only once the last operation finishes.
+   *
+   * The api instance is shared, so an unconditional `disconnect()` in a per-operation finalizer closes the transport
+   * out from under any operation still in flight.
+   */
+  #release(): Effect.Effect<void> {
+    return Effect.promise(async () => {
+      this.#activeOperations = Math.max(0, this.#activeOperations - 1);
+      if (this.#activeOperations === 0) {
+        await this.api.disconnect();
+      }
+    });
   }
 
   sendMidnightTransaction(
@@ -144,9 +187,9 @@ export class PolkadotNodeClient implements NodeClient.Service {
     );
 
     return pipe(
-      Stream.fromEffect(this.ensureConnection()),
+      Stream.fromEffect(this.#acquire()),
       Stream.flatMap(() => outputStream),
-      Stream.ensuring(Effect.promise(() => this.api.disconnect())),
+      Stream.ensuring(this.#release()),
     );
   }
 
@@ -155,7 +198,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
     NodeClientError.NodeClientError
   > {
     return pipe(
-      this.ensureConnection(),
+      this.#acquire(),
       Effect.andThen(() => Effect.promise(() => this.api.rpc.chain.getBlock(this.api.genesisHash))),
       // https://polkadot.js.org/docs/api/cookbook/blocks/#how-do-i-view-extrinsic-information
       Effect.map(({ block }) => ({
@@ -171,7 +214,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
             cause: error,
           }),
       ),
-      Effect.ensuring(Effect.promise(() => this.api.disconnect())),
+      Effect.ensuring(this.#release()),
     );
   }
 
