@@ -29,17 +29,19 @@ unconfigured builder has always produced and what `startEmpty` relies on — unc
 state unchanged between two variants of the same ledger version), and `makeCrossLedgerMigration` (start the next ledger
 version fresh). A builder that never mentions migration keeps building and behaves exactly as before.
 
-**Crossing a ledger version carries identity and nothing else.** The indexer replays the timeline after the fork,
-re-emitting the wallet's history as events of the new ledger version, so a migrated wallet re-discovers exactly the same
-coins by ordinary synchronization — decrypting them with the keys the sync restart supplies. `makeCrossLedgerMigration`
-therefore carries the public keys, the network and the protocol version that triggered the hand-over onto an empty local
-state, and carries no coins: doing so would double-count what the replay is about to deliver, and rebuilding a Merkle
-tree needs secret keys that migration by design does not have.
+**Crossing a ledger version carries identity and position, and no coins.** The indexer replays the timeline after the
+fork, re-emitting the wallet's history as events of the new ledger version, so a migrated wallet re-discovers exactly
+the same coins by ordinary synchronization — decrypting them with the keys the sync restart supplies.
+`makeCrossLedgerMigration` therefore carries the public keys, the network and the protocol version that triggered the
+hand-over onto an empty local state, and carries no coins: doing so would double-count what the replay is about to
+deliver, and rebuilding a Merkle tree needs secret keys that migration by design does not have.
 
-Sync progress is **reset** rather than carried, on the assumption that a replayed timeline restarts its event ids.
-Should the indexer continue them past the boundary instead, the projection parks progress at the fork rather than
-rewinding it — a one-line change, which is why `PreviousLedgerWallet` still exposes progress. The assumption is
-recorded against the indexer team and is the one thing here that must be confirmed before release.
+Sync progress is **parked at the fork**: the previous variant's cursor crosses unchanged. The replay is not a second
+timeline but the same one continuing — the indexer numbers the replayed events onwards from whatever id it had reached
+when the fork happened, never from zero — so a migrated wallet resumes from the inherited cursor and meets the replay
+there. Rewinding to zero would leave it waiting on a stretch of history that the new ledger version's events do not
+occupy. `isConnected` is the one part of progress that does not cross: nothing is synchronizing behind a just-migrated
+state until the restart reconnects it.
 
 `ShieldedWallet.start` now holds on to the keys it was given and re-establishes background synchronization on the
 variant a migration activates; `stop` releases them. Previously a migration left the wallet with no running sync, and no
