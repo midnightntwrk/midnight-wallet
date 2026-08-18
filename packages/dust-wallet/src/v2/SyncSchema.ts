@@ -396,6 +396,17 @@ export const SyncEventsUpdateSchema = Schema.Struct({
   id: Schema.Number,
   raw: HexedEvent,
   maxId: Schema.Number,
+  /**
+   * The protocol version the indexer reported this event under, when it reports one at all.
+   *
+   * @remarks
+   *   Optional because dust's subscription does not select the field yet — the schema defines it on `DustLedgerEvent`,
+   *   but adding the selection-set line waits on confirmation from a deployed indexer. Until then every item arrives
+   *   without it, and an absent value means "the indexer did not say", which is treated as in-range: the event applies
+   *   normally and the wallet's recorded version is left alone. Reading it as zero instead would drag the recorded
+   *   version down and, on a wallet already past the boundary, look like a migration backwards.
+   */
+  protocolVersion: Schema.optional(Schema.Number),
 });
 
 export type WalletSyncSubscription = Schema.Schema.Type<typeof SyncEventsUpdateSchema>;

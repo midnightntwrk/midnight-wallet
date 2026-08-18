@@ -123,8 +123,12 @@ describe('the cross-ledger migration', () => {
     const wallet = await Effect.runPromise(migration().migrate(previous));
 
     expect(wallet.state.utxos).toEqual([]);
-    expect(wallet.state.commitmentTreeFirstFree).toBe(0n);
-    expect(wallet.state.generatingTreeFirstFree).toBe(0n);
+    // The v2 twin of this test reads `commitmentTreeFirstFree` / `generatingTreeFirstFree`, which ledger-v8's
+    // `DustLocalState` does not expose. Stated instead as: the migrated state's trees are indistinguishable from those
+    // of a state that never held anything.
+    const untouched = new ledger.DustLocalState(dustParameters());
+    expect(wallet.state.commitmentTreeRoot()).toBe(untouched.commitmentTreeRoot());
+    expect(wallet.state.generatingTreeRoot()).toBe(untouched.generatingTreeRoot());
     expect(wallet.pendingDust).toEqual([]);
   });
 

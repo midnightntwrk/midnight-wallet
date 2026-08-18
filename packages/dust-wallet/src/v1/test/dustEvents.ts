@@ -183,7 +183,7 @@ export const buildDustChain = (protocolVersion?: ProtocolVersion.ProtocolVersion
           const signed = yield* running.addDustGenerationSignature(unsigned, signature);
           // The simulator takes proof-erased transactions, so erasing here is the whole of "proving" on this path —
           // the same shortcut `makeSimulatorProvingServiceEffect` takes, without depending on it.
-          yield* simulator.submitTransaction(signed.eraseProofs(), 'InBlock');
+          yield* simulator.submitTransaction(signed.eraseProofs());
           yield* syncedTo(BigInt(DUST_EVENT_COUNT + index + 1));
         }),
       { discard: true },

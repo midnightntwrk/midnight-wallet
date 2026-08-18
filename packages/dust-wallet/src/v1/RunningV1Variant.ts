@@ -68,8 +68,26 @@ const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   return [StateChange.ProgressUpdate({ sourceGap, applyGap })];
 };
 
-const protocolVersionChange = (previous: CoreWallet, current: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
-  return previous.protocolVersion != current.protocolVersion
+/**
+ * The version signals this variant puts on its state stream.
+ *
+ * @remarks
+ *   Two of them, for two different situations. A transition is the ordinary one: the state moved to a version the variant
+ *   may or may not own, and the runtime decides. The healing emission covers restore: a snapshot taken between the
+ *   moment sync annotated an out-of-range version and the moment the runtime acted on it comes back with a version this
+ *   variant does not own and no transition to announce it, so it would sit there forever. Announcing it on the first
+ *   observation is what forward-migrates such a snapshot.
+ */
+const protocolVersionChange = (
+  previous: CoreWallet,
+  current: CoreWallet,
+  isInitial: boolean,
+  activationRange: ProtocolVersion.ProtocolVersion.Range,
+): StateChange.StateChange<CoreWallet>[] => {
+  const transitioned = previous.protocolVersion != current.protocolVersion;
+  const strandedOutsideRange = isInitial && !ProtocolVersion.withinRange(current.protocolVersion, activationRange);
+
+  return transitioned || strandedOutsideRange
     ? [
         StateChange.VersionChange({
           change: VersionChangeType.Version({
@@ -127,18 +145,27 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
         context.stateRef.changes.pipe(
-          Stream.mapAccum(initialState, (previous: CoreWallet, current: CoreWallet) => {
-            return [current, [previous, current]] as const;
-          }),
+          // The accumulator carries the "have we seen anything yet" flag alongside the previous state: the first
+          // observation is the only one that can be a restored state nobody has inspected against this variant's
+          // range yet, and `SubscriptionRef.changes` replays the current value, so it is exactly this element.
+          Stream.mapAccum(
+            { previous: initialState, isInitial: true },
+            (seen, current: CoreWallet) =>
+              [{ previous: current, isInitial: false }, [seen.previous, current, seen.isInitial] as const] as const,
+          ),
         ),
       ),
       Stream.mapConcat(
-        ([previous, current]: readonly [CoreWallet, CoreWallet]): StateChange.StateChange<CoreWallet>[] => {
+        ([previous, current, isInitial]: readonly [
+          CoreWallet,
+          CoreWallet,
+          boolean,
+        ]): StateChange.StateChange<CoreWallet>[] => {
           // TODO: emit progress only upon actual change
           return [
             StateChange.State({ state: current }),
             ...progress(current),
-            ...protocolVersionChange(previous, current),
+            ...protocolVersionChange(previous, current, isInitial, context.activationRange),
           ];
         },
       ),
@@ -197,7 +224,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
             SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
               Effect.try({
                 try: () => {
-                  const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(state, update);
+                  const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(
+                    state,
+                    update,
+                    this.#context.activationRange,
+                  );
                   return [changesResult, newState] as const;
                 },
                 catch: (err) =>

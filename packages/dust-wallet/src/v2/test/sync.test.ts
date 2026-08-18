@@ -17,7 +17,7 @@ import {
   type Event as LedgerEvent,
   LedgerParameters,
 } from '@midnightntwrk/ledger-v9';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { BlockHash, DustLedgerEvents, DustNullifierTransactions } from '@midnightntwrk/wallet-sdk-indexer-client';
 import type {
   BlockHashQuery,
@@ -46,6 +46,13 @@ import {
 } from '../SyncSchema.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
+
+/**
+ * The projections capability takes an activation range like every other sync capability, but has nothing to apply it
+ * to — see the note on `makeEventLessSyncCapability`. A full span is passed here so these tests keep asserting what
+ * they always asserted.
+ */
+const fullSpan = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion);
 const dustParameters = LedgerParameters.initialParameters().dust;
 const seedHex = '0000000000000000000000000000000000000000000000000000000000000001';
 
@@ -144,7 +151,7 @@ describe('V2 projections sync capability', () => {
     const inputSyncTime = state.state.syncTime;
     const timestamp = new Date('2026-07-14T10:00:00.000Z');
 
-    const [updatedState, result] = makeEventLessSyncCapability().applyUpdate(state, projectionUpdate(timestamp));
+    const [updatedState, result] = makeEventLessSyncCapability().applyUpdate(state, projectionUpdate(timestamp), fullSpan);
 
     expect(updatedState.state).not.toBe(state.state);
     expect(updatedState.state.syncTime).toEqual(timestamp);
@@ -152,6 +159,27 @@ describe('V2 projections sync capability', () => {
     expect(result.changes).toEqual([]);
     expect(state.state.syncTime).toEqual(inputSyncTime);
     expect(state.state.serialize()).toEqual(serializedInput);
+  });
+
+  it('does not annotate a protocol version, because a projections update carries none', () => {
+    // Documents a real gap rather than hiding it. The projections wire format has no per-item protocol version — a
+    // projections update is a folded snapshot, not a run of version-tagged timeline items — so this capability takes an
+    // activation range it cannot act on. A wallet syncing this way never hands over at a fork. Closing that needs a
+    // version on the projections format; until then this test is what keeps the gap visible.
+    const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+    const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const narrowRange = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.ProtocolVersion(1n));
+
+    const [updatedState, result] = makeEventLessSyncCapability().applyUpdate(
+      state,
+      projectionUpdate(new Date('2026-07-14T10:00:00.000Z')),
+      narrowRange,
+    );
+
+    // Applied in full despite the range being as narrow as it can be, and the version left exactly where it was.
+    expect(updatedState.progress.highestIndex).toBe(1n);
+    expect(updatedState.protocolVersion).toBe(state.protocolVersion);
+    expect(result.protocolVersion).toBe(Number(state.protocolVersion));
   });
 
   it('does not mutate or advance the input state when root validation fails', () => {
@@ -163,7 +191,7 @@ describe('V2 projections sync capability', () => {
     const timestamp = new Date('2026-07-14T10:00:00.000Z');
 
     expect(() =>
-      makeEventLessSyncCapability().applyUpdate(state, projectionUpdate(timestamp, 'unexpected-commitment-root')),
+      makeEventLessSyncCapability().applyUpdate(state, projectionUpdate(timestamp, 'unexpected-commitment-root'), fullSpan),
     ).toThrow('Root hashes don`t match');
 
     expect(state.state.syncTime).toEqual(inputSyncTime);

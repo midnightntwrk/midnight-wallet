@@ -26,6 +26,7 @@ import {
   Chunk,
   Schedule,
 } from 'effect';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   dustNullifier,
   successorDustUtxo,
@@ -104,8 +105,92 @@ export type ChangesResult = {
 };
 
 export interface SyncCapability<TState, TUpdate, TResult> {
-  applyUpdate: (state: TState, update: TUpdate) => [TState, TResult];
+  /**
+   * Folds a sync update into the wallet state.
+   *
+   * @param state The state to fold into.
+   * @param update The update to apply.
+   * @param activeRange The half-open protocol version range the running variant owns. Anything the source reports at or
+   *   beyond its end belongs to a later variant and must be left unapplied for that variant to fetch.
+   */
+  applyUpdate: (
+    state: TState,
+    update: TUpdate,
+    activeRange: ProtocolVersion.ProtocolVersion.Range,
+  ) => [TState, TResult];
 }
+
+/** The result of splitting a batch of version-tagged items at a variant's activation boundary. */
+export type BoundarySplit<T> = {
+  /** The leading items this variant owns, in source order. */
+  readonly applied: readonly T[];
+  /** The trailing items belonging to a later protocol version, left for the next variant to re-fetch. */
+  readonly deferred: readonly T[];
+  /**
+   * The protocol version to record on the state: the first deferred item's version when there is one — that is the
+   * signal that triggers migration — otherwise the last version any applied item reported. `None` when the batch was
+   * empty, and also when nothing in it reported a version at all.
+   */
+  readonly observedVersion: Option.Option<ProtocolVersion.ProtocolVersion>;
+};
+
+/**
+ * Splits a batch of version-tagged items at the end of a variant's activation range.
+ *
+ * @remarks
+ *   The split is positional, not a filter: everything from the first out-of-range item onwards is deferred, even if a
+ *   later item reports an in-range version again. A batch is a contiguous slice of one timeline, so applying past a
+ *   boundary and then resuming behind it would leave a hole no cursor can describe.
+ *
+ *   An item whose version is `undefined` is treated as in-range and contributes no annotation. Dust's subscription does
+ *   not report `protocolVersion` yet, so an absent value means "the indexer did not say" — which must keep today's
+ *   behaviour exactly, rather than being read as version zero and dragging the recorded version down.
+ *
+ *   This is the one place the boundary rule lives; the indexer capability (per event) and the simulator capability (per
+ *   block) both go through it, so they cannot drift apart.
+ * @param items The batch, in source order.
+ * @param versionOf Reads the protocol version an item was reported at, or `undefined` if it carries none.
+ * @param activeRange The variant's half-open activation range.
+ * @returns The applied/deferred split and the version to record.
+ */
+export const splitAtVersionBoundary = <T>(
+  items: readonly T[],
+  versionOf: (item: T) => number | undefined,
+  activeRange: ProtocolVersion.ProtocolVersion.Range,
+): BoundarySplit<T> => {
+  const [, end] = activeRange;
+  const boundary = items.findIndex((item) => {
+    const version = versionOf(item);
+    return version !== undefined && BigInt(version) >= end;
+  });
+  const [applied, deferred] =
+    boundary < 0 ? [items, [] as readonly T[]] : [items.slice(0, boundary), items.slice(boundary)];
+  // The first deferred item is the hand-over signal. Failing that, the last applied item that actually reported a
+  // version — searching backwards so a trailing untagged item does not erase an earlier tagged one.
+  const signalling =
+    deferred.at(0) ?? [...applied].reverse().find((item) => versionOf(item) !== undefined);
+  const signalledVersion = signalling === undefined ? undefined : versionOf(signalling);
+
+  return {
+    applied,
+    deferred,
+    observedVersion:
+      signalledVersion === undefined
+        ? Option.none()
+        : Option.some(ProtocolVersion.ProtocolVersion(BigInt(signalledVersion))),
+  };
+};
+
+/** Records a batch's observed protocol version on the state, monotonically. A batch that observed none is a no-op. */
+export const annotateVersion = (
+  state: CoreWallet,
+  observedVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
+): CoreWallet =>
+  Option.match(observedVersion, {
+    onNone: () => state,
+    onSome: (version) => CoreWallet.withProtocolVersion(state, version),
+  });
+
 
 export type IndexerClientConnection = {
   indexerHttpUrl: string;
@@ -662,7 +747,11 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
 
 export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
   return {
-    applyUpdate(state: CoreWallet, wrappedUpdate: WalletSyncUpdate): [CoreWallet, ChangesResult] {
+    applyUpdate(
+      state: CoreWallet,
+      wrappedUpdate: WalletSyncUpdate,
+      activeRange: ProtocolVersion.ProtocolVersion.Range,
+    ): [CoreWallet, ChangesResult] {
       const { updates, secretKey } = wrappedUpdate;
 
       // Nothing to update yet
@@ -673,32 +762,71 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
       const appliedIndex = state.progress.appliedIndex;
       const freshUpdates = updates.filter((u) => BigInt(u.id) > appliedIndex);
 
+      // The tip is a property of the source, not of what this variant chose to apply, so it is read from the batch
+      // tail even when the tail belongs to the next protocol version.
       const highestRelevantWalletIndex = BigInt(updates.at(-1)!.maxId);
 
+      const { applied, observedVersion } = splitAtVersionBoundary(
+        freshUpdates,
+        (update) => update.protocolVersion,
+        activeRange,
+      );
+
       const [newState, changes]: [CoreWallet, DustStateChanges[]] =
-        freshUpdates.length === 0
+        applied.length === 0
           ? [state, []]
           : CoreWallet.applyEventsWithChanges(
               state,
               secretKey,
-              freshUpdates.map((u) => u.raw),
+              applied.map((u) => u.raw),
               wrappedUpdate.timestamp,
             );
 
-      const updatedState = CoreWallet.updateProgress(newState, {
-        appliedIndex: freshUpdates.length === 0 ? appliedIndex : BigInt(freshUpdates.at(-1)!.id),
+      // `appliedIndex` stops at the last event this variant actually replayed. The next variant resumes one below it
+      // on an inclusive cursor, so the deferred suffix is re-fetched rather than skipped.
+      const updatedState = CoreWallet.updateProgress(annotateVersion(newState, observedVersion), {
+        appliedIndex: applied.length === 0 ? appliedIndex : BigInt(applied.at(-1)!.id),
         highestRelevantWalletIndex,
         isConnected: true,
       });
 
-      return [updatedState, { changes, protocolVersion: Number(updatedState.protocolVersion) }];
+      return [
+        updatedState,
+        {
+          changes,
+          // Tags the changes that were actually produced, so tx-history records the version they were applied under
+          // rather than the one that is about to trigger the hand-over.
+          protocolVersion:
+            [...applied].reverse().find((u) => u.protocolVersion !== undefined)?.protocolVersion ??
+            Number(state.protocolVersion),
+        },
+      ];
     },
   };
 };
 
+/**
+ * The projections-based fast-sync capability.
+ *
+ * @remarks
+ *   **This path does not implement the fork boundary, and cannot yet.** It takes `activeRange` for signature parity with
+ *   the other capabilities and deliberately ignores it: a projections update is a folded snapshot of dust state — Merkle
+ *   tree updates, new and spent UTXOs, a block header — not a sequence of version-tagged timeline items, so there is
+ *   nothing in it to split and nothing that reports the protocol version a piece of it belongs to. `BlockData` carries
+ *   height, hash, timestamp and ledger parameters, but no version.
+ *
+ *   A wallet syncing through this path therefore never annotates a version and never hands over. Closing that needs a
+ *   version on the projections wire format, which is the same deferred indexer question as the one on
+ *   `SyncEventsUpdateSchema` — recorded here rather than papered over with a boundary check that would silently do
+ *   nothing.
+ */
 export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustProjectionsUpdate, ChangesResult> => {
   return {
-    applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
+    applyUpdate(
+      state: CoreWallet,
+      update: DustProjectionsUpdate,
+      _activeRange: ProtocolVersion.ProtocolVersion.Range,
+    ): [CoreWallet, ChangesResult] {
       if (isProgressUpdate(update)) {
         return [
           CoreWallet.updateProgress(state, {
@@ -921,27 +1049,50 @@ export const makeSimulatorSyncService = (
 
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate, ChangesResult> => {
   return {
-    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): [CoreWallet, ChangesResult] => {
+    applyUpdate: (
+      state: CoreWallet,
+      update: SimulatorSyncUpdate,
+      activeRange: ProtocolVersion.ProtocolVersion.Range,
+    ): [CoreWallet, ChangesResult] => {
       const lastBlock = getLastBlock(update.update);
       // If no block exists yet (blank simulator), skip update
       if (lastBlock === undefined) {
         return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
-      // Get all events from blocks starting at appliedIndex (the next block to process).
+
       // appliedIndex semantics: the first block number we haven't processed yet.
       // Initial: appliedIndex = 0 (haven't processed any blocks)
       // After processing block N: appliedIndex = N + 1 (next block to process)
-      const events = [...getBlockEventsFrom(update.update, state.progress.appliedIndex)];
-      const [newState, changes] = CoreWallet.applyEventsWithChanges(
-        state,
-        update.secretKey,
-        events,
-        lastBlock.timestamp,
+      //
+      // The boundary is applied at block granularity here — a block carries exactly one protocol version, stamped when
+      // it was produced — but it is the same rule and the same helper the indexer path uses. Blocks are walked
+      // individually rather than through `getBlockEventsFrom` so that the split has something to cut.
+      const pending = update.update.blocks.filter((block) => block.number >= state.progress.appliedIndex);
+      const { applied, observedVersion } = splitAtVersionBoundary(
+        pending,
+        (block) => Number(block.protocolVersion),
+        activeRange,
       );
-      const updatedState = CoreWallet.updateProgress(newState, {
-        appliedIndex: lastBlock.number + 1n,
+
+      const events = applied.flatMap((block) => block.transactions.flatMap((tx) => tx.result.events));
+      const lastAppliedBlock = applied.at(-1);
+
+      const [newState, changes] =
+        applied.length === 0
+          ? [state, []]
+          : CoreWallet.applyEventsWithChanges(state, update.secretKey, events, lastAppliedBlock!.timestamp);
+
+      const updatedState = CoreWallet.updateProgress(annotateVersion(newState, observedVersion), {
+        appliedIndex: lastAppliedBlock === undefined ? state.progress.appliedIndex : lastAppliedBlock.number + 1n,
       });
-      return [updatedState, { changes, protocolVersion: Number(updatedState.protocolVersion) }];
+      return [
+        updatedState,
+        {
+          changes,
+          protocolVersion:
+            lastAppliedBlock === undefined ? Number(state.protocolVersion) : Number(lastAppliedBlock.protocolVersion),
+        },
+      ];
     },
   };
 };

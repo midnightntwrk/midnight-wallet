@@ -13,6 +13,7 @@
 export * from './CoreWallet.js';
 export * from '../DustWallet.js';
 export * as Keys from './Keys.js';
+export * as Migration from './Migration.js';
 export { V8 as Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 export * as SyncService from './Sync.js';
 export * as Transacting from './Transacting.js';

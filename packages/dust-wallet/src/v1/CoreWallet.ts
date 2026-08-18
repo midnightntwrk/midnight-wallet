@@ -89,6 +89,46 @@ export const CoreWallet = {
     };
   },
 
+  /**
+   * Records an observed protocol version, monotonically.
+   *
+   * @remarks
+   *   Only ever raises it. A stale lower report — a late batch from behind the tip, a source that rewound — would
+   *   otherwise look like a downward version change and send the runtime migrating backwards into a variant this
+   *   wallet has already left.
+   */
+  withProtocolVersion(wallet: CoreWallet, version: ProtocolVersion.ProtocolVersion): CoreWallet {
+    return version > wallet.protocolVersion ? { ...wallet, protocolVersion: version } : wallet;
+  },
+
+  /**
+   * The first state of this ledger version, projected from the wallet of the version it replaced.
+   *
+   * @remarks
+   *   Identity and position only. The dust itself is deliberately absent: the indexer replays the timeline after the
+   *   fork, so the same dust is generated again by events of this ledger version and re-discovered by ordinary sync.
+   *
+   *   `dustParameters` has to be supplied rather than carried, and this is where dust departs from shielded:
+   *   `DustLocalState` is parameterised by the ledger's dust parameters, and those are a WASM object belonging to
+   *   whichever ledger module produced them. The previous variant's copy cannot be handed to this one.
+   */
+  fromPreviousVersion(previous: {
+    readonly publicKey: PublicKey;
+    readonly networkId: NetworkId;
+    readonly protocolVersion: bigint;
+    readonly progress: SyncProgress.SyncProgressData;
+    readonly dustParameters: DustParameters;
+  }): CoreWallet {
+    return {
+      state: new DustLocalState(previous.dustParameters),
+      publicKey: previous.publicKey,
+      networkId: previous.networkId,
+      pendingDust: [],
+      progress: SyncProgress.createSyncProgress({ ...previous.progress, isConnected: false }),
+      protocolVersion: ProtocolVersion.ProtocolVersion(previous.protocolVersion),
+    };
+  },
+
   applyEventsWithChanges(
     wallet: CoreWallet,
     secretKey: DustSecretKey,
