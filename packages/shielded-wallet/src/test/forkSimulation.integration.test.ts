@@ -181,9 +181,12 @@ describe('a shielded wallet crossing a byte-faithful hard fork', () => {
       expect(yield* translated.query((state) => state.ledger.zswap.firstFree)).toBe(treeSizeAtFork);
 
       // --- the indexer replays the timeline ---------------------------------------------------------------------
+      // Numbered and clocked from the boundary, exactly as the translated chain beside it is: the two reconstructions
+      // are two accounts of one timeline continuing, not of two timelines starting.
       const replayChain = yield* makeReplayChain({
         networkId,
         protocolVersion: forkVersion,
+        genesisBlockNumber: forkBlock,
         genesisTime: yield* fork.preFork.query((state) => state.currentTime),
         blockProducer: immediateBlockProducer(undefined, genesisStrictness),
         coins,
@@ -200,7 +203,8 @@ describe('a shielded wallet crossing a byte-faithful hard fork', () => {
       expect(migration.from.appliedIndex).toBe(forkBlock);
       expect(migration.to.coinCount).toBe(0);
       expect(migration.to.firstFree).toBe(0n);
-      expect(migration.to.appliedIndex).toBe(0n);
+      // Parked on the boundary, not rewound: the replay continues the indexer's event ids rather than restarting them.
+      expect(migration.to.appliedIndex).toBe(forkBlock);
 
       const postFork = yield* wallet.awaitState(
         (state) => state.version >= forkVersion && totalValue(state.state) === walletTotal,
@@ -233,6 +237,8 @@ describe('a shielded wallet crossing a byte-faithful hard fork', () => {
       // both chains: applying it neither consumes nor mutates it.
       const onReplay = yield* replayChain.submitTransaction(spend);
       expect(onReplay.transactions[0].result.type).toBe('success');
+      // Past the boundary on the replay too — both accounts of the timeline count on from the fork height.
+      expect(onReplay.number).toBeGreaterThan(forkBlock);
 
       const afterSpend = yield* wallet.awaitState((state) => state.state.progress.appliedIndex > onReplay.number);
       expect(totalValue(afterSpend.state)).toBe(walletTotal - transferred);

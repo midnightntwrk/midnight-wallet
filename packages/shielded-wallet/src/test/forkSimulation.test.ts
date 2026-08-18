@@ -21,8 +21,8 @@
  *   — then spends them.
  *
  *   Which is the whole point of the corrected design: nothing about the coins crosses the boundary. The migration is
- *   allowed to carry identity and nothing else, and everything else is re-earned by ordinary synchronization. If the
- *   wallet ends up whole here, it did so through the sync path it uses every day.
+ *   allowed to carry identity and a place in the timeline, and the coins are re-earned by ordinary synchronization. If
+ *   the wallet ends up whole here, it did so through the sync path it uses every day.
  *
  *   **Unit tier, and complete.** Modelling the replay needs no state translation — the pre-fork coins are re-announced as
  *   post-fork transactions, which is what an indexer replay is — so every assertion here is earned without a WASM
@@ -140,12 +140,21 @@ const driveTo = (chain: V8.Simulator, height: bigint): Effect.Effect<void, Ledge
     yield* driveTo(chain, height);
   });
 
+/**
+ * The indexer's replay of `coins`, numbered and clocked as a continuation of `chain`.
+ *
+ * @remarks
+ *   Both continuations matter and for the same reason: the replay is the pre-fork timeline carrying on, not a second one
+ *   starting. Its event ids — block numbers here — resume at the boundary height, which is where a migrated wallet's
+ *   parked cursor is waiting for them.
+ */
 const replayOf = (coins: readonly ReplayedCoin[], chain: V8.Simulator) =>
   Effect.gen(function* () {
     const genesisTime = yield* chain.query((state) => state.currentTime);
     return yield* makeReplayChain({
       networkId,
       protocolVersion: forkVersion,
+      genesisBlockNumber: forkBlock,
       genesisTime,
       blockProducer: replayProducer(),
       coins,
@@ -193,12 +202,17 @@ describe('a shielded wallet crossing a hard fork', () => {
       expect(migration.from.protocolVersion).toBe(forkVersion);
       expect(migration.from.appliedIndex).toBe(forkBlock);
 
-      // And what it produced: a wallet holding nothing at all. No coins, no tree, no coin hashes, no progress — the
-      // coins are about to arrive again as replayed events, so carrying them would double-count them.
+      // And what it produced: a wallet holding no coins at all — no tree, no coin hashes — because they are about to
+      // arrive again as replayed events, and carrying them would double-count what the replay is delivering.
       expect(migration.to.coinCount).toBe(0);
       expect(migration.to.firstFree).toBe(0n);
       expect(migration.to.coinHashCount).toBe(0);
-      expect(migration.to.appliedIndex).toBe(0n);
+      // **Parked, not rewound.** The one place the two cursor semantics are directly distinguishable: the state the
+      // migration produced, before any sync has touched it. The replayed timeline continues the indexer's event ids
+      // from where the fork found them, so this wallet resumes on the cursor its predecessor stopped at. A migration
+      // that reset to zero fails here — and only here, because a cursor behind the replay still reads all of it.
+      expect(migration.to.appliedIndex).toBe(migration.from.appliedIndex);
+      expect(migration.to.appliedIndex).toBe(forkBlock);
       // Identity is the one thing that does cross: without these keys the replay decrypts into nothing.
       expect(migration.to.coinPublicKey).toBe(v9.ZswapSecretKeys.fromSeed(seed).coinPublicKey);
       expect(migration.to.encryptionPublicKey).toBe(v9.ZswapSecretKeys.fromSeed(seed).encryptionPublicKey);
@@ -213,8 +227,9 @@ describe('a shielded wallet crossing a hard fork', () => {
       expect(coinIndices(postFork.state)).toEqual(walletIndices);
       // And the whole tree, not just the leaves it owns: the stranger's commitments were replayed and skipped over.
       expect(treeSize(postFork.state)).toBe(treeSizeAtFork);
-      // Read from the start of the replayed timeline, which is what resetting progress at migration buys.
-      expect(postFork.state.progress.appliedIndex).toBe(BigInt(coins.length) + 1n);
+      // Read onwards from the boundary rather than from the start of anything: the replay opens at the fork height and
+      // runs one block per coin, so a wallet that consumed all of it lands that many blocks past where it parked.
+      expect(postFork.state.progress.appliedIndex).toBe(forkBlock + BigInt(coins.length) + 1n);
 
       // --- the re-discovered coins are spendable ----------------------------------------------------------------
       const transferred = 150n;
@@ -288,6 +303,9 @@ describe('a shielded wallet crossing a hard fork', () => {
       const migration = yield* wallet.awaitMigration;
       expect(migration.from.appliedIndex).toBe(forkBlock);
       expect(migration.to.coinCount).toBe(0);
+      // Reached in one batch rather than two, and the cursor still parks on the boundary: where the split happened
+      // does not change what the next variant inherits.
+      expect(migration.to.appliedIndex).toBe(forkBlock);
 
       // The end state is the same as the live transition reaches, which is the point: how the timeline was delivered
       // is not supposed to change what the wallet ends up holding.
@@ -296,6 +314,6 @@ describe('a shielded wallet crossing a hard fork', () => {
       expect(coinValues(postFork.state).toSorted(ascending)).toEqual([...walletValues]);
       expect(coinIndices(postFork.state)).toEqual(walletIndices);
       expect(treeSize(postFork.state)).toBe(treeSizeAtFork);
-      expect(postFork.state.progress.appliedIndex).toBe(BigInt(coins.length) + 1n);
+      expect(postFork.state.progress.appliedIndex).toBe(forkBlock + BigInt(coins.length) + 1n);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
