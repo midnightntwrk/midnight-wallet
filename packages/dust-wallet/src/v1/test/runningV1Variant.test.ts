@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
+  DustLocalState,
   DustSecretKey,
   type DustStateChanges,
   type FinalizedTransaction,
@@ -18,6 +19,7 @@ import {
 } from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
+  Chunk,
   Deferred,
   Duration,
   Effect,
@@ -32,8 +34,9 @@ import {
 } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { chooseCoin, makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
-import { CoreWallet } from '../CoreWallet.js';
+import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
+import { StateChange, VersionChangeType } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { RunningV1Variant } from '../RunningV1Variant.js';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { type ChangesResult, type SyncCapability, type SyncService } from '../Sync.js';
@@ -293,5 +296,90 @@ describe('RunningV1Variant sync serialization', () => {
     }).pipe(Effect.runPromise);
 
     expect(result).toBe(2);
+  });
+});
+
+describe('RunningV1Variant.state protocol version signalling', () => {
+  /** The variant under test owns `[0, 7)`; 7 and above belong to whatever variant comes next. */
+  const activationRange = ProtocolVersion.makeRange(
+    ProtocolVersion.MinSupportedVersion,
+    ProtocolVersion.ProtocolVersion(7n),
+  );
+
+  const walletAtVersion = (protocolVersion: bigint): CoreWallet =>
+    CoreWallet.restore(
+      new DustLocalState(LedgerParameters.initialParameters().dust),
+      PublicKey.fromSecretKey(DustSecretKey.fromSeed(Buffer.alloc(32, 1))),
+      [],
+      { appliedIndex: 0n, highestRelevantWalletIndex: 0n, highestIndex: 0n, highestRelevantIndex: 0n },
+      protocolVersion,
+      networkId,
+    );
+
+  const versionChangesOf = (changes: Chunk.Chunk<StateChange.StateChange<CoreWallet>>): readonly bigint[] =>
+    Chunk.toArray(changes)
+      .filter(StateChange.isVersionChange)
+      .map(({ change }) => {
+        expect(VersionChangeType.isVersion(change)).toBe(true);
+        return VersionChangeType.isVersion(change) ? change.version : -1n;
+      });
+
+  /**
+   * Drains the variant's state stream for a fixed window and returns everything it emitted. A bounded window rather
+   * than `Stream.take(n)` on purpose: the point of these tests is _how many_ version changes appear, so a missing one
+   * has to surface as a failed assertion, not as a hang.
+   */
+  const emissionsWithin = (
+    initialState: CoreWallet,
+    act: (stateRef: SubscriptionRef.SubscriptionRef<CoreWallet>) => Effect.Effect<void> = () => Effect.void,
+  ): Promise<Chunk.Chunk<StateChange.StateChange<CoreWallet>>> =>
+    Effect.gen(function* () {
+      const stateRef = yield* SubscriptionRef.make(initialState);
+      const scope = yield* Scope.make();
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef, activationRange },
+        variantContextOf(
+          [],
+          trackingHistoryService({
+            inFlight: yield* Ref.make(0),
+            maxInFlight: yield* Ref.make(0),
+            recorded: yield* Ref.make(0),
+          }),
+        ),
+      );
+
+      const collector = yield* Effect.fork(
+        variant.state.pipe(Stream.interruptAfter(Duration.millis(300)), Stream.runCollect),
+      );
+      yield* Effect.sleep(Duration.millis(50));
+      yield* act(stateRef);
+      const collected = yield* Fiber.join(collector);
+      yield* Scope.close(scope, Exit.void);
+      return collected;
+    }).pipe(Effect.runPromise);
+
+  it('emits exactly one VersionChange when the state transitions to a new protocol version', async () => {
+    const collected = await emissionsWithin(walletAtVersion(0n), (stateRef) =>
+      SubscriptionRef.set(stateRef, walletAtVersion(5n)),
+    );
+
+    expect(versionChangesOf(collected)).toEqual([5n]);
+  });
+
+  it('emits an immediate healing VersionChange when the initial state is outside the activation range', async () => {
+    // A snapshot serialized after the version was annotated but before the runtime migrated restores here. Without a
+    // healing emission the wallet would sit on a version it does not own and never hand over.
+    const collected = await emissionsWithin(walletAtVersion(9n));
+
+    expect(versionChangesOf(collected)).toEqual([9n]);
+  });
+
+  it('emits no VersionChange when the initial state is inside the activation range', async () => {
+    const collected = await emissionsWithin(walletAtVersion(3n));
+
+    expect(versionChangesOf(collected)).toEqual([]);
+    // The stream still reports the state itself, so an empty result would be a false pass.
+    expect(Chunk.toArray(collected).filter(StateChange.isState).length).toBeGreaterThan(0);
   });
 });
