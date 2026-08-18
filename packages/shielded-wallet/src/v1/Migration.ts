@@ -45,7 +45,7 @@ export type EmptyWalletMigrationConfiguration = {
  *   exactly as it did.
  * @example
  *   ```typescript
- *   const builder = new V1Builder().withDefaults().withMigration(makeEmptyWalletMigration({ networkId }));
+ *   const builder = new V2Builder().withDefaults().withMigration(makeEmptyWalletMigration({ networkId }));
  *   ```;
  *
  * @param configuration Supplies the network the scaffold state claims to be on.
@@ -82,8 +82,9 @@ export const makeCarryOverMigration = (): StateMigration<CoreWallet> => ({
  *   projection reads is plain data — the ledger's key and network types are all string aliases — so a structural
  *   description is both sufficient and the only version-agnostic option.
  *
- *   `progress` is required but deliberately not carried: it is the input the alternative cursor semantics would need (see
- *   {@link makeCrossLedgerMigration}), and demanding it keeps that switch to a single line.
+ *   `progress` is where the migrated wallet resumes from: the replayed timeline continues the indexer's event ids rather
+ *   than restarting them, so the previous variant's cursor is the position the next one has to start at (see
+ *   {@link makeCrossLedgerMigration}).
  */
 export type PreviousLedgerWallet = Readonly<{
   publicKeys: { readonly coinPublicKey: string; readonly encryptionPublicKey: string };
@@ -93,7 +94,7 @@ export type PreviousLedgerWallet = Readonly<{
 }>;
 
 /**
- * The migration across a ledger-version boundary: a fresh state of this version, carrying identity only.
+ * The migration across a ledger-version boundary: a coinless state of this version, carrying identity and position.
  *
  * @remarks
  *   The indexer replays the timeline after the hard fork, re-emitting the wallet's history as events of the new ledger
@@ -102,11 +103,11 @@ export type PreviousLedgerWallet = Readonly<{
  *   restart hands it. Carrying them across as well would double-count what the replay is about to deliver, on top of
  *   requiring the secret keys that migration by design does not have.
  *
- *   So what crosses is public keys, the network, and the protocol version that triggered the hand-over. Sync progress is
- *   **reset**, on the assumption that the replayed timeline restarts its event ids; if the indexer continues them past
- *   the boundary instead, the fix is to park progress at the fork rather than rewind it — a one-line change in
- *   {@link CoreWallet.fromPreviousVersion}, which is why `progress` stays on {@link PreviousLedgerWallet}. The assumption
- *   is recorded as an open question against the indexer team.
+ *   So what crosses is public keys, the network, the protocol version that triggered the hand-over, and the cursor. Sync
+ *   progress is **parked at the fork** rather than rewound: the indexer numbers the replayed events onwards from
+ *   whatever id it had reached when the fork happened, never from zero, so the inherited cursor is exactly where the
+ *   replay begins. A wallet that rewound to zero would wait on a stretch of the timeline this ledger version's events
+ *   do not occupy.
  *
  *   If the ledger team ships a byte-level translation for wallet local state, it replaces this instance without touching
  *   anything around it — that is the point of the {@link StateMigration} seam.
@@ -119,6 +120,7 @@ export const makeCrossLedgerMigration = (): StateMigration<PreviousLedgerWallet>
         publicKeys: previousState.publicKeys,
         networkId: previousState.networkId,
         protocolVersion: previousState.protocolVersion,
+        progress: previousState.progress,
       }),
     ),
 });
