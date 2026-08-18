@@ -6,7 +6,6 @@ on:
     - cron: '0 0 * * *'
 
 env:
-  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
   NETWORK: 'undeployed'
   APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
@@ -33,7 +32,7 @@ jobs:
         uses: docker/login-action@9fe7774c8f8ebfade96f0a62aa10f3882309d517
         with:
           registry: 'https://ghcr.io'
-          username: ${{ env.MIDNIGHT_GH_USER }}
+          username: ${{ github.actor }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Configure yarn

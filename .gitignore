@@ -55,6 +55,9 @@ test-runner-profile/
 **/.sync_cache
 /packages/e2e-tests/res
 
+# Other Agents
+/.agents
+
 # Claude Code — personal/local settings
 .claude/settings.local.json
 CLAUDE.local.md
