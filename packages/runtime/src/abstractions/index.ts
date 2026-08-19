@@ -10,6 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+export * as StartMaterial from './StartMaterial.js';
 export * as Variant from './Variant.js';
 export * as VariantBuilder from './VariantBuilder.js';
 export * as WalletLike from './WalletLike.js';
