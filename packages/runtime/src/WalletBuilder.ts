@@ -153,6 +153,28 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
         }).pipe(Effect.runSync);
       }
 
+      static startAtVariant<T extends WalletLike.AnyWalletClass<Variants>, TVariant extends HList.Each<Variants>>(
+        WalletClass: T,
+        variant: TVariant,
+        state: Variant.StateOf<TVariant>,
+      ): WalletLike.WalletOf<T> {
+        return Effect.gen(this, function* () {
+          const scope = yield* Scope.make();
+
+          const runtime = yield* Runtime.init({
+            variants,
+            tag: Variant.getVersionedVariantTag(variant),
+            // Type cast required because: `Runtime.init` types the state through `HList.Find` on the tag, which can
+            // only resolve a tag the compiler knows statically. Here the variant is runtime data. The pairing holds by
+            // construction — the state is the one this very variant produced, by deserializing or migrating — and
+            // `startAtVariant`'s own signature is what states that; there is nothing left for the compiler to check.
+            state: state as never,
+          }).pipe(Effect.provideService(Scope.Scope, scope));
+
+          return new WalletClass(runtime, scope) as WalletLike.WalletOf<T>;
+        }).pipe(Effect.runSync);
+      }
+
       static start<T extends WalletLike.AnyWalletClass<Variants>, Tag extends string | symbol>(
         WalletClass: T,
         tag: Tag,

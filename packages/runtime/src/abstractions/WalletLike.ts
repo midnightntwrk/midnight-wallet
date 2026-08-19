@@ -43,6 +43,28 @@ export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray, TCo
     tag: Tag,
     state: StateOf<HList.Find<TVariants, { variant: Poly.WithTag<Tag> }>>,
   ): WalletOf<T>;
+  /**
+   * Starts a wallet on a variant that was resolved at runtime, with the state that variant produced.
+   *
+   * @remarks
+   *   The sibling {@link start} addresses a variant by a tag known statically, which is what lets it demand exactly that
+   *   variant's state type. A tag recovered from data — a snapshot's protocol version, the chain's current version —
+   *   carries no such static knowledge, and `HList.Find` over a union of tags cannot recover it: it resolves to the
+   *   first matching registration, or to `never`, so the state parameter it computes is not the one the caller holds.
+   *
+   *   Passing the resolved variant itself instead keeps the two ends of the pairing together. The state is typed as that
+   *   variant's, which for a `variantFor` result is the union of the registered variants' states — the honest guarantee
+   *   when the version is runtime data, and enough to make the call type-check without a cast at the call site.
+   * @param walletClass The wallet class to construct.
+   * @param variant The versioned variant to start on, as resolved by {@link variantFor}.
+   * @param state The state that variant is to start from.
+   * @returns The started wallet.
+   */
+  startAtVariant<T extends WalletClassLike<TVariants, any>, TVariant extends HList.Each<TVariants>>(
+    walletClass: T,
+    variant: TVariant,
+    state: StateOf<TVariant>,
+  ): WalletOf<T>;
 }
 
 /** Defines the static portion of wallet-like definition */
