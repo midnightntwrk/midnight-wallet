@@ -187,6 +187,22 @@ export type CustomizedShieldedWallet<
   WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
 /**
+ * The protocol version a ledger-v9-native chain hands over at, for the current node line.
+ *
+ * @remarks
+ *   Measured, not assumed: a `midnight-node` 2.x reports protocol version `2000000` on its ledger events — the runtime
+ *   version, scaled, rather than a small ordinal or the ledger major. A chain of the previous node line reports a
+ *   1.x-encoded value, which is below this, so a wallet configured with it stays on the pre-fork variant there and
+ *   reaches the post-fork variant on any v9-native chain.
+ *
+ *   Offered as a named value so applications and test suites pointed at a v9-native chain do not each invent a magic
+ *   number. It is **not** a default: {@link DefaultShieldedConfiguration.forkVersion} stays required, because the right
+ *   value is a property of the chain an application points at. The final mainnet fork constant is still an open
+ *   question; when it is fixed a `ProtocolVersion.Forks.*` value will join this one.
+ */
+export const V9_NATIVE_FORK_VERSION: ProtocolVersion.ProtocolVersion = ProtocolVersion.ProtocolVersion(2_000_000n);
+
+/**
  * The configuration a default {@link ShieldedWallet} is built from.
  *
  * @remarks
@@ -204,6 +220,20 @@ export type DefaultShieldedConfiguration = {
   batchUpdates?: BatchUpdatesConfig;
   txHistoryStorage: ShieldedHistoryStorage;
   transactionDetailsRetryWindow?: Duration.DurationInput;
+  /**
+   * The protocol version at which this chain hands over from the pre-fork ledger to the post-fork one.
+   *
+   * @remarks
+   *   Required, and deliberately without a default: the wallet registers one variant either side of it, so a wrong value
+   *   does not degrade — it decides which ledger version reads the chain. Below this version the pre-fork variant is
+   *   active; from it, the post-fork one. The SDK cannot guess it, because it is a property of the chain the
+   *   application points at, not of the SDK.
+   *
+   *   A node reporting a 2.x runtime version reports protocol version `2000000`, which is therefore the value for a
+   *   ledger-v9-native chain. The final mainnet fork constant is not yet fixed; a `ProtocolVersion.Forks.*` default
+   *   will ship once it is, and this field keeps working unchanged.
+   */
+  forkVersion: ProtocolVersion.ProtocolVersion;
 };
 
 export interface CustomizedShieldedWalletClass<
@@ -224,7 +254,7 @@ export interface CustomizedShieldedWalletClass<
 }
 
 export function ShieldedWallet(configuration: DefaultShieldedConfiguration): ShieldedWalletClass {
-  return CustomShieldedWallet(configuration, new V2Builder().withDefaults());
+  return CustomShieldedWallet<DefaultShieldedConfiguration>(configuration, new V2Builder().withDefaults());
 }
 
 export function CustomShieldedWallet<

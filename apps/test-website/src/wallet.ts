@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type DefaultConfiguration,
@@ -54,6 +55,9 @@ export type Configuration = DefaultConfiguration;
 
 export const configurationFor = (network: KnownNetwork): Configuration => ({
   networkId: network,
+  // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
+  // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
+  forkVersion: V9_NATIVE_FORK_VERSION,
   costParameters: {
     feeBlocksMargin: 5,
   },

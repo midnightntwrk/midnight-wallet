@@ -13,7 +13,7 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import { PublicKey, UnshieldedWallet, createKeystore } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { pipe } from 'effect';
@@ -91,6 +91,7 @@ describe('Wallet Facade Transfer', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      forkVersion: V9_NATIVE_FORK_VERSION,
       costParameters: {
         feeBlocksMargin: 5,
       },

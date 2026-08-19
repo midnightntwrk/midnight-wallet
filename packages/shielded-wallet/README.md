@@ -24,19 +24,23 @@ while maintaining verifiability. It provides:
 ### Starting the Wallet
 
 ```typescript
-import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
+import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ShieldedTransactionHistoryEntrySchema } from '@midnightntwrk/wallet-sdk-shielded';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { randomBytes } from 'node:crypto';
 
 // Configuration for the wallet
 const configuration = {
   networkId: 'preview',
-  provingServerUrl: new URL('http://localhost:6300'),
-  relayURL: new URL('ws://localhost:9944'),
   indexerClientConnection: {
-    indexerHttpUrl: 'http://localhost:8088/api/v3/graphql',
-    indexerWsUrl: 'ws://localhost:8088/api/v3/graphql/ws',
+    indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+    indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
   },
+  txHistoryStorage: new InMemoryTransactionHistoryStorage(ShieldedTransactionHistoryEntrySchema),
+  // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
+  // the final mainnet fork constant is not yet fixed, so it is supplied per environment.
+  forkVersion: V9_NATIVE_FORK_VERSION,
 };
 
 // Create secret keys from a shielded seed

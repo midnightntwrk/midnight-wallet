@@ -13,7 +13,11 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
 import { WalletFacade, type Clock } from '../../src/index.js';
-import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
+import {
+  CustomShieldedWallet,
+  type ShieldedWalletAPI,
+  V9_NATIVE_FORK_VERSION,
+} from '@midnightntwrk/wallet-sdk-shielded';
 import {
   Sync as ShieldedSync,
   TransactionHistory as ShieldedTransactionHistory,
@@ -298,6 +302,7 @@ export const makeSimulatorFacade = (
       const facade = await WalletFacade.init({
         configuration: {
           ...config,
+          forkVersion: V9_NATIVE_FORK_VERSION,
           // Dummy values - not used in simulation mode
           indexerClientConnection: { indexerHttpUrl: 'http://unused' },
           relayURL: new URL('ws://unused'),

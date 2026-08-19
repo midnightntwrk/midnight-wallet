@@ -16,7 +16,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
@@ -37,6 +37,7 @@ describe('Wallet Facade handling pending transactions', () => {
   beforeEach(async () => {
     configuration = {
       networkId: NetworkId.NetworkId.Undeployed,
+      forkVersion: V9_NATIVE_FORK_VERSION,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',

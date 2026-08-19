@@ -14,13 +14,19 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Scope, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { type CustomizedShieldedWallet, ShieldedWallet } from '../ShieldedWallet.js';
-import { type DefaultV2Configuration, TransactionHistory, V2Tag } from '../v2/index.js';
+import {
+  type CustomizedShieldedWallet,
+  type DefaultShieldedConfiguration,
+  ShieldedWallet,
+  V9_NATIVE_FORK_VERSION,
+} from '../ShieldedWallet.js';
+import { TransactionHistory, V2Tag } from '../v2/index.js';
 
-const configuration: DefaultV2Configuration = {
+const configuration: DefaultShieldedConfiguration = {
   networkId: NetworkId.NetworkId.Undeployed,
   indexerClientConnection: { indexerHttpUrl: 'http://localhost:8088/api/v4/graphql' },
   txHistoryStorage: new InMemoryTransactionHistoryStorage(TransactionHistory.ShieldedTransactionHistoryEntrySchema),
+  forkVersion: V9_NATIVE_FORK_VERSION,
 };
 
 /**

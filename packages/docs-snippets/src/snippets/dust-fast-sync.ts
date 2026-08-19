@@ -10,6 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type DefaultConfiguration,
@@ -40,6 +41,9 @@ const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
 const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
+  // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
+  // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
+  forkVersion: V9_NATIVE_FORK_VERSION,
   costParameters: {
     feeBlocksMargin: 5,
   },

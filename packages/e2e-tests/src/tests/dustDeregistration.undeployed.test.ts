@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -82,6 +82,7 @@ describe('Dust Deregistration', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      forkVersion: V9_NATIVE_FORK_VERSION,
       costParameters: {
         feeBlocksMargin: 5,
       },
