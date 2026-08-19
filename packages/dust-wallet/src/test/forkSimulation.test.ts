@@ -54,7 +54,7 @@ import {
 } from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Deferred, Effect, Option, Queue, Stream } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
 import { V1Tag } from '../v1/RunningV1Variant.js';
 import {
@@ -76,6 +76,10 @@ import {
   dustIndices,
   generationTreeRoot,
 } from './forkWalletAssertions.js';
+
+// Building a real dust chain (rewards + registrations through WASM) fits vitest's 5s default on a laptop but not on
+// a CI runner — the whole file measured ~23s there. Sized like the shielded fork proof's override, with CI headroom.
+vi.setConfig({ testTimeout: 30_000 });
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
