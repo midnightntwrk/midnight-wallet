@@ -11,8 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
+import * as otherLedger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Simulator, type SimulatorState, getLastBlockEvents } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import {
+  Simulator,
+  type SimulatorState,
+  V8 as OtherSimulation,
+  getLastBlockEvents,
+} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Option, Stream } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
@@ -54,22 +60,51 @@ const simulatorStateAt = (protocolVersion?: ProtocolVersion.ProtocolVersion): Pr
     return Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
   }).pipe(Effect.scoped, Effect.runPromise);
 
+const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
+
 /**
- * Serialized bytes of the six real `zswapOutput` events the genesis mints emit, in chain order.
+ * Hex of the six real `zswapOutput` events the genesis mints emit, in chain order — as the indexer serves them.
  *
- * They are kept as bytes rather than as `ledger.Event` instances on purpose: `replayEventsWithChanges` consumes the
+ * They are kept encoded rather than as `ledger.Event` instances on purpose: `replayEventsWithChanges` consumes the
  * event objects it is handed (wasm-bindgen moves ownership), so a second use of the same instance throws. Every test
- * deserializes its own instances.
+ * therefore hands over what the indexer hands over, and whatever reads it makes its own instances.
  */
-let eventBytes: readonly Uint8Array[];
+let eventHex: readonly string[];
+
+/**
+ * A real event of the _other_ ledger version, as the indexer serves it.
+ *
+ * @remarks
+ *   The bytes the chain produced before this variant's boundary. This ledger version cannot deserialize them at all — the
+ *   serialization header names a different version — which is why an event outside the range this variant applies must
+ *   never reach the deserializer, rather than merely never reaching the state.
+ */
+let otherLedgerEventHex: string;
 
 beforeAll(async () => {
   const state = await simulatorStateAt();
-  eventBytes = getLastBlockEvents(state).map((event) => event.serialize());
-  expect(eventBytes.length).toBe(MINT_COUNT);
+  eventHex = getLastBlockEvents(state).map((event) => hex(event.serialize()));
+  expect(eventHex.length).toBe(MINT_COUNT);
+
+  otherLedgerEventHex = await Effect.gen(function* () {
+    const simulator = yield* OtherSimulation.Simulator.init({
+      genesisMints: [
+        {
+          type: 'shielded' as const,
+          tokenType: otherLedger.shieldedToken().raw,
+          amount: 100n,
+          recipient: otherLedger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 7)),
+        },
+      ] as never,
+    });
+    const otherState = Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
+    return hex(OtherSimulation.getLastBlockEvents(otherState)[0].serialize());
+  }).pipe(Effect.scoped, Effect.runPromise);
+
+  expect(() => ledger.Event.deserialize(Buffer.from(otherLedgerEventHex, 'hex'))).toThrow();
 });
 
-/** Builds a batch of sync updates, one per `(id, protocolVersion)` pair, each carrying its own fresh event instance. */
+/** Builds a batch of sync updates, one per `(id, protocolVersion)` pair, each carrying its own event, encoded. */
 const batch = (items: readonly (readonly [id: number, protocolVersion: number])[]): WalletSyncUpdate =>
   WalletSyncUpdate.create(
     items.map(([id, protocolVersion]): EventsSyncUpdate => ({
@@ -77,10 +112,19 @@ const batch = (items: readonly (readonly [id: number, protocolVersion: number])[
       id,
       protocolVersion,
       maxId: MINT_COUNT,
-      event: ledger.Event.deserialize(eventBytes[id - 1]),
+      raw: eventHex[id - 1],
     })),
     secretKeys(),
   );
+
+/** A single update carrying bytes this ledger version cannot read, reported at `protocolVersion`. */
+const unreadable = (id: number, protocolVersion: number, maxId: number): EventsSyncUpdate => ({
+  _tag: 'EventsSyncUpdate',
+  id,
+  protocolVersion,
+  maxId,
+  raw: otherLedgerEventHex,
+});
 
 const freshWallet = (): CoreWallet => CoreWallet.initEmpty(secretKeys(), networkId);
 
@@ -197,6 +241,59 @@ describe('makeEventsSyncCapability.applyUpdate boundary handling', () => {
     expect(state.state.firstFree).toBe(0n);
     expect(result.changes).toEqual([]);
     expect(state.progress.highestRelevantWalletIndex).toBe(BigInt(MINT_COUNT));
+  });
+
+  it('reads no event reported beyond the active range, not merely applying none of them', () => {
+    // The suffix is bytes of the ledger version on the other side of the boundary, which is what the source serves
+    // once the chain has moved past this variant. Deferring cannot be a decision taken after decoding: this ledger
+    // version cannot decode them at all, so the split has to keep them away from the deserializer entirely.
+    const [state, result] = capability.applyUpdate(
+      freshWallet(),
+      WalletSyncUpdate.create(
+        [
+          { _tag: 'EventsSyncUpdate', id: 1, protocolVersion: 3, maxId: 3, raw: eventHex[0] },
+          { _tag: 'EventsSyncUpdate', id: 2, protocolVersion: 3, maxId: 3, raw: eventHex[1] },
+          unreadable(3, 7, 3),
+        ],
+        secretKeys(),
+      ),
+      activeRange,
+    );
+
+    expect(state.progress.appliedIndex).toBe(2n);
+    // Seen and recorded, which is what hands the wallet over to the variant that can read it.
+    expect(state.protocolVersion).toBe(7n);
+    expect(coinIndices(state)).toEqual([0n, 1n]);
+    expect(result.changes[0].receivedCoins.length).toBe(2);
+    expect(result.protocolVersion).toBe(3);
+  });
+
+  it('reads no event at or below the applied index, which the inclusive cursor re-delivers', () => {
+    // The subscription resumes one below the applied index, so the source re-delivers the boundary event. This
+    // variant inherits its cursor from the one before it, which held a position in *another* ledger version's
+    // timeline — so the re-delivered event is one it cannot read, and must not try to.
+    const [applied] = capability.applyUpdate(
+      freshWallet(),
+      batch([
+        [1, 3],
+        [2, 3],
+      ]),
+      activeRange,
+    );
+    expect(applied.progress.appliedIndex).toBe(2n);
+
+    const [state, result] = capability.applyUpdate(
+      applied,
+      WalletSyncUpdate.create(
+        [unreadable(2, 3, 3), { _tag: 'EventsSyncUpdate', id: 3, protocolVersion: 3, maxId: 3, raw: eventHex[2] }],
+        secretKeys(),
+      ),
+      activeRange,
+    );
+
+    expect(state.progress.appliedIndex).toBe(3n);
+    expect(coinIndices(state)).toEqual([0n, 1n, 2n]);
+    expect(result.changes[0].receivedCoins.length).toBe(1);
   });
 
   it('never lowers the recorded protocol version when a later batch reports a stale lower one', () => {
