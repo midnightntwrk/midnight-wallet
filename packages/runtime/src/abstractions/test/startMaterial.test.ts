@@ -109,4 +109,32 @@ describe('StartMaterial', () => {
       expect(error.variantTag).toBe(postForkTag);
     });
   });
+
+  describe('deriving for a variant whose key type differs from the retained one', () => {
+    it('derives from a retained seed, whatever the asking variant s key type is', () => {
+      const otherLedgerKeys = (given: WalletSeed.WalletSeed): string => `v8:${Buffer.from(given).toString('hex')}`;
+
+      const derived = StartMaterial.requireDerivedAuxFor(
+        StartMaterial.fromSeed<Keys>(seed),
+        preForkTag,
+        otherLedgerKeys,
+      );
+
+      expect(derived).toStrictEqual(Either.right(`v8:${Buffer.from(seed).toString('hex')}`));
+    });
+
+    it('fails typed when the wallet retained key objects rather than a seed', () => {
+      // Key objects belong to one ledger version's runtime. There is nothing to convert, so a variant
+      // speaking another one can only be served by re-deriving from a seed the wallet does not hold.
+      const retained = StartMaterial.forVariant<Keys>(postForkTag, { derivedFrom: 'elsewhere', ledger: 'v9' });
+
+      const derived = StartMaterial.requireDerivedAuxFor(retained, preForkTag, (): string => {
+        throw new Error('must not derive: nothing was retained to derive from');
+      });
+
+      const error = derived.pipe(Either.flip, Either.getOrThrow);
+      expect(error).toBeInstanceOf(StartMaterial.MissingStartAuxError);
+      expect(error.variantTag).toBe(preForkTag);
+    });
+  });
 });
