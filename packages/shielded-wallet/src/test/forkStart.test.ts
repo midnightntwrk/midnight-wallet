@@ -42,7 +42,9 @@ import {
   genesisStrictness,
   immediateBlockProducer,
 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { Cause, Effect, Option, Runtime } from 'effect';
+import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { Cause, Effect, Option, Runtime, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { PreForkTransactingUnsupportedError } from '../ForkingShieldedWallet.js';
 import { V1Tag } from '../v1/index.js';
@@ -131,17 +133,47 @@ const failureOf = (call: Promise<unknown>): Effect.Effect<Option.Option<unknown>
     ),
   );
 
-/** Every transacting call the wallet's API offers, named as the wallet names it. */
-const transactingCalls = (wallet: ForkWallet): readonly (readonly [string, () => Promise<unknown>])[] => {
+/**
+ * Every call that builds a transaction, named as the wallet names it.
+ *
+ * @remarks
+ *   `revertTransaction` is deliberately not among them: it builds nothing and needs no proving, so it is not what the
+ *   pre-fork seam is about — see the test below for what it does instead.
+ */
+const transactionBuildingCalls = (wallet: ForkWallet): readonly (readonly [string, () => Promise<unknown>])[] => {
   const transfer = { amount: 1n, type: v9.shieldedToken().raw, receiverAddress: strangerAddress() };
-  const someTransaction = v9.Transaction.fromParts(networkId);
   return [
-    ['balanceTransaction', () => wallet.shielded.balanceTransaction(wallet.keys.postFork, someTransaction)],
+    ['balanceTransaction', () => wallet.shielded.balanceTransaction(wallet.keys.postFork, someTransaction())],
     ['transferTransaction', () => wallet.shielded.transferTransaction(wallet.keys.postFork, [transfer])],
     ['initSwap', () => wallet.shielded.initSwap(wallet.keys.postFork, {}, [transfer])],
-    ['revertTransaction', () => wallet.shielded.revertTransaction(someTransaction)],
   ];
 };
+
+/** A transaction of the post-fork ledger version, which is the only kind this wallet's API accepts. */
+const someTransaction = (): v9.UnprovenTransaction => v9.Transaction.fromParts(networkId);
+
+/**
+ * A wallet on a chain that has not forked, synchronized and holding its coins.
+ *
+ * @remarks
+ *   Synchronized before anything is asked of it so that a refusal below is a refusal to transact at all, rather than a
+ *   wallet that has nothing to transact with. Scoped: the caller's scope stops it.
+ */
+const syncedPreForkWallet: Effect.Effect<ForkWallet, LedgerOps.LedgerError | WalletRuntimeError, Scope.Scope> =
+  Effect.gen(function* () {
+    const coins = chainCoins();
+    const chain = yield* chainAt(beforeFork, coins);
+    const replayed = yield* replayOf(coins, chain);
+
+    const wallet = makeForkWallet({ preFork: chain, replayed: Effect.succeed(replayed), networkId, forkVersion, seed });
+    yield* Effect.addFinalizer(() => wallet.stop);
+    yield* wallet.start;
+
+    yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+    expect(yield* wallet.activeTag).toBe(V1Tag);
+
+    return wallet;
+  });
 
 describe('a shielded wallet starting on a chain that has already forked', () => {
   it('hands over on the first batch, having applied nothing, and syncs on the post-fork variant', async () =>
@@ -206,30 +238,13 @@ describe('a shielded wallet starting on a chain that has not forked', () => {
       expect(yield* wallet.migration).toStrictEqual(Option.none());
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it.each(['balanceTransaction', 'transferTransaction', 'initSwap', 'revertTransaction'])(
+  it.each(['balanceTransaction', 'transferTransaction', 'initSwap'])(
     'refuses %s while it is still pre-fork, and says why',
     async (operation) =>
       Effect.gen(function* () {
-        const coins = chainCoins();
-        const chain = yield* chainAt(beforeFork, coins);
-        const replayed = yield* replayOf(coins, chain);
+        const wallet = yield* syncedPreForkWallet;
 
-        const wallet = makeForkWallet({
-          preFork: chain,
-          replayed: Effect.succeed(replayed),
-          networkId,
-          forkVersion,
-          seed,
-        });
-        yield* Effect.addFinalizer(() => wallet.stop);
-        yield* wallet.start;
-
-        // Synced first, and holding coins: what follows is a refusal to transact at all, not a wallet that has
-        // nothing to transact with.
-        yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
-        expect(yield* wallet.activeTag).toBe(V1Tag);
-
-        const call = transactingCalls(wallet).find(([name]) => name === operation)!;
+        const call = transactionBuildingCalls(wallet).find(([name]) => name === operation)!;
         const failure = Option.getOrThrow(yield* failureOf(call[1]()));
 
         // Typed, and naming the operation: the pre-fork branch cannot produce a transaction anybody can prove, and
@@ -238,4 +253,19 @@ describe('a shielded wallet starting on a chain that has not forked', () => {
         expect(failure).toMatchObject({ operation });
       }).pipe(Effect.scoped, Effect.runPromise),
   );
+
+  it('reverts a transaction it cannot have made, by doing nothing to its state', async () =>
+    Effect.gen(function* () {
+      // Reverting releases coins a transaction booked, and no transaction of this wallet's can have booked any: it
+      // could not have built one. So this resolves, changes nothing, and is deliberately not part of the seam above —
+      // it needs no proving, so version-routed proving has nothing to unlock here. The facade reverts all three
+      // wallets together when a submission fails, and a refusal here would strand that whole path.
+      const wallet = yield* syncedPreForkWallet;
+
+      yield* Effect.promise(() => wallet.shielded.revertTransaction(someTransaction()));
+
+      const after = yield* wallet.currentState;
+      expect(totalValue(after.state)).toBe(walletTotal);
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+    }).pipe(Effect.scoped, Effect.runPromise));
 });

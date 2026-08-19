@@ -459,12 +459,23 @@ export function CustomForkingShieldedWallet<
         .pipe(Effect.runPromise);
     }
 
+    /**
+     * Un-records a transaction this wallet produced, releasing the coins it had booked.
+     *
+     * @remarks
+     *   Nothing to do on the pre-fork variant, and that is a fact about the wallet rather than a convenience: while
+     *   pre-fork transacting is unavailable that variant cannot have produced the transaction being reverted, so it
+     *   holds nothing of it to release. The parameter's type says the same thing — a post-fork transaction is not one
+     *   the pre-fork variant could have built. Unlike the operations that build transactions, this needs no proving, so
+     *   there is nothing here for version-routed proving to unlock later.
+     * @param transaction The transaction to un-record.
+     */
     revertTransaction(
       transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
     ): Promise<void> {
       return this.runtime
         .dispatch<void, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('revertTransaction'),
+          [V1Tag]: () => Effect.void,
           [V2Tag]: (v2) => v2.revertTransaction(transaction),
         })
         .pipe(Effect.runPromise);
