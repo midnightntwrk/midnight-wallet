@@ -15,6 +15,7 @@ import {
   type ProtocolState,
   ProtocolVersion,
   type SyncProgress,
+  WalletSeed,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type BaseV2Configuration,
@@ -40,9 +41,14 @@ import {
 import { type TokenTransfer } from './v2/Transacting.js';
 import { type BatchUpdatesConfig, type IndexerClientConnection, type WalletSyncUpdate } from './v2/Sync.js';
 import { type ShieldedHistoryStorage, type TransactionHistoryService } from './v2/TransactionHistory.js';
-import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import {
+  StartMaterial,
+  type Variant,
+  type VariantBuilder,
+  type WalletLike,
+} from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
-import { HList } from '@midnightntwrk/wallet-sdk-utilities';
+import { EitherOps, HList, Poly } from '@midnightntwrk/wallet-sdk-utilities';
 import { variantForSnapshot } from './Restore.js';
 
 export type ShieldedWalletCapabilities<TSerialized = string> = {
@@ -256,9 +262,20 @@ export function CustomShieldedWallet<
       );
     }
 
+    /**
+     * Builds a wallet from a seed, and remembers the seed.
+     *
+     * @remarks
+     *   The seed is the only key material that crosses a protocol boundary, so a wallet built this way can start
+     *   synchronization on any variant it is ever migrated to — each derives its own from the seed. A wallet built from
+     *   key objects instead can only start the variants it was given objects for.
+     */
     static startWithSeed(seed: Uint8Array): CustomShieldedWalletImplementation {
-      const secretKeys: ledger.ZswapSecretKeys = ledger.ZswapSecretKeys.fromSeed(seed);
-      return CustomShieldedWalletImplementation.startWithSecretKeys(secretKeys);
+      const walletSeed = WalletSeed.WalletSeed(seed);
+      const secretKeys: ledger.ZswapSecretKeys = ledger.ZswapSecretKeys.fromSeed(walletSeed);
+      const wallet = CustomShieldedWalletImplementation.startWithSecretKeys(secretKeys);
+      wallet.#retainSeed(walletSeed);
+      return wallet;
     }
 
     /**
@@ -299,15 +316,54 @@ export function CustomShieldedWallet<
     readonly state: rx.Observable<ShieldedWalletState<TSerialized>>;
 
     /**
-     * The start-aux the application last called {@link start} with.
+     * What the application started this wallet with, kept so synchronization can be started again.
      *
      * @remarks
-     *   Sync needs the secret keys, and a migration starts a fresh variant whose sync has never been started. The keys
-     *   cannot come from the state — they are deliberately absent from anything serialized — and they do not exist yet
-     *   when the wallet is first constructed, so they are held here, in memory, for the lifetime of the wallet. Cleared
-     *   by {@link stop} so a stopped wallet cannot be silently resurrected by a late activation.
+     *   A migration starts a fresh variant whose sync has never run, and sync needs key material. That material cannot
+     *   come from the state — it is deliberately absent from anything serialized — and does not exist when the wallet
+     *   is first constructed, so it is held here, in memory, for the lifetime of the wallet. Cleared by {@link stop} so
+     *   a stopped wallet cannot be silently resurrected by a late activation.
+     *
+     *   A retained seed answers for every variant. Retained key objects answer only for the variants they were supplied
+     *   for, and accumulate per variant tag as `start` is called, which is the same product a caller holding key
+     *   objects for both protocol versions would hand over at once.
      */
-    readonly #retainedAux = Ref.unsafeMake<Option.Option<TStartAux>>(Option.none());
+    readonly #retainedStartMaterial = Ref.unsafeMake<Option.Option<StartMaterial.StartMaterial<TStartAux>>>(
+      Option.none(),
+    );
+
+    /** Remembers a seed, which supersedes any key objects retained for individual variants. */
+    #retainSeed(seed: WalletSeed.WalletSeed): void {
+      Ref.set(this.#retainedStartMaterial, Option.some(StartMaterial.fromSeed<TStartAux>(seed))).pipe(Effect.runSync);
+    }
+
+    /**
+     * Starts synchronization on a variant that has just become current, with key material it can use.
+     *
+     * @remarks
+     *   The derivation is the activating variant's own, so a wallet retaining a seed hands each variant key material
+     *   built by its own ledger version. A wallet retaining key objects for other variants only cannot answer, and says
+     *   so rather than handing over keys the variant would silently misuse.
+     */
+    #resumeSyncOn(
+      variantTag: typeof V2Tag,
+      running: { startSyncInBackground: (aux: TStartAux) => Effect.Effect<void> },
+    ): Effect.Effect<void, StartMaterial.MissingStartAuxError> {
+      return Ref.get(this.#retainedStartMaterial).pipe(
+        Effect.flatMap(
+          Option.match({
+            // Stopped, or never started: there is nothing to resume and nothing to resume it with.
+            onNone: () => Effect.void,
+            onSome: (retained: StartMaterial.StartMaterial<TStartAux>) =>
+              EitherOps.toEffect(
+                StartMaterial.requireAuxFor(retained, variantTag, (seed) =>
+                  CustomShieldedWalletImplementation.allVariantsRecord()[variantTag].variant.startAux.fromSeed(seed),
+                ),
+              ).pipe(Effect.flatMap((aux) => running.startSyncInBackground(aux))),
+          }),
+        ),
+      );
+    }
 
     /**
      * Whether the activation watcher has been registered.
@@ -338,7 +394,20 @@ export function CustomShieldedWallet<
 
     start(secretKeys: TStartAux): Promise<void> {
       return Effect.gen(this, function* () {
-        yield* Ref.set(this.#retainedAux, Option.some(secretKeys));
+        const current = yield* this.runtime.currentVariant;
+        yield* Ref.update(this.#retainedStartMaterial, (retained) =>
+          Option.some(
+            Option.match(retained, {
+              onNone: () => StartMaterial.forVariant<TStartAux>(Poly.getTag(current), secretKeys),
+              // A retained seed already answers for every variant, including ones this wallet has not met, so key
+              // objects for one of them add nothing. Otherwise the objects accumulate per variant tag.
+              onSome: (existing: StartMaterial.StartMaterial<TStartAux>) =>
+                existing._tag === 'FromSeed'
+                  ? existing
+                  : StartMaterial.forVariants<TStartAux>([...existing.byTag, [Poly.getTag(current), secretKeys]]),
+            }),
+          ),
+        );
 
         // Registered before the first dispatch, and only once: `onVariantActivation` resolves only after its
         // subscription is live, so an activation racing this call is queued rather than missed.
@@ -346,15 +415,7 @@ export function CustomShieldedWallet<
         if (!alreadyRegistered) {
           yield* this.runtime.onVariantActivation({
             [V2Tag]: (v2: RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>) =>
-              Ref.get(this.#retainedAux).pipe(
-                Effect.flatMap(
-                  Option.match({
-                    // Stopped, or never started: there is nothing to resume and no keys to resume it with.
-                    onNone: () => Effect.void,
-                    onSome: (retained: TStartAux) => v2.startSyncInBackground(retained),
-                  }),
-                ),
-              ),
+              this.#resumeSyncOn(V2Tag, v2),
           });
         }
 
@@ -363,8 +424,9 @@ export function CustomShieldedWallet<
     }
 
     async stop(): Promise<void> {
-      // Released before the runtime is torn down: the keys outlive neither the wallet nor an in-flight activation.
-      Ref.set(this.#retainedAux, Option.none()).pipe(Effect.runSync);
+      // Released before the runtime is torn down: the key material outlives neither the wallet nor an in-flight
+      // activation.
+      Ref.set(this.#retainedStartMaterial, Option.none()).pipe(Effect.runSync);
       await super.stop();
     }
 
