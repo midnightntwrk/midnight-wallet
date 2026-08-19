@@ -37,6 +37,15 @@ What does **not** come across is everything genuinely ledger-v9: ECDSA support a
 ledger version has a single signature scheme, so `./v1` has no `SchemeMismatchError` and does not validate a
 signature's scheme before attaching it.
 
+The one scheme-consistency check that **is** expressible without schemes does come across, and it is a behavioural
+change against the 1.x line: `./v1` deserialization now asserts that a snapshot's address really derives from its
+verifying key (`assertKeyAddressConsistency`, exported from `./v1`'s `Serialization`). A snapshot with a spliced or
+mismatched key/address pair — which previously restored silently — now fails with an `OtherWalletError`, as does one
+whose verifying key cannot be decoded at all, where the ledger's wasm decoder previously threw out of `deserialize`.
+Snapshots written by any released wallet are unaffected. Relatedly, `./v1`'s `TransactionOps.extractOwnInputs` now
+returns UTxOs owned by the derived address rather than by the verifying key, matching `./v2` and every other `Utxo` the
+wallet holds.
+
 **`./v1` carries its own keystore.** `createKeystore`, `PublicKey` and `UnshieldedKeystore` are exported from the `./v1`
 subpath as ledger-v8 types, because the two ledger versions disagree about what a key is: v8 signing and verifying keys
 are bare hex strings, v9's are `{tag, value}` records naming a scheme. So `createKeystore` on `./v1` takes a
