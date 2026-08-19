@@ -27,7 +27,12 @@ existing calls compile unchanged. What changes is what runs underneath, and thre
   variant** and stays there, because key objects belong to one ledger version's runtime and there is nothing to
   convert; it cannot read a chain that is still pre-fork.
 - **Restoring routes on the snapshot's declared protocol version**, into whichever of the two variants wrote it. The
-  serialized format is unchanged.
+  serialized format is unchanged, and snapshots written by this release round-trip: a wallet that has synced past the
+  boundary declares a version the post-fork variant owns, and one that has not was written by the pre-fork variant in
+  the first place. The exception is a snapshot from an **earlier beta**, where every wallet was the post-fork variant:
+  if it declares a version below `forkVersion` — which in practice means a wallet serialized before it had synced
+  anything, declaring `0` — it now routes to the pre-fork variant and fails to deserialize. Start such a wallet from
+  its seed instead; it has no state to lose.
 
 **Temporary: building a transaction is refused while the wallet is on the pre-fork variant**, with the typed
 `PreForkTransactingUnsupportedError` naming the operation (`balanceTransaction`, `transferTransaction`, `initSwap`).
