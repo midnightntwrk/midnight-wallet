@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type NetworkId, ProtocolVersion, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Effect } from 'effect';
+import { Effect, HashMap } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { type SyncProgressData } from './SyncProgress.js';
 import { createKeystore, PublicKey } from '../KeyStore.js';
@@ -91,8 +91,12 @@ export const makeCarryOverMigration = (): StateMigration<CoreWallet> => ({
  */
 export type PreviousLedgerWallet = Readonly<{
   state: {
-    readonly availableUtxos: Iterable<UtxoLike>;
-    readonly pendingUtxos: Iterable<UtxoLike>;
+    // Effect `HashMap`s, as the previous variant really holds them — not arrays. The distinction matters and is easy
+    // to get wrong: iterating a `HashMap` yields `[key, value]` entries, so a type that merely said `Iterable<UtxoLike>`
+    // would be satisfied by the real state and then silently carry across a list of malformed pairs. `HashMap` is an
+    // Effect type, not a ledger one, so naming it here keeps this description version-agnostic.
+    readonly availableUtxos: HashMap.HashMap<string, UtxoLike>;
+    readonly pendingUtxos: HashMap.HashMap<string, UtxoLike>;
   };
   publicKey: {
     readonly publicKey: string;
@@ -147,8 +151,8 @@ export const makeCrossLedgerMigration = (): StateMigration<PreviousLedgerWallet>
     Effect.succeed(
       CoreWallet.restore(
         UnshieldedState.restore(
-          Array.from(previousState.state.availableUtxos, carryUtxo),
-          Array.from(previousState.state.pendingUtxos, carryUtxo),
+          Array.from(HashMap.values(previousState.state.availableUtxos), carryUtxo),
+          Array.from(HashMap.values(previousState.state.pendingUtxos), carryUtxo),
         ),
         {
           // ledger-v8 had a single signature scheme, so an untagged key crossing this boundary is a schnorr key.

@@ -36,10 +36,10 @@ const previousWallet = (params: {
   readonly appliedId: bigint;
   readonly protocolVersion: bigint;
 }): PreviousLedgerWallet => ({
-  state: {
-    availableUtxos: params.available,
-    pendingUtxos: params.pending ?? [],
-  },
+  // Built through the real `UnshieldedState`, not from plain arrays: the previous variant hands over a state whose
+  // UTXOs live in Effect `HashMap`s, and a fixture that passed arrays would let a migration that iterated entries
+  // instead of values pass here and fail only against a real wallet.
+  state: UnshieldedState.restore(params.available, params.pending ?? []),
   publicKey: {
     publicKey: owner.publicKey,
     addressHex: owner.addressHex,
