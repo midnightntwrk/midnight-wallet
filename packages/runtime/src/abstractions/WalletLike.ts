@@ -11,12 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { type Scope } from 'effect';
+import { type Option, type Scope } from 'effect';
 import { type Observable } from 'rxjs';
 import { type Runtime } from '../Runtime.js';
 import { type AnyVersionedVariantArray, type StateOf, type VariantRecord } from './Variant.js';
 import { type HList, type Poly } from '@midnightntwrk/wallet-sdk-utilities';
-import { type ProtocolState } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 
 /** Defines the static portion of base wallet class definition */
 export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray, TConfiguration = object> {
@@ -24,6 +24,15 @@ export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray, TCo
   new (runtime: Runtime<TVariants>, scope: Scope.CloseableScope): WalletLike<TVariants>;
   allVariants(): TVariants;
   allVariantsRecord(): VariantRecord<TVariants>;
+  /**
+   * Resolves the variant that is active for a given protocol version, so a caller holding only a version — a snapshot's
+   * envelope, the chain's current version — can address {@link start} by the tag of the variant that owns it.
+   *
+   * @param version The protocol version to resolve.
+   * @returns The versioned variant whose activation range contains `version`, or `Option.none()` when no registered
+   *   variant covers it.
+   */
+  variantFor(version: ProtocolVersion.ProtocolVersion): Option.Option<HList.Each<TVariants>>;
   startEmpty<T extends WalletClassLike<TVariants, any>>(walletClass: T): WalletOf<T>;
   startFirst<T extends WalletClassLike<TVariants, any>>(
     walletClass: T,

@@ -216,10 +216,13 @@ describe('Variant', () => {
     });
 
     it('infers the union of the registered variants', () => {
-      const selected = selectByRange(variants, ProtocolVersion.ProtocolVersion(100n));
+      const _selected = selectByRange(variants, ProtocolVersion.ProtocolVersion(100n));
 
       type _1 = Expect<
-        Equal<typeof selected, Option.Option<VersionedVariant<NumericRange> | VersionedVariant<NumericRangeMultiplier>>>
+        Equal<
+          typeof _selected,
+          Option.Option<VersionedVariant<NumericRange> | VersionedVariant<NumericRangeMultiplier>>
+        >
       >;
     });
   });

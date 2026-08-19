@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Exit, Scope, type Types } from 'effect';
+import { Effect, Exit, type Option, Scope, type Types } from 'effect';
 import * as rx from 'rxjs';
 import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Variant, type VariantBuilder, type WalletLike, WalletRuntimeError } from './abstractions/index.js';
@@ -96,6 +96,10 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
 
       static allVariantsRecord(): Variant.VariantRecord<Variants> {
         return Variant.makeVersionedRecord(BaseWallet.allVariants());
+      }
+
+      static variantFor(version: ProtocolVersion.ProtocolVersion): Option.Option<HList.Each<Variants>> {
+        return Variant.selectByRange(BaseWallet.allVariants(), version);
       }
 
       static startEmpty<T extends WalletLike.AnyWalletClass<Variants>>(WalletClass: T): WalletLike.WalletOf<T> {

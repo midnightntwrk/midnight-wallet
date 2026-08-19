@@ -74,11 +74,11 @@ describe('Wallet Builder', () => {
     });
 
     it('infers the union of the registered variants', () => {
-      const resolved = Wallet.variantFor(ProtocolVersion.ProtocolVersion(100n));
+      const _resolved = Wallet.variantFor(ProtocolVersion.ProtocolVersion(100n));
 
       type _1 = Expect<
         Equal<
-          typeof resolved,
+          typeof _resolved,
           Option.Option<Variant.VersionedVariant<NumericRange> | Variant.VersionedVariant<NumericRangeMultiplier>>
         >
       >;

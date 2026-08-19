@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/no-explicit-any -- unknown does not work well as a default, because it causes assignability issues */
-import { type Scope, type SubscriptionRef } from 'effect';
+import { Either, Option, type Scope, type SubscriptionRef } from 'effect';
 import type { Effect } from 'effect/Effect';
 import type { Stream } from 'effect/Stream';
-import { Poly } from '@midnightntwrk/wallet-sdk-utilities';
-import type { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type HList, Poly } from '@midnightntwrk/wallet-sdk-utilities';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type WalletRuntimeError } from './WalletRuntimeError.js';
 import type * as StateChange from './StateChange.js';
 
@@ -127,8 +127,16 @@ export type VariantRecord<Variants> = Variants extends [infer THead, ...infer TR
   : Variants extends []
     ? object
     : never;
-export const getVersionedVariantTag = <Variant extends AnyVariant>(v: VersionedVariant<Variant>): VariantTag<Variant> =>
-  Poly.getTag(v.variant) as VariantTag<Variant>;
+/**
+ * Reads the tag of the variant a {@link VersionedVariant} wraps.
+ *
+ * @remarks
+ *   Generic over the versioned variant rather than over the variant inside it, so that a union — what
+ *   {@link selectByRange} resolves to — yields the union of its tags instead of collapsing to the first member's.
+ */
+export const getVersionedVariantTag = <TVersionedVariant extends AnyVersionedVariant>(
+  v: TVersionedVariant,
+): VariantTag<TVersionedVariant> => Poly.getTag(v.variant) as VariantTag<TVersionedVariant>;
 export const makeVersionedRecord = <Variants extends AnyVersionedVariantArray>(
   variants: Variants,
 ): VariantRecord<Variants> => {
@@ -136,3 +144,32 @@ export const makeVersionedRecord = <Variants extends AnyVersionedVariantArray>(
     return { ...acc, [getVersionedVariantTag(variant)]: variant };
   }, {}) as VariantRecord<Variants>;
 };
+
+/**
+ * Finds the variant that is active for a given protocol version.
+ *
+ * @remarks
+ *   Registration says only which version a variant starts answering for, so the range it owns is `[sinceVersion,
+ *   nextVariantSinceVersion)` — the same half-open window the runtime hands a starting variant as
+ *   {@link VariantContext.activationRange}, derived here through the shared
+ *   {@link ProtocolVersion.makeRegistryFromActivations} so the two cannot disagree.
+ *
+ *   Selection is total: a version below the first registration, or a registration order the builder would have rejected
+ *   anyway (`withVariant` throws on a version that is not strictly ascending), selects nothing rather than throwing.
+ *   Callers decide what a miss means — for restoring a snapshot it is an unsupported snapshot version, not a defect.
+ * @param variants The registered variants, in ascending order of `sinceVersion`.
+ * @param version The protocol version to resolve.
+ * @returns The versioned variant whose activation range contains `version`, if there is one.
+ */
+export const selectByRange = <Variants extends AnyVersionedVariantArray>(
+  variants: Variants,
+  version: ProtocolVersion.ProtocolVersion,
+): Option.Option<HList.Each<Variants>> =>
+  ProtocolVersion.makeRegistryFromActivations(
+    variants.map((variant: HList.Each<Variants>) => ({ sinceVersion: variant.sinceVersion, value: variant })),
+  ).pipe(
+    Either.match({
+      onLeft: (): Option.Option<HList.Each<Variants>> => Option.none(),
+      onRight: (registry) => ProtocolVersion.select(registry, version),
+    }),
+  );
