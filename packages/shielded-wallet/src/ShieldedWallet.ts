@@ -42,6 +42,8 @@ import { type BatchUpdatesConfig, type IndexerClientConnection, type WalletSyncU
 import { type ShieldedHistoryStorage, type TransactionHistoryService } from './v2/TransactionHistory.js';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
+import { HList } from '@midnightntwrk/wallet-sdk-utilities';
+import { variantForSnapshot } from './Restore.js';
 
 export type ShieldedWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
@@ -259,11 +261,39 @@ export function CustomShieldedWallet<
       return CustomShieldedWalletImplementation.startWithSecretKeys(secretKeys);
     }
 
+    /**
+     * Restores a wallet from a snapshot, into whichever registered variant wrote it.
+     *
+     * @remarks
+     *   The snapshot declares the protocol version it was written at, so the variant that can read it is a lookup rather
+     *   than an assumption. A snapshot written before snapshots declared a version, or a serialization format this
+     *   wallet does not recognise as an envelope at all, restores into the head variant — which is what every restore
+     *   did before there was more than one variant to choose between.
+     * @param serializedState The serialized wallet state.
+     * @returns A wallet started from that state, on the variant that owns its protocol version.
+     * @throws UnsupportedSnapshotVersionError if the snapshot declares a version no registered variant reads.
+     */
     static restore(serializedState: TSerialized): CustomShieldedWalletImplementation {
-      const deserialized: CoreWallet = CustomShieldedWalletImplementation.allVariantsRecord()
-        [V2Tag].variant.deserializeState(serializedState)
-        .pipe(Either.getOrThrow);
-      return CustomShieldedWalletImplementation.startFirst(CustomShieldedWalletImplementation, deserialized);
+      const headVariant = HList.head(CustomShieldedWalletImplementation.allVariants());
+      const routed =
+        // Routing reads a serialized envelope, which only a wallet keeping the default string serialization has. A
+        // custom format is left with the behaviour it has always had.
+        typeof serializedState === 'string'
+          ? variantForSnapshot(
+              serializedState,
+              (version) => CustomShieldedWalletImplementation.variantFor(version),
+              headVariant,
+            )
+          : Either.right(headVariant);
+
+      const variant = routed.pipe(Either.getOrThrow);
+      const deserialized = variant.variant.deserializeState(serializedState).pipe(Either.getOrThrow);
+
+      return CustomShieldedWalletImplementation.startAtVariant(
+        CustomShieldedWalletImplementation,
+        variant,
+        deserialized,
+      );
     }
 
     readonly state: rx.Observable<ShieldedWalletState<TSerialized>>;
