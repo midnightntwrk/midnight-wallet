@@ -203,6 +203,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
       .withCoinsAndBalancesDefaults()
       .withTransactionHistory(ShieldedTransactionHistory.makeSimulatorTransactionHistoryService)
       .withKeysDefaults()
+      .withStartAuxDefaults()
       .withCoinSelectionDefaults(),
   );
 

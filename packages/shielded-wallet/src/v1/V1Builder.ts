@@ -10,10 +10,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, type Either, Scope, type Types } from 'effect';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type Variant, type VariantBuilder, WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import {
+  type Variant,
+  type VariantBuilder,
+  WalletRuntimeError,
+  type StartMaterial,
+} from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type EmptyWalletMigrationConfiguration, type StateMigration, makeEmptyWalletMigration } from './Migration.js';
 import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
 import { makeDefaultV1SerializationCapability, type SerializationCapability } from './Serialization.js';
@@ -71,6 +76,7 @@ export type V1Variant<TSerialized, TSyncUpdate, TTransaction, TAuxData, TPreviou
   keys: KeysCapability<CoreWallet>;
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
   transactionHistory: TransactionHistoryService;
+  startAux: StartMaterial.StartAuxCapability<TAuxData>;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -143,6 +149,7 @@ export class V1Builder<
         .withCoinsAndBalancesDefaults()
         .withTransactionHistoryDefaults()
         .withKeysDefaults()
+        .withStartAuxDefaults()
         // Type cast required because: the chain accumulates `TContext` as an intersection of the individual
         // `Default*Context` fragments, which is a structurally weaker type than the complete
         // `RunningV1Variant.Context` that `DefaultV1Builder` names — the defaults do produce a full context, but the
@@ -227,6 +234,9 @@ export class V1Builder<
       ...this.#buildState,
       syncService,
       syncCapability,
+      // The derivation is typed against the *old* start-aux parameter, so it cannot ride along into a builder whose
+      // sync service expects something else — exactly as the migration cannot ride along through `withMigration`.
+      startAux: undefined,
     });
   }
 
@@ -462,6 +472,35 @@ export class V1Builder<
   }
 
   /**
+   * Uses the default start-aux derivation: this ledger version's Zswap secret keys, derived from the seed.
+   *
+   * @remarks
+   *   The seed is the only key material that crosses a protocol boundary, so every variant must be able to produce its
+   *   own from one. This is that derivation for this ledger version; a builder whose sync service expects something
+   *   else supplies its own with {@link V1Builder.withStartAux}.
+   */
+  withStartAuxDefaults(
+    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, ledger.ZswapSecretKeys, TPreviousState>,
+  ): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, ledger.ZswapSecretKeys, TPreviousState> {
+    return this.withStartAux({ fromSeed: (seed) => ledger.ZswapSecretKeys.fromSeed(seed) });
+  }
+
+  /**
+   * Chooses how this variant derives the key material its synchronization is started with from a seed.
+   *
+   * @param startAux The derivation.
+   * @returns A builder that produces a variant able to start sync from a seed alone.
+   */
+  withStartAux(
+    startAux: StartMaterial.StartAuxCapability<TStartAux>,
+  ): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux, TPreviousState> {
+    return new V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux, TPreviousState>({
+      ...this.#buildState,
+      startAux,
+    });
+  }
+
+  /**
    * Uses the default migration: an empty wallet built from nothing.
    *
    * @remarks
@@ -565,6 +604,7 @@ export class V1Builder<
       keys: v1Context.keysCapability,
       serialization: v1Context.serializationCapability,
       transactionHistory: v1Context.transactionHistoryService,
+      startAux: this.#resolveStartAux(),
       start(
         context: Variant.VariantContext<CoreWallet>,
       ): Effect.Effect<
@@ -606,6 +646,23 @@ export class V1Builder<
    *   value could only be widened to `StateMigration<TPreviousState>` through a cast. Declaring no parameter says the
    *   same thing to the type system without one.
    */
+  /**
+   * Resolves the configured start-aux derivation.
+   *
+   * @remarks
+   *   Unlike the migration there is no sensible fallback: the default derivation produces this ledger version's secret
+   *   keys, which is only correct for a builder that kept a sync service expecting them. A builder that replaced sync
+   *   and did not say how to derive its own key material is misconfigured, and is told so at build time rather than
+   *   silently handed key objects of the wrong shape at the first migration.
+   */
+  #resolveStartAux(): StartMaterial.StartAuxCapability<TStartAux> {
+    const configured = this.#buildState.startAux;
+    if (configured === undefined) {
+      throw new Error('Not all components are configured in V1 Builder: startAux');
+    }
+    return configured;
+  }
+
   #resolveMigration(configuration: TConfig, getContext: () => TContext): StateMigration<TPreviousState> {
     const configured = this.#buildState.migration;
     return configured === undefined
@@ -724,6 +781,14 @@ declare namespace V1Builder {
    * behaviour every builder had before migrations were configurable, so a builder that never mentions migration must
    * still be considered complete.
    */
+  /**
+   * The start-aux entry, kept out of {@link FullBuildState} because it is not one of the context-producing capabilities:
+   * it takes neither configuration nor sibling capabilities, only a seed.
+   */
+  type HasStartAux<TStartAux> = {
+    readonly startAux: StartMaterial.StartAuxCapability<TStartAux>;
+  };
+
   type HasMigration<TConfig, TContext, TPreviousState> = {
     readonly migration: (configuration: TConfig, getContext: () => TContext) => StateMigration<TPreviousState>;
   };
@@ -750,9 +815,14 @@ declare namespace V1Builder {
     TStartAux = object,
     TPreviousState = null,
   > = {
-    [K in keyof (FullBuildState<never, never, never, never, never, never> & HasMigration<never, never, never>)]?:
+    [
+      K in keyof (FullBuildState<never, never, never, never, never, never> &
+        HasMigration<never, never, never> &
+        HasStartAux<never>)
+    ]?:
       | (FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux> &
-          HasMigration<TConfig, TContext, TPreviousState>)[K]
+          HasMigration<TConfig, TContext, TPreviousState> &
+          HasStartAux<TStartAux>)[K]
       | undefined;
   };
 

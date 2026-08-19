@@ -246,6 +246,7 @@ export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
     .withCoinsAndBalancesDefaults()
     .withTransactionHistory(() => noOpPreForkHistory)
     .withKeysDefaults()
+    .withStartAuxDefaults()
     .withCoinSelectionDefaults();
 
   const postForkBuilder = new V2.V2Builder()
@@ -256,6 +257,7 @@ export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
     .withCoinsAndBalancesDefaults()
     .withTransactionHistory(() => noOpPostForkHistory)
     .withKeysDefaults()
+    .withStartAuxDefaults()
     .withCoinSelectionDefaults()
     .withMigration(() => capturingCrossLedgerMigration(captured));
 
