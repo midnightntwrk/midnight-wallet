@@ -21,8 +21,8 @@
  *   public API speaks the post-fork ledger version throughout, and where the two sides genuinely differ — the key
  *   material each variant's synchronization needs — the wallet resolves it per variant from what it retained.
  */
-import * as v8 from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import type * as v8 from '@midnight-ntwrk/ledger-v8';
+import type * as ledger from '@midnightntwrk/ledger-v9';
 import { type NetworkId, ProtocolVersion, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ShieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';

@@ -33,10 +33,13 @@ const configuration: DefaultShieldedConfiguration = {
  * What the wallet asked of its runtime.
  *
  * @remarks
+ *   The wallet under test is the single-variant composition, `CustomShieldedWallet` — what an application pinned to one
+ *   protocol version builds, and the only shape these claims are about. A wallet spanning a boundary resolves key
+ *   material per variant instead, and is driven end to end over real chains in `forkStart.test.ts`.
+ *
  *   The runtime is stubbed rather than driven through a real migration because the behaviour under test is entirely the
- *   wallet's: which keys it holds on to, and how many watchers it registers. Registering two variants to provoke a real
- *   activation would test the runtime — which already has its own coverage — and would need the multi-variant wallet
- *   type that is deliberately still deferred.
+ *   wallet's: which keys it holds on to, and how many watchers it registers. Provoking a real activation would test the
+ *   runtime, which already has its own coverage.
  */
 type RuntimeRecorder = {
   /** The start-aux each `dispatch` to `startSyncInBackground` was given, in order. */
@@ -106,7 +109,7 @@ const activate = (recorder: RuntimeRecorder): Effect.Effect<void> =>
 
 const keysFrom = (seed: number): ledger.ZswapSecretKeys => ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, seed));
 
-describe('ShieldedWallet post-migration sync restart', () => {
+describe('CustomShieldedWallet post-migration sync restart', () => {
   it('registers the activation watcher exactly once, however often start is called', async () => {
     const recorder = makeRecorder();
     const first = keysFrom(1);

@@ -36,12 +36,7 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnightntwrk/wallet-sdk-address-format';
-import {
-  type Simulator,
-  V8,
-  genesisStrictness,
-  immediateBlockProducer,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V8, genesisStrictness, immediateBlockProducer } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Cause, Effect, Option, Runtime, type Scope } from 'effect';

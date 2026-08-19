@@ -21,7 +21,6 @@ import {
   type BaseV2Configuration,
   type DefaultV2Configuration,
   type RunningV2Variant,
-  V2Builder,
   V2Tag,
   type V2Variant,
   CoreWallet,
