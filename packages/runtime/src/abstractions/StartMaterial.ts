@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Option } from 'effect';
+import { Data, Either, Option } from 'effect';
 
 /**
  * How a variant produces the key material its own sync needs from a seed.
@@ -100,3 +100,44 @@ export const auxFor = <TStartAux>(
   material._tag === 'FromSeed'
     ? Option.some(deriveFromSeed(material.seed))
     : Option.fromNullable(material.byTag.get(variantTag));
+
+/**
+ * Raised when a wallet holds no key material a given variant is able to use.
+ *
+ * @remarks
+ *   Only reachable for a wallet started with key objects rather than a seed: the objects belong to one ledger version's
+ *   runtime, so a variant on the other side of a protocol boundary has nothing to start with. Handing over what the
+ *   wallet does have would be worse than failing — the keys would be silently wrong, and the wallet would sync itself
+ *   into nonsense. Starting from a seed cannot reach this.
+ */
+export class MissingStartAuxError extends Data.TaggedError(
+  '@midnightntwrk/wallet-sdk-runtime/abstractions/StartMaterial/MissingStartAuxError',
+)<{
+  readonly message: string;
+  /** The variant that asked and could not be answered. */
+  readonly variantTag: string | symbol;
+}> {}
+
+/**
+ * Produces the key material a given variant should start its synchronization with, or says why it cannot.
+ *
+ * @param material What the wallet retained when the application started it.
+ * @param variantTag The tag of the variant asking.
+ * @param deriveFromSeed That variant's own derivation, consulted only for retained seeds.
+ * @returns The key material, or a {@link MissingStartAuxError} naming the variant.
+ */
+export const requireAuxFor = <TStartAux>(
+  material: StartMaterial<TStartAux>,
+  variantTag: string | symbol,
+  deriveFromSeed: (seed: WalletSeed.WalletSeed) => TStartAux,
+): Either.Either<TStartAux, MissingStartAuxError> =>
+  Either.fromOption(
+    auxFor(material, variantTag, deriveFromSeed),
+    () =>
+      new MissingStartAuxError({
+        message:
+          `This wallet was started with key material for other variants only, and holds none the variant ` +
+          `${String(variantTag)} can use. Start it from a seed so every variant can derive its own.`,
+        variantTag,
+      }),
+  );
