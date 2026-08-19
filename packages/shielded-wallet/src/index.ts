@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 export * from './ShieldedWallet.js';
+export * as Restore from './Restore.js';
 export {
   type ShieldedTransactionHistoryEntry,
   ShieldedSectionSchema,
