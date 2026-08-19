@@ -19,11 +19,27 @@ of the `./v1` subpath load a second ledger WASM module, which matters for browse
 exported from `./v1` is the ledger-v8 simulator twin only, where it previously re-exported the whole simulation entry
 point.
 
-Note that the two variants are not line-for-line equivalents of one another, and `./v1` is not simply `./v2` compiled
-against the older ledger. Projections-based fast sync is built on ledger-v9 generation- and commitment-tree APIs that
-have no ledger-v8 counterpart, so `./v1` syncs by event replay, as the pre-fork wallet always did, and does not export
-the projection schema types. Anything written against `./v2`'s sync surface should expect to be adjusted, not merely
-repointed, if it also has to run on `./v1`.
+**The pre-fork variant syncs by event replay only, and permanently so.** The projections-based (eventless) fast sync
+that `./v2` offers through `makeEventLessSyncService` / `makeEventLessSyncCapability` is built on four `DustLocalState`
+members that exist only in ledger-v9:
+
+- `updateGenerationTreeFromEvidence`
+- `commitmentTreeFirstFree`
+- `generatingTreeFirstFree`
+- `nullifiers`
+
+No published ledger-v8 has any of them (checked through 8.1.1, the latest), and no v8-compatible implementation exists
+anywhere, so the path cannot be back-ported. `./v1` therefore synchronises by replaying the indexer's dust ledger
+events — exactly what the shipped 1.x wallet does in production today — and does not export the projection schema types,
+the `DustProjectionsUpdate` union, or the eventless sync service and capability. **This was decided on 2026-08-19 as a
+permanent property of the pre-fork variant, not a temporary gap: no ledger change is being requested to close it.**
+Anything written against `./v2`'s sync surface should expect to be adjusted, not merely repointed, if it also has to run
+on `./v1`.
+
+Aside from that exclusion, `./v1` does track this line rather than the released 1.x code: it carries the current dust
+variant with the ledger swapped, including the lock that stops a second sync start from opening a duplicate
+subscription, the one-shot `sync` entry point that lock makes safe, and `blockData` reporting an absent block through
+the typed error channel instead of as a defect.
 
 `@midnightntwrk/wallet-sdk` mirrors this: `dust/v1` now re-exports the ledger-v8 variant, and a new `dust/v2` subpath
 re-exports the ledger-v9 one.
