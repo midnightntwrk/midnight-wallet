@@ -41,6 +41,7 @@ import {
 import { type TokenTransfer } from './v2/Transacting.js';
 import { type BatchUpdatesConfig, type IndexerClientConnection, type WalletSyncUpdate } from './v2/Sync.js';
 import { type ShieldedHistoryStorage, type TransactionHistoryService } from './v2/TransactionHistory.js';
+import { type CoreWallet as V1CoreWallet } from './v1/CoreWallet.js';
 import {
   StartMaterial,
   type Variant,
@@ -63,46 +64,89 @@ export type ShieldedWalletServices = {
 
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
+/** The core state of whichever shielded variant produced an emission. */
+export type ShieldedCoreState = V1CoreWallet | CoreWallet;
+
+/**
+ * Everything a state emission projects, already bound to the variant that produced it.
+ *
+ * @remarks
+ *   Binding is the point. The capabilities that understand a state and the state itself must be chosen together, in the
+ *   branch where the producing variant is known; the two variants' capability types are structurally identical, so a
+ *   capability of one would type-check against a state of the other and be wrong at runtime. Once bound there is
+ *   nothing left to mis-pair, and everything below is version-agnostic plain data.
+ */
+type ShieldedProjections<TSerialized> = Readonly<{
+  balances: () => Record<ledger.RawTokenType, bigint>;
+  totalCoins: () => readonly (AvailableCoin | PendingCoin)[];
+  availableCoins: () => readonly AvailableCoin[];
+  pendingCoins: () => readonly PendingCoin[];
+  coinPublicKey: () => ShieldedCoinPublicKey;
+  encryptionPublicKey: () => ShieldedEncryptionPublicKey;
+  address: () => ShieldedAddress;
+  serialize: () => TSerialized;
+}>;
+
+/** The capability set a variant exposes for reading and serializing its own state. */
+type ShieldedStateCapabilities<TState, TSerialized> = Readonly<{
+  serialization: SerializationCapability<TState, null, TSerialized>;
+  coinsAndBalances: CoinsAndBalancesCapability<TState>;
+  keys: KeysCapability<TState>;
+}>;
+
 export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.FinalizedTransaction> {
-  static readonly mapState =
-    <TSerialized = string>(variant: ShieldedWalletCapabilities<TSerialized> & ShieldedWalletServices) =>
-    (state: ProtocolState.ProtocolState<CoreWallet>): ShieldedWalletState<TSerialized> => {
-      const { serialization, coinsAndBalances, keys } = variant;
-      const { transactionHistory } = variant;
-      return new ShieldedWalletState(state, { serialization, coinsAndBalances, keys }, { transactionHistory });
-    };
+  /**
+   * Wraps a state emission with the capabilities of the variant that produced it.
+   *
+   * @remarks
+   *   Call this inside a branch that has narrowed on the emission's `variantTag`, so `variant` and `state` are known to
+   *   belong together. It is generic over the state type precisely so that pairing is checked.
+   */
+  static readonly fromVariant = <TState, TSerialized = string>(
+    variant: ShieldedStateCapabilities<TState, TSerialized>,
+    state: ProtocolState.ProtocolState<TState>,
+  ): ShieldedWalletState<TSerialized> =>
+    new ShieldedWalletState<TSerialized>(state.version, state.state as ShieldedCoreState, {
+      balances: () => variant.coinsAndBalances.getAvailableBalances(state.state),
+      totalCoins: () => variant.coinsAndBalances.getTotalCoins(state.state),
+      availableCoins: () => variant.coinsAndBalances.getAvailableCoins(state.state),
+      pendingCoins: () => variant.coinsAndBalances.getPendingCoins(state.state),
+      coinPublicKey: () => variant.keys.getCoinPublicKey(state.state),
+      encryptionPublicKey: () => variant.keys.getEncryptionPublicKey(state.state),
+      address: () => variant.keys.getAddress(state.state),
+      serialize: () => variant.serialization.serialize(state.state),
+    });
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
-  readonly state: CoreWallet;
-  readonly capabilities: ShieldedWalletCapabilities<TSerialized>;
-  readonly services: ShieldedWalletServices;
+  readonly state: ShieldedCoreState;
+  readonly #projections: ShieldedProjections<TSerialized>;
 
   get balances(): Record<ledger.RawTokenType, bigint> {
-    return this.capabilities.coinsAndBalances.getAvailableBalances(this.state);
+    return this.#projections.balances();
   }
 
   get totalCoins(): readonly (AvailableCoin | PendingCoin)[] {
-    return this.capabilities.coinsAndBalances.getTotalCoins(this.state);
+    return this.#projections.totalCoins();
   }
 
   get availableCoins(): readonly AvailableCoin[] {
-    return this.capabilities.coinsAndBalances.getAvailableCoins(this.state);
+    return this.#projections.availableCoins();
   }
 
   get pendingCoins(): readonly PendingCoin[] {
-    return this.capabilities.coinsAndBalances.getPendingCoins(this.state);
+    return this.#projections.pendingCoins();
   }
 
   get coinPublicKey(): ShieldedCoinPublicKey {
-    return this.capabilities.keys.getCoinPublicKey(this.state);
+    return this.#projections.coinPublicKey();
   }
 
   get encryptionPublicKey(): ShieldedEncryptionPublicKey {
-    return this.capabilities.keys.getEncryptionPublicKey(this.state);
+    return this.#projections.encryptionPublicKey();
   }
 
   get address(): ShieldedAddress {
-    return this.capabilities.keys.getAddress(this.state);
+    return this.#projections.address();
   }
 
   get progress(): SyncProgress.SyncProgress {
@@ -110,18 +154,17 @@ export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.Fi
   }
 
   constructor(
-    state: ProtocolState.ProtocolState<CoreWallet>,
-    capabilities: ShieldedWalletCapabilities<TSerialized>,
-    services: ShieldedWalletServices,
+    protocolVersion: ProtocolVersion.ProtocolVersion,
+    state: ShieldedCoreState,
+    projections: ShieldedProjections<TSerialized>,
   ) {
-    this.protocolVersion = state.version;
-    this.state = state.state;
-    this.capabilities = capabilities;
-    this.services = services;
+    this.protocolVersion = protocolVersion;
+    this.state = state;
+    this.#projections = projections;
   }
 
   serialize(): TSerialized {
-    return this.capabilities.serialization.serialize(this.state);
+    return this.#projections.serialize();
   }
 }
 
@@ -413,9 +456,11 @@ export function CustomShieldedWallet<
     ) {
       super(runtime, scope);
       this.state = this.rawState.pipe(
-        rx.map(
-          ShieldedWalletState.mapState<TSerialized>(
+        rx.map((emission) =>
+          // One variant, so the pairing is trivial here; the forking wallet narrows on `variantTag` first.
+          ShieldedWalletState.fromVariant<CoreWallet, TSerialized>(
             CustomShieldedWalletImplementation.allVariantsRecord()[V2Tag].variant,
+            emission,
           ),
         ),
         rx.shareReplay({ refCount: true, bufferSize: 1 }),
