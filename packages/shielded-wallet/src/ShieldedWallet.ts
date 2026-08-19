@@ -168,20 +168,6 @@ export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.Fi
   }
 }
 
-export type ShieldedWallet = CustomizedShieldedWallet<
-  ledger.ZswapSecretKeys,
-  ledger.FinalizedTransaction,
-  WalletSyncUpdate,
-  string
->;
-
-export type ShieldedWalletClass = CustomizedShieldedWalletClass<
-  ledger.ZswapSecretKeys,
-  ledger.FinalizedTransaction,
-  WalletSyncUpdate,
-  string
->;
-
 export type ShieldedWalletAPI<
   TStartAux = ledger.ZswapSecretKeys,
   TTransaction = ledger.FinalizedTransaction,
@@ -296,10 +282,17 @@ export interface CustomizedShieldedWalletClass<
   restore(serializedState: TSerialized): CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
 }
 
-export function ShieldedWallet(configuration: DefaultShieldedConfiguration): ShieldedWalletClass {
-  return CustomShieldedWallet<DefaultShieldedConfiguration>(configuration, new V2Builder().withDefaults());
-}
-
+/**
+ * Builds a shielded wallet class over a single variant.
+ *
+ * @remarks
+ *   One variant, and therefore one ledger version: this is the composition for a wallet that is not expected to meet a
+ *   protocol boundary — a test harness, a simulator-driven wallet, an application pinned to one protocol version. The
+ *   wallet this package ships is `ShieldedWallet`, which registers a variant either side of the boundary.
+ * @param configuration What the variant is built from.
+ * @param builder The variant builder.
+ * @returns The wallet class.
+ */
 export function CustomShieldedWallet<
   TConfig extends BaseV2Configuration = DefaultV2Configuration,
   TStartAux = ledger.ZswapSecretKeys,
