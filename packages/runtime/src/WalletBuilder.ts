@@ -38,7 +38,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
   readonly #buildState: WalletBuilder.BuildState<TBuilders>;
 
   /**
-   * Ensures that the built wallet uses a given variant.
+   * Ensures that the built wallet uses a given variant, configured together with every other variant at build time.
    *
    * @param sinceVersion The Midnight protocol version that the variant should operate from.
    * @param variantBuilder A {@link VariantBuilder} that builds the variant.
@@ -47,7 +47,30 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
   withVariant<TBuilder extends VariantBuilder.AnyVariantBuilder>(
     sinceVersion: ProtocolVersion.ProtocolVersion,
     variantBuilder: TBuilder,
-  ): WalletBuilder<HList.Append<TBuilders, VariantBuilder.VersionedVariantBuilder<TBuilder>>> {
+  ): WalletBuilder<HList.Append<TBuilders, VariantBuilder.VersionedVariantBuilder<TBuilder>>>;
+  /**
+   * Ensures that the built wallet uses a given variant, built from a configuration of its own.
+   *
+   * @remarks
+   *   The variant is settled at registration, so nothing about it is left for `build` to ask for. Use this where two
+   *   variants cannot share one configuration — the same key meaning different, mutually unassignable things on either
+   *   side of a protocol boundary — and where a caller would otherwise have to invent a merged configuration that no
+   *   single variant can consume.
+   * @param sinceVersion The Midnight protocol version that the variant should operate from.
+   * @param variantBuilder A {@link VariantBuilder} that builds the variant.
+   * @param configuration The configuration to build this variant, and only this variant, from.
+   * @returns A new {@link WalletBuilder} that uses the variant that will be built from `variantBuilder`.
+   */
+  withVariant<TBuilder extends VariantBuilder.AnyVariantBuilder>(
+    sinceVersion: ProtocolVersion.ProtocolVersion,
+    variantBuilder: TBuilder,
+    configuration: VariantBuilder.ConfigurationOf<TBuilder>,
+  ): WalletBuilder<HList.Append<TBuilders, VariantBuilder.SelfConfiguredVariantBuilder<TBuilder>>>;
+  withVariant<TBuilder extends VariantBuilder.AnyVariantBuilder>(
+    sinceVersion: ProtocolVersion.ProtocolVersion,
+    variantBuilder: TBuilder,
+    configuration?: VariantBuilder.ConfigurationOf<TBuilder>,
+  ): WalletBuilder<HList.Append<TBuilders, VariantBuilder.AnyVersionedVariantBuilder>> {
     const { sinceVersion: previousVersion } = this.#buildState.variants.at(-1) ?? {
       sinceVersion: ProtocolVersion.ProtocolVersion(-1n),
     };
@@ -56,9 +79,10 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
       throw new Error('ProtocolMismatch: sinceVersion is prior to previously registered version');
     }
 
-    const newBuilder: VariantBuilder.VersionedVariantBuilder<TBuilder> = { sinceVersion, variantBuilder };
+    const newBuilder: VariantBuilder.AnyVersionedVariantBuilder =
+      configuration === undefined ? { sinceVersion, variantBuilder } : { sinceVersion, variantBuilder, configuration };
 
-    return new WalletBuilder<HList.Append<TBuilders, VariantBuilder.VersionedVariantBuilder<TBuilder>>>({
+    return new WalletBuilder<HList.Append<TBuilders, VariantBuilder.AnyVersionedVariantBuilder>>({
       variants: HList.append(this.#buildState.variants, newBuilder),
     });
   }
@@ -77,9 +101,13 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
     }
 
     const variants: Variants = this.#buildState.variants.map(
-      ({ sinceVersion, variantBuilder }): Variant.VersionedVariant<Variant.AnyVariant> => ({
-        sinceVersion,
-        variant: variantBuilder.build(maybeConfiguration ?? {}),
+      (registered): Variant.VersionedVariant<Variant.AnyVariant> => ({
+        sinceVersion: registered.sinceVersion,
+        // A variant registered with its own configuration is built from that and nothing else: what
+        // `build` was handed is, by construction, not addressed to it.
+        variant: registered.variantBuilder.build(
+          'configuration' in registered ? registered.configuration : (maybeConfiguration ?? {}),
+        ),
       }),
     ) as Variants;
 
@@ -183,7 +211,6 @@ export declare namespace WalletBuilder {
 
   type VoidIfEmpty<TObject> = keyof TObject extends never ? undefined : TObject;
 
-  type Configurations<TBuilders extends VariantBuilder.AnyVersionedVariantBuilder[]> = VariantBuilder.ConfigurationOf<
-    HList.Each<TBuilders>
-  >;
+  type Configurations<TBuilders extends VariantBuilder.AnyVersionedVariantBuilder[]> =
+    VariantBuilder.PendingConfigurationOf<HList.Each<TBuilders>>;
 }
