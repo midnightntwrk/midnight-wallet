@@ -53,7 +53,7 @@ import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { Array as Arr, pipe, Schema } from 'effect';
-import { TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type ProtocolVersion, TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { combineLatest, map, type Observable, firstValueFrom, type Subscription, concatMap } from 'rxjs';
 import {
   type DefaultPendingTransactionsServiceConfiguration,
@@ -282,11 +282,53 @@ export type UtxoWithMeta = {
   };
 };
 
+/** The protocol version each of the three wallets has reached. */
+export type WalletProtocolVersions = Readonly<{
+  shielded: ProtocolVersion.ProtocolVersion;
+  unshielded: ProtocolVersion.ProtocolVersion;
+  dust: ProtocolVersion.ProtocolVersion;
+}>;
+
+/**
+ * The lowest of the protocol versions the three wallets have reached.
+ *
+ * @remarks
+ *   The three wallets follow the same chain but not in lock-step: each recognises a protocol version change when its own
+ *   synchronization reaches it, so around a fork they disagree for a while. A transaction spans all three, so the one
+ *   still behind is what bounds the facade as a whole — the highest version every wallet is known to be at.
+ * @param versions The version each wallet has reached.
+ * @returns The lowest of the three.
+ */
+export const lowestProtocolVersion = (versions: WalletProtocolVersions): ProtocolVersion.ProtocolVersion =>
+  [versions.shielded, versions.unshielded, versions.dust].reduce((lowest, candidate) =>
+    candidate < lowest ? candidate : lowest,
+  );
+
 export class FacadeState {
   public readonly shielded: ShieldedWalletState;
   public readonly unshielded: UnshieldedWalletState;
   public readonly dust: DustWalletState;
   public readonly pending: PendingTransactions.PendingTransactions<ledger.FinalizedTransaction>;
+
+  /** The protocol version each of the three wallets has reached. */
+  public get protocolVersion(): WalletProtocolVersions {
+    return {
+      shielded: this.shielded.protocolVersion,
+      unshielded: this.unshielded.protocolVersion,
+      dust: this.dust.protocolVersion,
+    };
+  }
+
+  /**
+   * The protocol version the facade as a whole can act at: the lowest the three wallets have reached.
+   *
+   * @remarks
+   *   Around a protocol boundary the three wallets cross at slightly different moments, and a transaction needs all
+   *   three. This is the version every one of them is known to understand.
+   */
+  public get activeProtocolVersion(): ProtocolVersion.ProtocolVersion {
+    return lowestProtocolVersion(this.protocolVersion);
+  }
 
   public get isSynced(): boolean {
     return (
