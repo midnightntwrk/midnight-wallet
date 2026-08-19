@@ -88,6 +88,105 @@ describe('Wallet Builder', () => {
     });
   });
 
+  describe('registering a variant with its own configuration', () => {
+    it('builds the variant from that configuration and asks for none at build time', async () => {
+      const Wallet = WalletBuilder.init()
+        .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(), { min: 0, max: 2 })
+        .build();
+      const wallet = Wallet.startEmpty(Wallet);
+
+      const receivedStates = await toProtocolStateArray(
+        wallet.rawState.pipe(rx.takeWhile(({ state }) => state !== 2, true)),
+      );
+
+      expect(receivedStates.at(-1)).toEqual({
+        version: ProtocolVersion.MinSupportedVersion,
+        variantTag: Numeric,
+        state: 2,
+      });
+    });
+
+    it('keeps each variant on its own configuration when both carry one', async () => {
+      // The two configurations name the same keys with values only one variant can use — the shape
+      // a fork wallet has, where each side is configured for its own ledger. Merging them would put
+      // `multiplier: 5` out of reach of the variant that needs it.
+      const Wallet = WalletBuilder.init()
+        .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2), { min: 0, max: 4 })
+        .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder(), {
+          min: 0,
+          max: 2,
+          multiplier: 5,
+        })
+        .build();
+      const wallet = Wallet.startEmpty(Wallet);
+
+      const receivedStates = await toProtocolStateArray(
+        wallet.rawState.pipe(rx.takeWhile(({ state }) => state !== 10, true)),
+      );
+
+      expect(receivedStates.at(-1)).toEqual({
+        version: ProtocolVersion.ProtocolVersion(100n),
+        variantTag: NumericMultiplier,
+        state: 10,
+      });
+    });
+
+    it('still takes the configuration of the variants that carry none', async () => {
+      const Wallet = WalletBuilder.init()
+        .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
+        .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder(), {
+          min: 0,
+          max: 2,
+          multiplier: 5,
+        })
+        .build({ min: 0, max: 4 });
+      const wallet = Wallet.startEmpty(Wallet);
+
+      const receivedStates = await toProtocolStateArray(
+        wallet.rawState.pipe(rx.takeWhile(({ state }) => state !== 10, true)),
+      );
+
+      expect(receivedStates.at(-1)).toEqual({
+        version: ProtocolVersion.ProtocolVersion(100n),
+        variantTag: NumericMultiplier,
+        state: 10,
+      });
+    });
+
+    it('reports the configuration it was built with, without the self-configured variants', () => {
+      const Wallet = WalletBuilder.init()
+        .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
+        .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder(), {
+          min: 0,
+          max: 2,
+          multiplier: 5,
+        })
+        .build({ min: 0, max: 4 });
+
+      expect(Wallet.configuration).toEqual({ min: 0, max: 4 });
+      type _1 = Expect<Equal<typeof Wallet.configuration, Readonly<RangeConfig>>>;
+    });
+
+    it('rejects a variant registered out of protocol version order, configuration or not', () => {
+      const builder = WalletBuilder.init().withVariant(
+        ProtocolVersion.ProtocolVersion(50n),
+        new NumericRangeBuilder(),
+        {
+          min: 0,
+          max: 1,
+        },
+      );
+
+      expect(() =>
+        builder.withVariant(ProtocolVersion.ProtocolVersion(10n), new NumericRangeMultiplierBuilder(), {
+          min: 0,
+          max: 1,
+          multiplier: 2,
+        }),
+      ).toThrow('ProtocolMismatch: sinceVersion is prior to previously registered version');
+    });
+  });
+
   describe('protocol version ordering', () => {
     it('should reject adding a variant with the same protocol version as the previous one', () => {
       const version = ProtocolVersion.ProtocolVersion(10n);
