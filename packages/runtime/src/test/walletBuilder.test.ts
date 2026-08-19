@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type HList } from '@midnightntwrk/wallet-sdk-utilities';
 import { type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { Effect, Option, PubSub, Scope, Stream } from 'effect';
 import * as rx from 'rxjs';
@@ -23,7 +22,8 @@ import {
   VersionChangeType,
   type WalletLike,
 } from '../abstractions/index.js';
-import { type Runtime } from '../Runtime.js';
+import type * as Runtime from '../Runtime.js';
+import { type Runtime as RuntimeService } from '../Runtime.js';
 import {
   isOrderedSubsequenceOf,
   isRange,
@@ -242,10 +242,10 @@ describe('Wallet Builder', () => {
 
     it('takes the union of the registered variants states, so a resolved variant is callable at all', () => {
       const Wallet = walletOverTwoStateTypes();
-      const resolved = Wallet.variantFor(ProtocolVersion.MinSupportedVersion).pipe(Option.getOrThrow);
+      const _resolved = Wallet.variantFor(ProtocolVersion.MinSupportedVersion).pipe(Option.getOrThrow);
 
       type _1 = Expect<
-        Equal<Parameters<typeof Wallet.startAtVariant<typeof Wallet, typeof resolved>>[2], string | number>
+        Equal<Parameters<typeof Wallet.startAtVariant<typeof Wallet, typeof _resolved>>[2], string | number>
       >;
 
       expect(Option.isSome(Wallet.variantFor(ProtocolVersion.MinSupportedVersion))).toBe(true);
@@ -283,7 +283,7 @@ describe('Wallet Builder', () => {
       Equal<typeof Wallet, WalletLike.BaseWalletClass<[Variant.VersionedVariant<NumericRange>], RangeConfig>>
     >;
     type _2 = Expect<Equal<typeof wallet, WalletLike.WalletLike<[Variant.VersionedVariant<NumericRange>]>>>;
-    type _3 = Expect<Equal<typeof wallet.runtime, Runtime<[Variant.VersionedVariant<NumericRange>]>>>;
+    type _3 = Expect<Equal<typeof wallet.runtime, RuntimeService<[Variant.VersionedVariant<NumericRange>]>>>;
     type _4 = Expect<Equal<typeof wallet.rawState, rx.Observable<ProtocolState.ProtocolState<number, typeof Numeric>>>>;
 
     expect(wallet).toBeDefined();
@@ -324,11 +324,14 @@ describe('Wallet Builder', () => {
 
     type Variants = [Variant.VersionedVariant<NumericRange>, Variant.VersionedVariant<NumericRangeMultiplier>];
     type _1 = Expect<Equal<typeof wallet, WalletLike.WalletLike<Variants>>>;
-    type _2 = Expect<Equal<typeof wallet.runtime, Runtime<Variants>>>;
+    type _2 = Expect<Equal<typeof wallet.runtime, RuntimeService<Variants>>>;
     type _3 = Expect<
       Equal<
         typeof wallet.rawState,
-        rx.Observable<ProtocolState.ProtocolState<number, typeof Numeric | typeof NumericMultiplier>>
+        rx.Observable<
+          | ProtocolState.ProtocolState<number, typeof Numeric>
+          | ProtocolState.ProtocolState<number, typeof NumericMultiplier>
+        >
       >
     >;
 
@@ -368,12 +371,7 @@ describe('Wallet Builder', () => {
     const wallet = Wallet.startEmpty(Wallet);
 
     type Variants = [Variant.VersionedVariant<NumericRange>, Variant.VersionedVariant<NumericRangeMultiplier>];
-    type _1 = Expect<
-      Equal<
-        typeof wallet.rawState,
-        rx.Observable<ProtocolState.ProtocolState<number, Variant.VariantTag<HList.Each<Variants>>>>
-      >
-    >;
+    type _1 = Expect<Equal<typeof wallet.rawState, rx.Observable<Runtime.RuntimeState<Variants>>>>;
 
     const receivedStates = await toProtocolStateArray(
       wallet.rawState.pipe(rx.takeWhile(({ state }) => state !== 8, true)),

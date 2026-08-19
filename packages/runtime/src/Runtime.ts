@@ -15,11 +15,18 @@ import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-a
 import { StateChange, type Variant, VersionChangeType, WalletRuntimeError } from './abstractions/index.js';
 import { EitherOps, HList, Poly } from '@midnightntwrk/wallet-sdk-utilities';
 
-/** The state a {@link Runtime} publishes: the variant's state, the protocol version, and the variant that produced it. */
-export type RuntimeState<Variants extends Variant.AnyVersionedVariantArray> = ProtocolState.ProtocolState<
-  Variant.StateOf<HList.Each<Variants>>,
-  Variant.VariantTag<HList.Each<Variants>>
->;
+/**
+ * The state a {@link Runtime} publishes: the variant's state, the protocol version, and the variant that produced it.
+ *
+ * @remarks
+ *   Distributed over the registered variants rather than formed as one `ProtocolState` of two unions, so that
+ *   `variantTag` is a genuine discriminant: branching on it narrows `state` to what that variant actually produces.
+ *   Pairing them any more loosely would leave every reader to re-establish the correspondence with a cast, which is the
+ *   cost the tag exists to remove.
+ */
+export type RuntimeState<Variants extends Variant.AnyVersionedVariantArray> = {
+  [K in keyof Variants]: ProtocolState.ProtocolState<Variant.StateOf<Variants[K]>, Variant.VariantTag<Variants[K]>>;
+}[number];
 
 /** The {@link Runtime} service type. */
 export interface Runtime<Variants extends Variant.AnyVersionedVariantArray> {
