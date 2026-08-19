@@ -32,6 +32,7 @@ import {
   toProtocolStateArray,
 } from '../testing/utils.js';
 import {
+  InterceptingVariantBuilder,
   Numeric,
   NumericMultiplier,
   type NumericRange,
@@ -184,6 +185,55 @@ describe('Wallet Builder', () => {
           multiplier: 2,
         }),
       ).toThrow('ProtocolMismatch: sinceVersion is prior to previously registered version');
+    });
+  });
+
+  describe('starting at a variant resolved from a protocol version', () => {
+    // The two variants deliberately keep different state types: a tag alone cannot say which of them a
+    // state belongs to once the version is runtime data, which is exactly what this entry point is for.
+    const walletOverTwoStateTypes = () =>
+      WalletBuilder.init()
+        .withVariant(ProtocolVersion.MinSupportedVersion, new InterceptingVariantBuilder<'pre', string>('pre'))
+        .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeBuilder(10))
+        .build({ min: 0, max: 2 });
+
+    it('starts on the resolved variant, at the version that variant was registered from', async () => {
+      const Wallet = walletOverTwoStateTypes();
+      const resolved = Wallet.variantFor(ProtocolVersion.ProtocolVersion(120n)).pipe(Option.getOrThrow);
+
+      const wallet = Wallet.startAtVariant(Wallet, resolved, 0);
+
+      expect(await rx.firstValueFrom(wallet.rawState)).toEqual({
+        version: ProtocolVersion.ProtocolVersion(100n),
+        variantTag: Numeric,
+        state: 0,
+      });
+      await wallet.stop();
+    });
+
+    it('starts on the head variant when that is the one resolved, taking its own state type', async () => {
+      const Wallet = walletOverTwoStateTypes();
+      const resolved = Wallet.variantFor(ProtocolVersion.MinSupportedVersion).pipe(Option.getOrThrow);
+
+      const wallet = Wallet.startAtVariant(Wallet, resolved, 'restored');
+
+      expect(await rx.firstValueFrom(wallet.rawState)).toEqual({
+        version: ProtocolVersion.MinSupportedVersion,
+        variantTag: 'pre',
+        state: 'restored',
+      });
+      await wallet.stop();
+    });
+
+    it('takes the union of the registered variants states, so a resolved variant is callable at all', () => {
+      const Wallet = walletOverTwoStateTypes();
+      const resolved = Wallet.variantFor(ProtocolVersion.MinSupportedVersion).pipe(Option.getOrThrow);
+
+      type _1 = Expect<
+        Equal<Parameters<typeof Wallet.startAtVariant<typeof Wallet, typeof resolved>>[2], string | number>
+      >;
+
+      expect(Option.isSome(Wallet.variantFor(ProtocolVersion.MinSupportedVersion))).toBe(true);
     });
   });
 
