@@ -17,7 +17,19 @@ import {
   LedgerParameters,
 } from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Duration, Effect, Exit, Ref, Scope, Stream, SubscriptionRef, TestClock, TestContext } from 'effect';
+import {
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Ref,
+  Scope,
+  Stream,
+  SubscriptionRef,
+  TestClock,
+  TestContext,
+} from 'effect';
 import { describe, expect, it } from 'vitest';
 import { chooseCoin, makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
@@ -86,15 +98,29 @@ const trackingHistoryService = (counters: FanOutCounters): TransactionHistorySer
   put: () => Ref.update(counters.recorded, (n) => n + 1),
 });
 
+/** A tx-history service that records without parking, for the tests that run on the real clock. */
+const immediateHistoryService = (recorded: Ref.Ref<number>): TransactionHistoryService => ({
+  getTransactionDetails: (hash) =>
+    Effect.succeed({
+      hash,
+      block: { hash: 'block-hash', height: 1, timestamp: 1_700_000_000 },
+      status: 'SUCCESS' as const,
+      identifiers: [],
+      fees: null,
+    }),
+  put: () => Ref.update(recorded, (n) => n + 1),
+});
+
 const variantContextOf = (
   batches: readonly FakeSyncUpdate[],
   transactionHistoryService: TransactionHistoryService,
+  syncService: SyncService<CoreWallet, null, FakeSyncUpdate> = syncServiceOf(batches),
 ): RunningV1Variant.Context<string, FakeSyncUpdate, FinalizedTransaction, null> => {
   const keysCapability = makeDefaultKeysCapability();
   const coinsAndBalancesCapability = makeDefaultCoinsAndBalancesCapability(undefined, () => ({ keysCapability }));
   return {
     serializationCapability: makeDefaultV1SerializationCapability(),
-    syncService: syncServiceOf(batches),
+    syncService,
     syncCapability: fakeSyncCapability,
     transactingCapability: makeDefaultTransactingCapability(
       { networkId, costParameters: { feeBlocksMargin: 5 } },
@@ -157,5 +183,115 @@ describe('RunningV1Variant.startSync tx-history fan-out', () => {
     expect(result.maxInFlight).toBe(8);
     // The cap only queues work, it never drops it.
     expect(result.recorded).toBe(12);
+  });
+});
+
+describe('RunningV1Variant sync serialization', () => {
+  const stateAndScope = () =>
+    Effect.gen(function* () {
+      const secretKey = DustSecretKey.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.initEmpty(LedgerParameters.initialParameters().dust, secretKey, networkId),
+      );
+      const scope = yield* Scope.make();
+      return { stateRef, scope };
+    });
+
+  const fullRange = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion);
+
+  const blockData = () =>
+    Effect.succeed({
+      hash: 'block-hash',
+      height: 1,
+      ledgerParameters: LedgerParameters.initialParameters(),
+      timestamp: new Date(0),
+    });
+
+  it('ignores a second start while the first sync stream is still running', async () => {
+    // The first subscription is held open by a gate; a second start must not open another one against the same
+    // state, which would apply every update twice.
+    const result = await Effect.gen(function* () {
+      const subscriptions = yield* Ref.make(0);
+      const recorded = yield* Ref.make(0);
+      const started = yield* Deferred.make<void>();
+      const gate = yield* Deferred.make<void>();
+
+      const gatedSyncService: SyncService<CoreWallet, null, FakeSyncUpdate> = {
+        updates: () =>
+          Stream.unwrap(
+            Effect.gen(function* () {
+              const subscription = yield* Ref.updateAndGet(subscriptions, (n) => n + 1);
+              if (subscription > 1) {
+                // Only the first subscription is held open, so a missing lock shows up as a failed
+                // assertion rather than a hang.
+                return Stream.fromIterable([['b1']] as readonly FakeSyncUpdate[]);
+              }
+              yield* Deferred.succeed(started, undefined);
+              return Stream.fromIterable([['a1']] as readonly FakeSyncUpdate[]).pipe(
+                Stream.concat(Stream.fromEffect(Deferred.await(gate)).pipe(Stream.drain)),
+              );
+            }),
+          ),
+        blockData,
+      };
+
+      const { stateRef, scope } = yield* stateAndScope();
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef, activationRange: fullRange },
+        variantContextOf([], immediateHistoryService(recorded), gatedSyncService),
+      );
+
+      const first = yield* Effect.fork(
+        variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope)),
+      );
+      yield* Deferred.await(started);
+
+      yield* variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope));
+      const subscriptionsDuringFirst = yield* Ref.get(subscriptions);
+
+      yield* Deferred.succeed(gate, undefined);
+      yield* Fiber.join(first);
+      yield* Scope.close(scope, Exit.void);
+
+      return { subscriptionsDuringFirst, recorded: yield* Ref.get(recorded) };
+    }).pipe(Effect.runPromise);
+
+    expect(result.subscriptionsDuringFirst).toBe(1);
+    expect(result.recorded).toBe(1);
+  });
+
+  it('releases the lock when the stream ends, so a one-shot sync can be run again', async () => {
+    // `sync` runs the same stream to completion instead of forking it into the background; the lock must not
+    // outlive the run, or the second call would silently do nothing.
+    const result = await Effect.gen(function* () {
+      const subscriptions = yield* Ref.make(0);
+      const recorded = yield* Ref.make(0);
+
+      const countingSyncService: SyncService<CoreWallet, null, FakeSyncUpdate> = {
+        updates: () =>
+          Stream.unwrap(
+            Ref.update(subscriptions, (n) => n + 1).pipe(
+              Effect.as(Stream.fromIterable([['a1']] as readonly FakeSyncUpdate[])),
+            ),
+          ),
+        blockData,
+      };
+
+      const { stateRef, scope } = yield* stateAndScope();
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef, activationRange: fullRange },
+        variantContextOf([], immediateHistoryService(recorded), countingSyncService),
+      );
+
+      yield* variant.sync(null);
+      yield* variant.sync(null);
+      yield* Scope.close(scope, Exit.void);
+
+      return yield* Ref.get(subscriptions);
+    }).pipe(Effect.runPromise);
+
+    expect(result).toBe(2);
   });
 });
