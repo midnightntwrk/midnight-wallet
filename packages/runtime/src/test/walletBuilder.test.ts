@@ -17,7 +17,7 @@ import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import {
   StateChange,
-  type Variant,
+  Variant,
   type VariantBuilder,
   VersionChangeType,
   type WalletLike,
@@ -44,6 +44,44 @@ describe('Wallet Builder', () => {
     it('should not build a valid wallet', () => {
       //TODO: it should be possible to play with types to hide build method unless variant is registered
       expect(() => WalletBuilder.init().build()).toThrow();
+    });
+  });
+
+  describe('resolving a variant by protocol version', () => {
+    const Wallet = WalletBuilder.init()
+      .withVariant(ProtocolVersion.ProtocolVersion(10n), new NumericRangeBuilder(2))
+      .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder())
+      .build({ min: 0, max: 4, multiplier: 2 });
+
+    it('resolves the variant registered for a version', () => {
+      const [preFork, postFork] = Wallet.allVariants();
+
+      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(10n))).toStrictEqual(Option.some(preFork));
+      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(99n))).toStrictEqual(Option.some(preFork));
+      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(100n))).toStrictEqual(Option.some(postFork));
+      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(4_000n))).toStrictEqual(Option.some(postFork));
+    });
+
+    it('reports a miss rather than throwing for a version nothing is registered for', () => {
+      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(9n))).toStrictEqual(Option.none());
+      expect(Wallet.variantFor(ProtocolVersion.MinSupportedVersion)).toStrictEqual(Option.none());
+    });
+
+    it('resolves to a variant whose tag addresses the variant record', () => {
+      const resolved = Wallet.variantFor(ProtocolVersion.ProtocolVersion(100n)).pipe(Option.getOrThrow);
+
+      expect(Wallet.allVariantsRecord()[Variant.getVersionedVariantTag(resolved)]).toBe(resolved);
+    });
+
+    it('infers the union of the registered variants', () => {
+      const resolved = Wallet.variantFor(ProtocolVersion.ProtocolVersion(100n));
+
+      type _1 = Expect<
+        Equal<
+          typeof resolved,
+          Option.Option<Variant.VersionedVariant<NumericRange> | Variant.VersionedVariant<NumericRangeMultiplier>>
+        >
+      >;
     });
   });
 

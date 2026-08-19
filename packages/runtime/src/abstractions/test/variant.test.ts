@@ -13,6 +13,7 @@
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type HList, type Poly } from '@midnightntwrk/wallet-sdk-utilities';
 import type { Expect, Equal, CanAssign } from '@midnightntwrk/wallet-sdk-utilities/types';
+import { Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import {
   type InterceptingRunningVariant,
@@ -26,6 +27,7 @@ import {
   makeVersionedRecord,
   type RunningVariant,
   type RunningVariantOf,
+  selectByRange,
   type StateOf,
   type VersionedVariant,
 } from '../Variant.js';
@@ -172,6 +174,52 @@ describe('Variant', () => {
           },
           typeof record
         >
+      >;
+    });
+  });
+
+  describe('selecting by protocol version', () => {
+    const preFork: VersionedVariant<NumericRange> = {
+      sinceVersion: ProtocolVersion.ProtocolVersion(10n),
+      variant: new NumericRange({ min: 0, max: 1 }, 1, false),
+    };
+    const postFork: VersionedVariant<NumericRangeMultiplier> = {
+      sinceVersion: ProtocolVersion.ProtocolVersion(100n),
+      variant: new NumericRangeMultiplier({ min: 0, max: 1, multiplier: 2 }),
+    };
+    const variants = [preFork, postFork] as [typeof preFork, typeof postFork];
+
+    it('selects the variant registered for the version', () => {
+      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(10n))).toStrictEqual(Option.some(preFork));
+      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(99n))).toStrictEqual(Option.some(preFork));
+    });
+
+    it('hands a version over to the next variant exactly at its registration version', () => {
+      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(100n))).toStrictEqual(Option.some(postFork));
+    });
+
+    it('leaves the last registered variant answering for every version above it', () => {
+      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(1_000_000n))).toStrictEqual(Option.some(postFork));
+    });
+
+    it('selects nothing below the first registration', () => {
+      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(9n))).toStrictEqual(Option.none());
+      expect(selectByRange(variants, ProtocolVersion.MinSupportedVersion)).toStrictEqual(Option.none());
+    });
+
+    it('selects nothing at all when nothing is registered', () => {
+      expect(selectByRange([], ProtocolVersion.MinSupportedVersion)).toStrictEqual(Option.none());
+    });
+
+    it('selects nothing at the maximum supported version, which bounds the last range', () => {
+      expect(selectByRange(variants, ProtocolVersion.MaxSupportedVersion)).toStrictEqual(Option.none());
+    });
+
+    it('infers the union of the registered variants', () => {
+      const selected = selectByRange(variants, ProtocolVersion.ProtocolVersion(100n));
+
+      type _1 = Expect<
+        Equal<typeof selected, Option.Option<VersionedVariant<NumericRange> | VersionedVariant<NumericRangeMultiplier>>>
       >;
     });
   });
