@@ -10,7 +10,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type ProtocolState, ProtocolVersion, type SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  type NetworkId,
+  type ProtocolState,
+  ProtocolVersion,
+  type SyncProgress,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type BaseV2Configuration,
   type DefaultV2Configuration,
@@ -21,11 +26,10 @@ import {
   CoreWallet,
 } from './v2/index.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { Effect, Either, Option, Ref, type Scope } from 'effect';
+import { type Duration, Effect, Either, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type BalancingResult } from './v2/Transacting.js';
 import { type SerializationCapability } from './v2/Serialization.js';
-import { type TransactionHistoryService } from './v2/TransactionHistory.js';
 import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v2/CoinsAndBalances.js';
 import { type KeysCapability } from './v2/Keys.js';
 import {
@@ -34,7 +38,8 @@ import {
   type ShieldedEncryptionPublicKey,
 } from '@midnightntwrk/wallet-sdk-address-format';
 import { type TokenTransfer } from './v2/Transacting.js';
-import { type WalletSyncUpdate } from './v2/Sync.js';
+import { type BatchUpdatesConfig, type IndexerClientConnection, type WalletSyncUpdate } from './v2/Sync.js';
+import { type ShieldedHistoryStorage, type TransactionHistoryService } from './v2/TransactionHistory.js';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 
@@ -173,7 +178,25 @@ export type CustomizedShieldedWallet<
 > = ShieldedWalletAPI<TStartAux, TTransaction, TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
-export type DefaultShieldedConfiguration = DefaultV2Configuration;
+/**
+ * The configuration a default {@link ShieldedWallet} is built from.
+ *
+ * @remarks
+ *   Declared by this package rather than aliased to a variant's configuration. A wallet that spans a protocol boundary is
+ *   built from more than one variant, so no single variant's configuration can be the wallet's public contract: the
+ *   package states what it asks an application for, and maps it onto whichever variants it registers.
+ *
+ *   The field types are still the ones the variants declare, because they are version-agnostic — `configuration.test.ts`
+ *   asserts that this type remains interchangeable with what _both_ variants are built from, so a divergence surfaces
+ *   as a compile error here instead of as a wallet that cannot be built for one of its variants.
+ */
+export type DefaultShieldedConfiguration = {
+  networkId: NetworkId.NetworkId;
+  indexerClientConnection: IndexerClientConnection;
+  batchUpdates?: BatchUpdatesConfig;
+  txHistoryStorage: ShieldedHistoryStorage;
+  transactionDetailsRetryWindow?: Duration.DurationInput;
+};
 
 export interface CustomizedShieldedWalletClass<
   TStartAux = ledger.ZswapSecretKeys,
@@ -192,7 +215,7 @@ export interface CustomizedShieldedWalletClass<
   restore(serializedState: TSerialized): CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
 }
 
-export function ShieldedWallet(configuration: DefaultV2Configuration): ShieldedWalletClass {
+export function ShieldedWallet(configuration: DefaultShieldedConfiguration): ShieldedWalletClass {
   return CustomShieldedWallet(configuration, new V2Builder().withDefaults());
 }
 

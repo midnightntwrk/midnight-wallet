@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type BaseV2Configuration,
   type DefaultV2Configuration,
@@ -24,7 +24,8 @@ import type * as ledger from '@midnightntwrk/ledger-v9';
 import { Effect, Either, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type SerializationCapability } from './v2/Serialization.js';
-import { type TransactionHistoryService } from './v2/TransactionHistory.js';
+import { type TransactionHistoryService, type UnshieldedHistoryStorage } from './v2/TransactionHistory.js';
+import { type IndexerClientConnection } from './v2/Sync.js';
 import { type CoinsAndBalancesCapability } from './v2/CoinsAndBalances.js';
 import { type KeysCapability } from './v2/Keys.js';
 import {
@@ -109,7 +110,23 @@ export class UnshieldedWalletState<TSerialized = string> {
 
 export type UnshieldedWallet = CustomizedUnshieldedWallet<WalletSyncUpdate, string>;
 
-export type DefaultUnshieldedConfiguration = DefaultV2Configuration;
+/**
+ * The configuration a default {@link UnshieldedWallet} is built from.
+ *
+ * @remarks
+ *   Declared by this package rather than aliased to a variant's configuration. A wallet that spans a protocol boundary is
+ *   built from more than one variant, so no single variant's configuration can be the wallet's public contract: the
+ *   package states what it asks an application for, and maps it onto whichever variants it registers.
+ *
+ *   The field types are still the ones the variants declare, because they are version-agnostic — `configuration.test.ts`
+ *   asserts that this type remains interchangeable with what _both_ variants are built from, so a divergence surfaces
+ *   as a compile error here instead of as a wallet that cannot be built for one of its variants.
+ */
+export type DefaultUnshieldedConfiguration = {
+  networkId: NetworkId.NetworkId;
+  indexerClientConnection: IndexerClientConnection;
+  txHistoryStorage: UnshieldedHistoryStorage;
+};
 
 export type UnshieldedWalletClass = CustomizedUnshieldedWalletClass<
   WalletSyncUpdate,
@@ -185,7 +202,7 @@ export interface CustomizedUnshieldedWalletClass<
   restore(serializedState: TSerialized): CustomizedUnshieldedWallet<TSyncUpdate, TSerialized>;
 }
 
-export function UnshieldedWallet(configuration: DefaultV2Configuration): UnshieldedWalletClass {
+export function UnshieldedWallet(configuration: DefaultUnshieldedConfiguration): UnshieldedWalletClass {
   return CustomUnshieldedWallet(configuration, new V2Builder().withDefaults());
 }
 

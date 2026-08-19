@@ -24,7 +24,7 @@ import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Clock } from '@midnightntwrk/wallet-sdk-utilities';
-import { Effect, Either, Option, Ref, type Scope } from 'effect';
+import { type Duration, Effect, Either, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './v2/CoinsAndBalances.js';
 import { CoreWallet } from './v2/CoreWallet.js';
@@ -34,7 +34,9 @@ import { type SerializationCapability } from './v2/Serialization.js';
 import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
 import { type DustFullInfo, type UtxoWithMeta } from './v2/types/Dust.js';
 import { type AnyTransaction } from './v2/types/ledger.js';
-import { type BaseV2Configuration, type DefaultV2Configuration, type V2Variant, V2Builder } from './v2/V2Builder.js';
+import { type BaseV2Configuration, type V2Variant, V2Builder } from './v2/V2Builder.js';
+import { type DustHistoryStorage } from './v2/TransactionHistory.js';
+import { type NetworkId, type TotalCostParameters } from './v2/types/index.js';
 import { type WalletSyncUpdate, type BlockData } from './v2/SyncSchema.js';
 
 export type { BlockData } from './v2/SyncSchema.js';
@@ -217,7 +219,26 @@ export type CustomizedDustWallet<
 > = DustWalletAPI<TStartAux, TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
-export type DefaultDustConfiguration = DefaultV2Configuration;
+/**
+ * The configuration a default {@link DustWallet} is built from.
+ *
+ * @remarks
+ *   Declared by this package rather than aliased to a variant's configuration. A wallet that spans a protocol boundary is
+ *   built from more than one variant, so no single variant's configuration can be the wallet's public contract: the
+ *   package states what it asks an application for, and maps it onto whichever variants it registers.
+ *
+ *   `dustParameters` is the one field here that names a ledger type. It is version-agnostic only because the two ledgers'
+ *   `DustParameters` are structurally identical; `configuration.test.ts` asserts that, so a divergence surfaces as a
+ *   compile error here instead of as a wallet that cannot be built for one of its variants.
+ */
+export type DefaultDustConfiguration = {
+  networkId: NetworkId;
+  costParameters: TotalCostParameters;
+  dustParameters?: DustParameters;
+  txHistoryStorage: DustHistoryStorage;
+  indexerClientConnection: { indexerHttpUrl: string };
+  transactionDetailsRetryWindow?: Duration.DurationInput;
+};
 
 export interface CustomizedDustWalletClass<
   TStartAux = DustSecretKey,
