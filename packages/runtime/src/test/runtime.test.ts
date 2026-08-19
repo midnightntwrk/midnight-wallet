@@ -70,16 +70,16 @@ describe('Wallet runtime', () => {
     // state, but may skip intermediate states when it lags behind the producer. Collect until the
     // terminal state arrives and assert order-preserving delivery against the full emission.
     const fullStateSequence = [
-      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
-      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
-      { version: ProtocolVersion.MinSupportedVersion, state: 1 },
-      { version: ProtocolVersion.ProtocolVersion(50n), state: 1 }, // This is expected to be emitted by the intercepting variant
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 4 }, // This is the rest
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 6 },
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 8 },
+      { version: ProtocolVersion.MinSupportedVersion, variantTag: Numeric, state: 0 },
+      { version: ProtocolVersion.MinSupportedVersion, variantTag: Numeric, state: 0 },
+      { version: ProtocolVersion.MinSupportedVersion, variantTag: Numeric, state: 1 },
+      { version: ProtocolVersion.ProtocolVersion(50n), variantTag: interceptingTag, state: 1 }, // This is expected to be emitted by the intercepting variant
+      { version: ProtocolVersion.ProtocolVersion(100n), variantTag: NumericMultiplier, state: 4 }, // This is the rest
+      { version: ProtocolVersion.ProtocolVersion(100n), variantTag: NumericMultiplier, state: 6 },
+      { version: ProtocolVersion.ProtocolVersion(100n), variantTag: NumericMultiplier, state: 8 },
     ];
-    const allCollectedState = toProtocolStateArray<number>(
-      wallet.rawState.pipe(rx.takeWhile(({ state }: ProtocolState.ProtocolState<number>) => state !== 8, true)),
+    const allCollectedState = toProtocolStateArray(
+      wallet.rawState.pipe(rx.takeWhile(({ state }) => state !== 8, true)),
     );
 
     // Let's wait for the intercepting variant to be initiated to remove any chance of races
@@ -100,7 +100,11 @@ describe('Wallet runtime', () => {
 
     expect(dispatchResult).toBe(true);
     const receivedStates = await allCollectedState;
-    expect(receivedStates.at(-1)).toEqual({ version: ProtocolVersion.ProtocolVersion(100n), state: 8 });
+    expect(receivedStates.at(-1)).toEqual({
+      version: ProtocolVersion.ProtocolVersion(100n),
+      variantTag: NumericMultiplier,
+      state: 8,
+    });
     expect(receivedStates).toSatisfy((received: typeof receivedStates) =>
       isOrderedSubsequenceOf(received, fullStateSequence, protocolStateEquals),
     );
@@ -129,19 +133,23 @@ describe('Wallet runtime', () => {
     // Latest-value semantics: intermediate states may be skipped, but order is preserved and the
     // stream converges on the terminal state.
     const fullStateSequence = [
-      { version: ProtocolVersion.MinSupportedVersion, state: 42 },
-      { version: ProtocolVersion.MinSupportedVersion, state: 42 },
-      { version: ProtocolVersion.MinSupportedVersion, state: 43 },
+      { version: ProtocolVersion.MinSupportedVersion, variantTag: Numeric, state: 42 },
+      { version: ProtocolVersion.MinSupportedVersion, variantTag: Numeric, state: 42 },
+      { version: ProtocolVersion.MinSupportedVersion, variantTag: Numeric, state: 43 },
       // The second variant starts applying the multiplier to the state (represents a protocol change).
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 88 },
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 90 },
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 92 },
+      { version: ProtocolVersion.ProtocolVersion(100n), variantTag: NumericMultiplier, state: 88 },
+      { version: ProtocolVersion.ProtocolVersion(100n), variantTag: NumericMultiplier, state: 90 },
+      { version: ProtocolVersion.ProtocolVersion(100n), variantTag: NumericMultiplier, state: 92 },
     ];
     const receivedStates = await toProtocolStateArray(
-      wallet.rawState.pipe(rx.takeWhile(({ state }: ProtocolState.ProtocolState<number>) => state !== 92, true)),
+      wallet.rawState.pipe(rx.takeWhile(({ state }) => state !== 92, true)),
     );
 
-    expect(receivedStates.at(-1)).toEqual({ version: ProtocolVersion.ProtocolVersion(100n), state: 92 });
+    expect(receivedStates.at(-1)).toEqual({
+      version: ProtocolVersion.ProtocolVersion(100n),
+      variantTag: NumericMultiplier,
+      state: 92,
+    });
     expect(receivedStates).toSatisfy((received: typeof receivedStates) =>
       isOrderedSubsequenceOf(received, fullStateSequence, protocolStateEquals),
     );
@@ -166,13 +174,13 @@ describe('Wallet runtime', () => {
     // Latest-value semantics: intermediate states may be skipped, but order is preserved and the
     // stream converges on the terminal state.
     const fullStateSequence = [
-      { version: ProtocolVersion.ProtocolVersion(50n), state: 42 }, // this is the state we provided, and runtime automatically emits it
-      { version: ProtocolVersion.ProtocolVersion(50n), state: 42 }, // the intercepting variant emits it again on start
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 86 },
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 88 },
+      { version: ProtocolVersion.ProtocolVersion(50n), variantTag: Intercepting, state: 42 }, // this is the state we provided, and runtime automatically emits it
+      { version: ProtocolVersion.ProtocolVersion(50n), variantTag: Intercepting, state: 42 }, // the intercepting variant emits it again on start
+      { version: ProtocolVersion.ProtocolVersion(100n), variantTag: NumericMultiplier, state: 86 },
+      { version: ProtocolVersion.ProtocolVersion(100n), variantTag: NumericMultiplier, state: 88 },
     ];
-    const allCollectedState = toProtocolStateArray<number>(
-      wallet.rawState.pipe(rx.takeWhile(({ state }: ProtocolState.ProtocolState<number>) => state !== 88, true)),
+    const allCollectedState = toProtocolStateArray(
+      wallet.rawState.pipe(rx.takeWhile(({ state }) => state !== 88, true)),
     );
 
     await wallet.runtime
@@ -185,7 +193,11 @@ describe('Wallet runtime', () => {
       .pipe(Effect.runPromise);
 
     const receivedStates = await allCollectedState;
-    expect(receivedStates.at(-1)).toEqual({ version: ProtocolVersion.ProtocolVersion(100n), state: 88 });
+    expect(receivedStates.at(-1)).toEqual({
+      version: ProtocolVersion.ProtocolVersion(100n),
+      variantTag: NumericMultiplier,
+      state: 88,
+    });
     expect(receivedStates).toSatisfy((received: typeof receivedStates) =>
       isOrderedSubsequenceOf(received, fullStateSequence, protocolStateEquals),
     );
@@ -206,19 +218,23 @@ describe('Wallet runtime', () => {
     // Latest-value semantics: intermediate states may be skipped, but order is preserved and the
     // stream converges on the terminal state.
     const fullStateSequence = [
-      { version: ProtocolVersion.MinSupportedVersion, state: 42 }, // The initial state is emitted both by runtime and the variant
-      { version: ProtocolVersion.MinSupportedVersion, state: 42 },
-      { version: ProtocolVersion.MinSupportedVersion, state: 43 },
+      { version: ProtocolVersion.MinSupportedVersion, variantTag: Numeric, state: 42 }, // The initial state is emitted both by runtime and the variant
+      { version: ProtocolVersion.MinSupportedVersion, variantTag: Numeric, state: 42 },
+      { version: ProtocolVersion.MinSupportedVersion, variantTag: Numeric, state: 43 },
       // The second variant starts applying the multiplier to the state (represents a protocol change).
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 88 },
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 90 },
-      { version: ProtocolVersion.ProtocolVersion(100n), state: 92 },
+      { version: ProtocolVersion.ProtocolVersion(100n), variantTag: NumericMultiplier, state: 88 },
+      { version: ProtocolVersion.ProtocolVersion(100n), variantTag: NumericMultiplier, state: 90 },
+      { version: ProtocolVersion.ProtocolVersion(100n), variantTag: NumericMultiplier, state: 92 },
     ];
     const receivedStates = await toProtocolStateArray(
-      wallet.rawState.pipe(rx.takeWhile(({ state }: ProtocolState.ProtocolState<number>) => state !== 92, true)),
+      wallet.rawState.pipe(rx.takeWhile(({ state }) => state !== 92, true)),
     );
 
-    expect(receivedStates.at(-1)).toEqual({ version: ProtocolVersion.ProtocolVersion(100n), state: 92 });
+    expect(receivedStates.at(-1)).toEqual({
+      version: ProtocolVersion.ProtocolVersion(100n),
+      variantTag: NumericMultiplier,
+      state: 92,
+    });
     expect(receivedStates).toSatisfy((received: typeof receivedStates) =>
       isOrderedSubsequenceOf(received, fullStateSequence, protocolStateEquals),
     );
@@ -305,7 +321,11 @@ describe('Wallet runtime', () => {
     const stateAfterVersionChange = await rx.firstValueFrom(
       wallet.rawState.pipe(rx.filter(({ state }) => state === 42)),
     );
-    expect(stateAfterVersionChange).toEqual({ version: ProtocolVersion.ProtocolVersion(50n), state: 42 });
+    expect(stateAfterVersionChange).toEqual({
+      version: ProtocolVersion.ProtocolVersion(50n),
+      variantTag: interceptingTag,
+      state: 42,
+    });
 
     // Verify the variant was NOT migrated — we can still dispatch to the intercepting variant
     const stillIntercepting = await wallet.runtime
@@ -345,7 +365,11 @@ describe('Wallet runtime', () => {
 
     // State should still be annotated with the original version
     const stateAfter = await rx.firstValueFrom(wallet.rawState.pipe(rx.filter(({ state }) => state === 99)));
-    expect(stateAfter).toEqual({ version: ProtocolVersion.MinSupportedVersion, state: 99 });
+    expect(stateAfter).toEqual({
+      version: ProtocolVersion.MinSupportedVersion,
+      variantTag: interceptingTag,
+      state: 99,
+    });
 
     // Variant was not migrated — dispatching still reaches the intercepting variant
     const stillSoleVariant = await wallet.runtime

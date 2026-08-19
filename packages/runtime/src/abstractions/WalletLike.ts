@@ -13,10 +13,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { type Option, type Scope } from 'effect';
 import { type Observable } from 'rxjs';
-import { type Runtime } from '../Runtime.js';
+import { type Runtime, type RuntimeState } from '../Runtime.js';
 import { type AnyVersionedVariantArray, type StateOf, type VariantRecord } from './Variant.js';
 import { type HList, type Poly } from '@midnightntwrk/wallet-sdk-utilities';
-import { type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 
 /** Defines the static portion of base wallet class definition */
 export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray, TConfiguration = object> {
@@ -66,7 +66,7 @@ export interface WalletLike<TVariants extends AnyVersionedVariantArray> {
   readonly runtimeScope: Scope.CloseableScope;
 
   /** A stream of state changes over any amount of time that have been processed by the wallet. */
-  readonly rawState: Observable<ProtocolState.ProtocolState<StateOf<HList.Each<TVariants>>>>;
+  readonly rawState: Observable<RuntimeState<TVariants>>;
 
   /** Stops the wallet */
   stop(): Promise<void>;

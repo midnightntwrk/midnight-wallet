@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Effect, Exit, type Option, Scope, type Types } from 'effect';
 import * as rx from 'rxjs';
-import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Variant, type VariantBuilder, type WalletLike, WalletRuntimeError } from './abstractions/index.js';
 import { type StateOf } from './abstractions/Variant.js';
 import { ObservableOps, HList, type Poly } from '@midnightntwrk/wallet-sdk-utilities';
@@ -84,7 +84,6 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
     ) as Variants;
 
     type WalletRuntime = Runtime.Runtime<Variants>;
-    type WalletState = Variant.StateOf<HList.Each<Variants>>;
 
     return class BaseWallet implements WalletLike.WalletLike<Variants> {
       static readonly configuration: WalletBuilder.FullConfiguration<TBuilders> = (maybeConfiguration ??
@@ -142,7 +141,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
 
       readonly runtime: WalletRuntime;
       readonly runtimeScope: Scope.CloseableScope;
-      readonly rawState: rx.Observable<ProtocolState.ProtocolState<WalletState>>;
+      readonly rawState: rx.Observable<Runtime.RuntimeState<Variants>>;
 
       get syncComplete(): boolean {
         const { sourceGap, applyGap } = Effect.runSync(this.runtime.progress);

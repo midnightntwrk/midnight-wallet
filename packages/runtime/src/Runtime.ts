@@ -15,12 +15,15 @@ import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-a
 import { StateChange, type Variant, VersionChangeType, WalletRuntimeError } from './abstractions/index.js';
 import { EitherOps, HList, Poly } from '@midnightntwrk/wallet-sdk-utilities';
 
+/** The state a {@link Runtime} publishes: the variant's state, the protocol version, and the variant that produced it. */
+export type RuntimeState<Variants extends Variant.AnyVersionedVariantArray> = ProtocolState.ProtocolState<
+  Variant.StateOf<HList.Each<Variants>>,
+  Variant.VariantTag<HList.Each<Variants>>
+>;
+
 /** The {@link Runtime} service type. */
 export interface Runtime<Variants extends Variant.AnyVersionedVariantArray> {
-  readonly stateChanges: Stream.Stream<
-    ProtocolState.ProtocolState<Variant.StateOf<HList.Each<Variants>>>,
-    WalletRuntimeError
-  >;
+  readonly stateChanges: Stream.Stream<RuntimeState<Variants>, WalletRuntimeError>;
 
   readonly progress: Effect.Effect<Progress>;
 
@@ -103,9 +106,13 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
     Effect.bind('currentStateRef', ({ initiatedFirstVariant }) =>
       initiatedFirstVariant.currentStateRef.get.pipe(
         Effect.flatMap((state: Variant.StateOf<HList.Each<Variants>>) =>
-          SubscriptionRef.make<
-            Either.Either<ProtocolState.ProtocolState<Variant.StateOf<HList.Each<Variants>>>, WalletRuntimeError>
-          >(Either.right({ version: initiatedFirstVariant.initProtocolVersion, state })),
+          SubscriptionRef.make<Either.Either<RuntimeState<Variants>, WalletRuntimeError>>(
+            Either.right({
+              version: initiatedFirstVariant.initProtocolVersion,
+              variantTag: variantTagOf(initiatedFirstVariant),
+              state,
+            }),
+          ),
         ),
       ),
     ),
@@ -189,6 +196,18 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
     }),
   );
 };
+
+/**
+ * The tag of the variant a running variant record belongs to, narrowed to the tags this runtime can produce.
+ *
+ * @remarks
+ *   Type cast required because: inside a function generic over `Variants`, `EachRunningVariant` still describes its tag
+ *   through the `AnyVariant` constraint, so the property reads as `string | symbol`. The value is the same one
+ *   `initHeadVariant` copies off the variant it started, which is by construction one of `Variants`.
+ */
+const variantTagOf = <Variants extends Variant.AnyVersionedVariantArray>(
+  running: EachRunningVariant<Variants>,
+): Variant.VariantTag<HList.Each<Variants>> => running.__polyTag__ as Variant.VariantTag<HList.Each<Variants>>;
 
 export const dispatch = <Variants extends Variant.AnyVersionedVariantArray, TResult, E = never>(
   runtime: Runtime<Variants>,
@@ -298,9 +317,7 @@ const initHeadVariant = <Variants extends Variant.AnyVersionedVariantArray>(
 
 const runVariantStream = <Variants extends Variant.AnyVersionedVariantArray>(
   initiatedVariant: EachRunningVariant<Variants>,
-  stateRef: SubscriptionRef.SubscriptionRef<
-    Either.Either<ProtocolState.ProtocolState<Variant.StateOf<HList.Each<Variants>>>, WalletRuntimeError>
-  >,
+  stateRef: SubscriptionRef.SubscriptionRef<Either.Either<RuntimeState<Variants>, WalletRuntimeError>>,
   progressRef: SynchronizedRef.SynchronizedRef<Progress>,
   currentVariantRef: SynchronizedRef.SynchronizedRef<EachRunningVariant<Variants>>,
   activations: PubSub.PubSub<EachRunningVariant<Variants>>,
@@ -326,7 +343,14 @@ const runVariantStream = <Variants extends Variant.AnyVersionedVariantArray>(
         State: ({ state }) => {
           return SubscriptionRef.set(
             stateRef,
-            Either.right({ version: accumulator.protocolVersion, state } as const),
+            // The tag is taken from the variant whose stream this is, so an emission can never be
+            // attributed to a variant that did not produce it — including across a migration, where
+            // this function is re-entered with the newly activated variant.
+            Either.right({
+              version: accumulator.protocolVersion,
+              variantTag: variantTagOf(initiatedVariant),
+              state,
+            } as const),
           ).pipe(Effect.as({ ...accumulator, lastState: state }));
         },
         ProgressUpdate: (progress) => {
