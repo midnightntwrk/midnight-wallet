@@ -225,6 +225,21 @@ describe('Wallet Builder', () => {
       await wallet.stop();
     });
 
+    it('narrows an emission s state to the variant its tag names', async () => {
+      const Wallet = walletOverTwoStateTypes();
+      const resolved = Wallet.variantFor(ProtocolVersion.MinSupportedVersion).pipe(Option.getOrThrow);
+      const wallet = Wallet.startAtVariant(Wallet, resolved, 'restored');
+
+      const emission = await rx.firstValueFrom(wallet.rawState);
+
+      // Only compiles if `variantTag` discriminates `state`: a string operation on one side of the
+      // branch, arithmetic on the other. That is the zero-cast capability selection the tag exists for.
+      const described = emission.variantTag === 'pre' ? emission.state.toUpperCase() : emission.state + 1;
+
+      expect(described).toBe('RESTORED');
+      await wallet.stop();
+    });
+
     it('takes the union of the registered variants states, so a resolved variant is callable at all', () => {
       const Wallet = walletOverTwoStateTypes();
       const resolved = Wallet.variantFor(ProtocolVersion.MinSupportedVersion).pipe(Option.getOrThrow);
