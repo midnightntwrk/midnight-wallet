@@ -16,7 +16,7 @@ import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractio
 import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
 import { ArrayOps, DateOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { Array as Arr, Effect, HashMap, pipe, Record as Rec } from 'effect';
+import { Array as Arr, Cause, Effect, Exit, HashMap, Option, pipe, Record as Rec } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, PublicKey } from '../KeyStore.js';
@@ -30,8 +30,9 @@ import {
   makeDefaultTransactingCapability,
   type TokenTransfer,
 } from '../Transacting.js';
+import { TransactionOps } from '../TransactionOps.js';
 import { UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
-import { InsufficientFundsError, SpendUtxoError, TransactingError } from '../WalletError.js';
+import { InsufficientFundsError, SignError, SpendUtxoError, TransactingError } from '../WalletError.js';
 
 const NIGHT = ledger.nativeToken().raw;
 const tokenA = ledger.sampleRawTokenType();
@@ -123,6 +124,34 @@ const walletAndTransfersArbitrary = (): fc.Arbitrary<{
 
       return { keystore, wallet, outputs };
     });
+};
+
+/** A wallet holding one spendable Night UTxO, together with the keystore that owns it. */
+const walletWithSingleNightUtxo = (): { keystore: ReturnType<typeof createKeystore>; wallet: CoreWallet } => {
+  const keystore = createKeystore(Buffer.from(ledger.sampleSigningKey(), 'hex'), NetworkId.NetworkId.Undeployed);
+  const ownerPK = PublicKey.fromKeyStore(keystore);
+  const utxos = [
+    new UtxoWithMeta({
+      utxo: {
+        value: 1_000n,
+        owner: ownerPK.addressHex,
+        type: NIGHT,
+        intentHash: ledger.sampleIntentHash(),
+        outputNo: 0,
+      },
+      meta: { ctime: new Date(0), registeredForDustGeneration: false },
+    }),
+  ];
+  return {
+    keystore,
+    wallet: CoreWallet.restore(
+      UnshieldedState.restore(utxos, []),
+      ownerPK,
+      { appliedId: 0n, highestTransactionId: 0n },
+      ProtocolVersion.ProtocolVersion(1n),
+      NetworkId.NetworkId.Undeployed,
+    ),
+  };
 };
 
 describe('Unshielded wallet transacting', () => {
@@ -304,6 +333,57 @@ describe('Unshielded wallet transacting', () => {
       );
 
       expect(result).toBe(emptyTx);
+    });
+
+    it('surfaces a rejecting signer as a SignError carrying the original cause', async () => {
+      // The whole point of the async signer is out-of-process backends, which fail for their own reasons. Their
+      // failure has to arrive as a typed error holding the original rejection, not as a defect or a bare string.
+      const signing = makeDefaultSigningService();
+      const transacting = makeDefaultTransactingCapability(config, () => context);
+      const { wallet } = walletWithSingleNightUtxo();
+      const { transaction } = transacting
+        .makeTransfer(
+          wallet,
+          [{ amount: 100n, type: NIGHT, receiverAddress: new UnshieldedAddress(Buffer.alloc(32, 5)) }],
+          DateOps.addSeconds(new Date(), 1800),
+        )
+        .pipe(EitherOps.getOrThrowLeft);
+      const backendDown = new Error('MPC coordinator unreachable');
+
+      const exit = await Effect.runPromiseExit(signing.sign(transaction, () => Promise.reject(backendDown)));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const error = Option.getOrThrow(Cause.failureOption(exit.cause));
+        expect(error).toBeInstanceOf(SignError);
+        if (error instanceof SignError) {
+          expect(error.cause).toBe(backendDown);
+        }
+      }
+    });
+  });
+
+  describe('extractOwnInputs', () => {
+    it("returns UTxOs owned by the wallet's ADDRESS, not by its verifying key", () => {
+      // An intent input is a UtxoSpend, owned by a verifying key; a Utxo is owned by the address derived from that
+      // key. Under ledger-v8 both are hex strings, so returning the spend unchanged typechecks — and hands back a
+      // `Utxo` whose `owner` is a key. Every other Utxo in the wallet carries an address there.
+      const transacting = makeDefaultTransactingCapability(config, () => context);
+      const { wallet } = walletWithSingleNightUtxo();
+      const verifyingKey = wallet.publicKey.publicKey;
+      const { transaction } = transacting
+        .makeTransfer(
+          wallet,
+          [{ amount: 100n, type: NIGHT, receiverAddress: new UnshieldedAddress(Buffer.alloc(32, 5)) }],
+          DateOps.addSeconds(new Date(), 1800),
+        )
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const ownInputs = TransactionOps.extractOwnInputs(transaction, verifyingKey);
+
+      expect(ownInputs.length).toBeGreaterThan(0);
+      expect(ownInputs.every((utxo) => utxo.owner === wallet.publicKey.addressHex)).toBe(true);
+      expect(ownInputs.some((utxo) => utxo.owner === verifyingKey)).toBe(false);
     });
   });
 
