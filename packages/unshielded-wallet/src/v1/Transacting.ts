@@ -1,0 +1,621 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Either, Option, pipe, Array as Arr } from 'effect';
+import { CoreWallet } from './CoreWallet.js';
+import { InsufficientFundsError, OtherWalletError, TransactingError, type WalletError } from './WalletError.js';
+import { type UtxoWithMeta } from './UnshieldedState.js';
+import {
+  type BalanceRecipe,
+  type CoinSelection,
+  getBalanceRecipe,
+  Imbalances,
+  InsufficientFundsError as BalancingInsufficientFundsError,
+} from '@midnightntwrk/wallet-sdk-capabilities';
+import { TransactionOps, type UnboundTransaction, type IntentOf } from './TransactionOps.js';
+import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { type KeysCapability } from './Keys.js';
+import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+
+const GUARANTEED_SEGMENT = 0;
+
+export interface TokenTransfer {
+  readonly amount: bigint;
+  readonly type: ledger.RawTokenType;
+  readonly receiverAddress: UnshieldedAddress;
+}
+
+export type FinalizedTransactionBalanceResult = ledger.UnprovenTransaction | undefined;
+
+export type UnboundTransactionBalanceResult = UnboundTransaction | undefined;
+
+export type UnprovenTransactionBalanceResult = ledger.UnprovenTransaction | undefined;
+
+export type TransactingResult<TTransaction, TState> = {
+  readonly newState: TState;
+  readonly transaction: TTransaction;
+};
+
+export interface TransactingCapability<TState> {
+  makeTransfer(
+    wallet: CoreWallet,
+    outputs: ReadonlyArray<TokenTransfer>,
+    ttl: Date,
+  ): Either.Either<TransactingResult<ledger.UnprovenTransaction, TState>, WalletError>;
+
+  initSwap(
+    wallet: CoreWallet,
+    desiredInputs: Record<string, bigint>,
+    outputs: ReadonlyArray<TokenTransfer>,
+    ttl: Date,
+  ): Either.Either<TransactingResult<ledger.UnprovenTransaction, TState>, WalletError>;
+
+  /**
+   * Builds an unproven transaction that moves a caller-supplied set of Night UTxOs back to their current owner,
+   * splitting them between the guaranteed and fallible sections of a single intent. The provided UTxOs are booked in
+   * the wallet state (moved from available to pending) so that no subsequent build call can pick them.
+   *
+   * Used by the Dust wallet's registration/deregistration flow, where the Dust wallet picks the guaranteed slot (based
+   * on dust generation) and hands both sets here for booking and intent construction. The Dust wallet then attaches its
+   * DustActions onto the returned intent.
+   *
+   * @param wallet - The wallet whose UTxOs are being passed through
+   * @param guaranteedUtxos - UTxOs to place in the guaranteed offer (segment 0)
+   * @param fallibleUtxos - UTxOs to place in the fallible offer (segment 1+)
+   * @param nightVerifyingKey - The verifying key used as the input owner and the address for the consolidating output
+   * @param ttl - The TTL for the transaction
+   * @returns The new wallet state (with all provided UTxOs booked) and the unproven transaction
+   */
+  rotateUtxos(
+    wallet: CoreWallet,
+    guaranteedUtxos: ReadonlyArray<UtxoWithMeta>,
+    fallibleUtxos: ReadonlyArray<UtxoWithMeta>,
+    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    ttl: Date,
+  ): Either.Either<TransactingResult<ledger.UnprovenTransaction, TState>, WalletError>;
+
+  balanceFinalizedTransaction(
+    wallet: CoreWallet,
+    transaction: ledger.FinalizedTransaction,
+  ): Either.Either<[FinalizedTransactionBalanceResult, CoreWallet], WalletError>;
+
+  balanceUnboundTransaction(
+    wallet: CoreWallet,
+    transaction: UnboundTransaction,
+  ): Either.Either<[UnboundTransactionBalanceResult, CoreWallet], WalletError>;
+
+  balanceUnprovenTransaction(
+    wallet: CoreWallet,
+    transaction: ledger.UnprovenTransaction,
+  ): Either.Either<[UnprovenTransactionBalanceResult, CoreWallet], WalletError>;
+
+  revertTransaction(
+    wallet: CoreWallet,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Either.Either<CoreWallet, WalletError>;
+}
+
+export type DefaultTransactingConfiguration = {
+  networkId: NetworkId.NetworkId;
+};
+
+export type DefaultTransactingContext = {
+  coinSelection: CoinSelection<ledger.Utxo>;
+  coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
+  keysCapability: KeysCapability<CoreWallet>;
+};
+
+export const makeDefaultTransactingCapability = (
+  config: DefaultTransactingConfiguration,
+  getContext: () => DefaultTransactingContext,
+): TransactingCapability<CoreWallet> => {
+  return new TransactingCapabilityImplementation(
+    config.networkId,
+    () => getContext().coinSelection,
+    () => getContext().coinsAndBalancesCapability,
+    () => getContext().keysCapability,
+    TransactionOps,
+  );
+};
+
+export class TransactingCapabilityImplementation implements TransactingCapability<CoreWallet> {
+  public readonly networkId: NetworkId.NetworkId;
+  public readonly getCoinSelection: () => CoinSelection<ledger.Utxo>;
+  public readonly txOps: TransactionOps;
+  readonly getCoins: () => CoinsAndBalancesCapability<CoreWallet>;
+  readonly getKeys: () => KeysCapability<CoreWallet>;
+
+  constructor(
+    networkId: NetworkId.NetworkId,
+    getCoinSelection: () => CoinSelection<ledger.Utxo>,
+    getCoins: () => CoinsAndBalancesCapability<CoreWallet>,
+    getKeys: () => KeysCapability<CoreWallet>,
+    txOps: TransactionOps,
+  ) {
+    this.getCoins = getCoins;
+    this.networkId = networkId;
+    this.getCoinSelection = getCoinSelection;
+    this.getKeys = getKeys;
+    this.txOps = txOps;
+  }
+
+  /**
+   * Balances an unbound transaction Note: Unbound transactions are balanced in place and returned
+   *
+   * @param wallet - The wallet to balance the transaction with
+   * @param transaction - The transaction to balance
+   * @returns The balanced transaction and the new wallet state if successful, otherwise an error
+   */
+  balanceUnboundTransaction(
+    wallet: CoreWallet,
+    transaction: UnboundTransaction,
+  ): Either.Either<[UnboundTransactionBalanceResult, CoreWallet], WalletError> {
+    return this.#balanceUnboundishTransaction(wallet, transaction);
+  }
+
+  /**
+   * Balances an unproven transaction Note: This method does the same thing as balanceUnboundTransaction but is provided
+   * for convenience and type safety
+   *
+   * @param wallet - The wallet to balance the transaction with
+   * @param transaction - The transaction to balance
+   * @returns The balanced transaction and the new wallet state if successful, otherwise an error
+   */
+  balanceUnprovenTransaction(
+    wallet: CoreWallet,
+    transaction: ledger.UnprovenTransaction,
+  ): Either.Either<[UnprovenTransactionBalanceResult, CoreWallet], WalletError> {
+    return this.#balanceUnboundishTransaction(wallet, transaction);
+  }
+
+  /**
+   * Balances a bound transaction Note: In bound transactions we can only balance the guaranteed section in intents
+   *
+   * @param wallet - The wallet to balance the transaction with
+   * @param transaction - The transaction to balance
+   * @returns A balancing counterpart transaction (which should be merged with the original transaction ) and the new
+   *   wallet state if successful, otherwise an error
+   */
+  balanceFinalizedTransaction(
+    wallet: CoreWallet,
+    transaction: ledger.FinalizedTransaction,
+  ): Either.Either<[FinalizedTransactionBalanceResult, CoreWallet], WalletError> {
+    return Either.gen(this, function* () {
+      // Ensure all intents are bound
+      const segments = this.txOps.getSegments(transaction);
+
+      for (const segment of segments) {
+        const intent = transaction.intents?.get(segment);
+
+        const isBound = this.txOps.isIntentBound(intent!);
+
+        if (!isBound) {
+          return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} is not bound` }));
+        }
+      }
+
+      // get the first intent so we can use its ttl to create the balancing intent
+      const intent = transaction.intents?.get(segments[0]);
+
+      const imbalances = this.txOps.getImbalances(transaction, GUARANTEED_SEGMENT);
+
+      // guaranteed section is balanced
+      if (imbalances.size === 0) {
+        return [undefined, wallet];
+      }
+
+      const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
+
+      const { newState, offer } = yield* this.#prepareOffer(wallet, recipe);
+
+      const balancingIntent = ledger.Intent.new(intent!.ttl);
+      balancingIntent.guaranteedUnshieldedOffer = offer;
+
+      const segmentId = Option.getOrElse(this.txOps.findAvailableSegmentId(transaction), () => 1);
+      const balancingTx = ledger.Transaction.fromParts(this.networkId).addIntent(
+        { tag: 'specific', value: segmentId },
+        balancingIntent,
+      );
+      return [balancingTx, newState];
+    });
+  }
+
+  /**
+   * Makes a transfer transaction
+   *
+   * @param wallet - The wallet to make the transfer with
+   * @param outputs - The outputs for the transfer
+   * @param ttl - The TTL for the transaction
+   * @returns The balanced transfer transaction and the new wallet state if successful, otherwise an error
+   */
+  makeTransfer(
+    wallet: CoreWallet,
+    outputs: ReadonlyArray<TokenTransfer>,
+    ttl: Date,
+  ): Either.Either<TransactingResult<ledger.UnprovenTransaction, CoreWallet>, WalletError> {
+    return Either.gen(this, function* () {
+      const { networkId } = this;
+      const isValid = outputs.every((output) => output.amount > 0n);
+
+      if (!isValid) {
+        return yield* Either.left(new TransactingError({ message: 'The amount of all inputs needs to be positive' }));
+      }
+
+      const ledgerOutputs = outputs.map((output) => {
+        return {
+          value: output.amount,
+          owner: output.receiverAddress.data.toString('hex'),
+          type: output.type,
+        };
+      });
+
+      const recipe = yield* this.#balanceSegment(
+        wallet,
+        Imbalances.empty(),
+        Imbalances.fromEntries(ledgerOutputs.map((output) => [output.type, output.value])),
+        this.getCoinSelection(),
+      );
+
+      const { newState, offer } = yield* this.#prepareOffer(wallet, {
+        inputs: recipe.inputs,
+        outputs: [...recipe.outputs, ...ledgerOutputs],
+      });
+
+      const intent = ledger.Intent.new(ttl);
+
+      const hasNightOutput = ledgerOutputs.some((output) => output.type === ledger.nativeToken().raw);
+      if (hasNightOutput) {
+        intent.fallibleUnshieldedOffer = offer;
+      } else {
+        intent.guaranteedUnshieldedOffer = offer;
+      }
+
+      return {
+        newState,
+        transaction: ledger.Transaction.fromParts(networkId, undefined, undefined, intent),
+      };
+    });
+  }
+
+  rotateUtxos(
+    wallet: CoreWallet,
+    guaranteedUtxos: ReadonlyArray<UtxoWithMeta>,
+    fallibleUtxos: ReadonlyArray<UtxoWithMeta>,
+    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    ttl: Date,
+  ): Either.Either<TransactingResult<ledger.UnprovenTransaction, CoreWallet>, WalletError> {
+    return Either.gen(this, function* () {
+      const { networkId } = this;
+
+      if (guaranteedUtxos.length === 0 && fallibleUtxos.length === 0) {
+        return yield* Either.left(
+          new TransactingError({ message: 'At least one UTxO must be provided to rotateUtxos' }),
+        );
+      }
+
+      const ownerAddress = ledger.addressFromKey(nightVerifyingKey);
+
+      const makeOffer = (
+        utxos: ReadonlyArray<UtxoWithMeta>,
+      ): Option.Option<ledger.UnshieldedOffer<ledger.SignatureEnabled>> => {
+        if (utxos.length === 0) {
+          return Option.none();
+        }
+        const inputs: ledger.UtxoSpend[] = utxos.map(({ utxo }) => ({
+          value: utxo.value,
+          type: utxo.type,
+          intentHash: utxo.intentHash,
+          outputNo: utxo.outputNo,
+          owner: nightVerifyingKey,
+        }));
+        const totalValue = pipe(
+          utxos,
+          Arr.map(({ utxo }) => utxo.value),
+          Arr.reduce(0n, (a, b) => a + b),
+        );
+        const output: ledger.UtxoOutput = {
+          owner: ownerAddress,
+          type: ledger.nativeToken().raw,
+          value: totalValue,
+        };
+        return Option.some(ledger.UnshieldedOffer.new(inputs, [output], []));
+      };
+
+      const allUtxos = [...guaranteedUtxos, ...fallibleUtxos].map(({ utxo }) => utxo);
+      const [, walletAfterBooking] = yield* CoreWallet.spendUtxos(wallet, allUtxos);
+
+      const guaranteedOffer = makeOffer(guaranteedUtxos);
+      const fallibleOffer = makeOffer(fallibleUtxos);
+
+      const intent = pipe(
+        ledger.Intent.new(ttl),
+        (i) =>
+          Option.match(guaranteedOffer, {
+            onNone: () => i,
+            onSome: (offer) => {
+              i.guaranteedUnshieldedOffer = offer;
+              return i;
+            },
+          }),
+        (i) =>
+          Option.match(fallibleOffer, {
+            onNone: () => i,
+            onSome: (offer) => {
+              i.fallibleUnshieldedOffer = offer;
+              return i;
+            },
+          }),
+      );
+
+      const transaction = ledger.Transaction.fromParts(networkId, undefined, undefined, intent);
+
+      return {
+        newState: walletAfterBooking,
+        transaction,
+      };
+    });
+  }
+
+  /**
+   * Initializes a swap transaction
+   *
+   * @param wallet - The wallet to initialize the swap for
+   * @param desiredInputs - The desired inputs for the swap
+   * @param desiredOutputs - The desired outputs for the swap
+   * @param ttl - The TTL for the swap
+   * @returns The initialized swap transaction and the new wallet state if successful, otherwise an error
+   */
+  initSwap(
+    wallet: CoreWallet,
+    desiredInputs: Record<ledger.RawTokenType, bigint>,
+    desiredOutputs: ReadonlyArray<TokenTransfer>,
+    ttl: Date,
+  ): Either.Either<TransactingResult<ledger.UnprovenTransaction, CoreWallet>, WalletError> {
+    return Either.gen(this, function* () {
+      const { networkId } = this;
+
+      const outputsValid = desiredOutputs.every((output) => output.amount > 0n);
+      if (!outputsValid) {
+        return yield* Either.left(new TransactingError({ message: 'The amount of all outputs needs to be positive' }));
+      }
+
+      const inputsValid = Object.entries(desiredInputs).every(([, amount]) => amount > 0n);
+      if (!inputsValid) {
+        return yield* Either.left(new TransactingError({ message: 'The amount of all inputs needs to be positive' }));
+      }
+
+      const ledgerOutputs = desiredOutputs.map((output) => ({
+        value: output.amount,
+        owner: output.receiverAddress.data.toString('hex'),
+        type: output.type,
+      }));
+
+      const targetImbalances = Imbalances.fromEntries(Object.entries(desiredInputs));
+
+      const recipe = yield* this.#balanceSegment(wallet, Imbalances.empty(), targetImbalances, this.getCoinSelection());
+
+      const { newState, offer } = yield* this.#prepareOffer(wallet, {
+        inputs: recipe.inputs,
+        outputs: [...recipe.outputs, ...ledgerOutputs],
+      });
+
+      const intent = ledger.Intent.new(ttl);
+      intent.guaranteedUnshieldedOffer = offer;
+      const tx = ledger.Transaction.fromParts(networkId, undefined, undefined, intent);
+
+      return {
+        newState,
+        transaction: tx,
+      };
+    });
+  }
+
+  /**
+   * Reverts a transaction by rolling back all inputs owned by this wallet
+   *
+   * @param wallet - The wallet to revert the transaction for
+   * @param transaction - The transaction to revert (can be FinalizedTransaction, UnboundTransaction, or
+   *   UnprovenTransaction)
+   * @returns The updated wallet with rolled back UTXOs if successful, otherwise an error
+   */
+  revertTransaction(
+    wallet: CoreWallet,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Either.Either<CoreWallet, WalletError> {
+    return pipe(
+      this.txOps.extractOwnInputs(transaction, wallet.publicKey.publicKey),
+      Arr.reduce(Either.right(wallet), (walletAcc: Either.Either<CoreWallet, WalletError>, utxo: ledger.Utxo) =>
+        pipe(
+          walletAcc,
+          Either.flatMap((w) => CoreWallet.rollbackUtxo(w, utxo)),
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Balances a segment of a transaction
+   *
+   * @param wallet - The wallet to balance the segment for
+   * @param imbalances - The imbalances to balance the segment for
+   * @param targetImbalances - The target imbalances to balance the segment for
+   * @param coinSelection - The coin selection to use for the balance recipe
+   * @returns The balance recipe if successful, otherwise an error
+   */
+  #balanceSegment(
+    wallet: CoreWallet,
+    imbalances: Imbalances,
+    targetImbalances: Imbalances,
+    coinSelection: CoinSelection<ledger.Utxo>,
+  ): Either.Either<BalanceRecipe<ledger.Utxo, ledger.UtxoOutput>, WalletError> {
+    return Either.try({
+      try: () =>
+        getBalanceRecipe<ledger.Utxo, ledger.UtxoOutput>({
+          coins: this.getCoins()
+            .getAvailableCoins(wallet)
+            .map(({ utxo }) => utxo),
+          initialImbalances: imbalances,
+          feeTokenType: '',
+          transactionCostModel: {
+            inputFeeOverhead: 0n,
+            outputFeeOverhead: 0n,
+          },
+          coinSelection,
+          createOutput: (coin) => ({
+            ...coin,
+            owner: wallet.publicKey.addressHex,
+          }),
+          isCoinEqual: (a, b) => a.intentHash === b.intentHash && a.outputNo === b.outputNo,
+          targetImbalances,
+        }),
+      catch: (err) => {
+        if (err instanceof BalancingInsufficientFundsError) {
+          return new InsufficientFundsError({
+            message: 'Insufficient funds',
+            tokenType: err.tokenType,
+            amount: imbalances.get(err.tokenType) ?? 0n,
+          });
+        } else {
+          return new OtherWalletError({
+            message: 'Balancing unshielded segment failed',
+            cause: err,
+          });
+        }
+      },
+    });
+  }
+
+  /**
+   * Prepares an offer for a given balance recipe
+   *
+   * @param wallet - The wallet to prepare the offer for
+   * @param balanceRecipe - The balance recipe to prepare the offer for
+   * @returns The prepared offer and the new wallet state if successful, otherwise an error
+   */
+  #prepareOffer(
+    wallet: CoreWallet,
+    balanceRecipe: BalanceRecipe<ledger.Utxo, ledger.UtxoOutput>,
+  ): Either.Either<{ newState: CoreWallet; offer: ledger.UnshieldedOffer<ledger.SignatureEnabled> }, WalletError> {
+    return Either.gen(function* () {
+      const [spentInputs, updatedWallet] = yield* CoreWallet.spendUtxos(wallet, balanceRecipe.inputs);
+      const { publicKey } = wallet.publicKey;
+
+      const ledgerInputs = spentInputs.map((input) => ({
+        ...input,
+        intentHash: input.intentHash,
+        owner: publicKey,
+      }));
+
+      const counterOffer = yield* Either.try({
+        try: () => ledger.UnshieldedOffer.new(ledgerInputs, [...balanceRecipe.outputs], []),
+        catch: (error) => new TransactingError({ message: 'Failed to create counter offer', cause: error }),
+      });
+
+      return {
+        newState: updatedWallet,
+        offer: counterOffer,
+      };
+    });
+  }
+
+  #mergeOffers(
+    offerA: ledger.UnshieldedOffer<ledger.SignatureEnabled>,
+    offerB?: ledger.UnshieldedOffer<ledger.SignatureEnabled>,
+  ): Either.Either<ledger.UnshieldedOffer<ledger.SignatureEnabled>, WalletError> {
+    return pipe(
+      Option.fromNullable(offerB),
+      Option.match({
+        onNone: () => Either.right(offerA),
+        onSome: (offerB) =>
+          Either.try({
+            try: () =>
+              ledger.UnshieldedOffer.new(
+                [...offerB.inputs, ...offerA.inputs],
+                [...offerB.outputs, ...offerA.outputs],
+                [...offerB.signatures, ...offerA.signatures],
+              ),
+            catch: (error) => new TransactingError({ message: 'Failed to merge offers', cause: error }),
+          }),
+      }),
+    );
+  }
+
+  /**
+   * Balances an unboundish (unproven or unbound) transaction
+   *
+   * @param wallet - The wallet to balance the transaction with
+   * @param transaction - The transaction to balance
+   * @returns The balanced transaction and the new wallet state if successful, otherwise an error
+   * @todo - https://shielded.atlassian.net/browse/PM-21260
+   */
+  #balanceUnboundishTransaction<T extends ledger.UnprovenTransaction | UnboundTransaction>(
+    wallet: CoreWallet,
+    transaction: T,
+  ): Either.Either<[T | undefined, CoreWallet], WalletError> {
+    return Either.gen(this, function* () {
+      const segments = this.txOps.getSegments(transaction);
+
+      // no segments to balance
+      if (segments.length === 0) {
+        return [undefined, wallet];
+      }
+
+      for (const segment of [...segments, GUARANTEED_SEGMENT]) {
+        const imbalances = this.txOps.getImbalances(transaction, segment);
+
+        // intent is balanced
+        if (imbalances.size === 0) {
+          continue;
+        }
+
+        // if segment is GUARANTEED_SEGMENT, use the first intent to place the balancing offer in the guaranteed section
+        const intentSegment = segment === GUARANTEED_SEGMENT ? segments[0] : segment;
+
+        const intent = transaction.intents?.get(intentSegment) as IntentOf<T> | undefined;
+
+        if (!intent) {
+          return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} was not found` }));
+        }
+
+        const isBound = this.txOps.isIntentBound(intent);
+
+        if (isBound) {
+          return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} is already bound` }));
+        }
+
+        const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
+
+        const { offer } = yield* this.#prepareOffer(wallet, recipe);
+
+        const targetOffer =
+          segment !== GUARANTEED_SEGMENT ? intent.fallibleUnshieldedOffer : intent.guaranteedUnshieldedOffer;
+
+        const mergedOffer = yield* this.#mergeOffers(offer, targetOffer);
+
+        if (segment !== GUARANTEED_SEGMENT) {
+          intent.fallibleUnshieldedOffer = mergedOffer;
+        } else {
+          intent.guaranteedUnshieldedOffer = mergedOffer;
+        }
+
+        (transaction.intents as Map<number, IntentOf<T>>) = (transaction.intents as Map<number, IntentOf<T>>).set(
+          intentSegment,
+          intent,
+        );
+      }
+
+      return [transaction, wallet];
+    });
+  }
+}
