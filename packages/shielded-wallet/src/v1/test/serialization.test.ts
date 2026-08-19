@@ -13,7 +13,7 @@
 import { OtherWalletError } from '../WalletError.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Array as Arr, pipe } from 'effect';
+import { Array as Arr, pipe, Schema } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
@@ -169,6 +169,71 @@ describe('V1 Wallet serialization', () => {
           expect(result.left instanceof OtherWalletError).toBe(true);
         }
       }),
+    );
+  });
+});
+
+// The property above asserts snapshot-to-snapshot equality, so a break tells you a byte moved but not which field. It
+// also draws its wallet from an arbitrary whose transaction array has no minimum length, so a run can legitimately
+// assert over an empty wallet. `coinHashes` is the field that most deserves better: it is derived from the secret keys,
+// deserialization is handed none, and a wallet that loses it cannot recognise its own coins after an upgrade. So it gets
+// a guaranteed non-empty fixture and an assertion by value.
+const fundedWallet = (seed: string) => {
+  const keys = ledger.ZswapSecretKeys.fromSeed(Buffer.from(seed, 'hex'));
+  const coin: ledger.ShieldedCoinInfo = {
+    type: ledger.shieldedToken().raw,
+    value: 500n,
+    nonce: 'ab'.repeat(32),
+  };
+  const offer = ledger.ZswapOffer.fromOutput(
+    ledger.ZswapOutput.new(coin, 0, keys.coinPublicKey, keys.encryptionPublicKey),
+    coin.type,
+    coin.value,
+  );
+  return { keys, wallet: CoreWallet.init(new ledger.ZswapLocalState().apply(keys, offer), keys, 'undeployed') };
+};
+
+describe('V1 Wallet serialization carries derived coin hashes', () => {
+  const seed = '0000000000000000000000000000000000000000000000000000000000000005';
+
+  it('holds coin hashes before anything is asserted about carrying them', () => {
+    // Guards the fixture: an empty wallet would make every assertion below pass vacuously.
+    expect(Object.keys(fundedWallet(seed).wallet.coinHashes).length).toBeGreaterThan(0);
+  });
+
+  it('carries the nullifier and commitment for every coin', () => {
+    const capability = makeDefaultV1SerializationCapability();
+    const { wallet } = fundedWallet(seed);
+
+    const restored = pipe(capability.deserialize(null, capability.serialize(wallet)), EitherOps.getOrThrowLeft);
+
+    expect(restored.coinHashes).toEqual(wallet.coinHashes);
+    expect([...restored.state.coins]).toEqual([...wallet.state.coins]);
+  });
+
+  it('carries coin hashes for arbitrary non-empty wallets', () => {
+    const capability = makeDefaultV1SerializationCapability();
+    fc.assert(
+      fc.property(walletArbitrary(10), ({ wallet }) => {
+        fc.pre(Object.keys(wallet.coinHashes).length > 0);
+        const restored = pipe(capability.deserialize(null, capability.serialize(wallet)), EitherOps.getOrThrowLeft);
+
+        expect(restored.coinHashes).toEqual(wallet.coinHashes);
+      }),
+      { numRuns: 10 },
+    );
+  });
+
+  it('pins the top-level field names', () => {
+    // The envelope is a cross-release contract: a rename or a dropped field has to fail here rather than be read as a
+    // default by the next SDK line.
+    const capability = makeDefaultV1SerializationCapability();
+
+    const parsed: unknown = JSON.parse(capability.serialize(fundedWallet(seed).wallet));
+    const envelope = Schema.decodeUnknownSync(Schema.Record({ key: Schema.String, value: Schema.Unknown }))(parsed);
+
+    expect(Object.keys(envelope).sort()).toEqual(
+      ['coinHashes', 'networkId', 'offset', 'protocolVersion', 'publicKeys', 'state'].sort(),
     );
   });
 });
