@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, type Scope, Stream, Schema, pipe, Either, HashMap } from 'effect';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { CoreWallet } from './CoreWallet.js';
 import { UtxoWithMeta } from './UnshieldedState.js';
 // The simulation package re-exports the ledger-v9 twin unqualified and offers both lines as `V8`/`V9` namespaces. This
@@ -31,8 +32,47 @@ export interface SyncService<TState, TUpdate> {
 }
 
 export interface SyncCapability<TState, TUpdate> {
-  applyUpdate: (state: TState, update: TUpdate) => Either.Either<TState, WalletError>;
+  /**
+   * Folds a single sync message into the wallet state.
+   *
+   * @param state The state to fold into.
+   * @param update The message to apply.
+   * @param activeRange The half-open protocol version range the running variant owns. A message the source reports at
+   *   or beyond its end belongs to a later variant and must be left entirely unapplied, for that variant to fetch.
+   */
+  applyUpdate: (
+    state: TState,
+    update: TUpdate,
+    activeRange: ProtocolVersion.ProtocolVersion.Range,
+  ) => Either.Either<TState, WalletError>;
 }
+
+/**
+ * Whether a reported protocol version belongs to a variant later than the one owning `activeRange`.
+ *
+ * @remarks
+ *   Unshielded sync is message-at-a-time, so this is the whole of the boundary rule — there is no batch to split into an
+ *   applied prefix and a deferred suffix, only a yes/no per message. Exported so the indexer and simulator sync
+ *   capabilities cannot drift apart on the question.
+ * @param version The protocol version the source reported for this message.
+ * @param activeRange The running variant's half-open activation range.
+ * @returns `true` when the message must be left unapplied.
+ */
+export const isBeyondActiveRange = (version: number, activeRange: ProtocolVersion.ProtocolVersion.Range): boolean =>
+  BigInt(version) >= activeRange[1];
+
+/**
+ * Records an observed protocol version on the state, monotonically.
+ *
+ * @remarks
+ *   This is the only thing written when a message is deferred at the boundary, and it is what the runtime watches to
+ *   decide that the variant must hand over.
+ * @param state The state to annotate.
+ * @param version The protocol version the source reported.
+ * @returns The state carrying the higher of the two versions.
+ */
+export const annotateVersion = (state: CoreWallet, version: number): CoreWallet =>
+  CoreWallet.withProtocolVersion(state, ProtocolVersion.ProtocolVersion(BigInt(version)));
 
 export type IndexerClientConnection = {
   indexerHttpUrl: string;
@@ -104,14 +144,27 @@ export const makeDefaultSyncCapability = (
   getContext: () => DefaultSyncContext,
 ): SyncCapability<CoreWallet, WalletSyncUpdate> => {
   return {
-    applyUpdate: (state: CoreWallet, update: WalletSyncUpdate): Either.Either<CoreWallet, WalletError> => {
+    applyUpdate: (
+      state: CoreWallet,
+      update: WalletSyncUpdate,
+      activeRange: ProtocolVersion.ProtocolVersion.Range,
+    ): Either.Either<CoreWallet, WalletError> => {
       if (update.type === 'UnshieldedTransactionsProgress') {
+        // A progress message reports the tip of the source, not a transaction, and the wire schema carries no protocol
+        // version on it. It therefore never annotates: reading one as version zero would drag a wallet that has
+        // already crossed a boundary back below it.
         return Either.right(
           CoreWallet.updateProgress(state, {
             highestTransactionId: BigInt(update.highestTransactionId),
             isConnected: true,
           }),
         );
+      } else if (isBeyondActiveRange(update.transaction.protocolVersion, activeRange)) {
+        // The hand-over point. This transaction belongs to the next variant, so NOTHING about it is applied: no UTXO
+        // change, no cursor movement, no transaction-history write. Only the version is recorded, which is what makes
+        // the runtime migrate. Because the cursor did not move, the next variant re-fetches this very transaction from
+        // it and applies it exactly once.
+        return Either.right(annotateVersion(state, update.transaction.protocolVersion));
       } else {
         const updatePayload = {
           createdUtxos: update.createdUtxos,
@@ -133,7 +186,7 @@ export const makeDefaultSyncCapability = (
             const { transactionHistoryService } = getContext();
             Effect.runFork(transactionHistoryService.put(update));
 
-            return stateAfterUpdatingProgress;
+            return annotateVersion(stateAfterUpdatingProgress, update.transaction.protocolVersion);
           }),
         );
       }
@@ -182,7 +235,17 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
   const utxoKey = (utxo: { intentHash: string; outputNo: number }) => `${utxo.intentHash}#${utxo.outputNo}`;
 
   return {
-    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): Either.Either<CoreWallet, WalletError> => {
+    applyUpdate: (
+      state: CoreWallet,
+      update: SimulatorSyncUpdate,
+      activeRange: ProtocolVersion.ProtocolVersion.Range,
+    ): Either.Either<CoreWallet, WalletError> => {
+      // The same rule at the simulator's granularity: a chain state tagged at or beyond the boundary belongs to the
+      // next variant, so nothing of it is applied and only the version is recorded.
+      if (isBeyondActiveRange(Number(update.update.protocolVersion), activeRange)) {
+        return Either.right(annotateVersion(state, Number(update.update.protocolVersion)));
+      }
+
       const { ledger: ledgerState, currentTime } = update.update;
       const walletAddress = state.publicKey.addressHex;
       const nativeTokenType = ledger.nativeToken().raw;
@@ -223,13 +286,16 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
       const updateProgress = (wallet: CoreWallet) =>
         CoreWallet.updateProgress(wallet, { appliedId: blockNumber, isConnected: true });
 
+      const annotate = (wallet: CoreWallet) => annotateVersion(wallet, Number(update.update.protocolVersion));
+
       if (createdUtxos.length === 0 && spentUtxos.length === 0) {
-        return Either.right(updateProgress(state));
+        return Either.right(annotate(updateProgress(state)));
       }
 
       return pipe(
         CoreWallet.applyUpdate(state, { createdUtxos, spentUtxos, status: 'SUCCESS' as const }),
         Either.map(updateProgress),
+        Either.map(annotate),
       );
     },
   };

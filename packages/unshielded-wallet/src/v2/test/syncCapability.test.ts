@@ -33,9 +33,12 @@ const owner = fixtureOwner();
 describe('unshielded sync capability at a variant boundary', () => {
   const setup = () => {
     const history = recordingHistory();
-    const capability = makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () => ({
-      transactionHistoryService: history.service,
-    }));
+    const capability = makeDefaultSyncCapability(
+      { indexerClientConnection: { indexerHttpUrl: 'http://unused' } },
+      () => ({
+        transactionHistoryService: history.service,
+      }),
+    );
     return { capability, history };
   };
 
@@ -53,7 +56,11 @@ describe('unshielded sync capability at a variant boundary', () => {
     const created = fixtureUtxo(owner, 100n, 0);
 
     const result = capability
-      .applyUpdate(emptyWallet(), fixtureTransaction({ id: 1, protocolVersion: 3, createdUtxos: [created] }), activeRange)
+      .applyUpdate(
+        emptyWallet(),
+        fixtureTransaction({ id: 1, protocolVersion: 3, createdUtxos: [created] }),
+        activeRange,
+      )
       .pipe(EitherOps.getOrThrowLeft);
 
     expect(HashMap.size(result.state.availableUtxos)).toBe(1);

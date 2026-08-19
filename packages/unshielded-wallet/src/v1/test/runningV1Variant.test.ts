@@ -43,8 +43,8 @@ const walletAt = (protocolVersion: bigint): CoreWallet =>
  * Drains the variant's state stream for a bounded window and returns the versions it announced.
  *
  * @remarks
- *   Bounded by time rather than by `Stream.take(n)` on purpose: a missing emission has to surface as a failed
- *   assertion on an empty list, not as a hung test.
+ *   Bounded by time rather than by `Stream.take(n)` on purpose: a missing emission has to surface as a failed assertion
+ *   on an empty list, not as a hung test.
  */
 const announcedVersions = (
   initial: CoreWallet,
@@ -72,14 +72,12 @@ const announcedVersions = (
     yield* Effect.sleep(Duration.millis(50));
     yield* drive(stateRef);
     const chunk = yield* collected.await;
-    return chunk._tag === 'Success' ? Array.from(chunk.value).map((v) => v as bigint) : [];
+    return chunk._tag === 'Success' ? Array.from(chunk.value) : [];
   }).pipe(Effect.scoped, Effect.runPromise);
 
 describe('unshielded running variant version signals', () => {
   it('announces a version transition observed on the state', async () => {
-    const versions = await announcedVersions(walletAt(0n), (ref) =>
-      SubscriptionRef.set(ref, walletAt(5n)),
-    );
+    const versions = await announcedVersions(walletAt(0n), (ref) => SubscriptionRef.set(ref, walletAt(5n)));
 
     expect(versions).toEqual([5n]);
   });

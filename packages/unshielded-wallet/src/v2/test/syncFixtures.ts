@@ -28,9 +28,7 @@ export const fixtureSeed = (): Uint8Array => Uint8Array.from({ length: 32 }, (_,
 
 /** The fixture owner, derived through the real keystore. */
 export const fixtureOwner = (): PublicKey =>
-  PublicKeyOps.fromKeyStore(
-    createKeystore({ kind: 'schnorr', secret: fixtureSeed() }, NetworkId.NetworkId.Undeployed),
-  );
+  PublicKeyOps.fromKeyStore(createKeystore({ kind: 'schnorr', secret: fixtureSeed() }, NetworkId.NetworkId.Undeployed));
 
 /** A UTXO addressed to `owner`, deterministic in `outputNo`. */
 export const fixtureUtxo = (owner: PublicKey, value: bigint, outputNo: number): UtxoWithMeta => ({
@@ -78,7 +76,7 @@ export const fixtureTransaction = (params: {
     createdUtxos: params.createdUtxos ?? [],
     spentUtxos: params.spentUtxos ?? [],
     status,
-  } as UnshieldedUpdate;
+  };
 };
 
 /** A progress message. It carries no protocol version at all — the wire schema has no field for one. */

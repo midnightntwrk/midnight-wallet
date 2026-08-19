@@ -65,6 +65,21 @@ export const CoreWallet = {
     return { ...wallet, progress };
   },
 
+  /**
+   * Records an observed protocol version, monotonically.
+   *
+   * @remarks
+   *   Only ever raises it. A stale lower report — a reconnect replaying from an earlier cursor, say — would otherwise
+   *   look like a downward version change and send the runtime migrating backwards into a variant this wallet has
+   *   already left.
+   * @param wallet The wallet to annotate.
+   * @param version The protocol version the source reported.
+   * @returns The wallet carrying the higher of the two versions.
+   */
+  withProtocolVersion(wallet: CoreWallet, version: ProtocolVersion.ProtocolVersion): CoreWallet {
+    return version > wallet.protocolVersion ? { ...wallet, protocolVersion: version } : wallet;
+  },
+
   applyUpdate(coreWallet: CoreWallet, update: UnshieldedUpdate): Either.Either<CoreWallet, WalletError> {
     return UnshieldedState.applyUpdate(coreWallet.state, update).pipe(
       Either.map((state) => ({ ...coreWallet, state })),
