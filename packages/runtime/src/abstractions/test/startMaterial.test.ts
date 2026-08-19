@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Option } from 'effect';
+import { Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as StartMaterial from '../StartMaterial.js';
 
@@ -88,6 +88,25 @@ describe('StartMaterial', () => {
       expect(StartMaterial.forVariant<Keys>(postForkTag, keys)).toStrictEqual(
         StartMaterial.forVariants<Keys>([[postForkTag, keys]]),
       );
+    });
+  });
+
+  describe('requiring key material a variant can use', () => {
+    it('produces the key material when the wallet holds some for that variant', () => {
+      expect(
+        StartMaterial.requireAuxFor(StartMaterial.fromSeed<Keys>(seed), postForkTag, derivedBy('v9')),
+      ).toStrictEqual(Either.right({ derivedFrom: Buffer.from(seed).toString('hex'), ledger: 'v9' }));
+    });
+
+    it('fails typed, naming the variant, when the wallet holds none that variant can use', () => {
+      const retained = StartMaterial.forVariant<Keys>(preForkTag, { derivedFrom: 'elsewhere', ledger: 'v8' });
+
+      const resolved = StartMaterial.requireAuxFor(retained, postForkTag, neverDerives);
+
+      const error = resolved.pipe(Either.flip, Either.getOrThrow);
+      expect(error).toBeInstanceOf(StartMaterial.MissingStartAuxError);
+      expect(error._tag).toBe('@midnightntwrk/wallet-sdk-runtime/abstractions/StartMaterial/MissingStartAuxError');
+      expect(error.variantTag).toBe(postForkTag);
     });
   });
 });
