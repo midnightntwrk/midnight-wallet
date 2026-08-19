@@ -1,7 +1,6 @@
 name: CI
 
 env:
-  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
   NETWORK: undeployed
   DEPLOYMENT: local
@@ -48,7 +47,7 @@ jobs:
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: 'https://ghcr.io'
-          username: ${{ env.MIDNIGHT_GH_USER }}
+          username: ${{ github.actor }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Configure yarn
@@ -105,7 +104,7 @@ jobs:
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: 'https://ghcr.io'
-          username: ${{ env.MIDNIGHT_GH_USER }}
+          username: ${{ github.actor }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Configure yarn
@@ -265,7 +264,7 @@ jobs:
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: 'https://ghcr.io'
-          username: ${{ env.MIDNIGHT_GH_USER }}
+          username: ${{ github.actor }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Configure yarn
@@ -349,7 +348,7 @@ jobs:
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: 'https://ghcr.io'
-          username: ${{ env.MIDNIGHT_GH_USER }}
+          username: ${{ github.actor }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Configure yarn
@@ -406,7 +405,7 @@ jobs:
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: 'https://ghcr.io'
-          username: ${{ env.MIDNIGHT_GH_USER }}
+          username: ${{ github.actor }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Configure yarn
