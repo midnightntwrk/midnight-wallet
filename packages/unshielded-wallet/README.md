@@ -115,8 +115,22 @@ const swapTx = await unshieldedWallet.initSwap(
 
 - `UnshieldedWallet` - Main wallet class
 - `UnshieldedWalletState` - Wallet state type
-- `KeyStore` - Key storage utilities
+- `KeyStore` - Key storage utilities (ledger-v9)
 - Storage utilities for persistence
+
+Variant internals are published under two subpaths, one per ledger version:
+
+- Current (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-unshielded-wallet/v2`
+- Pre-fork (ledger-v8) variant internals via `@midnightntwrk/wallet-sdk-unshielded-wallet/v1`
+
+The production wallet registers the ledger-v9 variant only; `./v1` exists so a wallet can sync pre-fork history with the
+ledger that produced it. The two are not interchangeable — `./v1` has no ECDSA support (ledger-v8 has a single signature
+scheme) and carries its own ledger-v8 `createKeystore`, whose secret is a plain `Uint8Array` rather than the root
+export's `{kind, secret}`.
+
+```typescript
+import { V2Builder, RunningV2Variant } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
+```
 
 ## License
 
