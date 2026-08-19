@@ -21,7 +21,7 @@ import {
   type UnboundTransaction,
 } from './v2/index.js';
 import type * as ledger from '@midnightntwrk/ledger-v9';
-import { Effect, Either, type Scope } from 'effect';
+import { Effect, Either, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type SerializationCapability } from './v2/Serialization.js';
 import { type TransactionHistoryService } from './v2/TransactionHistory.js';
@@ -34,6 +34,7 @@ import {
   type UnprovenTransactionBalanceResult,
 } from './v2/Transacting.js';
 import { type WalletSyncUpdate } from './v2/SyncSchema.js';
+import { type RunningV2Variant } from './v2/RunningV2Variant.js';
 import { type SignSegment } from './v2/Signing.js';
 import { type UtxoWithMeta } from './v2/UnshieldedState.js';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
@@ -245,8 +246,52 @@ export function CustomUnshieldedWallet<
       );
     }
 
+    /**
+     * Whether the activation watcher has been registered.
+     *
+     * @remarks
+     *   Registration is per wallet, not per `start`: watchers accumulate, so registering on every call would restart sync
+     *   once per historical `start` on the next activation. Flipped with `getAndSet` so concurrent `start` calls cannot
+     *   both observe it unset.
+     */
+    readonly #watcherRegistered = Ref.unsafeMake(false);
+
+    /**
+     * Whether the wallet is currently started.
+     *
+     * @remarks
+     *   The unshielded counterpart of the retained start-aux the shielded and dust wallets hold. This wallet is
+     *   watch-only — sync needs nothing secret, and signing is supplied per call by the caller — so there is no key to
+     *   keep and the restart needs no argument. All the watcher has to know is whether a stopped wallet should be left
+     *   stopped, which is what this records; `stop` clears it so a stopped wallet cannot be resurrected by a late
+     *   activation.
+     */
+    readonly #started = Ref.unsafeMake(false);
+
     start(): Promise<void> {
-      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground() }).pipe(Effect.runPromise);
+      return Effect.gen(this, function* () {
+        yield* Ref.set(this.#started, true);
+
+        // Registered before the first dispatch, and only once: `onVariantActivation` resolves only after its
+        // subscription is live, so an activation racing this call is queued rather than missed.
+        const alreadyRegistered = yield* Ref.getAndSet(this.#watcherRegistered, true);
+        if (!alreadyRegistered) {
+          yield* this.runtime.onVariantActivation({
+            [V2Tag]: (v2: RunningV2Variant<TSerialized, TSyncUpdate>) =>
+              Ref.get(this.#started).pipe(
+                // Stopped, or never started: there is nothing to resume.
+                Effect.flatMap((started) => (started ? v2.startSyncInBackground() : Effect.void)),
+              ),
+          });
+        }
+
+        yield* this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground() });
+      }).pipe(Effect.runPromise);
+    }
+
+    override async stop(): Promise<void> {
+      Ref.set(this.#started, false).pipe(Effect.runSync);
+      await super.stop();
     }
 
     balanceFinalizedTransaction(tx: ledger.FinalizedTransaction): Promise<FinalizedTransactionBalanceResult> {
