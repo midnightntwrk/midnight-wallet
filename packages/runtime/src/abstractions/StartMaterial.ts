@@ -141,3 +141,40 @@ export const requireAuxFor = <TStartAux>(
         variantTag,
       }),
   );
+
+/**
+ * Produces key material for a variant whose key type is not the one the wallet retains.
+ *
+ * @remarks
+ *   A wallet's public API speaks one ledger version's key objects, but the variants either side of a protocol boundary do
+ *   not agree on that type. Only a retained seed can serve the odd one out: key objects belong to one ledger version's
+ *   runtime, so there is nothing to convert, and a wallet holding only those has nothing that variant can start with.
+ * @param material What the wallet retained when the application started it.
+ * @param variantTag The tag of the variant asking.
+ * @param deriveFromSeed That variant's own derivation.
+ * @returns The key material, or a {@link MissingStartAuxError} naming the variant.
+ */
+export const requireDerivedAuxFor = <TAux>(
+  material: StartMaterial<unknown>,
+  variantTag: string | symbol,
+  deriveFromSeed: (seed: WalletSeed.WalletSeed) => TAux,
+): Either.Either<TAux, MissingStartAuxError> =>
+  Either.fromOption(
+    Option.map(seedOf(material), deriveFromSeed),
+    () =>
+      new MissingStartAuxError({
+        message:
+          `This wallet was started with key material of another protocol version, which the variant ` +
+          `${String(variantTag)} cannot use. Start it from a seed so every variant can derive its own.`,
+        variantTag,
+      }),
+  );
+
+/**
+ * The seed a wallet retained, if it retained one rather than key objects.
+ *
+ * @param material What the wallet retained when the application started it.
+ * @returns The seed, or `Option.none()` when the wallet holds key objects instead.
+ */
+export const seedOf = <TStartAux>(material: StartMaterial<TStartAux>): Option.Option<WalletSeed.WalletSeed> =>
+  material._tag === 'FromSeed' ? Option.some(material.seed) : Option.none();
