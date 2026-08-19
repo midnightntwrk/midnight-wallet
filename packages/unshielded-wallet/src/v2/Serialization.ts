@@ -27,7 +27,7 @@ export type DefaultSerializationConfiguration = {
   networkId: NetworkId.NetworkId;
 };
 
-export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, string> => {
+export const makeDefaultV2SerializationCapability = (): SerializationCapability<CoreWallet, string> => {
   // Annotated with the ledger type so this fails to typecheck if SignatureKind gains or loses members
   const SignatureKindSchema: Schema.Schema<SignatureKind> = Schema.Literal('schnorr', 'ecdsa');
 

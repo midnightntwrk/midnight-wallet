@@ -62,7 +62,7 @@ const protocolVersionChange = (previous: CoreWallet, current: CoreWallet): State
     : [];
 };
 
-export declare namespace RunningV1Variant {
+export declare namespace RunningV2Variant {
   export type Context<TSerialized, TSyncUpdate> = {
     serializationCapability: SerializationCapability<CoreWallet, TSerialized>;
     syncService: SyncService<CoreWallet, TSyncUpdate>;
@@ -78,26 +78,26 @@ export declare namespace RunningV1Variant {
   export type AnyContext = Context<any, any>;
 }
 
-export const V1Tag: unique symbol = Symbol('V1');
+export const V2Tag: unique symbol = Symbol('V2');
 
-export type DefaultRunningV1 = RunningV1Variant<string, WalletSyncUpdate>;
+export type DefaultRunningV2 = RunningV2Variant<string, WalletSyncUpdate>;
 
-export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.RunningVariant<typeof V1Tag, CoreWallet> {
-  readonly __polyTag__: typeof V1Tag = V1Tag;
+export class RunningV2Variant<TSerialized, TSyncUpdate> implements Variant.RunningVariant<typeof V2Tag, CoreWallet> {
+  readonly __polyTag__: typeof V2Tag = V2Tag;
   readonly #scope: Scope.Scope;
   readonly #context: Variant.VariantContext<CoreWallet>;
-  readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate>;
+  readonly #v2Context: RunningV2Variant.Context<TSerialized, TSyncUpdate>;
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
 
   constructor(
     scope: Scope.Scope,
     context: Variant.VariantContext<CoreWallet>,
-    v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate>,
+    v2Context: RunningV2Variant.Context<TSerialized, TSyncUpdate>,
   ) {
     this.#scope = scope;
     this.#context = context;
-    this.#v1Context = v1Context;
+    this.#v2Context = v2Context;
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
         context.stateRef.changes.pipe(
@@ -131,10 +131,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     return pipe(
       SubscriptionRef.get(this.#context.stateRef),
       Stream.fromEffect,
-      Stream.flatMap((state) => this.#v1Context.syncService.updates(state)),
+      Stream.flatMap((state) => this.#v2Context.syncService.updates(state)),
       Stream.mapEffect((update) => {
         return SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
-          pipe(this.#v1Context.syncCapability.applyUpdate(state, update), EitherOps.toEffect),
+          pipe(this.#v2Context.syncCapability.applyUpdate(state, update), EitherOps.toEffect),
         );
       }),
       Stream.tapError((error) => Console.error(error)),
@@ -157,13 +157,13 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     tx: ledger.FinalizedTransaction,
   ): Effect.Effect<FinalizedTransactionBalanceResult, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
-      return pipe(this.#v1Context.transactingCapability.balanceFinalizedTransaction(state, tx), EitherOps.toEffect);
+      return pipe(this.#v2Context.transactingCapability.balanceFinalizedTransaction(state, tx), EitherOps.toEffect);
     });
   }
 
   balanceUnboundTransaction(tx: UnboundTransaction): Effect.Effect<UnboundTransactionBalanceResult, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
-      return pipe(this.#v1Context.transactingCapability.balanceUnboundTransaction(state, tx), EitherOps.toEffect);
+      return pipe(this.#v2Context.transactingCapability.balanceUnboundTransaction(state, tx), EitherOps.toEffect);
     });
   }
 
@@ -171,7 +171,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     tx: ledger.UnprovenTransaction,
   ): Effect.Effect<UnprovenTransactionBalanceResult, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
-      return pipe(this.#v1Context.transactingCapability.balanceUnprovenTransaction(state, tx), EitherOps.toEffect);
+      return pipe(this.#v2Context.transactingCapability.balanceUnprovenTransaction(state, tx), EitherOps.toEffect);
     });
   }
 
@@ -181,7 +181,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
   ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
-        this.#v1Context.transactingCapability.makeTransfer(state, outputs, ttl),
+        this.#v2Context.transactingCapability.makeTransfer(state, outputs, ttl),
         EitherOps.toEffect,
         Effect.map(({ transaction, newState }) => [transaction, newState]),
       );
@@ -196,7 +196,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
   ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
-        this.#v1Context.transactingCapability.rotateUtxos(
+        this.#v2Context.transactingCapability.rotateUtxos(
           state,
           guaranteedUtxos,
           fallibleUtxos,
@@ -216,7 +216,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
   ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
-        this.#v1Context.transactingCapability.initSwap(state, desiredInputs, desiredOutputs, ttl),
+        this.#v2Context.transactingCapability.initSwap(state, desiredInputs, desiredOutputs, ttl),
         Effect.map(({ transaction, newState }) => [transaction, newState]),
       );
     });
@@ -226,25 +226,25 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     transaction: ledger.UnprovenTransaction,
     signSegment: SignSegment,
   ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
-    return this.#v1Context.signingService.sign(transaction, signSegment);
+    return this.#v2Context.signingService.sign(transaction, signSegment);
   }
 
   signUnboundTransaction(
     transaction: UnboundTransaction,
     signSegment: SignSegment,
   ): Effect.Effect<UnboundTransaction, WalletError> {
-    return this.#v1Context.signingService.sign(transaction, signSegment);
+    return this.#v2Context.signingService.sign(transaction, signSegment);
   }
 
   revertTransaction(
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Effect.Effect<void, WalletError> {
     return SubscriptionRef.updateEffect(this.#context.stateRef, (state) => {
-      return pipe(this.#v1Context.transactingCapability.revertTransaction(state, transaction), EitherOps.toEffect);
+      return pipe(this.#v2Context.transactingCapability.revertTransaction(state, transaction), EitherOps.toEffect);
     });
   }
 
   serializeState(state: CoreWallet): TSerialized {
-    return this.#v1Context.serializationCapability.serialize(state);
+    return this.#v2Context.serializationCapability.serialize(state);
   }
 }

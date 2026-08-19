@@ -26,18 +26,18 @@ import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, PublicKey, type UnshieldedKeystore } from '../src/KeyStore.js';
-import { makeDefaultCoinsAndBalancesCapability } from '../src/v1/CoinsAndBalances.js';
-import { CoreWallet } from '../src/v1/CoreWallet.js';
-import { makeDefaultKeysCapability } from '../src/v1/Keys.js';
+import { makeDefaultCoinsAndBalancesCapability } from '../src/v2/CoinsAndBalances.js';
+import { CoreWallet } from '../src/v2/CoreWallet.js';
+import { makeDefaultKeysCapability } from '../src/v2/Keys.js';
 import {
   type DefaultTransactingConfiguration,
   type DefaultTransactingContext,
   makeDefaultTransactingCapability,
-} from '../src/v1/Transacting.js';
-import { TransactionOps } from '../src/v1/TransactionOps.js';
-import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js';
-import { UnshieldedState, UtxoWithMeta } from '../src/v1/UnshieldedState.js';
-import { type WalletError } from '../src/v1/WalletError.js';
+} from '../src/v2/Transacting.js';
+import { TransactionOps } from '../src/v2/TransactionOps.js';
+import { makeDefaultV2SerializationCapability } from '../src/v2/Serialization.js';
+import { UnshieldedState, UtxoWithMeta } from '../src/v2/UnshieldedState.js';
+import { type WalletError } from '../src/v2/WalletError.js';
 import { verifyWithOracle } from './ecdsaOracle.js';
 
 const NIGHT = ledger.nativeToken().raw;
@@ -237,7 +237,7 @@ describe('Phase 2 — ECDSA signs a multi-offer transaction (guaranteed + fallib
 
 describe('Phase 2 — ECDSA wallet survives serialize → restore and can still authorize', () => {
   it('restores an ECDSA wallet from a snapshot and authorizes a spend with it', () => {
-    const capability = makeDefaultV1SerializationCapability();
+    const capability = makeDefaultV2SerializationCapability();
     const original = walletWithNight(keystores.ecdsa);
 
     const restored = capability.deserialize(capability.serialize(original)).pipe(Either.getOrThrow);

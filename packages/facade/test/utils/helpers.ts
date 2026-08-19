@@ -36,8 +36,8 @@ import { NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstrac
 import { type WalletEntry } from '../../src/index.js';
 import {
   Sync as UnshieldedSync,
-  V1Builder as UnshieldedV1Builder,
-} from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+  V2Builder as UnshieldedV2Builder,
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import {
@@ -223,7 +223,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
   // Unshielded wallet: all defaults except sync (uses simulator sync)
   const UnshieldedWalletFactory = CustomUnshieldedWallet(
     { ...config, txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>() },
-    new UnshieldedV1Builder()
+    new UnshieldedV2Builder()
       .withSync(UnshieldedSync.makeSimulatorSyncService, UnshieldedSync.makeSimulatorSyncCapability)
       .withSerializationDefaults()
       .withTransactingDefaults()

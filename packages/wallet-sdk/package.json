@@ -137,6 +137,10 @@
       "types": "./dist/unshielded/v1.d.ts",
       "import": "./dist/unshielded/v1.js"
     },
+    "./unshielded/v2": {
+      "types": "./dist/unshielded/v2.d.ts",
+      "import": "./dist/unshielded/v2.js"
+    },
     "./utilities": {
       "types": "./dist/utilities/index.d.ts",
       "import": "./dist/utilities/index.js"

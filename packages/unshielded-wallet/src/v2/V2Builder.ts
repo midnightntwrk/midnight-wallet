@@ -18,8 +18,8 @@ import {
   type VariantBuilder,
   type WalletRuntimeError,
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
-import { makeDefaultV1SerializationCapability, type SerializationCapability } from './Serialization.js';
+import { RunningV2Variant, V2Tag } from './RunningV2Variant.js';
+import { makeDefaultV2SerializationCapability, type SerializationCapability } from './Serialization.js';
 import {
   type DefaultSyncContext,
   type DefaultSyncConfiguration,
@@ -49,26 +49,26 @@ import {
 import { type Expect, type Equal, type ItemType } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { createKeystore, PublicKey } from '../KeyStore.js';
 
-export type BaseV1Configuration = {
+export type BaseV2Configuration = {
   networkId: NetworkId.NetworkId;
 };
 
-export type DefaultV1Configuration = BaseV1Configuration &
+export type DefaultV2Configuration = BaseV2Configuration &
   DefaultSyncConfiguration &
   DefaultTransactingConfiguration &
   DefaultTransactionHistoryConfiguration;
 
-const V1BuilderSymbol: {
+const V2BuilderSymbol: {
   readonly typeId: unique symbol;
 } = {
-  typeId: Symbol('@midnight-ntwrk/unshielded-wallet#V1Builder') as (typeof V1BuilderSymbol)['typeId'],
+  typeId: Symbol('@midnight-ntwrk/unshielded-wallet#V2Builder') as (typeof V2BuilderSymbol)['typeId'],
 } as const;
 
-export type V1Variant<TSerialized, TSyncUpdate> = Variant.Variant<
-  typeof V1Tag,
+export type V2Variant<TSerialized, TSyncUpdate> = Variant.Variant<
+  typeof V2Tag,
   CoreWallet,
   null,
-  RunningV1Variant<TSerialized, TSyncUpdate>
+  RunningV2Variant<TSerialized, TSyncUpdate>
 > & {
   deserializeState: (serialized: TSerialized) => Either.Either<CoreWallet, WalletError>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
@@ -78,39 +78,39 @@ export type V1Variant<TSerialized, TSyncUpdate> = Variant.Variant<
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyV1Variant = V1Variant<any, any>;
-export type DefaultV1Variant = V1Variant<string, WalletSyncUpdate>;
+export type AnyV2Variant = V2Variant<any, any>;
+export type DefaultV2Variant = V2Variant<string, WalletSyncUpdate>;
 
-export type TransactionOf<T extends AnyV1Variant> =
+export type TransactionOf<T extends AnyV2Variant> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  T extends V1Variant<any, any>
+  T extends V2Variant<any, any>
     ? ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>
     : never;
 
-export type SerializedStateOf<T extends AnyV1Variant> =
+export type SerializedStateOf<T extends AnyV2Variant> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  T extends V1Variant<infer TSerialized, any> ? TSerialized : never;
+  T extends V2Variant<infer TSerialized, any> ? TSerialized : never;
 
-export type DefaultV1Builder = V1Builder<
-  DefaultV1Configuration,
-  RunningV1Variant.Context<string, WalletSyncUpdate>,
+export type DefaultV2Builder = V2Builder<
+  DefaultV2Configuration,
+  RunningV2Variant.Context<string, WalletSyncUpdate>,
   string,
   WalletSyncUpdate
 >;
 
-export class V1Builder<
-  TConfig extends BaseV1Configuration = BaseV1Configuration,
-  TContext extends Partial<RunningV1Variant.AnyContext> = object,
+export class V2Builder<
+  TConfig extends BaseV2Configuration = BaseV2Configuration,
+  TContext extends Partial<RunningV2Variant.AnyContext> = object,
   TSerialized = never,
   TSyncUpdate = never,
-> implements VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate>, TConfig> {
-  readonly #buildState: V1Builder.PartialBuildState<TConfig, TContext, TSerialized, TSyncUpdate>;
+> implements VariantBuilder.VariantBuilder<V2Variant<TSerialized, TSyncUpdate>, TConfig> {
+  readonly #buildState: V2Builder.PartialBuildState<TConfig, TContext, TSerialized, TSyncUpdate>;
 
-  constructor(buildState: V1Builder.PartialBuildState<TConfig, TContext, TSerialized, TSyncUpdate> = {}) {
+  constructor(buildState: V2Builder.PartialBuildState<TConfig, TContext, TSerialized, TSyncUpdate> = {}) {
     this.#buildState = buildState;
   }
 
-  withDefaults(): DefaultV1Builder {
+  withDefaults(): DefaultV2Builder {
     return this.withSyncDefaults()
       .withSerializationDefaults()
       .withTransactingDefaults()
@@ -118,10 +118,10 @@ export class V1Builder<
       .withCoinsAndBalancesDefaults()
       .withTransactionHistoryDefaults()
       .withKeysDefaults()
-      .withCoinSelectionDefaults() as DefaultV1Builder;
+      .withCoinSelectionDefaults() as DefaultV2Builder;
   }
 
-  withSyncDefaults(): V1Builder<
+  withSyncDefaults(): V2Builder<
     TConfig & DefaultSyncConfiguration,
     TContext & DefaultSyncContext,
     TSerialized,
@@ -130,43 +130,43 @@ export class V1Builder<
     return this.withSync(makeDefaultSyncService, makeDefaultSyncCapability);
   }
 
-  withSync<TSyncConfig, TSyncContext extends Partial<RunningV1Variant.AnyContext>, TSyncUpdate>(
+  withSync<TSyncConfig, TSyncContext extends Partial<RunningV2Variant.AnyContext>, TSyncUpdate>(
     syncService: (configuration: TSyncConfig, getContext: () => TSyncContext) => SyncService<CoreWallet, TSyncUpdate>,
     syncCapability: (
       configuration: TSyncConfig,
       getContext: () => TSyncContext,
     ) => SyncCapability<CoreWallet, TSyncUpdate>,
-  ): V1Builder<TConfig & TSyncConfig, TContext & TSyncContext, TSerialized, TSyncUpdate> {
-    return new V1Builder<TConfig & TSyncConfig, TContext & TSyncContext, TSerialized, TSyncUpdate>({
+  ): V2Builder<TConfig & TSyncConfig, TContext & TSyncContext, TSerialized, TSyncUpdate> {
+    return new V2Builder<TConfig & TSyncConfig, TContext & TSyncContext, TSerialized, TSyncUpdate>({
       ...this.#buildState,
       syncService,
       syncCapability,
     });
   }
 
-  withSerializationDefaults(): V1Builder<TConfig, TContext, string, TSyncUpdate> {
-    return this.withSerialization(makeDefaultV1SerializationCapability);
+  withSerializationDefaults(): V2Builder<TConfig, TContext, string, TSyncUpdate> {
+    return this.withSerialization(makeDefaultV2SerializationCapability);
   }
 
   withSerialization<
     TSerializationConfig,
-    TSerializationContext extends Partial<RunningV1Variant.AnyContext>,
+    TSerializationContext extends Partial<RunningV2Variant.AnyContext>,
     TSerialized,
   >(
     serializationCapability: (
       configuration: TSerializationConfig,
       getContext: () => TSerializationContext,
     ) => SerializationCapability<CoreWallet, TSerialized>,
-  ): V1Builder<TConfig & TSerializationConfig, TContext & TSerializationContext, TSerialized, TSyncUpdate> {
-    return new V1Builder<TConfig & TSerializationConfig, TContext & TSerializationContext, TSerialized, TSyncUpdate>({
+  ): V2Builder<TConfig & TSerializationConfig, TContext & TSerializationContext, TSerialized, TSyncUpdate> {
+    return new V2Builder<TConfig & TSerializationConfig, TContext & TSerializationContext, TSerialized, TSyncUpdate>({
       ...this.#buildState,
       serializationCapability,
     });
   }
 
   withTransactingDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate>,
-  ): V1Builder<
+    this: V2Builder<TConfig, TContext, TSerialized, TSyncUpdate>,
+  ): V2Builder<
     TConfig & DefaultTransactingConfiguration,
     TContext & DefaultTransactingContext,
     TSerialized,
@@ -175,79 +175,79 @@ export class V1Builder<
     return this.withTransacting(makeDefaultTransactingCapability);
   }
 
-  withTransacting<TTransactingConfig, TTransactingContext extends Partial<RunningV1Variant.AnyContext>>(
+  withTransacting<TTransactingConfig, TTransactingContext extends Partial<RunningV2Variant.AnyContext>>(
     transactingCapability: (
       config: TTransactingConfig,
       getContext: () => TTransactingContext,
     ) => TransactingCapability<CoreWallet>,
-  ): V1Builder<TConfig & TTransactingConfig, TContext & TTransactingContext, TSerialized, TSyncUpdate> {
-    return new V1Builder<TConfig & TTransactingConfig, TContext & TTransactingContext, TSerialized, TSyncUpdate>({
+  ): V2Builder<TConfig & TTransactingConfig, TContext & TTransactingContext, TSerialized, TSyncUpdate> {
+    return new V2Builder<TConfig & TTransactingConfig, TContext & TTransactingContext, TSerialized, TSyncUpdate>({
       ...this.#buildState,
       transactingCapability,
     });
   }
 
-  withSigningDefaults(): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate> {
+  withSigningDefaults(): V2Builder<TConfig, TContext, TSerialized, TSyncUpdate> {
     return this.withSigning(makeDefaultSigningService);
   }
 
-  withSigning<TSigningConfig, TSigningContext extends Partial<RunningV1Variant.AnyContext>>(
+  withSigning<TSigningConfig, TSigningContext extends Partial<RunningV2Variant.AnyContext>>(
     signingService: (configuration: TSigningConfig, getContext: () => TSigningContext) => SigningService,
-  ): V1Builder<TConfig & TSigningConfig, TContext & TSigningContext, TSerialized, TSyncUpdate> {
-    return new V1Builder<TConfig & TSigningConfig, TContext & TSigningContext, TSerialized, TSyncUpdate>({
+  ): V2Builder<TConfig & TSigningConfig, TContext & TSigningContext, TSerialized, TSyncUpdate> {
+    return new V2Builder<TConfig & TSigningConfig, TContext & TSigningContext, TSerialized, TSyncUpdate>({
       ...this.#buildState,
       signingService,
     });
   }
 
-  withCoinSelection<TCoinSelectionConfig, TCoinSelectionContext extends Partial<RunningV1Variant.AnyContext>>(
+  withCoinSelection<TCoinSelectionConfig, TCoinSelectionContext extends Partial<RunningV2Variant.AnyContext>>(
     coinSelection: (
       config: TCoinSelectionConfig,
       getContext: () => TCoinSelectionContext,
     ) => CoinSelection<ledger.Utxo>,
-  ): V1Builder<TConfig & TCoinSelectionConfig, TContext & TCoinSelectionContext, TSerialized, TSyncUpdate> {
-    return new V1Builder<TConfig & TCoinSelectionConfig, TContext & TCoinSelectionContext, TSerialized, TSyncUpdate>({
+  ): V2Builder<TConfig & TCoinSelectionConfig, TContext & TCoinSelectionContext, TSerialized, TSyncUpdate> {
+    return new V2Builder<TConfig & TCoinSelectionConfig, TContext & TCoinSelectionContext, TSerialized, TSyncUpdate>({
       ...this.#buildState,
       coinSelection,
     });
   }
 
-  withCoinSelectionDefaults(): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate> {
+  withCoinSelectionDefaults(): V2Builder<TConfig, TContext, TSerialized, TSyncUpdate> {
     return this.withCoinSelection(() => chooseCoin);
   }
 
-  withCoinsAndBalancesDefaults(): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate> {
+  withCoinsAndBalancesDefaults(): V2Builder<TConfig, TContext, TSerialized, TSyncUpdate> {
     return this.withCoinsAndBalances(makeDefaultCoinsAndBalancesCapability);
   }
 
-  withCoinsAndBalances<TBalancesConfig, TBalancesContext extends Partial<RunningV1Variant.AnyContext>>(
+  withCoinsAndBalances<TBalancesConfig, TBalancesContext extends Partial<RunningV2Variant.AnyContext>>(
     coinsAndBalancesCapability: (
       configuration: TBalancesConfig,
       getContext: () => TBalancesContext,
     ) => CoinsAndBalancesCapability<CoreWallet>,
-  ): V1Builder<TConfig & TBalancesConfig, TContext & TBalancesContext, TSerialized, TSyncUpdate> {
-    return new V1Builder<TConfig & TBalancesConfig, TContext & TBalancesContext, TSerialized, TSyncUpdate>({
+  ): V2Builder<TConfig & TBalancesConfig, TContext & TBalancesContext, TSerialized, TSyncUpdate> {
+    return new V2Builder<TConfig & TBalancesConfig, TContext & TBalancesContext, TSerialized, TSyncUpdate>({
       ...this.#buildState,
       coinsAndBalancesCapability,
     });
   }
 
   withTransactionHistoryDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate>,
-  ): V1Builder<TConfig & DefaultTransactionHistoryConfiguration, TContext, TSerialized, TSyncUpdate> {
+    this: V2Builder<TConfig, TContext, TSerialized, TSyncUpdate>,
+  ): V2Builder<TConfig & DefaultTransactionHistoryConfiguration, TContext, TSerialized, TSyncUpdate> {
     return this.withTransactionHistory(makeDefaultTransactionHistoryService);
   }
 
   withTransactionHistory<
     TTransactionHistoryConfig,
-    TTransactionHistoryContext extends Partial<RunningV1Variant.AnyContext>,
+    TTransactionHistoryContext extends Partial<RunningV2Variant.AnyContext>,
   >(
     transactionHistoryService: (
       configuration: TTransactionHistoryConfig,
       getContext: () => TTransactionHistoryContext,
     ) => TransactionHistoryService,
-  ): V1Builder<TConfig & TTransactionHistoryConfig, TContext & TTransactionHistoryContext, TSerialized, TSyncUpdate> {
-    return new V1Builder<
+  ): V2Builder<TConfig & TTransactionHistoryConfig, TContext & TTransactionHistoryContext, TSerialized, TSyncUpdate> {
+    return new V2Builder<
       TConfig & TTransactionHistoryConfig,
       TContext & TTransactionHistoryContext,
       TSerialized,
@@ -258,38 +258,38 @@ export class V1Builder<
     });
   }
 
-  withKeysDefaults(): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate> {
+  withKeysDefaults(): V2Builder<TConfig, TContext, TSerialized, TSyncUpdate> {
     return this.withKeys(makeDefaultKeysCapability);
   }
 
-  withKeys<TKeysConfig, TKeysContext extends Partial<RunningV1Variant.AnyContext>>(
+  withKeys<TKeysConfig, TKeysContext extends Partial<RunningV2Variant.AnyContext>>(
     keysCapability: (configuration: TKeysConfig, getContext: () => TKeysContext) => KeysCapability<CoreWallet>,
-  ): V1Builder<TConfig & TKeysConfig, TContext & TKeysContext, TSerialized, TSyncUpdate> {
-    return new V1Builder<TConfig & TKeysConfig, TContext & TKeysContext, TSerialized, TSyncUpdate>({
+  ): V2Builder<TConfig & TKeysConfig, TContext & TKeysContext, TSerialized, TSyncUpdate> {
+    return new V2Builder<TConfig & TKeysConfig, TContext & TKeysContext, TSerialized, TSyncUpdate>({
       ...this.#buildState,
       keysCapability,
     });
   }
 
   build(
-    this: V1Builder<TConfig, RunningV1Variant.Context<TSerialized, TSyncUpdate>, TSerialized, TSyncUpdate>,
+    this: V2Builder<TConfig, RunningV2Variant.Context<TSerialized, TSyncUpdate>, TSerialized, TSyncUpdate>,
     configuration: TConfig,
-  ): V1Variant<TSerialized, TSyncUpdate> {
-    const v1Context = this.#buildContextFromBuildState(configuration);
+  ): V2Variant<TSerialized, TSyncUpdate> {
+    const v2Context = this.#buildContextFromBuildState(configuration);
     const { networkId } = configuration;
 
     return {
-      __polyTag__: V1Tag,
-      coinsAndBalances: v1Context.coinsAndBalancesCapability,
-      keys: v1Context.keysCapability,
-      serialization: v1Context.serializationCapability,
-      transactionHistory: v1Context.transactionHistoryService,
+      __polyTag__: V2Tag,
+      coinsAndBalances: v2Context.coinsAndBalancesCapability,
+      keys: v2Context.keysCapability,
+      serialization: v2Context.serializationCapability,
+      transactionHistory: v2Context.transactionHistoryService,
       start(
         context: Variant.VariantContext<CoreWallet>,
-      ): Effect.Effect<RunningV1Variant<TSerialized, TSyncUpdate>, WalletRuntimeError, Scope.Scope> {
+      ): Effect.Effect<RunningV2Variant<TSerialized, TSyncUpdate>, WalletRuntimeError, Scope.Scope> {
         return Effect.gen(function* () {
           const scope = yield* Scope.Scope;
-          return new RunningV1Variant(scope, context, v1Context);
+          return new RunningV2Variant(scope, context, v2Context);
         });
       },
       migrateState(_previousState) {
@@ -304,17 +304,17 @@ export class V1Builder<
       },
 
       deserializeState: (serialized: TSerialized): Either.Either<CoreWallet, WalletError> => {
-        return v1Context.serializationCapability.deserialize(serialized);
+        return v2Context.serializationCapability.deserialize(serialized);
       },
     };
   }
 
   #buildContextFromBuildState(
-    this: V1Builder<TConfig, RunningV1Variant.Context<TSerialized, TSyncUpdate>, TSerialized, TSyncUpdate>,
+    this: V2Builder<TConfig, RunningV2Variant.Context<TSerialized, TSyncUpdate>, TSerialized, TSyncUpdate>,
     configuration: TConfig,
-  ): RunningV1Variant.Context<TSerialized, TSyncUpdate> {
+  ): RunningV2Variant.Context<TSerialized, TSyncUpdate> {
     if (!isBuildStateFull(this.#buildState)) {
-      throw new Error('Not all components are configured in V1 Builder');
+      throw new Error('Not all components are configured in V2 Builder');
     }
 
     const {
@@ -329,7 +329,7 @@ export class V1Builder<
       transactionHistoryService,
     } = this.#buildState;
 
-    const getContext = (): RunningV1Variant.Context<TSerialized, TSyncUpdate> => context;
+    const getContext = (): RunningV2Variant.Context<TSerialized, TSyncUpdate> => context;
 
     const context = {
       serializationCapability: serializationCapability(configuration, getContext),
@@ -348,7 +348,7 @@ export class V1Builder<
 }
 
 /** @internal */
-declare namespace V1Builder {
+declare namespace V2Builder {
   type HasSync<TConfig, TContext, TSyncUpdate> = {
     readonly syncService: (configuration: TConfig, getContext: () => TContext) => SyncService<CoreWallet, TSyncUpdate>;
     readonly syncCapability: (
@@ -397,7 +397,7 @@ declare namespace V1Builder {
     readonly keysCapability: (configuration: TConfig, getContext: () => TContext) => KeysCapability<CoreWallet>;
   };
 
-  /** The internal build state of {@link V1Builder}. */
+  /** The internal build state of {@link V2Builder}. */
   type FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate> = Types.Simplify<
     HasSync<TConfig, TContext, TSyncUpdate> &
       HasSerialization<TConfig, TContext, TSerialized> &
@@ -413,17 +413,17 @@ declare namespace V1Builder {
       FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate>[K] | undefined;
   };
 
-  /** Utility interface that manages the type variance of {@link V1Builder}. */
+  /** Utility interface that manages the type variance of {@link V2Builder}. */
   interface Variance<R> {
-    readonly [V1BuilderSymbol.typeId]: {
+    readonly [V2BuilderSymbol.typeId]: {
       readonly _R: Types.Covariant<R>;
     };
   }
 }
 
 const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate>(
-  buildState: V1Builder.PartialBuildState<TConfig, TContext, TSerialized, TSyncUpdate>,
-): buildState is V1Builder.FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate> => {
+  buildState: V2Builder.PartialBuildState<TConfig, TContext, TSerialized, TSyncUpdate>,
+): buildState is V2Builder.FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate> => {
   const allBuildStateKeys = [
     'syncService',
     'syncCapability',
@@ -437,13 +437,13 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate>(
   ] as const;
   /** This type will fail compilation if any key is omitted, letting the `isFull` check work properly */
   type _1 = Expect<
-    Equal<keyof V1Builder.FullBuildState<never, never, never, never>, ItemType<typeof allBuildStateKeys>>
+    Equal<keyof V2Builder.FullBuildState<never, never, never, never>, ItemType<typeof allBuildStateKeys>>
   >;
   return allBuildStateKeys.every((key) => typeof buildState[key] == 'function');
 };
 
 /** @internal */
-declare namespace _V1BuilderMethods {
+declare namespace _V2BuilderMethods {
   type WithSyncDefaults = 'withSyncDefaults';
   type WithSyncMethod = 'withSync';
   type WithTransactingMethod = 'withTransacting';

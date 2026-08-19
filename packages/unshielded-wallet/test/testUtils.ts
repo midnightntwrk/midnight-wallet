@@ -13,15 +13,15 @@
 import { sampleIntentHash } from '@midnightntwrk/ledger-v9';
 import * as rx from 'rxjs';
 import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
-import { type UnshieldedUpdate, type UtxoWithMeta } from '../src/v1/SyncSchema.js';
+import { type UnshieldedUpdate, type UtxoWithMeta } from '../src/v2/SyncSchema.js';
 import {
   NetworkId,
   InMemoryTransactionHistoryStorage,
   TransactionHistoryStorage,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Schema } from 'effect';
-import { UnshieldedSectionSchema } from '../src/v1/TransactionHistory.js';
-import { type DefaultV1Configuration } from '../src/v1/index.js';
+import { UnshieldedSectionSchema } from '../src/v2/TransactionHistory.js';
+import { type DefaultV2Configuration } from '../src/v2/index.js';
 
 const UnshieldedEntrySchema = TransactionHistoryStorage.extendEntrySchema({
   unshielded: Schema.optional(UnshieldedSectionSchema),
@@ -110,13 +110,13 @@ export const getUnshieldedSeed = (seed: string): Uint8Array => {
  *
  * @param indexerPort - The port number for the indexer service
  * @param overrides - Optional partial configuration to override defaults
- * @returns A complete DefaultV1Configuration object
+ * @returns A complete DefaultV2Configuration object
  */
 export const createWalletConfig = (
   indexerPort: number,
-  overrides?: Partial<DefaultV1Configuration>,
-): DefaultV1Configuration => {
-  const defaultConfig: DefaultV1Configuration = {
+  overrides?: Partial<DefaultV2Configuration>,
+): DefaultV2Configuration => {
+  const defaultConfig: DefaultV2Configuration = {
     indexerClientConnection: {
       indexerWsUrl: `ws://localhost:${indexerPort}/api/v4/graphql/ws`,
       indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,

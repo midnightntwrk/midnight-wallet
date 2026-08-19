@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest';
 import { Either } from 'effect';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { makeDefaultV1SerializationCapability } from '../Serialization.js';
+import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { UnshieldedState } from '../UnshieldedState.js';
 import { createKeystore, PublicKey } from '../../KeyStore.js';
@@ -45,8 +45,8 @@ const makeWallet = (publicKey: PublicKey): CoreWallet =>
     'undeployed',
   );
 
-describe('default v1 serialization capability', () => {
-  const capability = makeDefaultV1SerializationCapability();
+describe('default v2 serialization capability', () => {
+  const capability = makeDefaultV2SerializationCapability();
 
   it('serializes the verifying key with its tag and round-trips a schnorr key', () => {
     const wallet = makeWallet(schnorrPK);
