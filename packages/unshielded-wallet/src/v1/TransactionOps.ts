@@ -13,6 +13,7 @@
 import { Either, type Option, pipe, Array as Arr, Iterable as IterableOps } from 'effect';
 import { Imbalances } from '@midnightntwrk/wallet-sdk-capabilities';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import { addressFromKey } from '@midnight-ntwrk/ledger-v8';
 import { TransactingError, type WalletError } from './WalletError.js';
 
 /** Unbound transaction type. This is a transaction that has no signatures and is not bound yet. */
@@ -208,6 +209,11 @@ export const TransactionOps: TransactionOps = {
     signatureVerifyingKey: ledger.SignatureVerifyingKey,
   ): ledger.Utxo[] {
     const segments = TransactionOps.getSegments(transaction);
+    const ownerAddress = addressFromKey(signatureVerifyingKey);
+    // Intent inputs are UtxoSpends owned by a verifying key; a Utxo is owned by the derived address. Under ledger-v8
+    // both are hex strings, so returning the spend unchanged would typecheck while handing back a `Utxo` whose
+    // `owner` is a key — unlike every other Utxo the wallet holds.
+    const toUtxo = (input: ledger.UtxoSpend): ledger.Utxo => ({ ...input, owner: ownerAddress });
 
     return pipe(
       segments,
@@ -228,7 +234,7 @@ export const TransactionOps: TransactionOps = {
           ? fallibleUnshieldedOffer.inputs.filter((input) => input.owner === signatureVerifyingKey)
           : [];
 
-        return [...ownedInputsfromGuaranteedSection, ...ownedInputsfromFallibleSection];
+        return [...ownedInputsfromGuaranteedSection, ...ownedInputsfromFallibleSection].map(toUtxo);
       }),
     );
   },
