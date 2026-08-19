@@ -210,9 +210,12 @@ export const makeDefaultSyncService = (
         Effect.catchAll((err) =>
           Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
         ),
-        Effect.flatMap((blockData) => {
+        Effect.flatMap((blockData): Effect.Effect<BlockData, WalletError> => {
           if (!blockData) {
-            throw new OtherWalletError({ message: 'Unable to fetch block data' });
+            // A cold indexer (or one mid-reorg) resolves the query with `block: null`. That is an expected
+            // condition, so it belongs in the typed error channel: a synchronous `throw` here would become a
+            // defect, slipping past every `catchAll` a caller has installed.
+            return Effect.fail(new OtherWalletError({ message: 'Unable to fetch block data' }));
           }
           // TODO: convert to schema
           return LedgerOps.ledgerTry(() => ({
@@ -259,7 +262,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
             WsSubscriptionClient.layer({ url, keepAlive: indexerClientConnection.keepAlive }),
         }),
         Layer.mapError(
-          (e: URLError) => new SyncWalletError({ message: 'Failed to to obtain correct indexer URLs', cause: e }),
+          (e: URLError) => new SyncWalletError({ message: 'Failed to obtain correct indexer URLs', cause: e }),
         ),
       );
     },
