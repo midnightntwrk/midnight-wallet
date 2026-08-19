@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type HList } from '@midnightntwrk/wallet-sdk-utilities';
 import { type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { Effect, Option, PubSub, Scope, Stream } from 'effect';
 import * as rx from 'rxjs';
@@ -31,6 +32,8 @@ import {
   toProtocolStateArray,
 } from '../testing/utils.js';
 import {
+  Numeric,
+  NumericMultiplier,
   type NumericRange,
   NumericRangeBuilder,
   type NumericRangeMultiplier,
@@ -177,6 +180,43 @@ describe('Wallet Builder', () => {
     expect(receivedStates).toSatisfy((received: typeof receivedStates) =>
       isOrderedSubsequenceOf(received, fullStateSequence, protocolStateEquals),
     );
+  });
+
+  it('stamps every state emission with the tag of the variant that produced it', async () => {
+    const Wallet = WalletBuilder.init()
+      // Have the first variant complete after producing two values, signifying a protocol change.
+      .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
+      .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder())
+      .build({ min: 0, max: 4, multiplier: 2 });
+    const wallet = Wallet.startEmpty(Wallet);
+
+    type Variants = [Variant.VersionedVariant<NumericRange>, Variant.VersionedVariant<NumericRangeMultiplier>];
+    type _1 = Expect<
+      Equal<
+        typeof wallet.rawState,
+        rx.Observable<ProtocolState.ProtocolState<number, Variant.VariantTag<HList.Each<Variants>>>>
+      >
+    >;
+
+    const receivedStates = await toProtocolStateArray(
+      wallet.rawState.pipe(rx.takeWhile(({ state }) => state !== 8, true)),
+    );
+
+    // The tag travels with the emission, so a reader can pick the right capabilities for a state
+    // without inferring the producing variant from the version.
+    expect(receivedStates.filter(({ version }) => version === ProtocolVersion.MinSupportedVersion)).toSatisfy(
+      (preFork: typeof receivedStates) =>
+        preFork.length > 0 && preFork.every(({ variantTag }) => variantTag === Numeric),
+    );
+    expect(receivedStates.filter(({ version }) => version === ProtocolVersion.ProtocolVersion(100n))).toSatisfy(
+      (postFork: typeof receivedStates) =>
+        postFork.length > 0 && postFork.every(({ variantTag }) => variantTag === NumericMultiplier),
+    );
+    expect(receivedStates.at(-1)).toEqual({
+      version: ProtocolVersion.ProtocolVersion(100n),
+      variantTag: NumericMultiplier,
+      state: 8,
+    });
   });
 
   it('should support three sequential variant migrations', async () => {
