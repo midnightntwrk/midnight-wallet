@@ -226,42 +226,58 @@ const EventsSyncUpdatePayload = Schema.Struct({
   maxId: Schema.Number,
 });
 
+/**
+ * One event of the source's timeline, still encoded.
+ *
+ * @remarks
+ *   The event is carried as the source served it rather than as a `ledger.Event`, because whether this ledger version may
+ *   read it at all is not the source's question to answer. A batch spanning a protocol boundary carries events of the
+ *   version that follows this one, which this ledger version cannot deserialize — the serialization header names a
+ *   different version — and after a hand-over the inclusive cursor re-delivers an event of the version that preceded
+ *   it, which it equally cannot. Both are ordinary, and neither is an error: they belong to the variant either side.
+ *
+ *   So the bytes travel undecoded and only the capability, which knows the activation range, reads the ones it is about
+ *   to apply — see {@link readEvent}. Decoding here would fail the whole batch on an event nobody intended to apply.
+ */
 export const EventsSyncUpdate = Schema.TaggedStruct('EventsSyncUpdate', {
   id: Schema.Number,
   protocolVersion: Schema.Number,
   maxId: Schema.Number,
-  event: LedgerEventSchema,
+  raw: Schema.String,
 });
 
 export type EventsSyncUpdate = Schema.Schema.Type<typeof EventsSyncUpdate>;
 
-const EventsSyncUpdateFromPayload = Schema.transformOrFail(EventsSyncUpdatePayload, EventsSyncUpdate, {
-  decode: (input) =>
-    pipe(
-      Schema.decodeUnknownEither(HexedLedgerEvent)(input.raw),
-      Either.map((event) => ({
-        _tag: 'EventsSyncUpdate' as const,
-        id: input.id,
-        protocolVersion: input.protocolVersion,
-        maxId: input.maxId,
-        event,
-      })),
-      Either.mapLeft((error) => new ParseResult.Unexpected(error, 'Failed to decode ledger event payload')),
-      EitherOps.toEffect,
-    ),
-  encode: (output) =>
-    pipe(
-      Schema.encodeEither(HexedLedgerEvent)(output.event),
-      Either.map((raw) => ({
-        id: output.id,
-        raw,
-        protocolVersion: output.protocolVersion,
-        maxId: output.maxId,
-      })),
-      Either.mapLeft((error) => new ParseResult.Unexpected(error, 'Failed to encode ledger event payload')),
-      EitherOps.toEffect,
-    ),
+const EventsSyncUpdateFromPayload = Schema.transform(EventsSyncUpdatePayload, EventsSyncUpdate, {
+  strict: true,
+  decode: (input) => ({
+    _tag: 'EventsSyncUpdate' as const,
+    id: input.id,
+    protocolVersion: input.protocolVersion,
+    maxId: input.maxId,
+    raw: input.raw,
+  }),
+  encode: (update) => ({
+    id: update.id,
+    raw: update.raw,
+    protocolVersion: update.protocolVersion,
+    maxId: update.maxId,
+  }),
 });
+
+/**
+ * Reads an event this variant is going to apply.
+ *
+ * @remarks
+ *   The counterpart of {@link EventsSyncUpdate} carrying its event encoded: a capability calls this on the batch prefix it
+ *   owns, and never on what it defers. Failure here is a genuine one — an event this variant claimed and cannot read —
+ *   and is raised rather than returned, because `SyncCapability.applyUpdate` is total in its own domain and the variant
+ *   already turns a throw from it into a typed synchronization error.
+ * @param update The update to read.
+ * @returns The event it carries.
+ * @throws ParseError if the bytes are not an event this ledger version can deserialize.
+ */
+export const readEvent = (update: EventsSyncUpdate): ledger.Event => Schema.decodeSync(HexedLedgerEvent)(update.raw);
 
 export const makeEventsSyncService = (
   config: DefaultSyncConfiguration,
@@ -383,14 +399,12 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
         activeRange,
       );
 
+      // Read here and nowhere earlier: `applied` is exactly the slice this variant owns, so nothing outside its
+      // activation range — nor anything below its cursor — is ever handed to this ledger version's deserializer.
       const [newState, newChanges]: [CoreWallet, ledger.ZswapStateChanges[]] =
         applied.length === 0
           ? [state, []]
-          : CoreWallet.replayEventsWithChanges(
-              state,
-              wrappedUpdate.secretKeys,
-              applied.map((u) => u.event),
-            );
+          : CoreWallet.replayEventsWithChanges(state, wrappedUpdate.secretKeys, applied.map(readEvent));
 
       // `appliedIndex` stops at the last event this variant actually replayed. The next variant resumes one
       // below it on an inclusive cursor, so the deferred suffix is re-fetched rather than skipped.
