@@ -24,6 +24,7 @@ import {
   Simulator,
   type SimulatorState,
   getCurrentBlockNumber,
+  getLastBlockResults,
 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -37,18 +38,6 @@ import {
 import { createUnshieldedKeystore } from './UnshieldedKeyStore.js';
 import { getDustSeed } from './utils.js';
 
-/**
- * Drives a simulator-backed dust wallet until it holds real Dust, and hands back the resulting state.
- *
- * @remarks
- *   Snapshot tests need a wallet whose `DustLocalState` carries generation info, commitments and UTxOs, and the only
- *   honest way to get one is to let the wallet earn it: reward Night, register the Night UTxOs for Dust generation, and
- *   let the sync capability apply the resulting events. Hand-built states would pin whatever shape the test author
- *   imagined rather than the shape the wallet actually produces.
- *
- *   The setup mirrors `DustWallet.test.ts` — including its deliberately un-closed scope, which is what keeps the
- *   background sync alive after the effect returns.
- */
 export const NETWORK = 'undeployed';
 const NIGHT_TOKEN_TYPE = nativeToken().raw;
 const dustParameters = LedgerParameters.initialParameters().dust;
@@ -67,6 +56,16 @@ export type FundedWallet = {
 };
 
 /**
+ * Drives a simulator-backed dust wallet until it holds real Dust, and hands back the resulting state.
+ *
+ * @remarks
+ *   Snapshot tests need a wallet whose `DustLocalState` carries generation info, commitments and UTxOs, and the only
+ *   honest way to get one is to let the wallet earn it: reward Night, register the Night UTxOs for Dust generation, and
+ *   let the sync capability apply the resulting events. Hand-built states would pin whatever shape the test author
+ *   imagined rather than the shape the wallet actually produces.
+ *
+ *   The setup mirrors `DustWallet.test.ts` — including its deliberately un-closed scope, which is what keeps the
+ *   background sync alive after the effect returns.
  * @param seedHex Wallet seed, so callers that need two distinct wallets can ask for them.
  * @param nightAwards How many Night rewards to earn before registering; more awards means more generation entries.
  */
@@ -126,7 +125,19 @@ export const makeFundedDustWallet = (seedHex: string, nightAwards = 2): Promise<
     );
     const signature = keyStore.signData(registration.intents!.get(1)!.signatureData(1));
     const signed = yield* running.addDustGenerationSignature(registration, signature);
-    yield* submissionService.submitTransaction(yield* provingService.prove(signed), 'InBlock');
+    const submission = yield* submissionService.submitTransaction(yield* provingService.prove(signed), 'InBlock');
+
+    // A rejected registration still produces a block, so the wait below would resolve and the only symptom would be a
+    // wallet with no Dust — which reads as a broken assertion rather than a rejected transaction. Fail here instead,
+    // naming the cause. This is the failure mode a ledger bump produces when it changes fees or the intent shape.
+    const afterSubmission = yield* simulator.getLatestState();
+    const outcome = getLastBlockResults(afterSubmission)[0]?.type;
+    if (submission.blockHeight !== getCurrentBlockNumber(afterSubmission) || outcome !== 'success') {
+      return yield* Effect.dieMessage(
+        `Dust generation registration was not applied: block result ${outcome ?? 'missing'}, ` +
+          `submitted at ${submission.blockHeight}, chain at ${getCurrentBlockNumber(afterSubmission)}`,
+      );
+    }
     yield* awaitBlock(rewardedAt + 1n);
 
     return { wallet: yield* SubscriptionRef.get(stateRef), secretKey };

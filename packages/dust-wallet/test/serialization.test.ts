@@ -136,6 +136,12 @@ describe('V1 dust wallet serialization over a funded wallet', () => {
       expect(spendOne().pendingDust).toHaveLength(1);
     });
 
+    it('round-trips without error after a spend', () => {
+      // `it.fails` below passes on any thrown error, so on its own it would also certify "serializing a wallet that has
+      // spent Dust throws". This pins the round trip as succeeding, leaving the marker to speak only about content.
+      expect(() => restore(spendOne())).not.toThrow();
+    });
+
     // Marked as expected-to-fail: the snapshot has no slot for pending Dust, so a wallet that has spent Dust presents
     // it as available again after any restore. Left as a live marker rather than deleted or skipped — it flips to a
     // normal failure the moment the behaviour changes, which is the signal wanted here.

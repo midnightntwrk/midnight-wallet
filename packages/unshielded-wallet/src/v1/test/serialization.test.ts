@@ -103,7 +103,7 @@ const fundedWallet = (): CoreWallet =>
   CoreWallet.restore(
     UnshieldedState.restore(availableUtxos, pendingUtxos),
     makePublicKey(),
-    { appliedId: 42n, highestTransactionId: 42n },
+    { appliedId: 42n, highestTransactionId: 99n },
     ProtocolVersion.ProtocolVersion(7n),
     networkId,
   );
@@ -145,6 +145,22 @@ describe('V1 unshielded wallet serialization', () => {
       expect(restored.protocolVersion).toBe(7n);
       expect(restored.networkId).toBe(networkId);
       expect(restored.progress.appliedId).toBe(42n);
+    });
+
+    it('rebuilds the highest transaction id from the applied id rather than carrying it', () => {
+      // The snapshot holds one index, so the other half of sync progress is reconstructed as `appliedId`. The fixture
+      // sets them apart (99 vs 42) to make that visible: a restored wallet believes the chain has nothing newer than
+      // the point it stopped at, so its source gap is zero and it reports itself synced until the first sync update
+      // arrives. Pinned rather than corrected — whether the field should be persisted is an open call, and this fails
+      // the moment someone changes it either way.
+      const capability = makeDefaultV1SerializationCapability();
+      const wallet = fundedWallet();
+      expect(wallet.progress.highestTransactionId).toBe(99n);
+
+      const restored = pipe(capability.deserialize(capability.serialize(wallet)), EitherOps.getOrThrowLeft);
+
+      expect(restored.progress.highestTransactionId).toBe(42n);
+      expect(restored.progress.highestTransactionId).toBe(restored.progress.appliedId);
     });
 
     it('re-serializes to the same snapshot', () => {
