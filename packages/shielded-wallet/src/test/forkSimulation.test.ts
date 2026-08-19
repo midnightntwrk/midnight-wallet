@@ -50,7 +50,7 @@ import { describe, expect, it } from 'vitest';
 import { V1Tag } from '../v1/index.js';
 import { V2Tag } from '../v2/index.js';
 import { type ReplayedCoin, makeReplayChain, mintable, preForkPayment } from './forkReplay.js';
-import { type ForkWallet, makeForkWallet } from './forkWallet.js';
+import { type ForkWallet, makeForkWallet } from './forkHarness.js';
 import { ascending, coinIndices, coinValues, totalValue, treeSize } from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
@@ -233,8 +233,8 @@ describe('a shielded wallet crossing a hard fork', () => {
 
       // --- the re-discovered coins are spendable ----------------------------------------------------------------
       const transferred = 150n;
-      const transfer = yield* wallet.onPostForkVariant((variant) =>
-        variant.transferTransaction(wallet.keys.postFork, [
+      const transfer = yield* Effect.promise(() =>
+        wallet.shielded.transferTransaction(wallet.keys.postFork, [
           { amount: transferred, type: v9.shieldedToken().raw, receiverAddress: recipientAddress() },
         ]),
       );

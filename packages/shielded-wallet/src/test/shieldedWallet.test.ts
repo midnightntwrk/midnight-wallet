@@ -15,12 +15,12 @@ import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wal
 import { Effect, Scope, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import {
+  CustomShieldedWallet,
   type CustomizedShieldedWallet,
   type DefaultShieldedConfiguration,
-  ShieldedWallet,
   V9_NATIVE_FORK_VERSION,
 } from '../ShieldedWallet.js';
-import { TransactionHistory, V2Tag } from '../v2/index.js';
+import { TransactionHistory, V2Builder, V2Tag } from '../v2/index.js';
 
 const configuration: DefaultShieldedConfiguration = {
   networkId: NetworkId.NetworkId.Undeployed,
@@ -56,7 +56,10 @@ const walletWith = (
 ): Effect.Effect<{ wallet: CustomizedShieldedWallet; scope: Scope.CloseableScope }> =>
   Effect.gen(function* () {
     const scope = yield* Scope.make();
-    const WalletClass = ShieldedWallet(configuration);
+    const WalletClass = CustomShieldedWallet<DefaultShieldedConfiguration>(
+      configuration,
+      new V2Builder().withDefaults(),
+    );
 
     const runningVariant = {
       __polyTag__: V2Tag,

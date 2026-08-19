@@ -12,37 +12,27 @@
 // limitations under the License.
 
 /**
- * A shielded wallet registered over _both_ variants, syncing a chain that forks under it — test scaffolding only.
+ * The shipped forking shielded wallet, driven over simulated chains, with the channels a fork proof needs to watch it.
  *
  * @remarks
- *   The shipped `ShieldedWallet` registers exactly one variant and its type is a one-element HList throughout, so it
- *   cannot express a wallet that crosses a fork. Rather than widen the public surface ahead of the API redesign this
- *   builds the two-variant wallet the way `packages/e2e-tests` builds its custom wallets: `WalletBuilder.init()` with
- *   both variant builders registered directly. Nothing here is exported from the package.
+ *   Everything here is observation and simulated infrastructure. The wallet itself is the one the package ships —
+ *   {@link CustomForkingShieldedWallet}, the same composition `ShieldedWallet(configuration)` uses — with each variant
+ *   pointed at a simulated chain instead of an indexer, and the post-fork variant's migration wrapped so both ends of
+ *   the hand-over can be recorded as plain data.
  *
  *   The two sides read different sources, which is the shape the real thing has: before the fork the pre-fork chain,
  *   after it the indexer's replayed timeline (see `forkReplay.ts`). The post-fork source does not exist when the wallet
- *   is built, so it is supplied as an effect the post-fork variant awaits at its first sync.
- *
- *   Three things it has to work around, each of which is a real question the public API will have to answer eventually:
- *
- *   - **Configuration collides.** `WalletBuilder` intersects every variant's configuration, and both variants name their
- *       simulator `simulator` — with different, incompatible ledger types. So the sync services are passed as closures
- *       that ignore configuration entirely, leaving the merged configuration as just `networkId`.
- *   - **Start-aux does not cross the boundary.** The pre-fork variant's aux is a ledger-v8 `ZswapSecretKeys`, the post-fork
- *       variant's a ledger-v9 one. A single retained value cannot serve both, so what is retained here is the _seed_,
- *       and each variant is handed keys derived from it — the same public keys either way (asserted by
- *       `forkSimulation.integration.test.ts`), just built by the ledger that variant speaks.
- *   - **The post-fork source does not exist yet** when the wallet is built, hence the effect above.
+ *   is built — the replay only happens once the fork has — so it reaches its variant as an effect awaited at the first
+ *   sync, carried in that variant's own configuration.
  */
 
 import * as v8 from '@midnight-ntwrk/ledger-v8';
 import * as v9 from '@midnightntwrk/ledger-v9';
-import { type NetworkId, type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type Simulator, type V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, Option, Stream, pipe } from 'effect';
+import { CustomForkingShieldedWallet, type ForkingShieldedWallet } from '../ForkingShieldedWallet.js';
 import * as V1 from '../v1/index.js';
 import * as V2 from '../v2/index.js';
 
@@ -147,6 +137,12 @@ const noOpPostForkHistory: V2.TransactionHistory.TransactionHistoryService = {
   getTransactionDetails: (hash) => Effect.succeed(transactionDetails(hash)),
 };
 
+/** What the post-fork variant is configured with: a source that does not exist yet. */
+type DeferredSourceConfiguration = Readonly<{
+  networkId: NetworkId.NetworkId;
+  replayed: Effect.Effect<Simulator, never>;
+}>;
+
 /**
  * The post-fork sync source, deferred until it exists.
  *
@@ -156,12 +152,12 @@ const noOpPostForkHistory: V2.TransactionHistory.TransactionHistoryService = {
  *   error channel.
  */
 const postForkSyncService = (
-  replayed: Effect.Effect<Simulator, never>,
+  configuration: DeferredSourceConfiguration,
 ): V2.Sync.SyncService<V2.CoreWallet, v9.ZswapSecretKeys, V2.Sync.SimulatorSyncUpdate> => ({
   updates: (state, secretKeys) =>
     Stream.unwrap(
       pipe(
-        replayed,
+        configuration.replayed,
         Effect.orDie,
         Effect.map((chain) => V2.Sync.makeSimulatorSyncService({ simulator: chain }).updates(state, secretKeys)),
       ),
@@ -172,7 +168,7 @@ const postForkSyncService = (
 // The wallet
 // =============================================================================
 
-/** Everything needed to build a two-variant shielded wallet over a chain that forks. */
+/** Everything needed to point a forking shielded wallet at a chain that forks. */
 export type ForkWalletConfig = Readonly<{
   /** The pre-fork chain, available immediately. */
   preFork: V8.Simulator;
@@ -191,12 +187,17 @@ export type ForkWalletConfig = Readonly<{
   seed: Uint8Array;
 }>;
 
-/** A running two-variant shielded wallet, plus the channels a fork proof needs to observe it. */
+/** A state emission, whichever variant produced it. */
+export type ForkedState = ProtocolState.ProtocolState<V1.CoreWallet | V2.CoreWallet>;
+
+/** A running forking shielded wallet, plus the channels a fork proof needs to observe it. */
 export type ForkWallet = Readonly<{
+  /** The wallet itself, exactly as an application would hold it. */
+  shielded: ForkingShieldedWallet<V1.Sync.SimulatorSyncUpdate, V2.Sync.SimulatorSyncUpdate>;
   /** Keys of each ledger version, derived from the same seed. */
   keys: Readonly<{ preFork: v8.ZswapSecretKeys; postFork: v9.ZswapSecretKeys }>;
-  /** Starts background sync, having first registered the activation watcher that restarts it after a migration. */
-  start: Effect.Effect<void, WalletRuntimeError>;
+  /** Starts background sync through the wallet's own API, which resolves the key material each variant can use. */
+  start: Effect.Effect<void>;
   /** Resolves when the hand-over happens, with both ends of it. */
   awaitMigration: Effect.Effect<CapturedMigration>;
   /** Both ends of the migration, or `None` if none has happened yet. */
@@ -204,28 +205,20 @@ export type ForkWallet = Readonly<{
   /** The tag of the variant currently running — `V1Tag` before a migration, `V2Tag` after one. */
   activeTag: Effect.Effect<string | symbol>;
   /** The wallet's current state, whichever variant produced it. */
-  currentState: Effect.Effect<ProtocolState.ProtocolState<V1.CoreWallet | V2.CoreWallet>, WalletRuntimeError>;
+  currentState: Effect.Effect<ForkedState, WalletRuntimeError>;
   /**
    * Resolves once the wallet's state satisfies `predicate`, failing the test's timeout if it never does.
    *
    * Use monotone predicates only: the runtime's state stream keeps just the latest value, so a state that satisfies a
    * transient predicate can legitimately be skipped.
    */
-  awaitState: (
-    predicate: (state: ProtocolState.ProtocolState<V1.CoreWallet | V2.CoreWallet>) => boolean,
-  ) => Effect.Effect<ProtocolState.ProtocolState<V1.CoreWallet | V2.CoreWallet>, WalletRuntimeError>;
-  /** Runs `use` against the running post-fork variant. Fails if the wallet has not migrated. */
-  onPostForkVariant: <A, E>(
-    use: (
-      variant: V2.RunningV2Variant<string, V2.Sync.SimulatorSyncUpdate, v9.FinalizedTransaction, v9.ZswapSecretKeys>,
-    ) => Effect.Effect<A, E>,
-  ) => Effect.Effect<A, E | WalletRuntimeError>;
+  awaitState: (predicate: (state: ForkedState) => boolean) => Effect.Effect<ForkedState, WalletRuntimeError>;
   /** Tears the wallet down. */
   stop: Effect.Effect<void>;
 }>;
 
 /**
- * Builds and starts a shielded wallet registered over both variants.
+ * Builds and starts the shipped forking shielded wallet over two simulated chains.
  *
  * @param config - The two sources, the boundary version, the network and the seed.
  * @returns The running wallet and its observation channels.
@@ -240,7 +233,7 @@ export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
 
   const preForkBuilder = new V1.V1Builder()
     .withDefaultTransactionType()
-    .withSync(() => V1.Sync.makeSimulatorSyncService({ simulator: preFork }), V1.Sync.makeSimulatorSyncCapability)
+    .withSync(V1.Sync.makeSimulatorSyncService, V1.Sync.makeSimulatorSyncCapability)
     .withSerializationDefaults()
     .withTransactingDefaults()
     .withCoinsAndBalancesDefaults()
@@ -251,7 +244,7 @@ export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
 
   const postForkBuilder = new V2.V2Builder()
     .withDefaultTransactionType()
-    .withSync(() => postForkSyncService(replayed), V2.Sync.makeSimulatorSyncCapability)
+    .withSync(postForkSyncService, V2.Sync.makeSimulatorSyncCapability)
     .withSerializationDefaults()
     .withTransactingDefaults()
     .withCoinsAndBalancesDefaults()
@@ -261,31 +254,26 @@ export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
     .withCoinSelectionDefaults()
     .withMigration(() => capturingCrossLedgerMigration(captured));
 
-  const WalletClass = WalletBuilder.init()
-    .withVariant(ProtocolVersion.MinSupportedVersion, preForkBuilder)
-    .withVariant(forkVersion, postForkBuilder)
-    .build({ networkId });
+  const WalletClass = CustomForkingShieldedWallet(
+    { networkId, forkVersion },
+    { builder: preForkBuilder, configuration: { networkId, simulator: preFork } },
+    { builder: postForkBuilder, configuration: { networkId, replayed } },
+  );
 
-  const wallet = WalletClass.startFirst(WalletClass, V1.CoreWallet.initEmpty(preForkKeys, networkId));
+  const wallet = WalletClass.startWithSeed(seed);
   const runtime = wallet.runtime;
 
   const currentState = pipe(runtime.stateChanges, Stream.take(1), Stream.runHead, Effect.map(Option.getOrThrow));
 
   return {
+    shielded: wallet,
+
     keys: { preFork: preForkKeys, postFork: postForkKeys },
 
-    start: Effect.gen(function* () {
-      // Registered before the first dispatch and only once, exactly as `ShieldedWallet.start` does it: the returned
-      // effect resolves only once the subscription is live, so the migration cannot outrun the watcher.
-      yield* runtime.onVariantActivation({
-        [V1.V1Tag]: (v1) => v1.startSyncInBackground(preForkKeys),
-        [V2.V2Tag]: (v2) => v2.startSyncInBackground(postForkKeys),
-      });
-      yield* runtime.dispatch({
-        [V1.V1Tag]: (v1) => v1.startSyncInBackground(preForkKeys),
-        [V2.V2Tag]: (v2) => v2.startSyncInBackground(postForkKeys),
-      });
-    }),
+    // The keys handed over are the post-fork ledger version's, which is what the wallet's API speaks. The pre-fork
+    // variant running underneath is started from the seed the wallet retained instead — the seam a wallet crossing a
+    // boundary rests on.
+    start: Effect.promise(() => wallet.start(postForkKeys)),
 
     awaitMigration: Deferred.await(captured),
 
@@ -308,13 +296,6 @@ export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
         Stream.runHead,
         Effect.map(Option.getOrThrow),
       ),
-
-    onPostForkVariant: (use) =>
-      runtime.dispatch({
-        [V1.V1Tag]: () =>
-          Effect.die(new Error('The wallet is still running its pre-fork variant; it has not migrated')),
-        [V2.V2Tag]: use,
-      }),
 
     stop: Effect.promise(() => wallet.stop()),
   };
