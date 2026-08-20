@@ -278,8 +278,12 @@ export const currentLedgerWellFormedCheck: WellFormedCheck<AnyValidatableTransac
 /**
  * Rejects a promise with the typed failure itself rather than the fiber wrapper around it, so a caller can `catch` the
  * error class the signature names.
+ *
+ * @remarks
+ *   `E extends Error` is what makes that rejection legitimate rather than a thrown bare value, and every failure on this
+ *   surface is a `Data.TaggedError`, which is one.
  */
-const runPromiseThrowingFailure = async <A, E>(effect: Effect.Effect<A, E>): Promise<A> => {
+const runPromiseThrowingFailure = async <A, E extends Error>(effect: Effect.Effect<A, E>): Promise<A> => {
   const exit = await Effect.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) return exit.value;
   const failure = Cause.failureOption(exit.cause);
