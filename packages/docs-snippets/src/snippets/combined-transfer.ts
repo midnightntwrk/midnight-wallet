@@ -12,7 +12,6 @@
 // limitations under the License.
 import { initWalletWithSeed } from '../utils.ts';
 import * as rx from 'rxjs';
-import * as ledger from '@midnightntwrk/ledger-v9';
 import { Buffer } from 'buffer';
 import { generateRandomSeed, Token } from '@midnightntwrk/wallet-sdk';
 
@@ -42,7 +41,7 @@ await sender.wallet
           {
             amount: 1_000_000n,
             receiverAddress: await receiver.wallet.shielded.getAddress(),
-            type: ledger.shieldedToken().raw,
+            type: Token.night,
           },
         ],
       },
@@ -67,7 +66,7 @@ const receiverState = await rx.firstValueFrom(
 
 console.log('Transfer completed;');
 console.log('  Night balance:', receiverState.unshielded.balances[Token.night] ?? 0n);
-console.log('  shielded token balance:', receiverState.shielded.balances[ledger.shieldedToken().raw] ?? 0n);
+console.log('  shielded token balance:', receiverState.shielded.balances[Token.night] ?? 0n);
 
 await receiver.wallet.stop();
 await sender.wallet.stop();
