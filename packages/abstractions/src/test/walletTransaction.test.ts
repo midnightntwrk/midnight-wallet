@@ -158,9 +158,11 @@ describe('WalletTransaction', () => {
 
       expect(handle.protocolVersion).toBe(postFork);
       expect(handle.stage).toBe('Finalized');
-      expect(WalletTransaction.unwrapWithin<LedgerLikeTransaction>(handle, postForkEra)).toStrictEqual(
-        Either.right(ledgerLikeTransaction('Finalized@2000000', someBytes)),
+      const decoded = WalletTransaction.unwrapWithin<LedgerLikeTransaction>(handle, postForkEra).pipe(
+        Either.getOrThrow,
       );
+      expect(decoded.kind).toBe('Finalized@2000000');
+      expect(decoded.serialize()).toStrictEqual(Uint8Array.from(someBytes));
     });
 
     it('round-trips the bytes the handle carried', () => {
