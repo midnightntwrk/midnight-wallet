@@ -11,4 +11,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 export * from './blockData.js';
+export * from './preForkValidationService.js';
 export * from './validationService.js';
