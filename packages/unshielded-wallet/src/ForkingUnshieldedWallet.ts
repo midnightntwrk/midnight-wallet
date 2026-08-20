@@ -48,7 +48,7 @@ import { EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Either, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type PublicKey } from './KeyStore.js';
-import { variantForSnapshot } from './Restore.js';
+import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
 import {
   type DefaultUnshieldedConfiguration,
   type UnshieldedWalletAPI,
@@ -65,7 +65,19 @@ import { type WalletSyncUpdate as PostForkSyncUpdate } from './v2/SyncSchema.js'
 import { type TokenTransfer } from './v2/Transacting.js';
 import { type UnboundTransaction } from './v2/TransactionOps.js';
 import { type UtxoWithMeta } from './v2/UnshieldedState.js';
+import { type WalletError as PreForkWalletError } from './v1/WalletError.js';
 import { type WalletError } from './v2/WalletError.js';
+
+/**
+ * What restoring a unshielded wallet from a snapshot can fail with.
+ *
+ * @remarks
+ *   Two failures, and they mean different things. The snapshot may declare a protocol version no registered variant
+ *   reads, which is a fact about this build of the SDK rather than about the snapshot; or the variant that owns it may
+ *   be unable to make sense of the bytes, which is a fact about the snapshot. Either is an ordinary thing to meet when
+ *   restoring something a user supplied, which is why `tryRestore` reports them rather than throwing.
+ */
+export type UnshieldedRestoreError = UnsupportedSnapshotVersionError | PreForkWalletError | WalletError;
 
 /**
  * What a transacting call can fail with.
@@ -147,6 +159,21 @@ export interface ForkingUnshieldedWalletClass<
    * @throws UnsupportedSnapshotVersionError if the snapshot declares a version no registered variant reads.
    */
   restore(serializedState: string): ForkingUnshieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>;
+  /**
+   * Restores a wallet from a snapshot, reporting what it could not read rather than throwing.
+   *
+   * @remarks
+   *   Additive alongside {@link restore}, which is unchanged and still the right shape for a snapshot the application has
+   *   just written itself. This is the shape for one it has not: a snapshot a user supplied, or one written by a build
+   *   of the SDK that is no longer the one running, where "I cannot read this" is an ordinary answer rather than a bug.
+   *   The two cannot disagree — `restore` is this, with the reason thrown.
+   * @param serializedState The serialized wallet state.
+   * @returns A wallet started from that state, or the reason the snapshot could not be read. See
+   *   {@link UnshieldedRestoreError}.
+   */
+  tryRestore(
+    serializedState: string,
+  ): Either.Either<ForkingUnshieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>, UnshieldedRestoreError>;
 }
 
 /**
@@ -305,25 +332,33 @@ export function CustomForkingUnshieldedWallet<
       });
     }
 
-    static restore(serializedState: string): ForkingUnshieldedWalletImplementation {
+    static tryRestore(
+      serializedState: string,
+    ): Either.Either<ForkingUnshieldedWalletImplementation, UnshieldedRestoreError> {
       const headVariant = HList.head(ForkingUnshieldedWalletImplementation.allVariants());
-      const variant = variantForSnapshot(
+      return variantForSnapshot(
         serializedState,
         (version) => ForkingUnshieldedWalletImplementation.variantFor(version),
         headVariant,
-      ).pipe(Either.getOrThrow);
-      // Stated with its result type because the resolved variant is either of the two, so its deserializer is either
-      // of theirs: what comes back is a state of whichever one wrote the snapshot, which is what `startAtVariant`
-      // takes.
-      const deserialized = Either.getOrThrow<PreForkCoreWallet | CoreWallet, unknown>(
-        variant.variant.deserializeState(serializedState),
+      ).pipe(
+        // Stated with its result type because the resolved variant is either of the two, so its deserializer is
+        // either of theirs: what comes back is a state of whichever one wrote the snapshot, which is what
+        // `startAtVariant` takes.
+        Either.flatMap((variant): Either.Either<ForkingUnshieldedWalletImplementation, UnshieldedRestoreError> => {
+          // Annotated rather than inferred because the resolved variant is either of the two, so its deserializer is
+          // either of theirs: what comes back is a state of whichever one wrote the snapshot, which is what
+          // `startAtVariant` takes.
+          const deserialized: Either.Either<PreForkCoreWallet | CoreWallet, UnshieldedRestoreError> =
+            variant.variant.deserializeState(serializedState);
+          return Either.map(deserialized, (state) =>
+            ForkingUnshieldedWalletImplementation.startAtVariant(ForkingUnshieldedWalletImplementation, variant, state),
+          );
+        }),
       );
+    }
 
-      return ForkingUnshieldedWalletImplementation.startAtVariant(
-        ForkingUnshieldedWalletImplementation,
-        variant,
-        deserialized,
-      );
+    static restore(serializedState: string): ForkingUnshieldedWalletImplementation {
+      return Either.getOrThrow(ForkingUnshieldedWalletImplementation.tryRestore(serializedState));
     }
 
     readonly state: rx.Observable<UnshieldedWalletState<string>>;
