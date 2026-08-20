@@ -30,7 +30,13 @@
 
 import * as v8 from '@midnight-ntwrk/ledger-v8';
 import * as v9 from '@midnightntwrk/ledger-v9';
-import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  type AnyTx,
+  NetworkId,
+  ProtocolVersion,
+  ProtocolVersionMismatchError,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
@@ -41,12 +47,11 @@ import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstr
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Cause, Effect, Option, Runtime, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { PreForkTransactingUnsupportedError } from '../ForkingShieldedWallet.js';
 import { V1Tag } from '../v1/index.js';
 import { V2Tag } from '../v2/index.js';
 import { type ForkWallet, makeForkWallet } from './forkHarness.js';
 import { type ReplayedCoin, makeReplayChain, mintable, preForkPayment } from './forkReplay.js';
-import { coinValues, totalValue } from './forkWalletAssertions.js';
+import { carried, coinValues, totalValue } from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -132,20 +137,27 @@ const failureOf = (call: Promise<unknown>): Effect.Effect<Option.Option<unknown>
  * Every call that builds a transaction, named as the wallet names it.
  *
  * @remarks
- *   `revertTransaction` is deliberately not among them: it builds nothing and needs no proving, so it is not what the
- *   pre-fork seam is about — see the test below for what it does instead.
+ *   `revertTransaction` is deliberately not among them: it builds nothing, so what it does with a transaction of the
+ *   other epoch is a different question — see the test below.
  */
-const transactionBuildingCalls = (wallet: ForkWallet): readonly (readonly [string, () => Promise<unknown>])[] => {
-  const transfer = { amount: 1n, type: v9.shieldedToken().raw, receiverAddress: strangerAddress() };
+const transactionBuildingCalls = (
+  wallet: ForkWallet,
+): readonly (readonly [string, () => Promise<AnyTx | undefined>])[] => {
+  const transfer = { amount: 1n, type: v8.shieldedToken().raw, receiverAddress: strangerAddress() };
   return [
-    ['balanceTransaction', () => wallet.shielded.balanceTransaction(wallet.keys.postFork, someTransaction())],
-    ['transferTransaction', () => wallet.shielded.transferTransaction(wallet.keys.postFork, [transfer])],
-    ['initSwap', () => wallet.shielded.initSwap(wallet.keys.postFork, {}, [transfer])],
+    ['balanceTransaction', () => wallet.shielded.balanceTransaction(preForkTransaction())],
+    ['transferTransaction', () => wallet.shielded.transferTransaction([transfer])],
+    ['initSwap', () => wallet.shielded.initSwap({ [v8.shieldedToken().raw]: 1n }, [transfer])],
   ];
 };
 
-/** A transaction of the post-fork ledger version, which is the only kind this wallet's API accepts. */
-const someTransaction = (): v9.UnprovenTransaction => v9.Transaction.fromParts(networkId);
+/** A transaction of the pre-fork ledger version, sealed as an application would seal one it built for itself. */
+const preForkTransaction = (): AnyTx =>
+  WalletTransaction.adopt('Unproven', v8.Transaction.fromParts(networkId), ProtocolVersion.MinSupportedVersion);
+
+/** A transaction of the post-fork ledger version, sealed at the version the post-fork variant answers for. */
+const postForkTransaction = (): AnyTx =>
+  WalletTransaction.adopt('Unproven', v9.Transaction.fromParts(networkId), forkVersion);
 
 /**
  * A wallet on a chain that has not forked, synchronized and holding its coins.
@@ -234,30 +246,65 @@ describe('a shielded wallet starting on a chain that has not forked', () => {
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it.each(['balanceTransaction', 'transferTransaction', 'initSwap'])(
-    'refuses %s while it is still pre-fork, and says why',
+    'builds %s while it is still pre-fork, stamped with the version that built it',
     async (operation) =>
       Effect.gen(function* () {
         const wallet = yield* syncedPreForkWallet;
 
         const call = transactionBuildingCalls(wallet).find(([name]) => name === operation)!;
-        const failure = Option.getOrThrow(yield* failureOf(call[1]()));
+        const built = yield* Effect.promise(call[1]);
 
-        // Typed, and naming the operation: the pre-fork branch cannot produce a transaction anybody can prove, and
-        // says so instead of producing one nobody can.
-        expect(failure).toBeInstanceOf(PreForkTransactingUnsupportedError);
-        expect(failure).toMatchObject({ operation });
+        // It answered rather than refusing, and whatever it produced is stamped with the ledger version the chain is
+        // actually on — so everything that routes on the version afterwards (which prover, which validator) has the
+        // answer it needs. `balanceTransaction` alone may legitimately produce nothing: a transaction that needs no
+        // shielded coins needs no shielded balancing.
+        if (built !== undefined) {
+          expect(WalletTransaction.is(built)).toBe(true);
+          expect(built.protocolVersion).toBeLessThan(forkVersion);
+        }
+        // Still pre-fork: building a transaction is not what moves a wallet across the boundary.
+        expect(yield* wallet.activeTag).toBe(V1Tag);
       }).pipe(Effect.scoped, Effect.runPromise),
   );
 
-  it('reverts a transaction it cannot have made, by doing nothing to its state', async () =>
+  it('spends what it holds, so a pre-fork transfer is a real one', async () =>
     Effect.gen(function* () {
-      // Reverting releases coins a transaction booked, and no transaction of this wallet's can have booked any: it
-      // could not have built one. So this resolves, changes nothing, and is deliberately not part of the seam above —
-      // it needs no proving, so version-routed proving has nothing to unlock here. The facade reverts all three
-      // wallets together when a submission fails, and a refusal here would strand that whole path.
+      // The refusal these replaced could be satisfied by any wallet at all; this cannot. The transfer is built from
+      // the coins the pre-fork variant synchronized, by the pre-fork ledger version, and carries them.
       const wallet = yield* syncedPreForkWallet;
 
-      yield* Effect.promise(() => wallet.shielded.revertTransaction(someTransaction()));
+      const transfer = yield* Effect.promise(() =>
+        wallet.shielded.transferTransaction([
+          { amount: 50n, type: v8.shieldedToken().raw, receiverAddress: strangerAddress() },
+        ]),
+      );
+
+      const built = carried<v8.UnprovenTransaction>(transfer, forkVersion);
+      expect(built).toBeInstanceOf(v8.Transaction);
+      expect(built.guaranteedOffer?.inputs.length ?? 0).toBeGreaterThan(0);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('refuses a transaction built on the other side of the boundary, naming both versions', async () =>
+    Effect.gen(function* () {
+      // The enforcement the stamp exists for. A post-fork transaction's bytes are of a ledger version the pre-fork
+      // variant cannot read, so balancing it is not something to attempt and fail at — it is refused by name.
+      const wallet = yield* syncedPreForkWallet;
+
+      const failure = Option.getOrThrow(yield* failureOf(wallet.shielded.balanceTransaction(postForkTransaction())));
+
+      expect(failure).toBeInstanceOf(ProtocolVersionMismatchError);
+      expect(failure).toMatchObject({ authoredFor: forkVersion });
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('reverts a transaction of the other epoch by doing nothing to its state', async () =>
+    Effect.gen(function* () {
+      // Reverting releases coins a transaction booked, and a transaction of the other ledger version cannot have
+      // booked any of this variant's. So this resolves, changes nothing, and is deliberately not a version mismatch:
+      // the facade reverts all three wallets together when a submission fails, and a refusal here would strand that
+      // whole path.
+      const wallet = yield* syncedPreForkWallet;
+
+      yield* Effect.promise(() => wallet.shielded.revertTransaction(postForkTransaction()));
 
       const after = yield* wallet.currentState;
       expect(totalValue(after.state)).toBe(walletTotal);

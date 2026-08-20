@@ -28,13 +28,20 @@
  *   version a chain reports is a property of the chain, and the real fork's value is not final.
  */
 
+import * as v8 from '@midnight-ntwrk/ledger-v8';
 import { LedgerParameters as PreForkLedgerParameters } from '@midnight-ntwrk/ledger-v8';
 import * as v9 from '@midnightntwrk/ledger-v9';
-import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  type AnyTx,
+  NetworkId,
+  ProtocolVersion,
+  ProtocolVersionMismatchError,
+  type UnprovenTx,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { Cause, Deferred, Effect, Option, Queue, Runtime, type Scope, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { PreForkDustTransactingUnsupportedError } from '../ForkingDustWallet.js';
 import { V1Tag } from '../v1/RunningV1Variant.js';
 import * as PreForkSync from '../v1/Sync.js';
 import { DUST_EVENT_COUNT, type DustChain, buildDustChain, dustSeed } from '../v1/test/dustEvents.js';
@@ -119,10 +126,46 @@ const failureOf = (call: Promise<unknown>): Effect.Effect<Option.Option<unknown>
     ),
   );
 
-/** A transaction of the post-fork ledger version, which is the only kind this wallet's API accepts. */
-const someTransaction = (): v9.UnprovenTransaction => v9.Transaction.fromParts(networkId);
+/** A transaction of the pre-fork ledger version, sealed as an application would seal one it built for itself. */
+const preForkTransaction = (): UnprovenTx =>
+  WalletTransaction.adopt('Unproven', v8.Transaction.fromParts(networkId), ProtocolVersion.MinSupportedVersion);
+
+/** A transaction of the post-fork ledger version, sealed at the version the post-fork variant answers for. */
+const postForkTransaction = (): AnyTx =>
+  WalletTransaction.adopt('Unproven', v9.Transaction.fromParts(networkId), forkVersion);
 
 const signingKey = (): v9.SigningKey => v9.sampleSigningKey();
+
+/** A Night UTxO the verifying key owns, as plain data — the shape both ledger versions read identically. */
+const nightUtxo = (verifyingKey: v9.SignatureVerifyingKey) => ({
+  value: 1_000_000n,
+  type: v9.nativeToken().raw,
+  owner: v9.addressFromKey(verifyingKey),
+  intentHash: '00'.repeat(32),
+  outputNo: 0,
+  ctime: new Date(0),
+  registeredForDustGeneration: false,
+});
+
+/**
+ * A dust generation transaction the wallet built for itself: the shape the registration operations act on.
+ *
+ * @param withRegistration Whether the base already carries a registration — `attachDustRegistration` needs one that
+ *   does not, and the signing operations need one that does.
+ */
+const registrationTransaction = async (
+  wallet: ForkWallet,
+  ttl: Date,
+  verifyingKey: v9.SignatureVerifyingKey,
+  withRegistration: boolean,
+): Promise<UnprovenTx> =>
+  wallet.dust.createDustGenerationTransaction(
+    undefined,
+    ttl,
+    [nightUtxo(verifyingKey)],
+    verifyingKey,
+    withRegistration ? await wallet.dust.getAddress() : undefined,
+  );
 
 /**
  * Every call that builds, signs or prices a transaction, named as the wallet names it.
@@ -130,8 +173,12 @@ const signingKey = (): v9.SigningKey => v9.sampleSigningKey();
  * @remarks
  *   `revertTransaction` and `splitNightUtxosForDustRegistration` are deliberately not among them — see the tests below
  *   for what they do instead.
+ *
+ *   Every argument is stated in the wallet's own terms: a handle, and a verifying key or signature in the shape the SDK
+ *   speaks. What the pre-fork variant is handed underneath — bare hex, and the previous ledger version's transaction —
+ *   is the wallet's business, and that it manages the translation is exactly what these assert.
  */
-const gatedCalls = (wallet: ForkWallet): readonly (readonly [string, () => Promise<unknown>])[] => {
+const transactionBuildingCalls = (wallet: ForkWallet): readonly (readonly [string, () => Promise<unknown>])[] => {
   const ttl = new Date(Date.now() + 3_600_000);
   const verifyingKey = v9.signatureVerifyingKey(signingKey());
   const signature = v9.signData(signingKey(), new Uint8Array([1, 2, 3]));
@@ -141,14 +188,22 @@ const gatedCalls = (wallet: ForkWallet): readonly (readonly [string, () => Promi
       () => wallet.dust.createDustGenerationTransaction(undefined, ttl, [], verifyingKey, undefined),
     ],
     [
-      'attachDustRegistration',
-      () => wallet.dust.attachDustRegistration(someTransaction(), new Date(), verifyingKey, undefined, 0n),
+      'addDustGenerationSignature',
+      async () => {
+        const base = await registrationTransaction(wallet, ttl, verifyingKey, true);
+        return wallet.dust.addDustGenerationSignature(base, signature);
+      },
     ],
-    ['addDustGenerationSignature', () => wallet.dust.addDustGenerationSignature(someTransaction(), signature)],
-    ['addDustRegistrationSignature', () => wallet.dust.addDustRegistrationSignature(someTransaction(), signature)],
-    ['calculateFee', () => wallet.dust.calculateFee([someTransaction()])],
-    ['estimateFee', () => wallet.dust.estimateFee(wallet.keys.postFork, [someTransaction()])],
-    ['balanceTransactions', () => wallet.dust.balanceTransactions(wallet.keys.postFork, [someTransaction()], ttl)],
+    [
+      'addDustRegistrationSignature',
+      async () => {
+        const base = await registrationTransaction(wallet, ttl, verifyingKey, true);
+        return wallet.dust.addDustRegistrationSignature(base, signature);
+      },
+    ],
+    ['calculateFee', () => wallet.dust.calculateFee([preForkTransaction()])],
+    ['estimateFee', () => wallet.dust.estimateFee([preForkTransaction()])],
+    ['balanceTransactions', () => wallet.dust.balanceTransactions([preForkTransaction()], ttl)],
   ];
 };
 
@@ -205,35 +260,97 @@ describe('a dust wallet starting on a chain that has not forked', () => {
 
   it.each([
     'createDustGenerationTransaction',
-    'attachDustRegistration',
     'addDustGenerationSignature',
     'addDustRegistrationSignature',
     'calculateFee',
     'estimateFee',
     'balanceTransactions',
-  ])('refuses %s while it is still pre-fork, and says why', async (operation) =>
+  ])('answers %s while it is still pre-fork, with the ledger version the chain is on', async (operation) =>
     Effect.gen(function* () {
       const wallet = yield* syncedPreForkWallet;
 
-      const call = gatedCalls(wallet).find(([name]) => name === operation)!;
-      const failure = Option.getOrThrow(yield* failureOf(call[1]()));
+      const call = transactionBuildingCalls(wallet).find(([name]) => name === operation)!;
+      const answer = yield* Effect.promise(call[1]);
 
-      // Typed, and naming the operation: the pre-fork branch cannot produce a transaction anybody can prove, and says
-      // so instead of producing one nobody can.
-      expect(failure).toBeInstanceOf(PreForkDustTransactingUnsupportedError);
-      expect(failure).toMatchObject({ operation });
+      // It answered rather than refusing. Where the answer is a transaction it is stamped with the version that built
+      // it — a pre-fork one — so everything that routes on the version afterwards has what it needs; where it is a
+      // number (a fee), the answer is the number the pre-fork ledger's own cost model gives.
+      if (WalletTransaction.is(answer)) {
+        expect(answer.protocolVersion).toBeLessThan(forkVersion);
+      } else {
+        expect(answer).toBeDefined();
+      }
+      expect(yield* wallet.activeTag).toBe(V1Tag);
     }).pipe(Effect.scoped, Effect.runPromise),
   );
 
-  it('reverts a transaction it cannot have made, by doing nothing to its state', async () =>
+  it('attaches a registration on the pre-fork variant, which is what raises when there is nowhere to attach it', async () =>
     Effect.gen(function* () {
-      // Reverting releases dust a transaction booked, and no transaction of this wallet's can have booked any: it
-      // could not have built one. So this resolves, changes nothing, and is deliberately not part of the seam above —
-      // it needs no proving. The facade reverts all three wallets together when a submission fails, and a refusal here
-      // would strand that whole path.
+      // The only intent `attachDustRegistration` can act on is one the *unshielded* wallet built, which this suite has
+      // no way to produce — so what is asserted here is the thing the refusal it replaced hid: the call reaches the
+      // pre-fork variant's own transacting and is answered by it. The error is that capability's own, about the state
+      // of the intent, and is neither a refusal to transact pre-fork nor a version mismatch.
+      const wallet = yield* syncedPreForkWallet;
+      const ttl = new Date(Date.now() + 3_600_000);
+      const verifyingKey = v9.signatureVerifyingKey(signingKey());
+      const base = yield* Effect.promise(() => registrationTransaction(wallet, ttl, verifyingKey, true));
+
+      const failure = Option.getOrThrow(
+        yield* failureOf(wallet.dust.attachDustRegistration(base, new Date(), verifyingKey, undefined, 0n)),
+      );
+
+      expect(failure).not.toBeInstanceOf(ProtocolVersionMismatchError);
+      expect(String(failure)).toContain('already has a dust registration attached');
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('pays a fee out of the dust it actually holds', async () =>
+    Effect.gen(function* () {
+      // The refusal these replaced could be satisfied by any wallet at all; this cannot. Balancing selects dust the
+      // pre-fork variant synchronized, with the pre-fork variant's own key, and prices it against a pre-fork block.
       const wallet = yield* syncedPreForkWallet;
 
-      yield* Effect.promise(() => wallet.dust.revertTransaction(someTransaction()));
+      const { transaction, blockData } = yield* Effect.promise(() =>
+        wallet.dust.balanceTransactions([preForkTransaction()], new Date(Date.now() + 3_600_000)),
+      );
+
+      expect(transaction.protocolVersion).toBeLessThan(forkVersion);
+      expect(blockData.ledgerParameters).toBeInstanceOf(PreForkLedgerParameters);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('refuses a transaction built on the other side of the boundary, naming both versions', async () =>
+    Effect.gen(function* () {
+      const wallet = yield* syncedPreForkWallet;
+
+      const failure = Option.getOrThrow(yield* failureOf(wallet.dust.calculateFee([postForkTransaction()])));
+
+      expect(failure).toBeInstanceOf(ProtocolVersionMismatchError);
+      expect(failure).toMatchObject({ authoredFor: forkVersion });
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('refuses a signature of a scheme the pre-fork ledger version does not have', async () =>
+    Effect.gen(function* () {
+      // The one scalar that genuinely changed shape at the fork. An ecdsa signature has no pre-fork encoding at all,
+      // so it is refused by name rather than lowered into bytes that ledger version would misread.
+      const wallet = yield* syncedPreForkWallet;
+
+      const failure = Option.getOrThrow(
+        yield* failureOf(
+          wallet.dust.addDustRegistrationSignature(preForkTransaction(), { tag: 'ecdsa', value: '00'.repeat(64) }),
+        ),
+      );
+
+      expect(failure).toMatchObject({ kind: 'ecdsa' });
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('reverts a transaction of the other epoch by doing nothing to its state', async () =>
+    Effect.gen(function* () {
+      // Reverting releases dust a transaction booked, and a transaction of the other ledger version cannot have
+      // booked any of this variant's. So this resolves, changes nothing, and is deliberately not a version mismatch:
+      // the facade reverts all three wallets together when a submission fails, and a refusal here would strand that
+      // whole path.
+      const wallet = yield* syncedPreForkWallet;
+
+      yield* Effect.promise(() => wallet.dust.revertTransaction(postForkTransaction()));
 
       const after = yield* wallet.currentState;
       expect(dustCount(after.state)).toBe(DUST_EVENT_COUNT);

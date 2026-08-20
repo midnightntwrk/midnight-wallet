@@ -33,16 +33,23 @@
  *   version a chain reports is a property of the chain, and the real fork's value is not final.
  */
 
+import * as v8 from '@midnight-ntwrk/ledger-v8';
 import * as v9 from '@midnightntwrk/ledger-v9';
-import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Cause, Effect, Fiber, Option, Runtime, type Scope } from 'effect';
+import {
+  type AnyTx,
+  NetworkId,
+  ProtocolVersion,
+  ProtocolVersionMismatchError,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
+import { Cause, Effect, Either, Fiber, Option, Runtime, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { PreForkUnshieldedTransactingUnsupportedError } from '../ForkingUnshieldedWallet.js';
 import { peekProtocolVersion } from '../Restore.js';
 import { V1Tag } from '../v1/RunningV1Variant.js';
 import { type SignSegment } from '../v2/Signing.js';
-import { type UnboundTransaction } from '../v2/TransactionOps.js';
 import { V2Tag } from '../v2/RunningV2Variant.js';
+import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { type UtxoWithMeta } from '../v2/UnshieldedState.js';
 import { type CarriedUtxo, type ForkWallet, makeForkWallet, utxosOf } from './forkHarness.js';
 import { ecdsaIdentity, postForkIdentity, preForkIdentity, timelineTransaction } from './forkTimeline.js';
 
@@ -105,24 +112,51 @@ const failureOf = (call: Promise<unknown>): Effect.Effect<Option.Option<unknown>
     ),
   );
 
-/** A transaction of the post-fork ledger version, which is the only kind this wallet's API accepts. */
-const someTransaction = (): v9.UnprovenTransaction => v9.Transaction.fromParts(networkId);
+/** A transaction of the pre-fork ledger version, sealed as an application would seal one it built for itself. */
+const someTransaction = (): AnyTx =>
+  WalletTransaction.adopt('Unproven', v8.Transaction.fromParts(networkId), ProtocolVersion.MinSupportedVersion);
 
 /** The same transaction, proven and bound. */
-const someFinalizedTransaction = (): v9.FinalizedTransaction => someTransaction().mockProve();
+const someFinalizedTransaction = (): AnyTx =>
+  WalletTransaction.adopt(
+    'Finalized',
+    v8.Transaction.fromParts(networkId).mockProve(),
+    ProtocolVersion.MinSupportedVersion,
+  );
 
 /**
  * The same transaction at the unbound stage.
  *
  * @remarks
- *   Only a prover produces one — `mockProve` binds as it proves — and a unit-tier proof has no prover.
+ *   Only a prover produces one — `mockProve` binds as it proves — and a unit-tier proof has no prover. The handle seals
+ *   the stage as data, so what a caller declares here is what the wallet routes on.
  */
-// Type cast required because: the unbound stage is reachable only through a real proving provider, which this tier
-// deliberately does not have, and `Binding`/`PreBinding` are nominal. The gated branch refuses before touching the
-// argument, so what is load-bearing here is the static type of the parameter and never the value.
-const someUnboundTransaction = (): UnboundTransaction => someTransaction() as unknown as UnboundTransaction;
+const someUnboundTransaction = (): AnyTx =>
+  WalletTransaction.adopt('Unbound', v8.Transaction.fromParts(networkId), ProtocolVersion.MinSupportedVersion);
+
+/** A transaction of the post-fork ledger version, sealed at the version the post-fork variant answers for. */
+const postForkTransaction = (): AnyTx =>
+  WalletTransaction.adopt('Unproven', v9.Transaction.fromParts(networkId), forkVersion);
 
 const signSegment: SignSegment = (data) => Promise.resolve(v9.signData(v9.sampleSigningKey(), data));
+
+/** One of the UTxOs the wallet has actually synchronized, in the shape its own API takes. */
+const heldUtxo = (wallet: ForkWallet): Effect.Effect<UtxoWithMeta, WalletRuntimeError> =>
+  wallet.currentState.pipe(
+    Effect.map((state) => {
+      const [held] = utxosOf(state.state);
+      return {
+        utxo: {
+          value: held.value,
+          owner: held.owner,
+          type: held.type,
+          intentHash: held.intentHash,
+          outputNo: held.outputNo,
+        },
+        meta: { ctime: new Date(held.ctime), registeredForDustGeneration: false },
+      };
+    }),
+  );
 
 /**
  * Every call that builds, balances or signs a transaction, named as the wallet names it.
@@ -130,7 +164,7 @@ const signSegment: SignSegment = (data) => Promise.resolve(v9.signData(v9.sample
  * @remarks
  *   `revertTransaction` is deliberately not among them — see the test below for what it does instead.
  */
-const gatedCalls = (wallet: ForkWallet): readonly (readonly [string, () => Promise<unknown>])[] => {
+const transactionBuildingCalls = (wallet: ForkWallet): readonly (readonly [string, () => Promise<unknown>])[] => {
   const ttl = new Date(Date.now() + 3_600_000);
   const verifyingKey = v9.signatureVerifyingKey(v9.sampleSigningKey());
   return [
@@ -138,7 +172,15 @@ const gatedCalls = (wallet: ForkWallet): readonly (readonly [string, () => Promi
     ['balanceUnboundTransaction', () => wallet.unshielded.balanceUnboundTransaction(someUnboundTransaction())],
     ['balanceUnprovenTransaction', () => wallet.unshielded.balanceUnprovenTransaction(someTransaction())],
     ['transferTransaction', () => wallet.unshielded.transferTransaction([], ttl)],
-    ['rotateUtxos', () => wallet.unshielded.rotateUtxos([], [], verifyingKey, ttl)],
+    [
+      'rotateUtxos',
+      // Rotation moves UTxOs the wallet holds, so it is given one of its own — the point is that the pre-fork variant
+      // can do it, not that it can be asked to do nothing.
+      async () => {
+        const held = await Effect.runPromise(heldUtxo(wallet));
+        return wallet.unshielded.rotateUtxos([held], [], verifyingKey, ttl);
+      },
+    ],
     ['initSwap', () => wallet.unshielded.initSwap({}, [], ttl)],
     ['signUnprovenTransaction', () => wallet.unshielded.signUnprovenTransaction(someTransaction(), signSegment)],
     ['signUnboundTransaction', () => wallet.unshielded.signUnboundTransaction(someUnboundTransaction(), signSegment)],
@@ -207,33 +249,116 @@ describe('an unshielded wallet starting on a chain that has not forked', () => {
     'balanceUnboundTransaction',
     'balanceUnprovenTransaction',
     'transferTransaction',
-    'rotateUtxos',
     'initSwap',
     'signUnprovenTransaction',
     'signUnboundTransaction',
-  ])('refuses %s while it is still pre-fork, and says why', async (operation) =>
+  ])('answers %s while it is still pre-fork, with the ledger version the chain is on', async (operation) =>
     Effect.gen(function* () {
       const wallet = yield* syncedPreForkWallet;
 
-      const call = gatedCalls(wallet).find(([name]) => name === operation)!;
-      const failure = Option.getOrThrow(yield* failureOf(call[1]()));
+      const call = transactionBuildingCalls(wallet).find(([name]) => name === operation)!;
+      const answer = yield* Effect.promise(call[1]);
 
-      // Typed, and naming the operation: the pre-fork branch cannot hold a transaction of the post-fork ledger
-      // version, let alone produce one anybody can prove, and says so instead of producing one nobody can.
-      expect(failure).toBeInstanceOf(PreForkUnshieldedTransactingUnsupportedError);
-      expect(failure).toMatchObject({ operation });
+      // It answered rather than refusing, and whatever it produced is stamped with the ledger version the chain is
+      // actually on. The balancing calls may legitimately produce nothing — a transaction needing no Night of this
+      // wallet's needs no unshielded balancing.
+      if (answer !== undefined) {
+        expect(WalletTransaction.is(answer)).toBe(true);
+        expect((answer as AnyTx).protocolVersion).toBeLessThan(forkVersion);
+      }
+      expect(yield* wallet.activeTag).toBe(V1Tag);
     }).pipe(Effect.scoped, Effect.runPromise),
   );
 
-  it('reverts a transaction it cannot have made, by doing nothing to its state', async () =>
+  it('builds with the pre-fork ledger version itself, not merely with something', async () =>
     Effect.gen(function* () {
-      // Reverting releases UTXOs a transaction booked, and no transaction of this wallet's can have booked any: it
-      // could not have built one. So this resolves, changes nothing, and is deliberately not part of the seam above —
-      // it needs no proving. The facade reverts all three wallets together when a submission fails, and a refusal here
-      // would strand that whole path.
+      // The refusal this replaced could be satisfied by any wallet at all; this cannot. What comes back is an object
+      // of the previous ledger version's own `Transaction` class — the thing the post-fork variant provably cannot
+      // produce, and the whole reason the handle exists.
       const wallet = yield* syncedPreForkWallet;
 
-      yield* Effect.promise(() => wallet.unshielded.revertTransaction(someFinalizedTransaction()));
+      const built = yield* Effect.promise(() =>
+        wallet.unshielded.transferTransaction([], new Date(Date.now() + 3_600_000)),
+      );
+
+      const carried = Either.getOrThrow(
+        WalletTransaction.unwrapWithin<v8.UnprovenTransaction>(
+          built,
+          ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, forkVersion),
+        ),
+      );
+      expect(carried).toBeInstanceOf(v8.Transaction);
+      expect(carried).not.toBeInstanceOf(v9.Transaction);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('rotates UTxOs on the pre-fork variant, which is what raises when the UTxO is not one a ledger can read', async () =>
+    Effect.gen(function* () {
+      // The UTxOs this harness's timeline carries are plain sync fixtures rather than ledger-real ones, so a rotation
+      // cannot be completed here. What is asserted instead is the thing the refusal it replaced hid: the call reaches
+      // the pre-fork variant's own transacting and is answered by the pre-fork *ledger*, rather than turned away at
+      // the wallet layer.
+      const wallet = yield* syncedPreForkWallet;
+      const held = yield* heldUtxo(wallet);
+
+      // Raised by the ledger rather than reported through the typed failure channel, which is itself the point: it is
+      // the pre-fork ledger's own complaint about the bytes, from inside the pre-fork variant.
+      const rejection = yield* Effect.promise(() =>
+        wallet.unshielded
+          .rotateUtxos([held], [], v9.signatureVerifyingKey(v9.sampleSigningKey()), new Date(Date.now() + 3_600_000))
+          .then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
+      );
+
+      expect(rejection).not.toBeInstanceOf(ProtocolVersionMismatchError);
+      expect(String(rejection)).toContain('Invalid character');
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('refuses a transaction built on the other side of the boundary, naming both versions', async () =>
+    Effect.gen(function* () {
+      const wallet = yield* syncedPreForkWallet;
+
+      const failure = Option.getOrThrow(
+        yield* failureOf(wallet.unshielded.balanceUnprovenTransaction(postForkTransaction())),
+      );
+
+      expect(failure).toBeInstanceOf(ProtocolVersionMismatchError);
+      expect(failure).toMatchObject({ authoredFor: forkVersion });
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('refuses a signer that answers with a scheme the pre-fork ledger version does not have', async () =>
+    Effect.gen(function* () {
+      // The one scalar that genuinely changed shape at the fork. The SDK's signing callback speaks the current ledger
+      // version's signature, and an ecdsa one has no pre-fork encoding at all.
+      const wallet = yield* syncedPreForkWallet;
+      const ecdsaSigner: SignSegment = () => Promise.resolve({ tag: 'ecdsa', value: '00'.repeat(64) });
+      // A transaction with a segment to sign: an empty one asks the signer nothing, and the point here is what the
+      // signer answers with.
+      const toSign = WalletTransaction.adopt(
+        'Unproven',
+        v8.Transaction.fromParts(networkId, undefined, undefined, v8.Intent.new(new Date(Date.now() + 3_600_000))),
+        ProtocolVersion.MinSupportedVersion,
+      );
+
+      const failure = Option.getOrThrow(
+        yield* failureOf(wallet.unshielded.signUnprovenTransaction(toSign, ecdsaSigner)),
+      );
+
+      // The signing service reports a signer that raised as a `SignError`, carrying what it raised: the typed refusal
+      // naming the scheme the pre-fork ledger version does not have.
+      expect(failure).toMatchObject({ cause: { kind: 'ecdsa' } });
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('reverts a transaction of the other epoch by doing nothing to its state', async () =>
+    Effect.gen(function* () {
+      // Reverting releases UTXOs a transaction booked, and a transaction of the other ledger version cannot have
+      // booked any of this variant's. So this resolves, changes nothing, and is deliberately not a version mismatch:
+      // the facade reverts all three wallets together when a submission fails, and a refusal here would strand that
+      // whole path.
+      const wallet = yield* syncedPreForkWallet;
+
+      yield* Effect.promise(() => wallet.unshielded.revertTransaction(postForkTransaction()));
 
       const after = yield* wallet.currentState;
       expect(valuesOf(utxosOf(after.state))).toEqual([100n, 200n]);

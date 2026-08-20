@@ -61,7 +61,7 @@ import { V1Tag } from '../v1/index.js';
 import { V2Tag } from '../v2/index.js';
 import { type ReplayedCoin, makeReplayChain, mintable, preForkPayment, simulatedChainRoot } from './forkReplay.js';
 import { makeForkWallet } from './forkHarness.js';
-import { coinIndices, coinValues, merkleRoot, totalValue, treeSize } from './forkWalletAssertions.js';
+import { carried, coinIndices, coinValues, merkleRoot, totalValue, treeSize } from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -220,11 +220,11 @@ describe('a shielded wallet crossing a byte-faithful hard fork', () => {
       // --- and it can transact against the translation ----------------------------------------------------------
       const transferred = 150n;
       const transfer = yield* Effect.promise(() =>
-        wallet.shielded.transferTransaction(wallet.keys.postFork, [
+        wallet.shielded.transferTransaction([
           { amount: transferred, type: v9.shieldedToken().raw, receiverAddress: recipientAddress() },
         ]),
       );
-      const spend = transfer.eraseProofs();
+      const spend = carried<v9.UnprovenTransaction>(transfer, forkVersion).eraseProofs();
 
       // Submitted to the chain that holds the *translated* ledger, not to the replay the wallet learned from. The
       // Merkle path in this spend was built from the wallet's own tree; the translated chain recognises it only if

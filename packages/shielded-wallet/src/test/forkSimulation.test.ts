@@ -51,7 +51,7 @@ import { V1Tag } from '../v1/index.js';
 import { V2Tag } from '../v2/index.js';
 import { type ReplayedCoin, makeReplayChain, mintable, preForkPayment } from './forkReplay.js';
 import { type ForkWallet, makeForkWallet } from './forkHarness.js';
-import { ascending, coinIndices, coinValues, totalValue, treeSize } from './forkWalletAssertions.js';
+import { ascending, carried, coinIndices, coinValues, totalValue, treeSize } from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -234,13 +234,15 @@ describe('a shielded wallet crossing a hard fork', () => {
       // --- the re-discovered coins are spendable ----------------------------------------------------------------
       const transferred = 150n;
       const transfer = yield* Effect.promise(() =>
-        wallet.shielded.transferTransaction(wallet.keys.postFork, [
+        wallet.shielded.transferTransaction([
           { amount: transferred, type: v9.shieldedToken().raw, receiverAddress: recipientAddress() },
         ]),
       );
 
       const replayChain = yield* Deferred.await(replayed);
-      const block = yield* replayChain.submitTransaction(transfer.eraseProofs());
+      const block = yield* replayChain.submitTransaction(
+        carried<v9.UnprovenTransaction>(transfer, forkVersion).eraseProofs(),
+      );
       // The chain accepting this is the claim: a spend carries a Merkle path built from the wallet's own tree, and is
       // only recognised if that path resolves to a root the chain holds. A tree rebuilt one index off would not.
       expect(block.transactions[0].result.type).toBe('success');

@@ -20,11 +20,29 @@
  *   both versions express identically, so these read the union rather than being written twice.
  */
 
+import { ProtocolVersion, WalletTransaction, type AnyTx } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Either } from 'effect';
 import { type CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
 import { type CoreWallet as PostForkWallet } from '../v2/CoreWallet.js';
 
 /** A wallet on either side of the boundary. */
 export type EitherWallet = PreForkWallet | PostForkWallet;
+
+/**
+ * The transaction a handle carries, read at the epoch its own stamp names.
+ *
+ * @remarks
+ *   A test assertion is entitled to look inside, and this is the only place these suites do. The result type is the
+ *   caller's to name, which is exactly the choice the stamp has already settled — so a suite that names the wrong
+ *   ledger version is making a claim the surrounding assertions will refute.
+ * @param handle The handle to read.
+ * @param forkVersion The boundary the epoch is measured against.
+ * @returns The carried transaction.
+ */
+export const carried = <T>(handle: AnyTx, forkVersion: ProtocolVersion.ProtocolVersion): T =>
+  Either.getOrThrow(
+    WalletTransaction.unwrapWithin<T>(handle, ProtocolVersion.epochOf(handle.protocolVersion, forkVersion)),
+  );
 
 /** Ascending order for bigints, which `Array.prototype.sort`'s default (string) comparison gets wrong. */
 export const ascending = (left: bigint, right: bigint): number => (left < right ? -1 : left > right ? 1 : 0);
