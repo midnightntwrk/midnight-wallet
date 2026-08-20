@@ -28,8 +28,7 @@ import {
   type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { type DefaultDustConfiguration, DustWallet, type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { type DefaultV2Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { type DefaultDustConfiguration, DustWallet, type DustWalletAPI } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { Roles } from '@midnightntwrk/wallet-sdk-hd';
 import { type TestContainersFixture } from '../test-fixture.js';
 import { logger } from '../logger.js';
@@ -104,7 +103,7 @@ const restoreUnshieldedWallet = async (
 
 const restoreDustWallet = async (
   path: string,
-  walletConfig: DefaultV2Configuration,
+  walletConfig: DefaultDustConfiguration,
   readIfExists: (path: string) => Promise<string | undefined>,
 ) => {
   try {
@@ -251,7 +250,18 @@ export const saveState = async (wallet: WalletFacade, filename: string) => {
 };
 
 export type CustomWallets = {
-  dustWallet?: (config: DefaultDustConfiguration) => DustWalletClass;
+  /**
+   * A dust wallet composition to use instead of the shipped `DustWallet`.
+   *
+   * @remarks
+   *   Typed by what a start actually owes the facade rather than by `DustWalletClass`, so a **single-variant**
+   *   composition is still acceptable here — which is the only way the projections fast-sync path can be exercised.
+   *   That path is a post-fork capability (it needs `DustLocalState` APIs no pre-fork ledger has), so a two-variant
+   *   wallet would boot on the pre-fork variant, replay every event, and only reach projections after migrating.
+   */
+  dustWallet?: (config: DefaultDustConfiguration) => {
+    startWithSeed(seed: Uint8Array, dustParameters: ledger.DustParameters): DustWalletAPI;
+  };
   manualSync?: boolean;
 };
 

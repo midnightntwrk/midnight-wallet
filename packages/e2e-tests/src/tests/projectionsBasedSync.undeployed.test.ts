@@ -81,13 +81,17 @@ describe('Projections-based synchronisation model', () => {
     Arr.differenceWith<T>(equal)(left, right).length === 0 &&
     Arr.differenceWith<T>(equal)(right, left).length === 0;
 
-  const rootsEqual = (state1: ledger.DustLocalState, state2: ledger.DustLocalState) =>
+  // The dust state a facade emission carries is whichever variant produced it, so this reads the union rather than
+  // ledger-v9's class by name. Both versions declare everything compared below.
+  type SyncedDustState = FacadeState['dust']['state']['state'];
+
+  const rootsEqual = (state1: SyncedDustState, state2: SyncedDustState) =>
     state1.commitmentTreeRoot() === state2.commitmentTreeRoot() &&
     state1.generatingTreeRoot() === state2.generatingTreeRoot();
 
-  const dustStatesEqual = (state1: ledger.DustLocalState, state2: ledger.DustLocalState) =>
+  const dustStatesEqual = (state1: SyncedDustState, state2: SyncedDustState) =>
     rootsEqual(state1, state2) &&
-    sameItems<ledger.QualifiedDustOutput>(
+    sameItems(
       state1.utxos,
       state2.utxos,
       (utxo1, utxo2) => stringifyWithBigInts(utxo1) === stringifyWithBigInts(utxo2),

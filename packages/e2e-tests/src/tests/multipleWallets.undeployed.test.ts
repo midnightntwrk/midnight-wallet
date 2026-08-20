@@ -24,7 +24,7 @@ import {
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { WalletFacade, WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
-import { DustWallet } from '../../../dust-wallet/dist/DustWallet.js';
+import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 
 /** Syncing tests */
 

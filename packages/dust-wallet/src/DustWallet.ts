@@ -34,8 +34,9 @@ import { type SerializationCapability } from './v2/Serialization.js';
 import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
 import { type DustFullInfo, type UtxoWithMeta } from './v2/types/Dust.js';
 import { type AnyTransaction } from './v2/types/ledger.js';
-import { type BaseV2Configuration, type V2Variant, V2Builder } from './v2/V2Builder.js';
+import { type BaseV2Configuration, type V2Variant } from './v2/V2Builder.js';
 import { type DustHistoryStorage } from './v2/TransactionHistory.js';
+import { type CoreWallet as V1CoreWallet } from './v1/CoreWallet.js';
 import { type NetworkId, type TotalCostParameters } from './v2/types/index.js';
 import { type WalletSyncUpdate, type BlockData } from './v2/SyncSchema.js';
 
@@ -53,38 +54,91 @@ export type DustWalletServices = {
   transactionHistory: TransactionHistoryService;
 };
 
+/** The core state of whichever dust variant produced an emission. */
+export type DustCoreState = V1CoreWallet | CoreWallet;
+
+/**
+ * Everything a state emission projects, already bound to the variant that produced it.
+ *
+ * @remarks
+ *   Binding is the point. The capabilities that understand a state and the state itself must be chosen together, in the
+ *   branch where the producing variant is known; the two variants' capability types are structurally identical, so a
+ *   capability of one would type-check against a state of the other and be wrong at runtime. Once bound there is
+ *   nothing left to mis-pair, and everything below is version-agnostic plain data — dust amounts and rates are
+ *   `bigint`, times are `Date`, keys and nonces are `bigint`/`string`, and the address is the SDK's own type.
+ */
+type DustProjections<TSerialized> = Readonly<{
+  totalCoins: () => readonly DustFullInfo[];
+  availableCoins: () => readonly DustFullInfo[];
+  pendingCoins: () => readonly DustFullInfo[];
+  publicKey: () => DustPublicKey;
+  address: () => DustAddress;
+  balance: (time: Date) => Balance;
+  estimateDustGeneration: (
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    currentTime: Date,
+  ) => ReadonlyArray<UtxoWithFullDustDetails>;
+  splitNightUtxos: (nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>) => {
+    guaranteed: ReadonlyArray<UtxoWithFullDustDetails>;
+    fallible: ReadonlyArray<UtxoWithFullDustDetails>;
+  };
+  serialize: () => TSerialized;
+}>;
+
+/** The capability set a variant exposes for reading and serializing its own state. */
+type DustStateCapabilities<TState, TSerialized> = Readonly<{
+  serialization: SerializationCapability<TState, null, TSerialized>;
+  coinsAndBalances: CoinsAndBalancesCapability<TState>;
+  keys: KeysCapability<TState>;
+}>;
+
 export class DustWalletState<TSerialized = string> {
-  static readonly mapState =
-    <TSerialized = string>(variant: DustWalletCapabilities<TSerialized> & DustWalletServices) =>
-    (state: ProtocolState.ProtocolState<CoreWallet>): DustWalletState<TSerialized> => {
-      const { serialization, coinsAndBalances, keys } = variant;
-      const { transactionHistory } = variant;
-      return new DustWalletState(state, { serialization, coinsAndBalances, keys }, { transactionHistory });
-    };
+  /**
+   * Wraps a state emission with the capabilities of the variant that produced it.
+   *
+   * @remarks
+   *   Call this inside a branch that has narrowed on the emission's `variantTag`, so `variant` and `state` are known to
+   *   belong together. It is generic over the state type precisely so that pairing is checked.
+   */
+  static readonly fromVariant = <TState, TSerialized = string>(
+    variant: DustStateCapabilities<TState, TSerialized>,
+    state: ProtocolState.ProtocolState<TState>,
+  ): DustWalletState<TSerialized> =>
+    new DustWalletState<TSerialized>(state.version, state.state as DustCoreState, {
+      totalCoins: () => variant.coinsAndBalances.getTotalCoins(state.state),
+      availableCoins: () => variant.coinsAndBalances.getAvailableCoins(state.state),
+      pendingCoins: () => variant.coinsAndBalances.getPendingCoins(state.state),
+      publicKey: () => variant.keys.getPublicKey(state.state),
+      address: () => variant.keys.getAddress(state.state),
+      balance: (time) => variant.coinsAndBalances.getWalletBalance(state.state, time),
+      estimateDustGeneration: (nightUtxos, currentTime) =>
+        variant.coinsAndBalances.estimateDustGeneration(state.state, nightUtxos, currentTime),
+      splitNightUtxos: (nightUtxos) => variant.coinsAndBalances.splitNightUtxos(nightUtxos),
+      serialize: () => variant.serialization.serialize(state.state),
+    });
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
-  readonly state: CoreWallet;
-  readonly capabilities: DustWalletCapabilities<TSerialized>;
-  readonly services: DustWalletServices;
+  readonly state: DustCoreState;
+  readonly #projections: DustProjections<TSerialized>;
 
   get totalCoins(): readonly DustFullInfo[] {
-    return this.capabilities.coinsAndBalances.getTotalCoins(this.state);
+    return this.#projections.totalCoins();
   }
 
   get availableCoins(): readonly DustFullInfo[] {
-    return this.capabilities.coinsAndBalances.getAvailableCoins(this.state);
+    return this.#projections.availableCoins();
   }
 
   get pendingCoins(): readonly DustFullInfo[] {
-    return this.capabilities.coinsAndBalances.getPendingCoins(this.state);
+    return this.#projections.pendingCoins();
   }
 
   get publicKey(): DustPublicKey {
-    return this.capabilities.keys.getPublicKey(this.state);
+    return this.#projections.publicKey();
   }
 
   get address(): DustAddress {
-    return this.capabilities.keys.getAddress(this.state);
+    return this.#projections.address();
   }
 
   get progress(): SyncProgress.SyncProgress {
@@ -92,29 +146,45 @@ export class DustWalletState<TSerialized = string> {
   }
 
   constructor(
-    state: ProtocolState.ProtocolState<CoreWallet>,
-    capabilities: DustWalletCapabilities<TSerialized>,
-    services: DustWalletServices,
+    protocolVersion: ProtocolVersion.ProtocolVersion,
+    state: DustCoreState,
+    projections: DustProjections<TSerialized>,
   ) {
-    this.protocolVersion = state.version;
-    this.state = state.state;
-    this.capabilities = capabilities;
-    this.services = services;
+    this.protocolVersion = protocolVersion;
+    this.state = state;
+    this.#projections = projections;
   }
 
   balance(time: Date): Balance {
-    return this.capabilities.coinsAndBalances.getWalletBalance(this.state, time);
+    return this.#projections.balance(time);
   }
 
   estimateDustGeneration(
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     currentTime: Date,
   ): ReadonlyArray<UtxoWithFullDustDetails> {
-    return this.capabilities.coinsAndBalances.estimateDustGeneration(this.state, nightUtxos, currentTime);
+    return this.#projections.estimateDustGeneration(nightUtxos, currentTime);
+  }
+
+  /**
+   * Splits Night UTxOs into the ones a registration puts in its guaranteed and fallible sections.
+   *
+   * @remarks
+   *   Projected here rather than reached for through the capability set, so a reader of this state never has to know
+   *   which variant produced it. The split itself is plain arithmetic over plain data — no ledger object crosses it —
+   *   which is why both variants answer it identically.
+   * @param nightUtxos The UTxOs to split, with their dust generation readings.
+   * @returns The guaranteed and fallible halves.
+   */
+  splitNightUtxos(nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>): {
+    guaranteed: ReadonlyArray<UtxoWithFullDustDetails>;
+    fallible: ReadonlyArray<UtxoWithFullDustDetails>;
+  } {
+    return this.#projections.splitNightUtxos(nightUtxos);
   }
 
   serialize(): TSerialized {
-    return this.capabilities.serialization.serialize(this.state);
+    return this.#projections.serialize();
   }
 }
 
@@ -238,6 +308,21 @@ export type DefaultDustConfiguration = {
   txHistoryStorage: DustHistoryStorage;
   indexerClientConnection: { indexerHttpUrl: string };
   transactionDetailsRetryWindow?: Duration.DurationInput;
+  /**
+   * The protocol version at which this chain hands over from the pre-fork ledger to the post-fork one.
+   *
+   * @remarks
+   *   Required, and deliberately without a default: the wallet registers one variant either side of it, so a wrong value
+   *   does not degrade — it decides which ledger version reads the chain. Below this version the pre-fork variant is
+   *   active; from it, the post-fork one. The SDK cannot guess it, because it is a property of the chain the
+   *   application points at, not of the SDK.
+   *
+   *   A node reporting a 2.x runtime version reports protocol version `2000000`, which is therefore the value for a
+   *   ledger-v9-native chain — the shielded package publishes it as `V9_NATIVE_FORK_VERSION`. The final mainnet fork
+   *   constant is not yet fixed; a `ProtocolVersion.Forks.*` default will ship once it is, and this field keeps working
+   *   unchanged.
+   */
+  forkVersion: ProtocolVersion.ProtocolVersion;
 };
 
 export interface CustomizedDustWalletClass<
@@ -259,14 +344,6 @@ export interface CustomizedDustWalletClass<
     dustParameters: DustParameters,
   ): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
   restore(serializedState: TSerialized): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
-}
-
-export type DustWallet = CustomizedDustWallet<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
-
-export type DustWalletClass = CustomizedDustWalletClass<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
-
-export function DustWallet(configuration: DefaultDustConfiguration): DustWalletClass {
-  return CustomDustWallet(configuration, new V2Builder().withDefaults());
 }
 
 export function CustomDustWallet<
@@ -353,8 +430,12 @@ export function CustomDustWallet<
     ) {
       super(runtime, scope);
       this.state = this.rawState.pipe(
-        rx.map(
-          DustWalletState.mapState<TSerialized>(CustomDustWalletImplementation.allVariantsRecord()[V2Tag].variant),
+        rx.map((emission) =>
+          // One variant, so the pairing is trivial here; the forking wallet narrows on `variantTag` first.
+          DustWalletState.fromVariant<CoreWallet, TSerialized>(
+            CustomDustWalletImplementation.allVariantsRecord()[V2Tag].variant,
+            emission,
+          ),
         ),
         rx.shareReplay({ refCount: true, bufferSize: 1 }),
       );

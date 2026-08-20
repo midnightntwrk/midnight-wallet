@@ -64,6 +64,14 @@ const configuration: DefaultConfiguration = {
 // `anonymityLevel` tunes the nullifier prefixes revealed to the indexer: the prefix is chosen
 // so the wallet hides among roughly 2^anonymityLevel candidate nullifiers (default 7). Raising
 // it improves privacy but downloads more non-matching candidates to filter out locally.
+//
+// Note the `CustomDustWallet` composition: fast sync registers a SINGLE variant, and deliberately
+// so. `DustWallet(config)` registers one variant either side of `forkVersion`, and the pre-fork
+// variant has no projections path at all — it needs `DustLocalState` APIs no pre-fork ledger
+// version has, permanently. A two-variant wallet therefore always begins on the event-replay
+// variant and would only reach projections after migrating, which defeats the point. A wallet
+// composed this way starts on the post-fork variant directly and cannot cross a fork; that is the
+// trade this path makes.
 const fastSyncDustWallet = (config: DefaultDustConfiguration) =>
   CustomDustWallet(
     { ...config, anonymityLevel: 7 },

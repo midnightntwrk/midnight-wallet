@@ -1301,7 +1301,7 @@ export class WalletFacade {
         registeredForDustGeneration: meta.registeredForDustGeneration,
       })),
       (utxosWithMeta) => dustState.estimateDustGeneration(utxosWithMeta, now),
-      (estimatedUtxos) => dustState.capabilities.coinsAndBalances.splitNightUtxos(estimatedUtxos),
+      (estimatedUtxos) => dustState.splitNightUtxos(estimatedUtxos),
       (split) => split.guaranteed,
     );
     const fakeSigningKey = ledger.sampleSigningKey();

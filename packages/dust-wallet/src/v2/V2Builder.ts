@@ -14,11 +14,16 @@ import { Effect, Scope, type Types, type Either } from 'effect';
 import { type Expect, type ItemType } from '@midnightntwrk/wallet-sdk-utilities/types';
 import {
   type DustParameters,
-  type DustSecretKey,
+  DustSecretKey,
   type FinalizedTransaction,
   LedgerParameters,
 } from '@midnightntwrk/ledger-v9';
-import { WalletRuntimeError, type VariantBuilder, type Variant } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import {
+  WalletRuntimeError,
+  type StartMaterial,
+  type VariantBuilder,
+  type Variant,
+} from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type WalletError } from './WalletError.js';
 import { type EmptyWalletMigrationConfiguration, type StateMigration, makeEmptyWalletMigration } from './Migration.js';
 import {
@@ -106,6 +111,7 @@ export type V2Variant<TSerialized, TSyncUpdate, TTransaction, TAuxData, TPreviou
   keys: KeysCapability<CoreWallet>;
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
   transactionHistory: TransactionHistoryService;
+  startAux: StartMaterial.StartAuxCapability<TAuxData>;
 };
 
 export type DefaultV2Builder<TPreviousState = null> = V2Builder<
@@ -114,7 +120,7 @@ export type DefaultV2Builder<TPreviousState = null> = V2Builder<
   string,
   WalletSyncUpdate,
   FinalizedTransaction,
-  object,
+  DustSecretKey,
   TPreviousState
 >;
 
@@ -165,6 +171,7 @@ export class V2Builder<
         .withCoinsAndBalancesDefaults()
         .withTransactionHistoryDefaults()
         .withKeysDefaults()
+        .withStartAuxDefaults()
         // Type cast required because: the chain accumulates `TConfig` and `TContext` as intersections of the
         // individual `Default*` fragments, which are structurally weaker than the complete `DefaultV2Configuration`
         // and `RunningV2Variant.Context` that `DefaultV2Builder` names — the defaults do produce both in full, but the
@@ -249,6 +256,9 @@ export class V2Builder<
       ...this.#buildState,
       syncService,
       syncCapability,
+      // The derivation is typed against the *old* start-aux parameter, so it cannot ride along into a builder whose
+      // sync service expects something else — exactly as the migration cannot ride along through `withMigration`.
+      startAux: undefined,
     });
   }
 
@@ -584,6 +594,7 @@ export class V2Builder<
       keys: v2Context.keysCapability,
       serialization: v2Context.serializationCapability,
       transactionHistory: v2Context.transactionHistoryService,
+      startAux: this.#resolveStartAux(),
       start(
         context: Variant.VariantContext<CoreWallet>,
       ): Effect.Effect<
@@ -615,6 +626,52 @@ export class V2Builder<
         return v2Context.serializationCapability.deserialize(null, serialized);
       },
     };
+  }
+
+  /**
+   * Uses the default derivation: this ledger version's own dust secret key, built from the seed.
+   *
+   * @remarks
+   *   Constrained to a builder whose sync is started with a `DustSecretKey`, because that is the only start-aux this
+   *   derivation can produce. A builder whose sync expects something else has to say how that is derived, or say
+   *   nothing and be refused at `build`.
+   * @returns A builder that produces a variant able to start sync from a seed alone.
+   */
+  withStartAuxDefaults(
+    this: V2Builder<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, DustSecretKey, TPreviousState>,
+  ): V2Builder<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, DustSecretKey, TPreviousState> {
+    return this.withStartAux({ fromSeed: (seed) => DustSecretKey.fromSeed(seed) });
+  }
+
+  /**
+   * Chooses how this variant derives the key material its synchronization is started with from a seed.
+   *
+   * @param startAux The derivation.
+   * @returns A builder that produces a variant able to start sync from a seed alone.
+   */
+  withStartAux(
+    startAux: StartMaterial.StartAuxCapability<TStartAux>,
+  ): V2Builder<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux, TPreviousState> {
+    return new V2Builder<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux, TPreviousState>({
+      ...this.#buildState,
+      startAux,
+    });
+  }
+
+  /**
+   * Resolves the configured derivation, refusing a builder that never stated one.
+   *
+   * @remarks
+   *   Kept out of the structural completeness check because it is typed rather than merely present: a builder whose sync
+   *   expects one kind of key material and whose derivation produces another is a wallet that would be silently handed
+   *   key objects of the wrong shape at the first migration.
+   */
+  #resolveStartAux(): StartMaterial.StartAuxCapability<TStartAux> {
+    const configured = this.#buildState.startAux;
+    if (configured === undefined) {
+      throw new Error('Not all components are configured in V2Builder: startAux');
+    }
+    return configured;
   }
 
   /**
@@ -758,6 +815,18 @@ declare namespace V2Builder {
       FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux>[K] | undefined;
   };
 
+  /**
+   * How a variant derives its own key material from a seed.
+   *
+   * @remarks
+   *   Kept out of {@link FullBuildState} alongside the migration entry, because completeness there is checked structurally
+   *   — every key present and a function — and this one has to be checked by type as well: a derivation producing the
+   *   wrong kind of key object is worse than a missing one.
+   */
+  type HasStartAux<TStartAux> = {
+    readonly startAux: StartMaterial.StartAuxCapability<TStartAux>;
+  };
+
   type PartialBuildState<
     TConfig = object,
     TContext = object,
@@ -767,9 +836,14 @@ declare namespace V2Builder {
     TStartAux = object,
     TPreviousState = null,
   > = {
-    [K in keyof (FullBuildState<never, never, never, never, never, never> & HasMigration<never, never, never>)]?:
+    [
+      K in keyof (FullBuildState<never, never, never, never, never, never> &
+        HasMigration<never, never, never> &
+        HasStartAux<never>)
+    ]?:
       | (FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux> &
-          HasMigration<TConfig, TContext, TPreviousState>)[K]
+          HasMigration<TConfig, TContext, TPreviousState> &
+          HasStartAux<TStartAux>)[K]
       | undefined;
   };
 

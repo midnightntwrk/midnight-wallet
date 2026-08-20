@@ -102,6 +102,9 @@ export const makeEnvironment = (
       indexerClientConnection: {
         indexerHttpUrl: endpoints.indexerHttpUrl,
       },
+      // The same boundary the shielded configuration names, for the same reason: this testkit's environments all run
+      // the ledger-v9-native node line, so the dust wallet reaches its post-fork variant too.
+      forkVersion: V9_NATIVE_FORK_VERSION,
     };
   },
   down: options.down ?? (async () => {}),
