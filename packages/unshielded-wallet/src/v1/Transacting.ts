@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, Option, pipe, Array as Arr } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { InsufficientFundsError, OtherWalletError, TransactingError, type WalletError } from './WalletError.js';
@@ -274,7 +274,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       const intent = ledger.Intent.new(ttl);
 
-      const hasNightOutput = ledgerOutputs.some((output) => output.type === ledger.nativeToken().raw);
+      const hasNightOutput = ledgerOutputs.some((output) => output.type === Token.night);
       if (hasNightOutput) {
         intent.fallibleUnshieldedOffer = offer;
       } else {
@@ -326,7 +326,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
         );
         const output: ledger.UtxoOutput = {
           owner: ownerAddress,
-          type: ledger.nativeToken().raw,
+          type: Token.night,
           value: totalValue,
         };
         return Option.some(ledger.UnshieldedOffer.new(inputs, [output], []));

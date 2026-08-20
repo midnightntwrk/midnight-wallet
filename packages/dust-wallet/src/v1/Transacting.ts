@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, Either, pipe, BigInt as BigIntOps, Iterable as IterableOps, Option } from 'effect';
+import { Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   DustActions,
   DustRegistration,
@@ -30,7 +31,6 @@ import {
   type UnprovenTransaction,
   addressFromKey,
   type LedgerParameters,
-  nativeToken,
 } from '@midnight-ntwrk/ledger-v8';
 import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { OtherWalletError, TransactingError, type WalletError, InsufficientFundsError } from './WalletError.js';
@@ -262,7 +262,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       }));
       const output: UtxoOutput = {
         owner: addressFromKey(nightVerifyingKey),
-        type: nativeToken().raw,
+        type: Token.night,
         value: totalValue,
       };
 

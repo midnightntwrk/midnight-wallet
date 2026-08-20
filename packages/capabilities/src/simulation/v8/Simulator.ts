@@ -48,7 +48,7 @@ import {
   type ZswapSecretKeys,
 } from '@midnight-ntwrk/ledger-v8';
 import { DateOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 
 import {
   addToMempool,
@@ -91,10 +91,10 @@ const isShieldedMint = (mint: GenesisMint): mint is ShieldedGenesisMint => mint.
 const isUnshieldedMint = (mint: GenesisMint): mint is UnshieldedGenesisMint => mint.type === 'unshielded';
 
 /**
- * Check if an unshielded mint is for the native Night token. Night is auto-detected by comparing tokenType with
- * ledger.nativeToken().raw.
+ * Check if an unshielded mint is for the native Night token. Night is auto-detected by comparing tokenType with the
+ * SDK's own `Token.night`, which is what both ledger versions call the native token.
  */
-const isNightToken = (tokenType: string): boolean => tokenType === nativeToken().raw;
+const isNightToken = (tokenType: string): boolean => tokenType === Token.night;
 
 // Re-export types from SimulatorState for backward compatibility
 export type {
@@ -273,7 +273,7 @@ export class Simulator {
 
   /**
    * Initialize simulator with genesis mints (pre-funded accounts). Supports shielded and unshielded token mints. Night
-   * tokens are auto-detected by comparing tokenType with nativeToken().raw.
+   * tokens are auto-detected by comparing tokenType with `Token.night`.
    */
   private static initWithGenesis(
     genesisMints: Arr.NonEmptyArray<GenesisMint>,
@@ -295,7 +295,7 @@ export class Simulator {
         : [];
 
     // Pure function to extract Night mint data from unshielded mints (returns array for flatMap)
-    // Night is auto-detected by comparing tokenType with nativeToken().raw
+    // Night is auto-detected by comparing tokenType with `Token.night`
     const toNightMint = (mint: GenesisMint) =>
       isUnshieldedMint(mint) && isNightToken(mint.tokenType) && mint.verifyingKey !== undefined
         ? [{ amount: mint.amount, recipient: mint.recipient, verifyingKey: mint.verifyingKey }]

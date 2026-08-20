@@ -26,13 +26,12 @@ import {
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import {
   type DustSecretKey,
-  nativeToken,
   type Signature,
   type SignatureVerifyingKey,
   type FinalizedTransaction,
   type UnprovenTransaction,
 } from '@midnightntwrk/ledger-v9';
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
@@ -279,7 +278,7 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
   ): Effect.Effect<UnprovenTransaction, WalletError> {
-    if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
+    if (nightUtxos.some((utxo) => utxo.type !== Token.night)) {
       return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
     }
     return Effect.Do.pipe(
@@ -312,7 +311,7 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     isRegistration: boolean,
   ): Effect.Effect<NightUtxoSplitForDustRegistration, WalletError> {
-    if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
+    if (nightUtxos.some((utxo) => utxo.type !== Token.night)) {
       return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
     }
     return Effect.gen(this, function* () {

@@ -11,7 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
-import { generateRandomSeed, ProtocolVersion, type UnboundTx, WalletTransaction } from '@midnightntwrk/wallet-sdk';
+import {
+  generateRandomSeed,
+  ProtocolVersion,
+  Token,
+  type UnboundTx,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { aFakeProvingProvider, initWalletWithSeed } from '../utils.ts';
@@ -37,7 +43,7 @@ const user = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 const nightAmountToSend = 1000n * 10n ** 6n;
 
 const initialSenderState = await sponsor.wallet.waitForSyncedState();
-const initialBalance = initialSenderState.unshielded.balances[ledger.nativeToken().raw] ?? 0n;
+const initialBalance = initialSenderState.unshielded.balances[Token.night] ?? 0n;
 
 await sponsor.wallet
   .transferTransaction(
@@ -48,7 +54,7 @@ await sponsor.wallet
           {
             amount: nightAmountToSend,
             receiverAddress: await user.wallet.unshielded.getAddress(),
-            type: ledger.nativeToken().raw,
+            type: Token.night,
           },
         ],
       },
@@ -62,13 +68,10 @@ await sponsor.wallet
 const userReceivedNight = await rx.firstValueFrom(
   user.wallet.state().pipe(
     rx.filter((state) => state.isSynced),
-    rx.filter((state) => state.unshielded.balances[ledger.nativeToken().raw] > 0n),
+    rx.filter((state) => state.unshielded.balances[Token.night] > 0n),
   ),
 );
-console.log(
-  'User received night for main transaction',
-  userReceivedNight.unshielded.balances[ledger.nativeToken().raw],
-);
+console.log('User received night for main transaction', userReceivedNight.unshielded.balances[Token.night]);
 
 const prepareTransactionToBalance = async (): Promise<UnboundTx> => {
   const unshieldedOffer = ledger.UnshieldedOffer.new(
@@ -77,7 +80,7 @@ const prepareTransactionToBalance = async (): Promise<UnboundTx> => {
       {
         value: nightAmountToSend,
         owner: sponsor.unshieldedKeystore.getAddress(),
-        type: ledger.nativeToken().raw,
+        type: Token.night,
       },
     ],
     [],
@@ -127,12 +130,9 @@ const finalUserState = await user.wallet.waitForSyncedState();
 console.log('Sponsored transfer completed');
 console.log(
   'Did sponsor receive their night back?',
-  (finalSponsorState.unshielded.balances[ledger.nativeToken().raw] ?? 0n) === initialBalance,
+  (finalSponsorState.unshielded.balances[Token.night] ?? 0n) === initialBalance,
 );
-console.log(
-  'Did user spent all the Night?',
-  (finalUserState.unshielded.balances[ledger.nativeToken().raw] ?? 0n) === 0n,
-);
+console.log('Did user spent all the Night?', (finalUserState.unshielded.balances[Token.night] ?? 0n) === 0n);
 
 await user.wallet.stop();
 await sponsor.wallet.stop();

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, type Scope, Stream, Schema, pipe, Either, HashMap } from 'effect';
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import { CoreWallet } from './CoreWallet.js';
 import { UtxoWithMeta } from './UnshieldedState.js';
 // The simulation package re-exports the ledger-v9 twin unqualified and offers both lines as `V8`/`V9` namespaces. This
@@ -248,7 +248,7 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
 
       const { ledger: ledgerState, currentTime } = update.update;
       const walletAddress = state.publicKey.addressHex;
-      const nativeTokenType = ledger.nativeToken().raw;
+      const nativeTokenType = Token.night;
 
       // Heuristic: check if address appears in the ledger's dust delegation table
       const isAddressRegisteredForDust = ledgerState.dust.toString().includes(walletAddress);

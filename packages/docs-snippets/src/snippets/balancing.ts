@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { generateRandomSeed, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk';
+import { generateRandomSeed, ProtocolVersion, Token, WalletTransaction } from '@midnightntwrk/wallet-sdk';
 import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
@@ -22,7 +22,7 @@ const sender = await initWalletWithSeed(
 const receiver = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
 const initialSenderState = await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
-const initialBalance = initialSenderState.unshielded.balances[ledger.nativeToken().raw] ?? 0n;
+const initialBalance = initialSenderState.unshielded.balances[Token.night] ?? 0n;
 
 const makeTransactionBlueprint = () => {
   const unshieldedOffer = ledger.UnshieldedOffer.new(
@@ -31,7 +31,7 @@ const makeTransactionBlueprint = () => {
       {
         value: initialBalance,
         owner: receiver.unshieldedKeystore.getAddress(),
-        type: ledger.nativeToken().raw,
+        type: Token.night,
       },
     ],
     [],
@@ -61,18 +61,15 @@ const finalSenderState = await rx.firstValueFrom(sender.wallet.state().pipe(rx.f
 const receiverState = await rx.firstValueFrom(
   receiver.wallet.state().pipe(
     rx.filter((s) => s.isSynced),
-    rx.filter((s) => (s.unshielded.balances[ledger.nativeToken().raw] ?? 0n) !== 0n),
+    rx.filter((s) => (s.unshielded.balances[Token.night] ?? 0n) !== 0n),
   ),
 );
 
 console.log('Unshielded transfer by balancing completed');
-console.log(
-  'Did sender send all its Night?',
-  (finalSenderState.unshielded.balances[ledger.nativeToken().raw] ?? 0n) === 0n,
-);
+console.log('Did sender send all its Night?', (finalSenderState.unshielded.balances[Token.night] ?? 0n) === 0n);
 console.log(
   'Did receiver receive all the Night?',
-  (receiverState.unshielded.balances[ledger.nativeToken().raw] ?? 0n) === initialBalance,
+  (receiverState.unshielded.balances[Token.night] ?? 0n) === initialBalance,
 );
 
 await receiver.wallet.stop();
