@@ -44,6 +44,10 @@
       "types": "./dist/proving/index.d.ts",
       "import": "./dist/proving/index.js"
     },
+    "./signatures": {
+      "types": "./dist/signatures/index.d.ts",
+      "import": "./dist/signatures/index.js"
+    },
     "./simulation": {
       "types": "./dist/simulation/index.d.ts",
       "import": "./dist/simulation/index.js"
