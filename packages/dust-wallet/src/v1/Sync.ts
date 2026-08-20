@@ -125,9 +125,9 @@ export type BoundarySplit<T> = {
  *   later item reports an in-range version again. A batch is a contiguous slice of one timeline, so applying past a
  *   boundary and then resuming behind it would leave a hole no cursor can describe.
  *
- *   An item whose version is `undefined` is treated as in-range and contributes no annotation. Dust's subscription does
- *   not report `protocolVersion` yet, so an absent value means "the indexer did not say" — which must keep today's
- *   behaviour exactly, rather than being read as version zero and dragging the recorded version down.
+ *   An item whose version is `undefined` is treated as in-range and contributes no annotation: an absent value means "the
+ *   indexer did not say", which must keep the un-versioned behaviour exactly, rather than being read as version zero
+ *   and dragging the recorded version down.
  *
  *   This is the one place the boundary rule lives; the indexer capability (per event) and the simulator capability (per
  *   block) both go through it, so they cannot drift apart.
@@ -263,22 +263,49 @@ const HexedEvent: Schema.Schema<LedgerEvent, string> = pipe(
 
 export const SyncEventsUpdateSchema = Schema.Struct({
   id: Schema.Number,
-  raw: HexedEvent,
+  /**
+   * The event as the indexer served it, still encoded.
+   *
+   * @remarks
+   *   Whether this ledger version may read the event at all is not the subscription's question to answer. A batch
+   *   spanning a protocol boundary carries events of the version that follows this one, which this ledger version
+   *   cannot deserialize — the serialization header names a different version — and after a hand-over the inclusive
+   *   cursor re-delivers an event of the version that preceded it, which it equally cannot. Both are ordinary, and
+   *   neither is an error: they belong to the variant either side.
+   *
+   *   So the bytes travel undecoded and only the capability, which knows its own activation range, reads the ones it is
+   *   about to apply — see {@link readEvent}. Decoding here would fail the whole batch on an event nobody intended to
+   *   apply, and the stream would retry that same batch forever.
+   */
+  raw: Schema.String,
   maxId: Schema.Number,
   /**
    * The protocol version the indexer reported this event under, when it reports one at all.
    *
    * @remarks
-   *   Optional because dust's subscription does not select the field yet — the schema defines it on `DustLedgerEvent`,
-   *   but adding the selection-set line waits on confirmation from a deployed indexer. Until then every item arrives
-   *   without it, and an absent value means "the indexer did not say", which is treated as in-range: the event applies
-   *   normally and the wallet's recorded version is left alone. Reading it as zero instead would drag the recorded
-   *   version down and, on a wallet already past the boundary, look like a migration backwards.
+   *   Optional rather than required, because an absent value has to keep meaning "the indexer did not say" — which is
+   *   treated as in-range: the event applies normally and the wallet's recorded version is left alone. Reading it as
+   *   zero instead would drag the recorded version down and, on a wallet already past the boundary, look like a
+   *   migration backwards. The subscription itself does select the field.
    */
   protocolVersion: Schema.optional(Schema.Number),
 });
 
 export type WalletSyncSubscription = Schema.Schema.Type<typeof SyncEventsUpdateSchema>;
+
+/**
+ * Reads an event this variant is going to apply.
+ *
+ * @remarks
+ *   The counterpart of {@link SyncEventsUpdateSchema} carrying its event encoded: a capability calls this on the batch
+ *   prefix it owns, and never on what it defers. Failure here is a genuine one — an event this variant claimed and
+ *   cannot read — and is raised rather than returned, because `SyncCapability.applyUpdate` is total in its own domain
+ *   and the variant already turns a throw from it into a typed synchronization error.
+ * @param event The event-carrying item to read.
+ * @returns The event it carries.
+ * @throws ParseError if the bytes are not an event this ledger version can deserialize.
+ */
+export const readEvent = (event: { readonly raw: string }): LedgerEvent => Schema.decodeSync(HexedEvent)(event.raw);
 
 export type WalletSyncUpdate = {
   updates: WalletSyncSubscription[];
@@ -468,15 +495,12 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
         activeRange,
       );
 
+      // Read here and nowhere earlier: `applied` is exactly the slice this variant owns, so nothing outside its
+      // activation range — nor anything below its cursor — is ever handed to this ledger version's deserializer.
       const [newState, changes]: [CoreWallet, DustStateChanges[]] =
         applied.length === 0
           ? [state, []]
-          : CoreWallet.applyEventsWithChanges(
-              state,
-              secretKey,
-              applied.map((u) => u.raw),
-              wrappedUpdate.timestamp,
-            );
+          : CoreWallet.applyEventsWithChanges(state, secretKey, applied.map(readEvent), wrappedUpdate.timestamp);
 
       // `appliedIndex` stops at the last event this variant actually replayed. The next variant resumes one below it
       // on an inclusive cursor, so the deferred suffix is re-fetched rather than skipped.

@@ -43,7 +43,7 @@ import {
 } from '../../v1/test/dustEvents.js';
 import { reframeAsPostFork } from '../../test/forkReplay.js';
 import { type CoreWallet } from '../CoreWallet.js';
-import { makeDefaultSyncCapability } from '../Sync.js';
+import { makeDefaultSyncCapability, matchedDustSpends } from '../Sync.js';
 import {
   DustGenerationsSubscriptionSchema,
   DustNullifierTransactionSubscriptionSchema,
@@ -165,7 +165,9 @@ describe('a nullifier lookup reaching back past the boundary', () => {
       block: { protocolVersion: preForkVersion, ledgerParameters: previousVersionParameters() },
       id: 1,
       hash: 'ab'.repeat(32),
-      dustLedgerEvents: [{ id: 1, raw: previousVersionEvent(0), maxId: DUST_EVENT_COUNT, protocolVersion: preForkVersion }],
+      dustLedgerEvents: [
+        { id: 1, raw: previousVersionEvent(0), maxId: DUST_EVENT_COUNT, protocolVersion: preForkVersion },
+      ],
       zswapLedgerEvents: [],
     },
   });
@@ -176,6 +178,16 @@ describe('a nullifier lookup reaching back past the boundary', () => {
     // The subscription runs from block zero, so it necessarily matches transactions of the previous version. Failing
     // on them would take down the whole nullifier lookup — and with it every dust spend this wallet ever made.
     expect(Either.isRight(decoded)).toBe(true);
+  });
+
+  it('skips a matched event it cannot read instead of failing the lookup', () => {
+    const matched = Either.getOrThrow(
+      Schema.decodeUnknownEither(DustNullifierTransactionSubscriptionSchema)(preForkMatch()),
+    );
+
+    // The lookup over-delivers by design — a nullifier _prefix_ match, from block zero. An event this ledger version
+    // cannot read is by construction not one of this wallet's own dust spends, so it drops out silently.
+    expect(matchedDustSpends([matched])).toEqual([]);
   });
 
   it('still reads a block of its own version', () => {
@@ -217,10 +229,14 @@ describe('the projections subscriptions', () => {
     // One item the wallet may never apply must not be able to fail the whole subscription on arrival.
     expect(Either.isRight(decoded)).toBe(true);
     const item = Either.getOrThrow(decoded);
-    if (item.__typename !== 'DustGenerationsProgress' || item.collapsedMerkleTree === null) {
+    if (item.__typename !== 'DustGenerationsProgress') {
+      throw new Error('Expected a progress item');
+    }
+    const collapsed = item.collapsedMerkleTree;
+    if (collapsed === null) {
       throw new Error('Expected a progress item carrying a collapsed Merkle tree update');
     }
-    expect(() => readCollapsedUpdate(item.collapsedMerkleTree)).toThrowError();
+    expect(() => readCollapsedUpdate(collapsed)).toThrowError();
   });
 
   it('carries a generation tree insertion path without asserting this version can read it', () => {

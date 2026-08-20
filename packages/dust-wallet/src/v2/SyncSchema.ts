@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Buffer } from 'buffer';
-import { Data, Effect, Either, HashMap, ParseResult, pipe, Schema } from 'effect';
+import { Data, Effect, Either, HashMap, type Option, ParseResult, pipe, Schema } from 'effect';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { LedgerParametersCodec } from '@midnightntwrk/wallet-sdk-capabilities/codecs';
 import {
@@ -66,14 +66,33 @@ const HexedDustStateMerkleTreeCollapsedUpdate: Schema.Schema<DustStateMerkleTree
   Schema.compose(DustStateMerkleTreeCollapsedUpdateFromUInt8Array),
 );
 
+/**
+ * A collapsed Merkle tree update as the indexer served it, still encoded.
+ *
+ * @remarks
+ *   The update travels as bytes rather than as a `DustStateMerkleTreeCollapsedUpdate`, because whether this ledger
+ *   version can read it is not the subscription's question to answer — and a subscription that answered it would answer
+ *   for the whole batch at once. One item this wallet was never going to apply would fail the fetch it arrived in, and
+ *   the stream would retry the same fetch forever. See {@link readCollapsedUpdate}.
+ */
 export const CollapsedMerkleTreeSchema = Schema.Struct({
   startIndex: Schema.Number,
   endIndex: Schema.Number,
-  update: HexedDustStateMerkleTreeCollapsedUpdate,
+  update: Schema.String,
   protocolVersion: Schema.Number,
 });
 
 export type CollapsedMerkleTree = Schema.Schema.Type<typeof CollapsedMerkleTreeSchema>;
+
+/**
+ * Reads a collapsed Merkle tree update this wallet is about to apply.
+ *
+ * @param tree The update as the indexer served it.
+ * @returns The decoded update.
+ * @throws ParseError if the bytes are not an update this ledger version can deserialize.
+ */
+export const readCollapsedUpdate = (tree: CollapsedMerkleTree): DustStateMerkleTreeCollapsedUpdate =>
+  Schema.decodeSync(HexedDustStateMerkleTreeCollapsedUpdate)(tree.update);
 
 export const WireDustGenerationsUpdateSchema = Schema.Struct({
   __typename: Schema.Literal('DustGenerationsItem'),
@@ -132,7 +151,8 @@ export type DustGenerationDtimUpdate = {
   generationMtIndex: number;
   nightUtxoHash: string;
   newDtime: Date;
-  treeInsertionPath: DustGenerationTreeInsertionPath;
+  /** The insertion path as the indexer served it, read by {@link readGenerationTreeInsertionPath} when applied. */
+  treeInsertionPath: string;
 };
 
 export type DustUtxoUpdate = {
@@ -184,13 +204,31 @@ const HexedDustGenerationTreeInsertionPath: Schema.Schema<DustGenerationTreeInse
   Schema.compose(DustGenerationTreeInsertionPathFromUInt8Array),
 );
 
+/**
+ * Reads a generation-tree insertion path this wallet is about to apply.
+ *
+ * @param treeInsertionPath The path as the indexer served it.
+ * @returns The decoded path.
+ * @throws ParseError if the bytes are not a path this ledger version can deserialize.
+ */
+export const readGenerationTreeInsertionPath = (treeInsertionPath: string): DustGenerationTreeInsertionPath =>
+  Schema.decodeSync(HexedDustGenerationTreeInsertionPath)(treeInsertionPath);
+
+/**
+ * A dtime update as the indexer served it, its insertion path still encoded.
+ *
+ * @remarks
+ *   Structural only, for the same reason as {@link CollapsedMerkleTreeSchema}: a subscription that deserialized on arrival
+ *   would decide for the whole batch whether this ledger version can read an item, and fail all of it on the first one
+ *   it cannot.
+ */
 export const DustGenerationDtimeUpdateItemSchema = Schema.transform(
   Schema.Struct({
     __typename: Schema.Literal('DustGenerationDtimeUpdateItem'),
     generationMtIndex: Schema.Number,
     nightUtxoHash: Schema.String,
     newDtime: Schema.Number,
-    treeInsertionPath: HexedDustGenerationTreeInsertionPath,
+    treeInsertionPath: Schema.String,
   }),
   Schema.typeSchema(
     Schema.Struct({
@@ -198,7 +236,7 @@ export const DustGenerationDtimeUpdateItemSchema = Schema.transform(
       generationMtIndex: Schema.Number,
       nightUtxoHash: Schema.String,
       newDtime: Schema.DateFromSelf,
-      treeInsertionPath: HexedDustGenerationTreeInsertionPath,
+      treeInsertionPath: Schema.String,
     }),
   ),
   {
@@ -284,12 +322,23 @@ const HexedEvent: Schema.Schema<LedgerEvent, string> = pipe(
   Schema.compose(LedgerEventFromUInt8Array),
 );
 
+/**
+ * One event of a matched transaction, still encoded.
+ *
+ * @remarks
+ *   The nullifier lookup this arrives through searches from block zero and matches on a nullifier _prefix_ — deliberately
+ *   over-fetching, for anonymity — so most of what it returns belongs to other parties, and on a chain that has forked
+ *   some of it belongs to the previous ledger version. Deserializing on arrival would let either of those fail the
+ *   whole lookup, and with it every dust spend this wallet ever made. See {@link readEvent}.
+ */
 export const TransactionEvent = Schema.Struct({
   id: Schema.Number,
-  raw: HexedEvent,
+  raw: Schema.String,
   maxId: Schema.Number,
   protocolVersion: Schema.Number,
 });
+
+export type TransactionEvent = Schema.Schema.Type<typeof TransactionEvent>;
 
 export type DustSpendProcessedEvent = {
   tag: 'dustSpendProcessed';
@@ -301,9 +350,38 @@ export type DustSpendProcessedEvent = {
   blockTime: Date;
 };
 
+/**
+ * The block a matched transaction sits in, its ledger parameters still encoded.
+ *
+ * @remarks
+ *   `protocolVersion` says which ledger version wrote those parameters, and is therefore what chooses the codec that
+ *   reads them — see {@link readNullifierBlockParameters}. Reading them on arrival would mean picking a ledger version
+ *   before consulting the one field that says which to pick, which is how a pre-fork block takes down the whole
+ *   lookup.
+ */
 const NullifierBlockInfoSchema = Schema.Struct({
-  ledgerParameters: HexedLedgerParameters,
+  protocolVersion: Schema.Number,
+  ledgerParameters: Schema.String,
 });
+
+export type NullifierBlockInfo = Schema.Schema.Type<typeof NullifierBlockInfoSchema>;
+
+/**
+ * Reads the ledger parameters of a block holding a spend this wallet owns.
+ *
+ * @param block The block as the indexer served it.
+ * @param codecs The ledger parameters codecs this variant is willing to read with.
+ * @returns The decoded parameters, or the codec registry's refusal when no codec claims the block's version.
+ */
+export const readNullifierBlockParameters = (
+  block: NullifierBlockInfo,
+  codecs: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters>,
+): Either.Either<LedgerParameters, LedgerParametersCodec.LedgerParametersCodecError> =>
+  LedgerParametersCodec.decode(
+    codecs,
+    ProtocolVersion.ProtocolVersion(BigInt(block.protocolVersion)),
+    block.ledgerParameters,
+  );
 
 const NullifierNonRegularTransactionSchema = Schema.Struct({
   __typename: Schema.Literal('SystemTransaction', 'BridgeClaimTransaction'),
@@ -397,22 +475,64 @@ export const DustGenerationsSyncUpdate = {
 
 export const SyncEventsUpdateSchema = Schema.Struct({
   id: Schema.Number,
-  raw: HexedEvent,
+  /**
+   * The event as the indexer served it, still encoded.
+   *
+   * @remarks
+   *   Whether this ledger version may read the event at all is not the subscription's question to answer. A batch
+   *   spanning a protocol boundary carries events of the version that follows this one, which this ledger version
+   *   cannot deserialize — the serialization header names a different version — and after a hand-over the inclusive
+   *   cursor re-delivers an event of the version that preceded it, which it equally cannot. Both are ordinary, and
+   *   neither is an error: they belong to the variant either side.
+   *
+   *   So the bytes travel undecoded and only the capability, which knows its own activation range, reads the ones it is
+   *   about to apply — see {@link readEvent}. Decoding here would fail the whole batch on an event nobody intended to
+   *   apply, and the stream would retry that same batch forever.
+   */
+  raw: Schema.String,
   maxId: Schema.Number,
   /**
    * The protocol version the indexer reported this event under, when it reports one at all.
    *
    * @remarks
-   *   Optional because dust's subscription does not select the field yet — the schema defines it on `DustLedgerEvent`,
-   *   but adding the selection-set line waits on confirmation from a deployed indexer. Until then every item arrives
-   *   without it, and an absent value means "the indexer did not say", which is treated as in-range: the event applies
-   *   normally and the wallet's recorded version is left alone. Reading it as zero instead would drag the recorded
-   *   version down and, on a wallet already past the boundary, look like a migration backwards.
+   *   Optional rather than required, because an absent value has to keep meaning "the indexer did not say" — which is
+   *   treated as in-range: the event applies normally and the wallet's recorded version is left alone. Reading it as
+   *   zero instead would drag the recorded version down and, on a wallet already past the boundary, look like a
+   *   migration backwards. The subscription itself does select the field.
    */
   protocolVersion: Schema.optional(Schema.Number),
 });
 
 export type WalletSyncSubscription = Schema.Schema.Type<typeof SyncEventsUpdateSchema>;
+
+/**
+ * Reads an event this variant is going to apply.
+ *
+ * @remarks
+ *   The counterpart of the sync schemas carrying their events encoded: a capability calls this on the batch prefix it
+ *   owns, and never on what it defers. Failure here is a genuine one — an event this variant claimed and cannot read —
+ *   and is raised rather than returned, because `SyncCapability.applyUpdate` is total in its own domain and the variant
+ *   already turns a throw from it into a typed synchronization error.
+ * @param event The event-carrying item to read.
+ * @returns The event it carries.
+ * @throws ParseError if the bytes are not an event this ledger version can deserialize.
+ */
+export const readEvent = (event: { readonly raw: string }): LedgerEvent => Schema.decodeSync(HexedEvent)(event.raw);
+
+/**
+ * Reads an event this variant only might be interested in.
+ *
+ * @remarks
+ *   For sources that over-deliver by design rather than by accident — the nullifier lookup matches on a nullifier
+ *   _prefix_ and searches from block zero, so it returns other parties' transactions and, on a chain that has forked,
+ *   the previous ledger version's. An event this version cannot read is by construction not one of this wallet's own
+ *   spends, so it is skipped rather than raised. Use {@link readEvent} wherever the variant has already claimed the
+ *   event.
+ * @param event The event-carrying item to read.
+ * @returns The event, or `Option.none()` when these bytes are not an event this ledger version reads.
+ */
+export const tryReadEvent = (event: { readonly raw: string }): Option.Option<LedgerEvent> =>
+  Schema.decodeOption(HexedEvent)(event.raw);
 
 export type WalletSyncUpdate = {
   updates: WalletSyncSubscription[];

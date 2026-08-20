@@ -15,14 +15,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { type CoreWallet } from '../CoreWallet.js';
 import { makeDefaultSyncCapability, makeSimulatorSyncCapability } from '../Sync.js';
 import { type WalletSyncSubscription, WalletSyncUpdate } from '../SyncSchema.js';
-import {
-  DUST_EVENT_COUNT,
-  type DustChain,
-  buildDustChain,
-  eventAt,
-  freshWallet,
-  fixtureSecretKey,
-} from './dustEvents.js';
+import { DUST_EVENT_COUNT, type DustChain, buildDustChain, freshWallet, fixtureSecretKey } from './dustEvents.js';
 
 vi.setConfig({ testTimeout: 60000 });
 
@@ -39,8 +32,12 @@ beforeAll(async () => {
   expect(chain.eventBytes.length).toBe(DUST_EVENT_COUNT);
 });
 
+/** An event as the indexer serves it: hex, decoded by whichever variant claims it. */
+const hexEventAt = (eventBytes: readonly Uint8Array[], index: number): string =>
+  Buffer.from(eventBytes[index]).toString('hex');
+
 /**
- * Builds a batch of sync updates, one per item, each carrying its own fresh event instance.
+ * Builds a batch of sync updates, one per item, each carrying its own encoded event.
  *
  * A `protocolVersion` of `undefined` models an indexer that does not report the field at all — the shape dust's
  * subscription has today.
@@ -50,7 +47,7 @@ const batch = (items: readonly (readonly [id: number, protocolVersion: number | 
     items.map(([id, protocolVersion]): WalletSyncSubscription => ({
       id,
       maxId: DUST_EVENT_COUNT,
-      raw: eventAt(chain.eventBytes, id - 1),
+      raw: hexEventAt(chain.eventBytes, id - 1),
       ...(protocolVersion === undefined ? {} : { protocolVersion }),
     })),
     fixtureSecretKey(),

@@ -10,13 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import {
-  DustSecretKey,
-  dustFirstNonce,
-  dustNullifier,
-  type Event as LedgerEvent,
-  LedgerParameters,
-} from '@midnightntwrk/ledger-v9';
+import { DustSecretKey, dustFirstNonce, dustNullifier, LedgerParameters } from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { BlockHash, DustLedgerEvents, DustNullifierTransactions } from '@midnightntwrk/wallet-sdk-indexer-client';
 import type {
@@ -39,7 +33,7 @@ import {
   nullifierPhaseProgress,
 } from '../Sync.js';
 import {
-  type DustNullifierTransactionsSubscription,
+  type NullifierRegularTransaction,
   type DustSpendProcessedEvent,
   DustUtxoMap,
   StateUpdate,
@@ -391,31 +385,24 @@ describe('V2 projections blockData', () => {
 describe('V2 projections dust spend resolution', () => {
   const initialParameters = LedgerParameters.initialParameters();
 
-  const spendEvent = (content: DustSpendProcessedEvent) => ({
-    id: 1,
-    maxId: 1,
-    protocolVersion: 1,
-    // Type cast required because: constructing a real ledger Event needs a serialized on-chain event; the code
-    // under test only reads `raw.content`, so a structural fake keeps this test free of live infrastructure.
-    raw: { content } as unknown as LedgerEvent,
+  const ledgerParametersHex = Buffer.from(initialParameters.serialize()).toString('hex');
+
+  /**
+   * The transaction a matched spend was carried by.
+   *
+   * Its events are no longer part of this fixture: reading them out of a transaction is now `matchedDustSpends`, so
+   * what this exercises — resolving a spend against the wallet's own dust — takes the spends directly.
+   */
+  const carryingTransaction = (): NullifierRegularTransaction => ({
+    __typename: 'RegularTransaction',
+    block: { protocolVersion: 1, ledgerParameters: ledgerParametersHex },
+    id: 42,
+    hash: 'ee'.repeat(32),
+    dustLedgerEvents: [],
+    zswapLedgerEvents: [],
   });
 
-  const transactionWithSpends = (events: ReturnType<typeof spendEvent>[]): DustNullifierTransactionsSubscription => ({
-    nullifierLeBytes: '00'.repeat(32),
-    commitmentLeBytes: '00'.repeat(32),
-    transactionId: 42,
-    transactionHash: 'ee'.repeat(32),
-    blockHeight: 10,
-    blockHash: 'dd'.repeat(32),
-    transaction: {
-      __typename: 'RegularTransaction',
-      block: { ledgerParameters: initialParameters },
-      id: 42,
-      hash: 'ee'.repeat(32),
-      dustLedgerEvents: events,
-      zswapLedgerEvents: [],
-    },
-  });
+  const matched = (dustSpend: DustSpendProcessedEvent) => [{ transaction: carryingTransaction(), dustSpend }];
 
   const dustSpend = (nullifier: bigint): DustSpendProcessedEvent => ({
     tag: 'dustSpendProcessed',
@@ -435,7 +422,7 @@ describe('V2 projections dust spend resolution', () => {
     const updates = await Effect.runPromise(
       createDustUtxoUpdates(
         state.state,
-        [transactionWithSpends([spendEvent(dustSpend(foreignNullifier))])],
+        matched(dustSpend(foreignNullifier)),
         secretKey,
         DustUtxoMap.create([]),
         new Map(),
@@ -472,14 +459,7 @@ describe('V2 projections dust spend resolution', () => {
     ]);
 
     const updates = await Effect.runPromise(
-      createDustUtxoUpdates(
-        state.state,
-        [transactionWithSpends([spendEvent(dustSpend(nullifier))])],
-        secretKey,
-        knownUtxos,
-        new Map(),
-        [],
-      ),
+      createDustUtxoUpdates(state.state, matched(dustSpend(nullifier)), secretKey, knownUtxos, new Map(), []),
     );
 
     expect(updates).toHaveLength(2);

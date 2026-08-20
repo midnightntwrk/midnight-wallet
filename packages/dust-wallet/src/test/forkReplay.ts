@@ -49,8 +49,6 @@
  *       over.
  */
 
-import { Event as PreForkEvent } from '@midnight-ntwrk/ledger-v8';
-import { Event as PostForkEvent } from '@midnightntwrk/ledger-v9';
 import { type WalletSyncSubscription as PreForkItem } from '../v1/Sync.js';
 import { type WalletSyncSubscription as PostForkItem } from '../v2/SyncSchema.js';
 
@@ -126,24 +124,32 @@ export const numberedFrom = (
  */
 const tipOf = (batch: readonly TimelineEvent[]): number => batch.at(-1)?.id ?? 0;
 
-/** The batch as the pre-fork variant's subscription sees it: events decoded by ledger-v8. */
+const hexOf = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
+
+/**
+ * The batch as the pre-fork variant's subscription sees it: the events as ledger-v8 framed them.
+ *
+ * @remarks
+ *   Hex rather than an `Event` instance, because that is what the indexer serves and what the subscription now carries:
+ *   whether this ledger version can read a given item is decided by the capability that applies it, not here.
+ */
 export const asPreForkItems = (batch: readonly TimelineEvent[]): PreForkItem[] => {
   const maxId = tipOf(batch);
   return batch.map((event) => ({
     id: event.id,
     maxId,
     protocolVersion: event.protocolVersion,
-    raw: PreForkEvent.deserialize(event.bytes),
+    raw: hexOf(event.bytes),
   }));
 };
 
-/** The batch as the post-fork variant's subscription sees it: the same events, re-framed and decoded by ledger-v9. */
+/** The batch as the post-fork variant's subscription sees it: the same events, re-framed for ledger-v9. */
 export const asPostForkItems = (batch: readonly TimelineEvent[]): PostForkItem[] => {
   const maxId = tipOf(batch);
   return batch.map((event) => ({
     id: event.id,
     maxId,
     protocolVersion: event.protocolVersion,
-    raw: PostForkEvent.deserialize(reframeAsPostFork(event.bytes)),
+    raw: hexOf(reframeAsPostFork(event.bytes)),
   }));
 };

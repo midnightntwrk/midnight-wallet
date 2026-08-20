@@ -35,6 +35,8 @@ import {
   type DustGenerationDtimUpdate,
   type DustUtxoEntry,
   type DustUtxoMap,
+  readCollapsedUpdate,
+  readGenerationTreeInsertionPath,
 } from './SyncSchema.js';
 
 export type PublicKey = {
@@ -170,7 +172,9 @@ export const CoreWallet = {
           ({ startIndex, endIndex }) =>
             startIndex > lastIndex && (nextGenerationIndex === undefined || endIndex < nextGenerationIndex),
         )
-        .reduce((current, update) => current.applyGenerationCollapsedUpdate(update.update), state);
+        // Read here rather than on arrival: the subscription serves updates this wallet may skip entirely, and one it
+        // never applies must not be able to fail the fetch the rest of them arrived in.
+        .reduce((current, update) => current.applyGenerationCollapsedUpdate(readCollapsedUpdate(update)), state);
 
     const { state: stateWithGenerations, lastIndex } = newGenerations.reduce(
       (acc, { generationMtIndex, genInfo, qdo }) => ({
@@ -186,7 +190,8 @@ export const CoreWallet = {
 
     // apply the rest of the updates, then the dtime updates
     const updatedState = generationDtimeUpdates.reduce(
-      (state, update) => state.updateGenerationTreeFromEvidence(update.treeInsertionPath),
+      (state, update) =>
+        state.updateGenerationTreeFromEvidence(readGenerationTreeInsertionPath(update.treeInsertionPath)),
       applySnapshotGap(stateWithGenerations, lastIndex),
     );
 
@@ -216,13 +221,13 @@ export const CoreWallet = {
     const insertCommitments = (state: DustLocalState, utxos: ReadonlyArray<DustUtxoEntry>): DustLocalState =>
       utxos.reduce((current, utxoInfo) => current.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true), state);
 
-    const stateAfterCollapsed = collapsedCommitments.reduce((state, { startIndex, update }) => {
+    const stateAfterCollapsed = collapsedCommitments.reduce((state, collapsed) => {
       // apply utxos going before the current index, then the current update
       const priorUtxos = newUtxos.filter(
         (utxoInfo) =>
-          Number(utxoInfo.qdo.mtIndex) < startIndex && utxoInfo.qdo.mtIndex >= state.commitmentTreeFirstFree,
+          Number(utxoInfo.qdo.mtIndex) < collapsed.startIndex && utxoInfo.qdo.mtIndex >= state.commitmentTreeFirstFree,
       );
-      return insertCommitments(state, priorUtxos).applyCommitmentCollapsedUpdate(update);
+      return insertCommitments(state, priorUtxos).applyCommitmentCollapsedUpdate(readCollapsedUpdate(collapsed));
     }, wallet.state);
 
     // insert the utxos after the last collapsed update — all of them when there were no collapsed updates

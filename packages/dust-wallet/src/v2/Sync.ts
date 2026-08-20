@@ -81,6 +81,9 @@ import {
   ProgressUpdate,
   StateUpdate,
   isProgressUpdate,
+  readEvent,
+  readNullifierBlockParameters,
+  tryReadEvent,
 } from './SyncSchema.js';
 import {
   bigintToLeHex,
@@ -140,9 +143,9 @@ export type BoundarySplit<T> = {
  *   later item reports an in-range version again. A batch is a contiguous slice of one timeline, so applying past a
  *   boundary and then resuming behind it would leave a hole no cursor can describe.
  *
- *   An item whose version is `undefined` is treated as in-range and contributes no annotation. Dust's subscription does
- *   not report `protocolVersion` yet, so an absent value means "the indexer did not say" — which must keep today's
- *   behaviour exactly, rather than being read as version zero and dragging the recorded version down.
+ *   An item whose version is `undefined` is treated as in-range and contributes no annotation: an absent value means "the
+ *   indexer did not say", which must keep the un-versioned behaviour exactly, rather than being read as version zero
+ *   and dragging the recorded version down.
  *
  *   This is the one place the boundary rule lives; the indexer capability (per event) and the simulator capability (per
  *   block) both go through it, so they cannot drift apart.
@@ -358,6 +361,7 @@ const resolveNullifierSpends = (
   dustGenerationUpdates: DustGenerationsSyncUpdate,
   indexerSyncService: IndexerSyncService,
   anonymityLevel: number,
+  ledgerParametersCodecs: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters>,
   emit: {
     single: (update: DustProjectionsUpdate) => Promise<void>;
   },
@@ -389,11 +393,12 @@ const resolveNullifierSpends = (
 
           const dustUtxoUpdates = yield* createDustUtxoUpdates(
             dustState,
-            nullifierTransactions,
+            matchedDustSpends(nullifierTransactions),
             secretKey,
             newUtxos,
             pendingDust,
             dustGenerationUpdates.generationDtimeUpdates,
+            ledgerParametersCodecs,
           );
 
           // report progress
@@ -437,6 +442,7 @@ export const doEventlessSync = (
   secretKey: DustSecretKey,
   anonymityLevel: number,
   indexerSyncService: IndexerSyncService,
+  ledgerParametersCodecs: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters> = defaultLedgerParametersCodecs,
 ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
   return Stream.asyncEffect((emit) =>
     Effect.gen(function* () {
@@ -499,6 +505,7 @@ export const doEventlessSync = (
         dustGenerationUpdates,
         indexerSyncService,
         anonymityLevel,
+        ledgerParametersCodecs,
         emit,
       );
 
@@ -548,7 +555,13 @@ export const makeEventLessSyncService = (
       secretKey: DustSecretKey,
     ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope> =>
       pipe(
-        doEventlessSync(state, secretKey, anonymityLevel, indexerSyncService),
+        doEventlessSync(
+          state,
+          secretKey,
+          anonymityLevel,
+          indexerSyncService,
+          config.ledgerParametersCodecs ?? defaultLedgerParametersCodecs,
+        ),
         Stream.provideSomeLayer(Layer.merge(indexerSyncService.connectionLayer(), indexerSyncService.queryClient())),
       ),
     blockData: defaultSyncService.blockData,
@@ -772,15 +785,12 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
         activeRange,
       );
 
+      // Read here and nowhere earlier: `applied` is exactly the slice this variant owns, so nothing outside its
+      // activation range — nor anything below its cursor — is ever handed to this ledger version's deserializer.
       const [newState, changes]: [CoreWallet, DustStateChanges[]] =
         applied.length === 0
           ? [state, []]
-          : CoreWallet.applyEventsWithChanges(
-              state,
-              secretKey,
-              applied.map((u) => u.raw),
-              wrappedUpdate.timestamp,
-            );
+          : CoreWallet.applyEventsWithChanges(state, secretKey, applied.map(readEvent), wrappedUpdate.timestamp);
 
       // `appliedIndex` stops at the last event this variant actually replayed. The next variant resumes one below it
       // on an inclusive cursor, so the deferred suffix is re-fetched rather than skipped.
@@ -921,6 +931,7 @@ const createUtxoUpdatesFromSpend = (
   generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
   transaction: NullifierRegularTransaction,
   dustSpend: DustSpendProcessedEvent,
+  ledgerParametersCodecs: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters>,
 ): Effect.Effect<Option.Option<[DustUtxoUpdate, DustUtxoUpdate]>, SyncWalletError> =>
   Effect.gen(function* () {
     const { nullifier, vFee, commitmentIndex, declaredTime } = dustSpend;
@@ -940,6 +951,14 @@ const createUtxoUpdatesFromSpend = (
     const updatedGenInfo = dtimeUpdate !== undefined ? { ...genInfo, dtime: dtimeUpdate.newDtime } : genInfo;
     const txMeta = { transactionId: transaction.id, transactionHash: transaction.hash, genInfo: updatedGenInfo };
     const spentUtxoUpdate: DustUtxoUpdate = { dustNullifier: nullifier, qdo, isSpent: true, ...txMeta };
+    // Read here rather than on arrival: the lookup matches on a nullifier prefix and searches from block zero, so most
+    // of what it returns is other parties' — and, on a chain that has forked, some of it is the previous ledger
+    // version's. Only a block holding a spend of this wallet's own is ever handed to a codec.
+    const blockParameters = yield* pipe(
+      readNullifierBlockParameters(transaction.block, ledgerParametersCodecs),
+      Either.mapLeft((error) => new SyncWalletError({ message: error.message, cause: error })),
+      EitherOps.toEffect,
+    );
     const successorUtxo = successorDustUtxo(
       qdo,
       declaredTime,
@@ -947,7 +966,7 @@ const createUtxoUpdatesFromSpend = (
       commitmentIndex,
       updatedGenInfo,
       secretKey,
-      transaction.block.ledgerParameters.dust,
+      blockParameters.dust,
     );
     const newUtxoUpdate: DustUtxoUpdate = {
       dustNullifier: dustNullifier(successorUtxo, secretKey),
@@ -958,14 +977,27 @@ const createUtxoUpdatesFromSpend = (
     return Option.some<[DustUtxoUpdate, DustUtxoUpdate]>([spentUtxoUpdate, newUtxoUpdate]);
   });
 
-export const createDustUtxoUpdates = (
-  dustState: DustLocalState,
+/** A dust spend a nullifier lookup turned up, paired with the transaction that carries it. */
+export type MatchedDustSpend = Readonly<{
+  transaction: NullifierRegularTransaction;
+  dustSpend: DustSpendProcessedEvent;
+}>;
+
+/**
+ * Reads the dust spends out of the transactions a nullifier lookup matched.
+ *
+ * @remarks
+ *   Separate from resolving them, because this is the step that touches bytes. The lookup matches on a nullifier _prefix_
+ *   and searches from block zero, so it deliberately over-delivers: most of what it returns belongs to other parties,
+ *   and on a chain that has forked some of it belongs to the previous ledger version. An event this ledger version
+ *   cannot read is therefore by construction not one of this wallet's spends, and is skipped rather than failing the
+ *   whole lookup — which would take every dust spend this wallet ever made down with it.
+ * @param nullifierTransactions The transactions the lookup matched.
+ * @returns The dust spends among them, in source order.
+ */
+export const matchedDustSpends = (
   nullifierTransactions: ReadonlyArray<DustNullifierTransactionsSubscription>,
-  secretKey: DustSecretKey,
-  knownUtxos: Readonly<DustUtxoMap>,
-  pendingDust: Map<DustNullifier, Dust>,
-  generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
-): Effect.Effect<DustUtxoUpdate[], SyncWalletError> =>
+): readonly MatchedDustSpend[] =>
   pipe(
     nullifierTransactions,
     Arr.filterMap(({ transaction }) =>
@@ -974,11 +1006,29 @@ export const createDustUtxoUpdates = (
     Arr.dedupeAdjacentWith((a, b) => a.id === b.id),
     Arr.flatMap((transaction) =>
       Arr.filterMap(transaction.dustLedgerEvents, (event) =>
-        event.raw.content.tag === 'dustSpendProcessed'
-          ? Option.some({ transaction, dustSpend: event.raw.content as DustSpendProcessedEvent })
-          : Option.none(),
+        pipe(
+          tryReadEvent(event),
+          Option.flatMap((decoded) =>
+            decoded.content.tag === 'dustSpendProcessed'
+              ? Option.some({ transaction, dustSpend: decoded.content as DustSpendProcessedEvent })
+              : Option.none(),
+          ),
+        ),
       ),
     ),
+  );
+
+export const createDustUtxoUpdates = (
+  dustState: DustLocalState,
+  spends: ReadonlyArray<MatchedDustSpend>,
+  secretKey: DustSecretKey,
+  knownUtxos: Readonly<DustUtxoMap>,
+  pendingDust: Map<DustNullifier, Dust>,
+  generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
+  ledgerParametersCodecs: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters> = defaultLedgerParametersCodecs,
+): Effect.Effect<DustUtxoUpdate[], SyncWalletError> =>
+  pipe(
+    spends,
     Arr.map(({ transaction, dustSpend }) =>
       createUtxoUpdatesFromSpend(
         dustState,
@@ -988,6 +1038,7 @@ export const createDustUtxoUpdates = (
         generationDtimeUpdates,
         transaction,
         dustSpend,
+        ledgerParametersCodecs,
       ),
     ),
     Effect.all,
