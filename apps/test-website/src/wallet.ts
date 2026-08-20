@@ -12,7 +12,6 @@
 // limitations under the License.
 
 import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type DefaultConfiguration,
   DustWallet,

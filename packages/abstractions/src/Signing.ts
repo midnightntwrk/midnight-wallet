@@ -1,0 +1,43 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/**
+ * How the SDK writes a signature, whichever ledger version is underneath.
+ *
+ * @remarks
+ *   The one scalar that genuinely changed shape at the protocol boundary. The pre-fork ledger version has a single
+ *   signature scheme and writes a signature as bare hexadecimal; the current one has more than one and names the scheme
+ *   alongside the bytes. Everything else an application reads — token types, addresses, nullifiers, transaction
+ *   identifiers — is byte-identical across the two.
+ *
+ *   The SDK speaks the current shape everywhere and lowers it for the pre-fork variant, rather than the reverse. Lifting
+ *   is total — the pre-fork ledger has exactly one scheme, so naming it is never a guess — while lowering is partial,
+ *   and a scheme the pre-fork ledger has never heard of is refused rather than handed over as bytes it would misread.
+ *   Speaking the older shape would have made the common case lossy instead.
+ *
+ *   Stated here, in a package that names no ledger version, so an application can annotate a signer without importing
+ *   one. These are structurally the current ledger version's own types: a signer already written against them compiles
+ *   unchanged.
+ */
+
+/** The signature schemes the chain knows. Only `schnorr` exists before the protocol boundary. */
+export type SignatureKind = 'schnorr' | 'ecdsa';
+
+/** A signature: the scheme that produced it, and its bytes as hexadecimal. */
+export type Signature = Readonly<{ tag: SignatureKind; value: string }>;
+
+/** The public half of a signing key, named with the scheme it belongs to. */
+export type SignatureVerifyingKey = Readonly<{ tag: SignatureKind; value: string }>;
+
+/** A signing key, named with the scheme it belongs to. */
+export type SigningKey = Readonly<{ tag: SignatureKind; value: string }>;

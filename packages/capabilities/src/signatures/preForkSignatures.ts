@@ -22,11 +22,11 @@
  *   heard of cannot be lowered at all, and says so rather than being handed over as bytes it would misread.
  */
 import type * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import type * as ledger from '@midnightntwrk/ledger-v9';
+import { type Signing } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Data, Either } from 'effect';
 
 /** The signature scheme the pre-fork ledger version has, and the only one a lowered value can name. */
-const PRE_FORK_SIGNATURE_KIND: ledger.SignatureKind = 'schnorr';
+const PRE_FORK_SIGNATURE_KIND: Signing.SignatureKind = 'schnorr';
 
 /** Raised when a signature or verifying key names a scheme the pre-fork ledger version does not have. */
 export class UnsupportedSignatureKindError extends Data.TaggedError(
@@ -34,11 +34,11 @@ export class UnsupportedSignatureKindError extends Data.TaggedError(
 )<{
   readonly message: string;
   /** The scheme that was named. */
-  readonly kind: ledger.SignatureKind;
+  readonly kind: Signing.SignatureKind;
 }> {}
 
 const lower = (
-  value: Readonly<{ tag: ledger.SignatureKind; value: string }>,
+  value: Signing.Signature | Signing.SignatureVerifyingKey,
   what: string,
 ): Either.Either<string, UnsupportedSignatureKindError> =>
   value.tag === PRE_FORK_SIGNATURE_KIND
@@ -60,7 +60,7 @@ const lower = (
  * @returns The bare hex the pre-fork ledger version reads, or the reason it cannot be expressed there.
  */
 export const lowerSignature = (
-  signature: ledger.Signature,
+  signature: Signing.Signature,
 ): Either.Either<preForkLedger.Signature, UnsupportedSignatureKindError> => lower(signature, 'signature');
 
 /**
@@ -70,7 +70,7 @@ export const lowerSignature = (
  * @returns The bare hex the pre-fork ledger version reads, or the reason it cannot be expressed there.
  */
 export const lowerSignatureVerifyingKey = (
-  key: ledger.SignatureVerifyingKey,
+  key: Signing.SignatureVerifyingKey,
 ): Either.Either<preForkLedger.SignatureVerifyingKey, UnsupportedSignatureKindError> => lower(key, 'verifying key');
 
 /**
@@ -81,7 +81,7 @@ export const lowerSignatureVerifyingKey = (
  * @param signature The signature, as the pre-fork ledger version writes it.
  * @returns The same signature, with the scheme it necessarily used named.
  */
-export const liftSignature = (signature: preForkLedger.Signature): ledger.Signature => ({
+export const liftSignature = (signature: preForkLedger.Signature): Signing.Signature => ({
   tag: PRE_FORK_SIGNATURE_KIND,
   value: signature,
 });
@@ -92,7 +92,7 @@ export const liftSignature = (signature: preForkLedger.Signature): ledger.Signat
  * @param key The verifying key, as the pre-fork ledger version writes it.
  * @returns The same key, with the scheme it necessarily used named.
  */
-export const liftSignatureVerifyingKey = (key: preForkLedger.SignatureVerifyingKey): ledger.SignatureVerifyingKey => ({
+export const liftSignatureVerifyingKey = (key: preForkLedger.SignatureVerifyingKey): Signing.SignatureVerifyingKey => ({
   tag: PRE_FORK_SIGNATURE_KIND,
   value: key,
 });

@@ -49,7 +49,7 @@ import { type DefaultDustConfiguration, type DustWalletAPI, DustWalletState } fr
 import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import { CoreWallet as PreForkCoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
 import { type WalletSyncUpdate as PreForkSyncUpdate } from './v1/Sync.js';
-import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
+import { type CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
 import { type WalletSyncUpdate as PostForkSyncUpdate } from './v2/SyncSchema.js';
 import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
 import { type UtxoWithMeta } from './v2/types/Dust.js';

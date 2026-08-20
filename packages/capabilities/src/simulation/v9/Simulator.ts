@@ -31,7 +31,6 @@ import {
   createShieldedCoinInfo,
   Intent,
   LedgerState,
-  nativeToken,
   type PreBinding,
   type PreProof,
   type ProofErasedTransaction,

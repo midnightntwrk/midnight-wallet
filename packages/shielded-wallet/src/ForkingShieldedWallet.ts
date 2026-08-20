@@ -52,7 +52,7 @@ import {
 } from './ShieldedWallet.js';
 import { CoreWallet as PreForkCoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
 import { type WalletSyncUpdate as PreForkSyncUpdate } from './v1/Sync.js';
-import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
+import { type CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
 import { type WalletSyncUpdate as PostForkSyncUpdate } from './v2/Sync.js';
 import { type TokenTransfer } from './v2/Transacting.js';
 import { type WalletError as PreForkWalletError } from './v1/WalletError.js';

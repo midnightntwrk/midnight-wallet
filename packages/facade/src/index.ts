@@ -49,7 +49,7 @@ import { DustSectionSchema, mergeDustSections } from '@midnightntwrk/wallet-sdk-
 import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Array as Arr, Either, Option, pipe, Schema } from 'effect';
+import { Array as Arr, type DateTime, Either, Option, pipe, Schema } from 'effect';
 import {
   type AnyTx,
   type FinalizedTx,
@@ -524,11 +524,86 @@ export const protocolPhaseOf = (
   };
 };
 
+/**
+ * What has become of a transaction the wallet submitted.
+ *
+ * @remarks
+ *   Tagged rather than a status string, and deliberately: `Orphaned` and `Rejected` are different facts about the world
+ *   and the difference matters to what an application should do next. A rejection is the chain's verdict — the node saw
+ *   the transaction and refused it. An orphaned transaction has no verdict at all and never will: its bytes were
+ *   authored under a protocol version the chain has moved past, and nothing can include them afterwards. The wallet has
+ *   already unbooked its coins and recorded the rejection either way; what differs is what an application can tell a
+ *   user, and whether re-submitting the same bytes could ever help.
+ */
+export type PendingStatus =
+  | Readonly<{ _tag: 'Submitted' }>
+  | Readonly<{ _tag: 'Confirmed'; segments: readonly Readonly<{ id: number; success: boolean }>[] }>
+  | Readonly<{ _tag: 'Rejected'; segments: readonly Readonly<{ id: number; success: boolean }>[] }>
+  | Readonly<{
+      _tag: 'Orphaned';
+      /** The protocol version the transaction was authored for. */
+      authoredFor: ProtocolVersion.ProtocolVersion;
+      /** The protocol version the chain had reached when the wallet gave up on it. */
+      chainNow: ProtocolVersion.ProtocolVersion;
+    }>;
+
+/** A transaction the wallet has submitted and the chain has not finished answering for. */
+export type PendingTransaction = Readonly<{
+  /** The transaction itself, as the handle an application carries. */
+  transaction: FinalizedTx;
+  /** When the wallet recorded it as pending. */
+  submittedAt: DateTime.Utc;
+  /**
+   * The protocol version it was authored for, when the wallet had observed one.
+   *
+   * @remarks
+   *   `Option.none()` means the wallet never learned which version it was authored against. Such a transaction is never
+   *   orphaned — an unobserved version is not evidence of anything.
+   */
+  authoredFor: Option.Option<ProtocolVersion.ProtocolVersion>;
+  /** What has become of it. See {@link PendingStatus}. */
+  status: PendingStatus;
+}>;
+
+/** Reads what has become of a transaction from the verdict the pending set holds, if it holds one. */
+const pendingStatusOf = (result: PendingTransactions.TransactionResult | undefined): PendingStatus => {
+  if (result === undefined) return { _tag: 'Submitted' };
+  switch (result.status) {
+    case 'SUCCESS':
+      return { _tag: 'Confirmed', segments: result.segments };
+    case 'FAILURE':
+    case 'PARTIAL_SUCCESS':
+      // A transaction only some of whose segments succeeded is still not a transaction that happened as submitted.
+      return { _tag: 'Rejected', segments: result.segments };
+    case 'ORPHANED_BY_FORK':
+      return { _tag: 'Orphaned', authoredFor: result.authoredFor, chainNow: result.chainNow };
+  }
+};
+
+/**
+ * The pending transactions as an application reads them.
+ *
+ * @remarks
+ *   A projection over the pending set the services keep, not a second copy of it: the facts are the same, stated as a
+ *   list of transactions with a status each rather than as the bag the machinery works in.
+ * @param pending The pending set.
+ * @returns One entry per transaction, in the order the wallet recorded them.
+ */
+export const pendingTransactionsOf = (
+  pending: PendingTransactions.PendingTransactions<FinalizedTx>,
+): readonly PendingTransaction[] =>
+  pending.all.map((item) => ({
+    transaction: item.tx,
+    submittedAt: item.creationTime,
+    authoredFor: item.protocolVersion,
+    status: pendingStatusOf('result' in item ? item.result : undefined),
+  }));
+
 export class FacadeState {
   public readonly shielded: ShieldedWalletState;
   public readonly unshielded: UnshieldedWalletState;
   public readonly dust: DustWalletState;
-  public readonly pending: PendingTransactions.PendingTransactions<FinalizedTx>;
+  public readonly pending: readonly PendingTransaction[];
 
   /** The protocol version each of the three wallets has reached. */
   public get protocolVersion(): WalletProtocolVersions {
@@ -582,7 +657,7 @@ export class FacadeState {
     this.shielded = shielded;
     this.unshielded = unshielded;
     this.dust = dust;
-    this.pending = pending;
+    this.pending = pendingTransactionsOf(pending);
     this.#forkVersion = forkVersion;
   }
 }

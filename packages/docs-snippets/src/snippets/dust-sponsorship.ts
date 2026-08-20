@@ -122,7 +122,7 @@ await sponsor.wallet
 const finalSponsorState = await rx.firstValueFrom(
   sponsor.wallet.state().pipe(
     rx.filter((s) => s.isSynced),
-    rx.filter((s) => s.pending.all.length === 0),
+    rx.filter((s) => s.pending.length === 0),
   ),
 );
 const finalUserState = await user.wallet.waitForSyncedState();

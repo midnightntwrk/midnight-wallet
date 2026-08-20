@@ -25,7 +25,6 @@ import { WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type WalletSyncUpdate, WalletSyncUpdateSchema } from './SyncSchema.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
 
 export interface SyncService<TState, TUpdate> {
   updates: (state: TState) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
