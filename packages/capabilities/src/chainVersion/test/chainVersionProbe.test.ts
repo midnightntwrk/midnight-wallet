@@ -33,9 +33,9 @@ const blockAt = (protocolVersion: number) => ({ block: { protocolVersion } });
  * An indexer that answers every query with one prepared result.
  *
  * @remarks
- *   A stub rather than a spy: what is asserted is the version the probe arrives at, not that a query was issued. The
- *   real {@link currentChainVersion} document is still the one executed — only the transport is replaced — so a
- *   selection set that stopped carrying `protocolVersion` would surface here.
+ *   A stub rather than a spy: what is asserted is the version the probe arrives at, not that a query was issued. The real
+ *   {@link currentChainVersion} document is still the one executed — only the transport is replaced — so a selection set
+ *   that stopped carrying `protocolVersion` would surface here.
  */
 const indexerAnswering = <T>(result: T): Layer.Layer<QueryClient> =>
   // Type cast required because: `QueryClient.query` is generic in the document it is handed, so its result type is

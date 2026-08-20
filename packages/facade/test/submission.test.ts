@@ -79,22 +79,22 @@ describe('Facade submission', () => {
     const facade: WalletFacade = await WalletFacade.init({
       configuration,
       submissionService: () => fakeSubmission,
-      shielded: (config) => {
-        const wallet = ShieldedWallet(config).startWithSeed(seed);
+      shielded: async (config) => {
+        const wallet = await ShieldedWallet(config).startWithSeed(seed);
         const mockedShielded = withRealState(vi.mockObject(wallet), wallet);
         mockedShielded.start.mockResolvedValue(undefined);
         return mockedShielded;
       },
-      unshielded: (config) => {
-        const wallet = UnshieldedWallet(config).startWithPublicKey(
+      unshielded: async (config) => {
+        const wallet = await UnshieldedWallet(config).startWithPublicKey(
           PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
         );
         const mockedUnshielded = withRealState(vi.mockObject(wallet), wallet);
         mockedUnshielded.start.mockResolvedValue(undefined);
         return mockedUnshielded;
       },
-      dust: (config) => {
-        const wallet = DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
+      dust: async (config) => {
+        const wallet = await DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
         const mockedDust = withRealState(vi.mockObject(wallet), wallet);
         mockedDust.start.mockResolvedValue(undefined);
         return mockedDust;
@@ -123,11 +123,11 @@ describe('Facade submission', () => {
       txHistoryStorage,
     };
     const seed = crypto.randomBytes(32);
-    const shielded = ShieldedWallet(config).startWithSeed(seed);
-    const unshielded = UnshieldedWallet(config).startWithPublicKey(
+    const shielded = await ShieldedWallet(config).startWithSeed(seed);
+    const unshielded = await UnshieldedWallet(config).startWithPublicKey(
       PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
     );
-    const dust = DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
+    const dust = await DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
     const fakeSubmission = new (class implements SubmissionService<ledger.FinalizedTransaction> {
       submitTransaction = () => Promise.reject(new Error('Submission failed'));
       close = () => Promise.resolve();
@@ -204,11 +204,11 @@ describe('Facade submission', () => {
       txHistoryStorage,
     };
     const seed = crypto.randomBytes(32);
-    const shielded = ShieldedWallet(config).startWithSeed(seed);
-    const unshielded = UnshieldedWallet(config).startWithPublicKey(
+    const shielded = await ShieldedWallet(config).startWithSeed(seed);
+    const unshielded = await UnshieldedWallet(config).startWithPublicKey(
       PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
     );
-    const dust = DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
+    const dust = await DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
     const fakeSubmission = new (class implements SubmissionService<ledger.FinalizedTransaction> {
       submitTransaction = () => Promise.reject(new Error('Submission failed'));
       close = () => Promise.resolve();

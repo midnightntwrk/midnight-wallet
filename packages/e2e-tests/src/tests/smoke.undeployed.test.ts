@@ -244,7 +244,7 @@ describe('Smoke tests', () => {
         { kind: 'schnorr', secret: utils.getUnshieldedSeed(seedFunded) },
         fixture.getNetworkId(),
       );
-      const initialWallet = UnshieldedWallet({
+      const initialWallet = await UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
           indexerHttpUrl: fixture.getIndexerUri(),

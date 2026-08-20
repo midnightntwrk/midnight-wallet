@@ -431,12 +431,12 @@ describe('a shielded wallet starting on a chain that has not forked', () => {
  * A wallet on a chain past the boundary that has shown it nothing.
  *
  * @remarks
- *   The hazard the probe closes, and the reason it is a correctness item rather than an optimization. A wallet learns
- *   the chain's version from the events it observes, so one that has observed none holds the only version it can
- *   assume: the bottom of the timeline. That is not a transient state on a chain whose shielded timeline contains
- *   nothing addressed to this wallet — it is where the wallet stays, for as long as it runs. And since transacting
- *   works on either side of the boundary, the wallet does not refuse: it builds with the wrong ledger version, against
- *   a chain that will reject the result.
+ *   The hazard the probe closes, and the reason it is a correctness item rather than an optimization. A wallet learns the
+ *   chain's version from the events it observes, so one that has observed none holds the only version it can assume:
+ *   the bottom of the timeline. That is not a transient state on a chain whose shielded timeline contains nothing
+ *   addressed to this wallet — it is where the wallet stays, for as long as it runs. And since transacting works on
+ *   either side of the boundary, the wallet does not refuse: it builds with the wrong ledger version, against a chain
+ *   that will reject the result.
  *
  *   Modelled by not starting synchronization, which is exactly the observable position of a wallet whose source has
  *   nothing to deliver: no event has been applied. What is asserted is the epoch the wallet believes it is in, read

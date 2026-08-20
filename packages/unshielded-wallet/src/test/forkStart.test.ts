@@ -521,12 +521,12 @@ describe('an unshielded wallet whose identity the pre-fork ledger version cannot
  * An unshielded wallet on a chain past the boundary that has shown it nothing.
  *
  * @remarks
- *   The hazard the probe closes, and the reason it is a correctness item rather than an optimization. A wallet learns
- *   the chain's version from the messages it observes, so one that has observed none holds the only version it can
- *   assume: the bottom of the timeline. That is not a transient state on a chain whose timeline contains nothing
- *   addressed to this wallet — it is where the wallet stays, for as long as it runs. And since transacting works on
- *   either side of the boundary, the wallet does not refuse: it builds with the wrong ledger version, against a chain
- *   that will reject the result.
+ *   The hazard the probe closes, and the reason it is a correctness item rather than an optimization. A wallet learns the
+ *   chain's version from the messages it observes, so one that has observed none holds the only version it can assume:
+ *   the bottom of the timeline. That is not a transient state on a chain whose timeline contains nothing addressed to
+ *   this wallet — it is where the wallet stays, for as long as it runs. And since transacting works on either side of
+ *   the boundary, the wallet does not refuse: it builds with the wrong ledger version, against a chain that will reject
+ *   the result.
  *
  *   Modelled by an empty timeline, which is exactly that chain: sync runs, and there is nothing for it to deliver.
  */

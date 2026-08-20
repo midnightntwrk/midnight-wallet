@@ -138,8 +138,8 @@ export type ForkingShieldedConfiguration = {
    *   chain entirely past the boundary, and, on a chain that has shown this wallet no events at all, an epoch that
    *   never gets corrected.
    *
-   *   Nothing about it can make a start fail. A rejection, a timeout, a version no registered variant covers: each
-   *   leaves the wallet exactly where a wallet that never asked would be.
+   *   Nothing about it can make a start fail. A rejection, a timeout, a version no registered variant covers: each leaves
+   *   the wallet exactly where a wallet that never asked would be.
    */
   chainVersionProbe?: ChainVersionProbe;
 };
@@ -185,7 +185,8 @@ export interface ForkingShieldedWalletClass<
    *   {@link ForkingShieldedConfiguration.chainVersionProbe} configured, the wallet starts at the variant that owns the
    *   version the chain reports, which on a chain already past the boundary is the post-fork one from the first moment.
    *   Without one, or when the question goes unanswered, it begins on the pre-fork variant and is handed over when the
-   *   chain reports a version the post-fork variant owns — on a chain that has already forked, the first batch it sees.
+   *   chain reports a version the post-fork variant owns — on a chain that has already forked, the first batch it
+   *   sees.
    * @param seed The seed to derive both ledger versions' keys from.
    * @returns A wallet started at the variant the chain is on, or on the pre-fork variant when the chain was not asked
    *   or did not say.
@@ -374,10 +375,10 @@ export function CustomForkingShieldedWallet<
    * How long a start waits for the chain to say which version it is on.
    *
    * @remarks
-   *   Short, because what is being bought is small: the alternative to an answer is the hand-over this wallet has
-   *   always done, which costs one migration and no correctness on a chain that produces events. It is a ceiling
-   *   rather than a typical cost — an unreachable indexer refuses a connection long before this — and it exists so
-   *   that a probe which neither answers nor fails cannot hold a start open indefinitely.
+   *   Short, because what is being bought is small: the alternative to an answer is the hand-over this wallet has always
+   *   done, which costs one migration and no correctness on a chain that produces events. It is a ceiling rather than a
+   *   typical cost — an unreachable indexer refuses a connection long before this — and it exists so that a probe which
+   *   neither answers nor fails cannot hold a start open indefinitely.
    */
   const probeTimeout = Duration.seconds(5);
 
@@ -779,8 +780,8 @@ export type ShieldedWalletClass = ForkingShieldedWalletClass<
  *
  *   **The chain is asked where it is before a variant is chosen.** The indexer this wallet already syncs from answers
  *   which protocol version the chain is on, so a start on a chain past the boundary begins post-fork rather than
- *   handing over immediately. An application that would rather ask something else — a cache, a value it already holds
- *   — supplies its own `chainVersionProbe`; one whose chain cannot be reached loses nothing, because the answer is
+ *   handing over immediately. An application that would rather ask something else — a cache, a value it already holds —
+ *   supplies its own `chainVersionProbe`; one whose chain cannot be reached loses nothing, because the answer is
  *   best-effort and its absence is the behaviour this wallet had before.
  * @param configuration What the wallet and both its variants are built from, including where the boundary lies.
  * @returns The wallet class.

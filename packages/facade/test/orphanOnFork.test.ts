@@ -113,9 +113,9 @@ describe('A pending transaction the fork left behind', () => {
     const unshieldedSeed = getUnshieldedSeed(seed);
     const dustSeed = getDustSeed(seed);
     const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: unshieldedSeed }, configuration.networkId);
-    shielded = ShieldedWallet(configuration).startWithSeed(shieldedSeed);
-    unshielded = UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
-    dust = DustWallet(configuration).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust);
+    shielded = await ShieldedWallet(configuration).startWithSeed(shieldedSeed);
+    unshielded = await UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
+    dust = await DustWallet(configuration).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust);
     pending = new RecordingPendingTransactions();
 
     facade = await WalletFacade.init({

@@ -90,7 +90,7 @@ describe('Wallet serialization and restoration', () => {
 
   it('allows to restore an non-empty wallet from the serialized state', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-    const wallet = Wallet.startWithSeed(seed);
+    const wallet = await Wallet.startWithSeed(seed);
     await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
     try {
       const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
@@ -115,7 +115,7 @@ describe('Wallet serialization and restoration', () => {
 
   it('allows to restore an empty wallet from the serialized state', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000009');
-    const wallet = Wallet.startWithSeed(seed);
+    const wallet = await Wallet.startWithSeed(seed);
     await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
     try {
       const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
@@ -140,7 +140,7 @@ describe('Wallet serialization and restoration', () => {
 
   it('should restore shielded wallet from serialized transaction history', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-    const wallet = ShieldedWallet(shieldedConfiguration).startWithSeed(seed);
+    const wallet = await ShieldedWallet(shieldedConfiguration).startWithSeed(seed);
     await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
     try {
       await wallet.waitForSyncedState();
@@ -179,7 +179,7 @@ describe('Wallet serialization and restoration', () => {
     const unshieldedSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
     const keystore = createKeystore({ kind: 'schnorr', secret: unshieldedSeed }, unshieldedConfiguration.networkId);
 
-    const initialWallet = UnshieldedWallet(unshieldedConfiguration).startWithPublicKey(
+    const initialWallet = await UnshieldedWallet(unshieldedConfiguration).startWithPublicKey(
       PublicKey.fromKeyStore(keystore),
     );
     await initialWallet.start();

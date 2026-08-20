@@ -139,8 +139,8 @@ export type ForkingUnshieldedConfiguration = {
    *   It resolves where a wallet may start, never where it can: an identity only the post-fork ledger version can hold
    *   starts there whatever the chain reports, because there is no decision left to inform.
    *
-   *   Nothing about it can make a start fail. A rejection, a timeout, a version no registered variant covers: each
-   *   leaves the wallet exactly where a wallet that never asked would be.
+   *   Nothing about it can make a start fail. A rejection, a timeout, a version no registered variant covers: each leaves
+   *   the wallet exactly where a wallet that never asked would be.
    */
   chainVersionProbe?: ChainVersionProbe;
 };
@@ -167,11 +167,11 @@ export interface ForkingUnshieldedWalletClass<
    *   which variant can _hold_ the identity, and that turns on the signature scheme — see {@link asPreForkPublicKey}. An
    *   ecdsa identity begins on the post-fork variant, because the pre-fork ledger version has no way to express it.
    *
-   *   A schnorr identity can be held by either, so for it the second question is where the chain is. Asynchronous
-   *   because answering that can mean asking: with a {@link ForkingUnshieldedConfiguration.chainVersionProbe}
-   *   configured, such a wallet starts at the variant that owns the version the chain reports, which on a chain
-   *   already past the boundary is the post-fork one from the first moment. Without one, or when the question goes
-   *   unanswered, it begins on the pre-fork variant and follows the chain across.
+   *   A schnorr identity can be held by either, so for it the second question is where the chain is. Asynchronous because
+   *   answering that can mean asking: with a {@link ForkingUnshieldedConfiguration.chainVersionProbe} configured, such a
+   *   wallet starts at the variant that owns the version the chain reports, which on a chain already past the boundary
+   *   is the post-fork one from the first moment. Without one, or when the question goes unanswered, it begins on the
+   *   pre-fork variant and follows the chain across.
    * @param publicKey The identity to watch, in the post-fork ledger version's shape, which is the one this wallet's
    *   public API speaks.
    * @returns A started wallet, on the variant that can hold the identity and — where both can — the one the chain says
@@ -332,10 +332,10 @@ export function CustomForkingUnshieldedWallet<
    * How long a start waits for the chain to say which version it is on.
    *
    * @remarks
-   *   Short, because what is being bought is small: the alternative to an answer is the hand-over this wallet has
-   *   always done, which costs one migration and no correctness on a chain that produces messages. It is a ceiling
-   *   rather than a typical cost — an unreachable indexer refuses a connection long before this — and it exists so
-   *   that a probe which neither answers nor fails cannot hold a start open indefinitely.
+   *   Short, because what is being bought is small: the alternative to an answer is the hand-over this wallet has always
+   *   done, which costs one migration and no correctness on a chain that produces messages. It is a ceiling rather than
+   *   a typical cost — an unreachable indexer refuses a connection long before this — and it exists so that a probe
+   *   which neither answers nor fails cannot hold a start open indefinitely.
    */
   const probeTimeout = Duration.seconds(5);
 
@@ -370,9 +370,9 @@ export function CustomForkingUnshieldedWallet<
    * A fresh state of the variant a probed start begins at, recording the version the chain reported.
    *
    * @remarks
-   *   Built exactly as the head-variant boot path builds its own — the identity, in the shape that variant holds it —
-   *   and then annotated with the observed version, which is what keeps a variant from starting outside its own
-   *   activation range and signalling backwards on sight.
+   *   Built exactly as the head-variant boot path builds its own — the identity, in the shape that variant holds it — and
+   *   then annotated with the observed version, which is what keeps a variant from starting outside its own activation
+   *   range and signalling backwards on sight.
    * @param variant The variant the chain's version resolved to.
    * @param publicKey The identity in the shape this wallet's API speaks.
    * @param preForkPublicKey The same identity as the pre-fork ledger version has it, which is only reached when that
@@ -777,8 +777,8 @@ export type UnshieldedWalletClass = ForkingUnshieldedWalletClass<
  *
  *   **The chain is asked where it is before a variant is chosen.** The indexer this wallet already syncs from answers
  *   which protocol version the chain is on, so a start on a chain past the boundary begins post-fork rather than
- *   handing over immediately. An application that would rather ask something else — a cache, a value it already holds
- *   — supplies its own `chainVersionProbe`; one whose chain cannot be reached loses nothing, because the answer is
+ *   handing over immediately. An application that would rather ask something else — a cache, a value it already holds —
+ *   supplies its own `chainVersionProbe`; one whose chain cannot be reached loses nothing, because the answer is
  *   best-effort and its absence is the behaviour this wallet had before.
  * @param configuration What the wallet and both its variants are built from, including where the boundary lies.
  * @returns The wallet class.

@@ -56,12 +56,12 @@ describe('Syncing', () => {
     async function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
       for (let i = 0; i < seeds.length; i++) {
         unshieldedKeystores[i] = createKeystore({ kind: 'schnorr', secret: seeds[i] }, fixture.getNetworkId());
-        shieldedWallets[i] = Wallet.startWithSeed(seeds[i]);
-        dustWallets[i] = Dust.startWithSeed(seeds[i], dustParameters);
+        shieldedWallets[i] = await Wallet.startWithSeed(seeds[i]);
+        dustWallets[i] = await Dust.startWithSeed(seeds[i], dustParameters);
       }
 
       for (let i = 0; i < seeds.length; i++) {
-        unshieldedWallets[i] = UnshieldedWallet({
+        unshieldedWallets[i] = await UnshieldedWallet({
           networkId: fixture.getNetworkId(),
           indexerClientConnection: {
             indexerHttpUrl: fixture.getIndexerUri(),

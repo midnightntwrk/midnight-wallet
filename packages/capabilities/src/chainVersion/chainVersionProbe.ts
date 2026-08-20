@@ -91,9 +91,9 @@ export type DefaultChainVersionProbeConfiguration = {
  * Builds a {@link ChainVersionProbe} that asks the indexer over HTTP for the latest block's protocol version.
  *
  * @remarks
- *   Each call opens a short-lived query client and closes it again, as the default block-data fetcher does. It carries
- *   no timeout of its own: the caller that blocks on it owns how long it is prepared to wait, and the wallet that
- *   starts with one applies its own bound.
+ *   Each call opens a short-lived query client and closes it again, as the default block-data fetcher does. It carries no
+ *   timeout of its own: the caller that blocks on it owns how long it is prepared to wait, and the wallet that starts
+ *   with one applies its own bound.
  * @param config Where to ask.
  * @returns The probe.
  */

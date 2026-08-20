@@ -86,7 +86,7 @@ const restoreUnshieldedWallet = async (
     const serialized = await readIfExists(path);
     if (serialized) {
       const keyStore = createKeystore({ kind: 'schnorr', secret: getUnshieldedSeed(seed) }, fixture.getNetworkId());
-      const wallet = UnshieldedWallet({
+      const wallet = await UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
           indexerHttpUrl: fixture.getIndexerUri(),
