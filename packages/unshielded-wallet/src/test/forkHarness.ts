@@ -32,7 +32,11 @@ import { NetworkId, type ProtocolState, type ProtocolVersion } from '@midnightnt
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, HashMap, Option, Stream, pipe } from 'effect';
-import { CustomForkingUnshieldedWallet, type ForkingUnshieldedWallet } from '../ForkingUnshieldedWallet.js';
+import {
+  CustomForkingUnshieldedWallet,
+  type ForkingUnshieldedWallet,
+  type ForkingUnshieldedWalletClass,
+} from '../ForkingUnshieldedWallet.js';
 import { type PublicKey } from '../KeyStore.js';
 import { type CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
 import * as PreForkMigration from '../v1/Migration.js';
@@ -216,6 +220,14 @@ export type ForkedState = ProtocolState.ProtocolState<PreForkWallet | PostForkWa
 export type ForkWallet = {
   /** The wallet itself, exactly as an application would hold it. */
   readonly unshielded: ForkingUnshieldedWallet<PreForkUpdate, PostForkUpdate>;
+  /**
+   * The class the wallet was started from, so a snapshot can be restored through the same registration that wrote it.
+   *
+   * @remarks
+   *   Restoring is a class-level entry point, not an instance one — it is how an application gets a wallet in the
+   *   first place — so a proof about restoring needs the class and not merely the running wallet.
+   */
+  readonly walletClass: ForkingUnshieldedWalletClass<PreForkUpdate, PostForkUpdate>;
   /** Starts background synchronization through the wallet's own API. */
   readonly start: Effect.Effect<void>;
   /** Resolves when the hand-over happens, with both ends of it. */
@@ -307,6 +319,8 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
 
       return {
         unshielded: wallet,
+
+        walletClass: WalletClass,
 
         start: Effect.promise(() => wallet.start()),
 

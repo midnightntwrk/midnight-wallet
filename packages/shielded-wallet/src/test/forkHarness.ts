@@ -33,7 +33,11 @@ import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/c
 import { type Simulator, type V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, Option, Stream, pipe } from 'effect';
-import { CustomForkingShieldedWallet, type ForkingShieldedWallet } from '../ForkingShieldedWallet.js';
+import {
+  CustomForkingShieldedWallet,
+  type ForkingShieldedWallet,
+  type ForkingShieldedWalletClass,
+} from '../ForkingShieldedWallet.js';
 import * as V1 from '../v1/index.js';
 import * as V2 from '../v2/index.js';
 
@@ -202,6 +206,14 @@ export type ForkedState = ProtocolState.ProtocolState<V1.CoreWallet | V2.CoreWal
 export type ForkWallet = Readonly<{
   /** The wallet itself, exactly as an application would hold it. */
   shielded: ForkingShieldedWallet<V1.Sync.SimulatorSyncUpdate, V2.Sync.SimulatorSyncUpdate>;
+  /**
+   * The class the wallet was started from, so a snapshot can be restored through the same registration that wrote it.
+   *
+   * @remarks
+   *   Restoring is a class-level entry point, not an instance one — it is how an application gets a wallet in the
+   *   first place — so a proof about restoring needs the class and not merely the running wallet.
+   */
+  walletClass: ForkingShieldedWalletClass<V1.Sync.SimulatorSyncUpdate, V2.Sync.SimulatorSyncUpdate>;
   /** Keys of each ledger version, derived from the same seed. */
   keys: Readonly<{ preFork: v8.ZswapSecretKeys; postFork: v9.ZswapSecretKeys }>;
   /** Starts background sync through the wallet's own API, which resolves the key material each variant can use. */
@@ -280,6 +292,8 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
 
       return {
         shielded: wallet,
+
+        walletClass: WalletClass,
 
         keys: { preFork: preForkKeys, postFork: postForkKeys },
 

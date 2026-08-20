@@ -94,6 +94,7 @@ describe('an unshielded wallet restoring a snapshot through the class it was sta
     Effect.gen(function* () {
       const wallet = yield* syncedWalletOnChainAt(beforeFork);
       expect(yield* wallet.activeTag).toBe(V1Tag);
+      const synced = yield* wallet.currentState;
 
       const snapshot = yield* Effect.promise(() => wallet.unshielded.serializeState());
       // The snapshot names the epoch that wrote it, which is the only thing the restore has to go on.
@@ -109,13 +110,14 @@ describe('an unshielded wallet restoring a snapshot through the class it was sta
       const state = yield* restoredState(restored);
       expect(state.protocolVersion).toBeLessThan(forkVersion);
       expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n]);
-      expect(state.state.publicKey.address).toBe(postFork.addressHex);
+      expect(state.state.publicKey.address).toBe(synced.state.publicKey.address);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('restores a snapshot written at or past the boundary onto the post-fork variant, with what it held', async () =>
     Effect.gen(function* () {
       const wallet = yield* syncedWalletOnChainAt(afterFork);
       expect(yield* wallet.activeTag).toBe(V2Tag);
+      const synced = yield* wallet.currentState;
 
       const snapshot = yield* Effect.promise(() => wallet.unshielded.serializeState());
       expect(peekProtocolVersion(snapshot)).toStrictEqual(
@@ -130,6 +132,6 @@ describe('an unshielded wallet restoring a snapshot through the class it was sta
       const state = yield* restoredState(restored);
       expect(state.protocolVersion).toBeGreaterThanOrEqual(forkVersion);
       expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n]);
-      expect(state.state.publicKey.address).toBe(postFork.addressHex);
+      expect(state.state.publicKey.address).toBe(synced.state.publicKey.address);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
