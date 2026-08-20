@@ -205,7 +205,7 @@ describe('a dust wallet crossing a hard fork', () => {
         const wire = yield* Queue.unbounded<readonly TimelineEvent[]>();
         const replayed = yield* Deferred.make<readonly TimelineEvent[]>();
 
-        const wallet = makeForkWallet({
+        const wallet = yield* makeForkWallet({
           preFork: Stream.fromQueue(wire),
           replayed: Deferred.await(replayed),
           networkId,
@@ -303,7 +303,7 @@ describe('a dust wallet crossing a hard fork', () => {
         const wire = yield* Queue.unbounded<readonly TimelineEvent[]>();
         const replayed = yield* Deferred.make<readonly TimelineEvent[]>();
 
-        const wallet = makeForkWallet({
+        const wallet = yield* makeForkWallet({
           preFork: Stream.fromQueue(wire),
           replayed: Deferred.await(replayed),
           networkId,
@@ -349,7 +349,7 @@ describe('a dust wallet crossing a hard fork', () => {
         const replay = replayOf(chain.eventBytes);
         const wire = yield* Queue.unbounded<readonly TimelineEvent[]>();
 
-        const wallet = makeForkWallet({
+        const wallet = yield* makeForkWallet({
           preFork: Stream.fromQueue(wire),
           replayed: Effect.succeed(replay),
           networkId,

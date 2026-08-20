@@ -46,6 +46,7 @@ import {
   LedgerParameters as PostForkLedgerParameters,
 } from '@midnightntwrk/ledger-v9';
 import { type NetworkId, type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, Option, Stream, pipe } from 'effect';
 import { CustomForkingDustWallet, type ForkingDustWallet } from '../ForkingDustWallet.js';
@@ -299,6 +300,13 @@ export type ForkWalletConfig = Readonly<{
   dustParameters: Readonly<{ preFork: PreForkParameters; postFork: PostForkParameters }>;
   /** The instant sync updates are valued at — at or after the last event's block time. */
   syncTime: Date;
+  /**
+   * How the wallet asks the chain which protocol version it is on before choosing a variant to start at.
+   *
+   * Absent means it does not ask, which is the behaviour of every wallet built without one: it starts at the head
+   * variant and learns the version from the first event it sees.
+   */
+  chainVersionProbe?: ChainVersionProbe;
 }>;
 
 /** A state emission, whichever variant produced it. */
@@ -334,12 +342,16 @@ export type ForkWallet = Readonly<{
 /**
  * Builds and starts the shipped forking dust wallet over an in-memory timeline that forks.
  *
- * @param config - The two sources, the boundary version, the network, the seed and the parameters each side values dust
- *   against.
+ * @remarks
+ *   Effectful because starting one is: a wallet that spans a boundary may ask the chain which version it is on before it
+ *   can choose a variant, and that question is answered over the network. A harness that hid it behind a synchronous
+ *   call would be hiding the very thing these proofs are about.
+ * @param config - The two sources, the boundary version, the network, the seed, the parameters each side values dust
+ *   against, and how the chain is asked its version.
  * @returns The running wallet and its observation channels.
  */
-export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
-  const { preFork, replayed, networkId, forkVersion, seed, dustParameters, syncTime } = config;
+export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWallet> => {
+  const { preFork, replayed, networkId, forkVersion, seed, dustParameters, syncTime, chainVersionProbe } = config;
 
   const preForkKey = PreForkSecretKey.fromSeed(seed);
   const postForkKey = PostForkSecretKey.fromSeed(seed);
@@ -370,7 +382,7 @@ export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
     .withMigration(() => capturingCrossLedgerMigration(dustParameters.postFork, captured));
 
   const WalletClass = CustomForkingDustWallet(
-    { networkId, forkVersion },
+    { networkId, forkVersion, ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}) },
     {
       builder: preForkBuilder,
       configuration: {
@@ -393,43 +405,46 @@ export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
     },
   );
 
-  const wallet = WalletClass.startWithSeed(seed, dustParameters.postFork);
-  const runtime = wallet.runtime;
+  return Effect.promise(() => WalletClass.startWithSeed(seed, dustParameters.postFork)).pipe(
+    Effect.map((wallet) => {
+      const runtime = wallet.runtime;
 
-  const currentState = pipe(runtime.stateChanges, Stream.take(1), Stream.runHead, Effect.map(Option.getOrThrow));
+      const currentState = pipe(runtime.stateChanges, Stream.take(1), Stream.runHead, Effect.map(Option.getOrThrow));
 
-  return {
-    dust: wallet,
+      return {
+        dust: wallet,
 
-    keys: { preFork: preForkKey, postFork: postForkKey },
+        keys: { preFork: preForkKey, postFork: postForkKey },
 
-    // The key handed over is the post-fork ledger version's, which is what the wallet's API speaks. The pre-fork
-    // variant running underneath is started from the seed the wallet retained instead — the seam a wallet crossing a
-    // boundary rests on.
-    start: Effect.promise(() => wallet.start(postForkKey)),
+        // The key handed over is the post-fork ledger version's, which is what the wallet's API speaks. The pre-fork
+        // variant running underneath is started from the seed the wallet retained instead — the seam a wallet crossing
+        // a boundary rests on.
+        start: Effect.promise(() => wallet.start(postForkKey)),
 
-    awaitMigration: Deferred.await(captured),
+        awaitMigration: Deferred.await(captured),
 
-    migration: Deferred.poll(captured).pipe(
-      Effect.flatMap(Option.match({ onNone: () => Effect.succeedNone, onSome: Effect.asSome })),
-    ),
+        migration: Deferred.poll(captured).pipe(
+          Effect.flatMap(Option.match({ onNone: () => Effect.succeedNone, onSome: Effect.asSome })),
+        ),
 
-    activeTag: pipe(
-      runtime.currentVariant,
-      Effect.map((current) => current.runningVariant.__polyTag__),
-    ),
+        activeTag: pipe(
+          runtime.currentVariant,
+          Effect.map((current) => current.runningVariant.__polyTag__),
+        ),
 
-    currentState,
+        currentState,
 
-    awaitState: (predicate) =>
-      pipe(
-        runtime.stateChanges,
-        Stream.filter(predicate),
-        Stream.take(1),
-        Stream.runHead,
-        Effect.map(Option.getOrThrow),
-      ),
+        awaitState: (predicate: (state: ForkedState) => boolean) =>
+          pipe(
+            runtime.stateChanges,
+            Stream.filter(predicate),
+            Stream.take(1),
+            Stream.runHead,
+            Effect.map(Option.getOrThrow),
+          ),
 
-    stop: Effect.promise(() => wallet.stop()),
-  };
+        stop: Effect.promise(() => wallet.stop()),
+      };
+    }),
+  );
 };

@@ -19,12 +19,14 @@
  *   here are the other question — a wallet meeting a chain that is already on one side or the other, which is what
  *   every application start actually is.
  *
- *   A wallet always begins on the pre-fork variant, because that is the variant a wallet with no history belongs to. On a
- *   chain that has already forked it therefore hands over immediately, having applied nothing: one migration per start,
- *   paid on chains that are entirely past the boundary. That cost is accepted rather than hidden — removing it means
- *   asking the chain for its version before choosing a variant, which is a separate piece of work.
+ *   Where it begins turns on one question: whether it asked the chain. A wallet given a way to ask starts at the variant
+ *   that owns the version the chain reports, which on a chain past the boundary is the post-fork one from the first
+ *   moment — no hand-over, and the right epoch before a single event has arrived. A wallet with no way to ask, or one
+ *   whose question went unanswered, begins on the pre-fork variant, because that is where a wallet with no history
+ *   belongs, and hands over on the first batch it sees. Both are specified here: the second is not a fallback in name
+ *   only, it is what every offline-first application and every wallet built without a probe does.
  *
- *   Both starts assert the boundary by comparison with `forkVersion` and never by the number itself: which protocol
+ *   All of it asserts the boundary by comparison with `forkVersion` and never by the number itself: which protocol
  *   version a chain reports is a property of the chain, and the real fork's value is not final.
  */
 
@@ -39,6 +41,7 @@ import {
   type UnprovenTx,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { Cause, Deferred, Effect, Option, Queue, Runtime, type Scope, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
@@ -80,13 +83,14 @@ const dustParameters = {
 const walletOnChainAt = (
   chain: DustChain,
   version: ProtocolVersion.ProtocolVersion,
+  chainVersionProbe?: ChainVersionProbe,
 ): Effect.Effect<ForkWallet, never, Scope.Scope> =>
   Effect.gen(function* () {
     const history: readonly TimelineEvent[] = numberedFrom(chain.eventBytes, 1, Number(version));
     const wire = yield* Queue.unbounded<readonly TimelineEvent[]>();
     const replayed = yield* Deferred.make<readonly TimelineEvent[]>();
 
-    const wallet = makeForkWallet({
+    const wallet = yield* makeForkWallet({
       preFork: Stream.fromQueue(wire),
       replayed: Deferred.await(replayed),
       networkId,
@@ -94,6 +98,7 @@ const walletOnChainAt = (
       seed: dustSeed(),
       dustParameters,
       syncTime: chain.syncTime,
+      ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}),
     });
     yield* Effect.addFinalizer(() => wallet.stop);
     yield* wallet.start;
@@ -106,6 +111,22 @@ const walletOnChainAt = (
 
     return wallet;
   });
+
+/** A probe answering as a chain on `version` would. */
+const chainReporting =
+  (version: ProtocolVersion.ProtocolVersion): ChainVersionProbe =>
+  () =>
+    Promise.resolve(version);
+
+/**
+ * A probe that never answers.
+ *
+ * @remarks
+ *   One shape stands in for every way the question can go unanswered — no indexer, no network, a request that outlives
+ *   the wallet's patience — because the wallet distinguishes none of them: it asked, it has no answer, it starts where
+ *   a wallet that never asked starts.
+ */
+const unreachableChain: ChainVersionProbe = () => Promise.reject(new Error('the indexer cannot be reached'));
 
 /**
  * The typed failure a wallet call rejected with.
@@ -218,9 +239,43 @@ const syncedPreForkWallet: Effect.Effect<ForkWallet, WalletRuntimeError, Scope.S
   return wallet;
 });
 
+describe('a dust wallet that asks the chain where it is starting', () => {
+  it('starts on the post-fork variant of a chain past the boundary, without a hand-over at all', async () =>
+    Effect.gen(function* () {
+      const chain = yield* Effect.promise(() => buildDustChain());
+      const wallet = yield* walletOnChainAt(chain, afterFork, chainReporting(afterFork));
+
+      // The post-fork variant does the syncing from the first event, and there is nothing to hand over because
+      // nothing was left behind. This is what the hand-over below costs a wallet that could not ask.
+      const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
+      expect(yield* wallet.activeTag).toBe(V2Tag);
+      expect(synced.state.protocolVersion).toBeGreaterThanOrEqual(forkVersion);
+      expect(balanceAt(synced.state, chain.syncTime)).toBeGreaterThan(0n);
+
+      expect(yield* wallet.migration).toStrictEqual(Option.none());
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('starts on the pre-fork variant of a chain that has not forked, and stays there', async () =>
+    Effect.gen(function* () {
+      const chain = yield* Effect.promise(() => buildDustChain());
+      const wallet = yield* walletOnChainAt(chain, beforeFork, chainReporting(beforeFork));
+
+      // The answer sends it to the variant that owns the version, which below the boundary is the one it would have
+      // started on anyway. What the probe changes here is nothing at all, which is the claim.
+      const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
+      expect(balanceAt(synced.state, chain.syncTime)).toBeGreaterThan(0n);
+      expect(synced.state.protocolVersion).toBeLessThan(forkVersion);
+
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+      expect(yield* wallet.migration).toStrictEqual(Option.none());
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
 describe('a dust wallet starting on a chain that has already forked', () => {
   it('hands over on the first batch, having applied nothing, and syncs on the post-fork variant', async () =>
     Effect.gen(function* () {
+      // No probe: the shape of every wallet built without one, and of every application that would rather not have
+      // its start depend on reaching an indexer.
       const chain = yield* Effect.promise(() => buildDustChain());
       const wallet = yield* walletOnChainAt(chain, afterFork);
 
@@ -238,6 +293,21 @@ describe('a dust wallet starting on a chain that has already forked', () => {
       const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
       expect(yield* wallet.activeTag).toBe(V2Tag);
       expect(synced.state.protocolVersion).toBeGreaterThanOrEqual(forkVersion);
+      expect(balanceAt(synced.state, chain.syncTime)).toBeGreaterThan(0n);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('hands over the same way when it asked the chain and got no answer', async () =>
+    Effect.gen(function* () {
+      const chain = yield* Effect.promise(() => buildDustChain());
+      const wallet = yield* walletOnChainAt(chain, afterFork, unreachableChain);
+
+      // A question that cannot be answered leaves the wallet exactly where a wallet that never asked would be — and,
+      // above all, leaves it started. An unreachable chain is not a reason to fail to start.
+      const migration = yield* wallet.awaitMigration;
+      expect(migration.from.appliedIndex).toBe(0n);
+
+      const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
+      expect(yield* wallet.activeTag).toBe(V2Tag);
       expect(balanceAt(synced.state, chain.syncTime)).toBeGreaterThan(0n);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
@@ -371,6 +441,62 @@ describe('a dust wallet starting on a chain that has not forked', () => {
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
+/**
+ * A dust wallet on a chain past the boundary that has shown it nothing.
+ *
+ * @remarks
+ *   The hazard the probe closes, and the reason it is a correctness item rather than an optimization. A wallet learns
+ *   the chain's version from the events it observes, so one that has observed none holds the only version it can
+ *   assume: the bottom of the timeline. That is not a transient state on a chain whose dust timeline contains nothing
+ *   addressed to this wallet — it is where the wallet stays, for as long as it runs. And since transacting works on
+ *   either side of the boundary, the wallet does not refuse: it prices and builds with the wrong ledger version,
+ *   against a chain that will reject the result.
+ *
+ *   Modelled by a wire that never emits, which is exactly the observable position of a wallet whose source has nothing
+ *   to deliver. What is asserted is the epoch the wallet believes it is in, read through a call that enforces it.
+ */
+describe('a dust wallet on a chain that has shown it no events', () => {
+  const walletOnSilentChain = (chainVersionProbe?: ChainVersionProbe): Effect.Effect<ForkWallet, never, Scope.Scope> =>
+    Effect.gen(function* () {
+      const wire = yield* Queue.unbounded<readonly TimelineEvent[]>();
+      const replayed = yield* Deferred.make<readonly TimelineEvent[]>();
+
+      const wallet = yield* makeForkWallet({
+        preFork: Stream.fromQueue(wire),
+        replayed: Deferred.await(replayed),
+        networkId,
+        forkVersion,
+        seed: dustSeed(),
+        dustParameters,
+        syncTime: new Date(),
+        ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}),
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      return wallet;
+    });
+
+  it('believes it is pre-fork, and refuses the chain’s own transactions, when it never asked', async () =>
+    Effect.gen(function* () {
+      const wallet = yield* walletOnSilentChain();
+
+      const failure = Option.getOrThrow(yield* failureOf(wallet.dust.calculateFee([postForkTransaction()])));
+
+      // A transaction of the ledger version this chain actually runs, refused by a wallet sitting on the same chain.
+      expect(failure).toBeInstanceOf(ProtocolVersionMismatchError);
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('is in the epoch the chain is in, having asked it', async () =>
+    Effect.gen(function* () {
+      const wallet = yield* walletOnSilentChain(chainReporting(afterFork));
+
+      // Same wallet, same silent chain, one question asked: the transaction is now one this wallet can price, and the
+      // variant holding it is the one the chain is on.
+      expect(yield* failureOf(wallet.dust.calculateFee([postForkTransaction()]))).toStrictEqual(Option.none());
+      expect(yield* wallet.activeTag).toBe(V2Tag);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
 describe('projections fast-sync and the two-variant wallet', () => {
   it('is a post-fork capability the pre-fork variant does not have and never will', () => {
     // The load-bearing fact behind the finding below, asserted rather than asserted-in-prose: the projections path
@@ -382,19 +508,22 @@ describe('projections fast-sync and the two-variant wallet', () => {
     expect('makeEventLessSyncCapability' in PreForkSync).toBe(false);
   });
 
-  it('is therefore reachable only through a single-variant composition', async () =>
+  it('is still reachable only through a single-variant composition, probe or no probe', async () =>
     Effect.gen(function* () {
-      // What the flip actually costs the fast-sync path: a two-variant wallet begins on the pre-fork variant no matter
-      // what the chain reports, so even on a chain entirely past the boundary it boots a variant that cannot fast-sync
-      // — and only reaches the post-fork one after a migration. A wallet that wants projections therefore composes a
-      // *single* post-fork variant (`CustomDustWallet` + `makeEventLessSyncService`, as `docs-snippets`'
-      // `dust-fast-sync.ts` does), which is unaffected by the flip.
+      // The finding survives the start probe, which changes where a wallet begins and not what it can sync with. A
+      // two-variant wallet has to be able to read a chain below the boundary, and below the boundary there is only the
+      // event path — so its post-fork variant is composed with the event sync too, and it is on the pre-fork variant
+      // whenever the chain has not forked, was not asked, or did not answer. A wallet that wants projections therefore
+      // still composes a *single* post-fork variant (`CustomDustWallet` + `makeEventLessSyncService`, as
+      // `docs-snippets`' `dust-fast-sync.ts` does).
       const chain = yield* Effect.promise(() => buildDustChain());
-      const wallet = yield* walletOnChainAt(chain, afterFork);
 
-      // It boots the events variant even though every event it will ever see is post-fork.
-      expect(yield* wallet.activeTag).toBe(V1Tag);
-      yield* wallet.awaitMigration;
-      expect(yield* wallet.activeTag).toBe(V2Tag);
+      const probed = yield* walletOnChainAt(chain, afterFork, chainReporting(afterFork));
+      expect(yield* probed.activeTag).toBe(V2Tag);
+
+      // The same class, the same registration, a chain that has not forked: the events variant, and no way for it to
+      // be anything else.
+      const belowBoundary = yield* walletOnChainAt(chain, beforeFork, chainReporting(beforeFork));
+      expect(yield* belowBoundary.activeTag).toBe(V1Tag);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
