@@ -207,6 +207,7 @@ describe('DustWallet', () => {
         .withSync(makeSimulatorSyncService, makeSimulatorSyncCapability)
         .withCoinsAndBalancesDefaults()
         .withKeysDefaults()
+        .withStartAuxDefaults()
         .withSerializationDefaults()
         .withTransactionHistory(makeSimulatorTransactionHistoryService)
         .build({

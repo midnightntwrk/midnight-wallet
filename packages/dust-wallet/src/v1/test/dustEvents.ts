@@ -149,6 +149,7 @@ export const buildDustChain = (protocolVersion?: ProtocolVersion.ProtocolVersion
       .withSync(makeSimulatorSyncService, makeSimulatorSyncCapability)
       .withCoinsAndBalancesDefaults()
       .withKeysDefaults()
+      .withStartAuxDefaults()
       .withSerializationDefaults()
       .withTransactionHistory(makeSimulatorTransactionHistoryService)
       .build({

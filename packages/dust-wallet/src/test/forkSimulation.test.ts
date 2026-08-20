@@ -67,7 +67,7 @@ import { CoreWallet as PostForkWallet } from '../v2/CoreWallet.js';
 import { V2Tag } from '../v2/RunningV2Variant.js';
 import { dustParameters as postForkDustParameters, freshWallet as freshPostForkWallet } from '../v2/test/dustEvents.js';
 import { type TimelineEvent, numberedFrom, reframeAsPostFork } from './forkReplay.js';
-import { makeForkWallet } from './forkWallet.js';
+import { makeForkWallet } from './forkHarness.js';
 import {
   balanceAt,
   commitmentTreeRoot,

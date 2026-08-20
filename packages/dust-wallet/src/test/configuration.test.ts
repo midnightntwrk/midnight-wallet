@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type DustParameters } from '@midnightntwrk/ledger-v9';
+import { type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type CanAssign, type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { type Duration } from 'effect';
 import { describe, it } from 'vitest';
@@ -32,18 +33,27 @@ describe('DefaultDustConfiguration', () => {
           txHistoryStorage: V2TransactionHistory.DustHistoryStorage;
           indexerClientConnection: { indexerHttpUrl: string };
           transactionDetailsRetryWindow?: Duration.DurationInput;
+          forkVersion: ProtocolVersion.ProtocolVersion;
         }
       >
     >;
   });
 
-  it('stays interchangeable with what either variant is built from', () => {
+  it('builds either variant, being a superset of what each is built from', () => {
+    // One direction only, and deliberately so. The wallet's configuration now says something no single variant does —
+    // where the boundary between them lies — so it is strictly larger than either variant's. What must keep holding is
+    // that it can still build both: a variant asking for something this type does not carry would be a wallet that
+    // cannot be built for one of its own variants.
     type _1 = Expect<CanAssign<DefaultDustConfiguration, DefaultV2Configuration>>;
-    type _2 = Expect<CanAssign<DefaultV2Configuration, DefaultDustConfiguration>>;
     // The pre-fork variant types `dustParameters` with ledger-v8's class rather than ledger-v9's. The two are
     // structurally identical, which is the only reason one configuration can serve both — asserted here so a
     // divergence shows up as a compile error rather than as a wallet that cannot be built for one of its variants.
-    type _3 = Expect<CanAssign<DefaultDustConfiguration, DefaultV1Configuration>>;
-    type _4 = Expect<CanAssign<DefaultV1Configuration, DefaultDustConfiguration>>;
+    // (The wallet still rebuilds the object per variant rather than sharing it: structural identity makes the *type*
+    // interchangeable, not the WASM instance.)
+    type _2 = Expect<CanAssign<DefaultDustConfiguration, DefaultV1Configuration>>;
+
+    // `forkVersion` is the wallet layer's alone: neither variant knows there is another one.
+    type _3 = Expect<Equal<'forkVersion' extends keyof DefaultV1Configuration ? true : false, false>>;
+    type _4 = Expect<Equal<'forkVersion' extends keyof DefaultV2Configuration ? true : false, false>>;
   });
 });

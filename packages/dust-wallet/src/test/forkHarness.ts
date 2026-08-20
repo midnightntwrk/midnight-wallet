@@ -12,45 +12,27 @@
 // limitations under the License.
 
 /**
- * A dust wallet registered over _both_ variants, syncing a timeline that forks under it — test scaffolding only.
+ * The shipped forking dust wallet, driven over an in-memory timeline, with the channels a fork proof needs to watch it.
  *
  * @remarks
- *   The shipped `DustWallet` registers exactly one variant and its type is a one-element HList throughout, so it cannot
- *   express a wallet that crosses a fork. Rather than widen the public surface ahead of the API redesign this builds
- *   the two-variant wallet the way `packages/e2e-tests` builds its custom wallets: `WalletBuilder.init()` with both
- *   variant builders registered directly. Nothing here is exported from the package.
+ *   Everything here is observation and simulated infrastructure. The wallet itself is the one the package ships —
+ *   {@link CustomForkingDustWallet}, the same composition `DustWallet(configuration)` uses — with each variant's sync
+ *   _service_ replaced by a numbered, version-tagged event log instead of a WebSocket to an indexer, and the post-fork
+ *   variant's migration wrapped so both ends of the hand-over can be recorded as plain data. The capability that folds
+ *   an update into the wallet, boundary rule and all, is the real one.
  *
- *   Both sides sync through the **events** path — `makeDefaultSyncCapability`, the capability the shipped wallet uses —
- *   because that is the path the fork design is written against: its cursor is an indexer event id, which is the thing
- *   the migration parks and the replay counts on from. (The projections path cannot do any of this and says so in
- *   `Sync.ts`: a projections update is a folded snapshot with no protocol version anywhere in it, so there is nothing
- *   to split at a boundary. The simulator path could, at block granularity, but its cursor is a block number and its
- *   updates carry a live chain that only one of the two ledger versions can hold.) What is substituted is the sync
- *   _service_ on each side — the thing that would otherwise open a WebSocket to an indexer — while the capability that
- *   folds an update into the wallet, boundary rule and all, is the real one.
+ *   Both sides sync through the **events** path, because that is the path the fork design is written against: its cursor
+ *   is an indexer event id, which is the thing the migration parks and the replay counts on from. (The projections path
+ *   cannot do any of this and says so in `v2/Sync.ts`: a projections update is a folded snapshot with no protocol
+ *   version anywhere in it, so there is nothing to split at a boundary.)
  *
  *   So neither side watches a chain: each is served a numbered, version-tagged event log, which is what an indexer serves
  *   and the only thing that exists after a fork anyway. The events in it are real, produced by a real ledger-v8 dust
  *   chain in `v1/test/dustEvents.ts` — recorded rather than streamed, because a wallet crossing a boundary has to be
- *   handed the same history twice, and a chain's `Event` instances are consumed the first time they are replayed.
+ *   handed the same history twice.
  *
- *   Three things it has to work around, each of which is a real question the public API will have to answer eventually:
- *
- *   - **One configuration cannot carry two ledgers' dust parameters.** `WalletBuilder` intersects every variant's
- *       configuration, and both variants declare an optional `dustParameters` — each of its own ledger's
- *       `DustParameters`. Nothing objects: the two classes are structurally identical, so the intersection accepts
- *       either, and whichever is supplied is then handed to _both_ variants — one of which would be building a
- *       `DustLocalState` out of the other module's WASM object. A hazard the type system does not catch, so the field
- *       is left unset and each side is passed its own parameters directly: the pre-fork ones into the initial state,
- *       the post-fork ones into the migration.
- *   - **Start-aux does not cross the boundary.** The pre-fork variant's aux is a ledger-v8 `DustSecretKey`, the post-fork
- *       variant's a ledger-v9 one, and those two _are_ distinct to the type system — each declares a private
- *       constructor — so a single retained value provably cannot serve both. What is retained here is therefore the
- *       _seed_, and each variant is handed a key derived from it: the same dust public key either way (asserted by
- *       `forkSimulation.test.ts`), just built by the ledger that variant speaks. This is exactly what `DustWallet`'s
- *       `#retainedAux` will have to become when it is registered over two variants.
- *   - **The replay does not exist yet** when the wallet is built — it is what the indexer starts serving once the fork has
- *       happened — so it is supplied as an effect the post-fork variant awaits at its first sync.
+ *   The post-fork source does not exist when the wallet is built — the replay only happens once the fork has — so it
+ *   reaches its variant as an effect awaited at the first sync, carried in that variant's own configuration.
  */
 
 import {
@@ -63,17 +45,15 @@ import {
   DustSecretKey as PostForkSecretKey,
   LedgerParameters as PostForkLedgerParameters,
 } from '@midnightntwrk/ledger-v9';
-import { type NetworkId, type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
+import { type NetworkId, type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, Option, Stream, pipe } from 'effect';
-import { CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
-import { V1Tag } from '../v1/RunningV1Variant.js';
+import { CustomForkingDustWallet, type ForkingDustWallet } from '../ForkingDustWallet.js';
+import { type CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
 import * as PreForkSync from '../v1/Sync.js';
 import { V1Builder } from '../v1/V1Builder.js';
 import { type CoreWallet as PostForkWallet } from '../v2/CoreWallet.js';
 import * as PostForkMigration from '../v2/Migration.js';
-import { V2Tag } from '../v2/RunningV2Variant.js';
 import * as PostForkSync from '../v2/Sync.js';
 import { type BlockData as PostForkBlockData, WalletSyncUpdate as PostForkUpdate } from '../v2/SyncSchema.js';
 import { V2Builder } from '../v2/V2Builder.js';
@@ -230,28 +210,37 @@ const postForkBlockData = (timestamp: Date): PostForkBlockData => ({
  */
 const resumeFrom = (appliedIndex: bigint): number => Number(appliedIndex) - 1;
 
-/**
- * The pre-fork sync service: batches of a timeline the test controls, filtered by the wallet's cursor.
- *
- * @param batches The pre-fork wire, one batch per emission — which is how a test decides whether the boundary arrives
- *   in the same batch as the history before it or in a later one.
- * @param timestamp The instant every batch is valued at, which has to be at or after the last event's block time for
- *   the dust it creates to be worth anything.
- */
+/** What the pre-fork variant is configured with, on top of what its builder already asks for. */
+type PreForkSourceConfiguration = Readonly<{
+  /** The pre-fork wire, one batch per emission. */
+  batches: Stream.Stream<readonly TimelineEvent[]>;
+  /** The instant every batch is valued at, which has to be at or after the last event's block time. */
+  syncTime: Date;
+}>;
+
+/** What the post-fork variant is configured with: a source that does not exist yet. */
+type PostForkSourceConfiguration = Readonly<{
+  /** The replay — the indexer's re-emission of the timeline — which only exists once the fork has happened. */
+  replayed: Effect.Effect<readonly TimelineEvent[], never>;
+  syncTime: Date;
+}>;
+
+/** The pre-fork sync service: batches of a timeline the test controls, filtered by the wallet's cursor. */
 const preForkSyncService = (
-  batches: Stream.Stream<readonly TimelineEvent[]>,
-  timestamp: Date,
+  configuration: PreForkSourceConfiguration,
 ): PreForkSync.SyncService<PreForkWallet, PreForkSecretKey, PreForkSync.WalletSyncUpdate> => ({
   updates: (state, secretKey) => {
     const from = resumeFrom(state.progress.appliedIndex);
     return pipe(
-      batches,
+      configuration.batches,
       Stream.map((batch) => batch.filter((event) => event.id > from)),
       Stream.filter((batch) => batch.length > 0),
-      Stream.map((batch) => PreForkSync.WalletSyncUpdate.create(asPreForkItems(batch), secretKey, timestamp)),
+      Stream.map((batch) =>
+        PreForkSync.WalletSyncUpdate.create(asPreForkItems(batch), secretKey, configuration.syncTime),
+      ),
     );
   },
-  blockData: () => Effect.succeed(preForkBlockData(timestamp)),
+  blockData: () => Effect.succeed(preForkBlockData(configuration.syncTime)),
 });
 
 /**
@@ -263,27 +252,26 @@ const preForkSyncService = (
  *   error channel.
  */
 const postForkSyncService = (
-  replayed: Effect.Effect<readonly TimelineEvent[], never>,
-  timestamp: Date,
+  configuration: PostForkSourceConfiguration,
 ): PostForkSync.SyncService<PostForkWallet, PostForkSecretKey, PostForkUpdate> => ({
   updates: (state, secretKey) => {
     const from = resumeFrom(state.progress.appliedIndex);
     return pipe(
-      replayed,
+      configuration.replayed,
       Effect.orDie,
       Effect.map((replay) => replay.filter((event) => event.id > from)),
-      Effect.map((batch) => PostForkUpdate.create(asPostForkItems(batch), secretKey, timestamp)),
+      Effect.map((batch) => PostForkUpdate.create(asPostForkItems(batch), secretKey, configuration.syncTime)),
       Stream.fromEffect,
     );
   },
-  blockData: () => Effect.succeed(postForkBlockData(timestamp)),
+  blockData: () => Effect.succeed(postForkBlockData(configuration.syncTime)),
 });
 
 // =============================================================================
 // The wallet
 // =============================================================================
 
-/** Everything needed to build a two-variant dust wallet over a timeline that forks. */
+/** Everything needed to point the shipped forking dust wallet at a timeline that forks. */
 export type ForkWalletConfig = Readonly<{
   /** The pre-fork wire, one batch per emission. */
   preFork: Stream.Stream<readonly TimelineEvent[]>;
@@ -305,19 +293,25 @@ export type ForkWalletConfig = Readonly<{
    *
    * @remarks
    *   Two of them, because `DustLocalState` is parameterised and the parameters are a WASM object of whichever ledger
-   *   module produced them. Shielded's fork wallet needs no equivalent: its local state carries no parameters at all.
+   *   module produced them. The shipped wallet rebuilds the pre-fork set from the post-fork one it is handed; this
+   *   harness states both so a proof can assert what the migration was given.
    */
   dustParameters: Readonly<{ preFork: PreForkParameters; postFork: PostForkParameters }>;
   /** The instant sync updates are valued at — at or after the last event's block time. */
   syncTime: Date;
 }>;
 
-/** A running two-variant dust wallet, plus the channels a fork proof needs to observe it. */
+/** A state emission, whichever variant produced it. */
+export type ForkedState = ProtocolState.ProtocolState<PreForkWallet | PostForkWallet>;
+
+/** A running forking dust wallet, plus the channels a fork proof needs to observe it. */
 export type ForkWallet = Readonly<{
+  /** The wallet itself, exactly as an application would hold it. */
+  dust: ForkingDustWallet<PreForkSync.WalletSyncUpdate, PostForkUpdate>;
   /** A dust key of each ledger version, derived from the same seed. */
   keys: Readonly<{ preFork: PreForkSecretKey; postFork: PostForkSecretKey }>;
-  /** Starts background sync, having first registered the activation watcher that restarts it after a migration. */
-  start: Effect.Effect<void, WalletRuntimeError>;
+  /** Starts background sync through the wallet's own API, which resolves the key material each variant can use. */
+  start: Effect.Effect<void>;
   /** Resolves when the hand-over happens, with both ends of it. */
   awaitMigration: Effect.Effect<CapturedMigration>;
   /** Both ends of the migration, or `None` if none has happened yet. */
@@ -325,22 +319,20 @@ export type ForkWallet = Readonly<{
   /** The tag of the variant currently running — `V1Tag` before a migration, `V2Tag` after one. */
   activeTag: Effect.Effect<string | symbol>;
   /** The wallet's current state, whichever variant produced it. */
-  currentState: Effect.Effect<ProtocolState.ProtocolState<PreForkWallet | PostForkWallet>, WalletRuntimeError>;
+  currentState: Effect.Effect<ForkedState, WalletRuntimeError>;
   /**
    * Resolves once the wallet's state satisfies `predicate`, failing the test's timeout if it never does.
    *
    * Use monotone predicates only: the runtime's state stream keeps just the latest value, so a state that satisfies a
    * transient predicate can legitimately be skipped.
    */
-  awaitState: (
-    predicate: (state: ProtocolState.ProtocolState<PreForkWallet | PostForkWallet>) => boolean,
-  ) => Effect.Effect<ProtocolState.ProtocolState<PreForkWallet | PostForkWallet>, WalletRuntimeError>;
+  awaitState: (predicate: (state: ForkedState) => boolean) => Effect.Effect<ForkedState, WalletRuntimeError>;
   /** Tears the wallet down. */
   stop: Effect.Effect<void>;
 }>;
 
 /**
- * Builds and starts a dust wallet registered over both variants.
+ * Builds and starts the shipped forking dust wallet over an in-memory timeline that forks.
  *
  * @param config - The two sources, the boundary version, the network, the seed and the parameters each side values dust
  *   against.
@@ -356,59 +348,65 @@ export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
 
   const preForkBuilder = new V1Builder()
     .withDefaultTransactionType()
-    .withSync(
-      () => preForkSyncService(preFork, syncTime),
-      () => PreForkSync.makeDefaultSyncCapability(),
-    )
+    .withSync(preForkSyncService, () => PreForkSync.makeDefaultSyncCapability())
     .withSerializationDefaults()
     .withTransactingDefaults()
     .withCoinsAndBalancesDefaults()
     .withTransactionHistory(() => noOpPreForkHistory)
     .withKeysDefaults()
+    .withStartAuxDefaults()
     .withCoinSelectionDefaults();
 
   const postForkBuilder = new V2Builder()
     .withDefaultTransactionType()
-    .withSync(
-      () => postForkSyncService(replayed, syncTime),
-      () => PostForkSync.makeDefaultSyncCapability(),
-    )
+    .withSync(postForkSyncService, () => PostForkSync.makeDefaultSyncCapability())
     .withSerializationDefaults()
     .withTransactingDefaults()
     .withCoinsAndBalancesDefaults()
     .withTransactionHistory(() => noOpPostForkHistory)
     .withKeysDefaults()
+    .withStartAuxDefaults()
     .withCoinSelectionDefaults()
     .withMigration(() => capturingCrossLedgerMigration(dustParameters.postFork, captured));
 
-  const WalletClass = WalletBuilder.init()
-    .withVariant(ProtocolVersion.MinSupportedVersion, preForkBuilder)
-    .withVariant(forkVersion, postForkBuilder)
-    .build({ networkId, costParameters: { feeBlocksMargin: 5 } });
-
-  const wallet = WalletClass.startFirst(
-    WalletClass,
-    PreForkWallet.initEmpty(dustParameters.preFork, preForkKey, networkId),
+  const WalletClass = CustomForkingDustWallet(
+    { networkId, forkVersion },
+    {
+      builder: preForkBuilder,
+      configuration: {
+        networkId,
+        costParameters: { feeBlocksMargin: 5 },
+        dustParameters: dustParameters.preFork,
+        batches: preFork,
+        syncTime,
+      },
+    },
+    {
+      builder: postForkBuilder,
+      configuration: {
+        networkId,
+        costParameters: { feeBlocksMargin: 5 },
+        dustParameters: dustParameters.postFork,
+        replayed,
+        syncTime,
+      },
+    },
   );
+
+  const wallet = WalletClass.startWithSeed(seed, dustParameters.postFork);
   const runtime = wallet.runtime;
 
   const currentState = pipe(runtime.stateChanges, Stream.take(1), Stream.runHead, Effect.map(Option.getOrThrow));
 
   return {
+    dust: wallet,
+
     keys: { preFork: preForkKey, postFork: postForkKey },
 
-    start: Effect.gen(function* () {
-      // Registered before the first dispatch and only once, exactly as `DustWallet.start` does it: the returned effect
-      // resolves only once the subscription is live, so the migration cannot outrun the watcher.
-      yield* runtime.onVariantActivation({
-        [V1Tag]: (v1) => v1.startSyncInBackground(preForkKey),
-        [V2Tag]: (v2) => v2.startSyncInBackground(postForkKey),
-      });
-      yield* runtime.dispatch({
-        [V1Tag]: (v1) => v1.startSyncInBackground(preForkKey),
-        [V2Tag]: (v2) => v2.startSyncInBackground(postForkKey),
-      });
-    }),
+    // The key handed over is the post-fork ledger version's, which is what the wallet's API speaks. The pre-fork
+    // variant running underneath is started from the seed the wallet retained instead — the seam a wallet crossing a
+    // boundary rests on.
+    start: Effect.promise(() => wallet.start(postForkKey)),
 
     awaitMigration: Deferred.await(captured),
 
