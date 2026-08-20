@@ -172,7 +172,7 @@ describe('a shielded wallet crossing a hard fork', () => {
       const chain = yield* preForkChain(coins, forkVersion);
       const replayed = yield* Deferred.make<Simulator>();
 
-      const wallet = makeForkWallet({
+      const wallet = yield* makeForkWallet({
         preFork: chain,
         replayed: Deferred.await(replayed),
         networkId,
@@ -259,7 +259,7 @@ describe('a shielded wallet crossing a hard fork', () => {
       const chain = yield* preForkChain(coins, withinRangeVersion);
       const replayed = yield* Deferred.make<Simulator>();
 
-      const wallet = makeForkWallet({
+      const wallet = yield* makeForkWallet({
         preFork: chain,
         replayed: Deferred.await(replayed),
         networkId,
@@ -292,7 +292,7 @@ describe('a shielded wallet crossing a hard fork', () => {
       yield* driveTo(chain, forkBlock);
       const replayChain = yield* replayOf(coins, chain);
 
-      const wallet = makeForkWallet({
+      const wallet = yield* makeForkWallet({
         preFork: chain,
         replayed: Effect.succeed(replayChain),
         networkId,

@@ -19,12 +19,14 @@
  *   are the other question — a wallet meeting a chain that is already on one side or the other, which is what every
  *   application start actually is.
  *
- *   A wallet always begins on the pre-fork variant, because that is the variant a wallet with no history belongs to. On a
- *   chain that has already forked it therefore hands over immediately, having applied nothing: one migration per start,
- *   paid on chains that are entirely past the boundary. That cost is accepted rather than hidden — removing it means
- *   asking the chain for its version before choosing a variant, which is a separate piece of work.
+ *   Where it begins turns on one question: whether it asked the chain. A wallet given a way to ask starts at the variant
+ *   that owns the version the chain reports, which on a chain past the boundary is the post-fork one from the first
+ *   moment — no hand-over, and the right epoch before a single event has arrived. A wallet with no way to ask, or one
+ *   whose question went unanswered, begins on the pre-fork variant, because that is where a wallet with no history
+ *   belongs, and hands over on the first batch it sees. Both are specified here: the second is not a fallback in name
+ *   only, it is what every offline-first application and every wallet built without a probe does.
  *
- *   Both starts assert the boundary by comparison with `forkVersion` and never by the number itself: which protocol
+ *   All of it asserts the boundary by comparison with `forkVersion` and never by the number itself: which protocol
  *   version a chain reports is a property of the chain, and the real fork's value is not final.
  */
 
@@ -42,6 +44,7 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnightntwrk/wallet-sdk-address-format';
+import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { V8, genesisStrictness, immediateBlockProducer } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -159,6 +162,22 @@ const preForkTransaction = (): AnyTx =>
 const postForkTransaction = (): AnyTx =>
   WalletTransaction.adopt('Unproven', v9.Transaction.fromParts(networkId), forkVersion);
 
+/** A probe answering as a chain on `version` would. */
+const chainReporting =
+  (version: ProtocolVersion.ProtocolVersion): ChainVersionProbe =>
+  () =>
+    Promise.resolve(version);
+
+/**
+ * A probe that never answers.
+ *
+ * @remarks
+ *   One shape stands in for every way the question can go unanswered — no indexer, no network, a request that outlives
+ *   the wallet's patience — because the wallet distinguishes none of them: it asked, it has no answer, it starts where
+ *   a wallet that never asked starts.
+ */
+const unreachableChain: ChainVersionProbe = () => Promise.reject(new Error('the indexer cannot be reached'));
+
 /**
  * A wallet on a chain that has not forked, synchronized and holding its coins.
  *
@@ -172,7 +191,13 @@ const syncedPreForkWallet: Effect.Effect<ForkWallet, LedgerOps.LedgerError | Wal
     const chain = yield* chainAt(beforeFork, coins);
     const replayed = yield* replayOf(coins, chain);
 
-    const wallet = makeForkWallet({ preFork: chain, replayed: Effect.succeed(replayed), networkId, forkVersion, seed });
+    const wallet = yield* makeForkWallet({
+      preFork: chain,
+      replayed: Effect.succeed(replayed),
+      networkId,
+      forkVersion,
+      seed,
+    });
     yield* Effect.addFinalizer(() => wallet.stop);
     yield* wallet.start;
 
@@ -182,6 +207,67 @@ const syncedPreForkWallet: Effect.Effect<ForkWallet, LedgerOps.LedgerError | Wal
     return wallet;
   });
 
+describe('a shielded wallet that asks the chain where it is starting', () => {
+  it('starts on the post-fork variant of a chain past the boundary, without a hand-over at all', async () =>
+    Effect.gen(function* () {
+      const coins = chainCoins();
+      const chain = yield* chainAt(afterFork, coins);
+      const replayed = yield* replayOf(coins, chain);
+
+      const wallet = yield* makeForkWallet({
+        preFork: chain,
+        replayed: Effect.succeed(replayed),
+        networkId,
+        forkVersion,
+        seed,
+        chainVersionProbe: chainReporting(afterFork),
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+
+      // Before sync has been started, before any event exists to learn from: the variant is already the post-fork one.
+      // The pre-fork variant is not where this wallet began and then left — it never ran.
+      expect(yield* wallet.activeTag).toBe(V2Tag);
+
+      yield* wallet.start;
+
+      const synced = yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+      expect(coinValues(synced.state)).toEqual([...walletValues]);
+      expect(synced.version).toBeGreaterThanOrEqual(forkVersion);
+
+      // Nothing was migrated, because nothing was left behind. This is the whole point: the hand-over below is a cost
+      // paid only by a wallet that could not ask.
+      expect(yield* wallet.migration).toStrictEqual(Option.none());
+      expect(yield* wallet.activeTag).toBe(V2Tag);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('starts on the pre-fork variant of a chain that has not forked, and stays there', async () =>
+    Effect.gen(function* () {
+      const coins = chainCoins();
+      const chain = yield* chainAt(beforeFork, coins);
+      const replayed = yield* replayOf(coins, chain);
+
+      const wallet = yield* makeForkWallet({
+        preFork: chain,
+        replayed: Effect.succeed(replayed),
+        networkId,
+        forkVersion,
+        seed,
+        chainVersionProbe: chainReporting(beforeFork),
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      yield* wallet.start;
+
+      // The answer sends it to the variant that owns the version, which below the boundary is the one it would have
+      // started on anyway. What the probe changes here is nothing at all, which is the claim.
+      const synced = yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+      expect(coinValues(synced.state)).toEqual([...walletValues]);
+      expect(synced.state.protocolVersion).toBeLessThan(forkVersion);
+
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+      expect(yield* wallet.migration).toStrictEqual(Option.none());
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
 describe('a shielded wallet starting on a chain that has already forked', () => {
   it('hands over on the first batch, having applied nothing, and syncs on the post-fork variant', async () =>
     Effect.gen(function* () {
@@ -189,7 +275,9 @@ describe('a shielded wallet starting on a chain that has already forked', () => 
       const chain = yield* chainAt(afterFork, coins);
       const replayed = yield* replayOf(coins, chain);
 
-      const wallet = makeForkWallet({
+      // No probe: the shape of every wallet built without one, and of every application that would rather not have
+      // its start depend on reaching an indexer.
+      const wallet = yield* makeForkWallet({
         preFork: chain,
         replayed: Effect.succeed(replayed),
         networkId,
@@ -215,6 +303,33 @@ describe('a shielded wallet starting on a chain that has already forked', () => 
       expect(synced.version).toBeGreaterThanOrEqual(forkVersion);
       expect(coinValues(synced.state)).toEqual([...walletValues]);
     }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('hands over the same way when it asked the chain and got no answer', async () =>
+    Effect.gen(function* () {
+      const coins = chainCoins();
+      const chain = yield* chainAt(afterFork, coins);
+      const replayed = yield* replayOf(coins, chain);
+
+      const wallet = yield* makeForkWallet({
+        preFork: chain,
+        replayed: Effect.succeed(replayed),
+        networkId,
+        forkVersion,
+        seed,
+        chainVersionProbe: unreachableChain,
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      yield* wallet.start;
+
+      // A question that cannot be answered leaves the wallet exactly where a wallet that never asked would be — and,
+      // above all, leaves it started. An unreachable chain is not a reason to fail to start.
+      const migration = yield* wallet.awaitMigration;
+      expect(migration.from.appliedIndex).toBe(0n);
+
+      const synced = yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+      expect(yield* wallet.activeTag).toBe(V2Tag);
+      expect(coinValues(synced.state)).toEqual([...walletValues]);
+    }).pipe(Effect.scoped, Effect.runPromise));
 });
 
 describe('a shielded wallet starting on a chain that has not forked', () => {
@@ -225,7 +340,7 @@ describe('a shielded wallet starting on a chain that has not forked', () => {
       // The replay is never reached: a source the post-fork variant would consume if it ever ran.
       const replayed = yield* replayOf(coins, chain);
 
-      const wallet = makeForkWallet({
+      const wallet = yield* makeForkWallet({
         preFork: chain,
         replayed: Effect.succeed(replayed),
         networkId,
@@ -309,5 +424,60 @@ describe('a shielded wallet starting on a chain that has not forked', () => {
       const after = yield* wallet.currentState;
       expect(totalValue(after.state)).toBe(walletTotal);
       expect(yield* wallet.activeTag).toBe(V1Tag);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/**
+ * A wallet on a chain past the boundary that has shown it nothing.
+ *
+ * @remarks
+ *   The hazard the probe closes, and the reason it is a correctness item rather than an optimization. A wallet learns
+ *   the chain's version from the events it observes, so one that has observed none holds the only version it can
+ *   assume: the bottom of the timeline. That is not a transient state on a chain whose shielded timeline contains
+ *   nothing addressed to this wallet — it is where the wallet stays, for as long as it runs. And since transacting
+ *   works on either side of the boundary, the wallet does not refuse: it builds with the wrong ledger version, against
+ *   a chain that will reject the result.
+ *
+ *   Modelled by not starting synchronization, which is exactly the observable position of a wallet whose source has
+ *   nothing to deliver: no event has been applied. What is asserted is the epoch the wallet believes it is in, read
+ *   through the one call that enforces it.
+ */
+describe('a shielded wallet on a chain that has shown it no events', () => {
+  const walletOnSilentChain = (chainVersionProbe?: ChainVersionProbe) =>
+    Effect.gen(function* () {
+      const chain = yield* chainAt(afterFork, []);
+      const replayed = yield* replayOf([], chain);
+
+      const wallet = yield* makeForkWallet({
+        preFork: chain,
+        replayed: Effect.succeed(replayed),
+        networkId,
+        forkVersion,
+        seed,
+        chainVersionProbe,
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      return wallet;
+    });
+
+  it('believes it is pre-fork, and refuses the chain’s own transactions, when it never asked', async () =>
+    Effect.gen(function* () {
+      const wallet = yield* walletOnSilentChain();
+
+      const failure = Option.getOrThrow(yield* failureOf(wallet.shielded.balanceTransaction(postForkTransaction())));
+
+      // A transaction of the ledger version this chain actually runs, refused by a wallet sitting on the same chain.
+      expect(failure).toBeInstanceOf(ProtocolVersionMismatchError);
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('is in the epoch the chain is in, having asked it', async () =>
+    Effect.gen(function* () {
+      const wallet = yield* walletOnSilentChain(chainReporting(afterFork));
+
+      // Same wallet, same silent chain, one question asked: the transaction is now one this wallet can read, and the
+      // variant holding it is the one the chain is on.
+      expect(yield* failureOf(wallet.shielded.balanceTransaction(postForkTransaction()))).toStrictEqual(Option.none());
+      expect(yield* wallet.activeTag).toBe(V2Tag);
     }).pipe(Effect.scoped, Effect.runPromise));
 });

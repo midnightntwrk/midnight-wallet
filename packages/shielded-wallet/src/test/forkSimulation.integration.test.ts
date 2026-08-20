@@ -150,7 +150,7 @@ describe('a shielded wallet crossing a byte-faithful hard fork', () => {
       const fork = yield* ForkSimulator.init(baseConfig);
       const replayed = yield* Deferred.make<Simulator>();
 
-      const wallet = makeForkWallet({
+      const wallet = yield* makeForkWallet({
         preFork: fork.preFork,
         replayed: Deferred.await(replayed),
         networkId,
