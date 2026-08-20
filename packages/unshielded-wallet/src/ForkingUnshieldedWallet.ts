@@ -41,11 +41,15 @@ import {
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import {
+  type ChainVersionProbe,
+  makeIndexerChainVersionProbe,
+} from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import * as PreForkSignatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
-import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
-import { Effect, Either, Option, Ref, type Scope } from 'effect';
+import { Duration, Effect, Either, Option, Ref, type Scope, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { type PublicKey } from './KeyStore.js';
 import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
@@ -122,6 +126,23 @@ export type ForkingUnshieldedConfiguration = {
   networkId: NetworkId.NetworkId;
   /** The protocol version at which the chain hands over from the pre-fork ledger version to the post-fork one. */
   forkVersion: ProtocolVersion.ProtocolVersion;
+  /**
+   * How the wallet asks the chain which protocol version it is on, before it chooses a variant to start at.
+   *
+   * @remarks
+   *   Optional, and best-effort where present: a wallet with no probe — or one whose probe does not answer in time —
+   *   starts on the pre-fork variant and learns the version from the first message it sees, which is what a wallet with
+   *   no history has always done. What a probe buys is the two things that guess costs: a hand-over per start on a
+   *   chain entirely past the boundary, and, on a chain that has shown this wallet no messages at all, an epoch that
+   *   never gets corrected.
+   *
+   *   It resolves where a wallet may start, never where it can: an identity only the post-fork ledger version can hold
+   *   starts there whatever the chain reports, because there is no decision left to inform.
+   *
+   *   Nothing about it can make a start fail. A rejection, a timeout, a version no registered variant covers: each
+   *   leaves the wallet exactly where a wallet that never asked would be.
+   */
+  chainVersionProbe?: ChainVersionProbe;
 };
 
 /** A running unshielded wallet that spans a protocol boundary. */
@@ -143,14 +164,20 @@ export interface ForkingUnshieldedWalletClass<
    * @remarks
    *   There is no secret here and none is wanted: an unshielded wallet reads public UTXO data addressed to an address
    *   anybody could compute, and signing is supplied per call by the caller. What the wallet does have to settle is
-   *   which variant can _hold_ the identity, and that turns on the signature scheme — see {@link asPreForkPublicKey}. A
-   *   schnorr identity begins on the pre-fork variant and follows the chain the whole way; an ecdsa one begins on the
-   *   post-fork variant, because the pre-fork ledger version has no way to express it.
+   *   which variant can _hold_ the identity, and that turns on the signature scheme — see {@link asPreForkPublicKey}. An
+   *   ecdsa identity begins on the post-fork variant, because the pre-fork ledger version has no way to express it.
+   *
+   *   A schnorr identity can be held by either, so for it the second question is where the chain is. Asynchronous
+   *   because answering that can mean asking: with a {@link ForkingUnshieldedConfiguration.chainVersionProbe}
+   *   configured, such a wallet starts at the variant that owns the version the chain reports, which on a chain
+   *   already past the boundary is the post-fork one from the first moment. Without one, or when the question goes
+   *   unanswered, it begins on the pre-fork variant and follows the chain across.
    * @param publicKey The identity to watch, in the post-fork ledger version's shape, which is the one this wallet's
    *   public API speaks.
-   * @returns A started wallet.
+   * @returns A started wallet, on the variant that can hold the identity and — where both can — the one the chain says
+   *   it is on.
    */
-  startWithPublicKey(publicKey: PublicKey): ForkingUnshieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>;
+  startWithPublicKey(publicKey: PublicKey): Promise<ForkingUnshieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>>;
   /**
    * Restores a wallet from a snapshot, into whichever registered variant wrote it.
    *
@@ -301,32 +328,115 @@ export function CustomForkingUnshieldedWallet<
         Either.getOrThrowWith(PreForkSignatures.lowerSignature(signature), (error) => error),
       );
 
+  /**
+   * How long a start waits for the chain to say which version it is on.
+   *
+   * @remarks
+   *   Short, because what is being bought is small: the alternative to an answer is the hand-over this wallet has
+   *   always done, which costs one migration and no correctness on a chain that produces messages. It is a ceiling
+   *   rather than a typical cost — an unreachable indexer refuses a connection long before this — and it exists so
+   *   that a probe which neither answers nor fails cannot hold a start open indefinitely.
+   */
+  const probeTimeout = Duration.seconds(5);
+
+  /** Where a start begins, when the chain answered for it. */
+  type ProbedStart = Readonly<{
+    version: ProtocolVersion.ProtocolVersion;
+    variant: HList.Each<Variants>;
+  }>;
+
+  /**
+   * The variant the chain's current version belongs to, or nothing.
+   *
+   * @remarks
+   *   Nothing covers every way the question can fail to produce an answer, and they are deliberately not distinguished:
+   *   no probe configured, a probe that rejected, a probe that outlived the wallet's patience, or a version no
+   *   registered variant claims. Each means the same thing to a caller — start where a wallet with no history starts —
+   *   and none of them is a reason to fail.
+   */
+  const probedStart: Effect.Effect<Option.Option<ProbedStart>> =
+    configuration.chainVersionProbe === undefined
+      ? Effect.succeedNone
+      : pipe(
+          Effect.tryPromise(configuration.chainVersionProbe),
+          Effect.timeout(probeTimeout),
+          Effect.map((version) =>
+            Option.map(BaseWallet.variantFor(version), (variant): ProbedStart => ({ version, variant })),
+          ),
+          Effect.orElseSucceed(() => Option.none<ProbedStart>()),
+        );
+
+  /**
+   * A fresh state of the variant a probed start begins at, recording the version the chain reported.
+   *
+   * @remarks
+   *   Built exactly as the head-variant boot path builds its own — the identity, in the shape that variant holds it —
+   *   and then annotated with the observed version, which is what keeps a variant from starting outside its own
+   *   activation range and signalling backwards on sight.
+   * @param variant The variant the chain's version resolved to.
+   * @param publicKey The identity in the shape this wallet's API speaks.
+   * @param preForkPublicKey The same identity as the pre-fork ledger version has it, which is only reached when that
+   *   variant is the one chosen — and only a schnorr identity ever gets here at all.
+   */
+  const freshStateAt = (
+    variant: HList.Each<Variants>,
+    publicKey: PublicKey,
+    preForkPublicKey: PreForkPublicKey,
+    version: ProtocolVersion.ProtocolVersion,
+  ): PreForkCoreWallet | CoreWallet =>
+    Variant.getVersionedVariantTag(variant) === V2Tag
+      ? CoreWallet.withProtocolVersion(CoreWallet.init(publicKey, configuration.networkId), version)
+      : PreForkCoreWallet.withProtocolVersion(
+          PreForkCoreWallet.init(preForkPublicKey, configuration.networkId),
+          version,
+        );
+
   return class ForkingUnshieldedWalletImplementation
     extends BaseWallet
     implements ForkingUnshieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>
   {
     static readonly configuration: TConfiguration = configuration;
 
-    static startWithPublicKey(publicKey: PublicKey): ForkingUnshieldedWalletImplementation {
+    static startWithPublicKey(publicKey: PublicKey): Promise<ForkingUnshieldedWalletImplementation> {
       return Option.match(asPreForkPublicKey(publicKey), {
-        // The identity both ledger versions can express: begin where a wallet with no history belongs, below the
-        // boundary, and let the runtime hand over when the chain says so.
+        // The identity both ledger versions can express, so where it begins is a question about the chain rather than
+        // about the key: at the variant that owns the version the chain reports, or — when the chain was not asked or
+        // did not answer — below the boundary, where a wallet with no history belongs, letting the runtime hand over
+        // when the chain says so.
         onSome: (preForkPublicKey) =>
-          ForkingUnshieldedWalletImplementation.startFirst(
-            ForkingUnshieldedWalletImplementation,
-            PreForkCoreWallet.init(preForkPublicKey, configuration.networkId),
+          pipe(
+            probedStart,
+            Effect.map(
+              Option.match({
+                onNone: () =>
+                  ForkingUnshieldedWalletImplementation.startFirst(
+                    ForkingUnshieldedWalletImplementation,
+                    PreForkCoreWallet.init(preForkPublicKey, configuration.networkId),
+                  ),
+                onSome: ({ version, variant }) =>
+                  ForkingUnshieldedWalletImplementation.startAtVariant(
+                    ForkingUnshieldedWalletImplementation,
+                    variant,
+                    freshStateAt(variant, publicKey, preForkPublicKey, version),
+                  ),
+              }),
+            ),
+            Effect.runPromise,
           ),
-        // An identity only the post-fork ledger version can express, so it starts on that variant and stays there.
-        // Stamped with the boundary version rather than left at the minimum: a variant that starts from a state
-        // outside its own activation range reports that on sight, which is how a stranded snapshot heals — and here
-        // there is no variant above this one to hand over to. The state does belong to this variant, so it says so.
+        // An identity only the post-fork ledger version can express, so it starts on that variant and stays there —
+        // and the chain is not asked, because there is nothing its answer could decide. Stamped with the boundary
+        // version rather than left at the minimum: a variant that starts from a state outside its own activation range
+        // reports that on sight, which is how a stranded snapshot heals — and here there is no variant above this one
+        // to hand over to. The state does belong to this variant, so it says so.
         onNone: () =>
-          ForkingUnshieldedWalletImplementation.startAtVariant(
-            ForkingUnshieldedWalletImplementation,
-            variants[V2Tag],
-            CoreWallet.withProtocolVersion(
-              CoreWallet.init(publicKey, configuration.networkId),
-              configuration.forkVersion,
+          Promise.resolve(
+            ForkingUnshieldedWalletImplementation.startAtVariant(
+              ForkingUnshieldedWalletImplementation,
+              variants[V2Tag],
+              CoreWallet.withProtocolVersion(
+                CoreWallet.init(publicKey, configuration.networkId),
+                configuration.forkVersion,
+              ),
             ),
           ),
       });
@@ -664,12 +774,22 @@ export type UnshieldedWalletClass = ForkingUnshieldedWalletClass<
  *
  *   Transacting, synchronization, balances, coins, addresses, serialization, restore and reverting all work on both
  *   sides: each variant builds with its own ledger version, and what it produces says which version built it.
+ *
+ *   **The chain is asked where it is before a variant is chosen.** The indexer this wallet already syncs from answers
+ *   which protocol version the chain is on, so a start on a chain past the boundary begins post-fork rather than
+ *   handing over immediately. An application that would rather ask something else — a cache, a value it already holds
+ *   — supplies its own `chainVersionProbe`; one whose chain cannot be reached loses nothing, because the answer is
+ *   best-effort and its absence is the behaviour this wallet had before.
  * @param configuration What the wallet and both its variants are built from, including where the boundary lies.
  * @returns The wallet class.
  */
 export function UnshieldedWallet(configuration: DefaultUnshieldedConfiguration): UnshieldedWalletClass {
+  const withProbe: DefaultUnshieldedConfiguration = {
+    ...configuration,
+    chainVersionProbe: configuration.chainVersionProbe ?? makeIndexerChainVersionProbe(configuration),
+  };
   return CustomForkingUnshieldedWallet(
-    configuration,
+    withProbe,
     { builder: new V1Builder().withDefaults(), configuration },
     {
       builder: new V2Builder().withDefaults().withMigration(() => Migration.makeCrossLedgerMigration()),

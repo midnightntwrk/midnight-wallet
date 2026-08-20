@@ -47,7 +47,7 @@ const identity = PublicKey.fromKeyStore(
 
 describe('an unshielded wallet restored from a snapshot it can read', () => {
   it('comes back as a wallet, rather than as a reason it could not', async () => {
-    const source = UnshieldedWallet(configuration).startWithPublicKey(identity);
+    const source = await UnshieldedWallet(configuration).startWithPublicKey(identity);
     const written = await source.serializeState();
     await source.stop();
 

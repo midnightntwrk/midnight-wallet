@@ -48,6 +48,7 @@ import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import { type PublicKey } from './KeyStore.js';
 import { type SyncProgress } from './v2/SyncProgress.js';
 import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 
 /** The core state of whichever unshielded variant produced an emission. */
 export type UnshieldedCoreState = PreForkCoreWallet | CoreWallet;
@@ -187,6 +188,16 @@ export type DefaultUnshieldedConfiguration = {
    *   unchanged.
    */
   forkVersion: ProtocolVersion.ProtocolVersion;
+  /**
+   * How the wallet asks the chain which protocol version it is on, before it chooses a variant to start at.
+   *
+   * @remarks
+   *   Optional, and defaulted rather than absent: left unset, the wallet asks the indexer named by
+   *   {@link indexerClientConnection}, which it is about to synchronize from anyway. Supply one to ask something else —
+   *   a cache, a node RPC, a value the application already holds. The answer is best-effort wherever it comes from: a
+   *   chain that cannot be reached leaves the wallet starting exactly where it started before there was a probe.
+   */
+  chainVersionProbe?: ChainVersionProbe;
 };
 
 export type UnshieldedWalletAPI<TSerialized = string> = {
