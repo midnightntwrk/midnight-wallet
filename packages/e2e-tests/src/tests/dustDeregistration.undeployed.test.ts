@@ -109,10 +109,7 @@ describe('Dust Deregistration', () => {
       submissionService: (configuration) => makeDefaultSubmissionService(configuration),
     });
 
-    await walletFacade.start(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),
-      ledger.DustSecretKey.fromSeed(dustWalletSeed),
-    );
+    await walletFacade.start({ shielded: shieldedWalletSeed, unshielded: shieldedWalletSeed, dust: dustWalletSeed });
   });
 
   afterEach(async () => {

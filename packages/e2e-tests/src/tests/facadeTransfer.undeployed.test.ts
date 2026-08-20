@@ -130,14 +130,12 @@ describe('Wallet Facade Transfer', () => {
     });
 
     await Promise.all([
-      senderFacade.start(
-        ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      ),
-      receiverFacade.start(
-        ledger.ZswapSecretKeys.fromSeed(shieldedReceiverSeed),
-        ledger.DustSecretKey.fromSeed(dustReceiverSeed),
-      ),
+      senderFacade.start({ shielded: shieldedSenderSeed, unshielded: shieldedSenderSeed, dust: dustSenderSeed }),
+      receiverFacade.start({
+        shielded: shieldedReceiverSeed,
+        unshielded: shieldedReceiverSeed,
+        dust: dustReceiverSeed,
+      }),
     ]);
   });
 

@@ -67,9 +67,9 @@ describe('Fresh wallet with empty state', () => {
       ...walletConfig,
       txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     });
-    shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
+    shieldedWallet = Wallet.startWithSeed(utils.getShieldedSeed(walletSeed));
     unshieldedWallet = Unshielded.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
-    dustWallet = Dust.startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust);
+    dustWallet = Dust.startWithSeed(utils.getDustSeed(walletSeed));
     await shieldedWallet.start(walletSecretKey);
     await unshieldedWallet.start();
     await dustWallet.start(dustSecretKey);

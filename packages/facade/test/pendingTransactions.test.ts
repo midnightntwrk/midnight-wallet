@@ -76,7 +76,7 @@ describe('Wallet Facade handling pending transactions', () => {
       dust: () => dust,
       provingService: () => createPreForkMockProvingService(),
     });
-    await facade?.start(ledger.ZswapSecretKeys.fromSeed(shieldedSeed), ledger.DustSecretKey.fromSeed(dustSeed));
+    await facade?.start({ shielded: shieldedSeed, unshielded: unshieldedSeed, dust: dustSeed });
   });
   afterEach(async () => {
     await facade?.stop();

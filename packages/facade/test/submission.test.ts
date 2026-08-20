@@ -101,7 +101,7 @@ describe('Facade submission', () => {
       },
     });
 
-    await facade.start(ledger.ZswapSecretKeys.fromSeed(seed), ledger.DustSecretKey.fromSeed(seed));
+    await facade.start({ shielded: seed, unshielded: seed, dust: seed });
     await facade.stop();
 
     expect(fakeSubmission.gotClosed).toBe(true);

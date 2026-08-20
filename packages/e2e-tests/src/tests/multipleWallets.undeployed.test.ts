@@ -84,7 +84,7 @@ describe('Syncing', () => {
           unshielded: () => unshieldedWallets[i],
           dust: () => dustWallets[i],
         });
-        await facades[i].start(ledger.ZswapSecretKeys.fromSeed(seeds[i]), ledger.DustSecretKey.fromSeed(seeds[i]));
+        await facades[i].start({ shielded: seeds[i], unshielded: seeds[i], dust: seeds[i] });
       }
     }
 

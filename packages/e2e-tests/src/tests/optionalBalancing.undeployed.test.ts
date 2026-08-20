@@ -122,7 +122,7 @@ describe('Optional Balancing', () => {
       provingService: () => makeWasmProvingService(),
     });
 
-    await facade.start(ledger.ZswapSecretKeys.fromSeed(shieldedSeed), ledger.DustSecretKey.fromSeed(dustSeed));
+    await facade.start({ shielded: shieldedSeed, unshielded: shieldedSeed, dust: dustSeed });
   });
 
   afterEach(async () => {

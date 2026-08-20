@@ -11,16 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnightntwrk/ledger-v9';
 import {
+  WalletSeeds,
   type DefaultConfiguration,
   type DefaultDustConfiguration,
   CustomDustWallet,
   InMemoryTransactionHistoryStorage,
   WalletEntrySchema,
   WalletFacade,
-  HDWallet,
-  Roles,
   ShieldedWallet,
   createKeystore,
   makeEventLessSyncCapability,
@@ -79,44 +77,24 @@ const fastSyncDustWallet = (config: DefaultDustConfiguration) =>
   );
 
 const initWalletWithSeed = async (seed: Buffer) => {
-  const hdWallet = HDWallet.fromSeed(seed);
-
-  if (hdWallet.type !== 'seedOk') {
-    throw new Error('Failed to initialize HDWallet');
-  }
-
-  const derivationResult = hdWallet.hdWallet
-    .selectAccount(0)
-    .selectRoles([Roles.Zswap, Roles.NightExternal, Roles.Dust])
-    .deriveKeysAt(0);
-
-  if (derivationResult.type !== 'keysDerived') {
-    throw new Error('Failed to derive keys');
-  }
-
-  hdWallet.hdWallet.clear();
-
-  const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(derivationResult.keys[Roles.Zswap]);
-  const dustSecretKey = ledger.DustSecretKey.fromSeed(derivationResult.keys[Roles.Dust]);
-  const unshieldedKeystore = createKeystore(
-    { kind: 'schnorr', secret: derivationResult.keys[Roles.NightExternal] },
-    configuration.networkId,
-  );
+  // One master seed, three wallet seeds. A seed is the only key material that crosses a protocol boundary, so this is
+  // what lets one wallet follow the chain through a fork.
+  const seeds = WalletSeeds.fromMasterSeed(seed);
+  const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, configuration.networkId);
 
   const wallet: WalletFacade = await WalletFacade.init({
     configuration,
-    shielded: (config) => ShieldedWallet(config).startWithSecretKeys(shieldedSecretKeys),
+    shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
-    dust: (config) =>
-      fastSyncDustWallet(config).startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust),
+    dust: (config) => fastSyncDustWallet(config).startWithSeed(seeds.dust),
   });
 
   // The fast-syncing dust wallet joins background synchronization like any other; pass
-  // `manualSync: true` as the third argument and drive it with `wallet.doSync(dustSecretKey)`
+  // `manualSync: true` as the third argument and drive it with `wallet.doSync(seeds)`
   // to control when snapshots are taken instead.
-  await wallet.start(shieldedSecretKeys, dustSecretKey);
+  await wallet.start(seeds);
 
-  return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
+  return { wallet, seeds, unshieldedKeystore };
 };
 
 const { wallet } = await initWalletWithSeed(

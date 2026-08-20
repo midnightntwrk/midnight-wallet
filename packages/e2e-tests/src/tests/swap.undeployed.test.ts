@@ -137,14 +137,8 @@ describe('Swaps', () => {
     });
 
     await Promise.all([
-      walletAFacade.start(
-        ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
-        ledger.DustSecretKey.fromSeed(dustWalletASeed),
-      ),
-      walletBFacade.start(
-        ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-        ledger.DustSecretKey.fromSeed(dustWalletBSeed),
-      ),
+      walletAFacade.start({ shielded: shieldedWalletASeed, unshielded: shieldedWalletASeed, dust: dustWalletASeed }),
+      walletBFacade.start({ shielded: shieldedWalletBSeed, unshielded: shieldedWalletBSeed, dust: dustWalletBSeed }),
     ]);
   });
 

@@ -12,7 +12,7 @@
 // limitations under the License.
 import type * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
+import { HDWallet, Roles, type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import { WalletFacade, type Clock } from '../../src/index.js';
 import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
 import {
@@ -263,6 +263,8 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
 export type WalletKeys = {
   shieldedKeys: ledger.ZswapSecretKeys;
   dustKey: ledger.DustSecretKey;
+  /** The per-wallet seeds the keys above were derived from, which is what the facade is started with. */
+  seeds: WalletSeeds;
   unshieldedKeystore: ReturnType<typeof createKeystore>;
   signatureVerifyingKey: ledger.SignatureVerifyingKey;
   userAddress: ledger.UserAddress;
@@ -292,7 +294,14 @@ export const deriveWalletKeys = (
   const signatureVerifyingKey = ledger.signatureVerifyingKey(ledgerSigningKey);
   const userAddress = ledger.addressFromKey(signatureVerifyingKey);
 
-  return { shieldedKeys, dustKey, unshieldedKeystore, signatureVerifyingKey, userAddress };
+  return {
+    shieldedKeys,
+    dustKey,
+    seeds: { shielded: shieldedSeed, unshielded: unshieldedSeed, dust: dustSeed },
+    unshieldedKeystore,
+    signatureVerifyingKey,
+    userAddress,
+  };
 };
 
 /**
@@ -333,7 +342,7 @@ export const makeSimulatorFacade = (
       });
 
       // Start the wallet with keys
-      await facade.start(keys.shieldedKeys, keys.dustKey);
+      await facade.start(keys.seeds);
 
       return facade;
     }),
