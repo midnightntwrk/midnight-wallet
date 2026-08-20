@@ -27,10 +27,7 @@ import {
   type DustWalletAPI,
   type DustWalletState,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import {
-  type AnyTransaction as DustAnyTransaction,
-  type CoinsAndBalances as DustCoinsAndBalances,
-} from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { type CoinsAndBalances as DustCoinsAndBalances } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
   type DefaultShieldedConfiguration,
   type ShieldedWalletAPI,
@@ -53,7 +50,18 @@ import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { Array as Arr, Either, Option, pipe, Schema } from 'effect';
-import { ProtocolVersion, TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  type AnyTx,
+  type FinalizedTx,
+  ProtocolVersion,
+  type ProtocolVersionMismatchError,
+  TransactionHistoryStorage,
+  type UnboundTx,
+  type UnprovenTx,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
+import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
+import * as PreForkSignatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import {
   BehaviorSubject,
   combineLatest,
@@ -72,13 +80,15 @@ import {
   PendingTransactionsServiceImpl,
 } from '@midnightntwrk/wallet-sdk-capabilities';
 import {
+  type AnyLedgerParameters,
+  type AnyVersionValidatableTransaction,
   type BlockData,
   type BlockDataFetcher,
   makeDefaultBlockDataFetcher,
-  makeDefaultValidationService,
+  makeDefaultVersionedValidationService,
   type ValidateTxOptions,
   ValidationFetchError,
-  type ValidationService,
+  type VersionedValidationService,
   WellFormedError,
   type WellFormedStrictnessFlags,
 } from '@midnightntwrk/wallet-sdk-capabilities/validation';
@@ -175,28 +185,59 @@ export function mergeWalletEntries(existing: WalletEntry, incoming: WalletEntry)
 }
 
 /**
- * Every transaction shape the facade will take from a caller: unproven, proven-but-unbound, finalized, or proof-erased.
+ * What the facade itself does to a transaction, stated structurally rather than by ledger version.
  *
  * @remarks
- *   Named here because the facade's own signatures take it. It was previously reachable only as
- *   `@midnightntwrk/wallet-sdk-dust-wallet/v2`'s `AnyTransaction` — a variant-scoped internal of a package a
- *   facade-only app need not depend on at all, and one with a differently-typed pre-fork twin under `/v1`. The facade
- *   owning the name is what keeps that an implementation detail.
+ *   The facade merges, binds and reads identifiers off transactions, and both ledger versions do all of that with the
+ *   same member names — the types are nominally distinct only because of what is _inside_ them. So once the handle's
+ *   stamp has settled which epoch a transaction belongs to, one code path serves both, and the epoch check is the whole
+ *   of the guarantee. Naming either ledger version's class here instead would be naming the thing that breaks when the
+ *   chain moves on.
  *
- *   Transitional, and deliberately an alias rather than a fresh declaration so it cannot drift from what these methods
- *   actually accept. `WalletTransaction` handles are what replace these signatures — at which point the version a
- *   transaction was authored for travels with it instead of being lost at this boundary, and this alias goes with
- *   them.
+ *   Deliberately the minimum: every member below is one the facade actually calls. Nothing here can mix epochs, because
+ *   the only way to obtain one of these is to unwrap a handle within a single epoch's range.
  */
-export type AnyTransaction = DustAnyTransaction;
+type Carried = Readonly<{
+  identifiers: () => readonly string[];
+  transactionHash: () => unknown;
+  serialize: () => Uint8Array;
+}>;
+
+/** An intent as the facade reads it, for finding and signing a dust registration. */
+type CarriedIntent = Readonly<{
+  dustActions?: Readonly<{ registrations?: readonly unknown[] }> | undefined;
+  signatureData: (segment: number) => Uint8Array;
+}>;
+
+/** An unproven transaction the facade can merge with another of the same epoch, and inspect for a registration. */
+type CarriedUnproven = Carried &
+  Readonly<{
+    merge: (other: CarriedUnproven) => CarriedUnproven;
+    mockProve: () => CarriedUnbound;
+    intents?: Readonly<{ get: (segment: number) => CarriedIntent | undefined }> | undefined;
+  }>;
+
+/** A proven transaction that has not yet been bound to its own contents. */
+type CarriedUnbound = Carried & Readonly<{ bind: () => CarriedFinalized }>;
+
+/** A finalized transaction, which the facade merges with the balancing transaction it finalized alongside it. */
+type CarriedFinalized = Carried & Readonly<{ merge: (other: CarriedFinalized) => CarriedFinalized }>;
+
+/**
+ * Every transaction shape the facade will take from a caller.
+ *
+ * @remarks
+ *   Now a handle: what an application carries between facade calls is sealed together with the protocol version it was
+ *   built at, so it can be routed rather than guessed about. The name is kept because it is what these signatures have
+ *   always been stated in terms of.
+ */
+export type AnyTransaction = AnyTx;
 
 /**
  * Storage key for a tx we're about to submit (record as pending). The hash comes from {@link txHistoryHash}, which the
  * revert side uses too — so a tx keyed here while pending resolves to the same key when later confirmed or reverted.
  */
-const submitTxHistoryKey = (
-  tx: ledger.FinalizedTransaction,
-): { readonly hash: string; readonly identifiers: readonly string[] } => ({
+const submitTxHistoryKey = (tx: Carried): { readonly hash: string; readonly identifiers: readonly string[] } => ({
   hash: txHistoryHash(tx),
   identifiers: tx.identifiers(),
 });
@@ -207,11 +248,40 @@ const submitTxHistoryKey = (
  * all (nothing to revert).
  */
 const revertTxHistoryKey = (
-  tx: AnyTransaction,
+  tx: Carried,
 ): { readonly hash: string; readonly identifiers: readonly string[] } | undefined => {
   const identifiers = tx.identifiers();
   if (identifiers.length === 0) return undefined;
   return { hash: txHistoryHash(tx), identifiers };
+};
+
+/**
+ * The ledger operations the facade performs for itself rather than through a wallet, per protocol epoch.
+ *
+ * @remarks
+ *   One place only: estimating what a dust registration will cost needs a signature over a transaction nobody will
+ *   submit, and a signature comes from a ledger version's own primitives. Everything the facade hands back is in the
+ *   current ledger version's shape — a scheme and its bytes — so the pre-fork entry lifts what its ledger version
+ *   writes as bare hex.
+ */
+type EpochAuthoring = Readonly<{
+  sampleSigningKey: () => unknown;
+  signatureVerifyingKey: (signingKey: never) => ledger.SignatureVerifyingKey;
+  signData: (signingKey: never, data: Uint8Array) => ledger.Signature;
+}>;
+
+const currentLedgerAuthoring: EpochAuthoring = {
+  sampleSigningKey: () => ledger.sampleSigningKey(),
+  signatureVerifyingKey: (signingKey: never) => ledger.signatureVerifyingKey(signingKey),
+  signData: (signingKey: never, data: Uint8Array) => ledger.signData(signingKey, data),
+};
+
+const preForkAuthoring: EpochAuthoring = {
+  sampleSigningKey: () => preForkLedger.sampleSigningKey(),
+  signatureVerifyingKey: (signingKey: never) =>
+    PreForkSignatures.liftSignatureVerifyingKey(preForkLedger.signatureVerifyingKey(signingKey)),
+  signData: (signingKey: never, data: Uint8Array) =>
+    PreForkSignatures.liftSignature(preForkLedger.signData(signingKey, data)),
 };
 
 type TokenKind = 'dust' | 'shielded' | 'unshielded';
@@ -237,28 +307,28 @@ export type FinalizedTransactionRecipe = {
   type: 'FINALIZED_TRANSACTION';
   /** The protocol version this recipe was built for, and so the version its parts have to be proved at. */
   protocolVersion: ProtocolVersion.ProtocolVersion;
-  originalTransaction: ledger.FinalizedTransaction;
-  balancingTransaction: ledger.UnprovenTransaction;
-  blockData?: BlockData;
+  originalTransaction: FinalizedTx;
+  balancingTransaction: UnprovenTx;
+  blockData?: BlockData<AnyLedgerParameters>;
 };
 
 export type UnboundTransactionRecipe = {
   type: 'UNBOUND_TRANSACTION';
   /** The protocol version this recipe was built for, and so the version its parts have to be proved at. */
   protocolVersion: ProtocolVersion.ProtocolVersion;
-  baseTransaction: UnboundTransaction;
+  baseTransaction: UnboundTx;
   // balancingTransaction is optional because if the user decides to balance only the unshielded part,
   // it occurs "in place" so the baseTransaction is modified
-  balancingTransaction?: ledger.UnprovenTransaction | undefined;
-  blockData?: BlockData;
+  balancingTransaction?: UnprovenTx | undefined;
+  blockData?: BlockData<AnyLedgerParameters>;
 };
 
 export type UnprovenTransactionRecipe = {
   type: 'UNPROVEN_TRANSACTION';
   /** The protocol version this recipe was built for, and so the version its parts have to be proved at. */
   protocolVersion: ProtocolVersion.ProtocolVersion;
-  transaction: ledger.UnprovenTransaction;
-  blockData?: BlockData;
+  transaction: UnprovenTx;
+  blockData?: BlockData<AnyLedgerParameters>;
 };
 
 export type BalancingRecipe = FinalizedTransactionRecipe | UnboundTransactionRecipe | UnprovenTransactionRecipe;
@@ -273,7 +343,7 @@ export const BalancingRecipe = {
       ['FINALIZED_TRANSACTION', 'UNBOUND_TRANSACTION', 'UNPROVEN_TRANSACTION'].includes(value.type)
     );
   },
-  getTransactions: (recipe: BalancingRecipe): readonly AnyTransaction[] => {
+  getTransactions: (recipe: BalancingRecipe): readonly AnyTx[] => {
     switch (recipe.type) {
       case 'FINALIZED_TRANSACTION': {
         return [recipe.originalTransaction, recipe.balancingTransaction];
@@ -350,7 +420,7 @@ export class FacadeState {
   public readonly shielded: ShieldedWalletState;
   public readonly unshielded: UnshieldedWalletState;
   public readonly dust: DustWalletState;
-  public readonly pending: PendingTransactions.PendingTransactions<ledger.FinalizedTransaction>;
+  public readonly pending: PendingTransactions.PendingTransactions<FinalizedTx>;
 
   /** The protocol version each of the three wallets has reached. */
   public get protocolVersion(): WalletProtocolVersions {
@@ -384,7 +454,7 @@ export class FacadeState {
     shielded: ShieldedWalletState,
     unshielded: UnshieldedWalletState,
     dust: DustWalletState,
-    pending: PendingTransactions.PendingTransactions<ledger.FinalizedTransaction>,
+    pending: PendingTransactions.PendingTransactions<FinalizedTx>,
   ) {
     this.shielded = shielded;
     this.unshielded = unshielded;
@@ -455,10 +525,8 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
   configuration: TConfig;
   /** Optional factory for the clock abstraction. Defaults to system clock (`() => new Date()`). */
   clock?: (config: TConfig) => MaybePromise<Clock.Clock>;
-  submissionService?: (config: TConfig) => MaybePromise<SubmissionService<ledger.FinalizedTransaction>>;
-  pendingTransactionsService?: (
-    config: TConfig,
-  ) => MaybePromise<PendingTransactionsService<ledger.FinalizedTransaction>>;
+  submissionService?: (config: TConfig) => MaybePromise<SubmissionService<FinalizedTx>>;
+  pendingTransactionsService?: (config: TConfig) => MaybePromise<PendingTransactionsService<FinalizedTx>>;
   provingService?: (config: TConfig) => MaybePromise<VersionedProvingService<UnboundTransaction>>;
   /**
    * Optional factory for the block-data fetcher used by validation. Defaults to an HTTP indexer-backed fetcher built
@@ -469,7 +537,7 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
   validationService?: (
     config: TConfig,
     deps: { fetchBlockData: BlockDataFetcher; clock: Clock.Clock },
-  ) => MaybePromise<ValidationService>;
+  ) => MaybePromise<VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>>;
   shielded: (config: TConfig) => MaybePromise<ShieldedWalletAPI>;
   unshielded: (config: TConfig) => MaybePromise<UnshieldedWalletAPI>;
   dust: (config: TConfig) => MaybePromise<DustWalletAPI>;
@@ -481,7 +549,7 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
 export {
   type BlockDataFetcher,
   type ValidateTxOptions,
-  type ValidationService,
+  type VersionedValidationService,
   ValidationFetchError,
   WellFormedError,
   type WellFormedStrictnessFlags,
@@ -490,14 +558,16 @@ export {
 export class WalletFacade {
   private static makeDefaultSubmissionService<TConfig extends DefaultSubmissionConfiguration>(
     config: TConfig,
-  ): SubmissionService<ledger.FinalizedTransaction> {
-    return makeDefaultSubmissionService<ledger.FinalizedTransaction>(config);
+  ): SubmissionService<FinalizedTx> {
+    // A handle serializes itself, which is all submission needs of a transaction — and the one thing every ledger
+    // version's transaction does identically.
+    return makeDefaultSubmissionService<FinalizedTx>(config);
   }
 
   private static makeDefaultPendingTransactionsService<
     TConfig extends DefaultPendingTransactionsServiceConfiguration & { forkVersion: ProtocolVersion.ProtocolVersion },
-  >(config: TConfig): Promise<PendingTransactionsServiceImpl<ledger.FinalizedTransaction>> {
-    return PendingTransactionsServiceImpl.init<ledger.FinalizedTransaction>({
+  >(config: TConfig): Promise<PendingTransactionsServiceImpl<FinalizedTx>> {
+    return PendingTransactionsServiceImpl.init<FinalizedTx>({
       configuration: config,
       txTraits: finalizedTransactionTraits(config.forkVersion),
     });
@@ -592,11 +662,14 @@ export class WalletFacade {
     const validationService = await Promise.resolve(
       initParams.validationService
         ? initParams.validationService(initParams.configuration, { fetchBlockData, clock })
-        : makeDefaultValidationService({
-            fetchBlockData,
-            networkId: initParams.configuration.networkId,
-            clock,
-          }),
+        : makeDefaultVersionedValidationService(
+            {
+              fetchBlockData,
+              networkId: initParams.configuration.networkId,
+              clock,
+            },
+            initParams.configuration.forkVersion,
+          ),
     );
     return new WalletFacade(
       shielded,
@@ -607,6 +680,7 @@ export class WalletFacade {
       provingService,
       validationService,
       initParams.configuration.txHistoryStorage,
+      initParams.configuration.forkVersion,
       clock,
     );
   }
@@ -614,10 +688,10 @@ export class WalletFacade {
   readonly shielded: ShieldedWalletAPI;
   readonly unshielded: UnshieldedWalletAPI;
   readonly dust: DustWalletAPI;
-  readonly submissionService: SubmissionService<ledger.FinalizedTransaction>;
-  readonly pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>;
+  readonly submissionService: SubmissionService<FinalizedTx>;
+  readonly pendingTransactionsService: PendingTransactionsService<FinalizedTx>;
   readonly provingService: VersionedProvingService<UnboundTransaction>;
-  readonly validationService: ValidationService;
+  readonly validationService: VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>;
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
   readonly clock: Clock.Clock;
   #pendingSubscription: Subscription;
@@ -631,6 +705,9 @@ export class WalletFacade {
    */
   #observedProtocolVersion = new BehaviorSubject<Option.Option<ProtocolVersion.ProtocolVersion>>(Option.none());
 
+  /** Where the chain hands over from one ledger version to the next, which is what divides the two epochs. */
+  readonly #forkVersion: ProtocolVersion.ProtocolVersion;
+
   /**
    * Constructor is private on purpose - much of initialization of the facade is potentially asynchronous, and adding
    * new parameters is a breaking change to the users Use {@link WalletFacade.init} instead
@@ -641,11 +718,12 @@ export class WalletFacade {
     shieldedWallet: ShieldedWalletAPI,
     unshieldedWallet: UnshieldedWalletAPI,
     dustWallet: DustWalletAPI,
-    submissionService: SubmissionService<ledger.FinalizedTransaction>,
-    pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>,
+    submissionService: SubmissionService<FinalizedTx>,
+    pendingTransactionsService: PendingTransactionsService<FinalizedTx>,
     provingService: VersionedProvingService<UnboundTransaction>,
-    validationService: ValidationService,
+    validationService: VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>,
     txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>,
+    forkVersion: ProtocolVersion.ProtocolVersion,
     clock: Clock.Clock = Clock.systemClock,
   ) {
     this.shielded = shieldedWallet;
@@ -656,6 +734,7 @@ export class WalletFacade {
     this.provingService = provingService;
     this.validationService = validationService;
     this.#txHistoryStorage = txHistoryStorage;
+    this.#forkVersion = forkVersion;
     this.clock = clock;
     this.#pendingSubscription = this.pendingTransactionsService
       .state()
@@ -683,14 +762,53 @@ export class WalletFacade {
   }
 
   /**
-   * The version a transaction is proved at: its own stamp when it has one, and otherwise the version the wallets have
-   * reached — which is the best available answer, not a correct one, for a transaction that never recorded what it was
-   * built for.
+   * The protocol version the facade is currently acting at.
+   *
+   * @remarks
+   *   The lowest the three wallets have reached, once they have all reported; the minimum supported version until then,
+   *   which is the epoch a wallet with no history belongs to. It is what a transaction the facade builds is stamped
+   *   with, and what the side of the boundary it accepts transactions from is measured against.
    */
-  private provingVersion(stamp?: ProtocolVersion.ProtocolVersion): ProtocolVersion.ProtocolVersion {
-    return (
-      stamp ?? Option.getOrElse(this.#observedProtocolVersion.getValue(), () => ProtocolVersion.MinSupportedVersion)
+  private currentVersion(): ProtocolVersion.ProtocolVersion {
+    return Option.getOrElse(this.#observedProtocolVersion.getValue(), () => ProtocolVersion.MinSupportedVersion);
+  }
+
+  /** The range of protocol versions on the facade's current side of the boundary. */
+  private currentEpoch(): ProtocolVersion.ProtocolVersion.Range {
+    return ProtocolVersion.epochOf(this.currentVersion(), this.#forkVersion);
+  }
+
+  /**
+   * Reads a transaction an application handed in, refusing one built on the other side of the boundary.
+   *
+   * @remarks
+   *   The enforcement point for everything that enters the facade — a transaction the wallets built, or one an
+   *   application authored and sealed with `WalletTransaction.adopt`. Only the current epoch is accepted, because a
+   *   transaction of the other one cannot be merged, proved or submitted alongside anything the facade would build for
+   *   it. Both a stranded pre-fork transaction after the crossing and a post-fork transaction offered before it are
+   *   refused here, by name, with the versions written down.
+   * @param handle The handle to read.
+   * @returns The carried transaction.
+   * @throws {@link ProtocolVersionMismatchError} When the transaction was built on the other side of the boundary.
+   */
+  private accept<T>(handle: AnyTx): T {
+    return Either.getOrThrowWith(
+      WalletTransaction.unwrapWithin<T>(handle, this.currentEpoch()),
+      (error: ProtocolVersionMismatchError) => error,
     );
+  }
+
+  /** Seals a transaction the facade or a wallet produced, at the version the facade is acting at. */
+  private seal<TStage extends WalletTransaction.Stage>(
+    stage: TStage,
+    transaction: { serialize: () => Uint8Array },
+  ): WalletTransaction<TStage> {
+    return WalletTransaction.adopt(stage, transaction, this.currentVersion());
+  }
+
+  /** The ledger primitives the facade signs with on its current side of the boundary. */
+  private authoring(): EpochAuthoring {
+    return this.currentVersion() < this.#forkVersion ? preForkAuthoring : currentLedgerAuthoring;
   }
 
   private defaultTtl(): Date {
@@ -742,18 +860,32 @@ export class WalletFacade {
    * @throws {@link WellFormedError} If the transaction fails any enabled check.
    * @throws {@link ValidationFetchError} If the block-data fetch fails.
    */
-  async validateTransaction(
-    tx: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
-    options: ValidateTxOptions,
-  ): Promise<void> {
-    return this.validationService.validateTx(tx, options);
+  async validateTransaction(tx: AnyTx, options: ValidateTxOptions<AnyLedgerParameters>): Promise<void> {
+    // Checked at the version the transaction says it was authored for, and never at the version the chain has since
+    // reached: well-formedness asks whether the ledger that produced these bytes would accept them, and a fork landing
+    // afterwards cannot change that answer. The transaction is read at its own epoch for the same reason.
+    return this.validationService.validateTx(
+      Either.getOrThrowWith(
+        WalletTransaction.unwrapWithin<AnyVersionValidatableTransaction>(
+          tx,
+          ProtocolVersion.epochOf(tx.protocolVersion, this.#forkVersion),
+        ),
+        (error: ProtocolVersionMismatchError) => error,
+      ),
+      tx.protocolVersion,
+      options,
+    );
   }
 
-  private mergeUnprovenTransactions(
-    a: ledger.UnprovenTransaction | undefined,
-    b: ledger.UnprovenTransaction | undefined,
-  ): ledger.UnprovenTransaction | undefined {
-    if (a && b) return a.merge(b);
+  /**
+   * Merges two unproven transactions of the same epoch, or returns whichever there is.
+   *
+   * @remarks
+   *   Both are unwrapped before merging, which is where a pair from different epochs is refused: a merge across the
+   *   boundary is not a failure to compute, it is unrepresentable, and saying so is the whole point of the stamp.
+   */
+  private mergeUnprovenTransactions(a: UnprovenTx | undefined, b: UnprovenTx | undefined): UnprovenTx | undefined {
+    if (a && b) return this.seal('Unproven', this.accept<CarriedUnproven>(a).merge(this.accept<CarriedUnproven>(b)));
     return a ?? b;
   }
 
@@ -762,7 +894,7 @@ export class WalletFacade {
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: SignSegment,
-  ): Promise<ledger.UnprovenTransaction> {
+  ): Promise<UnprovenTx> {
     const ttl = this.defaultTtl();
     const now = this.clock.now();
     const isRegistration = action.type === 'registration';
@@ -808,7 +940,7 @@ export class WalletFacade {
 
     // Step 3 — Dust attaches its DustActions onto the intent the unshielded wallet just built.
     // If this fails we must unbook the UTxOs so the caller can retry.
-    let txWithDustActions: ledger.UnprovenTransaction;
+    let txWithDustActions: UnprovenTx;
     try {
       txWithDustActions = await this.dust.attachDustRegistration(
         txWithOffers,
@@ -843,7 +975,7 @@ export class WalletFacade {
     // offers and the dust registration. Signing failures also need to release the booking.
     try {
       const signedRecipe = await this.signRecipe(
-        { type: 'UNPROVEN_TRANSACTION', protocolVersion: this.provingVersion(), transaction: txWithDustActions },
+        { type: 'UNPROVEN_TRANSACTION', protocolVersion: this.currentVersion(), transaction: txWithDustActions },
         signDustRegistration,
       );
       if (signedRecipe.type !== 'UNPROVEN_TRANSACTION') {
@@ -891,13 +1023,14 @@ export class WalletFacade {
    * @returns The transaction identifier.
    * @throws {@link WellFormedError} — call {@link validateTransaction} first to get this error early.
    */
-  async submitTransaction(tx: ledger.FinalizedTransaction): Promise<TransactionIdentifier> {
-    const identifiers = tx.identifiers();
+  async submitTransaction(tx: FinalizedTx): Promise<TransactionIdentifier> {
+    const carried = this.accept<Carried>(tx);
+    const identifiers = carried.identifiers();
     try {
       await this.pendingTransactionsService.addPendingTransaction(tx, this.#observedProtocolVersion.getValue());
       // Insert before awaiting submission so the entry exists while the tx is in flight — the per-wallet sync
       // handlers' gotFinalized call clears the pending entry on confirmation.
-      const key = submitTxHistoryKey(tx);
+      const key = submitTxHistoryKey(carried);
       await this.#txHistoryStorage.gotPending({ ...key, submittedAt: this.clock.now() });
       await this.submissionService.submitTransaction(tx, 'Finalized');
 
@@ -921,17 +1054,12 @@ export class WalletFacade {
    * @returns A {@link FinalizedTransactionRecipe} containing the original and balancing transactions.
    */
   async balanceFinalizedTransaction(
-    tx: ledger.FinalizedTransaction,
-    secretKeys: {
-      shieldedSecretKeys: ledger.ZswapSecretKeys;
-      dustSecretKey: ledger.DustSecretKey;
-    },
+    tx: FinalizedTx,
     options: {
       ttl: Date;
       tokenKindsToBalance?: TokenKindsToBalance;
     },
   ): Promise<FinalizedTransactionRecipe> {
-    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, tokenKindsToBalance = 'all' } = options;
 
     const { shouldBalanceDust, shouldBalanceShielded, shouldBalanceUnshielded } =
@@ -942,16 +1070,14 @@ export class WalletFacade {
       ? await this.unshielded.balanceFinalizedTransaction(tx)
       : undefined;
 
-    const shieldedBalancingTx = shouldBalanceShielded
-      ? await this.shielded.balanceTransaction(shieldedSecretKeys, tx)
-      : undefined;
+    const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
 
     // Step 2: Merge unshielded and shielded balancing
     const mergedBalancingTx = this.mergeUnprovenTransactions(shieldedBalancingTx, unshieldedBalancingTx);
 
     // Step 3: Conditionally add dust/fee balancing
     const dustResult = shouldBalanceDust
-      ? await this.dust.balanceTransactions(dustSecretKey, mergedBalancingTx ? [tx, mergedBalancingTx] : [tx], ttl)
+      ? await this.dust.balanceTransactions(mergedBalancingTx ? [tx, mergedBalancingTx] : [tx], ttl)
       : undefined;
     const feeBalancingTx = dustResult?.transaction;
 
@@ -964,7 +1090,7 @@ export class WalletFacade {
 
     return {
       type: 'FINALIZED_TRANSACTION',
-      protocolVersion: this.provingVersion(),
+      protocolVersion: this.currentVersion(),
       originalTransaction: tx,
       balancingTransaction: balancingTx,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
@@ -984,26 +1110,19 @@ export class WalletFacade {
    * @returns An {@link UnboundTransactionRecipe} containing the base and optional balancing transactions.
    */
   async balanceUnboundTransaction(
-    tx: UnboundTransaction,
-    secretKeys: {
-      shieldedSecretKeys: ledger.ZswapSecretKeys;
-      dustSecretKey: ledger.DustSecretKey;
-    },
+    tx: UnboundTx,
     options: {
       ttl: Date;
       tokenKindsToBalance?: TokenKindsToBalance;
     },
   ): Promise<UnboundTransactionRecipe> {
-    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, tokenKindsToBalance = 'all' } = options;
 
     const { shouldBalanceDust, shouldBalanceShielded, shouldBalanceUnshielded } =
       TokenKindsToBalance.toFlags(tokenKindsToBalance);
 
     // Step 1: Run unshielded and shielded balancing
-    const shieldedBalancingTx = shouldBalanceShielded
-      ? await this.shielded.balanceTransaction(shieldedSecretKeys, tx)
-      : undefined;
+    const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
 
     // For unbound transactions, unshielded balancing happens in place not with a balancing transaction
     const balancedUnshieldedTx = shouldBalanceUnshielded
@@ -1015,11 +1134,7 @@ export class WalletFacade {
 
     // Step 3: Conditionally add dust/fee balancing
     const dustResult = shouldBalanceDust
-      ? await this.dust.balanceTransactions(
-          dustSecretKey,
-          shieldedBalancingTx ? [baseTx, shieldedBalancingTx] : [baseTx],
-          ttl,
-        )
+      ? await this.dust.balanceTransactions(shieldedBalancingTx ? [baseTx, shieldedBalancingTx] : [baseTx], ttl)
       : undefined;
     const feeBalancingTransaction = dustResult?.transaction;
 
@@ -1033,7 +1148,7 @@ export class WalletFacade {
 
     return {
       type: 'UNBOUND_TRANSACTION',
-      protocolVersion: this.provingVersion(),
+      protocolVersion: this.currentVersion(),
       baseTransaction: baseTx,
       balancingTransaction: balancingTransaction ?? undefined,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
@@ -1053,26 +1168,19 @@ export class WalletFacade {
    * @returns An {@link UnprovenTransactionRecipe} containing the balanced transaction.
    */
   async balanceUnprovenTransaction(
-    tx: ledger.UnprovenTransaction,
-    secretKeys: {
-      shieldedSecretKeys: ledger.ZswapSecretKeys;
-      dustSecretKey: ledger.DustSecretKey;
-    },
+    tx: UnprovenTx,
     options: {
       ttl: Date;
       tokenKindsToBalance?: TokenKindsToBalance;
     },
   ): Promise<UnprovenTransactionRecipe> {
-    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, tokenKindsToBalance = 'all' } = options;
 
     const { shouldBalanceDust, shouldBalanceShielded, shouldBalanceUnshielded } =
       TokenKindsToBalance.toFlags(tokenKindsToBalance);
 
     // Step 1: Run unshielded and shielded balancing
-    const shieldedBalancingTx = shouldBalanceShielded
-      ? await this.shielded.balanceTransaction(shieldedSecretKeys, tx)
-      : undefined;
+    const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
 
     // For unproven transactions, unshielded balancing happens in place
     const balancedUnshieldedTx = shouldBalanceUnshielded
@@ -1086,9 +1194,7 @@ export class WalletFacade {
     const mergedTx = this.mergeUnprovenTransactions(baseTx, shieldedBalancingTx)!;
 
     // Step 4: Conditionally add dust/fee balancing
-    const dustResult = shouldBalanceDust
-      ? await this.dust.balanceTransactions(dustSecretKey, [mergedTx], ttl)
-      : undefined;
+    const dustResult = shouldBalanceDust ? await this.dust.balanceTransactions([mergedTx], ttl) : undefined;
     const feeBalancingTx = dustResult?.transaction;
 
     // Step 5: Merge fee balancing if present
@@ -1096,32 +1202,39 @@ export class WalletFacade {
 
     return {
       type: 'UNPROVEN_TRANSACTION',
-      protocolVersion: this.provingVersion(),
+      protocolVersion: this.currentVersion(),
       transaction: balancedTx,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
   }
 
-  async finalizeRecipe(recipe: BalancingRecipe): Promise<ledger.FinalizedTransaction> {
+  async finalizeRecipe(recipe: BalancingRecipe): Promise<FinalizedTx> {
     return Promise.resolve(recipe)
-      .then(async (recipe) => {
+      .then(async (recipe): Promise<FinalizedTx> => {
         switch (recipe.type) {
           case 'FINALIZED_TRANSACTION': {
-            const finalizedBalancing = await this.finalizeTransaction(
-              recipe.balancingTransaction,
-              recipe.protocolVersion,
+            const finalizedBalancing = await this.finalizeTransaction(recipe.balancingTransaction);
+            return this.seal(
+              'Finalized',
+              this.accept<CarriedFinalized>(recipe.originalTransaction).merge(
+                this.accept<CarriedFinalized>(finalizedBalancing),
+              ),
             );
-            return recipe.originalTransaction.merge(finalizedBalancing);
           }
           case 'UNBOUND_TRANSACTION': {
             const finalizedBalancingTx = recipe.balancingTransaction
-              ? await this.finalizeTransaction(recipe.balancingTransaction, recipe.protocolVersion)
+              ? await this.finalizeTransaction(recipe.balancingTransaction)
               : undefined;
-            const finalizedTransaction = recipe.baseTransaction.bind();
-            return finalizedBalancingTx ? finalizedTransaction.merge(finalizedBalancingTx) : finalizedTransaction;
+            const finalizedTransaction = this.accept<CarriedUnbound>(recipe.baseTransaction).bind();
+            return this.seal(
+              'Finalized',
+              finalizedBalancingTx
+                ? finalizedTransaction.merge(this.accept<CarriedFinalized>(finalizedBalancingTx))
+                : finalizedTransaction,
+            );
           }
           case 'UNPROVEN_TRANSACTION': {
-            return await this.finalizeTransaction(recipe.transaction, recipe.protocolVersion);
+            return await this.finalizeTransaction(recipe.transaction);
           }
         }
       })
@@ -1175,11 +1288,8 @@ export class WalletFacade {
     }
   }
 
-  async #signDustRegistrationIfPresent(
-    tx: ledger.UnprovenTransaction,
-    signSegment: SignSegment,
-  ): Promise<ledger.UnprovenTransaction> {
-    const intent = tx.intents?.get(1);
+  async #signDustRegistrationIfPresent(tx: UnprovenTx, signSegment: SignSegment): Promise<UnprovenTx> {
+    const intent = this.accept<CarriedUnproven>(tx).intents?.get(1);
     const registrations = intent?.dustActions?.registrations ?? [];
     if (!intent || registrations.length === 0) {
       return tx;
@@ -1188,33 +1298,33 @@ export class WalletFacade {
     return await this.dust.addDustRegistrationSignature(tx, signature);
   }
 
-  async signUnprovenTransaction(
-    tx: ledger.UnprovenTransaction,
-    signSegment: SignSegment,
-  ): Promise<ledger.UnprovenTransaction> {
+  async signUnprovenTransaction(tx: UnprovenTx, signSegment: SignSegment): Promise<UnprovenTx> {
     return await this.unshielded.signUnprovenTransaction(tx, signSegment);
   }
 
-  async signUnboundTransaction(tx: UnboundTransaction, signSegment: SignSegment): Promise<UnboundTransaction> {
+  async signUnboundTransaction(tx: UnboundTx, signSegment: SignSegment): Promise<UnboundTx> {
     return await this.unshielded.signUnboundTransaction(tx, signSegment);
   }
 
   /**
    * Proves and binds an unproven transaction, and records it as pending.
    *
+   * @remarks
+   *   Proved at the version stamped on the transaction itself, which is the version that fixed its bytes. A fork landing
+   *   between building a transaction and proving it therefore cannot send it to the wrong prover — and a transaction of
+   *   the epoch the facade is no longer in is refused rather than proved into something nobody can include.
    * @param tx The unproven transaction.
-   * @param protocolVersion The version the transaction was built for. Pass it whenever it is known — a fork can land
-   *   between building a transaction and proving it, and the bytes were fixed when it was built. Omitted, the version
-   *   the wallets have reached is used.
    * @returns The finalized transaction.
    */
-  async finalizeTransaction(
-    tx: ledger.UnprovenTransaction,
-    protocolVersion?: ProtocolVersion.ProtocolVersion,
-  ): Promise<ledger.FinalizedTransaction> {
+  async finalizeTransaction(tx: UnprovenTx): Promise<FinalizedTx> {
     try {
-      const unboundTx = await this.provingService.prove(tx, this.provingVersion(protocolVersion));
-      const finalizedTx = unboundTx.bind();
+      // Named as the prover's input rather than its output: the router hands the transaction to the prover registered
+      // for the version it was authored at, and what comes back is that ledger version's unbound transaction.
+      const unboundTx = await this.provingService.prove(
+        this.accept<ledger.UnprovenTransaction>(tx),
+        tx.protocolVersion,
+      );
+      const finalizedTx = this.seal('Finalized', (unboundTx as unknown as CarriedUnbound).bind());
       await this.pendingTransactionsService.addPendingTransaction(
         finalizedTx,
         this.#observedProtocolVersion.getValue(),
@@ -1231,35 +1341,29 @@ export class WalletFacade {
   }
 
   /** Estimates the fee for the given transaction only. This lacks the fees of the balancing transaction. */
-  async calculateTransactionFee(tx: AnyTransaction): Promise<bigint> {
+  async calculateTransactionFee(tx: AnyTx): Promise<bigint> {
     return await this.dust.calculateFee([tx]);
   }
 
   /** Calculates the total fee for the given transaction plus the fee of the balancing transaction. */
   async estimateTransactionFee(
-    tx: AnyTransaction,
-    secretKey: ledger.DustSecretKey,
+    tx: AnyTx,
     options?: {
       ttl?: Date;
       currentTime?: Date;
     },
   ): Promise<bigint> {
     const ttl = options?.ttl ?? this.defaultTtl();
-    return await this.dust.estimateFee(secretKey, [tx], ttl, options?.currentTime);
+    return await this.dust.estimateFee([tx], ttl, options?.currentTime);
   }
 
   async transferTransaction(
     outputs: CombinedTokenTransfer[],
-    secretKeys: {
-      shieldedSecretKeys: ledger.ZswapSecretKeys;
-      dustSecretKey: ledger.DustSecretKey;
-    },
     options: {
       ttl: Date;
       payFees?: boolean;
     },
   ): Promise<UnprovenTransactionRecipe> {
-    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, payFees = true } = options;
 
     const unshieldedOutputs = outputs
@@ -1273,9 +1377,7 @@ export class WalletFacade {
     }
 
     const shieldedTx =
-      shieldedOutputs.length > 0
-        ? await this.shielded.transferTransaction(shieldedSecretKeys, shieldedOutputs)
-        : undefined;
+      shieldedOutputs.length > 0 ? await this.shielded.transferTransaction(shieldedOutputs) : undefined;
 
     const unshieldedTx =
       unshieldedOutputs.length > 0 ? await this.unshielded.transferTransaction(unshieldedOutputs, ttl) : undefined;
@@ -1283,14 +1385,14 @@ export class WalletFacade {
     const mergedTxs = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx)!;
 
     // Add fee payment
-    const dustResult = payFees ? await this.dust.balanceTransactions(dustSecretKey, [mergedTxs], ttl) : undefined;
+    const dustResult = payFees ? await this.dust.balanceTransactions([mergedTxs], ttl) : undefined;
     const feeBalancingTx = dustResult?.transaction;
 
     const finalTx = this.mergeUnprovenTransactions(mergedTxs, feeBalancingTx)!;
 
     return {
       type: 'UNPROVEN_TRANSACTION',
-      protocolVersion: this.provingVersion(),
+      protocolVersion: this.currentVersion(),
       transaction: finalTx,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
@@ -1320,8 +1422,11 @@ export class WalletFacade {
       (estimatedUtxos) => dustState.splitNightUtxos(estimatedUtxos),
       (split) => split.guaranteed,
     );
-    const fakeSigningKey = ledger.sampleSigningKey();
-    const fakeVerifyingKey = ledger.signatureVerifyingKey(fakeSigningKey);
+    const authoring = this.authoring();
+    // Type cast required because: a signing key belongs to one ledger version's runtime and the two are nominally
+    // distinct, so the epoch's own primitives are the only things that may touch it; it never leaves this block.
+    const fakeSigningKey = authoring.sampleSigningKey() as never;
+    const fakeVerifyingKey = authoring.signatureVerifyingKey(fakeSigningKey);
 
     // Use the legacy dust-only construction path here so estimation does NOT book real UTxOs in the
     // unshielded wallet state. (The race-fix path in createDustActionTransaction books on purpose;
@@ -1338,15 +1443,14 @@ export class WalletFacade {
       fakeVerifyingKey,
       dustState.address,
     );
-    const intent = fakeUnsignedTx.intents?.get(1);
+    const intent = this.accept<CarriedUnproven>(fakeUnsignedTx).intents?.get(1);
     if (!intent) {
       throw Error('Dust generation transaction is missing intent segment 1.');
     }
-    const signatureData = intent.signatureData(1);
-    const signature = ledger.signData(fakeSigningKey, signatureData);
+    const signature = authoring.signData(fakeSigningKey, intent.signatureData(1));
     const fakeSignedTx = await this.dust.addDustGenerationSignature(fakeUnsignedTx, signature);
 
-    const finalizedFakeTx = fakeSignedTx.mockProve().bind();
+    const finalizedFakeTx = this.seal('Finalized', this.accept<CarriedUnproven>(fakeSignedTx).mockProve().bind());
 
     const fee = await this.calculateTransactionFee(finalizedFakeTx);
 
@@ -1359,16 +1463,11 @@ export class WalletFacade {
   async initSwap(
     desiredInputs: CombinedSwapInputs,
     desiredOutputs: CombinedSwapOutputs[],
-    secretKeys: {
-      shieldedSecretKeys: ledger.ZswapSecretKeys;
-      dustSecretKey: ledger.DustSecretKey;
-    },
     options: {
       ttl: Date;
       payFees?: boolean;
     },
   ): Promise<UnprovenTransactionRecipe> {
-    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, payFees = false } = options;
 
     const { shielded: shieldedInputs, unshielded: unshieldedInputs } = desiredInputs;
@@ -1392,7 +1491,7 @@ export class WalletFacade {
 
     const shieldedTx =
       hasShieldedPart && shieldedInputs !== undefined
-        ? await this.shielded.initSwap(shieldedSecretKeys, shieldedInputs, shieldedOutputs)
+        ? await this.shielded.initSwap(shieldedInputs, shieldedOutputs)
         : undefined;
 
     const unshieldedTx =
@@ -1406,14 +1505,14 @@ export class WalletFacade {
       throw Error('Unexpected transaction state.');
     }
 
-    const dustResult = payFees ? await this.dust.balanceTransactions(dustSecretKey, [combinedTx], ttl) : undefined;
+    const dustResult = payFees ? await this.dust.balanceTransactions([combinedTx], ttl) : undefined;
     const feeBalancingTx = dustResult?.transaction;
 
     const finalTx = this.mergeUnprovenTransactions(combinedTx, feeBalancingTx)!;
 
     return {
       type: 'UNPROVEN_TRANSACTION',
-      protocolVersion: this.provingVersion(),
+      protocolVersion: this.currentVersion(),
       transaction: finalTx,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
@@ -1440,7 +1539,7 @@ export class WalletFacade {
 
     return {
       type: 'UNPROVEN_TRANSACTION',
-      protocolVersion: this.provingVersion(),
+      protocolVersion: this.currentVersion(),
       transaction: dustRegistrationTx,
     };
   }
@@ -1485,12 +1584,12 @@ export class WalletFacade {
     );
     return {
       type: 'UNPROVEN_TRANSACTION',
-      protocolVersion: this.provingVersion(),
+      protocolVersion: this.currentVersion(),
       transaction: dustDeregistrationTx,
     };
   }
 
-  async revert(txOrRecipe: AnyTransaction | BalancingRecipe, reason?: string): Promise<void> {
+  async revert(txOrRecipe: AnyTx | BalancingRecipe, reason?: string): Promise<void> {
     // avoid instanceof check
     const transactionsToRevert = BalancingRecipe.isRecipe(txOrRecipe)
       ? BalancingRecipe.getTransactions(txOrRecipe)
@@ -1499,14 +1598,21 @@ export class WalletFacade {
     await Promise.all(transactionsToRevert.map((tx) => this.revertTransaction(tx, reason)));
   }
 
-  async revertTransaction(tx: AnyTransaction, reason?: string): Promise<void> {
+  async revertTransaction(tx: AnyTx, reason?: string): Promise<void> {
     await Promise.all([
       this.shielded.revertTransaction(tx),
       this.unshielded.revertTransaction(tx),
       this.dust.revertTransaction(tx),
     ]).then(async () => {
-      await this.pendingTransactionsService.clear(tx as unknown as ledger.FinalizedTransaction);
-      const key = revertTxHistoryKey(tx);
+      // Reverting is total over the stages: a transaction at any of them may have booked coins, and the pending set
+      // recognises only the finalized ones. Narrowing rather than casting is what says so.
+      await this.pendingTransactionsService.clear(tx as FinalizedTx);
+      // A transaction of the other epoch has no history entry of this session's to land on, so there is nothing to
+      // key and nothing to record — the same reason the wallets treat it as nothing of theirs to release.
+      const key = Option.match(Either.getRight(WalletTransaction.unwrapWithin<Carried>(tx, this.currentEpoch())), {
+        onNone: () => undefined,
+        onSome: revertTxHistoryKey,
+      });
       if (key !== undefined) {
         await this.#txHistoryStorage.gotRejected({
           ...key,
