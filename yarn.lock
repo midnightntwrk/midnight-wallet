@@ -2806,6 +2806,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk@workspace:packages/wallet-sdk"
   dependencies:
+    "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
+    "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.3"
     "@midnightntwrk/wallet-sdk-abstractions": "npm:3.0.0-beta.0"
     "@midnightntwrk/wallet-sdk-address-format": "npm:4.0.0-beta.2"
     "@midnightntwrk/wallet-sdk-capabilities": "npm:4.0.0-beta.2"
