@@ -47,5 +47,5 @@ state until the restart reconnects it.
 variant a migration activates; `stop` releases them. Previously a migration left the wallet with no running sync, and no
 keys to restart it with.
 
-The shielded wallet still registers a single ledger-v9 variant, so nothing about a live wallet's behaviour changes
-today.
+The shielded wallet registered a single ledger-v9 variant when this landed, so on its own it changed nothing about a
+live wallet's behaviour. It is the wiring the two-variant wallet in this same release runs on.

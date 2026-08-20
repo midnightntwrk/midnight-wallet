@@ -27,7 +27,9 @@ gained type parameters for the ledger version they speak, each defaulting to the
 annotation keeps naming exactly what it named before, and `makeDefaultValidationService(Effect)` is unchanged in
 signature and behaviour — this release is additive.
 
-Not yet wired: nothing registers the pre-fork validator, because the default block-data fetcher's codec registry is
-open-ended from the minimum supported version and holds only the current ledger's codec, so the block data reaching
-validation is always current-ledger parameters. Routing the block-data fetch on the version a block reports is what
-closes that.
+Nothing registered the pre-fork validator at this point, because the default block-data fetcher's codec registry was
+open-ended from the minimum supported version and held only the current ledger's codec, so the block data reaching
+validation was always current-ledger parameters. Routing the block-data fetch on the version a block reports is what
+closed that, later in this same release: `makeDefaultValidationServices` and `makeDefaultVersionedValidationService`
+now register a validator either side of the boundary, and the shipped pre-fork validator is reachable rather than
+merely constructible (see *Validate a transaction at the version it was authored for*).

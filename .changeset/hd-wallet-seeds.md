@@ -13,6 +13,8 @@ for a wallet that will sign with ECDSA.
 It throws rather than returning a result: this sits at a boundary an application calls directly and its failures are
 programming errors, not ordinary states. `HDWallet` remains for a caller that would rather branch on a tagged result.
 
-The derivation is pinned by test against its current behaviour, not against a published specification: the
-spec-reference vectors cover the hop *after* this one and take the per-wallet seed as given, so nothing published states
-what a master seed derives to per role. What the vectors protect is that naming the walk changed nothing.
+The derivation is pinned against the specification rather than against itself. The Wallet Specification gains a
+**Per-wallet seeds** section naming which role each of the three seeds comes from, the spec reference implements that
+walk over BIP-32 independently of this package, and the vectors it generates (`seedDerivation.json`) are what these
+tests assert against. They reproduce the values this package already derived, which is what makes them a statement of
+what a Midnight wallet is rather than a record of what this package happened to do.

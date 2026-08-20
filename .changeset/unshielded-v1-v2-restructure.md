@@ -57,5 +57,6 @@ to the async signer.
 `unshielded/v2` subpath re-exports the ledger-v9 one.
 
 Nothing changes at the root entry points: `UnshieldedWallet`, `UnshieldedWalletAPI` and friends keep their names, the
-production wallet still registers only the ledger-v9 variant, and serialized wallet states round-trip unchanged —
+production wallet registered only the ledger-v9 variant at this point — it registers one either side of the boundary by
+the end of this release — and serialized wallet states round-trip unchanged —
 snapshots never embedded the variant naming. The facade update is an internal repoint to the renamed types.

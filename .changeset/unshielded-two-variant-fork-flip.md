@@ -7,9 +7,9 @@
 
 The shipped unshielded wallet now registers one variant either side of a protocol boundary — the pre-fork ledger version
 from the minimum supported version, the post-fork one from `configuration.forkVersion` — and follows the chain across
-it. The crossing itself is unchanged and still proven by `test/forkSimulation.test.ts`, which was rewired onto the
+it. The crossing itself is unchanged and still proven by `src/test/forkSimulation.test.ts`, which was rewired onto the
 shipped factory with **no assertion changed**: the test-only two-variant builder it used to stand on has been dissolved
-into `test/forkHarness.ts`, which is now observation and simulated infrastructure around the real wallet.
+into `src/test/forkHarness.ts`, which is now observation and simulated infrastructure around the real wallet.
 
 Unshielded's crossing is a **structural carry**, not a fresh state plus replay. Its UTXOs are public ledger data the
 wallet holds as plain records, so every one of them crosses field for field, along with the identity, the network and
@@ -46,21 +46,23 @@ What else moved:
   so it does not collide with the other wallets' same-named classes in the umbrella barrel.
 - `CustomUnshieldedWallet` is unchanged and still single-variant.
 
-**A temporary seam, which must not survive to general availability.** While the wallet is on the pre-fork variant,
+**A seam that existed between this change and the next, and does not survive into this release.** Registering a
+pre-fork variant arrived before there was any way to prove what it built, so for as long as that was true,
 `balanceFinalizedTransaction`, `balanceUnboundTransaction`, `balanceUnprovenTransaction`, `transferTransaction`,
-`rotateUtxos`, `initSwap`, `signUnprovenTransaction` and `signUnboundTransaction` fail with a typed
-`PreForkUnshieldedTransactingUnsupportedError`. Each of them takes or produces a transaction of the post-fork ledger
-version, which the pre-fork variant cannot even hold and which this release has no way to prove; the seam closes with
-version-routed proving. Everything else works on both sides: synchronization, the state observable and all its
-projections, balances, coins, the address, `revertTransaction`, serialization, restore, and the migration.
-`revertTransaction` is deliberately outside the seam — the pre-fork variant cannot have built the transaction being
+`rotateUtxos`, `initSwap`, `signUnprovenTransaction` and `signUnboundTransaction` were refused by name while the wallet
+was on the pre-fork variant. Version-routed proving and pre-fork transacting close it in this same release — see
+*Transact on either side of the protocol boundary* — and `PreForkUnshieldedTransactingUnsupportedError` is not part of
+the published surface. Everything else worked on both sides throughout: synchronization, the state observable and all
+its projections, balances, coins, the address, `revertTransaction`, serialization, restore, and the migration.
+`revertTransaction` was deliberately outside the seam — the pre-fork variant cannot have built the transaction being
 reverted so it has booked nothing to release, and the facade reverts all three wallets together when a submission
 fails.
 
-**One consequence, accepted and reported rather than hidden.** Every start on a chain already past the boundary pays one
-spurious migration: the wallet begins on the pre-fork variant, applies nothing, and hands over on the first message it
-sees. For unshielded that carries nothing across and leaves the cursor at the start, so the post-fork variant simply
-syncs the chain itself.
+**One consequence, since removed.** A wallet with no way to ask the chain where it is pays one spurious migration on a
+chain already past the boundary: it begins on the pre-fork variant, applies nothing, and hands over on the first message
+it sees. For unshielded that carries nothing across and leaves the cursor at the start, so the post-fork variant simply
+syncs the chain itself. The start-version probe added later in this same release removes that for a default wallet, and
+leaves it as the fallback for a wallet whose question goes unanswered.
 
 BREAKING CHANGE — `DefaultUnshieldedConfiguration` requires `forkVersion`. `UnshieldedWalletState.capabilities` and
 `UnshieldedWalletState.services` are removed, along with the `UnshieldedWalletCapabilities` and

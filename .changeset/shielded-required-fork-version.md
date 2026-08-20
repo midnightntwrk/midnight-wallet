@@ -45,5 +45,5 @@ Reaching further than the shielded package:
 `DefaultV1Configuration` and `DefaultV2Configuration` are unchanged and deliberately do **not** gain the field: neither
 variant knows there is another one, and `forkVersion` is the wallet layer's alone.
 
-Registration is still single-variant in this release, so nothing changes behaviourally: this is the configuration
-contract landing ahead of the two-variant wallet that consumes it.
+Registration was still single-variant when this landed, so it changed nothing behaviourally on its own: it is the
+configuration contract arriving ahead of the two-variant wallet that consumes it, which is in this same release.

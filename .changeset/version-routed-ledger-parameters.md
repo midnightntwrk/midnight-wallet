@@ -29,5 +29,8 @@ always been on `Block` in the indexer schema.
   which ledger to use has to be read before the parameters are decoded, the same reason the shielded event payload
   keeps its `raw`. `BlockDataSchema` is now the default-codec instance of `makeBlockDataSchema(codecs)`; pass your own
   registry to bound a variant to the range it is active over.
-- `makeDefaultBlockDataFetcher` and dust's `makeDefaultSyncService` accept an optional `ledgerParametersCodecs`. Both
-  default to claiming every protocol version, so a single-variant wallet is unaffected.
+- `makeDefaultBlockDataFetcher` and dust's `makeDefaultSyncService` accept an optional `ledgerParametersCodecs`. Dust's
+  defaults to claiming every protocol version, so a single-variant wallet is unaffected. The block-data fetcher's
+  configuration also gains a **required** `forkVersion` by the end of this release, and its default registry is split at
+  it rather than claiming everything: `defaultLedgerParametersCodecs` becomes a function of the fork version (see
+  *Validate a transaction at the version it was authored for, on a chain with a protocol boundary*).

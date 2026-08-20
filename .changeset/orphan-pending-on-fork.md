@@ -34,5 +34,7 @@ is never orphaned — not knowing what a transaction was authored for is not evi
 - A custom `PendingTransactionsService` must implement `orphanBeyond(chainNow)`.
 - `facade.revert` / `facade.revertTransaction` take an optional trailing `reason`. Existing calls are unaffected.
 
-`FacadeState.pending` keeps its shape; orphaned entries appear on it as items whose `result.status` is
-`'ORPHANED_BY_FORK'`.
+Underneath, an orphaned entry is one whose `result.status` is `'ORPHANED_BY_FORK'`. `FacadeState.pending` kept the
+pending set's own shape at this point and does not by the end of this release: it is `readonly PendingTransaction[]`
+with a tagged `PendingStatus` whose `Orphaned` arm carries `authoredFor` and `chainNow`, which is where an application
+reads this (see *`FacadeState.pending` is now `readonly PendingTransaction[]`*).

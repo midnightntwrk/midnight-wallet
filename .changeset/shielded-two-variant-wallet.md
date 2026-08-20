@@ -11,21 +11,23 @@ and takes over from there, with the cross-ledger migration that carries identity
 boundary is one number in one place: the version at which the runtime hands over is the version at which each variant
 stops applying.
 
-**Nothing an application calls changes shape.** `startWithSeed`, `restore`, `start(keys)`, the `state` observable and
-everything it projects, `waitForSyncedState`, `serializeState` and `getAddress` keep their signatures and meaning, and
-existing calls compile unchanged. What changes is what runs underneath, and three things worth knowing:
+**Registering two variants alters nothing an application calls.** The `state` observable and everything it projects,
+`waitForSyncedState`, `restore`, `serializeState` and `getAddress` keep their signatures and meaning. The start and
+transacting methods do change in this release, but for other reasons and in other notes — see *Wallets are started from
+seeds*, *Transact on either side of the protocol boundary* and *asks the chain where it is starting*. What registering
+two variants changes is what runs underneath, and three things worth knowing:
 
-- **A wallet starts on the pre-fork variant.** On a chain that has already forked it hands over on the first batch it
-  sees, having applied nothing — one migration per start, paid on chains that are entirely past the boundary. It is
-  accepted rather than hidden: removing it means asking the chain for its version before choosing a variant, which is
-  separate work. On a chain that has not forked, the wallet stays on the pre-fork variant until the chain reports a
-  version the post-fork one owns.
-- **`startWithSeed` is the only start that can follow the chain the whole way.** The seed is the one piece of key
-  material that crosses a boundary — each variant derives its own from it. `start(keys)` keeps working: the keys are
-  the post-fork ledger version's, so they are retained against that variant, and a wallet still on the pre-fork variant
-  is started from the seed it retained. A wallet built with `startWithSecretKeys` therefore starts **on the post-fork
-  variant** and stays there, because key objects belong to one ledger version's runtime and there is nothing to
-  convert; it cannot read a chain that is still pre-fork.
+- **A wallet with no way to ask the chain starts on the pre-fork variant.** On a chain that has already forked it hands
+  over on the first batch it sees, having applied nothing — one migration per start. As released this is the fallback
+  rather than the rule: the start-version probe added later in this same release asks the chain first, so a default
+  wallet on a chain past the boundary starts on the post-fork variant with no hand-over at all. Without a probe, or
+  when the question goes unanswered, the hand-over is what happens. On a chain that has not forked, the wallet stays on
+  the pre-fork variant until the chain reports a version the post-fork one owns.
+- **A seed is the only key material that can follow the chain the whole way.** Each variant derives its own from it, so
+  a wallet built from a seed can synchronize on either side of the boundary; key objects belong to one ledger version's
+  runtime and there is nothing to convert. The single-key `startWithSecretKeys` this change would have pinned to the
+  post-fork variant is **deleted** later in this same release rather than shipped — what replaces it is
+  `startWithKeys({ v8, v9 })`, which requires both sides for exactly this reason.
 - **Restoring routes on the snapshot's declared protocol version**, into whichever of the two variants wrote it. The
   serialized format is unchanged, and snapshots written by this release round-trip: a wallet that has synced past the
   boundary declares a version the post-fork variant owns, and one that has not was written by the pre-fork variant in
@@ -34,16 +36,14 @@ existing calls compile unchanged. What changes is what runs underneath, and thre
   anything, declaring `0` — it now routes to the pre-fork variant and fails to deserialize. Start such a wallet from
   its seed instead; it has no state to lose.
 
-**Temporary: building a transaction is refused while the wallet is on the pre-fork variant**, with the typed
-`PreForkTransactingUnsupportedError` naming the operation (`balanceTransaction`, `transferTransaction`, `initSwap`).
-**This seam must not survive to general availability** — mainnet is pre-fork until the fork happens, so a wallet that
-cannot transact pre-fork cannot be the wallet that ships. It closes with the version-routed proving increment, which
-routes a recipe to the prover that speaks the protocol version it was built at; until then the only proving path this
-SDK has speaks the post-fork ledger version, and there is nothing honest for the pre-fork branch to return.
-Synchronization, the state observable and everything it projects, balances, coins, addresses, serialization, restoring
-and the migration itself all work on **both** sides of the boundary. `revertTransaction` is deliberately not part of the
-seam: it builds nothing, needs no proving, and on the pre-fork variant releases nothing, because that variant cannot
-have produced the transaction being reverted.
+**A seam that existed between this change and the next, and does not survive into this release.** Registering a
+pre-fork variant arrived before there was any way to prove what it built, so for as long as that was true, building a
+transaction on the pre-fork variant was refused by name (`balanceTransaction`, `transferTransaction`, `initSwap`).
+Version-routed proving and pre-fork transacting close it in this same release — see *Transact on either side of the
+protocol boundary* — and `PreForkTransactingUnsupportedError` is not part of the published surface. No version of this
+package that an application can install refuses to transact pre-fork. Synchronization, the state observable and
+everything it projects, balances, coins, addresses, serialization, restoring and the migration itself worked on
+**both** sides of the boundary throughout.
 
 **New entry points.** `CustomForkingShieldedWallet(configuration, preFork, postFork)` builds the same shape over
 variants of your choosing, each with **its own configuration** — two variants either side of a boundary can mean

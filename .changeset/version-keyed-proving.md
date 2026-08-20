@@ -30,9 +30,10 @@ refusal.
   says out loud what an unversioned service was implicitly claiming.
 - `BalancingRecipe` has a required `protocolVersion`. Recipes the facade builds carry it already; only code that
   constructs a recipe by hand has to say which version it was built for.
-- `facade.finalizeTransaction(tx)` gains an optional second argument, the version the transaction was built for. Pass
-  it whenever it is known — without it the version the wallets have reached is used, which is the best available
-  answer for a transaction that never recorded what it was built for, not a correct one.
+- `facade.finalizeTransaction(tx)` briefly took an optional second argument naming the version the transaction was
+  built for. As released it takes none: a transaction crosses the facade as a `WalletTransaction` handle carrying its
+  own stamp, which is authoritative, so there is nothing left to pass and no fallback to the version the wallets have
+  reached (see *The facade speaks transaction handles*).
 - `makeDefaultProvingService` / `makeDefaultProvingServiceEffect` take a `ServerProvingConfiguration` (required URL).
   `makeDefaultVersionedProvingService` is the version-routed equivalent and returns an `Either`.
 - `ProvingService<TProven>` is now `ProvingService<TProven, TUnproven = ledger.UnprovenTransaction>`. Existing

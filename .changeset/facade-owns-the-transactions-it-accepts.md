@@ -17,6 +17,7 @@ methods accept.
 **Ownership decision.** The facade names it, rather than dust promoting it to a documented public export, because the
 facade has a single entry point and was exporting nothing for a type in five of its public signatures, while dust's
 declaration sits under `v2/types/` with a v8 twin under `v1/types/` — variant-scoped, and not a type whose identity
-survives the fork. This is transitional: `WalletTransaction` handles replace these signatures, at which point the
-protocol version a transaction was authored for travels with it instead of being lost at this boundary, and the alias
-goes away with them.
+survives the fork. This was transitional, and the transition happens inside this same release: `WalletTransaction` handles replace these
+signatures, so the protocol version a transaction was authored for travels with it instead of being lost at this
+boundary. The name stays — `AnyTransaction` is an alias of `AnyTx` as released, so an annotation written against it
+keeps compiling — but what it aliases is the handle rather than a dust subpath's internal.

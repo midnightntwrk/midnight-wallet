@@ -29,5 +29,7 @@ either one names a ledger version, and breaks when the chain moves on.
   because choosing a ledger version is the caller's to make and hardcoding one here would be the very thing the handle
   removes.
 
-Nothing routes through the handle yet — the wallets and the facade still name ledger types in their own signatures.
-This is the type they will be stated in terms of.
+This is the type the wallets and the facade are stated in terms of. Nothing routed through it at the point this landed;
+by the end of this release everything does — every public method that took or returned a ledger transaction takes or
+returns a handle instead (see *The facade speaks transaction handles* and *Transact on either side of the protocol
+boundary*).

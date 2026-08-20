@@ -45,5 +45,6 @@ the typed error channel instead of as a defect.
 re-exports the ledger-v9 one.
 
 Nothing changes at the root entry points: `DustWallet`, `DustWalletAPI`, and friends keep their names, the production
-wallet still registers only the ledger-v9 variant, and serialized wallet states round-trip unchanged — snapshots never
+wallet registered only the ledger-v9 variant at this point — it registers one either side of the boundary by the end of
+this release — and serialized wallet states round-trip unchanged — snapshots never
 embedded the variant naming. The testkit and facade updates are internal repoints to the renamed types.
