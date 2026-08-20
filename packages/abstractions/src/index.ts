@@ -17,6 +17,7 @@ export * as ProtocolState from './ProtocolState.js';
 export * as ProtocolVersion from './ProtocolVersion.js';
 export * as NetworkId from './NetworkId.js';
 export * as SyncProgress from './SyncProgress.js';
+export * from './TokenType.js';
 export * from './WalletTransaction.js';
 export * from './InMemoryTransactionHistoryStorage.js';
 export * from './NoOpTransactionHistoryStorage.js';

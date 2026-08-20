@@ -416,6 +416,66 @@ export const lowestProtocolVersion = (versions: WalletProtocolVersions): Protoco
     candidate < lowest ? candidate : lowest,
   );
 
+/** Which of the three wallets a reading is about. */
+export type WalletKind = keyof WalletProtocolVersions;
+
+/**
+ * Whether the three wallets agree about which side of a protocol boundary the chain is on.
+ *
+ * @remarks
+ *   `Settled` is the ordinary state, and says which protocol version the facade is acting at. `Crossing` is the window
+ *   around a fork during which the wallets disagree: each one learns of the change when its own synchronization reaches
+ *   it, so for a while some have crossed and some have not. Nothing the facade builds during that window can span the
+ *   boundary, so it stays bound to the version the laggards are still on — which is what `from` reports, and what
+ *   `activeProtocolVersion` answers.
+ *
+ *   A difference in version _within_ one epoch is not a crossing: two versions on the same side of the boundary are the
+ *   same ledger version, and a wallet lagging there is ordinary synchronization.
+ */
+export type ProtocolPhase =
+  | Readonly<{ _tag: 'Settled'; version: ProtocolVersion.ProtocolVersion }>
+  | Readonly<{
+      _tag: 'Crossing';
+      /** The version the facade is still bound to: the epoch the wallets that have not crossed are in. */
+      from: ProtocolVersion.ProtocolVersion;
+      /** The version the wallets that have crossed have reached. */
+      to: ProtocolVersion.ProtocolVersion;
+      /** The wallets still on the near side, in a fixed order, so an application can say what it is waiting for. */
+      behind: readonly WalletKind[];
+    }>;
+
+/** The three wallets in a fixed order, so {@link protocolPhaseOf} reports them the same way every time. */
+const walletKinds = ['shielded', 'unshielded', 'dust'] as const satisfies readonly WalletKind[];
+
+/**
+ * Reads whether the wallets are settled on one side of a protocol boundary, or still crossing it.
+ *
+ * @remarks
+ *   Derived entirely from the version each wallet has reported and where the boundary lies — the same two facts every
+ *   other version-routing decision in the SDK is made from, so this reading cannot disagree with them.
+ * @param versions The version each wallet has reached.
+ * @param forkVersion The version at which the chain hands over to the next ledger version.
+ * @returns The reading. See {@link ProtocolPhase}.
+ */
+export const protocolPhaseOf = (
+  versions: WalletProtocolVersions,
+  forkVersion: ProtocolVersion.ProtocolVersion,
+): ProtocolPhase => {
+  const reported = walletKinds.map((kind) => [kind, versions[kind]] as const);
+  const from = lowestProtocolVersion(versions);
+  const epoch = ProtocolVersion.epochOf(from, forkVersion);
+  const crossed = reported.filter(([, version]) => !ProtocolVersion.withinRange(version, epoch));
+
+  if (crossed.length === 0) return { _tag: 'Settled', version: from };
+
+  return {
+    _tag: 'Crossing',
+    from,
+    to: crossed.reduce((highest, [, version]) => (version > highest ? version : highest), crossed[0][1]),
+    behind: reported.filter(([, version]) => ProtocolVersion.withinRange(version, epoch)).map(([kind]) => kind),
+  };
+};
+
 export class FacadeState {
   public readonly shielded: ShieldedWalletState;
   public readonly unshielded: UnshieldedWalletState;
@@ -442,6 +502,17 @@ export class FacadeState {
     return lowestProtocolVersion(this.protocolVersion);
   }
 
+  /**
+   * Whether the three wallets are settled on one side of the protocol boundary, or still crossing it.
+   *
+   * @remarks
+   *   Additive, and the reading `protocolVersion` alone cannot give: three versions that differ tell an application
+   *   nothing about whether the difference matters. See {@link ProtocolPhase}.
+   */
+  public get protocol(): ProtocolPhase {
+    return protocolPhaseOf(this.protocolVersion, this.#forkVersion);
+  }
+
   public get isSynced(): boolean {
     return (
       this.shielded.state.progress.isStrictlyComplete() &&
@@ -450,16 +521,21 @@ export class FacadeState {
     );
   }
 
+  /** Where the chain hands over from one ledger version to the next, which is what {@link protocol} is read against. */
+  readonly #forkVersion: ProtocolVersion.ProtocolVersion;
+
   constructor(
     shielded: ShieldedWalletState,
     unshielded: UnshieldedWalletState,
     dust: DustWalletState,
     pending: PendingTransactions.PendingTransactions<FinalizedTx>,
+    forkVersion: ProtocolVersion.ProtocolVersion = ProtocolVersion.MinSupportedVersion,
   ) {
     this.shielded = shielded;
     this.unshielded = unshielded;
     this.dust = dust;
     this.pending = pending;
+    this.#forkVersion = forkVersion;
   }
 }
 
@@ -997,7 +1073,7 @@ export class WalletFacade {
     ]).pipe(
       map(
         ([shieldedState, unshieldedState, dustState, pending]) =>
-          new FacadeState(shieldedState, unshieldedState, dustState, pending),
+          new FacadeState(shieldedState, unshieldedState, dustState, pending, this.#forkVersion),
       ),
     );
   }
@@ -1010,7 +1086,7 @@ export class WalletFacade {
       firstValueFrom(this.pendingTransactionsService.state()),
     ]);
 
-    return new FacadeState(shieldedState, unshieldedState, dustState, pending);
+    return new FacadeState(shieldedState, unshieldedState, dustState, pending, this.#forkVersion);
   }
 
   /**
