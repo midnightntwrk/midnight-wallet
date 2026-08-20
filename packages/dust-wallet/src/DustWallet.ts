@@ -37,6 +37,7 @@ import {
   type VariantBuilder,
   type WalletLike,
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import { type Clock, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type Duration, Effect, Either, Option, Ref, type Scope } from 'effect';
@@ -346,6 +347,16 @@ export type DefaultDustConfiguration = {
    *   unchanged.
    */
   forkVersion: ProtocolVersion.ProtocolVersion;
+  /**
+   * How the wallet asks the chain which protocol version it is on, before it chooses a variant to start at.
+   *
+   * @remarks
+   *   Optional, and defaulted rather than absent: left unset, the wallet asks the indexer named by
+   *   {@link indexerClientConnection}, which it is about to synchronize from anyway. Supply one to ask something else —
+   *   a cache, a node RPC, a value the application already holds. The answer is best-effort wherever it comes from: a
+   *   chain that cannot be reached leaves the wallet starting exactly where it started before there was a probe.
+   */
+  chainVersionProbe?: ChainVersionProbe;
 };
 
 export interface CustomizedDustWalletClass<

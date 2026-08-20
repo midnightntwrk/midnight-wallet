@@ -33,23 +33,27 @@ import {
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import {
+  type ChainVersionProbe,
+  makeIndexerChainVersionProbe,
+} from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import * as PreForkSignatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import {
   StartMaterial,
-  type Variant,
+  Variant,
   type VariantBuilder,
   type WalletLike,
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Clock, EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
-import { Effect, Either, Option, Ref, type Scope } from 'effect';
+import { Duration, Effect, Either, Option, Ref, type Scope, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
 import { type DefaultDustConfiguration, type DustWalletAPI, DustWalletState } from './DustWallet.js';
 import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import { CoreWallet as PreForkCoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
 import { type WalletSyncUpdate as PreForkSyncUpdate } from './v1/Sync.js';
-import { type CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
+import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
 import { type WalletSyncUpdate as PostForkSyncUpdate } from './v2/SyncSchema.js';
 import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
 import { type UtxoWithMeta } from './v2/types/Dust.js';
@@ -122,6 +126,20 @@ export type ForkingDustConfiguration = {
   networkId: NetworkId;
   /** The protocol version at which the chain hands over from the pre-fork ledger version to the post-fork one. */
   forkVersion: ProtocolVersion.ProtocolVersion;
+  /**
+   * How the wallet asks the chain which protocol version it is on, before it chooses a variant to start at.
+   *
+   * @remarks
+   *   Optional, and best-effort where present: a wallet with no probe — or one whose probe does not answer in time —
+   *   starts on the pre-fork variant and learns the version from the first event it sees, which is what a wallet with
+   *   no history has always done. What a probe buys is the two things that guess costs: a hand-over per start on a
+   *   chain entirely past the boundary, and, on a chain that has shown this wallet no events at all, an epoch that
+   *   never gets corrected.
+   *
+   *   Nothing about it can make a start fail. A rejection, a timeout, a version no registered variant covers: each
+   *   leaves the wallet exactly where a wallet that never asked would be.
+   */
+  chainVersionProbe?: ChainVersionProbe;
 };
 
 /**
@@ -155,18 +173,23 @@ export interface ForkingDustWalletClass<
    * @remarks
    *   The only start that can follow the chain the whole way. The seed is the one piece of key material that crosses a
    *   protocol boundary — each variant derives its own `DustSecretKey` from it, and the two derive the same dust public
-   *   key — so a wallet built this way can synchronize on either side of the fork. It begins on the pre-fork variant
-   *   and is handed over when the chain reports a version the post-fork variant owns, which on a chain that has already
-   *   forked happens on the first batch it sees.
+   *   key — so a wallet built this way can synchronize on either side of the fork.
+   *
+   *   Asynchronous because choosing where to begin can mean asking the chain: with a
+   *   {@link ForkingDustConfiguration.chainVersionProbe} configured, the wallet starts at the variant that owns the
+   *   version the chain reports, which on a chain already past the boundary is the post-fork one from the first moment.
+   *   Without one, or when the question goes unanswered, it begins on the pre-fork variant and is handed over when the
+   *   chain reports a version the post-fork variant owns — on a chain that has already forked, the first batch it sees.
    * @param seed The seed to derive both ledger versions' dust keys from.
    * @param dustParameters The post-fork ledger version's dust parameters, which an empty post-fork state is valued
    *   against.
-   * @returns A wallet started on the pre-fork variant.
+   * @returns A wallet started at the variant the chain is on, or on the pre-fork variant when the chain was not asked
+   *   or did not say.
    */
   startWithSeed(
     seed: Uint8Array,
     dustParameters?: DustGenerationRates,
-  ): ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>;
+  ): Promise<ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>>;
   /**
    * Builds a wallet from dust keys of both ledger versions.
    *
@@ -178,12 +201,13 @@ export interface ForkingDustWalletClass<
    *   same derivation done twice; a seed costs neither.
    * @param keys One ledger version's dust secret key per side of the boundary.
    * @param dustParameters The post-fork ledger version's dust parameters.
-   * @returns A wallet started on the pre-fork variant, which is where a wallet with no history belongs.
+   * @returns A wallet started at the variant the chain is on, or on the pre-fork variant — where a wallet with no
+   *   history belongs — when the chain was not asked or did not say.
    */
   startWithKeys(
     keys: DustKeysByEpoch,
     dustParameters?: DustGenerationRates,
-  ): ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>;
+  ): Promise<ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>>;
   /**
    * Restores a wallet from a snapshot, into whichever registered variant wrote it.
    *
@@ -240,6 +264,24 @@ export type DustGenerationRates = Readonly<{
 
 export const asPreForkDustParameters = (parameters: DustGenerationRates): v8.DustParameters =>
   new v8.DustParameters(parameters.nightDustRatio, parameters.generationDecayRate, parameters.dustGracePeriodSeconds);
+
+/**
+ * The same dust rates, as the post-fork ledger version's parameters object.
+ *
+ * @remarks
+ *   The mirror of {@link asPreForkDustParameters}, and needed for the same reason: an empty state of either variant is
+ *   parameterised, and the rates a caller names are plain numbers rather than either ledger's object. Ordinarily the
+ *   post-fork side's empty state is the migration's business; a wallet that starts post-fork because the chain said so
+ *   has no migration to get one from, and builds its own here.
+ * @param parameters The rates to express.
+ * @returns The same generation and decay rates, as a post-fork `DustParameters`.
+ */
+export const asPostForkDustParameters = (parameters: DustGenerationRates): ledger.DustParameters =>
+  new ledger.DustParameters(
+    parameters.nightDustRatio,
+    parameters.generationDecayRate,
+    parameters.dustGracePeriodSeconds,
+  );
 
 /**
  * Builds a dust wallet class over a variant either side of a protocol boundary.
@@ -379,26 +421,120 @@ export function CustomForkingDustWallet<
   const postForkTx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
     EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, postForkEpoch));
 
+  /**
+   * How long a start waits for the chain to say which version it is on.
+   *
+   * @remarks
+   *   Short, because what is being bought is small: the alternative to an answer is the hand-over this wallet has
+   *   always done, which costs one migration and no correctness on a chain that produces events. It is a ceiling
+   *   rather than a typical cost — an unreachable indexer refuses a connection long before this — and it exists so
+   *   that a probe which neither answers nor fails cannot hold a start open indefinitely.
+   */
+  const probeTimeout = Duration.seconds(5);
+
+  /** Where a start begins, when the chain answered for it. */
+  type ProbedStart = Readonly<{
+    version: ProtocolVersion.ProtocolVersion;
+    variant: HList.Each<Variants>;
+  }>;
+
+  /**
+   * The variant the chain's current version belongs to, or nothing.
+   *
+   * @remarks
+   *   Nothing covers every way the question can fail to produce an answer, and they are deliberately not distinguished:
+   *   no probe configured, a probe that rejected, a probe that outlived the wallet's patience, or a version no
+   *   registered variant claims. Each means the same thing to a caller — start where a wallet with no history starts —
+   *   and none of them is a reason to fail.
+   */
+  const probedStart: Effect.Effect<Option.Option<ProbedStart>> =
+    configuration.chainVersionProbe === undefined
+      ? Effect.succeedNone
+      : pipe(
+          Effect.tryPromise(configuration.chainVersionProbe),
+          Effect.timeout(probeTimeout),
+          Effect.map((version) =>
+            Option.map(BaseWallet.variantFor(version), (variant): ProbedStart => ({ version, variant })),
+          ),
+          Effect.orElseSucceed(() => Option.none<ProbedStart>()),
+        );
+
+  /**
+   * A fresh state of the variant a probed start begins at, recording the version the chain reported.
+   *
+   * @remarks
+   *   Built exactly as the head-variant boot path builds its own — an empty state of that variant, valued against that
+   *   ledger version's rebuild of the rates the caller named — and then annotated with the observed version, which is
+   *   what keeps a variant from starting outside its own activation range and signalling backwards on sight.
+   */
+  const freshStateAt = (
+    variant: HList.Each<Variants>,
+    keys: DustKeysByEpoch,
+    rates: DustGenerationRates,
+    version: ProtocolVersion.ProtocolVersion,
+  ): PreForkCoreWallet | CoreWallet =>
+    Variant.getVersionedVariantTag(variant) === V2Tag
+      ? CoreWallet.withProtocolVersion(
+          CoreWallet.initEmpty(asPostForkDustParameters(rates), keys.v9, configuration.networkId),
+          version,
+        )
+      : PreForkCoreWallet.withProtocolVersion(
+          PreForkCoreWallet.initEmpty(asPreForkDustParameters(rates), keys.v8, configuration.networkId),
+          version,
+        );
+
   return class ForkingDustWalletImplementation
     extends BaseWallet
     implements ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>
   {
     static readonly configuration: TConfiguration = configuration;
 
-    static startWithSeed(
+    /**
+     * Starts at the variant the chain says it is on, or at the head variant when it does not say.
+     *
+     * @remarks
+     *   The second branch is the whole of this wallet's previous behaviour, unchanged and reached whenever the chain was
+     *   not asked or did not answer: the pre-fork variant, an empty state valued against the pre-fork rebuild of the
+     *   rates the caller named, and a hand-over on the first batch that reports a version it does not own.
+     * @param keys One ledger version's dust key per side of the boundary, since either side may be the one that runs.
+     * @param rates The rates the caller named, which whichever empty state is built is valued against.
+     * @returns The started wallet.
+     */
+    static #startProbed(
+      keys: DustKeysByEpoch,
+      rates: DustGenerationRates,
+    ): Promise<ForkingDustWalletImplementation> {
+      return pipe(
+        probedStart,
+        Effect.map(
+          Option.match({
+            onNone: () =>
+              ForkingDustWalletImplementation.startFirst(
+                ForkingDustWalletImplementation,
+                // Valued against the same rates the caller named, rebuilt by the ledger version that owns this state —
+                // see {@link asPreForkDustParameters}.
+                PreForkCoreWallet.initEmpty(asPreForkDustParameters(rates), keys.v8, configuration.networkId),
+              ),
+            onSome: ({ version, variant }) =>
+              ForkingDustWalletImplementation.startAtVariant(
+                ForkingDustWalletImplementation,
+                variant,
+                freshStateAt(variant, keys, rates, version),
+              ),
+          }),
+        ),
+        Effect.runPromise,
+      );
+    }
+
+    static async startWithSeed(
       seed: Uint8Array,
       dustParameters: DustGenerationRates = defaultRates,
-    ): ForkingDustWalletImplementation {
+    ): Promise<ForkingDustWalletImplementation> {
       const derived = keysFromSeed(WalletSeed.WalletSeed(seed));
-      const wallet = ForkingDustWalletImplementation.startFirst(
-        ForkingDustWalletImplementation,
-        // Valued against the same rates the caller named, rebuilt by the ledger version that owns this state — see
-        // {@link asPreForkDustParameters}. The post-fork side's own empty state is the migration's business.
-        PreForkCoreWallet.initEmpty(
-          asPreForkDustParameters(dustParameters),
-          Option.getOrThrow(derived.preFork),
-          configuration.networkId,
-        ),
+      const wallet = await ForkingDustWalletImplementation.#startProbed(
+        { v8: Option.getOrThrow(derived.preFork), v9: Option.getOrThrow(derived.postFork) },
+        dustParameters,
       );
       // Both sides derived here and now, and the seed reference dropped with this frame: from this point the wallet
       // holds key objects only, which is strictly less than it held before and does the same work.
@@ -406,14 +542,11 @@ export function CustomForkingDustWallet<
       return wallet;
     }
 
-    static startWithKeys(
+    static async startWithKeys(
       keys: DustKeysByEpoch,
       dustParameters: DustGenerationRates = defaultRates,
-    ): ForkingDustWalletImplementation {
-      const wallet = ForkingDustWalletImplementation.startFirst(
-        ForkingDustWalletImplementation,
-        PreForkCoreWallet.initEmpty(asPreForkDustParameters(dustParameters), keys.v8, configuration.networkId),
-      );
+    ): Promise<ForkingDustWalletImplementation> {
+      const wallet = await ForkingDustWalletImplementation.#startProbed(keys, dustParameters);
       wallet.#retainKeys({ preFork: Option.some(keys.v8), postFork: Option.some(keys.v9) });
       return wallet;
     }
@@ -863,14 +996,24 @@ export type DustWalletClass = ForkingDustWalletClass<PreForkSyncUpdate, PostFork
  *
  *   **Fee-paying operations work on either side of the boundary**: the active variant answers with its own ledger's
  *   objects, and every result travels as a handle stamped with the epoch that built it.
+ *
+ *   **The chain is asked where it is before a variant is chosen.** The indexer this wallet already syncs from answers
+ *   which protocol version the chain is on, so a start on a chain past the boundary begins post-fork rather than
+ *   handing over immediately. An application that would rather ask something else — a cache, a value it already holds
+ *   — supplies its own `chainVersionProbe`; one whose chain cannot be reached loses nothing, because the answer is
+ *   best-effort and its absence is the behaviour this wallet had before.
  * @param configuration What the wallet and both its variants are built from, including where the boundary lies.
  * @returns The wallet class.
  */
 export function DustWallet(configuration: DefaultDustConfiguration): DustWalletClass {
   const dustParameters = configuration.dustParameters ?? ledger.LedgerParameters.initialParameters().dust;
+  const withProbe: DefaultDustConfiguration = {
+    ...configuration,
+    chainVersionProbe: configuration.chainVersionProbe ?? makeIndexerChainVersionProbe(configuration),
+  };
 
   return CustomForkingDustWallet(
-    configuration,
+    withProbe,
     {
       builder: new V1Builder().withDefaults(),
       // The one field that cannot be shared: `dustParameters` is a WASM object of whichever ledger module produced it,

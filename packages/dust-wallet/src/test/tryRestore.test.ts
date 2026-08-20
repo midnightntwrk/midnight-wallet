@@ -46,7 +46,10 @@ const seed = Buffer.alloc(32, 7);
 
 describe('a Dust wallet restored from a snapshot it can read', () => {
   it('comes back as a wallet, rather than as a reason it could not', async () => {
-    const source = DustWallet(configuration).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
+    const source = await DustWallet(configuration).startWithSeed(
+      seed,
+      ledger.LedgerParameters.initialParameters().dust,
+    );
     const written = await source.serializeState();
     await source.stop();
 
