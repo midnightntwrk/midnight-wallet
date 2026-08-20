@@ -40,6 +40,7 @@ import {
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ArrayOps, DateOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { carried } from './helpers/transactions.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
@@ -172,16 +173,9 @@ describe('Dust Registration', () => {
     ];
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const transferTxRecipe = await senderFacade.transferTransaction(
-      tokenTransfer,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
-      {
-        ttl,
-      },
-    );
+    const transferTxRecipe = await senderFacade.transferTransaction(tokenTransfer, {
+      ttl,
+    });
 
     const signedTransferTxRecipe = await senderFacade.signRecipe(
       transferTxRecipe,
@@ -231,7 +225,9 @@ describe('Dust Registration', () => {
     const receiverStateAfterRegistration = await rx.firstValueFrom(
       receiverFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await receiverFacade.queryTxHistoryByHash(provenDustRegistrationTx.transactionHash());
+          const txInHistory = await receiverFacade.queryTxHistoryByHash(
+            carried<ledger.FinalizedTransaction>(provenDustRegistrationTx).transactionHash(),
+          );
 
           return {
             state,
@@ -270,10 +266,6 @@ describe('Dust Registration', () => {
           ],
         },
       ],
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
       { ttl: new Date(Date.now() + 30 * 60 * 1000) },
     );
     const signedTransfer = await senderFacade.signRecipe(transferTxRecipe, unshieldedSenderKeystore.signDataAsync);
@@ -355,16 +347,9 @@ describe('Dust Registration', () => {
     };
 
     await senderFacade
-      .transferTransaction(
-        [transfersToMake],
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-        },
-        {
-          ttl: DateOps.addSeconds(new Date(), 1800),
-        },
-      )
+      .transferTransaction([transfersToMake], {
+        ttl: DateOps.addSeconds(new Date(), 1800),
+      })
       .then((recipe) => senderFacade.signRecipe(recipe, unshieldedSenderKeystore.signDataAsync))
       .then((signedTxRecipe) => senderFacade.finalizeRecipe(signedTxRecipe))
       .then((tx) => senderFacade.submitTransaction(tx));

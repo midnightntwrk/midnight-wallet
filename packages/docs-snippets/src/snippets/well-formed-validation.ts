@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
-import { generateRandomSeed } from '@midnightntwrk/wallet-sdk';
+import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
+import { generateRandomSeed, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';
@@ -32,7 +32,13 @@ const buildUnprovenTransaction = () => {
   );
   const intent = ledger.Intent.new(new Date(Date.now() + 30 * 60 * 1000));
   intent.fallibleUnshieldedOffer = unshieldedOffer;
-  return ledger.Transaction.fromParts('undeployed', undefined, undefined, intent);
+  // Sealed with the protocol version the ledger module above serves, which is how the wallet knows which of its
+  // variants may read these bytes and which prover and validator answer for them.
+  return WalletTransaction.adopt(
+    'Unproven',
+    ledger.Transaction.fromParts('undeployed', undefined, undefined, intent),
+    ProtocolVersion.MinSupportedVersion,
+  );
 };
 
 const unprovenTx = buildUnprovenTransaction();
@@ -44,11 +50,9 @@ await sender.wallet.validateTransaction(unprovenTx, {
 });
 console.log('Validated unproven transaction (structural checks only)');
 
-const recipe = await sender.wallet.balanceUnprovenTransaction(
-  unprovenTx,
-  { shieldedSecretKeys: sender.shieldedSecretKeys, dustSecretKey: sender.dustSecretKey },
-  { ttl: new Date(Date.now() + 30 * 60 * 1000) },
-);
+const recipe = await sender.wallet.balanceUnprovenTransaction(unprovenTx, {
+  ttl: new Date(Date.now() + 30 * 60 * 1000),
+});
 const signedRecipe = await sender.wallet.signRecipe(recipe, sender.unshieldedKeystore.signDataAsync);
 const finalizedTx = await sender.wallet.finalizeRecipe(signedRecipe);
 

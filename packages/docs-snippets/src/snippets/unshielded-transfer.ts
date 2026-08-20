@@ -38,10 +38,6 @@ await sender.wallet
       },
     ],
     {
-      shieldedSecretKeys: sender.shieldedSecretKeys,
-      dustSecretKey: sender.dustSecretKey,
-    },
-    {
       ttl: new Date(Date.now() + 30 * 60 * 1000),
     },
   )

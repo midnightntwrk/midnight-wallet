@@ -16,10 +16,11 @@
 // token-transfer tests (self-transaction, swap, error cases, dev TODOs) stay in the upstream
 // e2e-tests suite; they share the two-wallet setup via the exported `useTokenTransferWallets`.
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { Either } from 'effect';
 import { firstValueFrom } from 'rxjs';
 import { inspect } from 'node:util';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { type WalletTestEnvironment } from '../types.js';
 import { provideWallet, saveState, type WalletInit } from '../wallet.js';
@@ -210,16 +211,9 @@ export function registerTokenTransferHealthchecks(deps: TokenTransferScenarioDep
           },
         ];
 
-        const txRecipe = await sender.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: sender.shieldedSecretKeys,
-            dustSecretKey: sender.dustSecretKey,
-          },
-          {
-            ttl: new Date(Date.now() + 30 * 60 * 1000),
-          },
-        );
+        const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+          ttl: new Date(Date.now() + 30 * 60 * 1000),
+        });
         logger.info('Signing tx...');
         logger.info(txRecipe);
         const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, sender.unshieldedKeystore.signDataAsync);
@@ -227,9 +221,20 @@ export function registerTokenTransferHealthchecks(deps: TokenTransferScenarioDep
         logger.info(signedTxRecipe);
         const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
         logger.info('Submitting transaction...');
-        logger.info(finalizedTx.toString());
+        logger.info(inspect(finalizedTx));
         const txId = await sender.wallet.submitTransaction(finalizedTx);
-        const txHash = finalizedTx.transactionHash();
+        // The transaction's own hash, read through the handle at exactly the version it says it was built at — a
+        // one-wide range, which is how a caller asks for the transaction it is holding and no other.
+        const carried = Either.getOrThrow(
+          WalletTransaction.unwrapWithin<ledger.FinalizedTransaction>(
+            finalizedTx,
+            ProtocolVersion.makeRange(
+              finalizedTx.protocolVersion,
+              ProtocolVersion.ProtocolVersion(finalizedTx.protocolVersion + 1n),
+            ),
+          ),
+        );
+        const txHash = carried.transactionHash();
         logger.info('txProcessing');
         logger.info('Transaction id: ' + txId);
         logger.info('waiting for tx in history');

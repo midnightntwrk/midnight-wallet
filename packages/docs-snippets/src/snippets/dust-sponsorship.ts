@@ -10,11 +10,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
-import { generateRandomSeed } from '@midnightntwrk/wallet-sdk';
+import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
+import { generateRandomSeed, ProtocolVersion, type UnboundTx, WalletTransaction } from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
-import { type UnboundTransaction } from '@midnightntwrk/wallet-sdk/proving';
 import { aFakeProvingProvider, initWalletWithSeed } from '../utils.ts';
 
 /*
@@ -54,10 +53,6 @@ await sponsor.wallet
         ],
       },
     ],
-    {
-      shieldedSecretKeys: sponsor.shieldedSecretKeys,
-      dustSecretKey: sponsor.dustSecretKey,
-    },
     { ttl: new Date(Date.now() + 30 * 60 * 1000) },
   )
   .then((recipe) => sponsor.wallet.signRecipe(recipe, sponsor.unshieldedKeystore.signDataAsync))
@@ -75,7 +70,7 @@ console.log(
   userReceivedNight.unshielded.balances[ledger.nativeToken().raw],
 );
 
-const prepareTransactionToBalance = async (): Promise<UnboundTransaction> => {
+const prepareTransactionToBalance = async (): Promise<UnboundTx> => {
   const unshieldedOffer = ledger.UnshieldedOffer.new(
     [],
     [
@@ -91,43 +86,32 @@ const prepareTransactionToBalance = async (): Promise<UnboundTransaction> => {
   intent.fallibleUnshieldedOffer = unshieldedOffer;
   const unprovenTransaction = ledger.Transaction.fromParts('undeployed', undefined, undefined, intent);
   // Fake proving will work here as no proofs are involved. This is a major difference compared to real flow
-  return await unprovenTransaction.prove(
+  const proven = await unprovenTransaction.prove(
     aFakeProvingProvider,
     ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
   );
+  // Sealed with the protocol version the ledger module above serves: a transaction an application built for itself is
+  // handed to the wallet as a handle, saying which ledger version made it.
+  return WalletTransaction.adopt('Unbound', proven, ProtocolVersion.MinSupportedVersion);
 };
 //Transaction as DApp could prepare it
 const transactionToBalance = await prepareTransactionToBalance();
 
 // Balanced by user without paying fees
 const transactionWithoutFees = await user.wallet
-  .balanceUnboundTransaction(
-    transactionToBalance,
-    {
-      shieldedSecretKeys: user.shieldedSecretKeys,
-      dustSecretKey: user.dustSecretKey,
-    },
-    {
-      ttl: new Date(Date.now() + 30 * 60 * 1000),
-      tokenKindsToBalance: ['shielded', 'unshielded'],
-    },
-  )
+  .balanceUnboundTransaction(transactionToBalance, {
+    ttl: new Date(Date.now() + 30 * 60 * 1000),
+    tokenKindsToBalance: ['shielded', 'unshielded'],
+  })
   .then((recipe) => user.wallet.signRecipe(recipe, user.unshieldedKeystore.signDataAsync))
   .then((tx) => user.wallet.finalizeRecipe(tx));
 
 // With sponsor paying fees and submitting transaction
 await sponsor.wallet
-  .balanceFinalizedTransaction(
-    transactionWithoutFees,
-    {
-      shieldedSecretKeys: sponsor.shieldedSecretKeys,
-      dustSecretKey: sponsor.dustSecretKey,
-    },
-    {
-      ttl: new Date(Date.now() + 30 * 60 * 1000),
-      tokenKindsToBalance: ['dust'],
-    },
-  )
+  .balanceFinalizedTransaction(transactionWithoutFees, {
+    ttl: new Date(Date.now() + 30 * 60 * 1000),
+    tokenKindsToBalance: ['dust'],
+  })
   .then((recipe) => sponsor.wallet.signRecipe(recipe, sponsor.unshieldedKeystore.signDataAsync))
   .then((recipe) => sponsor.wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => sponsor.wallet.submitTransaction(finalizedTransaction));

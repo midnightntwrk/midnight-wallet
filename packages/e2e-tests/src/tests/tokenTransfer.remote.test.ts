@@ -34,6 +34,7 @@ import {
   registerTokenTransferHealthchecks,
   useTokenTransferWallets,
 } from '@midnightntwrk/wallet-sdk-testkit/scenarios';
+import { carried, sealed } from './helpers/transactions.js';
 
 const getEnv = useWalletTestEnvironment(() =>
   createTestContainersEnvironment({ network: process.env['NETWORK'] as MidnightNetwork }),
@@ -80,16 +81,9 @@ describe('Token transfer (extended)', () => {
         },
       ];
       logger.info('Transfer transaction...');
-      const txRecipe = await sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 30 * 60 * 1000),
-        },
-      );
+      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      });
       logger.info('Transaction to prove...');
       logger.info(txRecipe);
       const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
@@ -104,7 +98,7 @@ describe('Token transfer (extended)', () => {
       expect(pendingState.shielded.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
       expect(pendingState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
 
-      const txHash = finalizedTx.transactionHash();
+      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
       const txEntry = await waitForTxInHistory(txHash, sender.wallet, (e) => e.shielded !== undefined);
       const finalState = await sender.wallet.waitForSyncedState();
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
@@ -158,10 +152,6 @@ describe('Token transfer (extended)', () => {
         },
       ],
       {
-        shieldedSecretKeys: sender.shieldedSecretKeys,
-        dustSecretKey: sender.dustSecretKey,
-      },
-      {
         ttl,
         payFees: false,
       },
@@ -170,16 +160,9 @@ describe('Token transfer (extended)', () => {
     const wallet1TxId = await sender.wallet.submitTransaction(finalizedTx);
     logger.info('Transaction id: ' + wallet1TxId);
 
-    const wallet2BalancedTx = await receiver.wallet.balanceFinalizedTransaction(
-      finalizedTx,
-      {
-        shieldedSecretKeys: receiver.shieldedSecretKeys,
-        dustSecretKey: receiver.dustSecretKey,
-      },
-      {
-        ttl,
-      },
-    );
+    const wallet2BalancedTx = await receiver.wallet.balanceFinalizedTransaction(finalizedTx, {
+      ttl,
+    });
     const finalizedSwapTx = await receiver.wallet.finalizeRecipe(wallet2BalancedTx);
     const wallet2TxId = await receiver.wallet.submitTransaction(finalizedSwapTx);
     logger.info('Transaction id 2: ' + wallet2TxId);
@@ -220,7 +203,7 @@ describe('Token transfer (extended)', () => {
       );
       const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenRaw, outputValue);
       const unprovenTx = ledger.Transaction.fromParts(networkId, offer);
-      const finalizedTx = await sender.wallet.finalizeTransaction(unprovenTx);
+      const finalizedTx = await sender.wallet.finalizeTransaction(sealed('Unproven', unprovenTx));
       await expect(
         Promise.all([sender.wallet.submitTransaction(finalizedTx), sender.wallet.submitTransaction(finalizedTx)]),
       ).rejects.toThrow();
@@ -264,16 +247,9 @@ describe('Token transfer (extended)', () => {
         },
       ];
 
-      const txRecipe = await sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: new Date(),
-        },
-      );
+      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(),
+      });
       await expect(sender.wallet.finalizeRecipe(txRecipe)).rejects.toThrow();
 
       const finalState = await waitForFinalizedShieldedBalance(sender.wallet.shielded);
@@ -308,16 +284,9 @@ describe('Token transfer (extended)', () => {
         },
       ];
       try {
-        const txRecipe = await sender.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: sender.shieldedSecretKeys,
-            dustSecretKey: sender.dustSecretKey,
-          },
-          {
-            ttl: new Date(),
-          },
-        );
+        const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+          ttl: new Date(),
+        });
         const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
         await sender.wallet.submitTransaction(finalizedTx);
       } catch (e: unknown) {
@@ -354,16 +323,9 @@ describe('Token transfer (extended)', () => {
         },
       ];
       await expect(
-        sender.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: sender.shieldedSecretKeys,
-            dustSecretKey: sender.dustSecretKey,
-          },
-          {
-            ttl: new Date(),
-          },
-        ),
+        sender.wallet.transferTransaction(outputsToCreate, {
+          ttl: new Date(),
+        }),
       ).rejects.toThrow('The amount needs to be positive');
     },
     timeout,
@@ -393,16 +355,9 @@ describe('Token transfer (extended)', () => {
       ];
 
       await expect(
-        sender.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: sender.shieldedSecretKeys,
-            dustSecretKey: sender.dustSecretKey,
-          },
-          {
-            ttl: new Date(),
-          },
-        ),
+        sender.wallet.transferTransaction(outputsToCreate, {
+          ttl: new Date(),
+        }),
       ).rejects.toThrow('The amount needs to be positive');
     },
     timeout,
@@ -417,16 +372,9 @@ describe('Token transfer (extended)', () => {
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
       await expect(
-        sender.wallet.transferTransaction(
-          [],
-          {
-            shieldedSecretKeys: sender.shieldedSecretKeys,
-            dustSecretKey: sender.dustSecretKey,
-          },
-          {
-            ttl: new Date(),
-          },
-        ),
+        sender.wallet.transferTransaction([], {
+          ttl: new Date(),
+        }),
       ).rejects.toThrow('At least one shielded or unshielded output is required.');
     },
     timeout,

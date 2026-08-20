@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
-import { generateRandomSeed } from '@midnightntwrk/wallet-sdk';
+import { generateRandomSeed, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk';
+import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';
@@ -38,20 +38,19 @@ const makeTransactionBlueprint = () => {
   );
   const intent = ledger.Intent.new(new Date(Date.now() + 30 * 60 * 1000));
   intent.fallibleUnshieldedOffer = unshieldedOffer;
-  return ledger.Transaction.fromParts('undeployed', undefined, undefined, intent);
+  // Sealed together with the protocol version the ledger module above serves: an application that builds its own
+  // transaction is the one thing that has to say which ledger version built it.
+  return WalletTransaction.adopt(
+    'Unproven',
+    ledger.Transaction.fromParts('undeployed', undefined, undefined, intent),
+    ProtocolVersion.MinSupportedVersion,
+  );
 };
 
 await sender.wallet
-  .balanceUnprovenTransaction(
-    makeTransactionBlueprint(),
-    {
-      shieldedSecretKeys: sender.shieldedSecretKeys,
-      dustSecretKey: sender.dustSecretKey,
-    },
-    {
-      ttl: new Date(Date.now() + 30 * 60 * 1000),
-    },
-  )
+  .balanceUnprovenTransaction(makeTransactionBlueprint(), {
+    ttl: new Date(Date.now() + 30 * 60 * 1000),
+  })
   .then((recipe) => {
     return sender.wallet.signRecipe(recipe, sender.unshieldedKeystore.signDataAsync);
   })

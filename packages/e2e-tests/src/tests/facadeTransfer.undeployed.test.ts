@@ -32,6 +32,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-facade';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils.js';
 import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
+import { carried, sealed } from './helpers/transactions.js';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
 
@@ -164,16 +165,12 @@ describe('Wallet Facade Transfer', () => {
         },
       ],
       {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
-      {
         ttl,
       },
     );
 
     const finalizedTx = await senderFacade.finalizeRecipe(unprovenTxRecipe);
-    const finalizedTxHash = finalizedTx.transactionHash().toString();
+    const finalizedTxHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash().toString();
     const submittedTxIdentifier = await senderFacade.submitTransaction(finalizedTx);
 
     expect(submittedTxIdentifier).toBeTypeOf('string');
@@ -217,21 +214,14 @@ describe('Wallet Facade Transfer', () => {
     ];
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const transactionRecipe = await senderFacade.transferTransaction(
-      tokenTransfer,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
-      {
-        ttl,
-      },
-    );
+    const transactionRecipe = await senderFacade.transferTransaction(tokenTransfer, {
+      ttl,
+    });
 
     const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, unshieldedSenderKeystore.signDataAsync);
 
     const finalizedTx = await senderFacade.finalizeRecipe(signedTxRecipe);
-    const finalizedTxHash = finalizedTx.transactionHash().toString();
+    const finalizedTxHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash().toString();
 
     const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
 
@@ -285,16 +275,9 @@ describe('Wallet Facade Transfer', () => {
 
     const arbitraryTx = ledger.Transaction.fromParts(configuration.networkId, outputOffer);
 
-    const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(
-      arbitraryTx,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
-      {
-        ttl: new Date(Date.now() + 30 * 60 * 1000),
-      },
-    );
+    const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(sealed('Unproven', arbitraryTx), {
+      ttl: new Date(Date.now() + 30 * 60 * 1000),
+    });
 
     const finalizedArbitraryTx = await senderFacade.finalizeRecipe(balancingTxRecipe);
 
@@ -332,16 +315,9 @@ describe('Wallet Facade Transfer', () => {
 
     const arbitraryTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, undefined, undefined, intent);
 
-    const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(
-      arbitraryTx,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
-      {
-        ttl: new Date(Date.now() + 30 * 60 * 1000),
-      },
-    );
+    const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(sealed('Unproven', arbitraryTx), {
+      ttl: new Date(Date.now() + 30 * 60 * 1000),
+    });
 
     // Sign the balancing transaction before finalizing
     const signedBalancingTxRecipe = await senderFacade.signRecipe(
@@ -430,18 +406,11 @@ describe('Wallet Facade Transfer', () => {
       },
     ];
 
-    const transactionRecipe = await senderFacade.transferTransaction(
-      tokenTransfer,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
-      { ttl },
-    );
+    const transactionRecipe = await senderFacade.transferTransaction(tokenTransfer, { ttl });
 
     const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, unshieldedSenderKeystore.signDataAsync);
     const finalizedTx = await senderFacade.finalizeRecipe(signedTxRecipe);
-    const finalizedTxHash = finalizedTx.transactionHash().toString();
+    const finalizedTxHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash().toString();
     const submittedTxIdentifier = await senderFacade.submitTransaction(finalizedTx);
 
     // Wait for the tx to land in sender history as a SUCCESS with all three sections present.

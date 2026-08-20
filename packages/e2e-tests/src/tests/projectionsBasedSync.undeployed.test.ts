@@ -27,6 +27,7 @@ import {
   makeEventLessSyncService,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { carried } from './helpers/transactions.js';
 
 /** @group undeployed */
 
@@ -193,14 +194,7 @@ describe('Projections-based synchronisation model', () => {
     await receiver.wallet.doSync(receiver.dustSecretKey);
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const txRecipe = await funded.wallet.transferTransaction(
-      outputsToCreate,
-      {
-        shieldedSecretKeys: funded.shieldedSecretKeys,
-        dustSecretKey: funded.dustSecretKey,
-      },
-      { ttl },
-    );
+    const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, { ttl });
     const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
     const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
     const txId = await funded.wallet.submitTransaction(finalizedTx);
@@ -267,16 +261,12 @@ describe('Projections-based synchronisation model', () => {
           outputs: [{ type: shieldedTokenRaw, amount: outputValue, receiverAddress }],
         },
       ],
-      {
-        shieldedSecretKeys: fundedEventsSynced.shieldedSecretKeys,
-        dustSecretKey: fundedEventsSynced.dustSecretKey,
-      },
       { ttl: new Date(Date.now() + 30 * 60 * 1000) },
     );
     const finalizedTx = await fundedEventsSynced.wallet.finalizeRecipe(txRecipe);
     await fundedEventsSynced.wallet.submitTransaction(finalizedTx);
 
-    const txHash = finalizedTx.transactionHash();
+    const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
     await utils.waitForTxInHistory(txHash, fundedEventsSynced.wallet, {
       ready: (entry) => entry.shielded !== undefined && entry.dust !== undefined,
     });
