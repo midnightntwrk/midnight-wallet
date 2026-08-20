@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 import { describe, expect, it } from 'vitest';
 import type { AnyTransaction, WalletFacade } from '../src/index.js';
 
@@ -38,13 +38,27 @@ export type AliasIsTheRevertParameter = AssertAssignable<
 describe('Naming the transactions the facade accepts, from the facade alone', () => {
   it('names every transaction shape its fee and revert methods take, without reaching into another package', () => {
     // Each binding is annotated with the facade's own exported name. That the annotations compile is the assertion:
-    // before, a caller had to import the type from a dust-wallet variant subpath to write any of these lines.
-    const unproven: AnyTransaction = ledger.Transaction.fromParts(NETWORK_ID);
-    const finalized: AnyTransaction = ledger.Transaction.fromParts(NETWORK_ID).mockProve();
-    const proofErased: AnyTransaction = ledger.Transaction.fromParts(NETWORK_ID).eraseProofs();
+    // before, a caller had to import the type from a dust-wallet variant subpath to write any of these lines — and
+    // now the name is a handle, so a caller does not name a ledger version even to seal one.
+    const version = ProtocolVersion.MinSupportedVersion;
+    const unproven: AnyTransaction = WalletTransaction.adopt(
+      'Unproven',
+      ledger.Transaction.fromParts(NETWORK_ID),
+      version,
+    );
+    const finalized: AnyTransaction = WalletTransaction.adopt(
+      'Finalized',
+      ledger.Transaction.fromParts(NETWORK_ID).mockProve(),
+      version,
+    );
+    const proofErased: AnyTransaction = WalletTransaction.adopt(
+      'Finalized',
+      ledger.Transaction.fromParts(NETWORK_ID).eraseProofs(),
+      version,
+    );
 
-    expect(unproven).toBeInstanceOf(ledger.Transaction);
-    expect(finalized).toBeInstanceOf(ledger.Transaction);
-    expect(proofErased).toBeInstanceOf(ledger.Transaction);
+    expect(WalletTransaction.is(unproven)).toBe(true);
+    expect(WalletTransaction.is(finalized)).toBe(true);
+    expect(WalletTransaction.is(proofErased)).toBe(true);
   });
 });

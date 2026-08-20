@@ -10,12 +10,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  NetworkId,
+  InMemoryTransactionHistoryStorage,
+  ProtocolVersion,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { type SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { Either } from 'effect';
 import * as crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -25,6 +32,8 @@ import {
   isPendingWalletEntry,
   mergeWalletEntries,
 } from '../src/index.js';
+import { txHistoryHash } from '../src/transaction.js';
+import { createPreForkMockProvingService } from './utils/index.js';
 
 /**
  * `vi.mockObject` does not carry accessors across, and a wallet's `state` is one. The facade watches all three wallets'
@@ -129,6 +138,7 @@ describe('Facade submission', () => {
       shielded: () => shielded,
       unshielded: () => unshielded,
       dust: () => dust,
+      provingService: () => createPreForkMockProvingService(),
       submissionService: () => fakeSubmission,
     });
 
@@ -136,14 +146,18 @@ describe('Facade submission', () => {
     const spiedUnshieldedRevert = vi.spyOn(unshielded, 'revertTransaction');
     const spiedDustRevert = vi.spyOn(dust, 'revertTransaction');
 
-    const transaction = ledger.Transaction.fromParts(
-      config.networkId,
-      undefined,
-      undefined,
-      ledger.Intent.new(new Date(Date.now() + 1000)),
-    )
-      .mockProve()
-      .bind();
+    const transaction = WalletTransaction.adopt(
+      'Finalized',
+      preForkLedger.Transaction.fromParts(
+        config.networkId,
+        undefined,
+        undefined,
+        preForkLedger.Intent.new(new Date(Date.now() + 1000)),
+      )
+        .mockProve()
+        .bind(),
+      ProtocolVersion.MinSupportedVersion,
+    );
 
     const submissionResult = await facade.submitTransaction(transaction).then(
       () => 'succeeded',
@@ -159,7 +173,18 @@ describe('Facade submission', () => {
     // `txHistoryHash`), so the failed submission leaves a single entry transitioned in place — not an orphan pair.
     const entries = await txHistoryStorage.getAll();
     expect(entries).toHaveLength(1);
-    expect(entries[0].hash).toBe(transaction.transactionHash().toString());
+    // Read through the handle, because that is now the only way to reach the transaction it names: the key is the
+    // ledger transaction hash exactly as the submit and revert sides both compute it.
+    expect(entries[0].hash).toBe(
+      txHistoryHash(
+        Either.getOrThrow(
+          WalletTransaction.unwrapWithin<preForkLedger.FinalizedTransaction>(
+            transaction,
+            ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MinSupportedVersion),
+          ),
+        ),
+      ),
+    );
     expect(entries[0].lifecycle.status).toBe('rejected');
   });
 
@@ -200,14 +225,16 @@ describe('Facade submission', () => {
     // The simulator submits proof-erased transactions, whose `transactionHash()` throws — so the key falls back to the
     // serialized bytes. The runtime tx type is erased exactly as the simulator submission service does (helpers.ts),
     // which the static `FinalizedTransaction` type can't express.
-    const proofErased = ledger.Transaction.fromParts(
+    const proofErased = preForkLedger.Transaction.fromParts(
       config.networkId,
       undefined,
       undefined,
-      ledger.Intent.new(new Date(Date.now() + 10_000)),
+      preForkLedger.Intent.new(new Date(Date.now() + 10_000)),
     ).eraseProofs();
     expect(() => proofErased.transactionHash()).toThrow();
-    const transaction = proofErased as unknown as ledger.FinalizedTransaction;
+    // Sealed at the finalized stage because that is the stage the facade takes: what the handle carries is a
+    // proof-erased transaction, which is exactly the case whose history key falls back to its bytes.
+    const transaction = WalletTransaction.adopt('Finalized', proofErased, ProtocolVersion.MinSupportedVersion);
 
     // Submission fails, so submitTransaction writes the pending entry and then reverts — both keyed off the same
     // serialized-bytes hash, so the result is a single entry transitioned in place rather than an orphan pending +

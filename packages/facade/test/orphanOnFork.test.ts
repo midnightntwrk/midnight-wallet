@@ -13,8 +13,15 @@
  * limitations under the License.
  */
 
+import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolVersion,
+  WalletTransaction,
+  type FinalizedTx,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import type { PendingTransactionsService } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
@@ -24,14 +31,21 @@ import { DateTime, Option } from 'effect';
 import * as rx from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
-import { finalizedTransactionTrait } from '../src/transaction.js';
-import { getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
+import { finalizedTransactionTraits } from '../src/transaction.js';
+
+import {
+  createPreForkMockProvingService,
+  getDustSeed,
+  getShieldedSeed,
+  getUnshieldedSeed,
+  sleep,
+} from './utils/index.js';
 
 vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 
 type Recorded = Readonly<{
-  added: { tx: ledger.FinalizedTransaction; protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion> }[];
-  cleared: ledger.FinalizedTransaction[];
+  added: { tx: FinalizedTx; protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion> }[];
+  cleared: FinalizedTx[];
   orphanedBeyond: ProtocolVersion.ProtocolVersion[];
 }>;
 
@@ -39,9 +53,9 @@ type Recorded = Readonly<{
  * A pending-transactions service the test drives directly: it records what the facade asks of it, and lets the test
  * push a pending state so the facade's reaction to an orphaned entry is observable without a real fork.
  */
-class RecordingPendingTransactions implements PendingTransactionsService<ledger.FinalizedTransaction> {
+class RecordingPendingTransactions implements PendingTransactionsService<FinalizedTx> {
   readonly recorded: Recorded = { added: [], cleared: [], orphanedBeyond: [] };
-  readonly states = new rx.BehaviorSubject<PendingTransactions.PendingTransactions<ledger.FinalizedTransaction>>(
+  readonly states = new rx.BehaviorSubject<PendingTransactions.PendingTransactions<FinalizedTx>>(
     PendingTransactions.empty(),
   );
 
@@ -53,19 +67,19 @@ class RecordingPendingTransactions implements PendingTransactionsService<ledger.
     return Promise.resolve();
   }
 
-  state(): rx.Observable<PendingTransactions.PendingTransactions<ledger.FinalizedTransaction>> {
+  state(): rx.Observable<PendingTransactions.PendingTransactions<FinalizedTx>> {
     return this.states.asObservable();
   }
 
   addPendingTransaction(
-    tx: ledger.FinalizedTransaction,
+    tx: FinalizedTx,
     protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
   ): Promise<void> {
     this.recorded.added.push({ tx, protocolVersion });
     return Promise.resolve();
   }
 
-  clear(tx: ledger.FinalizedTransaction): Promise<void> {
+  clear(tx: FinalizedTx): Promise<void> {
     this.recorded.cleared.push(tx);
     return Promise.resolve();
   }
@@ -109,6 +123,7 @@ describe('A pending transaction the fork left behind', () => {
       shielded: () => shielded,
       unshielded: () => unshielded,
       dust: () => dust,
+      provingService: () => createPreForkMockProvingService(),
       pendingTransactionsService: () => pending,
     });
     // The wallets are not started: these tests observe the state the facade already has, and starting them
@@ -119,12 +134,18 @@ describe('A pending transaction the fork left behind', () => {
     await facade?.stop();
   });
 
-  const anyTransaction = (): ledger.UnprovenTransaction =>
-    ledger.Transaction.fromParts(
-      configuration.networkId,
-      undefined,
-      undefined,
-      ledger.Intent.new(new Date(Date.now() + 60_000)),
+  const anyTransaction = () =>
+    WalletTransaction.adopt(
+      'Unproven',
+      // The wallets here have never synced, so the facade is on the pre-fork side of the boundary and the ledger
+      // version that owns that epoch is the one that has to have built this.
+      preForkLedger.Transaction.fromParts(
+        configuration.networkId,
+        undefined,
+        undefined,
+        preForkLedger.Intent.new(new Date(Date.now() + 60_000)),
+      ),
+      ProtocolVersion.MinSupportedVersion,
     );
 
   it('asks the pending set to give up on everything the wallets have moved past', async () => {
@@ -180,6 +201,10 @@ describe('A pending transaction the fork left behind', () => {
     expect(rejected[0].lifecycle.status === 'rejected' ? rejected[0].lifecycle.reason : undefined).toBe(
       'orphaned-by-protocol-upgrade',
     );
-    expect(rejected[0].identifiers).toStrictEqual(finalizedTransactionTrait.ids(finalized));
+    expect(rejected[0].identifiers).toStrictEqual(
+      Option.getOrThrow(
+        ProtocolVersion.select(finalizedTransactionTraits(configuration.forkVersion), finalized.protocolVersion),
+      ).ids(finalized),
+    );
   });
 });

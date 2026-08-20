@@ -14,7 +14,13 @@
  */
 
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolVersion,
+  ProtocolVersionMismatchError,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import type { UnboundTransaction, VersionedProvingService } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
@@ -87,12 +93,16 @@ describe('Proving a transaction at the version it was built for', () => {
     await facade?.stop();
   });
 
-  const anyTransaction = (): ledger.UnprovenTransaction =>
-    ledger.Transaction.fromParts(
-      configuration.networkId,
-      undefined,
-      undefined,
-      ledger.Intent.new(new Date(Date.now() + 60_000)),
+  const anyTransaction = (stamp: ProtocolVersion.ProtocolVersion = ProtocolVersion.MinSupportedVersion) =>
+    WalletTransaction.adopt(
+      'Unproven',
+      ledger.Transaction.fromParts(
+        configuration.networkId,
+        undefined,
+        undefined,
+        ledger.Intent.new(new Date(Date.now() + 60_000)),
+      ),
+      stamp,
     );
 
   it('proves at the version the wallets have reached when nothing says otherwise', async () => {
@@ -111,7 +121,7 @@ describe('Proving a transaction at the version it was built for', () => {
 
     const recipe: BalancingRecipe = {
       type: 'UNPROVEN_TRANSACTION',
-      transaction: anyTransaction(),
+      transaction: anyTransaction(PRE_FORK),
       protocolVersion: PRE_FORK,
     };
 
@@ -120,9 +130,21 @@ describe('Proving a transaction at the version it was built for', () => {
     expect(prover.askedFor).toStrictEqual([PRE_FORK]);
   });
 
-  it('proves at an explicitly given version when one is passed', async () => {
-    await facade.finalizeTransaction(anyTransaction(), PRE_FORK);
+  it('proves at the version the transaction itself was built at, which is the only one it can be proved at', async () => {
+    // There is no way to name a version separately from the transaction any more, and that is the point: the stamp
+    // travels with the bytes it describes, so the two cannot disagree.
+    await facade.finalizeTransaction(anyTransaction(PRE_FORK));
 
     expect(prover.askedFor).toStrictEqual([PRE_FORK]);
+  });
+
+  it('refuses a transaction built on the other side of the boundary, without asking any prover', async () => {
+    const failure = await facade.finalizeTransaction(anyTransaction(V9_NATIVE_FORK_VERSION)).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(failure).toBeInstanceOf(ProtocolVersionMismatchError);
+    expect(prover.askedFor).toStrictEqual([]);
   });
 });
