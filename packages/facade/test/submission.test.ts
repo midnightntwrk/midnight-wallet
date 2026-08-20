@@ -27,8 +27,8 @@ import {
 } from '../src/index.js';
 
 /**
- * `vi.mockObject` does not carry accessors across, and a wallet's `state` is one. The facade watches all three
- * wallets' states to know which protocol version the chain has reached, so a double without one is not a wallet.
+ * `vi.mockObject` does not carry accessors across, and a wallet's `state` is one. The facade watches all three wallets'
+ * states to know which protocol version the chain has reached, so a double without one is not a wallet.
  */
 const withRealState = <TWallet extends { state: unknown }, TMocked>(mocked: TMocked, wallet: TWallet): TMocked => {
   Object.defineProperty(mocked, 'state', { get: () => wallet.state, configurable: true });

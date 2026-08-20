@@ -88,8 +88,8 @@ import { finalizedTransactionTraits, txHistoryHash } from './transaction.js';
  * Why the wallet gave up on a transaction, for the history entry.
  *
  * @remarks
- *   A chain rejection speaks for itself through the entry's status; an orphaned transaction has no chain verdict at
- *   all, so the entry is the only place the reason can be recorded.
+ *   A chain rejection speaks for itself through the entry's status; an orphaned transaction has no chain verdict at all,
+ *   so the entry is the only place the reason can be recorded.
  */
 const rejectionReason = (result: PendingTransactions.TransactionResult): string | undefined =>
   result.status === 'ORPHANED_BY_FORK' ? 'orphaned-by-protocol-upgrade' : undefined;
@@ -650,11 +650,7 @@ export class WalletFacade {
       .subscribe();
     // Deliberately built from the wallets' own states rather than from `state()`: `state()` includes the pending set,
     // and orphaning writes to it, so feeding that back here would be a cycle.
-    this.#protocolVersionSubscription = combineLatest([
-      this.shielded.state,
-      this.unshielded.state,
-      this.dust.state,
-    ])
+    this.#protocolVersionSubscription = combineLatest([this.shielded.state, this.unshielded.state, this.dust.state])
       .pipe(
         map(([shieldedState, unshieldedState, dustState]) =>
           lowestProtocolVersion({
@@ -672,8 +668,8 @@ export class WalletFacade {
 
   /**
    * The version a transaction is proved at: its own stamp when it has one, and otherwise the version the wallets have
-   * reached — which is the best available answer, not a correct one, for a transaction that never recorded what it
-   * was built for.
+   * reached — which is the best available answer, not a correct one, for a transaction that never recorded what it was
+   * built for.
    */
   private provingVersion(stamp?: ProtocolVersion.ProtocolVersion): ProtocolVersion.ProtocolVersion {
     return (

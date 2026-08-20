@@ -30,7 +30,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import * as PendingTransactions from './pendingTransactions.js';
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import type * as rx from 'rxjs';
 import { HttpQueryClient, type QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { TransactionStatus, type TransactionStatusQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
@@ -46,7 +46,10 @@ export type PendingTransactionsService<TTransaction> = {
    * @param tx The transaction.
    * @param protocolVersion The observed chain version, or `Option.none()` when no wallet has reported one yet.
    */
-  addPendingTransaction: (tx: TTransaction, protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>) => Promise<void>;
+  addPendingTransaction: (
+    tx: TTransaction,
+    protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
+  ) => Promise<void>;
   clear: (tx: TTransaction) => Promise<void>;
   /**
    * Gives up on every pending transaction whose protocol version epoch the chain has moved past.

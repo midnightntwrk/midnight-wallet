@@ -222,7 +222,10 @@ describe('V2 projections nullifier subscription', () => {
     transactionHash: 'ff'.repeat(32),
     blockHeight: 10,
     blockHash: 'ee'.repeat(32),
-    transaction: { __typename: 'SystemTransaction', block: { protocolVersion: 0, ledgerParameters: ledgerParametersHex } } as const,
+    transaction: {
+      __typename: 'SystemTransaction',
+      block: { protocolVersion: 0, ledgerParameters: ledgerParametersHex },
+    } as const,
   });
 
   it('keeps exact matches in fixed-width LE form, including nullifiers with a zero top byte', async () => {
@@ -274,7 +277,10 @@ describe('V2 projections nullifier subscription', () => {
     const foreignNullifierHex = '12' + 'ff'.repeat(31);
     const malformedForeignRecord = {
       ...wireRecord(foreignNullifierHex),
-      transaction: { __typename: 'SystemTransaction', block: { protocolVersion: 0, ledgerParameters: 'not-hex' } } as const,
+      transaction: {
+        __typename: 'SystemTransaction',
+        block: { protocolVersion: 0, ledgerParameters: 'not-hex' },
+      } as const,
     };
     const stub = (_variables: DustNullifierTransactionsSubscriptionVariables) =>
       Stream.fromIterable([

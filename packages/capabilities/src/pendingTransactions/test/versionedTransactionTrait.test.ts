@@ -33,11 +33,12 @@ const traitOf = (era: FakeTx['era']): PendingTransactions.TransactionTrait<FakeT
   firstId: (tx) => tx.ids[0],
   areAllTxIdsIncluded: (tx, txIds) => tx.ids.every((id) => txIds.includes(id)),
   isOneIncludedInOther: (tx, otherTx) =>
-    tx.era === otherTx.era && (tx.ids.every((id) => otherTx.ids.includes(id)) || otherTx.ids.every((id) => tx.ids.includes(id))),
+    tx.era === otherTx.era &&
+    (tx.ids.every((id) => otherTx.ids.includes(id)) || otherTx.ids.every((id) => tx.ids.includes(id))),
   hasTTLExpired: () => false,
   serialize: (tx) => Buffer.from(JSON.stringify(tx), 'utf-8'),
   deserialize: (bytes) => {
-    const parsed: FakeTx = JSON.parse(Buffer.from(bytes).toString('utf-8'));
+    const parsed = JSON.parse(Buffer.from(bytes).toString('utf-8')) as FakeTx;
     if (parsed.era !== era) throw new Error(`A ${era} trait cannot read a ${parsed.era} transaction.`);
     return parsed;
   },
@@ -93,7 +94,11 @@ describe('Stamping a pending transaction with the version it was authored for', 
     // Merging asks whether one transaction's identifiers include the other's. Across a protocol boundary that
     // question is meaningless — the two were authored against different rules — so both must stay.
     const sameIds: FakeTx = { era: 'after', ids: ['a'] };
-    const state = added(added(PendingTransactions.empty<FakeTx>(), txBefore, Option.some(BEFORE)), sameIds, Option.some(AFTER));
+    const state = added(
+      added(PendingTransactions.empty<FakeTx>(), txBefore, Option.some(BEFORE)),
+      sameIds,
+      Option.some(AFTER),
+    );
 
     expect(state.all).toHaveLength(2);
   });
@@ -101,7 +106,11 @@ describe('Stamping a pending transaction with the version it was authored for', 
 
 describe('Serializing pending transactions across a protocol boundary', () => {
   it('round-trips the stamp', () => {
-    const state = added(added(PendingTransactions.empty<FakeTx>(), txBefore, Option.some(BEFORE)), txAfter, Option.some(AFTER));
+    const state = added(
+      added(PendingTransactions.empty<FakeTx>(), txBefore, Option.some(BEFORE)),
+      txAfter,
+      Option.some(AFTER),
+    );
 
     const restored = Either.getOrThrow(
       PendingTransactions.deserialize<FakeTx>(PendingTransactions.serialize(state, traits), traits),
@@ -157,12 +166,7 @@ describe('Orphaning a pending transaction the fork left behind', () => {
   });
 
   it('leaves an item that already has a verdict alone', () => {
-    const failed = PendingTransactions.saveResult(
-      pendingBefore,
-      txBefore,
-      { status: 'FAILURE', segments: [] },
-      traits,
-    );
+    const failed = PendingTransactions.saveResult(pendingBefore, txBefore, { status: 'FAILURE', segments: [] }, traits);
 
     const after = PendingTransactions.orphanBeyond(failed, traits, AFTER);
 

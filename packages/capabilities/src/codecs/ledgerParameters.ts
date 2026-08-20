@@ -18,8 +18,8 @@ import { Data, Either, pipe } from 'effect';
  * Reads the indexer's hex-encoded ledger parameters as one ledger version understands them.
  *
  * @remarks
- *   A codec is deliberately allowed to throw: it wraps a WASM deserializer, and what it throws on is precisely the
- *   other ledger version's bytes. {@link decode} is the only way to call one, and it turns that into a typed failure.
+ *   A codec is deliberately allowed to throw: it wraps a WASM deserializer, and what it throws on is precisely the other
+ *   ledger version's bytes. {@link decode} is the only way to call one, and it turns that into a typed failure.
  * @typeParam TParameters The `LedgerParameters` type of the ledger version this codec speaks.
  */
 export type LedgerParametersCodec<TParameters> = Readonly<{

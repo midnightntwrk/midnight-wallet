@@ -26,8 +26,8 @@ export type BlockDataFetcher = () => Promise<BlockData>;
  *
  * @remarks
  *   Open-ended from the minimum supported version, because well-formedness is checked against one ledger version's
- *   `LedgerState`: this registry is the seam where a second ledger version's codec is registered when validation
- *   itself learns to speak two.
+ *   `LedgerState`: this registry is the seam where a second ledger version's codec is registered when validation itself
+ *   learns to speak two.
  */
 export const defaultLedgerParametersCodecs: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters> =
   Either.getOrThrow(

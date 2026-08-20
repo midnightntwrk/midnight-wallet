@@ -14,11 +14,7 @@
  */
 
 import * as ledger from '@midnightntwrk/ledger-v9';
-import {
-  InMemoryTransactionHistoryStorage,
-  NetworkId,
-  ProtocolVersion,
-} from '@midnightntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import type { UnboundTransaction, VersionedProvingService } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
@@ -79,8 +75,7 @@ describe('Proving a transaction at the version it was built for', () => {
     facade = await WalletFacade.init({
       configuration,
       shielded: () => ShieldedWallet(configuration).startWithSeed(shieldedSeed),
-      unshielded: () =>
-        UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
+      unshielded: () => UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
       dust: () => DustWallet(configuration).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust),
       provingService: () => prover,
     });

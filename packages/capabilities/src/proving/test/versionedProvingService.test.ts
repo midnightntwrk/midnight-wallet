@@ -89,9 +89,7 @@ describe('Configuring which proof server serves which protocol version', () => {
       }),
     );
 
-    expect(ProtocolVersion.select(registry, version(5n))).toStrictEqual(
-      Option.some(new URL('http://pre-fork:6300')),
-    );
+    expect(ProtocolVersion.select(registry, version(5n))).toStrictEqual(Option.some(new URL('http://pre-fork:6300')));
     expect(ProtocolVersion.select(registry, FORK)).toStrictEqual(Option.some(new URL('http://post-fork:6300')));
   });
 

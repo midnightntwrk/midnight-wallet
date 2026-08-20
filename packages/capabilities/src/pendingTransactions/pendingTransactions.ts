@@ -36,8 +36,8 @@ export type HasTransactionTrait<TTransaction> = { txTrait: TransactionTrait<TTra
  * @remarks
  *   A transaction's bytes, identifiers and TTL are only meaningful under the ledger version it was authored against, so
  *   which trait applies is a property of the transaction rather than of the wallet holding it. Keeping that in the
- *   shared {@link ProtocolVersion.Registry} means the boundary between two traits is the same boundary variant
- *   selection and codec selection use.
+ *   shared {@link ProtocolVersion.Registry} means the boundary between two traits is the same boundary variant selection
+ *   and codec selection use.
  */
 export type VersionedTransactionTrait<TTransaction> = ProtocolVersion.Registry<TransactionTrait<TTransaction>>;
 
@@ -65,9 +65,9 @@ export const headTrait = <TTransaction>(
  * The trait registered for a protocol version, or the oldest trait when nothing says which version applies.
  *
  * @remarks
- *   Falling back to the oldest trait is the same convention snapshot restore uses for an envelope written before
- *   versions were recorded: the only envelopes without a stamp are ones written before stamping existed, and those
- *   necessarily predate every version boundary since.
+ *   Falling back to the oldest trait is the same convention snapshot restore uses for an envelope written before versions
+ *   were recorded: the only envelopes without a stamp are ones written before stamping existed, and those necessarily
+ *   predate every version boundary since.
  * @param traits The registered traits.
  * @param protocolVersion The version the transaction was authored for, when one is known.
  * @returns The trait to read with, or `Option.none()` when the version falls outside every registered range.
@@ -117,8 +117,8 @@ export type SuccessTransactionResult = Readonly<{
  *
  * @remarks
  *   Deliberately not one of the indexer's statuses: the chain never reported anything about this transaction and never
- *   will, because bytes authored under the previous protocol version cannot be included under the new one. Saying so
- *   in its own arm keeps "the node rejected this" and "this can no longer be submitted at all" distinguishable.
+ *   will, because bytes authored under the previous protocol version cannot be included under the new one. Saying so in
+ *   its own arm keeps "the node rejected this" and "this can no longer be submitted at all" distinguishable.
  */
 export type OrphanedByForkResult = Readonly<{
   status: 'ORPHANED_BY_FORK';
@@ -137,9 +137,9 @@ export type PendingItem<TTransaction> = Readonly<{
    * The protocol version the transaction was authored for, when the wallet had observed one.
    *
    * @remarks
-   *   `Option.none()` means the wallet never learned what version it was authored against — either the envelope
-   *   predates stamping, or no wallet had reported a version yet. That is not evidence the transaction was left
-   *   behind, so such an item is read with the oldest trait but never orphaned.
+   *   `Option.none()` means the wallet never learned what version it was authored against — either the envelope predates
+   *   stamping, or no wallet had reported a version yet. That is not evidence the transaction was left behind, so such
+   *   an item is read with the oldest trait but never orphaned.
    */
   protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>;
 }>;
@@ -169,8 +169,7 @@ const traitOfItem = <TTransaction>(
 const sameEpoch = <TTransaction>(
   a: Option.Option<TransactionTrait<TTransaction>>,
   b: Option.Option<TransactionTrait<TTransaction>>,
-): boolean =>
-  Option.getEquivalence<TransactionTrait<TTransaction>>((left, right) => left === right)(a, b);
+): boolean => Option.getEquivalence<TransactionTrait<TTransaction>>((left, right) => left === right)(a, b);
 
 const idsOf = <TTransaction>(traits: VersionedTransactionTrait<TTransaction>, tx: TTransaction): readonly string[] =>
   traitForTx(traits, tx).pipe(
@@ -238,8 +237,8 @@ export const allOrphaned = <TTransaction>(
 };
 
 /**
- * Everything the wallet has given up on, in the order it was added: reported failures and orphaned transactions
- * alike. Both need the same treatment — unbook the coins, record the rejection — so both belong on one list.
+ * Everything the wallet has given up on, in the order it was added: reported failures and orphaned transactions alike.
+ * Both need the same treatment — unbook the coins, record the rejection — so both belong on one list.
  */
 export const allRejected = <TTransaction>(
   transactions: PendingTransactions<TTransaction>,
@@ -304,10 +303,7 @@ export const addPendingTransaction = <TTransaction>(
   const idCount = (candidate: PendingTransactionsItem<TTransaction>): number =>
     Option.match(trait, { onNone: () => 0, onSome: (found) => found.ids(candidate.tx).length });
 
-  const theBiggestMatchingTx = Arr.max(
-    Arr.append(foundMatching, item),
-    pipe(Order.number, Order.mapInput(idCount)),
-  );
+  const theBiggestMatchingTx = Arr.max(Arr.append(foundMatching, item), pipe(Order.number, Order.mapInput(idCount)));
 
   return {
     ...state,
@@ -344,9 +340,9 @@ export const saveResult = <TTransaction>(
  * Gives up on every unresolved transaction whose version epoch the chain has moved past.
  *
  * @remarks
- *   The epochs are the registry's own ranges, so "the chain has moved past" means exactly "a different trait answers
- *   for the chain now than answered for this transaction". A transaction authored under the previous protocol version
- *   can never be included afterwards, so waiting for its TTL only delays the inevitable and holds its coins hostage
+ *   The epochs are the registry's own ranges, so "the chain has moved past" means exactly "a different trait answers for
+ *   the chain now than answered for this transaction". A transaction authored under the previous protocol version can
+ *   never be included afterwards, so waiting for its TTL only delays the inevitable and holds its coins hostage
  *   meanwhile.
  * @param state The pending transactions.
  * @param traits The traits pending transactions are read with, whose ranges define the epochs.

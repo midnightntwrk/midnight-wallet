@@ -275,7 +275,9 @@ describe('Pending Transactions Service (Effect)', () => {
         return Effect.gen(function* () {
           const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTraits);
 
-          yield* Effect.forEach(fakeTransactionBatches.allShuffled, (tx) => service.addPendingTransaction(tx, Option.none()));
+          yield* Effect.forEach(fakeTransactionBatches.allShuffled, (tx) =>
+            service.addPendingTransaction(tx, Option.none()),
+          );
 
           const result = yield* pipe(service.state(), Stream.runHead, Effect.map(Option.getOrThrow));
 

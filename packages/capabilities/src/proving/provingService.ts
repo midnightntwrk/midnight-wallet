@@ -30,8 +30,8 @@ export class ProvingError extends Data.TaggedError('Wallet.Proving')<{
  * Turns an unproven transaction into a proven one.
  *
  * @typeParam TProven The proven transaction this backend produces.
- * @typeParam TUnproven The unproven transaction it accepts. Defaults to the current ledger's, because a proving
- *   backend is only ever written against one ledger version — which is exactly why choosing between backends is
+ * @typeParam TUnproven The unproven transaction it accepts. Defaults to the current ledger's, because a proving backend
+ *   is only ever written against one ledger version — which is exactly why choosing between backends is
  *   {@link VersionedProvingServiceEffect}'s job and not this interface's.
  */
 export interface ProvingServiceEffect<TProven, TUnproven = ledger.UnprovenTransaction> {
@@ -55,8 +55,8 @@ export class UnsupportedProvingVersionError extends Data.TaggedError(
  * Proves a transaction with the backend registered for the protocol version it was built for.
  *
  * @remarks
- *   The version is the transaction's own stamp, taken when it was built, and never the version the chain has reached
- *   by the time proving happens. A fork can land between balancing and proving; the bytes the prover has to read were
+ *   The version is the transaction's own stamp, taken when it was built, and never the version the chain has reached by
+ *   the time proving happens. A fork can land between balancing and proving; the bytes the prover has to read were
  *   fixed before it did.
  */
 export interface VersionedProvingServiceEffect<TProven, TUnproven = ledger.UnprovenTransaction> {
@@ -179,9 +179,9 @@ export type ProvingServerActivation = Readonly<{
  * Which proof server serves which protocol version.
  *
  * @remarks
- *   The two settings are alternatives, not a pair: `provingServers` is the version-keyed form, and `provingServerUrl`
- *   is the single-server form that reads as one server for every version. Giving both is not an error — the list
- *   wins — but naming neither is, because there is then nothing to prove with.
+ *   The two settings are alternatives, not a pair: `provingServers` is the version-keyed form, and `provingServerUrl` is
+ *   the single-server form that reads as one server for every version. Giving both is not an error — the list wins —
+ *   but naming neither is, because there is then nothing to prove with.
  */
 export type DefaultProvingConfiguration = {
   /** One proof server for every protocol version. */
@@ -268,8 +268,8 @@ export const makeDefaultVersionedProvingService = (
  *
  * @remarks
  *   The bundled prover resolves its key material at a single, fixed ledger version, so there is no local proving for
- *   anything below the fork. Registering nothing there is what turns that into an
- *   {@link UnsupportedProvingVersionError} naming the version, rather than a proof built from the wrong keys.
+ *   anything below the fork. Registering nothing there is what turns that into an {@link UnsupportedProvingVersionError}
+ *   naming the version, rather than a proof built from the wrong keys.
  * @param sinceVersion The first protocol version the bundled prover's key material covers.
  * @param configuration Optional key material override.
  * @returns The proving backends, keyed by version.

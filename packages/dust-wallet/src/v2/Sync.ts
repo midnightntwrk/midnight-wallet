@@ -27,7 +27,7 @@ import {
   Schedule,
 } from 'effect';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { LedgerParametersCodec } from '@midnightntwrk/wallet-sdk-capabilities/codecs';
+import { type LedgerParametersCodec } from '@midnightntwrk/wallet-sdk-capabilities/codecs';
 import {
   dustNullifier,
   successorDustUtxo,
@@ -733,9 +733,9 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
             return Effect.fail(new OtherWalletError({ message: 'Unable to fetch block data' }));
           }
           return pipe(
-            Schema.decodeUnknownEither(makeBlockDataSchema(config.ledgerParametersCodecs ?? defaultLedgerParametersCodecs))(
-              result.block,
-            ),
+            Schema.decodeUnknownEither(
+              makeBlockDataSchema(config.ledgerParametersCodecs ?? defaultLedgerParametersCodecs),
+            )(result.block),
             Either.mapLeft((err) => new SyncWalletError(err)),
             EitherOps.toEffect,
           );

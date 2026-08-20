@@ -14,7 +14,7 @@
  */
 
 import { Array as Arr, DateTime, Duration, Either, HashSet, Option, Order, pipe } from 'effect';
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
+import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type AnyTransaction } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
@@ -109,10 +109,10 @@ export const finalizedTransactionTrait: PendingTransactions.TransactionTrait<led
  *
  * @remarks
  *   Both entries hold the same trait today, and that is not an oversight: the facade only ever carries ledger-v9
- *   transaction objects, whichever protocol version the chain was at when they were authored, so one reader answers
- *   for both sides. What the split buys is the boundary itself — it makes pre-fork and post-fork different version
- *   epochs, which is what lets a transaction authored before the fork be recognised as stranded once the wallets
- *   cross, instead of waiting out a TTL for an inclusion that can never happen.
+ *   transaction objects, whichever protocol version the chain was at when they were authored, so one reader answers for
+ *   both sides. What the split buys is the boundary itself — it makes pre-fork and post-fork different version epochs,
+ *   which is what lets a transaction authored before the fork be recognised as stranded once the wallets cross, instead
+ *   of waiting out a TTL for an inclusion that can never happen.
  *
  *   The pre-fork entry becomes a ledger-v8 trait when the facade's transaction surface learns to carry pre-fork bytes.
  * @param forkVersion The protocol version this chain forks at.

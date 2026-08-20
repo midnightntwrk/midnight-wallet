@@ -14,11 +14,7 @@
  */
 
 import * as ledger from '@midnightntwrk/ledger-v9';
-import {
-  InMemoryTransactionHistoryStorage,
-  NetworkId,
-  ProtocolVersion,
-} from '@midnightntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import type { PendingTransactionsService } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';

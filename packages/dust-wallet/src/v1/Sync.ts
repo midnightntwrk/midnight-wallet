@@ -40,7 +40,7 @@ import {
   type SubscriptionClient,
   type QueryClient,
 } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { EitherOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type URLError, WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { OtherWalletError, SyncWalletError, type WalletError } from './WalletError.js';
 import { V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
@@ -343,15 +343,13 @@ export const makeDefaultSyncService = (
               ProtocolVersion.ProtocolVersion(BigInt(blockData.protocolVersion)),
               blockData.ledgerParameters,
             ),
-            Either.map(
-              (ledgerParameters): BlockData => ({
-                hash: blockData.hash,
-                height: blockData.height,
-                protocolVersion: blockData.protocolVersion,
-                ledgerParameters,
-                timestamp: new Date(blockData.timestamp),
-              }),
-            ),
+            Either.map((ledgerParameters): BlockData => ({
+              hash: blockData.hash,
+              height: blockData.height,
+              protocolVersion: blockData.protocolVersion,
+              ledgerParameters,
+              timestamp: new Date(blockData.timestamp),
+            })),
             Either.mapLeft((error) => new SyncWalletError({ message: error.message, cause: error })),
             EitherOps.toEffect,
           );

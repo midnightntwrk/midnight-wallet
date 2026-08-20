@@ -88,8 +88,12 @@ describe('Ledger parameters codec registry', () => {
     const v8Hex = Buffer.from(LedgerParametersV8.initialParameters().serialize()).toString('hex');
     const v9Hex = Buffer.from(LedgerParametersV9.initialParameters().serialize()).toString('hex');
 
-    const v8Codec = LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) => LedgerParametersV8.deserialize(bytes));
-    const v9Codec = LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) => LedgerParametersV9.deserialize(bytes));
+    const v8Codec = LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) =>
+      LedgerParametersV8.deserialize(bytes),
+    );
+    const v9Codec = LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) =>
+      LedgerParametersV9.deserialize(bytes),
+    );
 
     it('decodes each ledger version through a registry that only claims that version', () => {
       const preFork = codecOver(ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, FORK), v8Codec);
