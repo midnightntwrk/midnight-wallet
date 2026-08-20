@@ -62,6 +62,13 @@ export const preForkWellFormedCheck: WellFormedCheck<AnyPreForkValidatableTransa
 /**
  * Builds the validator for pre-fork transactions.
  *
+ * @remarks
+ *   Nothing in the SDK registers this yet, and that is a wiring gap rather than a missing capability. The default
+ *   block-data fetcher decodes with `defaultLedgerParametersCodecs`, which is open-ended from the minimum supported
+ *   version and holds only the current ledger's codec — so the block data reaching validation today is always
+ *   current-ledger parameters, which this validator cannot use. Registering a pre-fork codec and routing the fetch on
+ *   the block's reported version is what closes it; until then the pre-fork range stays empty and a pre-fork
+ *   transaction is refused by name rather than checked against the wrong ledger.
  * @param deps The network, clock, and a block-data fetcher whose parameters are decoded at the pre-fork ledger version.
  * @returns A validator to register in a `ValidationServices` registry for the version range before the fork.
  */
