@@ -11,7 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { DustSecretKey, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { LedgerParameters as PostForkLedgerParameters } from '@midnightntwrk/ledger-v9';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { LedgerParametersCodec } from '@midnightntwrk/wallet-sdk-capabilities/codecs';
 import { BlockHash, DustLedgerEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import type {
   BlockHashQuery,
@@ -21,12 +23,13 @@ import type {
 } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Cause, Effect, Exit, Option, Stream } from 'effect';
+import { Cause, Effect, Either, Exit, Option, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultSyncService } from '../Sync.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
+const V9_NATIVE = ProtocolVersion.ProtocolVersion(2_000_000n);
 const dustParameters = LedgerParameters.initialParameters().dust;
 const seedHex = '0000000000000000000000000000000000000000000000000000000000000001';
 
@@ -145,5 +148,85 @@ describe('V1 dust wallet blockData', () => {
         expect(failure.value.cause).toBe(transportError);
       }
     }
+  });
+
+  describe('choosing the ledger the parameters are read with', () => {
+    const blockAt = (protocolVersion: number, ledgerParameters: string): BlockHashQuery => ({
+      block: {
+        height: 7,
+        hash: '00'.repeat(32),
+        protocolVersion,
+        ledgerParameters,
+        timestamp: 1752487200000,
+        zswapEndIndex: 3,
+        dustCommitmentEndIndex: 5,
+        dustGenerationEndIndex: 4,
+        dustCommitmentMerkleTreeRoot: 'aa'.repeat(32),
+        dustGenerationMerkleTreeRoot: 'bb'.repeat(32),
+      },
+    });
+
+    const blockDataFor = (
+      block: BlockHashQuery,
+      codecs?: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters>,
+    ) =>
+      makeDefaultSyncService({
+        indexerClientConnection: {
+          indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+          indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+        },
+        networkId,
+        ...(codecs ? { ledgerParametersCodecs: codecs } : {}),
+      })
+        .blockData()
+        .pipe(
+          Effect.provideService(BlockHash.tag, (_variables: BlockHashQueryVariables) => Effect.succeed(block)),
+          Effect.runPromiseExit,
+        );
+
+    it('reads the parameters with the codec registered for the version the block reports', async () => {
+      const hex = Buffer.from(LedgerParameters.initialParameters().serialize()).toString('hex');
+
+      const exit = await blockDataFor(blockAt(0, hex));
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      if (Exit.isSuccess(exit)) expect(exit.value.ledgerParameters).toBeInstanceOf(LedgerParameters);
+    });
+
+    it('refuses a block reported at a version this variant does not serve, instead of decoding it anyway', async () => {
+      // A variant bounded below the fork must disown a post-fork block rather than hand its bytes to a deserializer
+      // that cannot read them.
+      const hex = Buffer.from(LedgerParameters.initialParameters().serialize()).toString('hex');
+      const untilFork = Either.getOrThrow(
+        ProtocolVersion.makeRegistry([
+          {
+            range: ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, V9_NATIVE),
+            value: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) => LedgerParameters.deserialize(bytes)),
+          },
+        ]),
+      );
+
+      const exit = await blockDataFor(blockAt(2_000_000, hex), untilFork);
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.isDie(exit.cause)).toBe(false);
+        const failure = Cause.failureOption(exit.cause);
+        expect(Option.isSome(failure)).toBe(true);
+        if (Option.isSome(failure)) expect(failure.value.message).toContain('2000000');
+      }
+    });
+
+    it('reports the other ledger version parameters as a typed failure rather than a defect', async () => {
+      const postForkHex = Buffer.from(PostForkLedgerParameters.initialParameters().serialize()).toString('hex');
+
+      const exit = await blockDataFor(blockAt(0, postForkHex));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Cause.isDie(exit.cause)).toBe(false);
+        expect(Option.isSome(Cause.failureOption(exit.cause))).toBe(true);
+      }
+    });
   });
 });
