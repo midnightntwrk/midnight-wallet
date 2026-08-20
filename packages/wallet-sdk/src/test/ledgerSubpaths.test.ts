@@ -18,16 +18,19 @@ import {
   ProtocolVersionMismatchError,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Either } from 'effect';
+import { Either, Schema } from 'effect';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import * as sdk from '../index.js';
 import * as v8 from '../ledger/v8.js';
 import * as v9 from '../ledger/v9.js';
 
-const packageJson: { readonly exports: Readonly<Record<string, unknown>> } = JSON.parse(
-  readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'),
-);
+const PackageManifest = Schema.Struct({ exports: Schema.Record({ key: Schema.String, value: Schema.Unknown }) });
+
+const declaredExports = Schema.decodeUnknownSync(PackageManifest)(
+  // `JSON.parse` is typed `any`; widening to `unknown` is what leaves the schema as the only thing that types this.
+  JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8')) as unknown,
+).exports;
 
 /**
  * Names only a ledger package defines. None of them may reach an application through the umbrella package's root: an
@@ -60,7 +63,7 @@ describe('the ledger subpaths an author builds transactions with', () => {
   });
 
   it('declares both subpaths in the package exports, so they resolve by name', () => {
-    expect(Object.keys(packageJson.exports)).toEqual(expect.arrayContaining(['./ledger/v8', './ledger/v9']));
+    expect(Object.keys(declaredExports)).toEqual(expect.arrayContaining(['./ledger/v8', './ledger/v9']));
   });
 
   it('never lets a ledger version out through the root, whatever the subpaths offer', () => {
