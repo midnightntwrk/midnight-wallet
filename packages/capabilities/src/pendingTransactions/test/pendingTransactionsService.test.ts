@@ -144,6 +144,11 @@ const FakeTransaction = new (class {
       return result;
     },
   };
+
+  // This fixture speaks one protocol version, so it registers its trait for every version.
+  txTraits: PendingTransactions.VersionedTransactionTrait<FakeTransaction> = PendingTransactions.singleTrait(
+    this.txTrait,
+  );
 })();
 
 class FakeTransactionStatus {
@@ -239,7 +244,7 @@ describe('Pending Transactions Service (Effect)', () => {
     return fc.assert(
       fc.asyncProperty(FakeTransaction.batchArbitrary(), (fakeTransactions) => {
         return Effect.gen(function* () {
-          const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+          const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTraits);
 
           const fiber = service.state().pipe(
             Stream.takeUntil((state) => PendingTransactions.all(state).length == fakeTransactions.length),
@@ -247,7 +252,7 @@ describe('Pending Transactions Service (Effect)', () => {
             Effect.runFork,
           );
 
-          yield* Effect.forEach(fakeTransactions, (tx) => service.addPendingTransaction(tx));
+          yield* Effect.forEach(fakeTransactions, (tx) => service.addPendingTransaction(tx, Option.none()));
 
           const results = yield* Fiber.join(fiber);
 
@@ -257,7 +262,7 @@ describe('Pending Transactions Service (Effect)', () => {
           expect(PendingTransactions.all(first).length).toEqual(0);
           expect(PendingTransactions.all(last).length).toEqual(fakeTransactions.length);
           for (const tx of fakeTransactions) {
-            expect(PendingTransactions.has(last, tx, FakeTransaction.txTrait)).toBe(true);
+            expect(PendingTransactions.has(last, tx, FakeTransaction.txTraits)).toBe(true);
           }
         }).pipe(Effect.runPromise);
       }),
@@ -268,15 +273,15 @@ describe('Pending Transactions Service (Effect)', () => {
     return fc.assert(
       fc.asyncProperty(FakeTransaction.batchesArbitrary(), (fakeTransactionBatches) => {
         return Effect.gen(function* () {
-          const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+          const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTraits);
 
-          yield* Effect.forEach(fakeTransactionBatches.allShuffled, (tx) => service.addPendingTransaction(tx));
+          yield* Effect.forEach(fakeTransactionBatches.allShuffled, (tx) => service.addPendingTransaction(tx, Option.none()));
 
           const result = yield* pipe(service.state(), Stream.runHead, Effect.map(Option.getOrThrow));
 
           expect(PendingTransactions.all(result).length).toEqual(fakeTransactionBatches.allMerged.length);
           for (const tx of fakeTransactionBatches.all) {
-            expect(PendingTransactions.has(result, tx, FakeTransaction.txTrait)).toBe(true);
+            expect(PendingTransactions.has(result, tx, FakeTransaction.txTraits)).toBe(true);
           }
         }).pipe(Effect.runPromise);
       }),
@@ -292,10 +297,10 @@ describe('Pending Transactions Service (Effect)', () => {
         (fakeTransactions) => {
           return Effect.gen(function* () {
             const fakeTxStatus = new FakeTransactionStatus();
-            const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+            const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTraits);
 
             yield* TestClock.setTime(0);
-            yield* Effect.forEach(fakeTransactions.batch, (tx) => service.addPendingTransaction(tx));
+            yield* Effect.forEach(fakeTransactions.batch, (tx) => service.addPendingTransaction(tx, Option.none()));
             yield* fakeTxStatus.registerResultForAll(fakeTransactions.subBatch, {
               segments: [],
               status: 'SUCCESS',
@@ -314,7 +319,7 @@ describe('Pending Transactions Service (Effect)', () => {
             const result = yield* pipe(service.state(), Stream.runHead, Effect.map(Option.getOrThrow));
 
             for (const tx of fakeTransactions.subBatch) {
-              expect(PendingTransactions.has(result, tx, FakeTransaction.txTrait)).toBe(false);
+              expect(PendingTransactions.has(result, tx, FakeTransaction.txTraits)).toBe(false);
             }
           }).pipe(Effect.scoped, Effect.provide(TestContext.TestContext), Effect.runPromise);
         },
@@ -330,9 +335,9 @@ describe('Pending Transactions Service (Effect)', () => {
         ),
         (fakeTransactions) => {
           return Effect.gen(function* () {
-            const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+            const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTraits);
 
-            yield* Effect.forEach(fakeTransactions.batch, (tx) => service.addPendingTransaction(tx));
+            yield* Effect.forEach(fakeTransactions.batch, (tx) => service.addPendingTransaction(tx, Option.none()));
             yield* Effect.forEach(fakeTransactions.subBatch, (tx) => service.clear(tx));
 
             const result = yield* pipe(service.state(), Stream.runHead, Effect.map(Option.getOrThrow));
@@ -341,7 +346,7 @@ describe('Pending Transactions Service (Effect)', () => {
               fakeTransactions.batch.length - fakeTransactions.subBatch.length,
             );
             for (const tx of fakeTransactions.subBatch) {
-              expect(PendingTransactions.has(result, tx, FakeTransaction.txTrait)).toBe(false);
+              expect(PendingTransactions.has(result, tx, FakeTransaction.txTraits)).toBe(false);
             }
           }).pipe(Effect.runPromise);
         },
@@ -359,9 +364,9 @@ describe('Pending Transactions Service (Effect)', () => {
           (fakeTransactions) => {
             return Effect.gen(function* () {
               const fakeTxStatus = new FakeTransactionStatus();
-              const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+              const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTraits);
 
-              yield* Effect.forEach(fakeTransactions.batch, (tx) => service.addPendingTransaction(tx));
+              yield* Effect.forEach(fakeTransactions.batch, (tx) => service.addPendingTransaction(tx, Option.none()));
               yield* fakeTxStatus.registerResultForAll(fakeTransactions.subBatch, {
                 segments: [],
                 status: 'FAILURE',
@@ -419,10 +424,10 @@ describe('Pending Transactions Service (Effect)', () => {
           (fakeTransactions, partialSuccess: TransactionResult) => {
             return Effect.gen(function* () {
               const fakeTxStatus = new FakeTransactionStatus();
-              const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+              const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTraits);
               yield* TestClock.setTime(0);
 
-              yield* Effect.forEach(fakeTransactions.batch, (tx) => service.addPendingTransaction(tx));
+              yield* Effect.forEach(fakeTransactions.batch, (tx) => service.addPendingTransaction(tx, Option.none()));
               yield* fakeTxStatus.registerResultForAll(fakeTransactions.subBatch, partialSuccess);
 
               yield* service
@@ -476,10 +481,10 @@ describe('Pending Transactions Service (Effect)', () => {
           ({ nowSeconds, batchExceedingTTL, batchWithinTTL }) => {
             return Effect.gen(function* () {
               const fakeTxStatus = new FakeTransactionStatus();
-              const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+              const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTraits);
 
-              yield* Effect.forEach(batchExceedingTTL, (tx) => service.addPendingTransaction(tx));
-              yield* Effect.forEach(batchWithinTTL, (tx) => service.addPendingTransaction(tx));
+              yield* Effect.forEach(batchExceedingTTL, (tx) => service.addPendingTransaction(tx, Option.none()));
+              yield* Effect.forEach(batchWithinTTL, (tx) => service.addPendingTransaction(tx, Option.none()));
 
               yield* TestClock.setTime(nowSeconds * 1000).pipe(
                 Effect.andThen(service.startPolling(Stream.make(undefined))),
@@ -529,10 +534,10 @@ describe('Pending Transactions Service (Effect)', () => {
         (fakeTransactions, registeredResult: TransactionResult) => {
           return Effect.gen(function* () {
             const fakeTxStatus = new FakeTransactionStatus();
-            const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+            const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTraits);
             yield* TestClock.setTime(0);
 
-            yield* Effect.forEach(fakeTransactions.batch, (tx) => service.addPendingTransaction(tx));
+            yield* Effect.forEach(fakeTransactions.batch, (tx) => service.addPendingTransaction(tx, Option.none()));
             yield* fakeTxStatus.registerResultForAll(fakeTransactions.subBatch, registeredResult);
 
             yield* service
@@ -547,12 +552,12 @@ describe('Pending Transactions Service (Effect)', () => {
             const serialized = yield* service.state().pipe(
               Stream.runHead,
               Effect.map(Option.getOrThrow),
-              Effect.map((state) => PendingTransactions.serialize(state, FakeTransaction.txTrait)),
+              Effect.map((state) => PendingTransactions.serialize(state, FakeTransaction.txTraits)),
             );
 
             const restoredService = yield* PendingTransactionsServiceEffectImpl.restore(
               serialized,
-              FakeTransaction.txTrait,
+              FakeTransaction.txTraits,
             );
 
             const result = yield* pipe(restoredService.state(), Stream.runHead, Effect.map(Option.getOrThrow));
@@ -560,7 +565,7 @@ describe('Pending Transactions Service (Effect)', () => {
             expect(PendingTransactions.all(result).length).toEqual(fakeTransactions.batch.length);
             expect(PendingTransactions.allFailed(result).length).toEqual(0);
             for (const item of fakeTransactions.batch) {
-              expect(PendingTransactions.has(result, item, FakeTransaction.txTrait)).toBe(true);
+              expect(PendingTransactions.has(result, item, FakeTransaction.txTraits)).toBe(true);
             }
           }).pipe(Effect.provide(TestContext.TestContext), Effect.scoped, Effect.runPromise);
         },
@@ -572,14 +577,14 @@ describe('Pending Transactions Service (Effect)', () => {
     return fc.assert(
       fc.asyncProperty(FakeTransaction.batchArbitrary(), (fakeTransactions) => {
         return Effect.gen(function* () {
-          const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+          const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTraits);
           const scope = yield* Scope.make();
           const latch1 = yield* Deferred.make<void>();
           const latch2 = yield* Deferred.make<void>();
           let hasRunQueryAfterStop = false;
 
           yield* TestClock.setTime(0);
-          yield* Effect.forEach(fakeTransactions, (tx) => service.addPendingTransaction(tx));
+          yield* Effect.forEach(fakeTransactions, (tx) => service.addPendingTransaction(tx, Option.none()));
 
           const fiber = yield* service
             .startPolling(
@@ -631,12 +636,12 @@ describe('Pending Transactions Service (Effect)', () => {
     return fc.assert(
       fc.asyncProperty(FakeTransaction.batchArbitrary(), (fakeTransactions) => {
         return Effect.gen(function* () {
-          const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+          const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTraits);
           const scope = yield* Scope.make();
           const latch = yield* Deferred.make<void>();
 
           yield* TestClock.setTime(0);
-          yield* Effect.forEach(fakeTransactions, (tx) => service.addPendingTransaction(tx));
+          yield* Effect.forEach(fakeTransactions, (tx) => service.addPendingTransaction(tx, Option.none()));
 
           const fiber = yield* service
             .startPolling(
