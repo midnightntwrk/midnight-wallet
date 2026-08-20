@@ -257,6 +257,8 @@ describe('Smoke tests', () => {
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage: unshieldedTxHistoryStorage,
+        // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+        forkVersion: fixture.getWalletConfig().forkVersion,
       }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
       await initialWallet.start();
       logger.info(`Waiting to sync...`);
@@ -281,6 +283,8 @@ describe('Smoke tests', () => {
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage: restoredTxHistoryStorage,
+        // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+        forkVersion: fixture.getWalletConfig().forkVersion,
       }).restore(serializedState);
 
       await restoredWallet.start();

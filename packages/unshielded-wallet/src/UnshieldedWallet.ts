@@ -14,17 +14,17 @@ import { type NetworkId, type ProtocolState, ProtocolVersion } from '@midnightnt
 import {
   type BaseV2Configuration,
   type DefaultV2Configuration,
-  V2Builder,
   V2Tag,
   type V2Variant,
   CoreWallet,
   type UnboundTransaction,
 } from './v2/index.js';
+import { type CoreWallet as PreForkCoreWallet } from './v1/CoreWallet.js';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 import { Effect, Either, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type SerializationCapability } from './v2/Serialization.js';
-import { type TransactionHistoryService, type UnshieldedHistoryStorage } from './v2/TransactionHistory.js';
+import { type UnshieldedHistoryStorage } from './v2/TransactionHistory.js';
 import { type IndexerClientConnection } from './v2/Sync.js';
 import { type CoinsAndBalancesCapability } from './v2/CoinsAndBalances.js';
 import { type KeysCapability } from './v2/Keys.js';
@@ -44,48 +44,92 @@ import { type PublicKey } from './KeyStore.js';
 import { type SyncProgress } from './v2/SyncProgress.js';
 import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 
-export type UnshieldedWalletCapabilities<TSerialized = string> = {
-  serialization: SerializationCapability<CoreWallet, TSerialized>;
-  coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
-  keys: KeysCapability<CoreWallet>;
-};
+/** The core state of whichever unshielded variant produced an emission. */
+export type UnshieldedCoreState = PreForkCoreWallet | CoreWallet;
 
-export type UnshieldedWalletServices = {
-  transactionHistory: TransactionHistoryService;
-};
+/**
+ * Everything a state emission projects, already bound to the variant that produced it.
+ *
+ * @remarks
+ *   Binding is the point. The capabilities that understand a state and the state itself must be chosen together, in the
+ *   branch where the producing variant is known; the two variants' capability types are structurally identical, so a
+ *   capability of one would type-check against a state of the other and be wrong at runtime. Once bound there is
+ *   nothing left to mis-pair, and everything below is version-agnostic plain data — balances are `bigint` under string
+ *   token types, a UTXO is a plain record of value, owner, type, intent hash and output number, and the address is the
+ *   SDK's own type. The one genuinely version-bound reading a variant offers, the verifying key, is deliberately not
+ *   projected here: it is a bare hex string on one side and a `{tag, value}` record on the other.
+ */
+type UnshieldedProjections<TSerialized> = Readonly<{
+  balances: () => Record<ledger.RawTokenType, bigint>;
+  totalCoins: () => readonly UtxoWithMeta[];
+  availableCoins: () => readonly UtxoWithMeta[];
+  pendingCoins: () => readonly UtxoWithMeta[];
+  address: () => UnshieldedAddress;
+  serialize: () => TSerialized;
+}>;
+
+/**
+ * What a variant has to offer for its own state to be projected — exactly that, and nothing more.
+ *
+ * @remarks
+ *   Narrowed to the projected methods rather than naming the three capability types whole, because one of their members
+ *   is the version break itself: `KeysCapability.getPublicKey` answers with a bare hex string on the pre-fork ledger
+ *   version and a `{tag, value}` record on the post-fork one, so a type demanding it could only ever be satisfied by
+ *   one of the two variants. Asking for what is projected keeps a wallet spanning the boundary buildable and keeps the
+ *   unprojectable reading out of reach, in one stroke.
+ */
+type UnshieldedStateCapabilities<TState, TSerialized> = Readonly<{
+  serialization: Pick<SerializationCapability<TState, TSerialized>, 'serialize'>;
+  coinsAndBalances: Pick<
+    CoinsAndBalancesCapability<TState>,
+    'getAvailableBalances' | 'getTotalCoins' | 'getAvailableCoins' | 'getPendingCoins'
+  >;
+  keys: Pick<KeysCapability<TState>, 'getAddress'>;
+}>;
 
 export class UnshieldedWalletState<TSerialized = string> {
-  static readonly mapState =
-    <TSerialized = string>(variant: UnshieldedWalletCapabilities<TSerialized> & UnshieldedWalletServices) =>
-    (state: ProtocolState.ProtocolState<CoreWallet>): UnshieldedWalletState<TSerialized> => {
-      const { serialization, coinsAndBalances, keys } = variant;
-      const { transactionHistory } = variant;
-      return new UnshieldedWalletState(state, { serialization, coinsAndBalances, keys }, { transactionHistory });
-    };
+  /**
+   * Wraps a state emission with the capabilities of the variant that produced it.
+   *
+   * @remarks
+   *   Call this inside a branch that has narrowed on the emission's `variantTag`, so `variant` and `state` are known to
+   *   belong together. It is generic over the state type precisely so that pairing is checked.
+   */
+  static readonly fromVariant = <TState extends UnshieldedCoreState, TSerialized = string>(
+    variant: UnshieldedStateCapabilities<TState, TSerialized>,
+    state: ProtocolState.ProtocolState<TState>,
+  ): UnshieldedWalletState<TSerialized> =>
+    new UnshieldedWalletState<TSerialized>(state.version, state.state, {
+      balances: () => variant.coinsAndBalances.getAvailableBalances(state.state),
+      totalCoins: () => variant.coinsAndBalances.getTotalCoins(state.state),
+      availableCoins: () => variant.coinsAndBalances.getAvailableCoins(state.state),
+      pendingCoins: () => variant.coinsAndBalances.getPendingCoins(state.state),
+      address: () => variant.keys.getAddress(state.state),
+      serialize: () => variant.serialization.serialize(state.state),
+    });
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
-  readonly state: CoreWallet;
-  readonly capabilities: UnshieldedWalletCapabilities<TSerialized>;
-  readonly services: UnshieldedWalletServices;
+  readonly state: UnshieldedCoreState;
+  readonly #projections: UnshieldedProjections<TSerialized>;
 
   get balances(): Record<ledger.RawTokenType, bigint> {
-    return this.capabilities.coinsAndBalances.getAvailableBalances(this.state);
+    return this.#projections.balances();
   }
 
   get totalCoins(): readonly UtxoWithMeta[] {
-    return this.capabilities.coinsAndBalances.getTotalCoins(this.state);
+    return this.#projections.totalCoins();
   }
 
   get availableCoins(): readonly UtxoWithMeta[] {
-    return this.capabilities.coinsAndBalances.getAvailableCoins(this.state);
+    return this.#projections.availableCoins();
   }
 
   get pendingCoins(): readonly UtxoWithMeta[] {
-    return this.capabilities.coinsAndBalances.getPendingCoins(this.state);
+    return this.#projections.pendingCoins();
   }
 
   get address(): UnshieldedAddress {
-    return this.capabilities.keys.getAddress(this.state);
+    return this.#projections.address();
   }
 
   get progress(): SyncProgress {
@@ -93,22 +137,19 @@ export class UnshieldedWalletState<TSerialized = string> {
   }
 
   constructor(
-    state: ProtocolState.ProtocolState<CoreWallet>,
-    capabilities: UnshieldedWalletCapabilities<TSerialized>,
-    services: UnshieldedWalletServices,
+    protocolVersion: ProtocolVersion.ProtocolVersion,
+    state: UnshieldedCoreState,
+    projections: UnshieldedProjections<TSerialized>,
   ) {
-    this.protocolVersion = state.version;
-    this.state = state.state;
-    this.capabilities = capabilities;
-    this.services = services;
+    this.protocolVersion = protocolVersion;
+    this.state = state;
+    this.#projections = projections;
   }
 
   serialize(): TSerialized {
-    return this.capabilities.serialization.serialize(this.state);
+    return this.#projections.serialize();
   }
 }
-
-export type UnshieldedWallet = CustomizedUnshieldedWallet<WalletSyncUpdate, string>;
 
 /**
  * The configuration a default {@link UnshieldedWallet} is built from.
@@ -126,13 +167,22 @@ export type DefaultUnshieldedConfiguration = {
   networkId: NetworkId.NetworkId;
   indexerClientConnection: IndexerClientConnection;
   txHistoryStorage: UnshieldedHistoryStorage;
+  /**
+   * The protocol version at which this chain hands over from the pre-fork ledger to the post-fork one.
+   *
+   * @remarks
+   *   Required, and deliberately without a default: the wallet registers one variant either side of it, so a wrong value
+   *   does not degrade — it decides which ledger version reads the chain. Below this version the pre-fork variant is
+   *   active; from it, the post-fork one. The SDK cannot guess it, because it is a property of the chain the
+   *   application points at, not of the SDK.
+   *
+   *   A node reporting a 2.x runtime version reports protocol version `2000000`, which is therefore the value for a
+   *   ledger-v9-native chain — the shielded package publishes it as `V9_NATIVE_FORK_VERSION`. The final mainnet fork
+   *   constant is not yet fixed; a `ProtocolVersion.Forks.*` default will ship once it is, and this field keeps working
+   *   unchanged.
+   */
+  forkVersion: ProtocolVersion.ProtocolVersion;
 };
-
-export type UnshieldedWalletClass = CustomizedUnshieldedWalletClass<
-  WalletSyncUpdate,
-  string,
-  DefaultUnshieldedConfiguration
->;
 
 export type UnshieldedWalletAPI<TSerialized = string> = {
   readonly state: rx.Observable<UnshieldedWalletState<TSerialized>>;
@@ -202,10 +252,6 @@ export interface CustomizedUnshieldedWalletClass<
   restore(serializedState: TSerialized): CustomizedUnshieldedWallet<TSyncUpdate, TSerialized>;
 }
 
-export function UnshieldedWallet(configuration: DefaultUnshieldedConfiguration): UnshieldedWalletClass {
-  return CustomUnshieldedWallet(configuration, new V2Builder().withDefaults());
-}
-
 export function CustomUnshieldedWallet<
   TConfig extends BaseV2Configuration = DefaultV2Configuration,
   TSyncUpdate = WalletSyncUpdate,
@@ -254,9 +300,11 @@ export function CustomUnshieldedWallet<
     ) {
       super(runtime, scope);
       this.state = this.rawState.pipe(
-        rx.map(
-          UnshieldedWalletState.mapState<TSerialized>(
+        rx.map((emission) =>
+          // One variant, so the pairing is trivial here; the forking wallet narrows on `variantTag` first.
+          UnshieldedWalletState.fromVariant<CoreWallet, TSerialized>(
             CustomUnshieldedWalletImplementation.allVariantsRecord()[V2Tag].variant,
+            emission,
           ),
         ),
         rx.shareReplay({ refCount: true, bufferSize: 1 }),

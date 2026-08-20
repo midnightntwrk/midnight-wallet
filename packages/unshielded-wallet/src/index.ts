@@ -11,6 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 export * from './UnshieldedWallet.js';
+export * from './ForkingUnshieldedWallet.js';
+// Exported under a wallet-qualified name rather than unqualified. The umbrella package re-exports all three wallets
+// into one barrel, and each declares its own `UnsupportedSnapshotVersionError` — three classes of the same name with
+// three different deterministic tags, one per wallet whose snapshot could not be read. Namespacing the third one keeps
+// that barrel unambiguous without renaming the two that shipped before it.
+export * as UnshieldedRestore from './Restore.js';
 export {
   type UnshieldedTransactionHistoryEntry,
   UnshieldedSectionSchema,

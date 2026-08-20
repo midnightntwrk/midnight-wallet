@@ -21,12 +21,14 @@ import {
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Schema } from 'effect';
 import { UnshieldedSectionSchema } from '../src/v2/TransactionHistory.js';
-import { type DefaultV2Configuration } from '../src/v2/index.js';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type DefaultUnshieldedConfiguration } from '../src/UnshieldedWallet.js';
 
 const UnshieldedEntrySchema = TransactionHistoryStorage.extendEntrySchema({
   unshielded: Schema.optional(UnshieldedSectionSchema),
 });
-import { type UnshieldedWallet, type UnshieldedWalletState } from '../src/UnshieldedWallet.js';
+import { type UnshieldedWalletState } from '../src/UnshieldedWallet.js';
+import { type UnshieldedWallet } from '../src/ForkingUnshieldedWallet.js';
 
 /** TODO: place in separate package with more additional mock functions */
 export const generateMockTransaction = (
@@ -110,19 +112,23 @@ export const getUnshieldedSeed = (seed: string): Uint8Array => {
  *
  * @param indexerPort - The port number for the indexer service
  * @param overrides - Optional partial configuration to override defaults
- * @returns A complete DefaultV2Configuration object
+ * @returns A complete DefaultUnshieldedConfiguration object
  */
 export const createWalletConfig = (
   indexerPort: number,
-  overrides?: Partial<DefaultV2Configuration>,
-): DefaultV2Configuration => {
-  const defaultConfig: DefaultV2Configuration = {
+  overrides?: Partial<DefaultUnshieldedConfiguration>,
+): DefaultUnshieldedConfiguration => {
+  const defaultConfig: DefaultUnshieldedConfiguration = {
     indexerClientConnection: {
       indexerWsUrl: `ws://localhost:${indexerPort}/api/v4/graphql/ws`,
       indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
     },
     networkId: NetworkId.NetworkId.Undeployed,
     txHistoryStorage: new InMemoryTransactionHistoryStorage(UnshieldedEntrySchema),
+    // The ledger-v9-native node line these suites run against reports this protocol version, so the wallet reaches its
+    // post-fork variant. Spelled out rather than imported: it is published as `V9_NATIVE_FORK_VERSION` by the shielded
+    // package, which this one does not depend on.
+    forkVersion: ProtocolVersion.ProtocolVersion(2_000_000n),
   };
 
   return { ...defaultConfig, ...overrides };

@@ -20,7 +20,7 @@ import {
 import { UnshieldedWallet, createKeystore, PublicKey } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import * as ledger from '@midnightntwrk/ledger-v9';
 
-import { type DefaultV2Configuration as UnshieldedV2Configuration } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
+import { type DefaultUnshieldedConfiguration } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
@@ -50,7 +50,7 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
 describe('Wallet serialization and restoration', () => {
   let startedEnvironment: StartedDockerComposeEnvironment;
   let shieldedConfiguration: DefaultShieldedConfiguration;
-  let unshieldedConfiguration: UnshieldedV2Configuration;
+  let unshieldedConfiguration: DefaultUnshieldedConfiguration;
   let indexerPort: number;
 
   beforeAll(async () => {
@@ -67,6 +67,9 @@ describe('Wallet serialization and restoration', () => {
     };
 
     unshieldedConfiguration = {
+      // The same boundary the shielded configuration names, for the same reason: this stack runs the
+      // ledger-v9-native node line, so the unshielded wallet reaches its post-fork variant too.
+      forkVersion: V9_NATIVE_FORK_VERSION,
       indexerClientConnection: {
         indexerWsUrl: `ws://localhost:${indexerPort}/api/v4/graphql/ws`,
         indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,

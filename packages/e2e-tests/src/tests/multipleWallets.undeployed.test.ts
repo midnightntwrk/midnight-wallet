@@ -68,6 +68,8 @@ describe('Syncing', () => {
             indexerWsUrl: fixture.getIndexerWsUri(),
           },
           txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+          // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+          forkVersion: fixture.getWalletConfig().forkVersion,
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystores[i]));
       }
 

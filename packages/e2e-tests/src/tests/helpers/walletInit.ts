@@ -90,6 +90,8 @@ const restoreUnshieldedWallet = async (
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage,
+        // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+        forkVersion: fixture.getWalletConfig().forkVersion,
       }).startWithPublicKey(PublicKey.fromKeyStore(keyStore));
       logger.info(`Restored unshielded wallet from ${path}`);
       return wallet;

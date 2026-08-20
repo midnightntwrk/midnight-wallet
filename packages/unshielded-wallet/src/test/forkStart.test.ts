@@ -38,6 +38,7 @@ import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractio
 import { Cause, Effect, Fiber, Option, Runtime, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { PreForkUnshieldedTransactingUnsupportedError } from '../ForkingUnshieldedWallet.js';
+import { peekProtocolVersion } from '../Restore.js';
 import { V1Tag } from '../v1/RunningV1Variant.js';
 import { type SignSegment } from '../v2/Signing.js';
 import { type UnboundTransaction } from '../v2/TransactionOps.js';
@@ -133,10 +134,7 @@ const gatedCalls = (wallet: ForkWallet): readonly (readonly [string, () => Promi
   const ttl = new Date(Date.now() + 3_600_000);
   const verifyingKey = v9.signatureVerifyingKey(v9.sampleSigningKey());
   return [
-    [
-      'balanceFinalizedTransaction',
-      () => wallet.unshielded.balanceFinalizedTransaction(someFinalizedTransaction()),
-    ],
+    ['balanceFinalizedTransaction', () => wallet.unshielded.balanceFinalizedTransaction(someFinalizedTransaction())],
     ['balanceUnboundTransaction', () => wallet.unshielded.balanceUnboundTransaction(someUnboundTransaction())],
     ['balanceUnprovenTransaction', () => wallet.unshielded.balanceUnprovenTransaction(someTransaction())],
     ['transferTransaction', () => wallet.unshielded.transferTransaction([], ttl)],
@@ -253,7 +251,10 @@ describe('an unshielded wallet starting on a chain that has not forked', () => {
       const snapshot = yield* Effect.promise(() => wallet.unshielded.serializeState());
 
       expect(address.hexString).toBe(postFork.addressHex);
-      expect(JSON.parse(snapshot).protocolVersion).toBe(String(beforeFork));
+      // Read back through the very function `restore` routes on, so the snapshot is pinned as the router sees it.
+      expect(peekProtocolVersion(snapshot)).toStrictEqual(
+        Option.some(ProtocolVersion.ProtocolVersion(BigInt(beforeFork))),
+      );
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 

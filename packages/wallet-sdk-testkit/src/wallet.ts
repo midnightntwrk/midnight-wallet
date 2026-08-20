@@ -103,6 +103,8 @@ const restoreUnshieldedWallet = async (
           indexerWsUrl: env.endpoints.indexerWsUrl,
         },
         txHistoryStorage,
+        // The same boundary the shielded configuration names, taken from the one place this environment defines it.
+        forkVersion: env.getWalletConfig().forkVersion,
       }).startWithPublicKey(PublicKey.fromKeyStore(keyStore));
       logger.info(`Restored unshielded wallet from ${path}`);
       return wallet;
