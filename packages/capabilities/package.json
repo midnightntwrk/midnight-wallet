@@ -28,6 +28,10 @@
       "types": "./dist/balancer/index.d.ts",
       "import": "./dist/balancer/index.js"
     },
+    "./chainVersion": {
+      "types": "./dist/chainVersion/index.d.ts",
+      "import": "./dist/chainVersion/index.js"
+    },
     "./codecs": {
       "types": "./dist/codecs/index.d.ts",
       "import": "./dist/codecs/index.js"
