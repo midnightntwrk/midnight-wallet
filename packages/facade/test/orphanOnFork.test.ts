@@ -148,6 +148,15 @@ describe('A pending transaction the fork left behind', () => {
       ProtocolVersion.MinSupportedVersion,
     );
 
+  it('reports the boundary the wallets are on, and agrees with the version it acts at', async () => {
+    // The reading `activeProtocolVersion` alone cannot give: three versions that differ say nothing about whether the
+    // difference spans the boundary. Here the wallets have never synchronized, so they are all in the epoch a wallet
+    // with no history belongs to — which is a settled chain, at the version the facade is bound to.
+    const observed = await rx.firstValueFrom(facade.state());
+
+    expect(observed.protocol).toStrictEqual({ _tag: 'Settled', version: observed.activeProtocolVersion });
+  });
+
   it('asks the pending set to give up on everything the wallets have moved past', async () => {
     await sleep(0.2);
 
