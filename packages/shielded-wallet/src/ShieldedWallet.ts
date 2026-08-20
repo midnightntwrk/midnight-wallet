@@ -11,11 +11,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
+  type AnyTx,
   type NetworkId,
   type ProtocolState,
   ProtocolVersion,
+  type ProtocolVersionMismatchError,
   type SyncProgress,
+  type UnprovenTx,
   WalletSeed,
+  WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type BaseV2Configuration,
@@ -28,8 +32,8 @@ import {
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type Duration, Effect, Either, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
-import { type BalancingResult } from './v2/Transacting.js';
 import { type SerializationCapability } from './v2/Serialization.js';
+import { type WalletError } from './v2/WalletError.js';
 import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v2/CoinsAndBalances.js';
 import { type KeysCapability } from './v2/Keys.js';
 import {
@@ -175,8 +179,18 @@ export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.Fi
   }
 }
 
+/**
+ * What balancing a transaction with shielded coins produces: a transaction covering the shortfall, when there is one.
+ *
+ * @remarks
+ *   A handle rather than a ledger transaction, because which ledger version built it is the variant's business and not
+ *   the caller's. Absent when the wallet had nothing to add — the transaction was already balanced on the shielded
+ *   side.
+ */
+export type ShieldedBalancingResult = UnprovenTx | undefined;
+
 export type ShieldedWalletAPI<
-  TStartAux = ledger.ZswapSecretKeys,
+  TStartAux extends ledger.ZswapSecretKeys = ledger.ZswapSecretKeys,
   TTransaction = ledger.FinalizedTransaction,
   TSerialized = string,
 > = {
@@ -184,22 +198,23 @@ export type ShieldedWalletAPI<
 
   start(secretKeys: TStartAux): Promise<void>;
 
+  /**
+   * Balances a transaction with shielded coins.
+   *
+   * @remarks
+   *   No key material is passed: the wallet derives what its current variant needs from what it was started with. A
+   *   caller-supplied key object could only ever belong to one ledger version, which is exactly what a wallet spanning
+   *   a protocol boundary cannot assume.
+   */
   // we can balance bound and unbound txs
-  balanceTransaction(
-    secretKeys: ledger.ZswapSecretKeys,
-    tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-  ): Promise<BalancingResult>;
+  balanceTransaction(tx: AnyTx): Promise<ShieldedBalancingResult>;
 
-  transferTransaction(
-    secretKeys: ledger.ZswapSecretKeys,
-    outputs: readonly TokenTransfer[],
-  ): Promise<ledger.UnprovenTransaction>;
+  transferTransaction(outputs: readonly TokenTransfer[]): Promise<UnprovenTx>;
 
   initSwap(
-    secretKeys: ledger.ZswapSecretKeys,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: readonly TokenTransfer[],
-  ): Promise<ledger.UnprovenTransaction>;
+  ): Promise<UnprovenTx>;
 
   serializeState(): Promise<TSerialized>;
 
@@ -207,15 +222,13 @@ export type ShieldedWalletAPI<
 
   getAddress(): Promise<ShieldedAddress>;
 
-  revertTransaction(
-    transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-  ): Promise<void>;
+  revertTransaction(transaction: AnyTx): Promise<void>;
 
   stop(): Promise<void>;
 };
 
 export type CustomizedShieldedWallet<
-  TStartAux = ledger.ZswapSecretKeys,
+  TStartAux extends ledger.ZswapSecretKeys = ledger.ZswapSecretKeys,
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
@@ -273,7 +286,7 @@ export type DefaultShieldedConfiguration = {
 };
 
 export interface CustomizedShieldedWalletClass<
-  TStartAux = ledger.ZswapSecretKeys,
+  TStartAux extends ledger.ZswapSecretKeys = ledger.ZswapSecretKeys,
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
@@ -302,7 +315,7 @@ export interface CustomizedShieldedWalletClass<
  */
 export function CustomShieldedWallet<
   TConfig extends BaseV2Configuration = DefaultV2Configuration,
-  TStartAux = ledger.ZswapSecretKeys,
+  TStartAux extends ledger.ZswapSecretKeys = ledger.ZswapSecretKeys,
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
@@ -505,44 +518,108 @@ export function CustomShieldedWallet<
       await super.stop();
     }
 
-    balanceTransaction(
-      secretKeys: ledger.ZswapSecretKeys,
-      tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-    ): Promise<BalancingResult> {
+    /**
+     * The key material this wallet's one variant uses, from what it was started with.
+     *
+     * @remarks
+     *   Typed as the variant's own start-aux, which for a single-variant wallet is whatever the application handed to
+     *   `start` — there is no other variant to derive for, so a retained seed is only ever used through the variant's
+     *   own derivation.
+     */
+    #requireAux(): Effect.Effect<TStartAux, StartMaterial.MissingStartAuxError> {
+      return Effect.gen(this, function* () {
+        const current = yield* this.runtime.currentVariant;
+        const variantTag = Poly.getTag(current);
+        const retained = yield* Ref.get(this.#retainedStartMaterial);
+        return yield* Option.match(retained, {
+          onNone: () =>
+            Effect.fail(
+              new StartMaterial.MissingStartAuxError({
+                message:
+                  `This wallet holds no key material: it has not been started, or it has been stopped. Start it ` +
+                  `before asking it to build a transaction.`,
+                variantTag,
+              }),
+            ),
+          onSome: (material: StartMaterial.StartMaterial<TStartAux>) =>
+            EitherOps.toEffect(
+              StartMaterial.requireAuxFor(material, variantTag, (seed) =>
+                CustomShieldedWalletImplementation.allVariantsRecord()[V2Tag].variant.startAux.fromSeed(seed),
+              ),
+            ),
+        });
+      });
+    }
+
+    /** The whole of the protocol timeline: one variant answers for every version this wallet will ever see. */
+    static readonly #epoch = ProtocolVersion.epochOf(
+      ProtocolVersion.MinSupportedVersion,
+      ProtocolVersion.MinSupportedVersion,
+    );
+
+    balanceTransaction(tx: AnyTx): Promise<ShieldedBalancingResult> {
       return this.runtime
-        .dispatch({
-          [V2Tag]: (v2) => v2.balanceTransaction(secretKeys, tx),
+        .dispatch<
+          ShieldedBalancingResult,
+          WalletError | StartMaterial.MissingStartAuxError | ProtocolVersionMismatchError
+        >({
+          [V2Tag]: (v2) =>
+            Effect.all([
+              this.#requireAux(),
+              EitherOps.toEffect(
+                WalletTransaction.unwrapWithin<
+                  ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>
+                >(tx, CustomShieldedWalletImplementation.#epoch),
+              ),
+            ]).pipe(
+              Effect.flatMap(([keys, unwrapped]) => v2.balanceTransaction(keys, unwrapped)),
+              Effect.map((result) =>
+                result === undefined
+                  ? undefined
+                  : WalletTransaction.adopt('Unproven', result, ProtocolVersion.MinSupportedVersion),
+              ),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    transferTransaction(
-      secretKeys: ledger.ZswapSecretKeys,
-      outputs: readonly TokenTransfer[],
-    ): Promise<ledger.UnprovenTransaction> {
+    transferTransaction(outputs: readonly TokenTransfer[]): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch({
-          [V2Tag]: (v2) => v2.transferTransaction(secretKeys, outputs),
+        .dispatch<UnprovenTx, WalletError | StartMaterial.MissingStartAuxError>({
+          [V2Tag]: (v2) =>
+            this.#requireAux().pipe(
+              Effect.flatMap((keys) => v2.transferTransaction(keys, outputs)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, ProtocolVersion.MinSupportedVersion)),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
     initSwap(
-      secretKeys: ledger.ZswapSecretKeys,
       desiredInputs: Record<ledger.RawTokenType, bigint>,
       desiredOutputs: readonly TokenTransfer[],
-    ): Promise<ledger.UnprovenTransaction> {
+    ): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch({ [V2Tag]: (v2) => v2.initSwap(secretKeys, desiredInputs, desiredOutputs) })
+        .dispatch<UnprovenTx, WalletError | StartMaterial.MissingStartAuxError>({
+          [V2Tag]: (v2) =>
+            this.#requireAux().pipe(
+              Effect.flatMap((keys) => v2.initSwap(keys, desiredInputs, desiredOutputs)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, ProtocolVersion.MinSupportedVersion)),
+            ),
+        })
         .pipe(Effect.runPromise);
     }
 
-    revertTransaction(
-      transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-    ): Promise<void> {
+    revertTransaction(transaction: AnyTx): Promise<void> {
       return this.runtime
-        .dispatch({
-          [V2Tag]: (v2) => v2.revertTransaction(transaction),
+        .dispatch<void, WalletError>({
+          [V2Tag]: (v2) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>
+              >(transaction, CustomShieldedWalletImplementation.#epoch),
+              { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertTransaction(unwrapped) },
+            ),
         })
         .pipe(Effect.runPromise);
     }

@@ -71,6 +71,28 @@ export const MinSupportedVersion = ProtocolVersion(0n);
 export const MaxSupportedVersion = ProtocolVersion(BigInt(Number.MAX_SAFE_INTEGER));
 
 /**
+ * The range of protocol versions on the same side of a protocol boundary as a given version.
+ *
+ * @remarks
+ *   What the SDK means by "the same ledger version made these bytes". A protocol boundary divides the timeline into two
+ *   epochs, and everything that routes on a version — which prover proves a transaction, which validator checks it,
+ *   which variant may unwrap it — is really asking which epoch it belongs to. Stated once here so the two ends of that
+ *   question, the wallet stamping a transaction and the caller unwrapping it, cannot compute the boundary differently.
+ *
+ *   A chain whose boundary is at or below the minimum supported version has never had two epochs, so the whole range is
+ *   one.
+ * @param version A version in the epoch of interest.
+ * @param forkVersion The version at which the chain hands over to the next ledger version.
+ * @returns The half-open range of versions in that epoch.
+ */
+export const epochOf = (version: ProtocolVersion, forkVersion: ProtocolVersion): ProtocolVersion.Range =>
+  forkVersion <= MinSupportedVersion
+    ? makeRange(MinSupportedVersion, MaxSupportedVersion)
+    : version < forkVersion
+      ? makeRange(MinSupportedVersion, forkVersion)
+      : makeRange(forkVersion, MaxSupportedVersion);
+
+/**
  * A value together with the protocol version range it serves.
  *
  * @typeParam T The type of the registered value.

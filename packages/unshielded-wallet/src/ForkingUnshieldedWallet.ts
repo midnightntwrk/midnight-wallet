@@ -29,13 +29,23 @@
  *   The one place the two ledger versions genuinely disagree is the _shape_ of a verifying key, and that is resolved
  *   once, at start, by {@link asPreForkPublicKey}.
  */
+import type * as v8 from '@midnight-ntwrk/ledger-v8';
 import type * as ledger from '@midnightntwrk/ledger-v9';
-import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  type AnyTx,
+  type NetworkId,
+  ProtocolVersion,
+  type ProtocolVersionMismatchError,
+  type UnboundTx,
+  type UnprovenTx,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import * as PreForkSignatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { HList } from '@midnightntwrk/wallet-sdk-utilities';
-import { Data, Effect, Either, Option, Ref, type Scope } from 'effect';
+import { EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
+import { Effect, Either, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type PublicKey } from './KeyStore.js';
 import { variantForSnapshot } from './Restore.js';
@@ -48,56 +58,23 @@ import { CoreWallet as PreForkCoreWallet, V1Builder, V1Tag, type V1Variant } fro
 import { type PublicKey as PreForkPublicKey } from './v1/KeyStore.js';
 import { type WalletSyncUpdate as PreForkSyncUpdate } from './v1/SyncSchema.js';
 import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
+import { type SignSegment as PreForkSignSegment } from './v1/Signing.js';
+import { type UnboundTransaction as PreForkUnboundTransaction } from './v1/TransactionOps.js';
 import { type SignSegment } from './v2/Signing.js';
 import { type WalletSyncUpdate as PostForkSyncUpdate } from './v2/SyncSchema.js';
-import {
-  type FinalizedTransactionBalanceResult,
-  type TokenTransfer,
-  type UnboundTransactionBalanceResult,
-  type UnprovenTransactionBalanceResult,
-} from './v2/Transacting.js';
+import { type TokenTransfer } from './v2/Transacting.js';
 import { type UnboundTransaction } from './v2/TransactionOps.js';
 import { type UtxoWithMeta } from './v2/UnshieldedState.js';
 import { type WalletError } from './v2/WalletError.js';
 
 /**
- * Raised when a transaction is asked for while the wallet is still on the pre-fork protocol version.
+ * What a transacting call can fail with.
  *
  * @remarks
- *   **This seam is temporary and must not survive to general availability.** Mainnet is pre-fork until the fork happens,
- *   so a wallet that cannot move Night pre-fork cannot be the wallet that ships. It closes with the proving-routing
- *   increment (WP-11 together with the carrier and author flows), which routes a recipe to the prover that speaks the
- *   protocol version it was built at; until then the only proving path this SDK has speaks the post-fork ledger
- *   version, and there is nothing honest for the pre-fork branch to return — every operation gated below either takes
- *   or produces a transaction of the post-fork ledger version, which the pre-fork variant cannot even hold.
- *
- *   Everything else works on both sides of the boundary: synchronization, the state observable and everything it
- *   projects, balances, coins, the address, serialization, restoring a snapshot, reverting, and the migration itself.
+ *   Two failures beyond the variant's own: a transaction handed in may have been built on the other side of the boundary,
+ *   and a signature the caller's signer returns may name a scheme the pre-fork ledger version does not have.
  */
-export class PreForkUnshieldedTransactingUnsupportedError extends Data.TaggedError(
-  '@midnightntwrk/wallet-sdk-unshielded-wallet/ForkingUnshieldedWallet/PreForkUnshieldedTransactingUnsupportedError',
-)<{
-  readonly message: string;
-  /** The wallet operation that was asked for. */
-  readonly operation: string;
-}> {}
-
-/** What a transacting call can fail with: the post-fork variant's own errors, or the pre-fork variant's refusal. */
-type TransactingError = WalletError | PreForkUnshieldedTransactingUnsupportedError;
-
-const preForkTransactingUnsupported = (
-  operation: string,
-): Effect.Effect<never, PreForkUnshieldedTransactingUnsupportedError> =>
-  Effect.fail(
-    new PreForkUnshieldedTransactingUnsupportedError({
-      operation,
-      message:
-        `${operation} is not available while this wallet is on the pre-fork protocol version: it takes or produces a ` +
-        `transaction of the previous ledger version, which this release has no way to prove. Pre-fork transacting ` +
-        `arrives with version-routed proving; until then the post-fork path is the one that works. Synchronization, ` +
-        `balances, coins, the address, state and serialization are unaffected on either side of the boundary.`,
-    }),
-  );
+type TransactingError = WalletError | ProtocolVersionMismatchError | PreForkSignatures.UnsupportedSignatureKindError;
 
 /** The pre-fork variant a forking unshielded wallet registers: the one that reads the chain before the boundary. */
 export type PreForkUnshieldedVariant<TSyncUpdate> = V1Variant<string, TSyncUpdate>;
@@ -254,6 +231,49 @@ export function CustomForkingUnshieldedWallet<
 
   const variants = BaseWallet.allVariantsRecord();
 
+  /**
+   * The protocol versions each variant owns, and the version a transaction it builds is stamped with.
+   *
+   * @remarks
+   *   The stamp is the floor of the variant's epoch: every decision it is later read for asks which side of the boundary
+   *   the bytes belong to, and the floor answers that the same way as any other version in the same epoch.
+   */
+  const preForkEpoch = ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, configuration.forkVersion);
+  const postForkEpoch = ProtocolVersion.epochOf(configuration.forkVersion, configuration.forkVersion);
+  const [preForkStamp] = preForkEpoch;
+  const [postForkStamp] = postForkEpoch;
+
+  /** Reads a transaction built before the boundary, refusing one built after it. */
+  const preForkTx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+    EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, preForkEpoch));
+
+  /** Reads a transaction built from the boundary, refusing one built before it. */
+  const postForkTx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+    EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, postForkEpoch));
+
+  /** Seals a balancing result, which is absent when the wallet had nothing of its own to add. */
+  const sealPreFork = (result: v8.UnprovenTransaction | undefined): UnprovenTx | undefined =>
+    result === undefined ? undefined : WalletTransaction.adopt('Unproven', result, preForkStamp);
+
+  const sealPostFork = (result: ledger.UnprovenTransaction | undefined): UnprovenTx | undefined =>
+    result === undefined ? undefined : WalletTransaction.adopt('Unproven', result, postForkStamp);
+
+  /**
+   * Adapts the caller's signer to the pre-fork ledger version's signature shape.
+   *
+   * @remarks
+   *   The SDK's signing callback speaks the current ledger version's signature — a scheme and its bytes — because that is
+   *   the shape an application writes against once. What the pre-fork ledger version reads is the bytes alone, and only
+   *   of the one scheme it has, so a signer that answers with any other is refused by name here rather than at the WASM
+   *   boundary.
+   */
+  const loweredSigner =
+    (signSegment: SignSegment): PreForkSignSegment =>
+    (data: Uint8Array) =>
+      signSegment(data).then((signature) =>
+        Either.getOrThrowWith(PreForkSignatures.lowerSignature(signature), (error) => error),
+      );
+
   return class ForkingUnshieldedWalletImplementation
     extends BaseWallet
     implements ForkingUnshieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>
@@ -388,38 +408,77 @@ export function CustomForkingUnshieldedWallet<
       await super.stop();
     }
 
-    balanceFinalizedTransaction(tx: ledger.FinalizedTransaction): Promise<FinalizedTransactionBalanceResult> {
+    balanceFinalizedTransaction(tx: AnyTx): Promise<UnprovenTx | undefined> {
       return this.runtime
-        .dispatch<FinalizedTransactionBalanceResult, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('balanceFinalizedTransaction'),
-          [V2Tag]: (v2) => v2.balanceFinalizedTransaction(tx),
+        .dispatch<UnprovenTx | undefined, TransactingError>({
+          [V1Tag]: (v1) =>
+            preForkTx<v8.FinalizedTransaction>(tx).pipe(
+              Effect.flatMap((unwrapped) => v1.balanceFinalizedTransaction(unwrapped)),
+              Effect.map(sealPreFork),
+            ),
+          [V2Tag]: (v2) =>
+            postForkTx<ledger.FinalizedTransaction>(tx).pipe(
+              Effect.flatMap((unwrapped) => v2.balanceFinalizedTransaction(unwrapped)),
+              Effect.map(sealPostFork),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    balanceUnboundTransaction(tx: UnboundTransaction): Promise<UnboundTransactionBalanceResult> {
+    /**
+     * Balances an unbound transaction, which happens in place rather than by producing a second transaction.
+     *
+     * @returns The transaction with this wallet's inputs added, or nothing when it needed none.
+     */
+    balanceUnboundTransaction(tx: AnyTx): Promise<UnboundTx | undefined> {
       return this.runtime
-        .dispatch<UnboundTransactionBalanceResult, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('balanceUnboundTransaction'),
-          [V2Tag]: (v2) => v2.balanceUnboundTransaction(tx),
+        .dispatch<UnboundTx | undefined, TransactingError>({
+          [V1Tag]: (v1) =>
+            preForkTx<PreForkUnboundTransaction>(tx).pipe(
+              Effect.flatMap((unwrapped) => v1.balanceUnboundTransaction(unwrapped)),
+              Effect.map((result) =>
+                result === undefined ? undefined : WalletTransaction.adopt('Unbound', result, preForkStamp),
+              ),
+            ),
+          [V2Tag]: (v2) =>
+            postForkTx<UnboundTransaction>(tx).pipe(
+              Effect.flatMap((unwrapped) => v2.balanceUnboundTransaction(unwrapped)),
+              Effect.map((result) =>
+                result === undefined ? undefined : WalletTransaction.adopt('Unbound', result, postForkStamp),
+              ),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    balanceUnprovenTransaction(tx: ledger.UnprovenTransaction): Promise<UnprovenTransactionBalanceResult> {
+    balanceUnprovenTransaction(tx: AnyTx): Promise<UnprovenTx | undefined> {
       return this.runtime
-        .dispatch<UnprovenTransactionBalanceResult, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('balanceUnprovenTransaction'),
-          [V2Tag]: (v2) => v2.balanceUnprovenTransaction(tx),
+        .dispatch<UnprovenTx | undefined, TransactingError>({
+          [V1Tag]: (v1) =>
+            preForkTx<v8.UnprovenTransaction>(tx).pipe(
+              Effect.flatMap((unwrapped) => v1.balanceUnprovenTransaction(unwrapped)),
+              Effect.map(sealPreFork),
+            ),
+          [V2Tag]: (v2) =>
+            postForkTx<ledger.UnprovenTransaction>(tx).pipe(
+              Effect.flatMap((unwrapped) => v2.balanceUnprovenTransaction(unwrapped)),
+              Effect.map(sealPostFork),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<ledger.UnprovenTransaction> {
+    transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch<ledger.UnprovenTransaction, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('transferTransaction'),
-          [V2Tag]: (v2) => v2.transferTransaction(outputs, ttl),
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            v1
+              .transferTransaction(outputs, ttl)
+              .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp))),
+          [V2Tag]: (v2) =>
+            v2
+              .transferTransaction(outputs, ttl)
+              .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp))),
         })
         .pipe(Effect.runPromise);
     }
@@ -429,11 +488,18 @@ export function CustomForkingUnshieldedWallet<
       fallibleUtxos: readonly UtxoWithMeta[],
       nightVerifyingKey: ledger.SignatureVerifyingKey,
       ttl: Date,
-    ): Promise<ledger.UnprovenTransaction> {
+    ): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch<ledger.UnprovenTransaction, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('rotateUtxos'),
-          [V2Tag]: (v2) => v2.rotateUtxos(guaranteedUtxos, fallibleUtxos, nightVerifyingKey, ttl),
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            EitherOps.toEffect(PreForkSignatures.lowerSignatureVerifyingKey(nightVerifyingKey)).pipe(
+              Effect.flatMap((key) => v1.rotateUtxos(guaranteedUtxos, fallibleUtxos, key, ttl)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+            ),
+          [V2Tag]: (v2) =>
+            v2
+              .rotateUtxos(guaranteedUtxos, fallibleUtxos, nightVerifyingKey, ttl)
+              .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp))),
         })
         .pipe(Effect.runPromise);
     }
@@ -442,32 +508,51 @@ export function CustomForkingUnshieldedWallet<
       desiredInputs: Record<ledger.RawTokenType, bigint>,
       desiredOutputs: readonly TokenTransfer[],
       ttl: Date,
-    ): Promise<ledger.UnprovenTransaction> {
+    ): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch<ledger.UnprovenTransaction, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('initSwap'),
-          [V2Tag]: (v2) => v2.initSwap(desiredInputs, desiredOutputs, ttl),
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            v1
+              .initSwap(desiredInputs, desiredOutputs, ttl)
+              .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp))),
+          [V2Tag]: (v2) =>
+            v2
+              .initSwap(desiredInputs, desiredOutputs, ttl)
+              .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp))),
         })
         .pipe(Effect.runPromise);
     }
 
-    signUnprovenTransaction(
-      transaction: ledger.UnprovenTransaction,
-      signSegment: SignSegment,
-    ): Promise<ledger.UnprovenTransaction> {
+    signUnprovenTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch<ledger.UnprovenTransaction, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('signUnprovenTransaction'),
-          [V2Tag]: (v2) => v2.signUnprovenTransaction(transaction, signSegment),
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            preForkTx<v8.UnprovenTransaction>(transaction).pipe(
+              Effect.flatMap((unwrapped) => v1.signUnprovenTransaction(unwrapped, loweredSigner(signSegment))),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+            ),
+          [V2Tag]: (v2) =>
+            postForkTx<ledger.UnprovenTransaction>(transaction).pipe(
+              Effect.flatMap((unwrapped) => v2.signUnprovenTransaction(unwrapped, signSegment)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp)),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    signUnboundTransaction(transaction: UnboundTransaction, signSegment: SignSegment): Promise<UnboundTransaction> {
+    signUnboundTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnboundTx> {
       return this.runtime
-        .dispatch<UnboundTransaction, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('signUnboundTransaction'),
-          [V2Tag]: (v2) => v2.signUnboundTransaction(transaction, signSegment),
+        .dispatch<UnboundTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            preForkTx<PreForkUnboundTransaction>(transaction).pipe(
+              Effect.flatMap((unwrapped) => v1.signUnboundTransaction(unwrapped, loweredSigner(signSegment))),
+              Effect.map((tx) => WalletTransaction.adopt('Unbound', tx, preForkStamp)),
+            ),
+          [V2Tag]: (v2) =>
+            postForkTx<UnboundTransaction>(transaction).pipe(
+              Effect.flatMap((unwrapped) => v2.signUnboundTransaction(unwrapped, signSegment)),
+              Effect.map((tx) => WalletTransaction.adopt('Unbound', tx, postForkStamp)),
+            ),
         })
         .pipe(Effect.runPromise);
     }
@@ -476,21 +561,30 @@ export function CustomForkingUnshieldedWallet<
      * Un-books the UTxOs a transaction of this wallet's had reserved, returning them to the available set.
      *
      * @remarks
-     *   Nothing to do on the pre-fork variant, and that is a fact about the wallet rather than a convenience: while
-     *   pre-fork transacting is unavailable that variant cannot have built the transaction being reverted, so it has
-     *   booked nothing of it to release. The parameter's type says the same thing. Unlike the operations that build
-     *   transactions, this needs no proving, so there is nothing here for version-routed proving to unlock later — and
-     *   the facade reverts all three wallets together when a submission fails, so a refusal here would strand that
-     *   whole path.
+     *   A transaction built on the other side of the boundary cannot have booked any of this variant's UTxOs, so there is
+     *   nothing to release and this resolves having done nothing. That is the one place a version mismatch is not an
+     *   error: the facade reverts all three wallets together when a submission fails, and a refusal here would strand
+     *   that whole path over a transaction this wallet was never holding anything for.
      * @param transaction The transaction to un-book.
      */
-    revertTransaction(
-      transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
-    ): Promise<void> {
+    revertTransaction(transaction: AnyTx): Promise<void> {
       return this.runtime
         .dispatch<void, WalletError>({
-          [V1Tag]: () => Effect.void,
-          [V2Tag]: (v2) => v2.revertTransaction(transaction),
+          [V1Tag]: (v1) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<v8.Transaction<v8.SignatureEnabled, v8.Proofish, v8.Bindingish>>(
+                transaction,
+                preForkEpoch,
+              ),
+              { onLeft: () => Effect.void, onRight: (unwrapped) => v1.revertTransaction(unwrapped) },
+            ),
+          [V2Tag]: (v2) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>
+              >(transaction, postForkEpoch),
+              { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertTransaction(unwrapped) },
+            ),
         })
         .pipe(Effect.runPromise);
     }
@@ -533,9 +627,8 @@ export type UnshieldedWalletClass = ForkingUnshieldedWalletClass<
  *   in the same storage, and both are built from the same application configuration, because what they ask for is
  *   identical — unshielded sync carries no ledger object in either direction, only public UTXO records as JSON.
  *
- *   **Transacting is available only once the wallet is on the post-fork variant** — see
- *   {@link PreForkUnshieldedTransactingUnsupportedError}, a temporary seam that closes with version-routed proving.
- *   Synchronization, balances, coins, addresses, serialization, restore and reverting work on both sides.
+ *   Transacting, synchronization, balances, coins, addresses, serialization, restore and reverting all work on both
+ *   sides: each variant builds with its own ledger version, and what it produces says which version built it.
  * @param configuration What the wallet and both its variants are built from, including where the boundary lies.
  * @returns The wallet class.
  */

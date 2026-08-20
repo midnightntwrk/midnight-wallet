@@ -19,11 +19,25 @@ import {
   type SignatureVerifyingKey,
   type UnprovenTransaction,
 } from '@midnightntwrk/ledger-v9';
-import { type ProtocolState, ProtocolVersion, type SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  type AnyTx,
+  type ProtocolState,
+  ProtocolVersion,
+  type ProtocolVersionMismatchError,
+  type SyncProgress,
+  type UnprovenTx,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
-import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { type Clock } from '@midnightntwrk/wallet-sdk-utilities';
+import {
+  StartMaterial,
+  type Variant,
+  type VariantBuilder,
+  type WalletLike,
+} from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-capabilities/validation';
+import { type Clock, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type Duration, Effect, Either, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './v2/CoinsAndBalances.js';
@@ -38,7 +52,7 @@ import { type BaseV2Configuration, type V2Variant } from './v2/V2Builder.js';
 import { type DustHistoryStorage } from './v2/TransactionHistory.js';
 import { type CoreWallet as V1CoreWallet } from './v1/CoreWallet.js';
 import { type NetworkId, type TotalCostParameters } from './v2/types/index.js';
-import { type WalletSyncUpdate, type BlockData } from './v2/SyncSchema.js';
+import { type WalletSyncUpdate } from './v2/SyncSchema.js';
 
 export type { BlockData } from './v2/SyncSchema.js';
 
@@ -201,7 +215,7 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
     nightUtxos: Array<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
-  ): Promise<UnprovenTransaction>;
+  ): Promise<UnprovenTx>;
 
   splitNightUtxosForDustRegistration(
     currentTime: Date,
@@ -210,14 +224,14 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
   ): Promise<NightUtxoSplitForDustRegistration>;
 
   attachDustRegistration(
-    transaction: UnprovenTransaction,
+    transaction: UnprovenTx,
     currentTime: Date,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
     feePayment: bigint,
-  ): Promise<UnprovenTransaction>;
+  ): Promise<UnprovenTx>;
 
-  addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction>;
+  addDustGenerationSignature(transaction: UnprovenTx, signature: Signature): Promise<UnprovenTx>;
 
   /**
    * Attaches a signature to the DustRegistration in segment 1's `dustActions` only. Unlike
@@ -225,23 +239,31 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
    * via the unshielded-wallet signing path. Use this when the caller orchestrates signing across both packages (e.g.
    * the facade's `signRecipe`).
    */
-  addDustRegistrationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction>;
+  addDustRegistrationSignature(transaction: UnprovenTx, signature: Signature): Promise<UnprovenTx>;
 
-  calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint>;
+  calculateFee(transactions: ReadonlyArray<AnyTx>): Promise<bigint>;
 
-  estimateFee(
-    secretKey: DustSecretKey,
-    transactions: ReadonlyArray<AnyTransaction>,
-    ttl?: Date,
-    currentTime?: Date,
-  ): Promise<bigint>;
+  /**
+   * Estimates what a set of transactions will cost, including the fee of the balancing transaction.
+   *
+   * @remarks
+   *   No key material is passed: the wallet derives what its current variant needs from what it was started with.
+   */
+  estimateFee(transactions: ReadonlyArray<AnyTx>, ttl?: Date, currentTime?: Date): Promise<bigint>;
 
+  /**
+   * Balances a set of transactions by paying their fee in dust.
+   *
+   * @remarks
+   *   The block data returned is the block the fee was priced against, stated in the terms every ledger version reports
+   *   identically — the parameters, the height, and the version they were read at. Each variant's own `BlockData`
+   *   carries dust index and root fields besides, which are the variant's business and not a caller's.
+   */
   balanceTransactions(
-    secretKey: DustSecretKey,
-    transactions: ReadonlyArray<AnyTransaction>,
+    transactions: ReadonlyArray<AnyTx>,
     ttl: Date,
     currentTime?: Date,
-  ): Promise<{ transaction: UnprovenTransaction; blockData: BlockData }>;
+  ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData }>;
 
   serializeState(): Promise<TSerialized>;
 
@@ -274,7 +296,7 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
     opts?: { timeoutMs?: number },
   ): Promise<void>;
 
-  revertTransaction(transaction: AnyTransaction): Promise<void>;
+  revertTransaction(transaction: AnyTx): Promise<void>;
 
   getAddress(): Promise<DustAddress>;
 
@@ -348,7 +370,7 @@ export interface CustomizedDustWalletClass<
 
 export function CustomDustWallet<
   TConfig extends BaseV2Configuration = DefaultDustConfiguration,
-  TStartAux = DustSecretKey,
+  TStartAux extends DustSecretKey = DustSecretKey,
   TTransaction = FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
@@ -369,6 +391,20 @@ export function CustomDustWallet<
     [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>],
     TConfig
   >;
+
+  /** The whole of the protocol timeline: one variant answers for every version this wallet will ever see. */
+  const wholeTimeline = ProtocolVersion.epochOf(
+    ProtocolVersion.MinSupportedVersion,
+    ProtocolVersion.MinSupportedVersion,
+  );
+
+  /** Seals a transaction this wallet built, at the version its one variant answers from. */
+  const seal = (transaction: UnprovenTransaction): UnprovenTx =>
+    WalletTransaction.adopt('Unproven', transaction, ProtocolVersion.MinSupportedVersion);
+
+  /** Reads a transaction a caller handed in, which a single-variant wallet accepts at any version. */
+  const carried = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+    EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, wholeTimeline));
 
   return class CustomDustWalletImplementation
     extends BaseWallet
@@ -477,17 +513,44 @@ export function CustomDustWallet<
       return this.runtime.dispatch({ [V2Tag]: (v2) => v2.sync(secretKey) }).pipe(Effect.runPromise);
     }
 
+    /**
+     * The key material this wallet's one variant uses, from what it was started with.
+     *
+     * @remarks
+     *   Fee payment selects dust the wallet owns, so it needs the same secret synchronization does.
+     */
+    #requireAux(): Effect.Effect<TStartAux, StartMaterial.MissingStartAuxError> {
+      return Ref.get(this.#retainedAux).pipe(
+        Effect.flatMap(
+          Option.match({
+            onNone: () =>
+              Effect.fail(
+                new StartMaterial.MissingStartAuxError({
+                  message:
+                    `This wallet holds no key material: it has not been started, or it has been stopped. Start it ` +
+                    `before asking it to pay a fee.`,
+                  variantTag: V2Tag,
+                }),
+              ),
+            onSome: (aux: TStartAux) => Effect.succeed(aux),
+          }),
+        ),
+      );
+    }
+
     async createDustGenerationTransaction(
       currentTime: Date | undefined,
       ttl: Date,
       nightUtxos: Array<UtxoWithMeta>,
       nightVerifyingKey: SignatureVerifyingKey,
       dustReceiverAddress: DustAddress | undefined,
-    ): Promise<UnprovenTransaction> {
+    ): Promise<UnprovenTx> {
       return this.runtime
         .dispatch({
           [V2Tag]: (v2) =>
-            v2.createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress),
+            v2
+              .createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress)
+              .pipe(Effect.map(seal)),
         })
         .pipe(Effect.runPromise);
     }
@@ -505,75 +568,94 @@ export function CustomDustWallet<
     }
 
     async attachDustRegistration(
-      transaction: UnprovenTransaction,
+      transaction: UnprovenTx,
       currentTime: Date,
       nightVerifyingKey: SignatureVerifyingKey,
       dustReceiverAddress: DustAddress | undefined,
       feePayment: bigint,
-    ): Promise<UnprovenTransaction> {
+    ): Promise<UnprovenTx> {
       return this.runtime
         .dispatch({
           [V2Tag]: (v2) =>
-            v2.attachDustRegistration(transaction, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment),
+            carried<UnprovenTransaction>(transaction).pipe(
+              Effect.flatMap((tx) =>
+                v2.attachDustRegistration(tx, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment),
+              ),
+              Effect.map(seal),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction> {
+    addDustGenerationSignature(transaction: UnprovenTx, signature: Signature): Promise<UnprovenTx> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.addDustGenerationSignature(transaction, signature),
+          [V2Tag]: (v2) =>
+            carried<UnprovenTransaction>(transaction).pipe(
+              Effect.flatMap((tx) => v2.addDustGenerationSignature(tx, signature)),
+              Effect.map(seal),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    addDustRegistrationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction> {
+    addDustRegistrationSignature(transaction: UnprovenTx, signature: Signature): Promise<UnprovenTx> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.addDustRegistrationSignature(transaction, signature),
+          [V2Tag]: (v2) =>
+            carried<UnprovenTransaction>(transaction).pipe(
+              Effect.flatMap((tx) => v2.addDustRegistrationSignature(tx, signature)),
+              Effect.map(seal),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint> {
+    calculateFee(transactions: ReadonlyArray<AnyTx>): Promise<bigint> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.calculateFee(transactions),
+          [V2Tag]: (v2) =>
+            Effect.forEach(transactions, carried<AnyTransaction>).pipe(Effect.flatMap((txs) => v2.calculateFee(txs))),
         })
         .pipe(Effect.runPromise);
     }
 
-    estimateFee(
-      secretKey: DustSecretKey,
-      transactions: ReadonlyArray<AnyTransaction>,
-      ttl?: Date,
-      currentTime?: Date,
-    ): Promise<bigint> {
+    estimateFee(transactions: ReadonlyArray<AnyTx>, ttl?: Date, currentTime?: Date): Promise<bigint> {
       const effectiveTtl = ttl ?? new Date(Date.now() + 60 * 60 * 1000);
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.estimateFee(secretKey, transactions, effectiveTtl, currentTime),
+          [V2Tag]: (v2) =>
+            Effect.all([this.#requireAux(), Effect.forEach(transactions, carried<AnyTransaction>)]).pipe(
+              Effect.flatMap(([key, txs]) => v2.estimateFee(key, txs, effectiveTtl, currentTime)),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
     balanceTransactions(
-      secretKey: DustSecretKey,
-      transactions: ReadonlyArray<AnyTransaction>,
+      transactions: ReadonlyArray<AnyTx>,
       ttl: Date,
       currentTime?: Date,
-    ): Promise<{ transaction: UnprovenTransaction; blockData: BlockData }> {
+    ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData }> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.balanceTransactions(secretKey, transactions, ttl, currentTime),
+          [V2Tag]: (v2) =>
+            Effect.all([this.#requireAux(), Effect.forEach(transactions, carried<AnyTransaction>)]).pipe(
+              Effect.flatMap(([key, txs]) => v2.balanceTransactions(key, txs, ttl, currentTime)),
+              Effect.map(({ transaction, blockData }) => ({ transaction: seal(transaction), blockData })),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    revertTransaction(transaction: AnyTransaction): Promise<void> {
+    revertTransaction(transaction: AnyTx): Promise<void> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.revertTransaction(transaction),
+          [V2Tag]: (v2) =>
+            Either.match(WalletTransaction.unwrapWithin<AnyTransaction>(transaction, wholeTimeline), {
+              onLeft: () => Effect.void,
+              onRight: (tx) => v2.revertTransaction(tx),
+            }),
         })
         .pipe(Effect.runPromise);
     }

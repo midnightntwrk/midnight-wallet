@@ -10,7 +10,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type NetworkId, type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  type AnyTx,
+  type NetworkId,
+  type ProtocolState,
+  ProtocolVersion,
+  type ProtocolVersionMismatchError,
+  type UnboundTx,
+  type UnprovenTx,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
   type BaseV2Configuration,
   type DefaultV2Configuration,
@@ -28,12 +38,7 @@ import { type UnshieldedHistoryStorage } from './v2/TransactionHistory.js';
 import { type IndexerClientConnection } from './v2/Sync.js';
 import { type CoinsAndBalancesCapability } from './v2/CoinsAndBalances.js';
 import { type KeysCapability } from './v2/Keys.js';
-import {
-  type TokenTransfer,
-  type FinalizedTransactionBalanceResult,
-  type UnboundTransactionBalanceResult,
-  type UnprovenTransactionBalanceResult,
-} from './v2/Transacting.js';
+import { type TokenTransfer } from './v2/Transacting.js';
 import { type WalletSyncUpdate } from './v2/SyncSchema.js';
 import { type RunningV2Variant } from './v2/RunningV2Variant.js';
 import { type SignSegment } from './v2/Signing.js';
@@ -189,13 +194,13 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
 
   start(): Promise<void>;
 
-  balanceFinalizedTransaction(tx: ledger.FinalizedTransaction): Promise<FinalizedTransactionBalanceResult>;
+  balanceFinalizedTransaction(tx: AnyTx): Promise<UnprovenTx | undefined>;
 
-  balanceUnboundTransaction(tx: UnboundTransaction): Promise<UnboundTransactionBalanceResult>;
+  balanceUnboundTransaction(tx: AnyTx): Promise<UnboundTx | undefined>;
 
-  balanceUnprovenTransaction(tx: ledger.UnprovenTransaction): Promise<UnprovenTransactionBalanceResult>;
+  balanceUnprovenTransaction(tx: AnyTx): Promise<UnprovenTx | undefined>;
 
-  transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<ledger.UnprovenTransaction>;
+  transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<UnprovenTx>;
 
   /**
    * Books a caller-supplied set of Night UTxOs and returns an unproven transaction that moves them back to the same
@@ -208,28 +213,23 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
     fallibleUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     ttl: Date,
-  ): Promise<ledger.UnprovenTransaction>;
+  ): Promise<UnprovenTx>;
 
   initSwap(
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: readonly TokenTransfer[],
     ttl: Date,
-  ): Promise<ledger.UnprovenTransaction>;
+  ): Promise<UnprovenTx>;
 
-  signUnprovenTransaction(
-    transaction: ledger.UnprovenTransaction,
-    signSegment: SignSegment,
-  ): Promise<ledger.UnprovenTransaction>;
+  signUnprovenTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnprovenTx>;
 
-  signUnboundTransaction(transaction: UnboundTransaction, signSegment: SignSegment): Promise<UnboundTransaction>;
+  signUnboundTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnboundTx>;
 
   serializeState(): Promise<TSerialized>;
 
   waitForSyncedState(allowedGap?: bigint): Promise<UnshieldedWalletState<TSerialized>>;
 
-  revertTransaction(
-    transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-  ): Promise<void>;
+  revertTransaction(transaction: AnyTx): Promise<void>;
 
   getAddress(): Promise<UnshieldedAddress>;
 
@@ -273,6 +273,26 @@ export function CustomUnshieldedWallet<
     [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate>>],
     TConfig
   >;
+
+  /** The whole of the protocol timeline: one variant answers for every version this wallet will ever see. */
+  const wholeTimeline = ProtocolVersion.epochOf(
+    ProtocolVersion.MinSupportedVersion,
+    ProtocolVersion.MinSupportedVersion,
+  );
+
+  /** Reads a transaction a caller handed in, which a single-variant wallet accepts at any version. */
+  const carried = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+    EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, wholeTimeline));
+
+  /** Seals a transaction this wallet built, at the version its one variant answers from. */
+  const seal = (transaction: ledger.UnprovenTransaction): UnprovenTx =>
+    WalletTransaction.adopt('Unproven', transaction, ProtocolVersion.MinSupportedVersion);
+
+  const sealUnproven = (result: ledger.UnprovenTransaction | undefined): UnprovenTx | undefined =>
+    result === undefined ? undefined : seal(result);
+
+  const sealUnbound = (result: UnboundTransaction | undefined): UnboundTx | undefined =>
+    result === undefined ? undefined : WalletTransaction.adopt('Unbound', result, ProtocolVersion.MinSupportedVersion);
 
   return class CustomUnshieldedWalletImplementation
     extends BaseWallet
@@ -359,34 +379,46 @@ export function CustomUnshieldedWallet<
       await super.stop();
     }
 
-    balanceFinalizedTransaction(tx: ledger.FinalizedTransaction): Promise<FinalizedTransactionBalanceResult> {
+    balanceFinalizedTransaction(tx: AnyTx): Promise<UnprovenTx | undefined> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.balanceFinalizedTransaction(tx),
+          [V2Tag]: (v2) =>
+            carried<ledger.FinalizedTransaction>(tx).pipe(
+              Effect.flatMap((unwrapped) => v2.balanceFinalizedTransaction(unwrapped)),
+              Effect.map(sealUnproven),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    balanceUnboundTransaction(tx: UnboundTransaction): Promise<UnboundTransactionBalanceResult> {
+    balanceUnboundTransaction(tx: AnyTx): Promise<UnboundTx | undefined> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.balanceUnboundTransaction(tx),
+          [V2Tag]: (v2) =>
+            carried<UnboundTransaction>(tx).pipe(
+              Effect.flatMap((unwrapped) => v2.balanceUnboundTransaction(unwrapped)),
+              Effect.map(sealUnbound),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    balanceUnprovenTransaction(tx: ledger.UnprovenTransaction): Promise<UnprovenTransactionBalanceResult> {
+    balanceUnprovenTransaction(tx: AnyTx): Promise<UnprovenTx | undefined> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.balanceUnprovenTransaction(tx),
+          [V2Tag]: (v2) =>
+            carried<ledger.UnprovenTransaction>(tx).pipe(
+              Effect.flatMap((unwrapped) => v2.balanceUnprovenTransaction(unwrapped)),
+              Effect.map(sealUnproven),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<ledger.UnprovenTransaction> {
+    transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<UnprovenTx> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.transferTransaction(outputs, ttl),
+          [V2Tag]: (v2) => v2.transferTransaction(outputs, ttl).pipe(Effect.map(seal)),
         })
         .pipe(Effect.runPromise);
     }
@@ -396,10 +428,11 @@ export function CustomUnshieldedWallet<
       fallibleUtxos: readonly UtxoWithMeta[],
       nightVerifyingKey: ledger.SignatureVerifyingKey,
       ttl: Date,
-    ): Promise<ledger.UnprovenTransaction> {
+    ): Promise<UnprovenTx> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.rotateUtxos(guaranteedUtxos, fallibleUtxos, nightVerifyingKey, ttl),
+          [V2Tag]: (v2) =>
+            v2.rotateUtxos(guaranteedUtxos, fallibleUtxos, nightVerifyingKey, ttl).pipe(Effect.map(seal)),
         })
         .pipe(Effect.runPromise);
     }
@@ -408,37 +441,46 @@ export function CustomUnshieldedWallet<
       desiredInputs: Record<ledger.RawTokenType, bigint>,
       desiredOutputs: readonly TokenTransfer[],
       ttl: Date,
-    ): Promise<ledger.UnprovenTransaction> {
+    ): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch({ [V2Tag]: (v2) => v2.initSwap(desiredInputs, desiredOutputs, ttl) })
+        .dispatch({ [V2Tag]: (v2) => v2.initSwap(desiredInputs, desiredOutputs, ttl).pipe(Effect.map(seal)) })
         .pipe(Effect.runPromise);
     }
 
-    signUnprovenTransaction(
-      transaction: ledger.UnprovenTransaction,
-      signSegment: SignSegment,
-    ): Promise<ledger.UnprovenTransaction> {
+    signUnprovenTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnprovenTx> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.signUnprovenTransaction(transaction, signSegment),
+          [V2Tag]: (v2) =>
+            carried<ledger.UnprovenTransaction>(transaction).pipe(
+              Effect.flatMap((unwrapped) => v2.signUnprovenTransaction(unwrapped, signSegment)),
+              Effect.map(seal),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    signUnboundTransaction(transaction: UnboundTransaction, signSegment: SignSegment): Promise<UnboundTransaction> {
+    signUnboundTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnboundTx> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.signUnboundTransaction(transaction, signSegment),
+          [V2Tag]: (v2) =>
+            carried<UnboundTransaction>(transaction).pipe(
+              Effect.flatMap((unwrapped) => v2.signUnboundTransaction(unwrapped, signSegment)),
+              Effect.map((tx) => WalletTransaction.adopt('Unbound', tx, ProtocolVersion.MinSupportedVersion)),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    revertTransaction(
-      transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
-    ): Promise<void> {
+    revertTransaction(transaction: AnyTx): Promise<void> {
       return this.runtime
         .dispatch({
-          [V2Tag]: (v2) => v2.revertTransaction(transaction),
+          [V2Tag]: (v2) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>
+              >(transaction, wholeTimeline),
+              { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertTransaction(unwrapped) },
+            ),
         })
         .pipe(Effect.runPromise);
     }

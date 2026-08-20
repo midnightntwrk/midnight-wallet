@@ -24,8 +24,16 @@
  */
 import * as v8 from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { ProtocolVersion, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  type AnyTx,
+  ProtocolVersion,
+  type ProtocolVersionMismatchError,
+  type UnprovenTx,
+  WalletSeed,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import * as PreForkSignatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import {
   StartMaterial,
@@ -34,10 +42,11 @@ import {
   type WalletLike,
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Clock, EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
-import { Data, Effect, Either, Option, Ref, type Scope } from 'effect';
+import { Effect, Either, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { variantForSnapshot } from './Restore.js';
-import { type DefaultDustConfiguration, type DustWalletAPI, DustWalletState, type BlockData } from './DustWallet.js';
+import { type DefaultDustConfiguration, type DustWalletAPI, DustWalletState } from './DustWallet.js';
+import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import { CoreWallet as PreForkCoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
 import { type WalletSyncUpdate as PreForkSyncUpdate } from './v1/Sync.js';
 import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
@@ -45,48 +54,23 @@ import { type WalletSyncUpdate as PostForkSyncUpdate } from './v2/SyncSchema.js'
 import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
 import { type UtxoWithMeta } from './v2/types/Dust.js';
 import { type NetworkId } from './v2/types/index.js';
+import { type AnyTransaction as PreForkAnyTransaction } from './v1/types/ledger.js';
 import { type AnyTransaction } from './v2/types/ledger.js';
 import { type WalletError } from './v2/WalletError.js';
 
 /**
- * Raised when a transaction is asked for while the wallet is still on the pre-fork protocol version.
+ * What a transacting call can fail with.
  *
  * @remarks
- *   **This seam is temporary and must not survive to general availability.** Mainnet is pre-fork until the fork happens,
- *   so a wallet that cannot pay a fee pre-fork cannot be the wallet that ships. It closes with the proving-routing
- *   increment (WP-11 together with the carrier and author flows), which routes a recipe to the prover that speaks the
- *   protocol version it was built at; until then the only proving path this SDK has speaks the post-fork ledger
- *   version, and there is nothing honest for the pre-fork branch to return — every operation gated below either takes
- *   or produces a transaction of the post-fork ledger version, which the pre-fork variant cannot even hold.
- *
- *   Everything else works on both sides of the boundary: synchronization, the state observable and everything it
- *   projects, `balance(date)`, dust generation estimates, the Night-UTxO split, addresses, serialization, restoring a
- *   snapshot, and the migration itself.
+ *   Three failures beyond the variant's own: the wallet may hold no key material the current variant can use, a
+ *   transaction handed in may have been built on the other side of the boundary, and a signature or verifying key may
+ *   name a signature scheme the pre-fork ledger version does not have.
  */
-export class PreForkDustTransactingUnsupportedError extends Data.TaggedError(
-  '@midnightntwrk/wallet-sdk-dust-wallet/ForkingDustWallet/PreForkDustTransactingUnsupportedError',
-)<{
-  readonly message: string;
-  /** The wallet operation that was asked for. */
-  readonly operation: string;
-}> {}
-
-/** What a transacting call can fail with: the post-fork variant's own errors, or the pre-fork variant's refusal. */
-type TransactingError = WalletError | PreForkDustTransactingUnsupportedError;
-
-const preForkTransactingUnsupported = (
-  operation: string,
-): Effect.Effect<never, PreForkDustTransactingUnsupportedError> =>
-  Effect.fail(
-    new PreForkDustTransactingUnsupportedError({
-      operation,
-      message:
-        `${operation} is not available while this wallet is on the pre-fork protocol version: it takes or produces a ` +
-        `transaction of the previous ledger version, which this release has no way to prove. Pre-fork transacting ` +
-        `arrives with version-routed proving; until then the post-fork path is the one that works. Synchronization, ` +
-        `balances, dust generation estimates, state and serialization are unaffected on either side of the boundary.`,
-    }),
-  );
+type TransactingError =
+  | WalletError
+  | StartMaterial.MissingStartAuxError
+  | ProtocolVersionMismatchError
+  | PreForkSignatures.UnsupportedSignatureKindError;
 
 /** The pre-fork variant a forking dust wallet registers: the one that reads the chain before the boundary. */
 export type PreForkDustVariant<TSyncUpdate> = V1Variant<string, TSyncUpdate, v8.FinalizedTransaction, v8.DustSecretKey>;
@@ -271,6 +255,26 @@ export function CustomForkingDustWallet<
     retained: RetainedStartMaterial,
   ): Either.Either<ledger.DustSecretKey, StartMaterial.MissingStartAuxError> =>
     StartMaterial.requireAuxFor(retained, V2Tag, (seed) => variants[V2Tag].variant.startAux.fromSeed(seed));
+
+  /**
+   * The protocol versions each variant owns, and the version a transaction it builds is stamped with.
+   *
+   * @remarks
+   *   The stamp is the floor of the variant's epoch: every decision it is later read for asks which side of the boundary
+   *   the bytes belong to, and the floor answers that the same way as any other version in the same epoch.
+   */
+  const preForkEpoch = ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, configuration.forkVersion);
+  const postForkEpoch = ProtocolVersion.epochOf(configuration.forkVersion, configuration.forkVersion);
+  const [preForkStamp] = preForkEpoch;
+  const [postForkStamp] = postForkEpoch;
+
+  /** Reads a transaction built before the boundary, refusing one built after it. */
+  const preForkTx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+    EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, preForkEpoch));
+
+  /** Reads a transaction built from the boundary, refusing one built before it. */
+  const postForkTx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+    EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, postForkEpoch));
 
   return class ForkingDustWalletImplementation
     extends BaseWallet
@@ -477,18 +481,56 @@ export function CustomForkingDustWallet<
         .pipe(Effect.runPromise);
     }
 
+    /**
+     * The key material the variant that is current can use, from what this wallet retained.
+     *
+     * @remarks
+     *   Fee payment selects dust the wallet owns, so it needs the same secret synchronization does. A wallet that was
+     *   never started, or one holding a key object of the other ledger version, has none the current variant can use
+     *   and says so by name.
+     */
+    #requireAux<TAux>(
+      auxFor: (retained: RetainedStartMaterial) => Either.Either<TAux, StartMaterial.MissingStartAuxError>,
+      variantTag: symbol,
+    ): Effect.Effect<TAux, StartMaterial.MissingStartAuxError> {
+      return Ref.get(this.#retainedStartMaterial).pipe(
+        Effect.flatMap(
+          Option.match({
+            onNone: () =>
+              Effect.fail(
+                new StartMaterial.MissingStartAuxError({
+                  message:
+                    `This wallet holds no key material: it has not been started, or it has been stopped. Start it ` +
+                    `before asking it to pay a fee.`,
+                  variantTag,
+                }),
+              ),
+            onSome: (retained: RetainedStartMaterial) => EitherOps.toEffect(auxFor(retained)),
+          }),
+        ),
+      );
+    }
+
     createDustGenerationTransaction(
       currentTime: Date | undefined,
       ttl: Date,
       nightUtxos: Array<UtxoWithMeta>,
       nightVerifyingKey: ledger.SignatureVerifyingKey,
       dustReceiverAddress: DustAddress | undefined,
-    ): Promise<ledger.UnprovenTransaction> {
+    ): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch<ledger.UnprovenTransaction, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('createDustGenerationTransaction'),
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            EitherOps.toEffect(PreForkSignatures.lowerSignatureVerifyingKey(nightVerifyingKey)).pipe(
+              Effect.flatMap((key) =>
+                v1.createDustGenerationTransaction(currentTime, ttl, nightUtxos, key, dustReceiverAddress),
+              ),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+            ),
           [V2Tag]: (v2) =>
-            v2.createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress),
+            v2
+              .createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress)
+              .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp))),
         })
         .pipe(Effect.runPromise);
     }
@@ -515,79 +557,137 @@ export function CustomForkingDustWallet<
     }
 
     attachDustRegistration(
-      transaction: ledger.UnprovenTransaction,
+      transaction: UnprovenTx,
       currentTime: Date,
       nightVerifyingKey: ledger.SignatureVerifyingKey,
       dustReceiverAddress: DustAddress | undefined,
       feePayment: bigint,
-    ): Promise<ledger.UnprovenTransaction> {
+    ): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch<ledger.UnprovenTransaction, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('attachDustRegistration'),
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            Effect.all([
+              preForkTx<v8.UnprovenTransaction>(transaction),
+              EitherOps.toEffect(PreForkSignatures.lowerSignatureVerifyingKey(nightVerifyingKey)),
+            ]).pipe(
+              Effect.flatMap(([tx, key]) =>
+                v1.attachDustRegistration(tx, currentTime, key, dustReceiverAddress, feePayment),
+              ),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+            ),
           [V2Tag]: (v2) =>
-            v2.attachDustRegistration(transaction, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment),
+            postForkTx<ledger.UnprovenTransaction>(transaction).pipe(
+              Effect.flatMap((tx) =>
+                v2.attachDustRegistration(tx, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment),
+              ),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp)),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    addDustGenerationSignature(
-      transaction: ledger.UnprovenTransaction,
-      signature: ledger.Signature,
-    ): Promise<ledger.UnprovenTransaction> {
+    addDustGenerationSignature(transaction: UnprovenTx, signature: ledger.Signature): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch<ledger.UnprovenTransaction, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('addDustGenerationSignature'),
-          [V2Tag]: (v2) => v2.addDustGenerationSignature(transaction, signature),
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            Effect.all([
+              preForkTx<v8.UnprovenTransaction>(transaction),
+              EitherOps.toEffect(PreForkSignatures.lowerSignature(signature)),
+            ]).pipe(
+              Effect.flatMap(([tx, lowered]) => v1.addDustGenerationSignature(tx, lowered)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+            ),
+          [V2Tag]: (v2) =>
+            postForkTx<ledger.UnprovenTransaction>(transaction).pipe(
+              Effect.flatMap((tx) => v2.addDustGenerationSignature(tx, signature)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp)),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    addDustRegistrationSignature(
-      transaction: ledger.UnprovenTransaction,
-      signature: ledger.Signature,
-    ): Promise<ledger.UnprovenTransaction> {
+    addDustRegistrationSignature(transaction: UnprovenTx, signature: ledger.Signature): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch<ledger.UnprovenTransaction, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('addDustRegistrationSignature'),
-          [V2Tag]: (v2) => v2.addDustRegistrationSignature(transaction, signature),
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            Effect.all([
+              preForkTx<v8.UnprovenTransaction>(transaction),
+              EitherOps.toEffect(PreForkSignatures.lowerSignature(signature)),
+            ]).pipe(
+              Effect.flatMap(([tx, lowered]) => v1.addDustRegistrationSignature(tx, lowered)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+            ),
+          [V2Tag]: (v2) =>
+            postForkTx<ledger.UnprovenTransaction>(transaction).pipe(
+              Effect.flatMap((tx) => v2.addDustRegistrationSignature(tx, signature)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp)),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint> {
+    calculateFee(transactions: ReadonlyArray<AnyTx>): Promise<bigint> {
       return this.runtime
         .dispatch<bigint, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('calculateFee'),
-          [V2Tag]: (v2) => v2.calculateFee(transactions),
+          [V1Tag]: (v1) =>
+            Effect.forEach(transactions, preForkTx<PreForkAnyTransaction>).pipe(
+              Effect.flatMap((txs) => v1.calculateFee(txs)),
+            ),
+          [V2Tag]: (v2) =>
+            Effect.forEach(transactions, postForkTx<AnyTransaction>).pipe(
+              Effect.flatMap((txs) => v2.calculateFee(txs)),
+            ),
         })
         .pipe(Effect.runPromise);
     }
 
-    estimateFee(
-      secretKey: ledger.DustSecretKey,
-      transactions: ReadonlyArray<AnyTransaction>,
-      ttl?: Date,
-      currentTime?: Date,
-    ): Promise<bigint> {
+    estimateFee(transactions: ReadonlyArray<AnyTx>, ttl?: Date, currentTime?: Date): Promise<bigint> {
       const effectiveTtl = ttl ?? new Date(Date.now() + 60 * 60 * 1000);
       return this.runtime
         .dispatch<bigint, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('estimateFee'),
-          [V2Tag]: (v2) => v2.estimateFee(secretKey, transactions, effectiveTtl, currentTime),
+          [V1Tag]: (v1) =>
+            Effect.all([
+              this.#requireAux(preForkAux, V1Tag),
+              Effect.forEach(transactions, preForkTx<PreForkAnyTransaction>),
+            ]).pipe(Effect.flatMap(([key, txs]) => v1.estimateFee(key, txs, effectiveTtl, currentTime))),
+          [V2Tag]: (v2) =>
+            Effect.all([
+              this.#requireAux(postForkAux, V2Tag),
+              Effect.forEach(transactions, postForkTx<AnyTransaction>),
+            ]).pipe(Effect.flatMap(([key, txs]) => v2.estimateFee(key, txs, effectiveTtl, currentTime))),
         })
         .pipe(Effect.runPromise);
     }
 
     balanceTransactions(
-      secretKey: ledger.DustSecretKey,
-      transactions: ReadonlyArray<AnyTransaction>,
+      transactions: ReadonlyArray<AnyTx>,
       ttl: Date,
       currentTime?: Date,
-    ): Promise<{ transaction: ledger.UnprovenTransaction; blockData: BlockData }> {
+    ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData }> {
       return this.runtime
-        .dispatch<{ transaction: ledger.UnprovenTransaction; blockData: BlockData }, TransactingError>({
-          [V1Tag]: () => preForkTransactingUnsupported('balanceTransactions'),
-          [V2Tag]: (v2) => v2.balanceTransactions(secretKey, transactions, ttl, currentTime),
+        .dispatch<{ transaction: UnprovenTx; blockData: PricedBlockData }, TransactingError>({
+          [V1Tag]: (v1) =>
+            Effect.all([
+              this.#requireAux(preForkAux, V1Tag),
+              Effect.forEach(transactions, preForkTx<PreForkAnyTransaction>),
+            ]).pipe(
+              Effect.flatMap(([key, txs]) => v1.balanceTransactions(key, txs, ttl, currentTime)),
+              Effect.map(({ transaction, blockData }) => ({
+                transaction: WalletTransaction.adopt('Unproven', transaction, preForkStamp),
+                blockData,
+              })),
+            ),
+          [V2Tag]: (v2) =>
+            Effect.all([
+              this.#requireAux(postForkAux, V2Tag),
+              Effect.forEach(transactions, postForkTx<AnyTransaction>),
+            ]).pipe(
+              Effect.flatMap(([key, txs]) => v2.balanceTransactions(key, txs, ttl, currentTime)),
+              Effect.map(({ transaction, blockData }) => ({
+                transaction: WalletTransaction.adopt('Unproven', transaction, postForkStamp),
+                blockData,
+              })),
+            ),
         })
         .pipe(Effect.runPromise);
     }
@@ -596,19 +696,25 @@ export function CustomForkingDustWallet<
      * Un-records a transaction this wallet paid the fee for, releasing the dust it had booked.
      *
      * @remarks
-     *   Nothing to do on the pre-fork variant, and that is a fact about the wallet rather than a convenience: while
-     *   pre-fork transacting is unavailable that variant cannot have paid for the transaction being reverted, so it
-     *   holds no dust of it to release. The parameter's type says the same thing. Unlike the operations that build
-     *   transactions, this needs no proving, so there is nothing here for version-routed proving to unlock later — and
-     *   the facade reverts all three wallets together when a submission fails, so a refusal here would strand that
-     *   whole path.
+     *   A transaction built on the other side of the boundary cannot have had its fee paid by the current variant, so
+     *   there is no dust of it to release and this resolves having done nothing. That is the one place a version
+     *   mismatch is not an error: the facade reverts all three wallets together when a submission fails, and a refusal
+     *   here would strand that whole path over a transaction this wallet was never holding anything for.
      * @param transaction The transaction to un-record.
      */
-    revertTransaction(transaction: AnyTransaction): Promise<void> {
+    revertTransaction(transaction: AnyTx): Promise<void> {
       return this.runtime
         .dispatch<void, TransactingError>({
-          [V1Tag]: () => Effect.void,
-          [V2Tag]: (v2) => v2.revertTransaction(transaction),
+          [V1Tag]: (v1) =>
+            Either.match(WalletTransaction.unwrapWithin<PreForkAnyTransaction>(transaction, preForkEpoch), {
+              onLeft: () => Effect.void,
+              onRight: (tx) => v1.revertTransaction(tx),
+            }),
+          [V2Tag]: (v2) =>
+            Either.match(WalletTransaction.unwrapWithin<AnyTransaction>(transaction, postForkEpoch), {
+              onLeft: () => Effect.void,
+              onRight: (tx) => v2.revertTransaction(tx),
+            }),
         })
         .pipe(Effect.runPromise);
     }
