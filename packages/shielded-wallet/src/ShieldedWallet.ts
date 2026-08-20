@@ -48,6 +48,7 @@ import {
   type WalletLike,
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
+import type { UnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { EitherOps, HList, Poly } from '@midnightntwrk/wallet-sdk-utilities';
 import { variantForSnapshot } from './Restore.js';
 
@@ -61,7 +62,14 @@ export type ShieldedWalletServices = {
   transactionHistory: TransactionHistoryService;
 };
 
-export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
+/**
+ * A transaction that has been proven but not yet bound.
+ *
+ * @remarks
+ *   Owned by the proving capability, which is what produces one, and re-exported here so the name stays where callers
+ *   already reach for it. The shielded wallet neither builds nor consumes one itself.
+ */
+export type { UnboundTransaction };
 
 /** The core state of whichever shielded variant produced an emission. */
 export type ShieldedCoreState = V1CoreWallet | CoreWallet;

@@ -16,7 +16,14 @@ import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { addressFromKey } from '@midnight-ntwrk/ledger-v8';
 import { TransactingError, type WalletError } from './WalletError.js';
 
-/** Unbound transaction type. This is a transaction that has no signatures and is not bound yet. */
+/**
+ * Unbound transaction type. This is a transaction that has no signatures and is not bound yet.
+ *
+ * @remarks
+ *   Declared here rather than re-exported from the proving capability, unlike its post-fork twin: this one names the
+ *   pre-fork ledger's classes, so it is a different type and not a duplicate of one. Collapsing the two would make the
+ *   two ledgers interchangeable in the type system while they stay incompatible at runtime.
+ */
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
 /** Utility type to extract the Intent type from a Transaction type. Maps Transaction<S, P, B> to Intent<S, P, B>. */

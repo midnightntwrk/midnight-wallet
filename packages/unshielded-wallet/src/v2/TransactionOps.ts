@@ -12,13 +12,21 @@
 // limitations under the License.
 import { Either, type Option, pipe, Array as Arr, Iterable as IterableOps } from 'effect';
 import { Imbalances } from '@midnightntwrk/wallet-sdk-capabilities';
+import type { UnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 import { addressFromKey, SignatureEnabled } from '@midnightntwrk/ledger-v9';
 import { assertSignatureMatchesKey } from '../SchemeConsistency.js';
 import { TransactingError, type WalletError } from './WalletError.js';
 
-/** Unbound transaction type. This is a transaction that has no signatures and is not bound yet. */
-export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
+/**
+ * Unbound transaction type. This is a transaction that has no signatures and is not bound yet.
+ *
+ * @remarks
+ *   Owned by the proving capability, which is what produces one, and re-exported here so the name stays where callers
+ *   already reach for it. The pre-fork twin in `../v1/TransactionOps.ts` keeps its own declaration on purpose: it names
+ *   the other ledger version's classes and is a genuinely different type.
+ */
+export type { UnboundTransaction };
 
 /** Utility type to extract the Intent type from a Transaction type. Maps Transaction<S, P, B> to Intent<S, P, B>. */
 export type IntentOf<T> = T extends ledger.Transaction<infer S, infer P, infer B> ? ledger.Intent<S, P, B> : never;
