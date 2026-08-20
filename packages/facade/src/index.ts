@@ -28,7 +28,7 @@ import {
   type DustWalletState,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import {
-  type AnyTransaction,
+  type AnyTransaction as DustAnyTransaction,
   type CoinsAndBalances as DustCoinsAndBalances,
 } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
@@ -173,6 +173,22 @@ export function mergeWalletEntries(existing: WalletEntry, incoming: WalletEntry)
     ...(dust !== undefined ? { dust } : {}),
   };
 }
+
+/**
+ * Every transaction shape the facade will take from a caller: unproven, proven-but-unbound, finalized, or proof-erased.
+ *
+ * @remarks
+ *   Named here because the facade's own signatures take it. It was previously reachable only as
+ *   `@midnightntwrk/wallet-sdk-dust-wallet/v2`'s `AnyTransaction` — a variant-scoped internal of a package a
+ *   facade-only app need not depend on at all, and one with a differently-typed pre-fork twin under `/v1`. The facade
+ *   owning the name is what keeps that an implementation detail.
+ *
+ *   Transitional, and deliberately an alias rather than a fresh declaration so it cannot drift from what these methods
+ *   actually accept. `WalletTransaction` handles are what replace these signatures — at which point the version a
+ *   transaction was authored for travels with it instead of being lost at this boundary, and this alias goes with
+ *   them.
+ */
+export type AnyTransaction = DustAnyTransaction;
 
 /**
  * Storage key for a tx we're about to submit (record as pending). The hash comes from {@link txHistoryHash}, which the
