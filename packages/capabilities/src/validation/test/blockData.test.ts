@@ -31,15 +31,46 @@ const blockAt = (protocolVersion: number, ledgerParameters: string) => ({
 
 describe('Reading a block the indexer served', () => {
   const hex = Buffer.from(LedgerParameters.initialParameters().serialize()).toString('hex');
+  const preForkHex = Buffer.from(PreForkLedgerParameters.initialParameters().serialize()).toString('hex');
+  const codecs = defaultLedgerParametersCodecs(V9_NATIVE);
 
   it('reads the parameters with the codec registered for the version the block reports', () => {
-    const result = blockDataFrom(defaultLedgerParametersCodecs, blockAt(2_000_000, hex));
+    const result = blockDataFrom(codecs, blockAt(2_000_000, hex));
 
     expect(Either.isRight(result)).toBe(true);
     const blockData = Option.getOrThrow(Either.getRight(result));
     expect(blockData.ledgerParameters).toBeInstanceOf(LedgerParameters);
     expect(blockData.protocolVersion).toBe(2_000_000);
     expect(blockData.timestamp).toEqual(new Date(1752487200000));
+  });
+
+  it('reads a block from before the fork with the pre-fork ledger version, and says so by its class', () => {
+    // The two ledger versions' `LedgerParameters` are structurally identical, so nothing in the type says which one
+    // came back — the class does, and it is the class the ledger's own `wellFormed` insists on.
+    const result = blockDataFrom(codecs, blockAt(1, preForkHex));
+
+    expect(Either.isRight(result)).toBe(true);
+    const blockData = Option.getOrThrow(Either.getRight(result));
+    expect(blockData.ledgerParameters).toBeInstanceOf(PreForkLedgerParameters);
+    expect(blockData.ledgerParameters).not.toBeInstanceOf(LedgerParameters);
+  });
+
+  it('splits at the fork version exactly, so the boundary block is already post-fork', () => {
+    const atBoundary = Option.getOrThrow(Either.getRight(blockDataFrom(codecs, blockAt(2_000_000, hex))));
+    const belowBoundary = Option.getOrThrow(Either.getRight(blockDataFrom(codecs, blockAt(1_999_999, preForkHex))));
+
+    expect(atBoundary.ledgerParameters).toBeInstanceOf(LedgerParameters);
+    expect(belowBoundary.ledgerParameters).toBeInstanceOf(PreForkLedgerParameters);
+  });
+
+  it('reads every block with the current ledger version when the chain has no boundary below it', () => {
+    // A chain whose fork version is the minimum supported one has no pre-fork epoch at all, so registering a codec
+    // for one would claim a range that cannot occur.
+    const noPreFork = defaultLedgerParametersCodecs(ProtocolVersion.MinSupportedVersion);
+
+    const blockData = Option.getOrThrow(Either.getRight(blockDataFrom(noPreFork, blockAt(0, hex))));
+
+    expect(blockData.ledgerParameters).toBeInstanceOf(LedgerParameters);
   });
 
   it('refuses a block reported at a version the caller does not validate for, naming that version', () => {
@@ -59,11 +90,10 @@ describe('Reading a block the indexer served', () => {
   });
 
   it('reports the other ledger version parameters as a typed decode failure', () => {
-    const preForkHex = Buffer.from(PreForkLedgerParameters.initialParameters().serialize()).toString('hex');
-
-    const error = Option.getOrThrow(
-      Either.getLeft(blockDataFrom(defaultLedgerParametersCodecs, blockAt(0, preForkHex))),
-    );
+    // A block reported from after the boundary, carrying bytes from before it: the version says which codec to use,
+    // and that codec cannot read them. Nothing else can tell the two apart, which is why this is a decode failure and
+    // not a mis-read.
+    const error = Option.getOrThrow(Either.getLeft(blockDataFrom(codecs, blockAt(2_000_000, preForkHex))));
 
     expect(error).toBeInstanceOf(LedgerParametersCodec.LedgerParametersDecodeError);
   });
