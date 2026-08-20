@@ -29,6 +29,7 @@
  *   post-fork ledger version's {@link PublicKey}.
  */
 import { NetworkId, type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, HashMap, Option, Stream, pipe } from 'effect';
 import { CustomForkingUnshieldedWallet, type ForkingUnshieldedWallet } from '../ForkingUnshieldedWallet.js';
@@ -199,6 +200,13 @@ export type ForkWalletConfig = {
   /** The identity the wallet is started with, in the shape an application holds it: the post-fork ledger version's. */
   readonly publicKey: PublicKey;
   readonly networkId?: NetworkId.NetworkId;
+  /**
+   * How the wallet asks the chain which protocol version it is on before choosing a variant to start at.
+   *
+   * Absent means it does not ask, which is the behaviour of every wallet built without one: it starts at the head
+   * variant and learns the version from the first message it sees.
+   */
+  readonly chainVersionProbe?: ChainVersionProbe;
 };
 
 /** A state emission, whichever variant produced it. */
@@ -232,10 +240,14 @@ export type ForkWallet = {
 /**
  * Builds and starts the shipped forking unshielded wallet over an in-memory timeline that forks.
  *
- * @param config The timeline, the boundary version and the identity to start with.
+ * @remarks
+ *   Effectful because starting one is: a wallet that spans a boundary may ask the chain which version it is on before it
+ *   can choose a variant, and that question is answered over the network. A harness that hid it behind a synchronous
+ *   call would be hiding the very thing these proofs are about.
+ * @param config The timeline, the boundary version, the identity to start with, and how the chain is asked its version.
  * @returns The running wallet and its observation channels.
  */
-export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
+export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWallet> => {
   const networkId = config.networkId ?? NetworkId.NetworkId.Undeployed;
   const captured = Deferred.unsafeMake<CapturedMigration>(FiberId.none);
   const variantConfiguration: SourceConfiguration = { networkId, timeline: config.timeline };
@@ -280,41 +292,48 @@ export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
     .withMigration(() => capturingCrossLedgerMigration(captured));
 
   const WalletClass = CustomForkingUnshieldedWallet(
-    { networkId, forkVersion: config.forkVersion },
+    {
+      networkId,
+      forkVersion: config.forkVersion,
+      ...(config.chainVersionProbe !== undefined ? { chainVersionProbe: config.chainVersionProbe } : {}),
+    },
     { builder: preForkBuilder, configuration: variantConfiguration },
     { builder: postForkBuilder, configuration: variantConfiguration },
   );
 
-  const wallet = WalletClass.startWithPublicKey(config.publicKey);
-  const runtime = wallet.runtime;
+  return Effect.promise(() => WalletClass.startWithPublicKey(config.publicKey)).pipe(
+    Effect.map((wallet) => {
+      const runtime = wallet.runtime;
 
-  return {
-    unshielded: wallet,
+      return {
+        unshielded: wallet,
 
-    start: Effect.promise(() => wallet.start()),
+        start: Effect.promise(() => wallet.start()),
 
-    awaitMigration: Deferred.await(captured),
+        awaitMigration: Deferred.await(captured),
 
-    migration: Deferred.poll(captured).pipe(
-      Effect.flatMap(Option.match({ onNone: () => Effect.succeedNone, onSome: Effect.asSome })),
-    ),
+        migration: Deferred.poll(captured).pipe(
+          Effect.flatMap(Option.match({ onNone: () => Effect.succeedNone, onSome: Effect.asSome })),
+        ),
 
-    activeTag: pipe(
-      runtime.currentVariant,
-      Effect.map((current) => current.runningVariant.__polyTag__),
-    ),
+        activeTag: pipe(
+          runtime.currentVariant,
+          Effect.map((current) => current.runningVariant.__polyTag__),
+        ),
 
-    currentState: pipe(runtime.stateChanges, Stream.take(1), Stream.runHead, Effect.map(Option.getOrThrow)),
+        currentState: pipe(runtime.stateChanges, Stream.take(1), Stream.runHead, Effect.map(Option.getOrThrow)),
 
-    awaitState: (predicate) =>
-      pipe(
-        runtime.stateChanges,
-        Stream.filter(predicate),
-        Stream.take(1),
-        Stream.runHead,
-        Effect.map(Option.getOrThrow),
-      ),
+        awaitState: (predicate: (state: ForkedState) => boolean) =>
+          pipe(
+            runtime.stateChanges,
+            Stream.filter(predicate),
+            Stream.take(1),
+            Stream.runHead,
+            Effect.map(Option.getOrThrow),
+          ),
 
-    stop: Effect.promise(() => wallet.stop()),
-  };
+        stop: Effect.promise(() => wallet.stop()),
+      };
+    }),
+  );
 };
