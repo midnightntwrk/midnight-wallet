@@ -28,6 +28,7 @@ describe('QueryRunner', () => {
         block: {
           height: 1_000,
           hash: 'SOME_HASH',
+          protocolVersion: 2_000_000,
           ledgerParameters: '0x0',
           timestamp: 1,
           zswapEndIndex: 1,
