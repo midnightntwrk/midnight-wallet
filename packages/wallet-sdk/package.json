@@ -77,6 +77,14 @@
       "types": "./dist/hd.d.ts",
       "import": "./dist/hd.js"
     },
+    "./ledger/v8": {
+      "types": "./dist/ledger/v8.d.ts",
+      "import": "./dist/ledger/v8.js"
+    },
+    "./ledger/v9": {
+      "types": "./dist/ledger/v9.d.ts",
+      "import": "./dist/ledger/v9.js"
+    },
     "./indexer-client": {
       "types": "./dist/indexer-client/index.d.ts",
       "import": "./dist/indexer-client/index.js"
