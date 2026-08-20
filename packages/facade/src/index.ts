@@ -52,9 +52,19 @@ import { DustSectionSchema, mergeDustSections } from '@midnightntwrk/wallet-sdk-
 import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Array as Arr, pipe, Schema } from 'effect';
+import { Array as Arr, Option, pipe, Schema } from 'effect';
 import { type ProtocolVersion, TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import { combineLatest, map, type Observable, firstValueFrom, type Subscription, concatMap } from 'rxjs';
+import {
+  BehaviorSubject,
+  combineLatest,
+  concatMap,
+  distinctUntilChanged,
+  firstValueFrom,
+  map,
+  type Observable,
+  type Subscription,
+  tap,
+} from 'rxjs';
 import {
   type DefaultPendingTransactionsServiceConfiguration,
   PendingTransactions,
@@ -72,7 +82,17 @@ import {
   WellFormedError,
   type WellFormedStrictnessFlags,
 } from '@midnightntwrk/wallet-sdk-capabilities/validation';
-import { finalizedTransactionTrait, txHistoryHash } from './transaction.js';
+import { finalizedTransactionTraits, txHistoryHash } from './transaction.js';
+
+/**
+ * Why the wallet gave up on a transaction, for the history entry.
+ *
+ * @remarks
+ *   A chain rejection speaks for itself through the entry's status; an orphaned transaction has no chain verdict at
+ *   all, so the entry is the only place the reason can be recorded.
+ */
+const rejectionReason = (result: PendingTransactions.TransactionResult): string | undefined =>
+  result.status === 'ORPHANED_BY_FORK' ? 'orphaned-by-protocol-upgrade' : undefined;
 import {
   type DustAddress,
   type ShieldedAddress,
@@ -452,12 +472,12 @@ export class WalletFacade {
     return makeDefaultSubmissionService<ledger.FinalizedTransaction>(config);
   }
 
-  private static makeDefaultPendingTransactionsService<TConfig extends DefaultPendingTransactionsServiceConfiguration>(
-    config: TConfig,
-  ): Promise<PendingTransactionsServiceImpl<ledger.FinalizedTransaction>> {
+  private static makeDefaultPendingTransactionsService<
+    TConfig extends DefaultPendingTransactionsServiceConfiguration & { forkVersion: ProtocolVersion.ProtocolVersion },
+  >(config: TConfig): Promise<PendingTransactionsServiceImpl<ledger.FinalizedTransaction>> {
     return PendingTransactionsServiceImpl.init<ledger.FinalizedTransaction>({
       configuration: config,
-      txTrait: finalizedTransactionTrait,
+      txTraits: finalizedTransactionTraits(config.forkVersion),
     });
   }
 
@@ -587,6 +607,15 @@ export class WalletFacade {
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
   readonly clock: Clock.Clock;
   #pendingSubscription: Subscription;
+  #protocolVersionSubscription: Subscription;
+  /**
+   * The protocol version the wallets have all reached, as last observed.
+   *
+   * @remarks
+   *   `Option.none()` until the three wallets have each emitted once. A transaction stamped with `none` is never
+   *   orphaned, so an unobserved version costs a transaction nothing but the ability to be given up on early.
+   */
+  #observedProtocolVersion = new BehaviorSubject<Option.Option<ProtocolVersion.ProtocolVersion>>(Option.none());
 
   /**
    * Constructor is private on purpose - much of initialization of the facade is potentially asynchronous, and adding
@@ -617,8 +646,28 @@ export class WalletFacade {
     this.#pendingSubscription = this.pendingTransactionsService
       .state()
       .pipe(
-        concatMap((pending) => PendingTransactions.allFailed(pending)),
-        concatMap((item) => this.revert(item.tx)),
+        concatMap((pending) => PendingTransactions.allRejected(pending)),
+        concatMap((item) => this.revert(item.tx, rejectionReason(item.result))),
+      )
+      .subscribe();
+    // Deliberately built from the wallets' own states rather than from `state()`: `state()` includes the pending set,
+    // and orphaning writes to it, so feeding that back here would be a cycle.
+    this.#protocolVersionSubscription = combineLatest([
+      this.shielded.state,
+      this.unshielded.state,
+      this.dust.state,
+    ])
+      .pipe(
+        map(([shieldedState, unshieldedState, dustState]) =>
+          lowestProtocolVersion({
+            shielded: shieldedState.protocolVersion,
+            unshielded: unshieldedState.protocolVersion,
+            dust: dustState.protocolVersion,
+          }),
+        ),
+        distinctUntilChanged(),
+        tap((version) => this.#observedProtocolVersion.next(Option.some(version))),
+        concatMap((version) => this.pendingTransactionsService.orphanBeyond(version)),
       )
       .subscribe();
   }
@@ -824,7 +873,7 @@ export class WalletFacade {
   async submitTransaction(tx: ledger.FinalizedTransaction): Promise<TransactionIdentifier> {
     const identifiers = tx.identifiers();
     try {
-      await this.pendingTransactionsService.addPendingTransaction(tx);
+      await this.pendingTransactionsService.addPendingTransaction(tx, this.#observedProtocolVersion.getValue());
       // Insert before awaiting submission so the entry exists while the tx is in flight — the per-wallet sync
       // handlers' gotFinalized call clears the pending entry on confirmation.
       const key = submitTxHistoryKey(tx);
@@ -1050,7 +1099,10 @@ export class WalletFacade {
         }
       })
       .then(async (finalizedTx) => {
-        await this.pendingTransactionsService.addPendingTransaction(finalizedTx);
+        await this.pendingTransactionsService.addPendingTransaction(
+          finalizedTx,
+          this.#observedProtocolVersion.getValue(),
+        );
         return finalizedTx;
       });
   }
@@ -1121,7 +1173,10 @@ export class WalletFacade {
     try {
       const unboundTx = await this.provingService.prove(tx);
       const finalizedTx = unboundTx.bind();
-      await this.pendingTransactionsService.addPendingTransaction(finalizedTx);
+      await this.pendingTransactionsService.addPendingTransaction(
+        finalizedTx,
+        this.#observedProtocolVersion.getValue(),
+      );
       return finalizedTx;
     } catch (error) {
       await Promise.allSettled([
@@ -1389,16 +1444,16 @@ export class WalletFacade {
     };
   }
 
-  async revert(txOrRecipe: AnyTransaction | BalancingRecipe): Promise<void> {
+  async revert(txOrRecipe: AnyTransaction | BalancingRecipe, reason?: string): Promise<void> {
     // avoid instanceof check
     const transactionsToRevert = BalancingRecipe.isRecipe(txOrRecipe)
       ? BalancingRecipe.getTransactions(txOrRecipe)
       : [txOrRecipe];
 
-    await Promise.all(transactionsToRevert.map((tx) => this.revertTransaction(tx)));
+    await Promise.all(transactionsToRevert.map((tx) => this.revertTransaction(tx, reason)));
   }
 
-  async revertTransaction(tx: AnyTransaction): Promise<void> {
+  async revertTransaction(tx: AnyTransaction, reason?: string): Promise<void> {
     await Promise.all([
       this.shielded.revertTransaction(tx),
       this.unshielded.revertTransaction(tx),
@@ -1407,7 +1462,11 @@ export class WalletFacade {
       await this.pendingTransactionsService.clear(tx as unknown as ledger.FinalizedTransaction);
       const key = revertTxHistoryKey(tx);
       if (key !== undefined) {
-        await this.#txHistoryStorage.gotRejected({ ...key, rejectedAt: this.clock.now() });
+        await this.#txHistoryStorage.gotRejected({
+          ...key,
+          rejectedAt: this.clock.now(),
+          ...(reason !== undefined ? { reason } : {}),
+        });
       }
     });
   }
@@ -1452,6 +1511,7 @@ export class WalletFacade {
       this.submissionService.close(),
       this.pendingTransactionsService.stop(),
       Promise.resolve(this.#pendingSubscription?.unsubscribe()),
+      Promise.resolve(this.#protocolVersionSubscription?.unsubscribe()),
     ]);
   }
 

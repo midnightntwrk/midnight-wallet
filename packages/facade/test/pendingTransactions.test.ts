@@ -23,7 +23,7 @@ import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWallet
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import * as rx from 'rxjs';
-import { finalizedTransactionTrait } from '../src/transaction.js';
+import { finalizedTransactionTraits } from '../src/transaction.js';
 
 vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 
@@ -91,6 +91,8 @@ describe('Wallet Facade handling pending transactions', () => {
     expect(spiedShieldedRevert).toHaveBeenCalled();
     expect(spiedUnshieldedRevert).toHaveBeenCalled();
     expect(spiedDustRevert).toHaveBeenCalled();
-    expect(PendingTransactions.has(state.pending, finalized, finalizedTransactionTrait)).toBe(true);
+    expect(
+      PendingTransactions.has(state.pending, finalized, finalizedTransactionTraits(configuration.forkVersion)),
+    ).toBe(true);
   });
 });

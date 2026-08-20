@@ -131,7 +131,7 @@ describe('A pending transaction the fork left behind', () => {
     );
 
   it('asks the pending set to give up on everything the wallets have moved past', async () => {
-    await sleep(200);
+    await sleep(0.2);
 
     const observed = await rx.firstValueFrom(facade.state());
 
@@ -170,7 +170,7 @@ describe('A pending transaction the fork left behind', () => {
       ],
     });
 
-    await sleep(200);
+    await sleep(0.2);
 
     expect(spiedShieldedRevert).toHaveBeenCalled();
     expect(spiedUnshieldedRevert).toHaveBeenCalled();
