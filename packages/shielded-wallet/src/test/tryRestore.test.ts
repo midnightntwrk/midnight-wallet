@@ -52,7 +52,7 @@ const seed = Buffer.alloc(32, 7);
 
 describe('a shielded wallet restored from a snapshot it can read', () => {
   it('comes back as a wallet, rather than as a reason it could not', async () => {
-    const source = ShieldedWallet(configuration).startWithSeed(seed);
+    const source = await ShieldedWallet(configuration).startWithSeed(seed);
     const written = await source.serializeState();
     await source.stop();
 

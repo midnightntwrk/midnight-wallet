@@ -267,7 +267,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     .withMigration(() => capturingCrossLedgerMigration(captured));
 
   const WalletClass = CustomForkingShieldedWallet(
-    { networkId, forkVersion, chainVersionProbe },
+    { networkId, forkVersion, ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}) },
     { builder: preForkBuilder, configuration: { networkId, simulator: preFork } },
     { builder: postForkBuilder, configuration: { networkId, replayed } },
   );

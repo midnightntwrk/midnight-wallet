@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type NetworkId, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type CanAssign, type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { type Duration } from 'effect';
 import { describe, it } from 'vitest';
@@ -34,6 +35,7 @@ describe('DefaultShieldedConfiguration', () => {
           txHistoryStorage: V2TransactionHistory.ShieldedHistoryStorage;
           transactionDetailsRetryWindow?: Duration.DurationInput;
           forkVersion: ProtocolVersion.ProtocolVersion;
+          chainVersionProbe?: ChainVersionProbe;
         }
       >
     >;
@@ -50,5 +52,10 @@ describe('DefaultShieldedConfiguration', () => {
     // `forkVersion` is the wallet layer's alone: neither variant knows there is another one.
     type _3 = Expect<Equal<'forkVersion' extends keyof DefaultV1Configuration ? true : false, false>>;
     type _4 = Expect<Equal<'forkVersion' extends keyof DefaultV2Configuration ? true : false, false>>;
+
+    // And so is the question of where to start, for the same reason: a variant that does not know there is another
+    // one has no use for the answer.
+    type _5 = Expect<Equal<'chainVersionProbe' extends keyof DefaultV1Configuration ? true : false, false>>;
+    type _6 = Expect<Equal<'chainVersionProbe' extends keyof DefaultV2Configuration ? true : false, false>>;
   });
 });

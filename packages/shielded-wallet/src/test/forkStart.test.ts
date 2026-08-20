@@ -454,7 +454,7 @@ describe('a shielded wallet on a chain that has shown it no events', () => {
         networkId,
         forkVersion,
         seed,
-        chainVersionProbe,
+        ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}),
       });
       yield* Effect.addFinalizer(() => wallet.stop);
       return wallet;

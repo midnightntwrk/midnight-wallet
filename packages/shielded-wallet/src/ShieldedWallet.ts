@@ -52,6 +52,7 @@ import {
   type WalletLike,
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
+import type { ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import type { UnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { EitherOps, HList, Poly } from '@midnightntwrk/wallet-sdk-utilities';
 import { variantForSnapshot } from './Restore.js';
@@ -283,6 +284,16 @@ export type DefaultShieldedConfiguration = {
    *   will ship once it is, and this field keeps working unchanged.
    */
   forkVersion: ProtocolVersion.ProtocolVersion;
+  /**
+   * How the wallet asks the chain which protocol version it is on, before it chooses a variant to start at.
+   *
+   * @remarks
+   *   Optional, and defaulted rather than absent: left unset, the wallet asks the indexer named by
+   *   {@link indexerClientConnection}, which it is about to synchronize from anyway. Supply one to ask something else —
+   *   a cache, a node RPC, a value the application already holds. The answer is best-effort wherever it comes from: a
+   *   chain that cannot be reached leaves the wallet starting exactly where it started before there was a probe.
+   */
+  chainVersionProbe?: ChainVersionProbe;
 };
 
 export interface CustomizedShieldedWalletClass<
