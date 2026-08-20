@@ -45,6 +45,13 @@ const codecsOf = <T>(...activations: readonly Activation<T>[]): LedgerParameters
     ),
   );
 
+/** The shape a variant's own registry has: one codec, bounded by the range that variant is active over. */
+const codecOver = <T>(
+  range: ProtocolVersion.ProtocolVersion.Range,
+  codec: LedgerParametersCodec.LedgerParametersCodec<T>,
+): LedgerParametersCodec.LedgerParametersCodecs<T> =>
+  Either.getOrThrow(ProtocolVersion.makeRegistry([{ range, value: codec }]));
+
 const failureOf = <A, E>(result: Either.Either<A, E>): E => Option.getOrThrow(Either.getLeft(result));
 
 describe('Ledger parameters codec registry', () => {
@@ -85,7 +92,7 @@ describe('Ledger parameters codec registry', () => {
     const v9Codec = LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) => LedgerParametersV9.deserialize(bytes));
 
     it('decodes each ledger version through a registry that only claims that version', () => {
-      const preFork = codecsOf({ sinceVersion: ProtocolVersion.MinSupportedVersion, codec: v8Codec });
+      const preFork = codecOver(ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, FORK), v8Codec);
       const postFork = codecsOf({ sinceVersion: FORK, codec: v9Codec });
 
       expect(Either.isRight(LedgerParametersCodec.decode(preFork, version(1n), v8Hex))).toBe(true);
@@ -96,7 +103,7 @@ describe('Ledger parameters codec registry', () => {
       // This is the whole point of routing the decode: a pre-fork variant that meets a post-fork block is told "not
       // mine" by selection, so the other ledger version's bytes never reach a deserializer that would reject them —
       // the same failure mode the shielded event path had to stop producing.
-      const preFork = codecsOf({ sinceVersion: ProtocolVersion.MinSupportedVersion, codec: v8Codec });
+      const preFork = codecOver(ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, FORK), v8Codec);
 
       const error = failureOf(LedgerParametersCodec.decode(preFork, FORK, v9Hex));
 
