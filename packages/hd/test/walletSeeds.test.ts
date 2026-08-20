@@ -19,17 +19,27 @@
  *   derivation, six near-identical copies of the same walk down the same tree, each one silently discarding the failure
  *   branches. The walk is what `packages/hd` is for; naming it is what was missing.
  *
- *   The values below are pinned against the derivation as it stands today, not against a published specification. The
- *   spec-reference test vectors cover the hop _after_ this one — a per-wallet seed to keys and addresses — and take the
- *   per-wallet seed as given. Nothing published states what a master seed derives to per role, so what these vectors
- *   protect is that the naming changed nothing.
+ *   The values are now pinned against a published specification rather than against themselves. The [Per-wallet
+ *   seeds](../../../docs/spec/Specification.md#per-wallet-seeds) section states which role each of the three seeds
+ *   comes from, the [spec reference](../../spec-reference) implements that walk independently, and
+ *   `seedDerivation.json` is the vector file it generates — a byte-identical copy of
+ *   `packages/spec-reference/test-vectors/seedDerivation.json`, the same arrangement `packages/address-format` uses for
+ *   its own vectors. The hexadecimal below is therefore a claim about what a Midnight wallet is, not a record of what
+ *   this package happened to do.
  */
 import { describe, expect, it } from 'vitest';
 import { HDWallet, Roles, WalletSeeds } from '../src/index.js';
+import vectors from './seedDerivation.json' with { type: 'json' };
 
 const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
 
-const masterSeed = Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex');
+const masterSeedOf = (vector: (typeof vectors)[number]): Buffer => Buffer.from(vector.masterSeed, 'hex');
+
+/** The first address of the first account, which is what a wallet with no reason to choose otherwise uses. */
+const firstAddress = vectors.find((vector) => vector.account === 0 && vector.addressIndex === 0);
+if (firstAddress === undefined) throw new Error('the vectors no longer cover the first address');
+
+const masterSeed = masterSeedOf(firstAddress);
 
 /** The walk every consumer in this repository has been writing out by hand. */
 const byHand = (role: (typeof Roles)[keyof typeof Roles], account = 0, index = 0): string => {
@@ -41,7 +51,51 @@ const byHand = (role: (typeof Roles)[keyof typeof Roles], account = 0, index = 0
 };
 
 describe('the seeds one master seed derives to', () => {
-  it('gives each wallet the seed that wallet has always been given', () => {
+  it.each(vectors)(
+    'derives the specified seeds from $masterSeed at account $account, address index $addressIndex',
+    (vector) => {
+      const seeds = WalletSeeds.fromMasterSeed(masterSeedOf(vector), {
+        account: vector.account,
+        addressIndex: vector.addressIndex,
+      });
+
+      expect({
+        unshielded: hex(seeds.unshielded),
+        dust: hex(seeds.dust),
+        shielded: hex(seeds.shielded),
+      }).toStrictEqual(vector.walletSeeds);
+    },
+  );
+
+  it.each(vectors)(
+    'derives the specified ECDSA unshielded seed from $masterSeed at account $account, address index $addressIndex',
+    (vector) => {
+      const seeds = WalletSeeds.fromMasterSeed(masterSeedOf(vector), {
+        account: vector.account,
+        addressIndex: vector.addressIndex,
+        unshieldedRole: Roles.EcdsaUnshielded,
+      });
+
+      expect(hex(seeds.unshielded)).toBe(vector.seedsByRole.EcdsaUnshielded.seed);
+      // The other two are the same wallet whichever way its unshielded side signs.
+      expect(hex(seeds.dust)).toBe(vector.walletSeeds.dust);
+      expect(hex(seeds.shielded)).toBe(vector.walletSeeds.shielded);
+    },
+  );
+
+  it('places each seed at the role the specification assigns it', () => {
+    // Read the other way round: the vectors state a path per role, and this is the claim that the three seeds are
+    // taken from roles 0, 2 and 3 of that path rather than merely being three different values.
+    expect(firstAddress.seedsByRole.UnshieldedExternal.path).toBe(`m/44'/2400'/0'/${Roles.NightExternal}/0`);
+    expect(firstAddress.seedsByRole.Dust.path).toBe(`m/44'/2400'/0'/${Roles.Dust}/0`);
+    expect(firstAddress.seedsByRole.Shielded.path).toBe(`m/44'/2400'/0'/${Roles.Zswap}/0`);
+    expect(firstAddress.seedsByRole.EcdsaUnshielded.path).toBe(`m/44'/2400'/0'/${Roles.EcdsaUnshielded}/0`);
+  });
+
+  it('agrees with the tree this package already exposed, so the two entry points cannot drift apart', () => {
+    // Kept beside the vectors rather than replaced by them: the vectors anchor `WalletSeeds` to the specification, and
+    // `tests.test.ts` anchors `HDWallet` to an independent BIP-32 implementation. This is the seam between the two,
+    // which neither of those covers.
     const seeds = WalletSeeds.fromMasterSeed(masterSeed);
 
     expect(hex(seeds.shielded)).toBe(byHand(Roles.Zswap));
@@ -49,37 +103,14 @@ describe('the seeds one master seed derives to', () => {
     expect(hex(seeds.dust)).toBe(byHand(Roles.Dust));
   });
 
-  it('derives the values it derives today, so naming the walk changed nothing', () => {
-    const seeds = WalletSeeds.fromMasterSeed(masterSeed);
-
-    expect(hex(seeds.shielded)).toBe('9690d4013e42e6739d9496f836b2cbd4339451c02a00624b86e9fb15cc4197a8');
-    expect(hex(seeds.unshielded)).toBe('22b8e577b3f638b2b361f36fd62d7138ed489d9afe3da5f7c325e2d0a95ae043');
-    expect(hex(seeds.dust)).toBe('b9b76cce66828aa6bd798abbb15b012331a6aa1e5f99e678724c37463b5775a1');
-  });
-
-  it('follows the account and address index it is asked for', () => {
-    const seeds = WalletSeeds.fromMasterSeed(masterSeed, { account: 2, addressIndex: 5 });
-
-    expect(hex(seeds.shielded)).toBe(byHand(Roles.Zswap, 2, 5));
-    expect(hex(seeds.unshielded)).toBe(byHand(Roles.NightExternal, 2, 5));
-    expect(hex(seeds.dust)).toBe(byHand(Roles.Dust, 2, 5));
-  });
-
-  it('derives the unshielded seed from whichever signing scheme the wallet will use', () => {
-    const ecdsa = WalletSeeds.fromMasterSeed(masterSeed, { unshieldedRole: Roles.EcdsaUnshielded });
-
-    expect(hex(ecdsa.unshielded)).toBe(byHand(Roles.EcdsaUnshielded));
-    // The other two are the same wallet whichever way its unshielded side signs.
-    expect(hex(ecdsa.shielded)).toBe(byHand(Roles.Zswap));
-    expect(hex(ecdsa.dust)).toBe(byHand(Roles.Dust));
-  });
-
   it('does not hold the master seed open once it has what it needs', () => {
     // The private material inside the BIP32 tree is wiped before this returns; an application that reads the master
     // seed afterwards is reading its own buffer, which is the only copy the SDK never controlled.
+    const before = hex(masterSeed);
+
     const seeds = WalletSeeds.fromMasterSeed(masterSeed);
 
-    expect(hex(masterSeed)).toBe('0000000000000000000000000000000000000000000000000000000000000001');
+    expect(hex(masterSeed)).toBe(before);
     expect(seeds.shielded).not.toBe(masterSeed);
   });
 });

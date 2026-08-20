@@ -2723,6 +2723,7 @@ __metadata:
     "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
     "@noble/curves": "npm:^1.8.1"
     "@scure/base": "npm:^2.0.0"
+    "@scure/bip32": "npm:^2.0.1"
     "@subsquid/scale-codec": "npm:^4.0.1"
     commander: "npm:^14.0.0"
     tsx: "npm:4.22.4"

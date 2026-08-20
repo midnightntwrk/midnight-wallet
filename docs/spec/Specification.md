@@ -48,6 +48,7 @@ This document comprises a couple of sections:
     - [Summary](#summary)
   - [Key management](#key-management)
     - [HD Wallet structure](#hd-wallet-structure)
+    - [Per-wallet seeds](#per-wallet-seeds)
     - [Night and unshielded tokens keys](#night-and-unshielded-tokens-keys)
     - [Dust keys](#dust-keys)
     - [Shielded token (Zswap) keys](#shielded-token-zswap-keys)
@@ -280,6 +281,42 @@ Where:
 > Generally treating keys as uniform bitstrings should not be done, though in this particular case, where secp256k1 base
 > field is so close in size to 2^256, it is found that impact on security is negligible, which makes this approach
 > acceptable.
+
+### Per-wallet seeds
+
+Sections below describe what each of a wallet's keys is generated from - a seed, treated as uniform bytes. This section
+describes where those seeds come from, since a wallet holds one master seed and needs three: one for unshielded tokens,
+one for Dust and one for shielded tokens.
+
+All three are secret keys derived from the master seed in the tree described above, at the same account and address
+index, differing only in the role:
+
+| Seed       | Role                                  | Value | Path                                     |
+| ---------- | ------------------------------------- | ----- | ---------------------------------------- |
+| Unshielded | Unshielded (and Night) External chain | 0     | `m / 44' / 2400' / account' / 0 / index` |
+| Dust       | Dust                                  | 2     | `m / 44' / 2400' / account' / 2 / index` |
+| Shielded   | Shielded                              | 3     | `m / 44' / 2400' / account' / 3 / index` |
+
+Where `account` and `index` follow BIP-44 recommendations, and a wallet with no reason to choose otherwise uses `0` for
+both. In a TS pseudocode:
+
+```ts
+type WalletSeeds = { unshielded: Buffer; dust: Buffer; shielded: Buffer };
+function walletSeeds(masterSeed: Buffer, account: number, index: number): WalletSeeds {
+  const seedAt = (role: number) => privateKeyAt(masterSeed, `m/44'/${2400}'/${account}'/${role}/${index}`);
+  return { unshielded: seedAt(0), dust: seedAt(2), shielded: seedAt(3) };
+}
+```
+
+What is taken at each path is the 32 bytes of the private key itself, and not an extended key: chain code and depth
+belong to the derivation and not to what the seed is used for. This is what makes a seed portable between
+implementations - two wallets given the same master seed, account and index arrive at the same keys and the same
+addresses, without agreeing on anything but the path.
+
+> [!NOTE] The role is what keeps the three apart, so no seed derived for one of them is ever the seed of another. For
+> the same reason, a wallet signing unshielded transactions with a signature scheme other than the one role 0 is used
+> with takes its unshielded seed from the role that scheme is assigned, rather than reusing role 0's secret scalar under
+> a second algorithm. Its Dust and shielded seeds are unaffected.
 
 ### Night and unshielded tokens keys
 
