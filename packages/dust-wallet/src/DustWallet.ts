@@ -12,6 +12,7 @@
 // limitations under the License.
 import {
   type DustParameters,
+  LedgerParameters,
   type DustPublicKey,
   DustSecretKey,
   type FinalizedTransaction,
@@ -359,11 +360,11 @@ export interface CustomizedDustWalletClass<
   configuration: TConfig;
   startWithSeed(
     seed: Uint8Array,
-    dustParameters: DustParameters,
+    dustParameters?: DustParameters,
   ): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
   startWithSecretKey(
     secretKey: DustSecretKey,
-    dustParameters: DustParameters,
+    dustParameters?: DustParameters,
   ): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
   restore(serializedState: TSerialized): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
 }
@@ -410,7 +411,12 @@ export function CustomDustWallet<
     extends BaseWallet
     implements CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>
   {
-    static startWithSeed(seed: Uint8Array, dustParameters: DustParameters): CustomDustWalletImplementation {
+    static startWithSeed(
+      seed: Uint8Array,
+      // The ledger's own initial parameters when a caller names none: three rates that do not depend on this wallet,
+      // and asking for them made an application import a ledger version to start one.
+      dustParameters: DustParameters = LedgerParameters.initialParameters().dust,
+    ): CustomDustWalletImplementation {
       const dustSecretKey = DustSecretKey.fromSeed(seed);
       return CustomDustWalletImplementation.startFirst(
         CustomDustWalletImplementation,
@@ -420,7 +426,7 @@ export function CustomDustWallet<
 
     static startWithSecretKey(
       secretKey: DustSecretKey,
-      dustParameters: DustParameters,
+      dustParameters: DustParameters = LedgerParameters.initialParameters().dust,
     ): CustomDustWalletImplementation {
       return CustomDustWalletImplementation.startFirst(
         CustomDustWalletImplementation,

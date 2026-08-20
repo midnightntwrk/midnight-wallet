@@ -61,6 +61,7 @@ import {
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
+import { type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import * as PreForkSignatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import {
   BehaviorSubject,
@@ -415,6 +416,53 @@ export const lowestProtocolVersion = (versions: WalletProtocolVersions): Protoco
   [versions.shielded, versions.unshielded, versions.dust].reduce((lowest, candidate) =>
     candidate < lowest ? candidate : lowest,
   );
+
+/**
+ * One ledger version's key objects per side of a protocol boundary.
+ *
+ * @remarks
+ *   The escape hatch for a caller that holds key objects rather than a seed. Both sides are required: key objects belong
+ *   to one ledger version's runtime and neither can be derived from the other, so a facade given one side alone would
+ *   hold wallets that cannot read half the chain. That is the shape seeds exist to avoid, and a product with one side
+ *   optional would reintroduce it.
+ */
+export type FacadeKeysByEpoch = Readonly<{
+  /** The pre-fork ledger version's key objects. */
+  v8: Readonly<{ shielded: preForkLedger.ZswapSecretKeys; dust: preForkLedger.DustSecretKey }>;
+  /** The post-fork ledger version's key objects. */
+  v9: Readonly<{ shielded: ledger.ZswapSecretKeys; dust: ledger.DustSecretKey }>;
+}>;
+
+/** What the facade will start its wallets from: seeds, or both ledger versions' key objects. */
+export type FacadeStartMaterial = WalletSeeds | FacadeKeysByEpoch;
+
+/** How the wallets are started. */
+export type FacadeStartOptions = Readonly<{
+  /**
+   * Leaves the dust wallet unstarted in the background, to be driven a step at a time with `doSync`.
+   *
+   * @remarks
+   *   Requires a dust wallet built with the projections sync service; see `makeEventLessSyncService`.
+   */
+  manualSync?: boolean;
+}>;
+
+/**
+ * The post-fork key objects the wallets' own `start` takes, from whichever material the caller supplied.
+ *
+ * @remarks
+ *   Only the post-fork side is needed here: a wallet built from seeds or from both versions' keys already holds what its
+ *   pre-fork variant needs, retained when it was built. What `start` supplies is the side the wallet's own API speaks.
+ */
+const postForkKeysOf = (
+  material: FacadeStartMaterial,
+): Readonly<{ shielded: ledger.ZswapSecretKeys; dust: ledger.DustSecretKey }> =>
+  'v9' in material
+    ? material.v9
+    : {
+        shielded: ledger.ZswapSecretKeys.fromSeed(material.shielded),
+        dust: ledger.DustSecretKey.fromSeed(material.dust),
+      };
 
 /** Which of the three wallets a reading is about. */
 export type WalletKind = keyof WalletProtocolVersions;
@@ -1702,21 +1750,32 @@ export class WalletFacade {
   /**
    * Starts the wallets and their background synchronization.
    *
-   * @param shieldedSecretKeys - Secret keys for the shielded wallet
-   * @param dustSecretKey - Secret key for the dust wallet
-   * @param manualSync - When true, the dust wallet is not started in the background; drive it explicitly with
+   * @remarks
+   *   Seeds, not key objects. A seed is the only key material that crosses a protocol boundary — every ledger version
+   *   derives its own keys from the same seed and arrives at the same identity — so a wallet started from seeds can
+   *   follow the chain across a fork, and one started from key objects of a single ledger version cannot. Derive them
+   *   once with `WalletSeeds.fromMasterSeed` and hand them over.
+   *
+   *   {@link FacadeKeysByEpoch} is the escape hatch for a caller that will not part with a seed. It requires **both**
+   *   ledger versions' key objects, because a wallet holding one side could not read the other side of the chain, and
+   *   it costs the caller an import of both ledger packages and the same derivation performed twice. A seed costs
+   *   neither.
+   * @example
+   *   ```typescript
+   *   await facade.start(WalletSeeds.fromMasterSeed(masterSeed));
+   *   ```;
+   *
+   * @param material The three wallets' seeds, or both ledger versions' key objects.
+   * @param options `manualSync` leaves the dust wallet unstarted in the background; drive it explicitly with
    *   {@link doSync} instead (requires a dust wallet built with the projections sync service, see
-   *   `makeEventLessSyncService`)
+   *   `makeEventLessSyncService`).
    */
-  async start(
-    shieldedSecretKeys: ledger.ZswapSecretKeys,
-    dustSecretKey: ledger.DustSecretKey,
-    manualSync: boolean = false,
-  ): Promise<void> {
+  async start(material: FacadeStartMaterial, options: FacadeStartOptions = {}): Promise<void> {
+    const keys = postForkKeysOf(material);
     await Promise.all([
-      this.shielded.start(shieldedSecretKeys),
+      this.shielded.start(keys.shielded),
       this.unshielded.start(),
-      !manualSync ? this.dust.start(dustSecretKey) : undefined,
+      !options.manualSync ? this.dust.start(keys.dust) : undefined,
       this.pendingTransactionsService.start(),
     ]);
   }
@@ -1725,10 +1784,10 @@ export class WalletFacade {
    * Runs a single dust synchronization pass and resolves when it completes. Only the dust wallet supports manual sync;
    * the shielded and unshielded wallets keep syncing in the background via {@link start}.
    *
-   * @param dustSecretKey - Secret key for the dust wallet
+   * @param material The same material {@link start} was given.
    */
-  async doSync(dustSecretKey: ledger.DustSecretKey): Promise<void> {
-    await this.dust.stepSync(dustSecretKey);
+  async doSync(material: FacadeStartMaterial): Promise<void> {
+    await this.dust.stepSync(postForkKeysOf(material).dust);
   }
 
   async stop(): Promise<void> {

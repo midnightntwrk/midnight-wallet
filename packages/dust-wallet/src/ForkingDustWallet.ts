@@ -124,6 +124,21 @@ export type ForkingDustConfiguration = {
   forkVersion: ProtocolVersion.ProtocolVersion;
 };
 
+/**
+ * One ledger version's dust secret key per side of a protocol boundary.
+ *
+ * @remarks
+ *   Both sides are required. A caller holding key objects rather than a seed has to hold both, because the two belong to
+ *   different ledger runtimes and neither can be derived from the other; a product with one side optional would let a
+ *   wallet be built that cannot read half the chain, which is the shape this replaced.
+ */
+export type DustKeysByEpoch = Readonly<{
+  /** The pre-fork ledger version's dust secret key. */
+  v8: v8.DustSecretKey;
+  /** The post-fork ledger version's dust secret key. */
+  v9: ledger.DustSecretKey;
+}>;
+
 /** A running dust wallet that spans a protocol boundary. */
 export type ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate> = DustWalletAPI<ledger.DustSecretKey, string> &
   WalletLike.WalletLike<ForkingDustVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>>;
@@ -150,24 +165,24 @@ export interface ForkingDustWalletClass<
    */
   startWithSeed(
     seed: Uint8Array,
-    dustParameters: ledger.DustParameters,
+    dustParameters?: DustGenerationRates,
   ): ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>;
   /**
-   * Builds a wallet from a post-fork dust key, starting it on the post-fork variant.
+   * Builds a wallet from dust keys of both ledger versions.
    *
    * @remarks
-   *   A `DustSecretKey` belongs to one ledger version's runtime, so it answers for one variant and no other: there is
-   *   nothing to convert, and the dust public keys being identical either side does not help — reading dust needs the
-   *   secret. A wallet built this way therefore starts on the variant its key belongs to and stays there. It cannot
-   *   read a chain that is still pre-fork, which is the honest consequence of holding only a post-fork key; start from
-   *   a seed to do that.
-   * @param secretKey The post-fork ledger version's dust secret key.
+   *   The escape hatch for a caller that will not hand over a seed. Both sides are required, and that is the whole point:
+   *   a `DustSecretKey` belongs to one ledger version's runtime — there is nothing to convert, and the dust public keys
+   *   being identical either side does not help, because reading dust needs the secret — so a wallet given one side
+   *   alone could not read the other side of the chain. It costs the caller an import of both ledger packages and the
+   *   same derivation done twice; a seed costs neither.
+   * @param keys One ledger version's dust secret key per side of the boundary.
    * @param dustParameters The post-fork ledger version's dust parameters.
-   * @returns A wallet started on the post-fork variant.
+   * @returns A wallet started on the pre-fork variant, which is where a wallet with no history belongs.
    */
-  startWithSecretKey(
-    secretKey: ledger.DustSecretKey,
-    dustParameters: ledger.DustParameters,
+  startWithKeys(
+    keys: DustKeysByEpoch,
+    dustParameters?: DustGenerationRates,
   ): ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>;
   /**
    * Restores a wallet from a snapshot, into whichever registered variant wrote it.
@@ -205,7 +220,25 @@ export interface ForkingDustWalletClass<
  * @param parameters The post-fork ledger version's dust parameters.
  * @returns The same generation and decay rates, as a pre-fork `DustParameters`.
  */
-export const asPreForkDustParameters = (parameters: ledger.DustParameters): v8.DustParameters =>
+/**
+ * The rates dust is generated and decays at, as plain data.
+ *
+ * @remarks
+ *   Structurally what both ledger versions' `DustParameters` are — three scalars and nothing else — which is why the
+ *   ledger classes remain assignable to this and a caller who already holds one can go on passing it. What it removes
+ *   is the reason to obtain one: three numbers do not need a ledger version to express, and asking for a
+ *   `LedgerParameters.initialParameters().dust` made an application import a ledger to start a wallet.
+ */
+export type DustGenerationRates = Readonly<{
+  /** How much dust one Night generates, at the cap. */
+  nightDustRatio: bigint;
+  /** How fast dust decays once its Night is spent. */
+  generationDecayRate: bigint;
+  /** How long dust survives after its Night is spent. */
+  dustGracePeriodSeconds: bigint;
+}>;
+
+export const asPreForkDustParameters = (parameters: DustGenerationRates): v8.DustParameters =>
   new v8.DustParameters(parameters.nightDustRatio, parameters.generationDecayRate, parameters.dustGracePeriodSeconds);
 
 /**
@@ -245,7 +278,6 @@ export function CustomForkingDustWallet<
   postFork: SelfConfiguredDustVariant<PostForkDustVariant<TPostForkSyncUpdate>, TPostForkConfig>,
 ): ForkingDustWalletClass<TPreForkSyncUpdate, TPostForkSyncUpdate, TConfiguration> {
   type Variants = ForkingDustVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>;
-  type RetainedStartMaterial = StartMaterial.StartMaterial<ledger.DustSecretKey>;
 
   // Registered through the shape the builder states rather than through the one this function was handed. The two are
   // the same builder; what is dropped is the configuration *type*, which the parameter types have already paired with
@@ -263,25 +295,69 @@ export function CustomForkingDustWallet<
 
   const variants = BaseWallet.allVariantsRecord();
 
+  /** What the rates are when a caller names none: the ledger's own initial parameters. */
+  const defaultRates: DustGenerationRates = ledger.LedgerParameters.initialParameters().dust;
+
   /**
-   * The pre-fork variant's key material, which only a retained seed can produce.
+   * The key material this wallet holds, one entry per side of the protocol boundary.
    *
    * @remarks
-   *   The wallet's public API speaks the post-fork ledger version's `DustSecretKey`, and the pre-fork variant cannot use
-   *   one: they belong to different ledger runtimes and each declares a private constructor, so the type system agrees.
-   *   A wallet holding a key object therefore has nothing this variant can start with, and says so instead of handing
-   *   over a key it would silently misuse.
+   *   The two ledger versions' `DustSecretKey` belong to different runtimes and each declares a private constructor, so
+   *   neither can be made from the other and the type system agrees. "The key this wallet holds" is therefore two
+   *   questions, and the type says so: each side is present or it is not, independently.
+   *
+   *   A seed is not among them. A seed can produce either side, so a wallet given one derives both at once and keeps the
+   *   results — the same capability with a shorter-lived secret, since from that moment the seed is not this wallet's
+   *   to hold.
    */
-  const preForkAux = (
-    retained: RetainedStartMaterial,
-  ): Either.Either<v8.DustSecretKey, StartMaterial.MissingStartAuxError> =>
-    StartMaterial.requireDerivedAuxFor(retained, V1Tag, (seed) => variants[V1Tag].variant.startAux.fromSeed(seed));
+  type RetainedKeys = Readonly<{
+    preFork: Option.Option<v8.DustSecretKey>;
+    postFork: Option.Option<ledger.DustSecretKey>;
+  }>;
 
-  /** The post-fork variant's key material: what the application handed over, or the retained seed's derivation. */
+  /** Nothing retained: never started, or stopped. */
+  const noKeys: RetainedKeys = { preFork: Option.none(), postFork: Option.none() };
+
+  /** Both sides, derived from one seed. */
+  const keysFromSeed = (seed: WalletSeed.WalletSeed): RetainedKeys => ({
+    preFork: Option.some(variants[V1Tag].variant.startAux.fromSeed(seed)),
+    postFork: Option.some(variants[V2Tag].variant.startAux.fromSeed(seed)),
+  });
+
+  /**
+   * What a variant can be started with, or why it cannot be.
+   *
+   * @remarks
+   *   Two different failures, deliberately distinguished: a wallet that was never started (or has been stopped) holds
+   *   nothing at all, while one started with the other side's key object holds something it must not use here.
+   */
+  const auxFor = <TAux>(
+    retained: RetainedKeys,
+    side: Option.Option<TAux>,
+    variantTag: symbol,
+  ): Either.Either<TAux, StartMaterial.MissingStartAuxError> =>
+    Either.fromOption(
+      side,
+      () =>
+        new StartMaterial.MissingStartAuxError({
+          message:
+            Option.isNone(retained.preFork) && Option.isNone(retained.postFork)
+              ? `This wallet holds no key material: it has not been started, or it has been stopped. Start it before ` +
+                `asking it to synchronize or to pay a fee.`
+              : `This wallet was started with key material of the other protocol version, which the variant ` +
+                `${String(variantTag)} cannot use: a Dust secret key belongs to one ledger version's runtime. Start ` +
+                `it from a seed, or hand it both versions' keys.`,
+          variantTag,
+        }),
+    );
+
+  const preForkAux = (retained: RetainedKeys): Either.Either<v8.DustSecretKey, StartMaterial.MissingStartAuxError> =>
+    auxFor(retained, retained.preFork, V1Tag);
+
   const postForkAux = (
-    retained: RetainedStartMaterial,
+    retained: RetainedKeys,
   ): Either.Either<ledger.DustSecretKey, StartMaterial.MissingStartAuxError> =>
-    StartMaterial.requireAuxFor(retained, V2Tag, (seed) => variants[V2Tag].variant.startAux.fromSeed(seed));
+    auxFor(retained, retained.postFork, V2Tag);
 
   /**
    * The protocol versions each variant owns, and the version a transaction it builds is stamped with.
@@ -309,37 +385,37 @@ export function CustomForkingDustWallet<
   {
     static readonly configuration: TConfiguration = configuration;
 
-    static startWithSeed(seed: Uint8Array, dustParameters: ledger.DustParameters): ForkingDustWalletImplementation {
-      const walletSeed = WalletSeed.WalletSeed(seed);
+    static startWithSeed(
+      seed: Uint8Array,
+      dustParameters: DustGenerationRates = defaultRates,
+    ): ForkingDustWalletImplementation {
+      const derived = keysFromSeed(WalletSeed.WalletSeed(seed));
       const wallet = ForkingDustWalletImplementation.startFirst(
         ForkingDustWalletImplementation,
         // Valued against the same rates the caller named, rebuilt by the ledger version that owns this state — see
         // {@link asPreForkDustParameters}. The post-fork side's own empty state is the migration's business.
         PreForkCoreWallet.initEmpty(
           asPreForkDustParameters(dustParameters),
-          variants[V1Tag].variant.startAux.fromSeed(walletSeed),
+          Option.getOrThrow(derived.preFork),
           configuration.networkId,
         ),
       );
-      wallet.#retainSeed(walletSeed);
+      // Both sides derived here and now, and the seed reference dropped with this frame: from this point the wallet
+      // holds key objects only, which is strictly less than it held before and does the same work.
+      wallet.#retainKeys(derived);
       return wallet;
     }
 
-    static startWithSecretKey(
-      secretKey: ledger.DustSecretKey,
-      dustParameters: ledger.DustParameters,
+    static startWithKeys(
+      keys: DustKeysByEpoch,
+      dustParameters: DustGenerationRates = defaultRates,
     ): ForkingDustWalletImplementation {
-      return ForkingDustWalletImplementation.startAtVariant(
+      const wallet = ForkingDustWalletImplementation.startFirst(
         ForkingDustWalletImplementation,
-        variants[V2Tag],
-        // Stamped with the boundary version rather than left at the minimum: a variant that starts from a state
-        // outside its own activation range reports that on sight, which is how a stranded snapshot heals — and here
-        // there is no variant above this one to hand over to. The state does belong to this variant, so it says so.
-        CoreWallet.withProtocolVersion(
-          CoreWallet.initEmpty(dustParameters, secretKey, configuration.networkId),
-          configuration.forkVersion,
-        ),
+        PreForkCoreWallet.initEmpty(asPreForkDustParameters(dustParameters), keys.v8, configuration.networkId),
       );
+      wallet.#retainKeys({ preFork: Option.some(keys.v8), postFork: Option.some(keys.v9) });
+      return wallet;
     }
 
     static tryRestore(serializedState: string): Either.Either<ForkingDustWalletImplementation, DustRestoreError> {
@@ -380,13 +456,11 @@ export function CustomForkingDustWallet<
      *   answers only for the post-fork one, which is the ledger version this wallet's public API speaks. Cleared by
      *   {@link stop} so a stopped wallet cannot be resurrected by a late activation.
      */
-    readonly #retainedStartMaterial = Ref.unsafeMake<Option.Option<RetainedStartMaterial>>(Option.none());
+    readonly #retainedKeys = Ref.unsafeMake<RetainedKeys>(noKeys);
 
-    /** Remembers a seed, which supersedes any key object retained for an individual variant. */
-    #retainSeed(seed: WalletSeed.WalletSeed): void {
-      Ref.set(this.#retainedStartMaterial, Option.some(StartMaterial.fromSeed<ledger.DustSecretKey>(seed))).pipe(
-        Effect.runSync,
-      );
+    /** Remembers key material for both sides of the boundary. */
+    #retainKeys(keys: RetainedKeys): void {
+      Ref.set(this.#retainedKeys, keys).pipe(Effect.runSync);
     }
 
     /**
@@ -397,16 +471,14 @@ export function CustomForkingDustWallet<
      */
     #resumeSyncOn<TStartAux>(
       running: { startSyncInBackground: (aux: TStartAux) => Effect.Effect<void> },
-      auxFor: (retained: RetainedStartMaterial) => Either.Either<TStartAux, StartMaterial.MissingStartAuxError>,
+      keysFor: (retained: RetainedKeys) => Either.Either<TStartAux, StartMaterial.MissingStartAuxError>,
     ): Effect.Effect<void, StartMaterial.MissingStartAuxError> {
-      return Ref.get(this.#retainedStartMaterial).pipe(
-        Effect.flatMap(
-          Option.match({
-            // Stopped, or never started: there is nothing to resume and nothing to resume it with.
-            onNone: () => Effect.void,
-            onSome: (retained: RetainedStartMaterial) =>
-              EitherOps.toEffect(auxFor(retained)).pipe(Effect.flatMap((aux) => running.startSyncInBackground(aux))),
-          }),
+      return Ref.get(this.#retainedKeys).pipe(
+        Effect.flatMap((retained) =>
+          // Stopped, or never started: there is nothing to resume and nothing to resume it with.
+          Option.isNone(retained.preFork) && Option.isNone(retained.postFork)
+            ? Effect.void
+            : EitherOps.toEffect(keysFor(retained)).pipe(Effect.flatMap((aux) => running.startSyncInBackground(aux))),
         ),
       );
     }
@@ -414,15 +486,13 @@ export function CustomForkingDustWallet<
     /** One synchronization step on a variant, with key material it can use. */
     #stepSyncOn<TStartAux, TError>(
       running: { sync: (aux: TStartAux) => Effect.Effect<void, TError> },
-      auxFor: (retained: RetainedStartMaterial) => Either.Either<TStartAux, StartMaterial.MissingStartAuxError>,
+      keysFor: (retained: RetainedKeys) => Either.Either<TStartAux, StartMaterial.MissingStartAuxError>,
     ): Effect.Effect<void, TError | StartMaterial.MissingStartAuxError> {
-      return Ref.get(this.#retainedStartMaterial).pipe(
-        Effect.flatMap(
-          Option.match({
-            onNone: () => Effect.void,
-            onSome: (retained: RetainedStartMaterial) =>
-              EitherOps.toEffect(auxFor(retained)).pipe(Effect.flatMap((aux) => running.sync(aux))),
-          }),
+      return Ref.get(this.#retainedKeys).pipe(
+        Effect.flatMap((retained) =>
+          Option.isNone(retained.preFork) && Option.isNone(retained.postFork)
+            ? Effect.void
+            : EitherOps.toEffect(keysFor(retained)).pipe(Effect.flatMap((aux) => running.sync(aux))),
         ),
       );
     }
@@ -463,19 +533,10 @@ export function CustomForkingDustWallet<
      */
     start(secretKey: ledger.DustSecretKey): Promise<void> {
       return Effect.gen(this, function* () {
-        yield* Ref.update(this.#retainedStartMaterial, (retained) =>
-          Option.some(
-            Option.match(retained, {
-              onNone: () => StartMaterial.forVariant<ledger.DustSecretKey>(V2Tag, secretKey),
-              // A retained seed already answers for every variant, including ones this wallet has not met, so a key
-              // object for one of them adds nothing. Otherwise the objects accumulate per variant tag.
-              onSome: (existing: RetainedStartMaterial) =>
-                existing._tag === 'FromSeed'
-                  ? existing
-                  : StartMaterial.forVariants<ledger.DustSecretKey>([...existing.byTag, [V2Tag, secretKey]]),
-            }),
-          ),
-        );
+        // The post-fork side only: this key belongs to that ledger version's runtime. Whatever the wallet already
+        // holds for the pre-fork side is left as it is, so a wallet built from a seed keeps the ability to read a
+        // chain that has not forked yet.
+        yield* Ref.update(this.#retainedKeys, (retained) => ({ ...retained, postFork: Option.some(secretKey) }));
 
         // Registered before the first dispatch, and only once: `onVariantActivation` resolves only after its
         // subscription is live, so an activation racing this call is queued rather than missed.
@@ -497,7 +558,7 @@ export function CustomForkingDustWallet<
     async stop(): Promise<void> {
       // Released before the runtime is torn down: the key material outlives neither the wallet nor an in-flight
       // activation.
-      Ref.set(this.#retainedStartMaterial, Option.none()).pipe(Effect.runSync);
+      Ref.set(this.#retainedKeys, noKeys).pipe(Effect.runSync);
       await super.stop();
     }
 
@@ -527,25 +588,9 @@ export function CustomForkingDustWallet<
      *   and says so by name.
      */
     #requireAux<TAux>(
-      auxFor: (retained: RetainedStartMaterial) => Either.Either<TAux, StartMaterial.MissingStartAuxError>,
-      variantTag: symbol,
+      keysFor: (retained: RetainedKeys) => Either.Either<TAux, StartMaterial.MissingStartAuxError>,
     ): Effect.Effect<TAux, StartMaterial.MissingStartAuxError> {
-      return Ref.get(this.#retainedStartMaterial).pipe(
-        Effect.flatMap(
-          Option.match({
-            onNone: () =>
-              Effect.fail(
-                new StartMaterial.MissingStartAuxError({
-                  message:
-                    `This wallet holds no key material: it has not been started, or it has been stopped. Start it ` +
-                    `before asking it to pay a fee.`,
-                  variantTag,
-                }),
-              ),
-            onSome: (retained: RetainedStartMaterial) => EitherOps.toEffect(auxFor(retained)),
-          }),
-        ),
-      );
+      return Ref.get(this.#retainedKeys).pipe(Effect.flatMap((retained) => EitherOps.toEffect(keysFor(retained))));
     }
 
     createDustGenerationTransaction(
@@ -684,14 +729,13 @@ export function CustomForkingDustWallet<
         .dispatch<bigint, TransactingError>({
           [V1Tag]: (v1) =>
             Effect.all([
-              this.#requireAux(preForkAux, V1Tag),
+              this.#requireAux(preForkAux),
               Effect.forEach(transactions, preForkTx<PreForkAnyTransaction>),
             ]).pipe(Effect.flatMap(([key, txs]) => v1.estimateFee(key, txs, effectiveTtl, currentTime))),
           [V2Tag]: (v2) =>
-            Effect.all([
-              this.#requireAux(postForkAux, V2Tag),
-              Effect.forEach(transactions, postForkTx<AnyTransaction>),
-            ]).pipe(Effect.flatMap(([key, txs]) => v2.estimateFee(key, txs, effectiveTtl, currentTime))),
+            Effect.all([this.#requireAux(postForkAux), Effect.forEach(transactions, postForkTx<AnyTransaction>)]).pipe(
+              Effect.flatMap(([key, txs]) => v2.estimateFee(key, txs, effectiveTtl, currentTime)),
+            ),
         })
         .pipe(Effect.runPromise);
     }
@@ -705,7 +749,7 @@ export function CustomForkingDustWallet<
         .dispatch<{ transaction: UnprovenTx; blockData: PricedBlockData }, TransactingError>({
           [V1Tag]: (v1) =>
             Effect.all([
-              this.#requireAux(preForkAux, V1Tag),
+              this.#requireAux(preForkAux),
               Effect.forEach(transactions, preForkTx<PreForkAnyTransaction>),
             ]).pipe(
               Effect.flatMap(([key, txs]) => v1.balanceTransactions(key, txs, ttl, currentTime)),
@@ -715,10 +759,7 @@ export function CustomForkingDustWallet<
               })),
             ),
           [V2Tag]: (v2) =>
-            Effect.all([
-              this.#requireAux(postForkAux, V2Tag),
-              Effect.forEach(transactions, postForkTx<AnyTransaction>),
-            ]).pipe(
+            Effect.all([this.#requireAux(postForkAux), Effect.forEach(transactions, postForkTx<AnyTransaction>)]).pipe(
               Effect.flatMap(([key, txs]) => v2.balanceTransactions(key, txs, ttl, currentTime)),
               Effect.map(({ transaction, blockData }) => ({
                 transaction: WalletTransaction.adopt('Unproven', transaction, postForkStamp),
