@@ -10,11 +10,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import type * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import type { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { Cause, Data, Effect, Exit, Option, pipe } from 'effect';
 import type { UnboundTransaction } from '../proving/provingService.js';
+
+/**
+ * Ledger parameters as either ledger version reads them: what a block-data fetch spanning a protocol boundary yields.
+ *
+ * @remarks
+ *   The two ledger versions' `LedgerParameters` are structurally identical, so this union carries no information the
+ *   compiler can act on — it names, at the one place a block's parameters cross into validation, that which ledger
+ *   version produced them is a run-time fact settled by the block's reported protocol version. Each ledger's
+ *   `LedgerState` still insists on its own class, so handing over the wrong one fails at the WASM boundary and is
+ *   reported as a {@link WellFormedError}.
+ */
+export type AnyLedgerParameters = preForkLedger.LedgerParameters | ledger.LedgerParameters;
 
 /**
  * Snapshot of chain state required for transaction validation. Structurally identical to the dust-wallet's `BlockData`
@@ -268,7 +281,7 @@ const buildBlankLedgerState = (networkId: string, parameters: ledger.LedgerParam
 };
 
 /** The current ledger version's well-formedness check. */
-export const currentLedgerWellFormedCheck: WellFormedCheck<AnyValidatableTransaction, ledger.LedgerParameters> = (
+export const currentLedgerWellFormedCheck: WellFormedCheck<AnyValidatableTransaction, AnyLedgerParameters> = (
   tx,
   { networkId, ledgerParameters, flags, now },
 ) => {
@@ -291,10 +304,14 @@ const runPromiseThrowingFailure = async <A, E extends Error>(effect: Effect.Effe
   throw new Error(Cause.pretty(exit.cause));
 };
 
-export const makeDefaultValidationServiceEffect = (deps: ValidationServiceDependencies): ValidationServiceEffect =>
+export const makeDefaultValidationServiceEffect = (
+  deps: ValidationServiceDependencies<AnyLedgerParameters>,
+): ValidationServiceEffect<AnyValidatableTransaction, AnyLedgerParameters> =>
   makeValidationServiceEffect(currentLedgerWellFormedCheck, deps);
 
-export const makeDefaultValidationService = (deps: ValidationServiceDependencies): ValidationService => {
+export const makeDefaultValidationService = (
+  deps: ValidationServiceDependencies<AnyLedgerParameters>,
+): ValidationService<AnyValidatableTransaction, AnyLedgerParameters> => {
   const effectService = makeDefaultValidationServiceEffect(deps);
   return {
     validateTx: (tx, options) => runPromiseThrowingFailure(effectService.validateTx(tx, options)),

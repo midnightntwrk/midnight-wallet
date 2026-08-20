@@ -13,6 +13,7 @@
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import {
   makeValidationServiceEffect,
+  type AnyLedgerParameters,
   type ValidationServiceDependencies,
   type ValidationServiceEffect,
   type WellFormedCheck,
@@ -52,7 +53,7 @@ const buildBlankLedgerState = (networkId: string, parameters: ledger.LedgerParam
  *   classes, not the steps, that make this a separate check: a pre-fork transaction cannot be handed to the current
  *   ledger's `wellFormed`, nor current-ledger parameters to this one.
  */
-export const preForkWellFormedCheck: WellFormedCheck<AnyPreForkValidatableTransaction, ledger.LedgerParameters> = (
+export const preForkWellFormedCheck: WellFormedCheck<AnyPreForkValidatableTransaction, AnyLedgerParameters> = (
   tx,
   { networkId, ledgerParameters, flags, now },
 ) => {
@@ -63,16 +64,13 @@ export const preForkWellFormedCheck: WellFormedCheck<AnyPreForkValidatableTransa
  * Builds the validator for pre-fork transactions.
  *
  * @remarks
- *   Nothing in the SDK registers this yet, and that is a wiring gap rather than a missing capability. The default
- *   block-data fetcher decodes with `defaultLedgerParametersCodecs`, which is open-ended from the minimum supported
- *   version and holds only the current ledger's codec — so the block data reaching validation today is always
- *   current-ledger parameters, which this validator cannot use. Registering a pre-fork codec and routing the fetch on
- *   the block's reported version is what closes it; until then the pre-fork range stays empty and a pre-fork
- *   transaction is refused by name rather than checked against the wrong ledger.
- * @param deps The network, clock, and a block-data fetcher whose parameters are decoded at the pre-fork ledger version.
+ *   Registered below the fork version by `makeDefaultValidationServices`, against a block-data fetcher whose codec
+ *   registry is split at the same version — so a block reported from before the boundary reaches this validator as
+ *   pre-fork parameters, which is the only kind its ledger version can build a state from.
+ * @param deps The network, clock, and the block-data fetcher, which decodes each block at the version it reports.
  * @returns A validator to register in a `ValidationServices` registry for the version range before the fork.
  */
 export const makePreForkValidationServiceEffect = (
-  deps: ValidationServiceDependencies<ledger.LedgerParameters>,
-): ValidationServiceEffect<AnyPreForkValidatableTransaction, ledger.LedgerParameters> =>
+  deps: ValidationServiceDependencies<AnyLedgerParameters>,
+): ValidationServiceEffect<AnyPreForkValidatableTransaction, AnyLedgerParameters> =>
   makeValidationServiceEffect(preForkWellFormedCheck, deps);

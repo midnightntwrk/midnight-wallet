@@ -13,3 +13,4 @@
 export * from './blockData.js';
 export * from './preForkValidationService.js';
 export * from './validationService.js';
+export * from './versionedValidation.js';
