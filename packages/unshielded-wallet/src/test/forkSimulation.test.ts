@@ -30,12 +30,10 @@
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, identity, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
-import { UnshieldedState as PreForkState } from '../v1/UnshieldedState.js';
 import { V1Tag } from '../v1/index.js';
 import { V2Tag } from '../v2/index.js';
 import { forkSeed, postForkIdentity, preForkIdentity, timelineTransaction } from './forkTimeline.js';
-import { makeForkWallet, utxosOf, type CarriedUtxo } from './forkWallet.js';
+import { makeForkWallet, utxosOf, type CarriedUtxo } from './forkHarness.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 /** The pre-fork variant owns everything below this; the post-fork variant takes over at it. */
@@ -62,20 +60,11 @@ const timeline = [
   timelineTransaction({ id: 6, protocolVersion: Number(forkVersion), owner: preFork.addressHex, value: 600n }),
 ];
 
-const emptyPreForkWallet = () =>
-  PreForkWallet.restore(
-    PreForkState.empty(),
-    preFork,
-    { appliedId: 0n, highestTransactionId: 0n },
-    ProtocolVersion.MinSupportedVersion,
-    networkId,
-  );
-
 const valuesOf = (utxos: readonly CarriedUtxo[]): readonly bigint[] => utxos.map((u) => u.value);
 
 describe('unshielded hard-fork crossing', () => {
   it('carries every UTXO across and applies the boundary transaction exactly once, in the new variant', async () => {
-    const wallet = makeForkWallet({ timeline, forkVersion, initialState: emptyPreForkWallet() });
+    const wallet = makeForkWallet({ timeline, forkVersion, publicKey: postFork });
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -126,7 +115,7 @@ describe('unshielded hard-fork crossing', () => {
   });
 
   it('carries the pre-fork UTXOs field for field, not merely by count', async () => {
-    const wallet = makeForkWallet({ timeline, forkVersion, initialState: emptyPreForkWallet() });
+    const wallet = makeForkWallet({ timeline, forkVersion, publicKey: postFork });
 
     const { before, after } = await Effect.runPromise(
       Effect.gen(function* () {
@@ -162,7 +151,7 @@ describe('unshielded hard-fork crossing', () => {
       // 5 is still below the boundary of 7, so this must be applied, not deferred.
       timelineTransaction({ id: 2, protocolVersion: 5, owner: preFork.addressHex, value: 200n }),
     ];
-    const wallet = makeForkWallet({ timeline: withinRange, forkVersion, initialState: emptyPreForkWallet() });
+    const wallet = makeForkWallet({ timeline: withinRange, forkVersion, publicKey: postFork });
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -187,7 +176,7 @@ describe('unshielded hard-fork crossing', () => {
   it('reaches the same end state from a wallet whose first sync already contains the fork', async () => {
     // Scenario 2: a fresh wallet syncing a timeline that already straddles the boundary. It still syncs the pre-fork
     // prefix with the old variant, hands over, and consumes the rest — double work by design, correct by construction.
-    const wallet = makeForkWallet({ timeline, forkVersion, initialState: emptyPreForkWallet() });
+    const wallet = makeForkWallet({ timeline, forkVersion, publicKey: postFork });
 
     const final = await Effect.runPromise(
       Effect.gen(function* () {

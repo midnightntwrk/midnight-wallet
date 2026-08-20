@@ -46,6 +46,17 @@ export const preForkIdentity = (networkId: NetworkId.NetworkId = NetworkId.Netwo
 export const postForkIdentity = (networkId: NetworkId.NetworkId = NetworkId.NetworkId.Undeployed): PostForkPublicKey =>
   PostForkPublicKey.fromKeyStore(createPostForkKeystore({ kind: 'schnorr', secret: forkSeed() }, networkId));
 
+/**
+ * The same secret read under the other signature scheme, which only the post-fork ledger version has.
+ *
+ * @remarks
+ *   Ledger-v8 has exactly one scheme, and its keys are bare hex with no room to name one — so an ecdsa identity is not
+ *   merely inconvenient to represent pre-fork, it is unrepresentable. It derives a different address, too, which is why
+ *   nothing about it can be narrowed to the pre-fork shape and back.
+ */
+export const ecdsaIdentity = (networkId: NetworkId.NetworkId = NetworkId.NetworkId.Undeployed): PostForkPublicKey =>
+  PostForkPublicKey.fromKeyStore(createPostForkKeystore({ kind: 'ecdsa', secret: forkSeed() }, networkId));
+
 /** A UTXO as it appears on the wire, in the shape both variants decode it to. */
 export type TimelineUtxo = {
   readonly utxo: {

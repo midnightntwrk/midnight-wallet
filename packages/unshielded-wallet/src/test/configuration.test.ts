@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type CanAssign, type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { describe, it } from 'vitest';
 import { type DefaultUnshieldedConfiguration } from '../UnshieldedWallet.js';
@@ -30,15 +30,24 @@ describe('DefaultUnshieldedConfiguration', () => {
           networkId: NetworkId.NetworkId;
           indexerClientConnection: V2Sync.IndexerClientConnection;
           txHistoryStorage: V2TransactionHistory.UnshieldedHistoryStorage;
+          forkVersion: ProtocolVersion.ProtocolVersion;
         }
       >
     >;
   });
 
-  it('stays interchangeable with what either variant is built from', () => {
+  it('builds either variant, being a superset of what each is built from', () => {
+    // One direction only, and deliberately so. The wallet's configuration now says something no single variant does —
+    // where the boundary between them lies — so it is strictly larger than either variant's. What must keep holding is
+    // that it can still build both: a variant asking for something this type does not carry would be a wallet that
+    // cannot be built for one of its own variants.
     type _1 = Expect<CanAssign<DefaultUnshieldedConfiguration, DefaultV2Configuration>>;
-    type _2 = Expect<CanAssign<DefaultV2Configuration, DefaultUnshieldedConfiguration>>;
-    type _3 = Expect<CanAssign<DefaultUnshieldedConfiguration, DefaultV1Configuration>>;
-    type _4 = Expect<CanAssign<DefaultV1Configuration, DefaultUnshieldedConfiguration>>;
+    // The two variants ask for exactly the same things, which is what lets one configuration serve both — asserted
+    // here so a divergence shows up as a compile error rather than as a wallet that cannot be built for one of them.
+    type _2 = Expect<CanAssign<DefaultUnshieldedConfiguration, DefaultV1Configuration>>;
+
+    // `forkVersion` is the wallet layer's alone: neither variant knows there is another one.
+    type _3 = Expect<Equal<'forkVersion' extends keyof DefaultV1Configuration ? true : false, false>>;
+    type _4 = Expect<Equal<'forkVersion' extends keyof DefaultV2Configuration ? true : false, false>>;
   });
 });

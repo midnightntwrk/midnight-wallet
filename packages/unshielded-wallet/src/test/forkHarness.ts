@@ -10,33 +10,46 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// A test-only unshielded wallet registered over BOTH variants, so a crossing can actually be driven.
-//
-// The shipped `UnshieldedWallet` registers exactly one variant and is typed as a one-element HList throughout, so it
-// cannot express a fork-crossing wallet. Rather than widen the public surface ahead of the API redesign, this builds the
-// two-variant wallet the way `packages/e2e-tests` builds its custom wallets: `WalletBuilder.init()` with both variant
-// builders registered directly. Nothing here is exported from the package.
-//
-// This factory is markedly simpler than the shielded and dust equivalents, and the reason is the point of the whole
-// unshielded increment: there is no key to retain. Unshielded sync is watch-only — the address is public and signing is
-// supplied per call by the caller — so `startSyncInBackground` takes no argument, the activation watcher re-dispatches
-// with nothing, and none of the start-aux workarounds those factories document apply here.
-import { NetworkId, ProtocolVersion, type ProtocolState } from '@midnightntwrk/wallet-sdk-abstractions';
+
+/**
+ * The shipped forking unshielded wallet, driven over an in-memory timeline, with the channels a fork proof needs.
+ *
+ * @remarks
+ *   Everything here is observation and simulated infrastructure. The wallet itself is the one the package ships —
+ *   {@link CustomForkingUnshieldedWallet}, the same composition `UnshieldedWallet(configuration)` uses — with each
+ *   variant's sync _service_ replaced by a numbered, version-tagged timeline instead of a WebSocket to an indexer, and
+ *   the post-fork variant's migration wrapped so both ends of the hand-over can be recorded as plain data. The
+ *   capability that folds a message into the wallet, boundary rule and all, is the real one.
+ *
+ *   This harness is markedly simpler than the shielded and dust equivalents, and the reason is the point of the whole
+ *   unshielded increment: there is no key to retain. Unshielded synchronization is watch-only — the address is public
+ *   and signing is supplied per call by the caller — so `startSyncInBackground` takes no argument on either variant,
+ *   the activation watcher re-dispatches with nothing, and none of the start-aux machinery those wallets need applies
+ *   here. What the wallet is started with is an identity, and the harness hands it the one an application holds: the
+ *   post-fork ledger version's {@link PublicKey}.
+ */
+import { NetworkId, type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import { Deferred, Effect, FiberId, HashMap, Option, Stream, pipe } from 'effect';
-import { V1Builder, V1Tag, type CoreWallet as PreForkWallet } from '../v1/index.js';
-import * as PreForkSync from '../v1/Sync.js';
+import { CustomForkingUnshieldedWallet, type ForkingUnshieldedWallet } from '../ForkingUnshieldedWallet.js';
+import { type PublicKey } from '../KeyStore.js';
+import { type CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
 import * as PreForkMigration from '../v1/Migration.js';
-import { V2Builder, V2Tag, type CoreWallet as PostForkWallet } from '../v2/index.js';
-import * as PostForkSync from '../v2/Sync.js';
-import * as PostForkMigration from '../v2/Migration.js';
-import { type TransactionHistoryService as PreForkHistory } from '../v1/TransactionHistory.js';
-import { type TransactionHistoryService as PostForkHistory } from '../v2/TransactionHistory.js';
+import * as PreForkSync from '../v1/Sync.js';
 import { type WalletSyncUpdate as PreForkUpdate } from '../v1/SyncSchema.js';
+import { type TransactionHistoryService as PreForkHistory } from '../v1/TransactionHistory.js';
+import { V1Builder } from '../v1/V1Builder.js';
+import { type CoreWallet as PostForkWallet } from '../v2/CoreWallet.js';
+import * as PostForkMigration from '../v2/Migration.js';
+import * as PostForkSync from '../v2/Sync.js';
 import { type WalletSyncUpdate as PostForkUpdate } from '../v2/SyncSchema.js';
+import { type TransactionHistoryService as PostForkHistory } from '../v2/TransactionHistory.js';
+import { V2Builder } from '../v2/V2Builder.js';
 import { type TimelineItem } from './forkTimeline.js';
+
+// =============================================================================
+// Observation channels
+// =============================================================================
 
 /**
  * A migration captured as plain data.
@@ -128,8 +141,27 @@ const capturingCrossLedgerMigration = (
   };
 };
 
+// =============================================================================
+// Stand-ins for services the proof does not exercise
+// =============================================================================
+
+/**
+ * Transaction history reduced to nothing.
+ *
+ * @remarks
+ *   The real service needs an indexer connection and a storage instance, neither of which says anything about crossing a
+ *   fork. Written out once per variant because the two `TransactionHistoryService` types name their own ledger
+ *   version's update.
+ */
 const noOpPreForkHistory: PreForkHistory = { put: () => Effect.void };
 const noOpPostForkHistory: PostForkHistory = { put: () => Effect.void };
+
+/** What each variant is configured with, on top of what its builder already asks for. */
+type SourceConfiguration = Readonly<{
+  networkId: NetworkId.NetworkId;
+  /** The single timeline both variants read, each decoding it as its own ledger version's update. */
+  timeline: readonly TimelineItem[];
+}>;
 
 /**
  * A sync service over an in-memory timeline, honouring the wallet's cursor.
@@ -148,43 +180,72 @@ const timelineSyncService = <TUpdate>(
     Stream.fromIterable(timeline.filter((item) => BigInt(item.id) > state.progress.appliedId).map(toUpdate)),
 });
 
+// =============================================================================
+// The wallet
+// =============================================================================
+
+/** Everything needed to point the shipped forking unshielded wallet at a timeline that forks. */
 export type ForkWalletConfig = {
   /** The single timeline both variants read, each decoding it as its own ledger version's update. */
   readonly timeline: readonly TimelineItem[];
-  /** The protocol version at which the second variant takes over. */
+  /**
+   * The version at which the post-fork variant is registered.
+   *
+   * The single source of truth for the boundary: the pre-fork variant's activation range ends here, and so does the
+   * point at which its sync stops applying. Deliberately not a production constant — the real fork version is not
+   * final.
+   */
   readonly forkVersion: ProtocolVersion.ProtocolVersion;
-  /** The wallet's starting state, built on the pre-fork ledger version. */
-  readonly initialState: PreForkWallet;
+  /** The identity the wallet is started with, in the shape an application holds it: the post-fork ledger version's. */
+  readonly publicKey: PublicKey;
   readonly networkId?: NetworkId.NetworkId;
 };
 
+/** A state emission, whichever variant produced it. */
+export type ForkedState = ProtocolState.ProtocolState<PreForkWallet | PostForkWallet>;
+
+/** A running forking unshielded wallet, plus the channels a fork proof needs to observe it. */
 export type ForkWallet = {
-  readonly start: Effect.Effect<void, WalletRuntimeError>;
+  /** The wallet itself, exactly as an application would hold it. */
+  readonly unshielded: ForkingUnshieldedWallet<PreForkUpdate, PostForkUpdate>;
+  /** Starts background synchronization through the wallet's own API. */
+  readonly start: Effect.Effect<void>;
+  /** Resolves when the hand-over happens, with both ends of it. */
   readonly awaitMigration: Effect.Effect<CapturedMigration>;
+  /** Both ends of the migration, or `None` if none has happened yet. */
   readonly migration: Effect.Effect<Option.Option<CapturedMigration>>;
+  /** The tag of the variant currently running — `V1Tag` before a migration, `V2Tag` after one. */
   readonly activeTag: Effect.Effect<string | symbol>;
-  readonly currentState: Effect.Effect<ProtocolState.ProtocolState<PreForkWallet | PostForkWallet>, WalletRuntimeError>;
-  readonly awaitState: (
-    predicate: (state: ProtocolState.ProtocolState<PreForkWallet | PostForkWallet>) => boolean,
-  ) => Effect.Effect<ProtocolState.ProtocolState<PreForkWallet | PostForkWallet>, WalletRuntimeError>;
+  /** The wallet's current state, whichever variant produced it. */
+  readonly currentState: Effect.Effect<ForkedState, WalletRuntimeError>;
+  /**
+   * Resolves once the wallet's state satisfies `predicate`, failing the test's timeout if it never does.
+   *
+   * Use monotone predicates only: the runtime's state stream keeps just the latest value, so a state that satisfies a
+   * transient predicate can legitimately be skipped.
+   */
+  readonly awaitState: (predicate: (state: ForkedState) => boolean) => Effect.Effect<ForkedState, WalletRuntimeError>;
+  /** Tears the wallet down. */
   readonly stop: Effect.Effect<void>;
 };
 
 /**
- * Builds and starts an unshielded wallet registered over both variants.
+ * Builds and starts the shipped forking unshielded wallet over an in-memory timeline that forks.
  *
- * @param config The timeline, the boundary version and the starting state.
+ * @param config The timeline, the boundary version and the identity to start with.
  * @returns The running wallet and its observation channels.
  */
 export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
   const networkId = config.networkId ?? NetworkId.NetworkId.Undeployed;
   const captured = Deferred.unsafeMake<CapturedMigration>(FiberId.none);
+  const variantConfiguration: SourceConfiguration = { networkId, timeline: config.timeline };
 
   const preForkBuilder = new V1Builder()
     .withSync(
-      () => timelineSyncService<PreForkUpdate>(config.timeline, (item) => item.update as PreForkUpdate),
+      (configuration: SourceConfiguration) =>
+        timelineSyncService<PreForkUpdate>(configuration.timeline, (item) => item.update as PreForkUpdate),
       // The REAL capability, boundary rule and all — only the service that would open a WebSocket is substituted.
-      (_c: object, getContext: () => { transactionHistoryService: PreForkHistory }) =>
+      (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: PreForkHistory }) =>
         PreForkSync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
           getContext(),
         ),
@@ -196,12 +257,15 @@ export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
     .withTransactionHistory(() => noOpPreForkHistory)
     .withKeysDefaults()
     .withCoinSelectionDefaults()
-    .withMigration(() => PreForkMigration.makeEmptyWalletMigration({ networkId }));
+    .withMigration((configuration: SourceConfiguration) =>
+      PreForkMigration.makeEmptyWalletMigration({ networkId: configuration.networkId }),
+    );
 
   const postForkBuilder = new V2Builder()
     .withSync(
-      () => timelineSyncService<PostForkUpdate>(config.timeline, (item) => item.update as PostForkUpdate),
-      (_c: object, getContext: () => { transactionHistoryService: PostForkHistory }) =>
+      (configuration: SourceConfiguration) =>
+        timelineSyncService<PostForkUpdate>(configuration.timeline, (item) => item.update as PostForkUpdate),
+      (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: PostForkHistory }) =>
         PostForkSync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
           getContext(),
         ),
@@ -215,27 +279,19 @@ export const makeForkWallet = (config: ForkWalletConfig): ForkWallet => {
     .withCoinSelectionDefaults()
     .withMigration(() => capturingCrossLedgerMigration(captured));
 
-  const WalletClass = WalletBuilder.init()
-    .withVariant(ProtocolVersion.MinSupportedVersion, preForkBuilder)
-    .withVariant(config.forkVersion, postForkBuilder)
-    .build({ networkId });
+  const WalletClass = CustomForkingUnshieldedWallet(
+    { networkId, forkVersion: config.forkVersion },
+    { builder: preForkBuilder, configuration: variantConfiguration },
+    { builder: postForkBuilder, configuration: variantConfiguration },
+  );
 
-  const wallet = WalletClass.startFirst(WalletClass, config.initialState);
+  const wallet = WalletClass.startWithPublicKey(config.publicKey);
   const runtime = wallet.runtime;
 
   return {
-    start: Effect.gen(function* () {
-      // Registered before the first dispatch and only once, exactly as `UnshieldedWallet.start` does it — and with no
-      // argument, which is the point: nothing secret has to survive the crossing.
-      yield* runtime.onVariantActivation({
-        [V1Tag]: (v1) => v1.startSyncInBackground(),
-        [V2Tag]: (v2) => v2.startSyncInBackground(),
-      });
-      yield* runtime.dispatch({
-        [V1Tag]: (v1) => v1.startSyncInBackground(),
-        [V2Tag]: (v2) => v2.startSyncInBackground(),
-      });
-    }),
+    unshielded: wallet,
+
+    start: Effect.promise(() => wallet.start()),
 
     awaitMigration: Deferred.await(captured),
 
