@@ -606,8 +606,9 @@ export type ShieldedWalletClass = ForkingShieldedWalletClass<
  *   registered with the cross-ledger migration, which is what makes the hand-over carry identity and a cursor onto a
  *   fresh state rather than start a wallet from nothing.
  *
- *   **Transacting is available only once the wallet is on the post-fork variant** — see
- *   {@link PreForkTransactingUnsupportedError}, a temporary seam that closes with version-routed proving.
+ *   **Transacting works on either side of the boundary**: the active variant builds with its own ledger and its own
+ *   derived keys, and every result travels as a handle stamped with the epoch that built it. Proving a pre-fork
+ *   transaction still requires a proving server registered below the boundary.
  * @param configuration What the wallet and both its variants are built from, including where the boundary lies.
  * @returns The wallet class.
  */

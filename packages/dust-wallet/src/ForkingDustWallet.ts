@@ -783,8 +783,8 @@ export type DustWalletClass = ForkingDustWalletClass<PreForkSyncUpdate, PostFork
  *   needs four `DustLocalState` APIs that no published pre-fork ledger has. That is a permanent property of the
  *   pre-fork variant, not a gap to be closed.
  *
- *   **Fee-paying operations are available only once the wallet is on the post-fork variant** — see
- *   {@link PreForkDustTransactingUnsupportedError}, a temporary seam that closes with version-routed proving.
+ *   **Fee-paying operations work on either side of the boundary**: the active variant answers with its own ledger's
+ *   objects, and every result travels as a handle stamped with the epoch that built it.
  * @param configuration What the wallet and both its variants are built from, including where the boundary lies.
  * @returns The wallet class.
  */
