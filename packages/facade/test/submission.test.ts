@@ -26,6 +26,15 @@ import {
   mergeWalletEntries,
 } from '../src/index.js';
 
+/**
+ * `vi.mockObject` does not carry accessors across, and a wallet's `state` is one. The facade watches all three
+ * wallets' states to know which protocol version the chain has reached, so a double without one is not a wallet.
+ */
+const withRealState = <TWallet extends { state: unknown }, TMocked>(mocked: TMocked, wallet: TWallet): TMocked => {
+  Object.defineProperty(mocked, 'state', { get: () => wallet.state, configurable: true });
+  return mocked;
+};
+
 describe('Facade submission', () => {
   it('is gracefully closed when wallet is stopped', async () => {
     const seed = crypto.randomBytes(32);
@@ -62,23 +71,22 @@ describe('Facade submission', () => {
       configuration,
       submissionService: () => fakeSubmission,
       shielded: (config) => {
-        const mockedShielded = vi.mockObject(ShieldedWallet(config).startWithSeed(seed));
+        const wallet = ShieldedWallet(config).startWithSeed(seed);
+        const mockedShielded = withRealState(vi.mockObject(wallet), wallet);
         mockedShielded.start.mockResolvedValue(undefined);
         return mockedShielded;
       },
       unshielded: (config) => {
-        const mockedUnshielded = vi.mockObject(
-          UnshieldedWallet(config).startWithPublicKey(
-            PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
-          ),
+        const wallet = UnshieldedWallet(config).startWithPublicKey(
+          PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
         );
+        const mockedUnshielded = withRealState(vi.mockObject(wallet), wallet);
         mockedUnshielded.start.mockResolvedValue(undefined);
         return mockedUnshielded;
       },
       dust: (config) => {
-        const mockedDust = vi.mockObject(
-          DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust),
-        );
+        const wallet = DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
+        const mockedDust = withRealState(vi.mockObject(wallet), wallet);
         mockedDust.start.mockResolvedValue(undefined);
         return mockedDust;
       },

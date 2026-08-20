@@ -36,7 +36,7 @@ import {
   type Transacting,
 } from '@midnightntwrk/wallet-sdk-shielded/v2';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { Effect, pipe } from 'effect';
+import { Effect, Either, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -45,9 +45,9 @@ import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntw
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
 import {
-  makeDefaultProvingServiceEffect,
+  makeDefaultVersionedProvingServiceEffect,
   type DefaultProvingConfiguration,
-  type ProvingServiceEffect,
+  type VersionedProvingServiceEffect,
   type UnboundTransaction,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
@@ -122,7 +122,7 @@ describe.skip('Wallet transacting', () => {
   let coinsAndBalances: CoinsAndBalances.CoinsAndBalancesCapability<CoreWallet>;
   let keys: Keys.KeysCapability<CoreWallet>;
   let submissionService: Submission.SubmissionServiceEffect<ledger.FinalizedTransaction>;
-  let provingService: ProvingServiceEffect<UnboundTransaction>;
+  let provingService: VersionedProvingServiceEffect<UnboundTransaction>;
 
   const getShieldedAddress = (state: CoreWallet | ledger.ZswapSecretKeys): ShieldedAddress => {
     return state instanceof ledger.ZswapSecretKeys
@@ -162,7 +162,7 @@ describe.skip('Wallet transacting', () => {
 
   beforeEach(async () => {
     submissionService = Submission.makeDefaultSubmissionServiceEffect<ledger.FinalizedTransaction>(configuration);
-    provingService = makeDefaultProvingServiceEffect(configuration);
+    provingService = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(configuration));
     Wallet = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V2Builder().withDefaults())
       .build(configuration);
@@ -216,7 +216,7 @@ describe.skip('Wallet transacting', () => {
             };
           });
           return v2.transferTransaction(walletKeys, transferOutputs).pipe(
-            Effect.flatMap((unprovenTx) => provingService.prove(unprovenTx)),
+            Effect.flatMap((unprovenTx) => provingService.prove(unprovenTx, ProtocolVersion.MinSupportedVersion)),
             Effect.map((tx) => tx.bind()),
             Effect.flatMap((tx) =>
               Effect.all({
@@ -264,7 +264,7 @@ describe.skip('Wallet transacting', () => {
               },
             ])
             .pipe(
-              Effect.flatMap((unprovenTx) => provingService.prove(unprovenTx)),
+              Effect.flatMap((unprovenTx) => provingService.prove(unprovenTx, ProtocolVersion.MinSupportedVersion)),
               Effect.map((tx) => tx.bind()),
               Effect.flatMap((tx) => submissionService.submitTransaction(tx, 'Finalized')),
             ),
@@ -295,7 +295,7 @@ describe.skip('Wallet transacting', () => {
         [V2Tag]: (v2) =>
           pipe(
             v2.initSwap(walletKeys, swapParams.inputs, swapParams.outputs),
-            Effect.andThen((unprovenTx) => provingService.prove(unprovenTx)),
+            Effect.andThen((unprovenTx) => provingService.prove(unprovenTx, ProtocolVersion.MinSupportedVersion)),
             Effect.map((tx) => tx.bind()),
           ),
       })
@@ -305,7 +305,7 @@ describe.skip('Wallet transacting', () => {
             [V2Tag]: (v2) =>
               pipe(
                 v2.balanceTransaction(wallet2Keys, tx),
-                Effect.andThen((unprovenTx) => provingService.prove(unprovenTx!)),
+                Effect.andThen((unprovenTx) => provingService.prove(unprovenTx!, ProtocolVersion.MinSupportedVersion)),
                 Effect.map((tx) => tx.bind()),
                 Effect.tap((tx) => submissionService.submitTransaction(tx, 'Finalized')),
               ),

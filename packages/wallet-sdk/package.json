@@ -37,6 +37,10 @@
       "types": "./dist/capabilities/balancer.d.ts",
       "import": "./dist/capabilities/balancer.js"
     },
+    "./capabilities/codecs": {
+      "types": "./dist/capabilities/codecs.d.ts",
+      "import": "./dist/capabilities/codecs.js"
+    },
     "./capabilities/pendingTransactions": {
       "types": "./dist/capabilities/pendingTransactions.d.ts",
       "import": "./dist/capabilities/pendingTransactions.js"

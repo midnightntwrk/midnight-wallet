@@ -84,7 +84,8 @@ describe('Proving a transaction at the version it was built for', () => {
       dust: () => DustWallet(configuration).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust),
       provingService: () => prover,
     });
-    await facade.start(ledger.ZswapSecretKeys.fromSeed(shieldedSeed), ledger.DustSecretKey.fromSeed(dustSeed));
+    // The wallets are not started: these tests observe the state the facade already has, and starting them
+    // would open indexer subscriptions this suite has no indexer for.
   });
 
   afterEach(async () => {

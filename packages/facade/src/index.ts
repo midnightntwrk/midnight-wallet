@@ -18,8 +18,8 @@ import {
 } from '@midnightntwrk/wallet-sdk-capabilities';
 import {
   type DefaultProvingConfiguration,
-  makeDefaultProvingService,
-  type ProvingService,
+  makeDefaultVersionedProvingService,
+  type VersionedProvingService,
   type UnboundTransaction,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import {
@@ -52,8 +52,8 @@ import { DustSectionSchema, mergeDustSections } from '@midnightntwrk/wallet-sdk-
 import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Array as Arr, Option, pipe, Schema } from 'effect';
-import { type ProtocolVersion, TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Array as Arr, Either, Option, pipe, Schema } from 'effect';
+import { ProtocolVersion, TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   BehaviorSubject,
   combineLatest,
@@ -219,6 +219,8 @@ const TokenKindsToBalance = new (class {
 
 export type FinalizedTransactionRecipe = {
   type: 'FINALIZED_TRANSACTION';
+  /** The protocol version this recipe was built for, and so the version its parts have to be proved at. */
+  protocolVersion: ProtocolVersion.ProtocolVersion;
   originalTransaction: ledger.FinalizedTransaction;
   balancingTransaction: ledger.UnprovenTransaction;
   blockData?: BlockData;
@@ -226,6 +228,8 @@ export type FinalizedTransactionRecipe = {
 
 export type UnboundTransactionRecipe = {
   type: 'UNBOUND_TRANSACTION';
+  /** The protocol version this recipe was built for, and so the version its parts have to be proved at. */
+  protocolVersion: ProtocolVersion.ProtocolVersion;
   baseTransaction: UnboundTransaction;
   // balancingTransaction is optional because if the user decides to balance only the unshielded part,
   // it occurs "in place" so the baseTransaction is modified
@@ -235,6 +239,8 @@ export type UnboundTransactionRecipe = {
 
 export type UnprovenTransactionRecipe = {
   type: 'UNPROVEN_TRANSACTION';
+  /** The protocol version this recipe was built for, and so the version its parts have to be proved at. */
+  protocolVersion: ProtocolVersion.ProtocolVersion;
   transaction: ledger.UnprovenTransaction;
   blockData?: BlockData;
 };
@@ -419,7 +425,7 @@ export type DefaultConfiguration = DefaultUnshieldedConfiguration &
   DefaultDustConfiguration &
   DefaultSubmissionConfiguration &
   DefaultPendingTransactionsServiceConfiguration &
-  Partial<DefaultProvingConfiguration>;
+  DefaultProvingConfiguration;
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -437,7 +443,7 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
   pendingTransactionsService?: (
     config: TConfig,
   ) => MaybePromise<PendingTransactionsService<ledger.FinalizedTransaction>>;
-  provingService?: (config: TConfig) => MaybePromise<ProvingService<UnboundTransaction>>;
+  provingService?: (config: TConfig) => MaybePromise<VersionedProvingService<UnboundTransaction>>;
   /**
    * Optional factory for the block-data fetcher used by validation. Defaults to an HTTP indexer-backed fetcher built
    * from `configuration.indexerClientConnection`. Override for simulator-based tests with
@@ -481,18 +487,10 @@ export class WalletFacade {
     });
   }
 
-  private static makeDefaultProvingService<TConfig extends Partial<DefaultProvingConfiguration>>(
+  private static makeDefaultProvingService<TConfig extends DefaultProvingConfiguration>(
     config: TConfig,
-  ): ProvingService<UnboundTransaction> {
-    if (config.provingServerUrl) {
-      return makeDefaultProvingService({
-        provingServerUrl: config.provingServerUrl,
-      });
-    } else {
-      throw new Error(
-        "Missing required configuration: 'provingServerUrl' must be set in config, or provide a custom provingService in init parameters.",
-      );
-    }
+  ): VersionedProvingService<UnboundTransaction> {
+    return Either.getOrThrowWith(makeDefaultVersionedProvingService(config), (error) => new Error(error.message));
   }
 
   /**
@@ -545,7 +543,7 @@ export class WalletFacade {
    *   submit transactions to the network, default uses Node RPC connection
    * - `pendingTransactionsService` - needs to implement {@link PendingTransactionsService} for a
    *   {@link ledger.FinalizedTransaction} to keep track of pending transactions, default uses in-memory implementation
-   * - `provingService` - needs to implement {@link ProvingService} to prove it, default uses proving server
+   * - `provingService` - needs to implement {@link VersionedProvingService} to prove it, default uses proving server
    * - `clock` - needs to implement {@link Clock.Clock} for getting current time, default uses system clock
    */
   static async init<TConfig extends DefaultConfiguration>(initParams: InitParams<TConfig>): Promise<WalletFacade> {
@@ -602,7 +600,7 @@ export class WalletFacade {
   readonly dust: DustWalletAPI;
   readonly submissionService: SubmissionService<ledger.FinalizedTransaction>;
   readonly pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>;
-  readonly provingService: ProvingService<UnboundTransaction>;
+  readonly provingService: VersionedProvingService<UnboundTransaction>;
   readonly validationService: ValidationService;
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
   readonly clock: Clock.Clock;
@@ -629,7 +627,7 @@ export class WalletFacade {
     dustWallet: DustWalletAPI,
     submissionService: SubmissionService<ledger.FinalizedTransaction>,
     pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>,
-    provingService: ProvingService<UnboundTransaction>,
+    provingService: VersionedProvingService<UnboundTransaction>,
     validationService: ValidationService,
     txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>,
     clock: Clock.Clock = Clock.systemClock,
@@ -670,6 +668,17 @@ export class WalletFacade {
         concatMap((version) => this.pendingTransactionsService.orphanBeyond(version)),
       )
       .subscribe();
+  }
+
+  /**
+   * The version a transaction is proved at: its own stamp when it has one, and otherwise the version the wallets have
+   * reached — which is the best available answer, not a correct one, for a transaction that never recorded what it
+   * was built for.
+   */
+  private provingVersion(stamp?: ProtocolVersion.ProtocolVersion): ProtocolVersion.ProtocolVersion {
+    return (
+      stamp ?? Option.getOrElse(this.#observedProtocolVersion.getValue(), () => ProtocolVersion.MinSupportedVersion)
+    );
   }
 
   private defaultTtl(): Date {
@@ -822,7 +831,7 @@ export class WalletFacade {
     // offers and the dust registration. Signing failures also need to release the booking.
     try {
       const signedRecipe = await this.signRecipe(
-        { type: 'UNPROVEN_TRANSACTION', transaction: txWithDustActions },
+        { type: 'UNPROVEN_TRANSACTION', protocolVersion: this.provingVersion(), transaction: txWithDustActions },
         signDustRegistration,
       );
       if (signedRecipe.type !== 'UNPROVEN_TRANSACTION') {
@@ -943,6 +952,7 @@ export class WalletFacade {
 
     return {
       type: 'FINALIZED_TRANSACTION',
+      protocolVersion: this.provingVersion(),
       originalTransaction: tx,
       balancingTransaction: balancingTx,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
@@ -1011,6 +1021,7 @@ export class WalletFacade {
 
     return {
       type: 'UNBOUND_TRANSACTION',
+      protocolVersion: this.provingVersion(),
       baseTransaction: baseTx,
       balancingTransaction: balancingTransaction ?? undefined,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
@@ -1073,6 +1084,7 @@ export class WalletFacade {
 
     return {
       type: 'UNPROVEN_TRANSACTION',
+      protocolVersion: this.provingVersion(),
       transaction: balancedTx,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
@@ -1083,18 +1095,21 @@ export class WalletFacade {
       .then(async (recipe) => {
         switch (recipe.type) {
           case 'FINALIZED_TRANSACTION': {
-            const finalizedBalancing = await this.finalizeTransaction(recipe.balancingTransaction);
+            const finalizedBalancing = await this.finalizeTransaction(
+              recipe.balancingTransaction,
+              recipe.protocolVersion,
+            );
             return recipe.originalTransaction.merge(finalizedBalancing);
           }
           case 'UNBOUND_TRANSACTION': {
             const finalizedBalancingTx = recipe.balancingTransaction
-              ? await this.finalizeTransaction(recipe.balancingTransaction)
+              ? await this.finalizeTransaction(recipe.balancingTransaction, recipe.protocolVersion)
               : undefined;
             const finalizedTransaction = recipe.baseTransaction.bind();
             return finalizedBalancingTx ? finalizedTransaction.merge(finalizedBalancingTx) : finalizedTransaction;
           }
           case 'UNPROVEN_TRANSACTION': {
-            return await this.finalizeTransaction(recipe.transaction);
+            return await this.finalizeTransaction(recipe.transaction, recipe.protocolVersion);
           }
         }
       })
@@ -1114,6 +1129,7 @@ export class WalletFacade {
         const withDustSig = await this.#signDustRegistrationIfPresent(signedBalancingTx, signSegment);
         return {
           type: 'FINALIZED_TRANSACTION',
+          protocolVersion: recipe.protocolVersion,
           originalTransaction: recipe.originalTransaction,
           balancingTransaction: withDustSig,
           ...(recipe.blockData ? { blockData: recipe.blockData } : {}),
@@ -1128,6 +1144,7 @@ export class WalletFacade {
         const signedBaseTx = await this.signUnboundTransaction(recipe.baseTransaction, signSegment);
         return {
           type: 'UNBOUND_TRANSACTION',
+          protocolVersion: recipe.protocolVersion,
           baseTransaction: signedBaseTx,
           balancingTransaction: signedBalancingTx,
           ...(recipe.blockData ? { blockData: recipe.blockData } : {}),
@@ -1138,6 +1155,7 @@ export class WalletFacade {
         const withDustSig = await this.#signDustRegistrationIfPresent(signedTx, signSegment);
         return {
           type: 'UNPROVEN_TRANSACTION',
+          protocolVersion: recipe.protocolVersion,
           transaction: withDustSig,
           ...(recipe.blockData ? { blockData: recipe.blockData } : {}),
         };
@@ -1169,9 +1187,21 @@ export class WalletFacade {
     return await this.unshielded.signUnboundTransaction(tx, signSegment);
   }
 
-  async finalizeTransaction(tx: ledger.UnprovenTransaction): Promise<ledger.FinalizedTransaction> {
+  /**
+   * Proves and binds an unproven transaction, and records it as pending.
+   *
+   * @param tx The unproven transaction.
+   * @param protocolVersion The version the transaction was built for. Pass it whenever it is known — a fork can land
+   *   between building a transaction and proving it, and the bytes were fixed when it was built. Omitted, the version
+   *   the wallets have reached is used.
+   * @returns The finalized transaction.
+   */
+  async finalizeTransaction(
+    tx: ledger.UnprovenTransaction,
+    protocolVersion?: ProtocolVersion.ProtocolVersion,
+  ): Promise<ledger.FinalizedTransaction> {
     try {
-      const unboundTx = await this.provingService.prove(tx);
+      const unboundTx = await this.provingService.prove(tx, this.provingVersion(protocolVersion));
       const finalizedTx = unboundTx.bind();
       await this.pendingTransactionsService.addPendingTransaction(
         finalizedTx,
@@ -1248,6 +1278,7 @@ export class WalletFacade {
 
     return {
       type: 'UNPROVEN_TRANSACTION',
+      protocolVersion: this.provingVersion(),
       transaction: finalTx,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
@@ -1370,6 +1401,7 @@ export class WalletFacade {
 
     return {
       type: 'UNPROVEN_TRANSACTION',
+      protocolVersion: this.provingVersion(),
       transaction: finalTx,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
@@ -1396,6 +1428,7 @@ export class WalletFacade {
 
     return {
       type: 'UNPROVEN_TRANSACTION',
+      protocolVersion: this.provingVersion(),
       transaction: dustRegistrationTx,
     };
   }
@@ -1440,6 +1473,7 @@ export class WalletFacade {
     );
     return {
       type: 'UNPROVEN_TRANSACTION',
+      protocolVersion: this.provingVersion(),
       transaction: dustDeregistrationTx,
     };
   }
