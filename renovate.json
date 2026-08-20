@@ -18,6 +18,35 @@
   ],
   "packageRules": [
     {
+      "description": [
+        "Hold npm updates for the same 7 days as Yarn's npmMinimalAgeGate (1w), so Renovate never proposes a version Yarn will quarantine.",
+        "The top-level minimumReleaseAge does not achieve this on its own: config:best-practices extends security:minimumReleaseAgeNpm, which sets minimumReleaseAge to 3 days via a packageRule on matchDatasources npm, and a matching packageRule overrides top-level config. Without this rule the effective npm gate is 3 days.",
+        "matchUpdateTypes is load-bearing, not decoration. The same preset sets minimumReleaseAge to null for npm pin, replacement, bump, lockfileUpdate, rollback and lockFileMaintenance updates, because those types carry no releaseTimestamp. A rule matching the datasource alone would come after those carve-outs and clobber them back to an age gate they cannot satisfy, leaving their PRs permanently pending. Listing only the version-bump types leaves the carve-outs intact."
+      ],
+      "matchDatasources": ["npm"],
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "minimumReleaseAge": "7 days",
+      "internalChecksFilter": "strict"
+    },
+    {
+      "description": [
+        "Do not let a missing releaseTimestamp block an update whose type never has one.",
+        "minimumReleaseAgeBehaviour defaults to timestamp-required, so with any minimumReleaseAge set the branch-stage stability check reads a missing upgrade.releaseTimestamp as 'has not met minimum release age' and stays pending forever rather than ageing out (renovatebot/renovate#45236). config:best-practices pins digests via docker:pinDigests and helpers:pinGitHubActionDigests, so digest updates are a permanent class here, and an open GitHub Action digest PR was pending on exactly this.",
+        "The update types listed mirror Renovate's own unsupported-type list in security.preset.ts, plus digest and pinDigest. For npm the preset already nulls most of them; this covers every other datasource, where no such carve-out exists."
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "pinDigest",
+        "pin",
+        "replacement",
+        "bump",
+        "lockfileUpdate",
+        "rollback",
+        "lockFileMaintenance"
+      ],
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
+    },
+    {
       "groupName": "All dependencies (non-major)",
       "matchUpdateTypes": ["patch", "minor"]
     },
