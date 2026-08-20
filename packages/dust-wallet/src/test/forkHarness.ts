@@ -49,11 +49,7 @@ import { type NetworkId, type ProtocolState, type ProtocolVersion } from '@midni
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, Option, Stream, pipe } from 'effect';
-import {
-  CustomForkingDustWallet,
-  type ForkingDustWallet,
-  type ForkingDustWalletClass,
-} from '../ForkingDustWallet.js';
+import { CustomForkingDustWallet, type ForkingDustWallet, type ForkingDustWalletClass } from '../ForkingDustWallet.js';
 import { type CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
 import * as PreForkSync from '../v1/Sync.js';
 import { V1Builder } from '../v1/V1Builder.js';
@@ -324,8 +320,8 @@ export type ForkWallet = Readonly<{
    * The class the wallet was started from, so a snapshot can be restored through the same registration that wrote it.
    *
    * @remarks
-   *   Restoring is a class-level entry point, not an instance one — it is how an application gets a wallet in the
-   *   first place — so a proof about restoring needs the class and not merely the running wallet.
+   *   Restoring is a class-level entry point, not an instance one — it is how an application gets a wallet in the first
+   *   place — so a proof about restoring needs the class and not merely the running wallet.
    */
   walletClass: ForkingDustWalletClass<PreForkSync.WalletSyncUpdate, PostForkUpdate>;
   /** A dust key of each ledger version, derived from the same seed. */

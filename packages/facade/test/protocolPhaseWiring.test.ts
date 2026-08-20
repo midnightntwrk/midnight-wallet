@@ -25,7 +25,8 @@
  *   Real disagreement is manufactured rather than simulated. Driving three wallets across a real fork means three
  *   simulated chains, a replay and a cross-ledger migration inside one facade suite, which proves the wallets rather
  *   than the wiring. What is under test here is a `combineLatest` and three property reads, so the three states are the
- *   wallets' own — taken from real, shipped, unstarted wallets — restated at the versions a crossing would put them at.
+ *   wallets' own — taken from real, shipped, unstarted wallets — restated at the versions a crossing would put them
+ *   at.
  *
  *   The versions are deliberately all different where they can be, so a wiring that read one wallet's version three
  *   times, or paired the wrong wallet with the wrong slot, fails rather than coincidentally passes.
@@ -182,9 +183,7 @@ describe('three wallets that disagree about which side of the boundary the chain
       ledger.LedgerParameters.initialParameters().dust,
     );
 
-    shieldedStates = new rx.BehaviorSubject(
-      shieldedAt(await rx.firstValueFrom(shielded.state), beforeFork.shielded),
-    );
+    shieldedStates = new rx.BehaviorSubject(shieldedAt(await rx.firstValueFrom(shielded.state), beforeFork.shielded));
     unshieldedStates = new rx.BehaviorSubject(
       unshieldedAt(await rx.firstValueFrom(unshielded.state), beforeFork.unshielded),
     );

@@ -18,7 +18,7 @@
  *   `restore.test.ts` pins the routing helpers on hand-built envelopes, and the runtime pins `startAtVariant` over
  *   synthetic variants. Neither says that the two meet correctly in a shipped forking wallet, which is the composition
  *   an application actually calls: peek at the snapshot, resolve the variant that owns the version it declares,
- *   deserialize with *that* variant's deserializer, and start there.
+ *   deserialize with _that_ variant's deserializer, and start there.
  *
  *   Both epochs are pinned in one file on purpose. A router that always answered with the head variant would pass the
  *   pre-fork half and fail the post-fork one; a router that always answered with the last registration would do the

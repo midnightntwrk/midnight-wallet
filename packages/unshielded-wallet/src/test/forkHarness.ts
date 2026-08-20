@@ -224,8 +224,8 @@ export type ForkWallet = {
    * The class the wallet was started from, so a snapshot can be restored through the same registration that wrote it.
    *
    * @remarks
-   *   Restoring is a class-level entry point, not an instance one — it is how an application gets a wallet in the
-   *   first place — so a proof about restoring needs the class and not merely the running wallet.
+   *   Restoring is a class-level entry point, not an instance one — it is how an application gets a wallet in the first
+   *   place — so a proof about restoring needs the class and not merely the running wallet.
    */
   readonly walletClass: ForkingUnshieldedWalletClass<PreForkUpdate, PostForkUpdate>;
   /** Starts background synchronization through the wallet's own API. */

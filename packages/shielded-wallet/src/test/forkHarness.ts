@@ -210,8 +210,8 @@ export type ForkWallet = Readonly<{
    * The class the wallet was started from, so a snapshot can be restored through the same registration that wrote it.
    *
    * @remarks
-   *   Restoring is a class-level entry point, not an instance one — it is how an application gets a wallet in the
-   *   first place — so a proof about restoring needs the class and not merely the running wallet.
+   *   Restoring is a class-level entry point, not an instance one — it is how an application gets a wallet in the first
+   *   place — so a proof about restoring needs the class and not merely the running wallet.
    */
   walletClass: ForkingShieldedWalletClass<V1.Sync.SimulatorSyncUpdate, V2.Sync.SimulatorSyncUpdate>;
   /** Keys of each ledger version, derived from the same seed. */
