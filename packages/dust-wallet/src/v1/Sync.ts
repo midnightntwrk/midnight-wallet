@@ -25,6 +25,7 @@ import {
   Option,
 } from 'effect';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { LedgerParametersCodec } from '@midnightntwrk/wallet-sdk-capabilities/codecs';
 import {
   type DustSecretKey,
   type DustStateChanges,
@@ -56,9 +57,30 @@ export interface SyncService<TState, TStartAux, TUpdate> {
 export interface BlockData {
   hash: string;
   height: number;
+  /** The protocol version the indexer reported this block under, and so the ledger version its parameters are in. */
+  protocolVersion: number;
   ledgerParameters: LedgerParameters;
   timestamp: Date;
 }
+
+/**
+ * The ledger parameters codecs this variant reads blocks with, unless it is told otherwise.
+ *
+ * @remarks
+ *   Open-ended from the minimum supported version, so a wallet whose variant has not been given a narrower range keeps
+ *   reading every block exactly as it did before this became routable. A two-variant dust wallet replaces this with a
+ *   registry bounded by the range its variant is active over, and then a block from the other side of the boundary is
+ *   refused by name instead of being deserialized.
+ */
+export const defaultLedgerParametersCodecs: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters> =
+  Either.getOrThrow(
+    LedgerParametersCodec.makeCodecs([
+      {
+        sinceVersion: ProtocolVersion.MinSupportedVersion,
+        codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) => LedgerParameters.deserialize(bytes)),
+      },
+    ]),
+  );
 
 export type ChangesResult = {
   readonly changes: DustStateChanges[];
@@ -188,6 +210,8 @@ export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
   networkId: NetworkId;
   batchUpdates?: BatchUpdatesConfig;
+  /** The ledger parameters codecs blocks are read with; defaults to {@link defaultLedgerParametersCodecs}. */
+  ledgerParametersCodecs?: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters>;
 };
 
 export type SimulatorSyncConfiguration = {
@@ -313,12 +337,24 @@ export const makeDefaultSyncService = (
             return Effect.fail(new OtherWalletError({ message: 'Unable to fetch block data' }));
           }
           // TODO: convert to schema
-          return LedgerOps.ledgerTry(() => ({
-            hash: blockData.hash,
-            height: blockData.height,
-            ledgerParameters: LedgerParameters.deserialize(Buffer.from(blockData.ledgerParameters, 'hex')),
-            timestamp: new Date(blockData.timestamp),
-          }));
+          return pipe(
+            LedgerParametersCodec.decode(
+              config.ledgerParametersCodecs ?? defaultLedgerParametersCodecs,
+              ProtocolVersion.ProtocolVersion(BigInt(blockData.protocolVersion)),
+              blockData.ledgerParameters,
+            ),
+            Either.map(
+              (ledgerParameters): BlockData => ({
+                hash: blockData.hash,
+                height: blockData.height,
+                protocolVersion: blockData.protocolVersion,
+                ledgerParameters,
+                timestamp: new Date(blockData.timestamp),
+              }),
+            ),
+            Either.mapLeft((error) => new SyncWalletError({ message: error.message, cause: error })),
+            EitherOps.toEffect,
+          );
         }),
       );
     },
@@ -506,6 +542,7 @@ export const makeSimulatorSyncService = (
         return {
           hash: lastBlock.hash,
           height: Number(lastBlock.number),
+          protocolVersion: Number(lastBlock.protocolVersion),
           ledgerParameters: state.ledger.parameters,
           timestamp: state.currentTime,
         };

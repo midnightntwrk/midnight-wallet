@@ -10,7 +10,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Data, Effect, HashMap, ParseResult, pipe, Schema } from 'effect';
+import { Buffer } from 'buffer';
+import { Data, Effect, Either, HashMap, ParseResult, pipe, Schema } from 'effect';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { LedgerParametersCodec } from '@midnightntwrk/wallet-sdk-capabilities/codecs';
 import {
   type DustSecretKey,
   Event as LedgerEvent,
@@ -467,10 +470,20 @@ const DustProjectionsUpdate = Data.taggedEnum<DustProjectionsUpdate>();
 export const isProgressUpdate = DustProjectionsUpdate.$is('ProgressUpdate');
 export const { $match: match, StateUpdate, ProgressUpdate } = DustProjectionsUpdate;
 
+/**
+ * The block as the indexer sends it: `ledgerParameters` is still hex, and `protocolVersion` says which ledger version
+ * produced that hex.
+ *
+ * @remarks
+ *   The parameters deliberately stay undecoded here, the same way the shielded event payload keeps its `raw` string.
+ *   Decoding on arrival means picking a ledger version before reading the one field that says which version to pick,
+ *   which is how a block from the other side of a fork takes down the whole fetch.
+ */
 export const WireBlockDataSchema = Schema.Struct({
   height: Schema.Number,
   hash: Schema.String,
-  ledgerParameters: HexedLedgerParameters,
+  protocolVersion: Schema.Number,
+  ledgerParameters: Schema.String,
   timestamp: Schema.Number,
   zswapEndIndex: Schema.Number,
   dustCommitmentEndIndex: Schema.Number,
@@ -480,41 +493,100 @@ export const WireBlockDataSchema = Schema.Struct({
   dustGenerationMerkleTreeRoot: Schema.NullOr(Schema.String),
 });
 
-export const BlockDataSchema = Schema.transform(
-  WireBlockDataSchema,
-  Schema.typeSchema(
-    Schema.Struct({
-      height: Schema.Number,
-      hash: Schema.String,
-      ledgerParameters: HexedLedgerParameters,
-      timestamp: Schema.DateFromSelf,
-      zswapEndIndex: Schema.Number,
-      dustCommitmentEndIndex: Schema.Number,
-      dustGenerationEndIndex: Schema.Number,
-      dustCommitmentMerkleTreeRoot: Schema.String,
-      dustGenerationMerkleTreeRoot: Schema.String,
-    }),
-  ),
-  {
-    strict: true,
-    decode: (wire) => {
-      return {
-        ...wire,
-        timestamp: new Date(wire.timestamp),
-        // '' is the local encoding for "no root" — it matches the wallet-side encoding of an empty tree
-        dustCommitmentMerkleTreeRoot: wire.dustCommitmentMerkleTreeRoot ?? '',
-        dustGenerationMerkleTreeRoot: wire.dustGenerationMerkleTreeRoot ?? '',
-      };
-    },
-    encode: (domain) => ({
-      ...domain,
-      timestamp: domain.timestamp.getTime(),
-      dustCommitmentMerkleTreeRoot:
-        domain.dustCommitmentMerkleTreeRoot === '' ? null : domain.dustCommitmentMerkleTreeRoot,
-      dustGenerationMerkleTreeRoot:
-        domain.dustGenerationMerkleTreeRoot === '' ? null : domain.dustGenerationMerkleTreeRoot,
-    }),
-  },
+// The protocol version survives the decode: it is what chose the codec, and keeping it means a `BlockData` still says
+// which ledger version wrote it once the parameters are an opaque object.
+const BlockDataStructSchema = Schema.typeSchema(
+  Schema.Struct({
+    height: Schema.Number,
+    hash: Schema.String,
+    protocolVersion: Schema.Number,
+    ledgerParameters: HexedLedgerParameters,
+    timestamp: Schema.DateFromSelf,
+    zswapEndIndex: Schema.Number,
+    dustCommitmentEndIndex: Schema.Number,
+    dustGenerationEndIndex: Schema.Number,
+    dustCommitmentMerkleTreeRoot: Schema.String,
+    dustGenerationMerkleTreeRoot: Schema.String,
+  }),
 );
 
-export type BlockData = Schema.Schema.Type<typeof BlockDataSchema>;
+/**
+ * The ledger parameters codecs this variant reads blocks with, unless it is told otherwise.
+ *
+ * @remarks
+ *   Open-ended from the minimum supported version, so a wallet whose variant has not been given a narrower range keeps
+ *   reading every block exactly as it did before this became routable. A two-variant dust wallet replaces this with a
+ *   registry bounded by the range its variant is active over, and then a block from the other side of the boundary is
+ *   refused by name instead of being deserialized.
+ */
+export const defaultLedgerParametersCodecs: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters> =
+  Either.getOrThrow(
+    LedgerParametersCodec.makeCodecs([
+      {
+        sinceVersion: ProtocolVersion.MinSupportedVersion,
+        codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) => LedgerParameters.deserialize(bytes)),
+      },
+    ]),
+  );
+
+/**
+ * Builds the block-data schema that reads a block's ledger parameters with whichever codec claims the protocol version
+ * the block was reported under.
+ *
+ * @param codecs The ledger parameters codecs this variant is willing to read with.
+ * @returns A schema decoding the indexer's block into {@link BlockData}.
+ */
+export const makeBlockDataSchema = (
+  codecs: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters>,
+): Schema.Schema<BlockData, Schema.Schema.Encoded<typeof WireBlockDataSchema>> =>
+  Schema.asSchema(
+    Schema.transformOrFail(WireBlockDataSchema, BlockDataStructSchema, {
+      strict: true,
+      decode: (wire, _options, ast) =>
+        pipe(
+          LedgerParametersCodec.decode(
+            codecs,
+            ProtocolVersion.ProtocolVersion(BigInt(wire.protocolVersion)),
+            wire.ledgerParameters,
+          ),
+          Either.mapBoth({
+            onLeft: (error) => new ParseResult.Type(ast, wire, error.message),
+            onRight: (ledgerParameters) => ({
+              height: wire.height,
+              hash: wire.hash,
+              protocolVersion: wire.protocolVersion,
+              ledgerParameters,
+              timestamp: new Date(wire.timestamp),
+              zswapEndIndex: wire.zswapEndIndex,
+              dustCommitmentEndIndex: wire.dustCommitmentEndIndex,
+              dustGenerationEndIndex: wire.dustGenerationEndIndex,
+              // '' is the local encoding for "no root" — it matches the wallet-side encoding of an empty tree
+              dustCommitmentMerkleTreeRoot: wire.dustCommitmentMerkleTreeRoot ?? '',
+              dustGenerationMerkleTreeRoot: wire.dustGenerationMerkleTreeRoot ?? '',
+            }),
+          }),
+        ),
+      encode: (domain, _options, ast) =>
+        Effect.try({
+          try: () => ({
+            height: domain.height,
+            hash: domain.hash,
+            protocolVersion: domain.protocolVersion,
+            ledgerParameters: Buffer.from(domain.ledgerParameters.serialize()).toString('hex'),
+            timestamp: domain.timestamp.getTime(),
+            zswapEndIndex: domain.zswapEndIndex,
+            dustCommitmentEndIndex: domain.dustCommitmentEndIndex,
+            dustGenerationEndIndex: domain.dustGenerationEndIndex,
+            dustCommitmentMerkleTreeRoot:
+              domain.dustCommitmentMerkleTreeRoot === '' ? null : domain.dustCommitmentMerkleTreeRoot,
+            dustGenerationMerkleTreeRoot:
+              domain.dustGenerationMerkleTreeRoot === '' ? null : domain.dustGenerationMerkleTreeRoot,
+          }),
+          catch: (err) => new ParseResult.Type(ast, domain, `Could not serialize Ledger Parameters: ${String(err)}`),
+        }),
+    }),
+  );
+
+export const BlockDataSchema = makeBlockDataSchema(defaultLedgerParametersCodecs);
+
+export type BlockData = Schema.Schema.Type<typeof BlockDataStructSchema>;

@@ -23,6 +23,8 @@ import type { UnboundTransaction } from '../proving/provingService.js';
 export interface BlockData {
   hash: string;
   height: number;
+  /** The protocol version the indexer reported this block under, and so the ledger version its parameters are in. */
+  protocolVersion: number;
   ledgerParameters: ledger.LedgerParameters;
   timestamp: Date;
 }

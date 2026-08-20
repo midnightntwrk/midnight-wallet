@@ -63,6 +63,7 @@ const syncServiceOf = (batches: readonly FakeSyncUpdate[]): SyncService<CoreWall
     Effect.succeed({
       hash: 'block-hash',
       height: 1,
+      protocolVersion: 0,
       ledgerParameters: LedgerParameters.initialParameters(),
       timestamp: new Date(0),
       zswapEndIndex: 0,

@@ -201,6 +201,7 @@ const noOpPostForkHistory = {
 const preForkBlockData = (timestamp: Date): PreForkSync.BlockData => ({
   hash: '',
   height: 0,
+  protocolVersion: 0,
   ledgerParameters: PreForkLedgerParameters.initialParameters(),
   timestamp,
 });
@@ -208,6 +209,7 @@ const preForkBlockData = (timestamp: Date): PreForkSync.BlockData => ({
 const postForkBlockData = (timestamp: Date): PostForkBlockData => ({
   hash: '',
   height: 0,
+  protocolVersion: 0,
   ledgerParameters: PostForkLedgerParameters.initialParameters(),
   timestamp,
   zswapEndIndex: 0,

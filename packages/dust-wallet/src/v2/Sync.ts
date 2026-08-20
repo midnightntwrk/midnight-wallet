@@ -27,6 +27,7 @@ import {
   Schedule,
 } from 'effect';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { LedgerParametersCodec } from '@midnightntwrk/wallet-sdk-capabilities/codecs';
 import {
   dustNullifier,
   successorDustUtxo,
@@ -34,6 +35,7 @@ import {
   type DustSecretKey,
   DustStateChanges,
   type DustLocalState,
+  type LedgerParameters,
 } from '@midnightntwrk/ledger-v9';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import {
@@ -71,7 +73,8 @@ import {
   SyncEventsUpdateSchema,
   type WalletSyncSubscription,
   WalletSyncUpdate,
-  BlockDataSchema,
+  defaultLedgerParametersCodecs,
+  makeBlockDataSchema,
   type BlockData,
   type DustGenerationDtimUpdate,
   type NullifierRegularTransaction,
@@ -223,6 +226,8 @@ export type DefaultSyncConfiguration = {
   networkId: NetworkId;
   batchUpdates?: BatchUpdatesConfig;
   anonymityLevel?: number;
+  /** The ledger parameters codecs blocks are read with; defaults to {@link defaultLedgerParametersCodecs}. */
+  ledgerParametersCodecs?: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters>;
 };
 
 export type SimulatorSyncConfiguration = {
@@ -728,7 +733,9 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
             return Effect.fail(new OtherWalletError({ message: 'Unable to fetch block data' }));
           }
           return pipe(
-            Schema.decodeUnknownEither(BlockDataSchema)(result.block),
+            Schema.decodeUnknownEither(makeBlockDataSchema(config.ledgerParametersCodecs ?? defaultLedgerParametersCodecs))(
+              result.block,
+            ),
             Either.mapLeft((err) => new SyncWalletError(err)),
             EitherOps.toEffect,
           );
@@ -1027,6 +1034,7 @@ export const makeSimulatorSyncService = (
         return {
           hash: lastBlock.hash,
           height: Number(lastBlock.number),
+          protocolVersion: Number(lastBlock.protocolVersion),
           ledgerParameters: state.ledger.parameters,
           timestamp: state.currentTime,
           zswapEndIndex: 1, // NOTE: not implemented
