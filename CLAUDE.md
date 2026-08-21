@@ -87,8 +87,8 @@ Contains working code examples for common wallet operations:
 - `dust-fast-sync.ts` - Wallet initialization with projections-based dust fast sync
 - `designation.ts` / `redesignation.ts` / `deregistration.ts` - Registering Night for dust generation, and undoing it
 - `dust-sponsorship.ts` - Paying another party's fees
-- `hard-fork-support.ts` - The dual-ledger surface: fork version, both-keys start, protocol phase, orphaned
-  transactions, version-keyed proving
+- `hard-fork-support.ts` - Hard-fork-ready initialization: fork version, version-keyed proving, protocol phase, orphaned
+  transactions
 - `wasm-prover.ts` - In-process proving
 - `well-formed-validation.ts` - Validating a transaction before submission
 - `terms-and-conditions.ts` - Fetching terms and conditions

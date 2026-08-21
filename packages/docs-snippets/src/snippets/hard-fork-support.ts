@@ -19,41 +19,34 @@
  * follows the chain across the boundary on its own. What an application does have to do is say where the boundary is,
  * read which side of it the wallets are on, and — if it authors its own transactions — author for the right side.
  *
- * This file demonstrates, in the order the code runs:
+ * This file is the copy-paste shape, in the order the code runs:
  *
  * 1. version-keyed proving configuration (`provingServers`)
  * 2. the seed-first start, which is the primary and the only one that crosses a fork
- * 3. the both-keys escape hatch (`startWithKeys`), for a caller that will not part with a seed
- * 4. reading the protocol phase off the state (`Settled` / `Crossing`)
- * 5. finding transactions the fork orphaned (`PendingStatus.Orphaned`)
- * 6. restoring a snapshot without throwing (`tryRestore`)
- * 7. the facade refusing a transaction authored on the other side of the boundary
+ * 3. reading the protocol phase off the state (`Settled` / `Crossing`)
+ * 4. finding transactions the fork orphaned (`PendingStatus.Orphaned`)
+ * 5. persisting and restoring (`serializeState` / `tryRestore`)
  *
- * It runs against a chain that is already past the boundary, so sections 4 and 5 report the settled, nothing-orphaned
- * case. Section 7 is the pre-fork behaviour demonstrated live: the refusal it prints is the same one an application
- * would get for a post-fork transaction offered to a chain that has not yet forked, with the versions the other way
- * round.
+ * The same configuration does the right thing on any chain: on one still below the boundary it runs on the pre-fork
+ * ledger, on one already past it (like the chain this runs against) it starts directly on the post-fork ledger, and
+ * across a fork it hands over by itself. The crossing involves no application code and so cannot appear here — the
+ * executable proof of it lives in each wallet package's `src/test/forkSimulation.test.ts` and
+ * `src/test/forkStart.test.ts`.
  */
 import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
   type DefaultConfiguration,
   DustWallet,
-  type FacadeKeysByEpoch,
   InMemoryTransactionHistoryStorage,
   mergeWalletEntries,
-  ProtocolVersion,
-  ProtocolVersionMismatchError,
   PublicKey,
   ShieldedWallet,
   UnshieldedWallet,
   WalletEntrySchema,
   WalletFacade,
   WalletSeeds,
-  WalletTransaction,
 } from '@midnightntwrk/wallet-sdk';
-import * as preForkLedger from '@midnightntwrk/wallet-sdk/ledger/v8';
-import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
 import { Buffer } from 'buffer';
 import { Either } from 'effect';
 
@@ -121,40 +114,12 @@ const wallet: WalletFacade = await WalletFacade.init({
 await wallet.start(seeds);
 const state = await wallet.waitForSyncedState();
 
-// ---------------------------------------------------------------------------------------------------------------------
-// 3. The both-keys escape hatch
-// ---------------------------------------------------------------------------------------------------------------------
-
-// For a caller that holds key objects rather than a seed. BOTH sides are required, and that is the whole point: key
-// objects belong to one ledger version's runtime and neither can be derived from the other, so a wallet given one side
-// alone could not read the other side of the chain. A product with one side optional would make that foot-gun
-// representable, so there isn't one. The cost is exactly what is written below — an import of both ledger packages and
-// the same derivation performed twice, which is why `wallet-sdk/ledger/v8` and `/v9` exist. A seed costs neither.
-const keysByEpoch: FacadeKeysByEpoch = {
-  v8: {
-    shielded: preForkLedger.ZswapSecretKeys.fromSeed(seeds.shielded),
-    dust: preForkLedger.DustSecretKey.fromSeed(seeds.dust),
-  },
-  v9: {
-    shielded: ledger.ZswapSecretKeys.fromSeed(seeds.shielded),
-    dust: ledger.DustSecretKey.fromSeed(seeds.dust),
-  },
-};
-
-// `facade.start(keysByEpoch)` accepts that whole product in place of the seeds. Per wallet the shape is the same, one
-// key object per side: `DustWallet(config).startWithKeys({ v8: keysByEpoch.v8.dust, v9: keysByEpoch.v9.dust })`.
-const shieldedFromKeys = await ShieldedWallet(configuration).startWithKeys({
-  v8: keysByEpoch.v8.shielded,
-  v9: keysByEpoch.v9.shielded,
-});
-console.log(
-  'Both-keys start reaches the same shielded identity as the seed?',
-  (await shieldedFromKeys.getAddress()).equals(await wallet.shielded.getAddress()),
-);
-await shieldedFromKeys.stop();
+// A caller that will not part with a seed starts from key objects instead — `facade.start(keysByEpoch)` or, per
+// wallet, `startWithKeys({ v8, v9 })`. Both sides are required: key objects belong to one ledger version's runtime,
+// so only a seed can cross a boundary on its own.
 
 // ---------------------------------------------------------------------------------------------------------------------
-// 4. Which side of the boundary the wallets are on
+// 3. Which side of the boundary the wallets are on
 // ---------------------------------------------------------------------------------------------------------------------
 
 // Additive to `state.protocolVersion`, which reports three numbers and says nothing about whether their differing
@@ -175,7 +140,7 @@ switch (state.protocol._tag) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// 5. Transactions the fork orphaned
+// 4. Transactions the fork orphaned
 // ---------------------------------------------------------------------------------------------------------------------
 
 // An orphaned transaction has no verdict from the chain and never will: its bytes were fixed by the ledger version
@@ -188,7 +153,7 @@ console.log(`Pending transactions: ${state.pending.length}, of which orphaned by
 orphaned.forEach((status) => console.log(`  authored for ${status.authoredFor}, chain had reached ${status.chainNow}`));
 
 // ---------------------------------------------------------------------------------------------------------------------
-// 6. Restoring a snapshot without throwing
+// 5. Persisting and restoring
 // ---------------------------------------------------------------------------------------------------------------------
 
 // `restore` throws, and is the right shape for a snapshot the application has just written itself. `tryRestore` is the
@@ -202,49 +167,9 @@ if (Either.isRight(restored)) {
   await restored.right.stop();
 }
 
-const fromAVersionNobodyReads = JSON.stringify({
-  publicKeys: { coinPublicKey: 'aa', encryptionPublicKey: 'bb' },
-  state: 'deadbeef',
-  protocolVersion: String(ProtocolVersion.MaxSupportedVersion),
-  networkId: 'undeployed',
-  coinHashes: {},
-});
-const refused = ShieldedWallet(configuration).tryRestore(fromAVersionNobodyReads);
-if (Either.isLeft(refused)) {
-  console.log('Refused a snapshot from a protocol version no variant reads:', refused.left.message);
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
-// 7. Only the current epoch's transactions are accepted
-// ---------------------------------------------------------------------------------------------------------------------
-
 // An application that authors its own transactions is the one thing that has to choose a ledger version, because
-// authoring is choosing which rules the bytes follow. Both subpaths are shipped and both are real: a chain is pre-fork
-// until it forks. So `wallet-sdk/ledger/v8` below the boundary, `/v9` from it — read `state.activeProtocolVersion` and
-// author accordingly. An authoring path that only ever imports one of them type-checks perfectly and fails at run time
-// on chains of the other epoch.
-//
-// Here the pre-fork ledger authors a minimal transaction — an intent with a TTL and nothing else — and seals it with
-// `adopt`, whose version argument is a claim about which ledger version produced these bytes. The SDK holds the caller
-// to that claim rather than trusting it: this chain is past the boundary, so the handle is refused by name at the
-// first gate it reaches, before a proof server is contacted or anything is sent. Every entry point that takes a
-// transaction checks the same thing the same way — `submitTransaction`, the balancing calls, this one.
-const preForkIntent = preForkLedger.Intent.new(new Date(Date.now() + 30 * 60 * 1000));
-const preForkTransaction = preForkLedger.Transaction.fromParts('undeployed', undefined, undefined, preForkIntent);
-const preForkHandle = WalletTransaction.adopt('Unproven', preForkTransaction, ProtocolVersion.MinSupportedVersion);
-
-try {
-  await wallet.finalizeTransaction(preForkHandle);
-  console.log('A pre-fork transaction was accepted after the fork, which should be impossible.');
-} catch (error) {
-  if (!(error instanceof ProtocolVersionMismatchError)) {
-    throw error;
-  }
-  const [from, to] = error.accepted;
-  console.log(
-    `Refused a transaction at stage ${error.stage}, authored for version ${error.authoredFor}; ` +
-      `this wallet accepts [${from}, ${to})`,
-  );
-}
+// authoring is choosing which rules the bytes follow: `wallet-sdk/ledger/v8` below the boundary, `/v9` from it — read
+// `state.activeProtocolVersion` and author accordingly. Every transaction travels as a handle stamped with the version
+// it was authored for, and every entry point refuses a handle from the other side (`ProtocolVersionMismatchError`).
 
 await wallet.stop();
