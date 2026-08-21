@@ -1,0 +1,8 @@
+# Override for the WebSocket deflate-compression *fallback* integration test: it freezes the last
+# pre-deflate indexer (4.3.x) so the test always exercises negotiation against a server that does
+# not know the graphql-transport-ws+deflate subprotocol, regardless of what the compose default
+# moves to. Delete this file (and the fallback test it serves) only when support for pre-deflate
+# indexers is deliberately dropped.
+services:
+  indexer:
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.3.2'

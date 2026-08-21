@@ -2395,6 +2395,7 @@ __metadata:
     "@graphql-typed-document-node/core": "npm:^3.2.0"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.2.1"
     effect: "npm:^3.19.19"
+    fflate: "npm:^0.8.2"
     graphql: "npm:^17.0.0"
     graphql-http: "npm:^1.22.4"
     graphql-ws: "npm:^6.0.7"
