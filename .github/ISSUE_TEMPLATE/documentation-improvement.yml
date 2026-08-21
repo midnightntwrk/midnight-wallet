@@ -1,6 +1,6 @@
 name: Documentation improvement
 description: Report a problem with the documentation or request missing docs
-title: "[Docs] "
+title: '[Docs] '
 type: Task
 labels:
   - status:untriaged

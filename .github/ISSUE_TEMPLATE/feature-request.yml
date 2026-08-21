@@ -1,6 +1,6 @@
 name: Feature request
 description: Propose a new feature or capability for midnight-wallet
-title: "[Feature] "
+title: '[Feature] '
 type: Feature
 labels:
   - status:untriaged

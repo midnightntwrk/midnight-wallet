@@ -1,6 +1,6 @@
 name: Task
 description: A unit of work that isn't a bug or a new feature
-title: "[Task] "
+title: '[Task] '
 type: Task
 labels:
   - status:untriaged

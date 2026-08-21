@@ -1,6 +1,6 @@
 name: Bug report
 description: Report a bug or incorrect behaviour in midnight-wallet
-title: "[Bug] "
+title: '[Bug] '
 type: Bug
 labels:
   - status:untriaged
