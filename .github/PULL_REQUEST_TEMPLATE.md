@@ -1,3 +1,9 @@
+# Related Issue
+
+_A plain reference (`#123`), or `none — <reason>` when there is no issue. Do **not** use a closing keyword
+(`Closes`/`Fixes`/`Resolves`): issues here are closed manually after QA, so an auto-close on merge would close them
+before QA has seen the change._
+
 # Description
 
 _A clear and concise description of what this pull request does or fixes._
