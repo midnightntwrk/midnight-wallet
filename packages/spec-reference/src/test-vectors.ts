@@ -25,10 +25,10 @@ import {
   dustSecretKey,
   coinKeys,
   unshieldedKeyPairFromUniformBytes,
+  ecdsaKeyPairFromUniformBytes,
   dustKeys,
 } from './key-derivation-reference.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import * as crypto from 'node:crypto';
 
 type AddressEntry = { hex: string; bech32m: string };
 type NullableAddressEntry = { hex: string | null; bech32m: string | null };
@@ -36,6 +36,7 @@ type NullableAddressEntry = { hex: string | null; bech32m: string | null };
 export type KeyDerivationVector = {
   seed: string;
   unshielded: { secretKey: string | null; publicKey: string | null };
+  ecdsa: { secretKey: string | null; publicKey: string | null };
   encryption: { secretKeyRepr: string; secretKeyDecimal: string; secretKeyIntermediateBytes: string };
   dust: { secretKeyRepr: string; secretKeyDecimal: string; secretKeyIntermediateBytes: string };
   coin: { secretKey: string; publicKey: string };
@@ -45,6 +46,7 @@ export type AddressVector = {
   seed: string;
   networkId: string | null;
   unshieldedAddress: NullableAddressEntry;
+  ecdsaAddress: NullableAddressEntry;
   shieldedAddress: AddressEntry;
   dustAddress: AddressEntry;
   shieldedESK: AddressEntry;
@@ -77,6 +79,7 @@ export const seeds = [
   Buffer.from('f4f9986bb7e602d1333267ce7c4320a5837c9710b95118639ee6c27f4ed55334', 'hex'), //dpk 33 bytes
   Buffer.from('37ec63328c318df8cf32722fa7ff0b75c389e38c7c7e9e9da32e09338e2b9351', 'hex'), //dpk 32 bytes
   Buffer.from('a48b298c95152242413880fb8a57d348b7e1d37d669634c0ae1d7b363a7a140d', 'hex'), //dpk 31 bytes
+  Buffer.from('fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141', 'hex'), // secp256k1 order → ECDSA null
 ];
 
 export function generateKeyDerivationTestVectors(seeds: Buffer[]): KeyDerivationVector[] {
@@ -85,11 +88,16 @@ export function generateKeyDerivationTestVectors(seeds: Buffer[]): KeyDerivation
     const dsk = dustSecretKey(seed);
     const coinKeyPair = coinKeys(seed);
     const unshieldedKeyPair = unshieldedKeyPairFromUniformBytes(seed); //In this case the seed is the secret key, matching HD Wallet behavior
+    const ecdsaKeyPair = ecdsaKeyPairFromUniformBytes(seed);
     return {
       seed: seed.toString('hex'),
       unshielded: {
         secretKey: unshieldedKeyPair.secretKey?.toString('hex') ?? null,
         publicKey: unshieldedKeyPair.publicKey?.toString('hex') ?? null,
+      },
+      ecdsa: {
+        secretKey: ecdsaKeyPair.secretKey?.toString('hex') ?? null,
+        publicKey: ecdsaKeyPair.publicKey?.toString('hex') ?? null,
       },
       encryption: {
         secretKeyRepr: fromScalar(esk.key, JubJubScalar).toString('hex'),
@@ -136,6 +144,7 @@ export function generateAddressFormattingTestVectors(seeds: Buffer[]): AddressVe
     const coinKeyPair = coinKeys(seed);
     const esk = encryptionSecretKey(seed);
     const unshieldedKeyPair = unshieldedKeyPairFromUniformBytes(seed);
+    const ecdsaKeyPair = ecdsaKeyPairFromUniformBytes(seed);
     const dustKeyPair = dustKeys(seed);
 
     const shieldedAddressFormatter = mkFormatter({ networkId }, ShieldedAddress);
@@ -148,9 +157,10 @@ export function generateAddressFormattingTestVectors(seeds: Buffer[]): AddressVe
       seed: seed.toString('hex'),
       networkId,
       unshieldedAddress: unshieldedAddressFormatter(
-        unshieldedKeyPair.publicKey
-          ? new UnshieldedAddress(crypto.hash('sha-256', unshieldedKeyPair.publicKey, 'buffer'))
-          : null,
+        unshieldedKeyPair.publicKey ? UnshieldedAddress.fromSchnorrPublicKey(unshieldedKeyPair.publicKey) : null,
+      ),
+      ecdsaAddress: unshieldedAddressFormatter(
+        ecdsaKeyPair.publicKey ? UnshieldedAddress.fromEcdsaPublicKey(ecdsaKeyPair.publicKey) : null,
       ),
       shieldedAddress: shieldedAddressFormatter(
         new ShieldedAddress(
