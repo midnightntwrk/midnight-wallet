@@ -2201,7 +2201,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/ledger-v8@npm:^8.1.0":
+"@midnight-ntwrk/ledger-v8@npm:^8.0.3, @midnight-ntwrk/ledger-v8@npm:^8.1.0":
   version: 8.1.0
   resolution: "@midnight-ntwrk/ledger-v8@npm:8.1.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fledger-v8%2F8.1.0%2Fc42ed442b6c8c79e28ca5fc13a8764f31eab2f73"
   checksum: 10c0/12a8b58678dbed60e7280ef1b3f16b465aa93d6fd4d0e1cbbb82730db941999c4354af5ffdfd1048b770afb497792e91cac0317962815dfc7c5471e581a96c40
@@ -2285,6 +2285,13 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@midnightntwrk/dapp-connector-api@npm:4.1.0-canary.20260805041554-9e03b1e":
+  version: 4.1.0-canary.20260805041554-9e03b1e
+  resolution: "@midnightntwrk/dapp-connector-api@npm:4.1.0-canary.20260805041554-9e03b1e"
+  checksum: 10c0/b8ab0055cb64351938d26023b95e75e6facbce96086aa701f2b17ac1fa54d4fdf95bcbe8a175eb404c324888ea2de79b2ef01c44cd7543481d0919233ff7c2f9
+  languageName: node
+  linkType: hard
+
 "@midnightntwrk/wallet-sdk-abstractions@npm:2.1.0, @midnightntwrk/wallet-sdk-abstractions@npm:^2.1.0, @midnightntwrk/wallet-sdk-abstractions@workspace:*, @midnightntwrk/wallet-sdk-abstractions@workspace:packages/abstractions":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-abstractions@workspace:packages/abstractions"
@@ -2303,7 +2310,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnightntwrk/wallet-sdk-capabilities@npm:3.3.1, @midnightntwrk/wallet-sdk-capabilities@npm:^3.3.1, @midnightntwrk/wallet-sdk-capabilities@workspace:^, @midnightntwrk/wallet-sdk-capabilities@workspace:packages/capabilities":
+"@midnightntwrk/wallet-sdk-capabilities@npm:3.3.1, @midnightntwrk/wallet-sdk-capabilities@npm:^3.3.1, @midnightntwrk/wallet-sdk-capabilities@workspace:*, @midnightntwrk/wallet-sdk-capabilities@workspace:^, @midnightntwrk/wallet-sdk-capabilities@workspace:packages/capabilities":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-capabilities@workspace:packages/capabilities"
   dependencies:
@@ -2326,6 +2333,28 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@midnightntwrk/wallet-sdk-dapp-connector-reference@workspace:packages/dapp-connector-reference":
+  version: 0.0.0-use.local
+  resolution: "@midnightntwrk/wallet-sdk-dapp-connector-reference@workspace:packages/dapp-connector-reference"
+  dependencies:
+    "@midnight-ntwrk/ledger-v8": "npm:^8.0.3"
+    "@midnight-ntwrk/zkir-v2": "npm:^2.1.0"
+    "@midnightntwrk/dapp-connector-api": "npm:4.1.0-canary.20260805041554-9e03b1e"
+    "@midnightntwrk/wallet-sdk-abstractions": "workspace:*"
+    "@midnightntwrk/wallet-sdk-address-format": "npm:3.1.2"
+    "@midnightntwrk/wallet-sdk-capabilities": "workspace:*"
+    "@midnightntwrk/wallet-sdk-dust-wallet": "workspace:*"
+    "@midnightntwrk/wallet-sdk-facade": "workspace:*"
+    "@midnightntwrk/wallet-sdk-hd": "workspace:*"
+    "@midnightntwrk/wallet-sdk-shielded": "workspace:*"
+    "@midnightntwrk/wallet-sdk-unshielded-wallet": "workspace:*"
+    "@types/semver": "npm:^7.7.1"
+    effect: "npm:^3.19.19"
+    rxjs: "npm:^7.8.1"
+    semver: "npm:^7.7.3"
+  languageName: unknown
+  linkType: soft
+
 "@midnightntwrk/wallet-sdk-docs-snippets@workspace:packages/docs-snippets":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-docs-snippets@workspace:packages/docs-snippets"
@@ -2338,7 +2367,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnightntwrk/wallet-sdk-dust-wallet@npm:4.2.0, @midnightntwrk/wallet-sdk-dust-wallet@workspace:^, @midnightntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet":
+"@midnightntwrk/wallet-sdk-dust-wallet@npm:4.2.0, @midnightntwrk/wallet-sdk-dust-wallet@workspace:*, @midnightntwrk/wallet-sdk-dust-wallet@workspace:^, @midnightntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet"
   dependencies:
@@ -2355,7 +2384,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnightntwrk/wallet-sdk-facade@npm:4.1.0, @midnightntwrk/wallet-sdk-facade@npm:^4.1.0, @midnightntwrk/wallet-sdk-facade@workspace:^, @midnightntwrk/wallet-sdk-facade@workspace:packages/facade":
+"@midnightntwrk/wallet-sdk-facade@npm:4.1.0, @midnightntwrk/wallet-sdk-facade@npm:^4.1.0, @midnightntwrk/wallet-sdk-facade@workspace:*, @midnightntwrk/wallet-sdk-facade@workspace:^, @midnightntwrk/wallet-sdk-facade@workspace:packages/facade":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-facade@workspace:packages/facade"
   dependencies:
@@ -2374,7 +2403,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnightntwrk/wallet-sdk-hd@npm:3.0.3, @midnightntwrk/wallet-sdk-hd@npm:^3.0.2, @midnightntwrk/wallet-sdk-hd@npm:^3.0.3, @midnightntwrk/wallet-sdk-hd@workspace:^, @midnightntwrk/wallet-sdk-hd@workspace:packages/hd":
+"@midnightntwrk/wallet-sdk-hd@npm:3.0.3, @midnightntwrk/wallet-sdk-hd@npm:^3.0.2, @midnightntwrk/wallet-sdk-hd@npm:^3.0.3, @midnightntwrk/wallet-sdk-hd@workspace:*, @midnightntwrk/wallet-sdk-hd@workspace:^, @midnightntwrk/wallet-sdk-hd@workspace:packages/hd":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-hd@workspace:packages/hd"
   dependencies:
@@ -2493,7 +2522,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnightntwrk/wallet-sdk-shielded@npm:3.0.2, @midnightntwrk/wallet-sdk-shielded@npm:^3.0.2, @midnightntwrk/wallet-sdk-shielded@workspace:^, @midnightntwrk/wallet-sdk-shielded@workspace:packages/shielded-wallet":
+"@midnightntwrk/wallet-sdk-shielded@npm:3.0.2, @midnightntwrk/wallet-sdk-shielded@npm:^3.0.2, @midnightntwrk/wallet-sdk-shielded@workspace:*, @midnightntwrk/wallet-sdk-shielded@workspace:^, @midnightntwrk/wallet-sdk-shielded@workspace:packages/shielded-wallet":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-shielded@workspace:packages/shielded-wallet"
   dependencies:
@@ -2556,7 +2585,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnightntwrk/wallet-sdk-unshielded-wallet@npm:3.1.0, @midnightntwrk/wallet-sdk-unshielded-wallet@npm:^3.1.0, @midnightntwrk/wallet-sdk-unshielded-wallet@workspace:^, @midnightntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet":
+"@midnightntwrk/wallet-sdk-unshielded-wallet@npm:3.1.0, @midnightntwrk/wallet-sdk-unshielded-wallet@npm:^3.1.0, @midnightntwrk/wallet-sdk-unshielded-wallet@workspace:*, @midnightntwrk/wallet-sdk-unshielded-wallet@workspace:^, @midnightntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet":
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet"
   dependencies:
@@ -3964,6 +3993,13 @@ __metadata:
   dependencies:
     csstype: "npm:^3.2.2"
   checksum: 10c0/bc2c4af96b3e480604424de70d5ebda90c5f4b485df471858c0bc2d7d70364b606ec3c4d8579f94f01aa0c6c0591f56bcf14cba5689f5eea4b74250ccdc3a232
+  languageName: node
+  linkType: hard
+
+"@types/semver@npm:^7.7.1":
+  version: 7.7.1
+  resolution: "@types/semver@npm:7.7.1"
+  checksum: 10c0/c938aef3bf79a73f0f3f6037c16e2e759ff40c54122ddf0b2583703393d8d3127130823facb880e694caa324eb6845628186aac1997ee8b31dc2d18fafe26268
   languageName: node
   linkType: hard
 

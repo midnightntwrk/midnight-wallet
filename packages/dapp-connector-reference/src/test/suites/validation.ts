@@ -1,0 +1,409 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/** Input validation test suite. Tests validation of makeTransfer and makeIntent inputs. */
+
+import { describe, expect, it, vi } from 'vitest';
+import type { DesiredInput, DesiredOutput } from '@midnightntwrk/dapp-connector-api';
+import type { TransactionTestContext } from '../context.js';
+import { containsString, matchesString } from './_matchers.js';
+
+vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
+
+// Valid test data
+const validTokenType = '0000000000000000000000000000000000000000000000000000000000000000';
+
+/** Run input validation tests against the provided context. */
+export const runValidationTests = (context: TransactionTestContext): void => {
+  const shieldedAddress = context.environment.addresses.shielded;
+  const unshieldedAddress = context.environment.addresses.unshielded;
+
+  describe('makeTransfer validation', () => {
+    describe('empty outputs', () => {
+      it('should reject empty outputs array', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          await expect(api.makeTransfer([])).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('At least one output is required'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+    });
+
+    describe('token type validation', () => {
+      it('should reject token type that is too short', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const outputs: DesiredOutput[] = [
+            { kind: 'shielded', type: '00000000', value: 100n, recipient: shieldedAddress },
+          ];
+
+          await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('64 hex characters'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+
+      it('should reject token type that is too long', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const outputs: DesiredOutput[] = [
+            { kind: 'shielded', type: validTokenType + 'aa', value: 100n, recipient: shieldedAddress },
+          ];
+
+          await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('64 hex characters'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+
+      it('should reject token type with invalid hex characters', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const outputs: DesiredOutput[] = [
+            {
+              kind: 'shielded',
+              type: 'gg00000000000000000000000000000000000000000000000000000000000000',
+              value: 100n,
+              recipient: shieldedAddress,
+            },
+          ];
+
+          await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('valid hex string'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+    });
+
+    describe('amount validation', () => {
+      it('should reject zero amount', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const outputs: DesiredOutput[] = [
+            { kind: 'shielded', type: validTokenType, value: 0n, recipient: shieldedAddress },
+          ];
+
+          await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('must be positive'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+
+      it('should reject negative amount', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const outputs: DesiredOutput[] = [
+            { kind: 'shielded', type: validTokenType, value: -100n, recipient: shieldedAddress },
+          ];
+
+          await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('must be positive'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+    });
+
+    describe('address validation', () => {
+      it('should reject empty address', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const outputs: DesiredOutput[] = [{ kind: 'shielded', type: validTokenType, value: 100n, recipient: '' }];
+
+          await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('non-empty string'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+
+      it('should reject invalid Bech32m address', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const outputs: DesiredOutput[] = [
+            { kind: 'shielded', type: validTokenType, value: 100n, recipient: 'invalid-address' },
+          ];
+
+          await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('invalid Bech32m'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+
+      it('should reject unshielded address for shielded output', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const outputs: DesiredOutput[] = [
+            { kind: 'shielded', type: validTokenType, value: 100n, recipient: unshieldedAddress },
+          ];
+
+          await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('expected shielded address'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+
+      it('should reject shielded address for unshielded output', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const outputs: DesiredOutput[] = [
+            { kind: 'unshielded', type: validTokenType, value: 100n, recipient: shieldedAddress },
+          ];
+
+          await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('expected unshielded address'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+    });
+
+    describe('multiple outputs validation', () => {
+      it('should report error for first invalid output', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const outputs: DesiredOutput[] = [
+            { kind: 'shielded', type: validTokenType, value: 100n, recipient: shieldedAddress }, // valid
+            { kind: 'shielded', type: 'short', value: 100n, recipient: shieldedAddress }, // invalid
+          ];
+
+          await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('outputs[1].type'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+    });
+  });
+
+  describe('makeIntent validation', () => {
+    describe('empty inputs and outputs', () => {
+      it('should reject when both inputs and outputs are empty', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          await expect(api.makeIntent([], [], { intentId: 'random', payFees: false })).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('At least one input or output is required'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+    });
+
+    describe('input validation', () => {
+      it('should reject input with invalid token type', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const inputs: DesiredInput[] = [{ kind: 'shielded', type: 'invalid', value: 100n }];
+
+          await expect(api.makeIntent(inputs, [], { intentId: 'random', payFees: false })).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('inputs[0].type'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+
+      it('should reject input with zero amount', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const inputs: DesiredInput[] = [{ kind: 'shielded', type: validTokenType, value: 0n }];
+
+          await expect(api.makeIntent(inputs, [], { intentId: 'random', payFees: false })).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('inputs[0].value'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+    });
+
+    describe('intentId validation', () => {
+      it('should reject negative intentId', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const inputs: DesiredInput[] = [{ kind: 'shielded', type: validTokenType, value: 100n }];
+
+          await expect(api.makeIntent(inputs, [], { intentId: -1, payFees: false })).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('intentId must be an integer between 1 and 65535'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+
+      it('should reject intentId greater than 65535', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const inputs: DesiredInput[] = [{ kind: 'shielded', type: validTokenType, value: 100n }];
+
+          await expect(api.makeIntent(inputs, [], { intentId: 65536, payFees: false })).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('intentId must be an integer between 1 and 65535'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+
+      it('should reject non-integer intentId', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const inputs: DesiredInput[] = [{ kind: 'shielded', type: validTokenType, value: 100n }];
+
+          await expect(api.makeIntent(inputs, [], { intentId: 1.5, payFees: false })).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('intentId must be an integer between 1 and 65535'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+
+      it('should reject intentId of 0 (segment 0 is reserved)', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const inputs: DesiredInput[] = [{ kind: 'shielded', type: validTokenType, value: 100n }];
+
+          await expect(api.makeIntent(inputs, [], { intentId: 0, payFees: false })).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('segment 0 is reserved'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+    });
+
+    describe('output validation in intent', () => {
+      it('should reject output with mismatched address type', async () => {
+        const { api, disconnect } = await context.createConnectedAPI();
+
+        try {
+          const outputs: DesiredOutput[] = [
+            { kind: 'shielded', type: validTokenType, value: 100n, recipient: unshieldedAddress },
+          ];
+
+          await expect(api.makeIntent([], outputs, { intentId: 'random', payFees: false })).rejects.toMatchObject({
+            code: 'InvalidRequest',
+            reason: containsString('expected shielded address'),
+          });
+        } finally {
+          await disconnect();
+        }
+      });
+    });
+  });
+
+  describe('error message quality', () => {
+    it('should include field path in error message', async () => {
+      const { api, disconnect } = await context.createConnectedAPI();
+
+      try {
+        const outputs: DesiredOutput[] = [
+          { kind: 'shielded', type: validTokenType, value: 100n, recipient: shieldedAddress },
+          { kind: 'unshielded', type: 'bad', value: 100n, recipient: unshieldedAddress },
+        ];
+
+        await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+          reason: matchesString(/outputs\[1\]\.type/),
+        });
+      } finally {
+        await disconnect();
+      }
+    });
+
+    it('should include actual value in amount error', async () => {
+      const { api, disconnect } = await context.createConnectedAPI();
+
+      try {
+        const outputs: DesiredOutput[] = [
+          { kind: 'shielded', type: validTokenType, value: -42n, recipient: shieldedAddress },
+        ];
+
+        await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+          reason: containsString('-42'),
+        });
+      } finally {
+        await disconnect();
+      }
+    });
+
+    it('should include actual length in token type error', async () => {
+      const { api, disconnect } = await context.createConnectedAPI();
+
+      try {
+        const outputs: DesiredOutput[] = [
+          { kind: 'shielded', type: '00000000', value: 100n, recipient: shieldedAddress },
+        ];
+
+        await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
+          reason: containsString('got 8'),
+        });
+      } finally {
+        await disconnect();
+      }
+    });
+  });
+};
