@@ -20,9 +20,10 @@
  *   version boundary, identity only.
  */
 
+import * as v8 from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Effect } from 'effect';
+import { Array as EArray, Effect, Order, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet, PublicKeys } from '../CoreWallet.js';
 import {
@@ -43,19 +44,12 @@ const forkVersion = ProtocolVersion.ProtocolVersion(7n);
  * A wallet of the previous ledger version, as plain data.
  *
  * @remarks
- *   Deliberately wider than {@link PreviousLedgerWallet}: it also carries the coins a real pre-fork wallet would be
- *   holding, so that "those do not cross" is something this file can actually observe rather than merely fail to
- *   mention. Its cursor is non-zero for the opposite reason — what does cross has to be seen crossing. Structural
- *   because the real thing is built on the other ledger's WASM module, and a projection that reads no ledger object out
- *   of it has no reason to load one.
+ *   Structural because the real thing is built on the other ledger's WASM module, and a projection that reads only plain
+ *   data out of it has no reason to load one — the test at the bottom of this file hands the real module's state in to
+ *   show the description fits it. Its coins are listed out of Merkle order on purpose: the projection promises sorted
+ *   output, so the input had better not be. Its cursor is non-zero because what crosses has to be seen crossing.
  */
-type PreviousWalletStandIn = PreviousLedgerWallet & {
-  readonly state: {
-    readonly coins: readonly Readonly<{ type: string; nonce: string; value: bigint; mt_index: bigint }>[];
-  };
-};
-
-const previousWallet = (): PreviousWalletStandIn => {
+const previousWallet = (): PreviousLedgerWallet => {
   const secretKeys = keys();
   return {
     publicKeys: {
@@ -72,10 +66,11 @@ const previousWallet = (): PreviousWalletStandIn => {
       isConnected: true,
     },
     state: {
-      coins: [
-        { type: 'aa'.repeat(32), nonce: 'bb'.repeat(32), value: 100n, mt_index: 0n },
+      coins: new Set([
         { type: 'aa'.repeat(32), nonce: 'cc'.repeat(32), value: 200n, mt_index: 4n },
-      ],
+        { type: 'aa'.repeat(32), nonce: 'bb'.repeat(32), value: 100n, mt_index: 0n },
+      ]),
+      firstFree: 6n,
     },
   };
 };
@@ -118,17 +113,79 @@ describe('the cross-ledger migration', () => {
     expect(wallet.protocolVersion).toBe(forkVersion);
   });
 
-  it('starts from an empty local state rather than carrying the previous version coins', async () => {
-    // The indexer replays the timeline after the fork, so these coins arrive again as events of this ledger version.
-    // Carrying them as well would double-count them, and rebuilding the tree would need secret keys this has none of.
+  it('starts from an empty local state — the carried coins wait beside the tree, not in it', async () => {
+    // The migration has no secret keys, and rebuilding the Merkle tree takes them: coins are indexed by nullifier.
+    // So the coins cross as plain data in the anchor payload, and the local state stays empty until the sync layer,
+    // which does hold the keys, re-anchors it.
     const previous = previousWallet();
-    expect(previous.state.coins.length).toBeGreaterThan(0);
+    expect(previous.state.coins.size).toBeGreaterThan(0);
 
     const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previous));
 
     expect([...wallet.state.coins]).toEqual([]);
     expect(wallet.state.firstFree).toBe(0n);
     expect(wallet.coinHashes).toEqual({});
+  });
+
+  it('carries the coins as plain data sorted by Merkle index, and the size the pre-fork tree had reached', async () => {
+    const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previousWallet()));
+
+    // Exactly the previous wallet's coins — `mt_index` renamed to `mtIndex` — in ascending Merkle order even though
+    // the input listed them the other way around, under the tree size the gaps will be computed against.
+    expect(wallet.pendingAnchor).toEqual({
+      coins: [
+        { type: 'aa'.repeat(32), nonce: 'bb'.repeat(32), value: 100n, mtIndex: 0n },
+        { type: 'aa'.repeat(32), nonce: 'cc'.repeat(32), value: 200n, mtIndex: 4n },
+      ],
+      treeSize: 6n,
+    });
+  });
+
+  it('projects a real pre-fork ledger state, which satisfies the previous-wallet shape as it is', async () => {
+    // The structural type is a claim about the actual v8 module, so the actual v8 module is what checks it here:
+    // this assignment compiling is the test that no adapter is needed between a real pre-fork wallet and the
+    // migration. The offer pays this wallet twice around another party's coin, so the tree is larger than what the
+    // wallet owns and the carried indices are the real, ledger-assigned ones.
+    const mySeed = Buffer.alloc(32, 3);
+    const myV8Keys = v8.ZswapSecretKeys.fromSeed(mySeed);
+    const otherV8Keys = v8.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 4));
+    const pay = (recipient: v8.ZswapSecretKeys, value: bigint): v8.ZswapOffer<v8.PreProof> => {
+      const coin = v8.createShieldedCoinInfo(v8.shieldedToken().raw, value);
+      const output = v8.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
+      return v8.ZswapOffer.fromOutput(output, coin.type, coin.value);
+    };
+    const offer = [pay(myV8Keys, 100n), pay(otherV8Keys, 999n), pay(myV8Keys, 200n)].reduce((a, b) => a.merge(b));
+    const v8State: v8.ZswapLocalState = new v8.ZswapLocalState().apply(myV8Keys, offer);
+
+    const previous: PreviousLedgerWallet = {
+      publicKeys: {
+        coinPublicKey: myV8Keys.coinPublicKey,
+        encryptionPublicKey: myV8Keys.encryptionPublicKey,
+      },
+      networkId,
+      protocolVersion: forkVersion,
+      progress: previousWallet().progress,
+      state: v8State,
+    };
+
+    const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previous));
+
+    const ownedOnChain = pipe(
+      [...v8State.coins],
+      EArray.sort(Order.mapInput(Order.bigint, (coin: v8.QualifiedShieldedCoinInfo) => coin.mt_index)),
+    );
+    expect(new Set(ownedOnChain.map((coin) => coin.value))).toEqual(new Set([100n, 200n]));
+    expect(v8State.firstFree).toBe(3n);
+    expect(wallet.pendingAnchor).toEqual({
+      coins: ownedOnChain.map((coin) => ({
+        type: coin.type,
+        nonce: coin.nonce,
+        value: coin.value,
+        mtIndex: coin.mt_index,
+      })),
+      treeSize: 3n,
+    });
+    expect([...wallet.state.coins]).toEqual([]);
   });
 
   it('parks sync progress at the fork, because the replayed timeline continues the ids it left off at', async () => {

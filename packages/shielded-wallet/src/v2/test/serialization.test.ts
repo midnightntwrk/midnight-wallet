@@ -142,6 +142,74 @@ describe('V2 Wallet serialization', () => {
     );
   });
 
+  describe('a wallet caught mid-crossing', () => {
+    // The wallet as the cross-ledger migration leaves it: identity and a cursor on an empty tree, with the previous
+    // ledger's coins waiting as plain data to be re-anchored. A snapshot taken in that window must not lose them.
+    const crossingKeys = (): ledger.ZswapSecretKeys => ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 5));
+    const midCrossing = (): CoreWallet =>
+      CoreWallet.fromPreviousVersion({
+        publicKeys: {
+          coinPublicKey: crossingKeys().coinPublicKey,
+          encryptionPublicKey: crossingKeys().encryptionPublicKey,
+        },
+        networkId: NetworkId.NetworkId.Undeployed,
+        protocolVersion: 7n,
+        progress: {
+          appliedIndex: 4321n,
+          highestRelevantWalletIndex: 4400n,
+          highestIndex: 4400n,
+          highestRelevantIndex: 4400n,
+          isConnected: false,
+        },
+        pendingAnchor: {
+          coins: [
+            { type: 'aa'.repeat(32), nonce: 'bb'.repeat(32), value: 100n, mtIndex: 0n },
+            { type: 'aa'.repeat(32), nonce: 'cc'.repeat(32), value: 200n, mtIndex: 4n },
+          ],
+          treeSize: 6n,
+        },
+      });
+
+    it('restores the anchor payload losslessly', () => {
+      const capability = makeDefaultV2SerializationCapability();
+      const wallet = midCrossing();
+
+      const serialized = capability.serialize(wallet);
+      const restored = pipe(capability.deserialize(null, serialized), EitherOps.getOrThrowLeft);
+
+      // Pinned against the literal payload, not against `wallet.pendingAnchor`, so that a wallet which never carried
+      // the payload in the first place cannot make this pass with undefined on both sides.
+      expect(restored.pendingAnchor).toEqual({
+        coins: [
+          { type: 'aa'.repeat(32), nonce: 'bb'.repeat(32), value: 100n, mtIndex: 0n },
+          { type: 'aa'.repeat(32), nonce: 'cc'.repeat(32), value: 200n, mtIndex: 4n },
+        ],
+        treeSize: 6n,
+      });
+      expect(capability.serialize(restored)).toEqual(serialized);
+    });
+
+    it('writes nothing new into the snapshot of a wallet that is not crossing', () => {
+      // A settled wallet's snapshot is byte-for-byte what this schema produced before the field existed, which is
+      // exactly what makes the next test a test of old snapshots.
+      const capability = makeDefaultV2SerializationCapability();
+      const settled = CoreWallet.initEmpty(crossingKeys(), NetworkId.NetworkId.Undeployed);
+
+      const parsed: unknown = JSON.parse(capability.serialize(settled));
+
+      expect(parsed).not.toHaveProperty('pendingAnchor');
+    });
+
+    it('reads a snapshot without the field as a wallet with nothing pending', () => {
+      const capability = makeDefaultV2SerializationCapability();
+      const settled = CoreWallet.initEmpty(crossingKeys(), NetworkId.NetworkId.Undeployed);
+
+      const restored = pipe(capability.deserialize(null, capability.serialize(settled)), EitherOps.getOrThrowLeft);
+
+      expect(restored.pendingAnchor).toBeUndefined();
+    });
+  });
+
   it('handles invalid JSON strings gracefully', () => {
     const capability = makeDefaultV2SerializationCapability();
 

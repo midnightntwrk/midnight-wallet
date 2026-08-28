@@ -77,6 +77,22 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
       key: Schema.String,
       value: Schema.Struct({ nullifier: Schema.String, commitment: Schema.String }),
     }),
+    // The coins a cross-ledger migration carried as plain data, still waiting to be re-anchored (see
+    // `CoreWallet.pendingAnchor`). Optional twice over: a wallet that is not mid-crossing has none, and snapshots
+    // written before the field existed must keep decoding unchanged.
+    pendingAnchor: Schema.optional(
+      Schema.Struct({
+        coins: Schema.Array(
+          Schema.Struct({
+            type: Schema.String,
+            nonce: Schema.String,
+            value: Schema.BigInt,
+            mtIndex: Schema.BigInt,
+          }),
+        ),
+        treeSize: Schema.BigInt,
+      }),
+    ),
   });
 
   type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
@@ -89,6 +105,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         networkId: w.networkId,
         offset: w.progress?.appliedIndex,
         coinHashes: w.coinHashes,
+        ...(w.pendingAnchor !== undefined ? { pendingAnchor: w.pendingAnchor } : {}),
       });
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
@@ -99,19 +116,24 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
         Either.mapLeft((err) => WalletError.other(err)),
         Either.flatMap((snapshot: Snapshot) =>
-          CoreWallet.restoreWithCoinHashes(
-            snapshot.publicKeys,
-            snapshot.state,
-            snapshot.coinHashes,
-            {
-              appliedIndex: snapshot.offset ?? 0n,
-              highestRelevantWalletIndex: 0n,
-              highestIndex: 0n,
-              highestRelevantIndex: 0n,
-              isConnected: false,
-            },
-            snapshot.protocolVersion,
-            snapshot.networkId,
+          pipe(
+            CoreWallet.restoreWithCoinHashes(
+              snapshot.publicKeys,
+              snapshot.state,
+              snapshot.coinHashes,
+              {
+                appliedIndex: snapshot.offset ?? 0n,
+                highestRelevantWalletIndex: 0n,
+                highestIndex: 0n,
+                highestRelevantIndex: 0n,
+                isConnected: false,
+              },
+              snapshot.protocolVersion,
+              snapshot.networkId,
+            ),
+            Either.map((wallet) =>
+              snapshot.pendingAnchor !== undefined ? { ...wallet, pendingAnchor: snapshot.pendingAnchor } : wallet,
+            ),
           ),
         ),
       );

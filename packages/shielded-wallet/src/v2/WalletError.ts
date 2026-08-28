@@ -44,6 +44,7 @@ export type WalletError =
   | SyncWalletError
   | InvalidCoinHashesError
   | TransactingError
+  | AnchoringError
   | LedgerOps.LedgerError;
 
 export class OtherWalletError extends Data.TaggedError('Wallet.Other')<{
@@ -79,6 +80,22 @@ export class InvalidCoinHashesError extends Data.TaggedError('Wallet.InvalidCoin
 }> {}
 
 export class TransactingError extends Data.TaggedError('Wallet.Transacting')<{
+  message: string;
+  cause?: unknown;
+}> {}
+
+/**
+ * Re-anchoring a wallet that crossed the ledger-version boundary could not be completed.
+ *
+ * @remarks
+ *   Raised by `CoreWallet.anchor` when the carried coins and the supplied collapsed Merkle updates cannot be folded into
+ *   a tree of the carried size: a missing or misaligned update, a coin that would land at the wrong index, a rebuilt
+ *   tree of the wrong height, or the ledger rejecting the data itself. The wallet's pending anchor payload is left
+ *   untouched, so anchoring can be retried with corrected updates.
+ */
+export class AnchoringError extends Data.TaggedError(
+  '@midnightntwrk/wallet-sdk-shielded/v2/WalletError/AnchoringError',
+)<{
   message: string;
   cause?: unknown;
 }> {}
