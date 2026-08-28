@@ -53,7 +53,7 @@ import { describe, expect, it } from 'vitest';
 import { V1Tag } from '../v1/index.js';
 import { V2Tag } from '../v2/index.js';
 import { type ForkWallet, makeForkWallet } from './forkHarness.js';
-import { type ReplayedCoin, makeReplayChain, mintable, preForkPayment } from './forkReplay.js';
+import { type MintedCoin, makePayingPostForkChain, mintable, preForkPayment } from './translationStub.js';
 import { carried, coinValues, totalValue } from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
@@ -86,11 +86,11 @@ const strangerAddress = (): ShieldedAddress => {
   );
 };
 
-const chainCoins = (): readonly ReplayedCoin[] =>
+const chainCoins = (): readonly MintedCoin[] =>
   walletValues.map((value) => mintable(v8.shieldedToken().raw, value, walletRecipient()));
 
 /** A ledger-v8 chain stamped with `version` from its genesis block, paying the wallet one coin per block. */
-const chainAt = (version: ProtocolVersion.ProtocolVersion, coins: readonly ReplayedCoin[]) =>
+const chainAt = (version: ProtocolVersion.ProtocolVersion, coins: readonly MintedCoin[]) =>
   Effect.gen(function* () {
     const chain = yield* V8.Simulator.init({
       networkId,
@@ -103,11 +103,17 @@ const chainAt = (version: ProtocolVersion.ProtocolVersion, coins: readonly Repla
     return chain;
   });
 
-/** The post-fork source: the same coins, re-announced by the post-fork ledger version. */
-const replayOf = (coins: readonly ReplayedCoin[], chain: V8.Simulator) =>
+/**
+ * The post-fork source: a chain that simply pays the wallet these coins.
+ *
+ * @remarks
+ *   Nothing here crosses a fork — every wallet in this file starts on one side or the other — so its post-fork chain is
+ *   an ordinary one, and the only way a wallet reading it comes to hold anything is by being paid on it.
+ */
+const payingChainFor = (coins: readonly MintedCoin[], chain: V8.Simulator) =>
   Effect.gen(function* () {
     const genesisTime = yield* chain.query((state) => state.currentTime);
-    return yield* makeReplayChain({
+    return yield* makePayingPostForkChain({
       networkId,
       protocolVersion: afterFork,
       genesisBlockNumber: forkBlock,
@@ -189,11 +195,11 @@ const syncedPreForkWallet: Effect.Effect<ForkWallet, LedgerOps.LedgerError | Wal
   Effect.gen(function* () {
     const coins = chainCoins();
     const chain = yield* chainAt(beforeFork, coins);
-    const replayed = yield* replayOf(coins, chain);
+    const postFork = yield* payingChainFor(coins, chain);
 
     const wallet = yield* makeForkWallet({
       preFork: chain,
-      replayed: Effect.succeed(replayed),
+      postFork: Effect.succeed(postFork),
       networkId,
       forkVersion,
       seed,
@@ -212,11 +218,11 @@ describe('a shielded wallet that asks the chain where it is starting', () => {
     Effect.gen(function* () {
       const coins = chainCoins();
       const chain = yield* chainAt(afterFork, coins);
-      const replayed = yield* replayOf(coins, chain);
+      const postFork = yield* payingChainFor(coins, chain);
 
       const wallet = yield* makeForkWallet({
         preFork: chain,
-        replayed: Effect.succeed(replayed),
+        postFork: Effect.succeed(postFork),
         networkId,
         forkVersion,
         seed,
@@ -244,11 +250,11 @@ describe('a shielded wallet that asks the chain where it is starting', () => {
     Effect.gen(function* () {
       const coins = chainCoins();
       const chain = yield* chainAt(beforeFork, coins);
-      const replayed = yield* replayOf(coins, chain);
+      const postFork = yield* payingChainFor(coins, chain);
 
       const wallet = yield* makeForkWallet({
         preFork: chain,
-        replayed: Effect.succeed(replayed),
+        postFork: Effect.succeed(postFork),
         networkId,
         forkVersion,
         seed,
@@ -273,13 +279,13 @@ describe('a shielded wallet starting on a chain that has already forked', () => 
     Effect.gen(function* () {
       const coins = chainCoins();
       const chain = yield* chainAt(afterFork, coins);
-      const replayed = yield* replayOf(coins, chain);
+      const postFork = yield* payingChainFor(coins, chain);
 
       // No probe: the shape of every wallet built without one, and of every application that would rather not have
       // its start depend on reaching an indexer.
       const wallet = yield* makeForkWallet({
         preFork: chain,
-        replayed: Effect.succeed(replayed),
+        postFork: Effect.succeed(postFork),
         networkId,
         forkVersion,
         seed,
@@ -308,11 +314,11 @@ describe('a shielded wallet starting on a chain that has already forked', () => 
     Effect.gen(function* () {
       const coins = chainCoins();
       const chain = yield* chainAt(afterFork, coins);
-      const replayed = yield* replayOf(coins, chain);
+      const postFork = yield* payingChainFor(coins, chain);
 
       const wallet = yield* makeForkWallet({
         preFork: chain,
-        replayed: Effect.succeed(replayed),
+        postFork: Effect.succeed(postFork),
         networkId,
         forkVersion,
         seed,
@@ -337,12 +343,12 @@ describe('a shielded wallet starting on a chain that has not forked', () => {
     Effect.gen(function* () {
       const coins = chainCoins();
       const chain = yield* chainAt(beforeFork, coins);
-      // The replay is never reached: a source the post-fork variant would consume if it ever ran.
-      const replayed = yield* replayOf(coins, chain);
+      // Never reached: a source the post-fork variant would consume if it ever ran.
+      const postFork = yield* payingChainFor(coins, chain);
 
       const wallet = yield* makeForkWallet({
         preFork: chain,
-        replayed: Effect.succeed(replayed),
+        postFork: Effect.succeed(postFork),
         networkId,
         forkVersion,
         seed,
@@ -446,11 +452,11 @@ describe('a shielded wallet on a chain that has shown it no events', () => {
   const walletOnSilentChain = (chainVersionProbe?: ChainVersionProbe) =>
     Effect.gen(function* () {
       const chain = yield* chainAt(afterFork, []);
-      const replayed = yield* replayOf([], chain);
+      const postFork = yield* payingChainFor([], chain);
 
       const wallet = yield* makeForkWallet({
         preFork: chain,
-        replayed: Effect.succeed(replayed),
+        postFork: Effect.succeed(postFork),
         networkId,
         forkVersion,
         seed,

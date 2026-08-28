@@ -23,7 +23,7 @@
 import { ProtocolVersion, WalletTransaction, type AnyTx } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { type CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
-import { type CoreWallet as PostForkWallet } from '../v2/CoreWallet.js';
+import { type CoreWallet as PostForkWallet, type PendingAnchor } from '../v2/CoreWallet.js';
 
 /** A wallet on either side of the boundary. */
 export type EitherWallet = PreForkWallet | PostForkWallet;
@@ -81,7 +81,19 @@ export const treeSize = (wallet: EitherWallet): bigint => wallet.state.firstFree
  *
  * @remarks
  *   The single value that says whether a wallet's tree is the chain's tree. Comparing it to a root taken from a chain
- *   state is how a proof states that what the wallet rebuilt from replayed events is byte-for-byte the tree the ledger
+ *   state is how a proof states that what the wallet rebuilt when it re-anchored is byte-for-byte the tree the ledger
  *   translation produced — not merely a tree with the same leaves in it.
  */
 export const merkleRoot = (wallet: EitherWallet): bigint | undefined => wallet.state.merkleTreeRoot;
+
+/**
+ * What the wallet still owes itself from the other side of the boundary, if anything.
+ *
+ * @remarks
+ *   Only a wallet of the post-fork ledger version can carry one — the pre-fork variant has nothing to cross to — so this
+ *   reads the union by asking, which narrows to the side that has the field. Present from the cross-ledger migration
+ *   until the anchor step at the head of sync rebuilds the tree; its absence on a wallet holding coins is how a proof
+ *   states that the carry completed rather than merely started.
+ */
+export const carriedPayload = (wallet: EitherWallet): PendingAnchor | undefined =>
+  'pendingAnchor' in wallet ? wallet.pendingAnchor : undefined;

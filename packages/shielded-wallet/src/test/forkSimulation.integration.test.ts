@@ -12,24 +12,26 @@
 // limitations under the License.
 
 /**
- * The fidelity link: what a wallet rebuilds from the replay is what the real translation produces.
+ * The fidelity link: the tree a crossing wallet rebuilds is the tree the real translation produced.
  *
  * @remarks
- *   `forkSimulation.test.ts` proves the crossing — hand-over, fresh state, re-discovery by sync, spend — and needs no
- *   ledger translation to do it. What it cannot prove is that the modelling is faithful: its wallet learns its coins
- *   from a replayed timeline and spends against that same timeline, so it is self-consistent by construction.
+ *   `forkSimulation.test.ts` proves the crossing — hand-over, carried coins, re-anchoring, a post-fork payment, a spend —
+ *   and needs no ledger translation to do it, because `translationStub.ts` reconstructs the post-fork ledger from the
+ *   same coins the pre-fork chain was paid. What it cannot prove is that the reconstruction is faithful: the collapsed
+ *   updates the wallet anchors from come off a chain the suite built itself.
  *
  *   This closes that gap against the ledger team's real v8-to-v9 state translation. The pre-fork chain hands its own
  *   serialized ledger to the translation and the post-fork chain continues from the result — the chain's own account of
- *   what survived the fork — while the wallet syncs the replayed timeline, which is the indexer's account of the same
- *   thing. Two independent reconstructions of one tree, checked against each other two ways:
+ *   what survived the fork — and the wallet, which crossed carrying nothing but plain data, rebuilds its commitment
+ *   tree out of _that_ state. Two independent reconstructions of one tree, checked against each other two ways:
  *
- *   - **The roots agree.** The tree the wallet rebuilds from replayed events has the same Merkle root as the tree the
- *       translation produced. A single number, and a byte-level claim: commitments are a function of coin and owner, so
- *       equality here means the two ledger versions computed every one of them identically.
+ *   - **The roots agree.** The tree the wallet re-anchors has the same Merkle root as the tree the translation produced. A
+ *       single number, and a byte-level claim: commitments are a function of coin and owner, so equality here means the
+ *       two ledger versions computed every one of them identically.
  *   - **The translated chain accepts the wallet's spend.** A spend carries a Merkle path built from the wallet's tree, and
- *       the post-fork ledger recognises it only if that path resolves to a root the translated state holds. So the
- *       wallet — which never saw the translated tree — transacts against it.
+ *       the post-fork ledger recognises it only if that path resolves to a root the translated state holds. So a wallet
+ *       that arrived with nothing but four coins' worth of strings and bigints transacts against the real translation.
+ *       That is the money test, and nothing short of a real translation can support it.
  *
  *   **Integration tier because of a build step, not infra.** The translation is a WASM artifact built from
  *   `packages/state-translation/wasm`, so it has to be compiled first; this package's `turbo.json` declares
@@ -48,20 +50,27 @@ import {
 } from '@midnightntwrk/wallet-sdk-address-format';
 import {
   ForkSimulator,
-  type Simulator,
   V8,
   genesisStrictness,
   immediateBlockProducer,
   translatorFromAsync,
 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { translateLedgerState } from '@midnightntwrk/wallet-sdk-state-translation';
-import { Deferred, Effect } from 'effect';
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { V1Tag } from '../v1/index.js';
 import { V2Tag } from '../v2/index.js';
-import { type ReplayedCoin, makeReplayChain, mintable, preForkPayment, simulatedChainRoot } from './forkReplay.js';
+import { type MintedCoin, mintable, preForkPayment, simulatedChainRoot } from './translationStub.js';
 import { makeForkWallet } from './forkHarness.js';
-import { carried, coinIndices, coinValues, merkleRoot, totalValue, treeSize } from './forkWalletAssertions.js';
+import {
+  carried,
+  carriedPayload,
+  coinIndices,
+  coinValues,
+  merkleRoot,
+  totalValue,
+  treeSize,
+} from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -95,7 +104,7 @@ const recipientAddress = (): ShieldedAddress => {
 };
 
 /** The pre-fork commitment sequence: three to us, a stranger's, ours, a stranger's again. */
-const chainCoins = (): readonly ReplayedCoin[] => {
+const chainCoins = (): readonly MintedCoin[] => {
   const tokenType = v8.shieldedToken().raw;
   const us = walletRecipient();
   const them = strangerRecipient();
@@ -121,10 +130,10 @@ const baseConfig = {
 };
 
 describe('the two ledger versions agree on what the wallet owns', () => {
-  it('derives the same public keys from one seed, which is what makes a replayed coin the same coin', () => {
-    // The lemma everything below rests on. A commitment is computed from the coin and its owner's coin public key; if
-    // the two ledger versions derived different keys from one seed, a replayed payment would be a payment to somebody
-    // else and no tree could ever line up.
+  it('derives the same public keys from one seed, which is what lets a carried coin be re-inserted as itself', () => {
+    // The lemma everything below rests on. A commitment is computed from the coin and its owner's coin public key; a
+    // coin carried across the boundary is re-inserted with the _new_ ledger version's keys, so if the two versions
+    // derived different keys from one seed the rebuilt leaf would be somebody else's and no tree could ever line up.
     const preFork = v8.ZswapSecretKeys.fromSeed(seed);
     const postFork = v9.ZswapSecretKeys.fromSeed(seed);
 
@@ -144,15 +153,14 @@ describe('the two ledger versions agree on what the wallet owns', () => {
 });
 
 describe('a shielded wallet crossing a byte-faithful hard fork', () => {
-  it('rebuilds the translated commitment tree from the replay, and spends against the translation', async () =>
+  it('re-anchors its carried coins into the truly translated tree, and spends against it', async () =>
     Effect.gen(function* () {
       const coins = chainCoins();
       const fork = yield* ForkSimulator.init(baseConfig);
-      const replayed = yield* Deferred.make<Simulator>();
 
       const wallet = yield* makeForkWallet({
         preFork: fork.preFork,
-        replayed: Deferred.await(replayed),
+        postFork: fork.awaitPostFork(),
         networkId,
         forkVersion,
         seed,
@@ -180,44 +188,41 @@ describe('a shielded wallet crossing a byte-faithful hard fork', () => {
       expect(translatedRoot).toBe(preForkRoot);
       expect(yield* translated.query((state) => state.ledger.zswap.firstFree)).toBe(treeSizeAtFork);
 
-      // --- the indexer replays the timeline ---------------------------------------------------------------------
-      // Numbered and clocked from the boundary, exactly as the translated chain beside it is: the two reconstructions
-      // are two accounts of one timeline continuing, not of two timelines starting.
-      const replayChain = yield* makeReplayChain({
-        networkId,
-        protocolVersion: forkVersion,
-        genesisBlockNumber: forkBlock,
-        genesisTime: yield* fork.preFork.query((state) => state.currentTime),
-        blockProducer: immediateBlockProducer(undefined, genesisStrictness),
-        coins,
-      });
-      // The replay is a faithful stand-in for the translation precisely because these agree: the same commitments, in
-      // the same order, therefore the same tree — reached by re-announcing coins rather than by converting bytes.
-      expect(yield* replayChain.query(simulatedChainRoot)).toBe(translatedRoot);
-      yield* Deferred.succeed(replayed, replayChain);
-
-      // --- the wallet hands over with nothing, then re-earns it all ---------------------------------------------
+      // --- the wallet hands over carrying its coins as plain data -----------------------------------------------
       const migration = yield* wallet.awaitMigration;
       expect(yield* wallet.activeTag).toBe(V2Tag);
       expect(migration.from.protocolVersion).toBe(forkVersion);
       expect(migration.from.appliedIndex).toBe(forkBlock);
+      expect(migration.to.carriedCoinCount).toBe(walletValues.length);
+      expect(migration.to.carriedTreeSize).toBe(treeSizeAtFork);
+      // Carried, not yet rebuilt: the tree is empty until sync, which holds the keys, anchors it.
       expect(migration.to.coinCount).toBe(0);
       expect(migration.to.firstFree).toBe(0n);
-      // Parked on the boundary, not rewound: the replay continues the indexer's event ids rather than restarting them.
+      // Parked on the boundary, not rewound: the post-fork timeline continues the indexer's event ids.
       expect(migration.to.appliedIndex).toBe(forkBlock);
 
       const postFork = yield* wallet.awaitState(
-        (state) => state.version >= forkVersion && totalValue(state.state) === walletTotal,
+        (state) =>
+          state.version >= forkVersion &&
+          totalValue(state.state) === walletTotal &&
+          state.state.progress.appliedIndex > forkBlock,
       );
       expect(coinValues(postFork.state)).toEqual([...walletValues]);
       expect(coinIndices(postFork.state)).toEqual(walletIndices);
       expect(treeSize(postFork.state)).toBe(treeSizeAtFork);
+      expect(carriedPayload(postFork.state)).toBeUndefined();
 
-      // **The fidelity link.** The wallet has never seen the translated state; it read replayed events and rebuilt a
-      // tree from them. That tree is the translated tree, down to its root.
+      // **The fidelity link.** The wallet arrived with four coins' worth of strings and bigints and fast-forwarded
+      // over the rest of the tree using collapsed updates taken off the translated state. That tree is the translated
+      // tree, down to its root.
       expect(merkleRoot(postFork.state)).toBe(translatedRoot);
 
-      // --- and it can transact against the translation ----------------------------------------------------------
+      // Nothing was re-announced. The translated chain has produced exactly one block — its genesis, holding the
+      // translated ledger — and it contains no transactions at all, so there was nothing here to re-discover from.
+      expect(yield* translated.query((state) => state.blocks.flatMap((block) => block.transactions))).toEqual([]);
+      expect(postFork.state.progress.appliedIndex).toBe(forkBlock + 1n);
+
+      // --- the money test: a carried coin is spent against the translation ---------------------------------------
       const transferred = 150n;
       const transfer = yield* Effect.promise(() =>
         wallet.shielded.transferTransaction([
@@ -226,21 +231,16 @@ describe('a shielded wallet crossing a byte-faithful hard fork', () => {
       );
       const spend = carried<v9.UnprovenTransaction>(transfer, forkVersion).eraseProofs();
 
-      // Submitted to the chain that holds the *translated* ledger, not to the replay the wallet learned from. The
-      // Merkle path in this spend was built from the wallet's own tree; the translated chain recognises it only if
-      // that root is one it holds. This is the claim in full, and nothing short of a real translation can support it.
+      // Submitted to the chain that holds the *translated* ledger. The Merkle path in this spend was built from a
+      // tree the wallet re-anchored out of that ledger's own collapsed updates; the chain recognises it only if the
+      // root it resolves to is one it holds.
       const onTranslatedChain = yield* translated.submitTransaction(spend);
       expect(onTranslatedChain.transactions[0].result.type).toBe('success');
       expect(onTranslatedChain.number).toBeGreaterThan(forkBlock);
 
-      // The indexer reports the same spend, which is how the wallet learns of it. The same transaction object serves
-      // both chains: applying it neither consumes nor mutates it.
-      const onReplay = yield* replayChain.submitTransaction(spend);
-      expect(onReplay.transactions[0].result.type).toBe('success');
-      // Past the boundary on the replay too — both accounts of the timeline count on from the fork height.
-      expect(onReplay.number).toBeGreaterThan(forkBlock);
-
-      const afterSpend = yield* wallet.awaitState((state) => state.state.progress.appliedIndex > onReplay.number);
+      const afterSpend = yield* wallet.awaitState(
+        (state) => state.state.progress.appliedIndex > onTranslatedChain.number,
+      );
       expect(totalValue(afterSpend.state)).toBe(walletTotal - transferred);
     }).pipe(Effect.scoped, Effect.runPromise));
 });

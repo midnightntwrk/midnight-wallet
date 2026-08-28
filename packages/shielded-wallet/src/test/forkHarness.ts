@@ -21,16 +21,20 @@
  *   the hand-over can be recorded as plain data.
  *
  *   The two sides read different sources, which is the shape the real thing has: before the fork the pre-fork chain,
- *   after it the indexer's replayed timeline (see `forkReplay.ts`). The post-fork source does not exist when the wallet
- *   is built — the replay only happens once the fork has — so it reaches its variant as an effect awaited at the first
- *   sync, carried in that variant's own configuration.
+ *   after it the chain the fork left behind — the one holding the translated state, which re-announces nothing (see
+ *   `translationStub.ts`). The post-fork source does not exist when the wallet is built — the fork has not happened yet
+ *   — so it reaches its variant as an effect awaited at the first sync, carried in that variant's own configuration.
  */
 
 import * as v8 from '@midnight-ntwrk/ledger-v8';
 import * as v9 from '@midnightntwrk/ledger-v9';
 import { type NetworkId, type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import { type Simulator, type V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import {
+  type LedgerTranslationError,
+  type Simulator,
+  type V8,
+} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, Option, Stream, pipe } from 'effect';
 import {
@@ -52,11 +56,16 @@ import * as V2 from '../v2/index.js';
  *   Recorded as plain data rather than by keeping the wallets themselves: the pre-fork state is built on the other
  *   ledger's wasm objects, whose lifetime ends with the variant scope the migration closes.
  *
- *   The `from` side is what the projection was allowed to see; the `to` side is what it produced. Under the replay design
- *   the interesting claim is on the `to` side — that a wallet crossing a fork starts with no coins at all and re-earns
- *   them by syncing, keeping only its identity and the cursor it inherited. `appliedIndex` is captured on both sides
- *   because comparing them is the only place the parked cursor is directly observable: once sync runs, a wallet that
- *   had rewound instead would read the same replay anyway and converge on the same state.
+ *   The `from` side is what the projection was allowed to see; the `to` side is what it produced. The interesting claim
+ *   is on the `to` side, and it is about the payload: a wallet crossing a fork carries its coins as plain data, because
+ *   nothing on the other side will ever announce them again. The tree itself is still empty at this point —
+ *   re-inserting the coins takes the secret keys, which migration by design does not hold — so `coinCount`/`firstFree`
+ *   read zero here and the carry is visible only as `carriedCoinCount`/`carriedTreeSize`. What turns one into the other
+ *   is the anchor step at the head of sync.
+ *
+ *   `appliedIndex` is captured on both sides because comparing them is where the parked cursor is directly observable:
+ *   the post-fork timeline continues the indexer's event ids rather than restarting them, so a migration that rewound
+ *   to zero would leave the wallet waiting on a stretch of history this ledger version's events do not occupy.
  */
 export type CapturedMigration = Readonly<{
   from: Readonly<{
@@ -75,6 +84,9 @@ export type CapturedMigration = Readonly<{
     coinCount: number;
     firstFree: bigint;
     coinHashCount: number;
+    /** How many coins the migration carried as plain data, and the tree size they have to be re-anchored into. */
+    carriedCoinCount: number;
+    carriedTreeSize: bigint | undefined;
   }>;
 }>;
 
@@ -95,6 +107,8 @@ const captureOutput = (migrated: V2.CoreWallet): CapturedMigration['to'] => ({
   coinCount: [...migrated.state.coins].length,
   firstFree: migrated.state.firstFree,
   coinHashCount: Object.keys(migrated.coinHashes).length,
+  carriedCoinCount: migrated.pendingAnchor?.coins.length ?? 0,
+  carriedTreeSize: migrated.pendingAnchor?.treeSize,
 });
 
 /** The real cross-ledger migration, with both ends recorded on the way through. */
@@ -145,16 +159,16 @@ const noOpPostForkHistory: V2.TransactionHistory.TransactionHistoryService = {
 /** What the post-fork variant is configured with: a source that does not exist yet. */
 type DeferredSourceConfiguration = Readonly<{
   networkId: NetworkId.NetworkId;
-  replayed: Effect.Effect<Simulator, never>;
+  postFork: Effect.Effect<Simulator, LedgerTranslationError>;
 }>;
 
 /**
- * The post-fork sync source, deferred until it exists.
+ * The post-fork sync source, deferred until the fork produces it.
  *
  * @remarks
- *   A source that never arrives is a broken harness rather than a wallet error — there is no `WalletError` that means
- *   "the simulated replay did not happen" — so failures are raised as defects instead of being folded into the sync
- *   error channel.
+ *   A source that never arrives — or a translation that failed — is a broken harness rather than a wallet error; there is
+ *   no `WalletError` that means "the simulated fork did not happen". So failures are raised as defects instead of being
+ *   folded into the sync error channel, where the variant's retry would quietly absorb them.
  */
 const postForkSyncService = (
   configuration: DeferredSourceConfiguration,
@@ -162,7 +176,7 @@ const postForkSyncService = (
   updates: (state, secretKeys) =>
     Stream.unwrap(
       pipe(
-        configuration.replayed,
+        configuration.postFork,
         Effect.orDie,
         Effect.map((chain) => V2.Sync.makeSimulatorSyncService({ simulator: chain }).updates(state, secretKeys)),
       ),
@@ -177,8 +191,13 @@ const postForkSyncService = (
 export type ForkWalletConfig = Readonly<{
   /** The pre-fork chain, available immediately. */
   preFork: V8.Simulator;
-  /** The post-fork source — the indexer's replayed timeline — which only exists once the fork has happened. */
-  replayed: Effect.Effect<Simulator, never>;
+  /**
+   * The post-fork source — the chain carrying the translated state — which only exists once the fork has happened.
+   *
+   * It re-announces nothing: everything the wallet owned before the boundary is already in the tree its genesis block
+   * holds, which is why a crossing wallet has to arrive carrying its coins.
+   */
+  postFork: Effect.Effect<Simulator, LedgerTranslationError>;
   networkId: NetworkId.NetworkId;
   /**
    * The version at which the post-fork variant is registered.
@@ -248,7 +267,7 @@ export type ForkWallet = Readonly<{
  * @returns The running wallet and its observation channels.
  */
 export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWallet> => {
-  const { preFork, replayed, networkId, forkVersion, seed, chainVersionProbe } = config;
+  const { preFork, postFork, networkId, forkVersion, seed, chainVersionProbe } = config;
 
   const preForkKeys = v8.ZswapSecretKeys.fromSeed(seed);
   const postForkKeys = v9.ZswapSecretKeys.fromSeed(seed);
@@ -281,7 +300,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
   const WalletClass = CustomForkingShieldedWallet(
     { networkId, forkVersion, ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}) },
     { builder: preForkBuilder, configuration: { networkId, simulator: preFork } },
-    { builder: postForkBuilder, configuration: { networkId, replayed } },
+    { builder: postForkBuilder, configuration: { networkId, postFork } },
   );
 
   return Effect.promise(() => WalletClass.startWithSeed(seed)).pipe(
