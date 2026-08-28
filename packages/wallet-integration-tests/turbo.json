@@ -1,0 +1,12 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "test:integration": {
+      // forkCrossing.integration.test.ts drives all three wallets across one fork whose handover is the real
+      // v8-to-v9 translation, a WASM artifact built from packages/state-translation/wasm. Declared so turbo builds it
+      // first rather than leaving the ordering to CI — which is why running any integration test in this package needs
+      // a Rust toolchain. Same trade-off, and same wiring, as packages/capabilities/turbo.json.
+      "dependsOn": ["$TURBO_EXTENDS$", "@midnightntwrk/wallet-sdk-state-translation#build:wasm"]
+    }
+  }
+}

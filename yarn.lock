@@ -2407,6 +2407,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-integration-tests@workspace:packages/wallet-integration-tests"
   dependencies:
+    "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
     "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.3"
     "@midnightntwrk/wallet-sdk-abstractions": "npm:^3.0.0-beta.0"
     "@midnightntwrk/wallet-sdk-address-format": "npm:^4.0.0-beta.2"
@@ -2416,6 +2417,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-prover-client": "npm:^2.0.0-beta.2"
     "@midnightntwrk/wallet-sdk-runtime": "npm:^1.0.6-beta.0"
     "@midnightntwrk/wallet-sdk-shielded": "npm:^4.0.0-beta.2"
+    "@midnightntwrk/wallet-sdk-state-translation": "workspace:^"
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "npm:^4.0.0-beta.2"
     "@types/node": "npm:^24.13.2"
     effect: "npm:^3.19.19"
