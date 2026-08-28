@@ -35,7 +35,7 @@ import type {
   ZswapEventsSubscription,
   ZswapEventsSubscriptionVariables,
 } from '@midnightntwrk/wallet-sdk-indexer-client';
-import { makeEventsSyncService } from '../Sync.js';
+import { type EventsSyncUpdate, type WalletSyncUpdate, makeEventsSyncService } from '../Sync.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Simulator, getLastBlock, getLastBlockEvents } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
@@ -146,6 +146,16 @@ const createMockSubscriptionFn = (
     return baseStream;
   };
 };
+
+/**
+ * The events a batch carries.
+ *
+ * @remarks
+ *   The stream's element type also admits the anchor step, which only a wallet that crossed the ledger-version boundary
+ *   triggers — none of the wallets here carry one, so every element these tests see is an event batch.
+ */
+const eventsOf = (update: WalletSyncUpdate): readonly EventsSyncUpdate[] =>
+  update._tag === 'Events' ? update.updates : [];
 
 // Helper to capture batch information at the consumer and log it
 const withBatchLogging = <A, E, R>(
@@ -458,15 +468,15 @@ describe('Wallet subscription', () => {
 
       expect(Chunk.size(updates)).toBe(1);
       const batch = updates.pipe(Chunk.unsafeHead);
-      expect(batch.updates.map((u) => u.id)).toEqual([1, 2, 3, 4, 5, 6]);
-      expect(batch.updates.map((u) => u.protocolVersion)).toEqual([3, 3, 3, 9, 9, 11]);
+      expect(eventsOf(batch).map((u) => u.id)).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(eventsOf(batch).map((u) => u.protocolVersion)).toEqual([3, 3, 3, 9, 9, 11]);
     });
 
     it('keeps each event paired with its own version when the batch boundary splits them', async () => {
       const updates = await collectUpdates(6, 2);
 
       expect(Chunk.size(updates)).toBe(3);
-      expect(Chunk.toArray(updates).map((batch) => batch.updates.map((u) => u.protocolVersion))).toEqual([
+      expect(Chunk.toArray(updates).map((batch) => eventsOf(batch).map((u) => u.protocolVersion))).toEqual([
         [3, 3],
         [3, 9],
         [9, 11],

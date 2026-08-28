@@ -24,6 +24,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
 import {
   type EventsSyncUpdate,
+  SimulatorSyncUpdate,
   WalletSyncUpdate,
   makeEventsSyncCapability,
   makeSimulatorSyncCapability,
@@ -344,7 +345,7 @@ describe('makeSimulatorSyncCapability.applyUpdate boundary handling', () => {
 
     const [state, result] = capability.applyUpdate(
       freshWallet(),
-      { update: simulatorState, secretKeys: secretKeys() },
+      SimulatorSyncUpdate.create(simulatorState, secretKeys()),
       activeRange,
     );
 
@@ -360,7 +361,7 @@ describe('makeSimulatorSyncCapability.applyUpdate boundary handling', () => {
 
     const [state, result] = capability.applyUpdate(
       freshWallet(),
-      { update: simulatorState, secretKeys: secretKeys() },
+      SimulatorSyncUpdate.create(simulatorState, secretKeys()),
       activeRange,
     );
 
