@@ -103,7 +103,7 @@ describe('the carry-over migration', () => {
 });
 
 describe('the cross-ledger migration', () => {
-  it('carries the public keys, so the replayed timeline can be decrypted into the same coins', async () => {
+  it('carries the public keys, so the same identity owns the wallet on the far side', async () => {
     const previous = previousWallet();
 
     const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previous));
@@ -119,8 +119,9 @@ describe('the cross-ledger migration', () => {
   });
 
   it('starts from an empty local state rather than carrying the previous version coins', async () => {
-    // The indexer replays the timeline after the fork, so these coins arrive again as events of this ledger version.
-    // Carrying them as well would double-count them, and rebuilding the tree would need secret keys this has none of.
+    // Shape parity, not a working crossing: this is the oldest registered variant, no ledger version below it exists,
+    // so nothing ever migrates into here. The coin carry and re-anchoring live in the v2 twin, which is where a real
+    // fork lands, and are deliberately not mirrored into a seam no chain can reach.
     const previous = previousWallet();
     expect(previous.state.coins.length).toBeGreaterThan(0);
 
@@ -131,11 +132,11 @@ describe('the cross-ledger migration', () => {
     expect(wallet.coinHashes).toEqual({});
   });
 
-  it('parks sync progress at the fork, because the replayed timeline continues the ids it left off at', async () => {
-    // The confirmed semantics: after the hard fork the indexer replays the events again, numbering them onwards from
-    // whatever id it had reached when the fork happened — never from zero. So the migrated wallet resumes from where
-    // its predecessor stopped. Rewinding to zero would point it at a stretch of the timeline the replay does not
-    // occupy, and it would sit there waiting for events that already went by under the previous ledger version.
+  it('parks sync progress at the fork, because event ids continue across it rather than restarting', async () => {
+    // The confirmed semantics: a hard fork does not restart the timeline. The indexer numbers events onwards from
+    // whatever id it had reached when the fork happened — never from zero — so a migrated wallet resumes from where
+    // its predecessor stopped. Rewinding to zero would point it at a stretch of the timeline this ledger version's
+    // events do not occupy, and it would sit there waiting for ones that already went by.
     const previous = previousWallet();
     expect(previous.progress.appliedIndex).toBeGreaterThan(0n);
 

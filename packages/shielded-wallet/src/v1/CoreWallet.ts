@@ -165,26 +165,30 @@ export const CoreWallet = {
    * Projects a wallet inherited from the previous ledger version onto a fresh state of this one.
    *
    * @remarks
-   *   No coin data crosses the boundary. Serialized local state is not readable by this ledger version, and it does not
-   *   need to be: the indexer replays the timeline after the fork, so this variant re-discovers the same coins by
-   *   ordinary sync of the replayed events, decrypting them with the keys the sync restart supplies. Carrying coins
-   *   across would duplicate what the replay is about to deliver.
+   *   No coin data crosses the boundary here, and that is a decision rather than an oversight. This is the oldest variant
+   *   the wallet registers and no ledger version below it exists, so nothing ever hands a state to this projection: it
+   *   is shape parity with the twin at `src/v2`, which is the variant a real crossing lands in. That twin carries the
+   *   previous wallet's coins across as plain data — type, nonce, value and Merkle index, plus the size the pre-fork
+   *   tree had reached — and re-anchors them into a local tree at sync start, because the chain's state translation
+   *   continues the commitment tree across the fork and the indexer re-emits none of the pre-fork timeline (see
+   *   `src/v2/Migration.ts` and `CoreWallet.anchor` there). Mirroring that machinery into a seam no chain can reach
+   *   would buy nothing, so this side stays as it is.
    *
-   *   What crosses is therefore identity and position: the public keys — which decide what the replay can be decrypted
-   *   into — the network, the protocol version that triggered the hand-over, kept so the new variant starts inside its
-   *   own activation range rather than immediately signalling backwards, and the cursor the previous variant stopped
-   *   at.
+   *   What crosses is therefore identity and position: the public keys — which decide whose coins the far side can
+   *   decrypt — the network, the protocol version that triggered the hand-over, kept so the new variant starts inside
+   *   its own activation range rather than immediately signalling backwards, and the cursor the previous variant
+   *   stopped at.
    *
-   *   **Sync progress is parked at the fork, not rewound**: the previous wallet's cursor crosses unchanged. The replay is
-   *   not a second timeline but the same one continuing — the indexer numbers the replayed events onwards from whatever
-   *   id it had reached when the fork happened, never from zero — so resuming from the inherited cursor is what puts
-   *   this wallet in front of them. Rewinding to zero would park it on a stretch of history that this ledger version's
-   *   events do not occupy. What does not cross is `isConnected`: no sync is running behind this state yet.
+   *   **Sync progress is parked at the fork, not rewound**: the previous wallet's cursor crosses unchanged. A fork does
+   *   not restart the timeline — event ids run onwards from whatever the indexer had reached when it happened, never
+   *   from zero — so resuming from the inherited cursor is what puts this wallet in front of what comes next. Rewinding
+   *   to zero would park it on a stretch of history that this ledger version's events do not occupy. What does not
+   *   cross is `isConnected`: no sync is running behind this state yet.
    *
    *   Coin hashes start empty for the same reason the tree does: they are commitments and nullifiers computed under the
-   *   previous ledger's codec, and this version recomputes its own as the replayed coins arrive.
+   *   previous ledger's codec, and this version recomputes its own from the keys and whatever state it ends up with.
    * @param previous The plain data read off the previous ledger version's wallet.
-   * @returns A wallet of this ledger version holding no coins, positioned at the fork, ready to sync the replay.
+   * @returns A wallet of this ledger version holding no coins, positioned at the fork.
    */
   fromPreviousVersion(previous: {
     readonly publicKeys: PublicKeys;

@@ -25,11 +25,12 @@ beyond it must be left unapplied for the next variant. Exported helpers implemen
 ignore the argument keep their present behavior.
 
 **Builders gain a migration seam** (`withMigration` / `withMigrationDefaults`) with three shipped strategies: empty
-wallet (the default, unchanged), carry-over within a ledger version, and cross-ledger. Crossing a fork, the shielded
-and dust wallets start the new variant on a fresh state carrying identity and sync position only — the indexer replays
-the timeline after a fork, so the wallet re-discovers the same coins through ordinary sync, with its cursor parked at
-the boundary. Unshielded state is public UTXO data and is carried over field for field. After a migration each wallet
-restarts its own background synchronization; `stop` prevents a late restart.
+wallet (the default, unchanged), carry-over within a ledger version, and cross-ledger. Crossing a fork, each wallet
+carries what its own resource requires: the shielded wallet takes its coins across as plain data and re-anchors them
+into a new local tree at the next sync, the dust wallet starts on a fresh state and re-discovers its own through
+ordinary sync because the chain wipes and replays dust at the fork, and unshielded state is public UTXO data carried
+over field for field. All three keep their identity and park their cursor at the boundary. After a migration each
+wallet restarts its own background synchronization; `stop` prevents a late restart.
 
 On `./v1`: the unshielded pre-fork variant adopts the current asynchronous signing architecture (`SigningService` /
 `SignSegment`) and exports its own ledger-v8 keystore, and its deserialization now rejects a snapshot whose address

@@ -82,9 +82,9 @@ export const makeCarryOverMigration = (): StateMigration<CoreWallet> => ({
  *   projection reads is plain data — the ledger's key and network types are all string aliases — so a structural
  *   description is both sufficient and the only version-agnostic option.
  *
- *   `progress` is where the migrated wallet resumes from: the replayed timeline continues the indexer's event ids rather
- *   than restarting them, so the previous variant's cursor is the position the next one has to start at (see
- *   {@link makeCrossLedgerMigration}).
+ *   `progress` is where a migrated wallet resumes from: event ids continue across a fork rather than restarting, so the
+ *   previous variant's cursor is the position the next one has to start at. Nothing ever fills this shape in practice —
+ *   see {@link makeCrossLedgerMigration} for why this variant is never on the receiving end of a crossing.
  */
 export type PreviousLedgerWallet = Readonly<{
   publicKeys: { readonly coinPublicKey: string; readonly encryptionPublicKey: string };
@@ -94,23 +94,27 @@ export type PreviousLedgerWallet = Readonly<{
 }>;
 
 /**
- * The migration across a ledger-version boundary: a coinless state of this version, carrying identity and position.
+ * The migration across a ledger-version boundary: for this variant, shape parity and nothing else.
  *
  * @remarks
- *   The indexer replays the timeline after the hard fork, re-emitting the wallet's history as events of the new ledger
- *   version. A migrated wallet therefore does not need — and must not attempt — to carry its coins: it re-discovers
- *   exactly the same ones by ordinary sync, decrypting the replayed events with the keys the post-migration sync
- *   restart hands it. Carrying them across as well would double-count what the replay is about to deliver, on top of
- *   requiring the secret keys that migration by design does not have.
+ *   This is the oldest variant the wallet registers, and no ledger version below the one it is built on exists to be
+ *   registered under it. Nothing can therefore ever hand a state _to_ here: this seam is never exercised by a real
+ *   chain. It exists because both twins declare the same builder surface, and a builder that could not name a
+ *   cross-ledger migration would be a different type on each side of the fork.
  *
- *   So what crosses is public keys, the network, the protocol version that triggered the hand-over, and the cursor. Sync
- *   progress is **parked at the fork** rather than rewound: the indexer numbers the replayed events onwards from
- *   whatever id it had reached when the fork happened, never from zero, so the inherited cursor is exactly where the
- *   replay begins. A wallet that rewound to zero would wait on a stretch of the timeline this ledger version's events
- *   do not occupy.
+ *   The twin at `src/v2` is where a crossing actually happens, and it does something this one deliberately does not
+ *   mirror. The chain's state translation carries every commitment across the fork in place — the post-fork tree
+ *   continues at the index the pre-fork tree reached, and the indexer re-emits none of the pre-fork timeline — so a
+ *   wallet that started coinless there would simply lose its coins. That migration flattens the previous wallet's coins
+ *   to plain data with their Merkle indices, and `CoreWallet.anchor`, run by the sync layer that holds the secret keys,
+ *   rebuilds the local tree from them before any post-fork event is applied (see `src/v2/Migration.ts` and
+ *   `src/v2/CoreWallet.ts`). Porting that mechanism back here would be machinery for a case that cannot arise, so it
+ *   stays out: a deliberate, permanent exclusion of the kind the twin convention allows for, not a gap left to close.
  *
- *   If the ledger team ships a byte-level translation for wallet local state, it replaces this instance without touching
- *   anything around it — that is the point of the {@link StateMigration} seam.
+ *   What crosses here is public keys, the network, the protocol version that triggered the hand-over, and the cursor.
+ *   Sync progress is **parked at the fork** rather than rewound, on the rule that outlives the design change: event ids
+ *   continue across a fork rather than restarting from zero, so the inherited cursor is exactly where reading resumes.
+ *   A wallet that rewound to zero would wait on a stretch of the timeline this ledger version's events do not occupy.
  * @returns A migration from a previous-ledger-version wallet.
  */
 export const makeCrossLedgerMigration = (): StateMigration<PreviousLedgerWallet> => ({

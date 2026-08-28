@@ -17,7 +17,7 @@
  * @remarks
  *   The three strategies differ in exactly one thing — how much of the previous wallet is allowed to survive — so that is
  *   what these pin down: everything (same ledger version), nothing (no previous wallet at all), and, across a ledger
- *   version boundary, identity only.
+ *   version boundary, identity plus the coins flattened to plain data for the sync layer to re-anchor.
  */
 
 import * as v8 from '@midnight-ntwrk/ledger-v8';
@@ -98,7 +98,7 @@ describe('the carry-over migration', () => {
 });
 
 describe('the cross-ledger migration', () => {
-  it('carries the public keys, so the replayed timeline can be decrypted into the same coins', async () => {
+  it('carries the public keys, so the same identity owns the carried coins on the far side', async () => {
     const previous = previousWallet();
 
     const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previous));
@@ -188,11 +188,11 @@ describe('the cross-ledger migration', () => {
     expect([...wallet.state.coins]).toEqual([]);
   });
 
-  it('parks sync progress at the fork, because the replayed timeline continues the ids it left off at', async () => {
-    // The confirmed semantics: after the hard fork the indexer replays the events again, numbering them onwards from
-    // whatever id it had reached when the fork happened — never from zero. So the migrated wallet resumes from where
-    // its predecessor stopped. Rewinding to zero would point it at a stretch of the timeline the replay does not
-    // occupy, and it would sit there waiting for events that already went by under the previous ledger version.
+  it('parks sync progress at the fork, because event ids continue across it rather than restarting', async () => {
+    // The confirmed semantics: a hard fork does not restart the timeline. The indexer numbers events onwards from
+    // whatever id it had reached when the fork happened — never from zero — so the migrated wallet resumes from where
+    // its predecessor stopped. Rewinding to zero would point it at a stretch of the timeline this ledger version's
+    // events do not occupy, and it would sit there waiting for ones that already went by.
     const previous = previousWallet();
     expect(previous.progress.appliedIndex).toBeGreaterThan(0n);
 
