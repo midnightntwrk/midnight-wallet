@@ -65,8 +65,8 @@ export const makeEmptyWalletMigration = (configuration: EmptyWalletMigrationConf
  *
  * @remarks
  *   Both sides speak the same state type, so the carry is the identity: local Merkle tree, coins, coin hashes and sync
- *   progress all remain valid, and there is nothing to re-anchor. This is the right strategy for a protocol bump that
- *   does not change serialization.
+ *   progress all remain valid, and nothing has to be re-read. This is the right strategy for a protocol bump that does
+ *   not change serialization.
  * @returns A migration from a {@link CoreWallet} of this ledger version.
  */
 export const makeCarryOverMigration = (): StateMigration<CoreWallet> => ({
@@ -105,10 +105,10 @@ export type PreviousLedgerWallet = Readonly<{
  *   The twin at `src/v2` is where a crossing actually happens, and it does something this one deliberately does not
  *   mirror. The chain's state translation carries every commitment across the fork in place — the post-fork tree
  *   continues at the index the pre-fork tree reached, and the indexer re-emits none of the pre-fork timeline — so a
- *   wallet that started coinless there would simply lose its coins. That migration flattens the previous wallet's coins
- *   to plain data with their Merkle indices, and `CoreWallet.anchor`, run by the sync layer that holds the secret keys,
- *   rebuilds the local tree from them before any post-fork event is applied (see `src/v2/Migration.ts` and
- *   `src/v2/CoreWallet.ts`). Porting that mechanism back here would be machinery for a case that cannot arise, so it
+ *   wallet that started coinless there would simply lose its coins. That migration therefore reads the previous
+ *   wallet's local state across whole, by handing its serialization to this ledger version's deserializer: the two
+ *   majors either side of that boundary share the `zswap-local-state` codec (see `src/v2/Migration.ts` and
+ *   `src/v2/test/byteCrossing.test.ts`). Porting that back here would be machinery for a case that cannot arise, so it
  *   stays out: a deliberate, permanent exclusion of the kind the twin convention allows for, not a gap left to close.
  *
  *   What crosses here is public keys, the network, the protocol version that triggered the hand-over, and the cursor.

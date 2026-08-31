@@ -18,19 +18,19 @@
  *   A hard fork does not re-announce anything. The chain's state translation carries every commitment across in place:
  *   the post-fork chain opens holding the tree the pre-fork chain ended with, continues inserting at the index that
  *   tree reached, and the indexer numbers its events onwards from where it had got to. Nothing about the pre-fork
- *   timeline is served a second time — which is why a wallet crossing the boundary has to carry its coins and re-anchor
- *   them, and why these suites are built around a post-fork chain that announces **nothing**.
+ *   timeline is served a second time — which is why a wallet crossing the boundary has to bring its own local state
+ *   with it, and why these suites are built around a post-fork chain that announces **nothing**.
  *
  *   `ForkSimulator` already models that chain; what it needs is a {@link LedgerStateTranslator}, and the real one is a
  *   WASM artifact that only the integration tier builds. {@link translationStub} stands in for it here. It cannot read
- *   the pre-fork bytes it is handed — no ledger version can deserialize another's state — so it reconstructs the answer
- *   instead: a coin commitment is a function of the coin and its owner's public key alone, so re-paying _the same_
- *   coins — same token type, same nonce, same value, same recipients, same order — on a throwaway post-fork chain
- *   reproduces the pre-fork tree exactly, commitment for commitment. That chain's ledger is the translation's output.
- *   The re-payments are an internal construction detail and never reach any wallet: what leaves this module is a ledger
- *   state, which `ForkSimulator` installs in the post-fork chain's genesis block. `forkSimulation.integration.test.ts`
- *   swaps in the ledger team's real translation and asserts the same claims, which is what makes the substitution
- *   honest.
+ *   the pre-fork bytes it is handed — the `LedgerState` codec did move at this fork, unlike the wallet's own
+ *   `zswap-local-state` one — so it reconstructs the answer instead: a coin commitment is a function of the coin and
+ *   its owner's public key alone, so re-paying _the same_ coins — same token type, same nonce, same value, same
+ *   recipients, same order — on a throwaway post-fork chain reproduces the pre-fork tree exactly, commitment for
+ *   commitment. That chain's ledger is the translation's output. The re-payments are an internal construction detail
+ *   and never reach any wallet: what leaves this module is a ledger state, which `ForkSimulator` installs in the
+ *   post-fork chain's genesis block. `forkSimulation.integration.test.ts` swaps in the ledger team's real translation
+ *   and asserts the same claims, which is what makes the substitution honest.
  *
  *   {@link makePayingPostForkChain} is the other post-fork chain a fork suite needs, and a different thing entirely: an
  *   ordinary chain that pays coins out after the fork, for wallets that _start_ past the boundary rather than cross it
@@ -157,9 +157,9 @@ export type PayingPostForkChainConfig = Readonly<{
  * A post-fork chain that pays `coins` out as ordinary post-fork transactions.
  *
  * @remarks
- *   For wallets that start _after_ the fork rather than crossing it: they have nothing carried and no anchor to perform,
- *   so the only way they can come to hold anything is the ordinary one — somebody pays them, and they sync it. Nothing
- *   here models a fork; a chain that has crossed one announces no pre-fork coin.
+ *   For wallets that start _after_ the fork rather than crossing it: they arrive with nothing, so the only way they can
+ *   come to hold anything is the ordinary one — somebody pays them, and they sync it. Nothing here models a fork; a
+ *   chain that has crossed one announces no pre-fork coin.
  * @param config The network, the version its blocks are stamped with, where its numbering and clock start, the producer
  *   and the coins.
  * @returns The chain, once every coin has been paid.
