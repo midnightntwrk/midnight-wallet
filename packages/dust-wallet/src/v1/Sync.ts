@@ -23,6 +23,7 @@ import {
   Chunk,
   Schedule,
   Option,
+  identity,
 } from 'effect';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { LedgerParametersCodec } from '@midnightntwrk/wallet-sdk-capabilities/codecs';
@@ -32,7 +33,7 @@ import {
   Event as LedgerEvent,
   LedgerParameters,
 } from '@midnight-ntwrk/ledger-v8';
-import { BlockHash, DustLedgerEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
+import { BlockHash, DustLedgerEventTip, DustLedgerEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
   HttpQueryClient,
@@ -206,10 +207,31 @@ export type BatchUpdatesConfig = {
   readonly spacing?: number;
 };
 
+/**
+ * How often the sync source re-asks the chain which protocol version it is on.
+ *
+ * @remarks
+ *   The event subscription this source reads has no progress arm: it says nothing at all when there is nothing to say. A
+ *   wallet therefore observes the chain's protocol version only through dust events, and on a chain that crosses a
+ *   protocol boundary and then produces no dust traffic it observes no version at all — it stays on the variant it was
+ *   running, and everything built through it stays routed to that variant's ledger. Asking on a timer is what closes
+ *   that, and the cost of asking is one small query per interval on a chain that has not moved.
+ */
+export type VersionWatchConfig = {
+  /**
+   * Milliseconds between checks. Zero or less turns the watcher off entirely, which is what a source driving a wallet
+   * from something other than a live chain wants.
+   *
+   * @default 30000
+   */
+  readonly intervalMs?: number;
+};
+
 export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
   networkId: NetworkId;
   batchUpdates?: BatchUpdatesConfig;
+  versionWatch?: VersionWatchConfig;
   /** The ledger parameters codecs blocks are read with; defaults to {@link defaultLedgerParametersCodecs}. */
   ledgerParametersCodecs?: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters>;
 };
@@ -307,20 +329,186 @@ export type WalletSyncSubscription = Schema.Schema.Type<typeof SyncEventsUpdateS
  */
 export const readEvent = (event: { readonly raw: string }): LedgerEvent => Schema.decodeSync(HexedEvent)(event.raw);
 
-export type WalletSyncUpdate = {
+/** The ordinary arm of {@link WalletSyncUpdate}: a batch of the indexer's dust event timeline, still encoded. */
+export type EventsWalletSyncUpdate = {
+  _tag: 'Events';
   updates: WalletSyncSubscription[];
   secretKey: DustSecretKey;
   timestamp: Date;
 };
-export const WalletSyncUpdate = {
-  create: (updates: WalletSyncSubscription[], secretKey: DustSecretKey, timestamp: Date): WalletSyncUpdate => {
+
+/**
+ * What the chain says about itself when its dust timeline says nothing.
+ *
+ * @remarks
+ *   An observation, not a piece of the chain: it moves no cursor, inserts nothing and produces no changes. All it can do
+ *   is record a protocol version, which is enough, because recording one outside the running variant's activation range
+ *   is exactly what makes the runtime hand over.
+ *
+ *   `highestEventId` is what makes the record safe to make. Handing over parks the sync cursor where it stands, and the
+ *   variant that takes over re-fetches from there — so an event still unread below the source's tip would reach it as
+ *   bytes of the version that preceded it, which its ledger cannot deserialize. The signal therefore travels with the
+ *   far end of the source's dust event timeline, so the capability can refuse it while anything remains unread.
+ *
+ *   There is deliberately no "the source provably holds no dust event" arm, which is where this departs from its shielded
+ *   twin. Shielded can settle that from the tip alone: a commitment tree that has never grown cannot have had a
+ *   nullifier spent against it either, so `zswapEndIndex === 0` proves the timeline is empty. Dust has no such witness
+ *   — a `ParamChange` is a dust ledger event and moves neither the commitment tree nor the generation tree, so both end
+ *   indices at zero prove nothing. A chain holding literally no dust event therefore never produces a signal; it
+ *   crosses on its first dust event instead. That is a liveness cost on a chain nobody has used, not a correctness one,
+ *   and it is preferred to a shortcut that cannot be justified.
+ */
+export type VersionSignalSyncUpdate = Readonly<{
+  _tag: 'VersionSignal';
+  /** The protocol version the source's tip was reported under. */
+  version: number;
+  /** The highest dust event id the source holds. */
+  highestEventId: number;
+}>;
+export const VersionSignalSyncUpdate = {
+  create: (version: number, highestEventId: number): VersionSignalSyncUpdate => {
     return {
+      _tag: 'VersionSignal',
+      version,
+      highestEventId,
+    };
+  },
+};
+
+/**
+ * What the indexer-backed sync source emits.
+ *
+ * @remarks
+ *   Ordinarily a batch of dust events; and, on a timer, what the chain says about its own version when its timeline says
+ *   nothing.
+ */
+export type WalletSyncUpdate = EventsWalletSyncUpdate | VersionSignalSyncUpdate;
+export const WalletSyncUpdate = {
+  create: (updates: WalletSyncSubscription[], secretKey: DustSecretKey, timestamp: Date): EventsWalletSyncUpdate => {
+    return {
+      _tag: 'Events',
       updates,
       secretKey,
       timestamp,
     };
   },
 };
+
+/** How often the chain is asked its version when the configuration does not say. */
+const DEFAULT_VERSION_WATCH_INTERVAL_MS = 30_000;
+
+/**
+ * How long one event-id probe is given to produce its single answer.
+ *
+ * @remarks
+ *   Both a stall guard and, on a chain with no dust history at all, the ordinary way the tick ends. A wallet with a
+ *   cursor subscribes at an event that provably exists, so there the answer arrives at once or the transport is broken;
+ *   a wallet on a chain that has never produced a dust event subscribes to a timeline the indexer will keep open and
+ *   never write to. Without a bound, either would leave the poll loop parked on a tick that never completes and the
+ *   wallet would stop asking altogether. A bound turns both into a skipped tick.
+ */
+const EVENT_TIP_PROBE_TIMEOUT = Duration.seconds(10);
+
+/**
+ * Asks the source how far its dust event timeline goes.
+ *
+ * @remarks
+ *   Over the event subscription rather than a query, because the schema has no query that reaches a dust ledger event:
+ *   `block`/`transactions` reach one only through a block that happens to contain dust events, which on a quiet chain
+ *   is precisely the block that does not. `maxId` is a property of the whole dust timeline — the indexer computes it as
+ *   the maximum id within the dust grouping — so any single event answers it: the first one delivered is taken and the
+ *   subscription closed.
+ *
+ *   The cursor is the wallet's own. The event it last applied provably exists, so the source answers immediately and has
+ *   the least backfill to abandon; a wallet that has applied nothing asks from the start, where the first event is —
+ *   or, on a chain with no dust event at all, where nothing is, and the tick times out into silence.
+ * @param config The sync configuration, carrying the keep-alive the source's subscriptions use.
+ * @param resumeFrom The wallet's cursor; below zero means "from the very start".
+ * @returns The highest dust event id, or nothing if the source did not answer.
+ */
+const highestEventId = (config: DefaultSyncConfiguration, resumeFrom: bigint) =>
+  pipe(
+    DustLedgerEventTip.run({ id: resumeFrom < 0n ? null : Number(resumeFrom) }),
+    Stream.runHead,
+    Effect.map(Option.map((answer) => answer.dustLedgerEvents.maxId)),
+    Effect.scoped,
+    Effect.timeout(EVENT_TIP_PROBE_TIMEOUT),
+  );
+
+/**
+ * One check of the chain's protocol version, gated on the wallet being caught up on the source's dust event ids.
+ *
+ * @remarks
+ *   The order of the two questions is load-bearing. The tip is read **first**: a tip reported at a version means the
+ *   source has indexed through the block that carries it, so every event below it is already counted in the `maxId`
+ *   read afterwards. Asked the other way round, an event indexed between the two answers could be one of the version
+ *   that preceded the tip — unread, uncounted, and exactly what the gate exists to catch.
+ *
+ *   The one short-circuit is an answer rather than a shortcut: a tip at or below the version the wallet already held is a
+ *   signal that could only be a no-op, so no probe is opened and nothing is emitted — which is what keeps a settled
+ *   wallet from polling a subscription for the rest of its life. There is deliberately no second short-circuit for a
+ *   chain that provably holds no dust event, because no such proof is available from the tip; see
+ *   {@link VersionSignalSyncUpdate}.
+ *
+ *   Everything else is swallowed. A tick that fails says nothing about the chain, so it must neither reach the state nor
+ *   take the sync stream down with it; the next tick is the retry, and costs nothing to wait for.
+ * @param config The sync configuration, for the indexer to ask.
+ * @param resumeFrom The wallet's cursor, for the probe.
+ * @param knownVersion The version the wallet already held when this stream opened — a lower bound on what it holds now.
+ * @returns The signal, or nothing when there is nothing to say or nobody said it.
+ */
+const readVersionSignal = (
+  config: DefaultSyncConfiguration,
+  resumeFrom: bigint,
+  knownVersion: ProtocolVersion.ProtocolVersion,
+): Effect.Effect<Option.Option<VersionSignalSyncUpdate>, never, SubscriptionClient> =>
+  pipe(
+    BlockHash.run({ offset: null }),
+    Effect.provide(HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl })),
+    Effect.scoped,
+    Effect.flatMap((answer) =>
+      Option.match(Option.fromNullable(answer.block), {
+        onNone: () => Effect.succeedNone,
+        onSome: (tip) =>
+          BigInt(tip.protocolVersion) <= knownVersion
+            ? Effect.succeedNone
+            : pipe(
+                highestEventId(config, resumeFrom),
+                Effect.map(Option.map((maxId) => VersionSignalSyncUpdate.create(tip.protocolVersion, maxId))),
+              ),
+      }),
+    ),
+    Effect.catchAll(() => Effect.succeedNone),
+  );
+
+/**
+ * The chain's version, re-asked on a timer for as long as sync runs.
+ *
+ * @remarks
+ *   Deliberately silent about ticks that say nothing: a tick that finds the chain where the wallet left it, or that
+ *   cannot reach the chain at all, emits no element rather than an empty one, so nothing downstream has to know that
+ *   polling is how the answer was arrived at.
+ * @param config The sync configuration, carrying the interval.
+ * @param resumeFrom The wallet's cursor, for the probe.
+ * @param knownVersion The version the wallet held when this stream opened.
+ * @returns The signals, or an empty stream when watching is turned off.
+ */
+const versionWatch = (
+  config: DefaultSyncConfiguration,
+  resumeFrom: bigint,
+  knownVersion: ProtocolVersion.ProtocolVersion,
+): Stream.Stream<VersionSignalSyncUpdate, never, SubscriptionClient> => {
+  const intervalMs = config.versionWatch?.intervalMs ?? DEFAULT_VERSION_WATCH_INTERVAL_MS;
+
+  return intervalMs <= 0
+    ? Stream.empty
+    : pipe(
+        Stream.fromSchedule(Schedule.spaced(Duration.millis(intervalMs))),
+        Stream.mapEffect(() => readVersionSignal(config, resumeFrom, knownVersion)),
+        Stream.filterMap(identity),
+      );
+};
+
 export const makeDefaultSyncService = (
   config: DefaultSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, WalletSyncUpdate> => {
@@ -334,7 +522,7 @@ export const makeDefaultSyncService = (
       const batchTimeout = Duration.millis(config.batchUpdates?.timeout ?? 1);
       const batchSpacing = config.batchUpdates?.spacing ?? 4;
 
-      return pipe(
+      const timeline = pipe(
         indexerSyncService.subscribeWallet(state),
         Stream.groupedWithin(batchSize, batchTimeout),
         Stream.map(Chunk.toArray),
@@ -342,9 +530,21 @@ export const makeDefaultSyncService = (
         batchSpacing > 0
           ? Stream.schedule(Schedule.spaced(Duration.millis(batchSpacing)))
           : (eventsStream) => eventsStream,
+      );
+
+      // The same cursor `subscribeWallet` resumes from: the source's cursor is inclusive, so the probe re-asks at the
+      // last event this wallet applied — one it provably holds — rather than one past it.
+      const resumeFrom = state.progress.appliedIndex - 1n;
+
+      // The timeline is what the source is for, so it decides when the source is done: `haltStrategy: 'left'` stops the
+      // watcher with it rather than leaving a poll loop running against a stream nobody is reading. It has nothing to
+      // say about failure — a failing timeline still fails the merged stream, where the variant's retry can see it.
+      return pipe(
+        Stream.merge(timeline, versionWatch(config, resumeFrom, state.protocolVersion), { haltStrategy: 'left' }),
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },
+
     blockData: (): Effect.Effect<BlockData, WalletError> => {
       return Effect.gen(function* () {
         const query = yield* BlockHash;
@@ -468,6 +668,37 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
   };
 };
 
+/** The result of an update that observed nothing of the chain. */
+const noChanges = (state: CoreWallet): ChangesResult => ({
+  changes: [],
+  protocolVersion: Number(state.protocolVersion),
+});
+
+/**
+ * Folds what the chain said about its own version into the wallet state.
+ *
+ * @remarks
+ *   The same recording the event path makes through {@link annotateVersion}, and nothing else: no cursor moves, no dust
+ *   changes hands, no tree grows. A signal is an observation about the chain, not a piece of it.
+ *
+ *   One situation makes the observation unsafe to record, and it leaves the state exactly as it was: unread events below
+ *   the source's tip mean the hand-over would park the cursor in front of history the next variant cannot read — and
+ *   those events carry the version themselves, so nothing is lost by waiting for them. That is not an error: the next
+ *   tick asks again.
+ *
+ *   A version at or below the one already recorded needs no guard of its own — {@link annotateVersion} never goes
+ *   backwards — so a source briefly answering from a lagging replica cannot drag a wallet back over a boundary.
+ * @param state The wallet to record on.
+ * @param update What the chain said, and how far its dust event timeline goes.
+ * @returns The wallet, annotated or untouched, and an empty result.
+ */
+const applyVersionSignal = (state: CoreWallet, update: VersionSignalSyncUpdate): [CoreWallet, ChangesResult] => [
+  BigInt(update.highestEventId) > state.progress.appliedIndex
+    ? state
+    : annotateVersion(state, Option.some(ProtocolVersion.ProtocolVersion(BigInt(update.version)))),
+  noChanges(state),
+];
+
 export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
   return {
     applyUpdate(
@@ -475,6 +706,10 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
       wrappedUpdate: WalletSyncUpdate,
       activeRange: ProtocolVersion.ProtocolVersion.Range,
     ): [CoreWallet, ChangesResult] {
+      if (wrappedUpdate._tag === 'VersionSignal') {
+        return applyVersionSignal(state, wrappedUpdate);
+      }
+
       const { updates, secretKey } = wrappedUpdate;
 
       // Nothing to update yet

@@ -151,4 +151,47 @@ export const ProgressSchema = Schema.Struct({
 
 export const WalletSyncUpdateSchema = Schema.Union(UnshieldedUpdateSchema, ProgressSchema);
 
-export type WalletSyncUpdate = Schema.Schema.Type<typeof WalletSyncUpdateSchema>;
+/** What the indexer's subscription says, decoded: either a transaction touching this address, or how far it has got. */
+export type IndexerSyncUpdate = Schema.Schema.Type<typeof WalletSyncUpdateSchema>;
+
+/**
+ * What the chain says about itself when this address's timeline says nothing.
+ *
+ * @remarks
+ *   An observation, not a piece of the chain: it moves no cursor, creates and spends nothing. All it can do is record a
+ *   protocol version, which is enough, because recording one outside the running variant's activation range is exactly
+ *   what makes the runtime hand over. It is not decoded off the wire like the other two arms — the source assembles it
+ *   from two answers the indexer gives separately — so it is a plain type rather than a schema.
+ *
+ *   `highestTransactionId` is what makes the record safe to make. Handing over parks the sync cursor where it stands, and
+ *   the variant that takes over resumes from there — so a transaction still unapplied below the address's tip would be
+ *   created and spent into a state assembled by a variant that never saw the history leading to it. The signal
+ *   therefore travels with the far end of this address's timeline, so the capability can refuse it while anything
+ *   remains unapplied. Zero means the indexer holds no transaction for this address at all, which is the one case where
+ *   nothing can be unapplied no matter what the wallet has done.
+ */
+export type VersionSignalSyncUpdate = Readonly<{
+  type: 'VersionSignal';
+  /** The protocol version the chain's tip was reported under. */
+  version: number;
+  /** The highest transaction id the source holds for this wallet's address; zero when it holds none. */
+  highestTransactionId: number;
+}>;
+export const VersionSignalSyncUpdate = {
+  create: (version: number, highestTransactionId: number): VersionSignalSyncUpdate => {
+    return {
+      type: 'VersionSignal',
+      version,
+      highestTransactionId,
+    };
+  },
+};
+
+/**
+ * What the indexer-backed sync source emits.
+ *
+ * @remarks
+ *   Ordinarily what the subscription decoded; and, on a timer, what the chain says about its own version when the
+ *   subscription says nothing.
+ */
+export type WalletSyncUpdate = IndexerSyncUpdate | VersionSignalSyncUpdate;

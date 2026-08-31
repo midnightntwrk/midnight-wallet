@@ -11,9 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 export * from './DustGenerationEvents.js';
+export * from './DustLedgerEventTip.js';
 export * from './DustLedgerEvents.js';
 export * from './DustNullifierTransactions.js';
 export * from './ShieldedTransactions.js';
+export * from './UnshieldedTransactionTip.js';
 export * from './UnshieldedTransactions.js';
 export * from './ZswapEventTip.js';
 export * from './ZswapEvents.js';

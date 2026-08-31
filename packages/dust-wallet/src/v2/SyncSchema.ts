@@ -534,14 +534,64 @@ export const readEvent = (event: { readonly raw: string }): LedgerEvent => Schem
 export const tryReadEvent = (event: { readonly raw: string }): Option.Option<LedgerEvent> =>
   Schema.decodeOption(HexedEvent)(event.raw);
 
-export type WalletSyncUpdate = {
+/** The ordinary arm of {@link WalletSyncUpdate}: a batch of the indexer's dust event timeline, still encoded. */
+export type EventsWalletSyncUpdate = {
+  _tag: 'Events';
   updates: WalletSyncSubscription[];
   secretKey: DustSecretKey;
   timestamp: Date;
 };
-export const WalletSyncUpdate = {
-  create: (updates: WalletSyncSubscription[], secretKey: DustSecretKey, timestamp: Date): WalletSyncUpdate => {
+
+/**
+ * What the chain says about itself when its dust timeline says nothing.
+ *
+ * @remarks
+ *   An observation, not a piece of the chain: it moves no cursor, inserts nothing and produces no changes. All it can do
+ *   is record a protocol version, which is enough, because recording one outside the running variant's activation range
+ *   is exactly what makes the runtime hand over.
+ *
+ *   `highestEventId` is what makes the record safe to make. Handing over parks the sync cursor where it stands, and the
+ *   variant that takes over re-fetches from there — so an event still unread below the source's tip would reach it as
+ *   bytes of the version that preceded it, which its ledger cannot deserialize. The signal therefore travels with the
+ *   far end of the source's dust event timeline, so the capability can refuse it while anything remains unread.
+ *
+ *   There is deliberately no "the source provably holds no dust event" arm, which is where this departs from its shielded
+ *   twin. Shielded can settle that from the tip alone: a commitment tree that has never grown cannot have had a
+ *   nullifier spent against it either, so `zswapEndIndex === 0` proves the timeline is empty. Dust has no such witness
+ *   — a `ParamChange` is a dust ledger event and moves neither the commitment tree nor the generation tree, so both end
+ *   indices at zero prove nothing. A chain holding literally no dust event therefore never produces a signal; it
+ *   crosses on its first dust event instead. That is a liveness cost on a chain nobody has used, not a correctness one,
+ *   and it is preferred to a shortcut that cannot be justified.
+ */
+export type VersionSignalSyncUpdate = Readonly<{
+  _tag: 'VersionSignal';
+  /** The protocol version the source's tip was reported under. */
+  version: number;
+  /** The highest dust event id the source holds. */
+  highestEventId: number;
+}>;
+export const VersionSignalSyncUpdate = {
+  create: (version: number, highestEventId: number): VersionSignalSyncUpdate => {
     return {
+      _tag: 'VersionSignal',
+      version,
+      highestEventId,
+    };
+  },
+};
+
+/**
+ * What the indexer-backed sync source emits.
+ *
+ * @remarks
+ *   Ordinarily a batch of dust events; and, on a timer, what the chain says about its own version when its timeline says
+ *   nothing.
+ */
+export type WalletSyncUpdate = EventsWalletSyncUpdate | VersionSignalSyncUpdate;
+export const WalletSyncUpdate = {
+  create: (updates: WalletSyncSubscription[], secretKey: DustSecretKey, timestamp: Date): EventsWalletSyncUpdate => {
+    return {
+      _tag: 'Events',
       updates,
       secretKey,
       timestamp,
