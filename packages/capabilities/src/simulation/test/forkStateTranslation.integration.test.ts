@@ -20,8 +20,9 @@
  *
  * **Integration tier because of a build step, not infra.** The translation is Rust — the ledger's translation crate
  * behind WASM bindings in `packages/state-translation/wasm` — so it has to be compiled first. `turbo` does that
- * automatically: `test:integration` depends on that package's `build:wasm`, so the artifact is always present here and
- * there is nothing to skip on. Nothing in this file needs Docker or a network.
+ * automatically: `test:integration` depends on that package's `artifacts` gate, which builds the WASM and verifies it
+ * translates, so the artifact is always present here and there is nothing to skip on. Nothing in this file needs Docker
+ * or a network.
  */
 
 import * as v8 from '@midnight-ntwrk/ledger-v8';

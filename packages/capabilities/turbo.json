@@ -2,10 +2,13 @@
   "extends": ["//"],
   "tasks": {
     "test:integration": {
-      // forkStateTranslation.integration.test.ts runs the real v8-to-v9 translation, which is a WASM artifact built from
-      // packages/state-translation/wasm. Declared so turbo builds it first rather than leaving the ordering to CI —
-      // which is why running any integration test in this package needs a Rust toolchain.
-      "dependsOn": ["$TURBO_EXTENDS$", "@midnightntwrk/wallet-sdk-state-translation#build:wasm"]
+      // forkStateTranslation.integration.test.ts runs the real v8-to-v9 translation, which
+      // @midnightntwrk/wallet-sdk-state-translation ships as a WASM artifact. What we depend on is that package's
+      // `artifacts` gate rather than the build that produces it, so how it is built — Rust, wasm-bindgen, the vendored
+      // storage patch — stays a detail of the package that owns it. Declared so turbo readies the artifact first
+      // rather than leaving the ordering to CI, and it is why running any integration test in this package needs a
+      // Rust toolchain.
+      "dependsOn": ["$TURBO_EXTENDS$", "@midnightntwrk/wallet-sdk-state-translation#artifacts"]
     }
   }
 }
