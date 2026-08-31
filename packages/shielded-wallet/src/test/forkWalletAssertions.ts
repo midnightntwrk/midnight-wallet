@@ -23,7 +23,7 @@
 import { ProtocolVersion, WalletTransaction, type AnyTx } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { type CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
-import { type CoreWallet as PostForkWallet, type PendingAnchor } from '../v2/CoreWallet.js';
+import { type CoreWallet as PostForkWallet } from '../v2/CoreWallet.js';
 
 /** A wallet on either side of the boundary. */
 export type EitherWallet = PreForkWallet | PostForkWallet;
@@ -81,19 +81,36 @@ export const treeSize = (wallet: EitherWallet): bigint => wallet.state.firstFree
  *
  * @remarks
  *   The single value that says whether a wallet's tree is the chain's tree. Comparing it to a root taken from a chain
- *   state is how a proof states that what the wallet rebuilt when it re-anchored is byte-for-byte the tree the ledger
- *   translation produced — not merely a tree with the same leaves in it.
+ *   state is how a proof states that what the wallet carried across the boundary is the tree the ledger translation
+ *   produced — not merely a tree with the same leaves in it.
  */
 export const merkleRoot = (wallet: EitherWallet): bigint | undefined => wallet.state.merkleTreeRoot;
 
 /**
- * What the wallet still owes itself from the other side of the boundary, if anything.
+ * Whether the wallet's coin hashes are still waiting to be computed.
  *
  * @remarks
- *   Only a wallet of the post-fork ledger version can carry one — the pre-fork variant has nothing to cross to — so this
- *   reads the union by asking, which narrows to the side that has the field. Present from the cross-ledger migration
- *   until the anchor step at the head of sync rebuilds the tree; its absence on a wallet holding coins is how a proof
- *   states that the carry completed rather than merely started.
+ *   Only a wallet of the post-fork ledger version can be waiting — the pre-fork variant is never on the receiving end of
+ *   a crossing — so this reads the union by asking, which narrows to the side that has the field. Set by the
+ *   cross-ledger migration, which holds no secret keys, and cleared by the first sync update, which carries them; its
+ *   absence on a wallet holding coins is how a proof states that the crossing finished rather than merely started.
  */
-export const carriedPayload = (wallet: EitherWallet): PendingAnchor | undefined =>
-  'pendingAnchor' in wallet ? wallet.pendingAnchor : undefined;
+export const awaitingCoinHashes = (wallet: EitherWallet): boolean =>
+  'coinHashesPending' in wallet && wallet.coinHashesPending === true;
+
+/** A coin the wallet is expecting but has not seen on chain yet, as plain data both ledger versions express alike. */
+export type ExpectedCoin = Readonly<{ commitment: string; nonce: string; value: bigint }>;
+
+/**
+ * The coins the wallet is still waiting for — its `pendingOutputs` — ascending by commitment.
+ *
+ * @remarks
+ *   A wallet that has built a transaction paying itself, or taken change out of one, is expecting an output it cannot yet
+ *   see: the commitment is known, the leaf is not on chain. That expectation is part of what a wallet owns, and nothing
+ *   on the far side of a fork re-announces it, so a crossing that dropped it would silently cost the wallet every coin
+ *   it was about to receive.
+ */
+export const expectedCoins = (wallet: EitherWallet): readonly ExpectedCoin[] =>
+  [...wallet.state.pendingOutputs.entries()]
+    .map(([commitment, [coin]]) => ({ commitment, nonce: coin.nonce, value: coin.value }))
+    .sort((left, right) => (left.commitment < right.commitment ? -1 : left.commitment > right.commitment ? 1 : 0));

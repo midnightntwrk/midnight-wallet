@@ -12,8 +12,9 @@
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type NetworkId, type SyncProgress, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Array as EArray, Effect, Order, pipe } from 'effect';
-import { type CarriedCoin, CoreWallet, PublicKeys } from './CoreWallet.js';
+import { EitherOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { Effect, Either, pipe } from 'effect';
+import { CoreWallet, PublicKeys } from './CoreWallet.js';
 import { type WalletError } from './WalletError.js';
 
 /**
@@ -65,8 +66,8 @@ export const makeEmptyWalletMigration = (configuration: EmptyWalletMigrationConf
  *
  * @remarks
  *   Both sides speak the same state type, so the carry is the identity: local Merkle tree, coins, coin hashes and sync
- *   progress all remain valid, and there is nothing to re-anchor. This is the right strategy for a protocol bump that
- *   does not change serialization.
+ *   progress all remain valid, and nothing has to be re-read. This is the right strategy for a protocol bump that does
+ *   not change serialization.
  * @returns A migration from a {@link CoreWallet} of this ledger version.
  */
 export const makeCarryOverMigration = (): StateMigration<CoreWallet> => ({
@@ -74,18 +75,15 @@ export const makeCarryOverMigration = (): StateMigration<CoreWallet> => ({
 });
 
 /**
- * The shape a wallet of the _previous_ ledger version must expose to be projected across a hard fork.
+ * The shape a wallet of the _previous_ ledger version must expose to be carried across a hard fork.
  *
  * @remarks
  *   Structural on purpose. The previous variant's `CoreWallet` is built on a different ledger module, and naming that
  *   module here would drag a second multi-megabyte WASM binary into this variant for the sake of a type. Everything the
- *   projection reads is plain data — the ledger's key and network types are all string aliases, and its
- *   `QualifiedShieldedCoinInfo` is a bare record of strings and bigints — so a structural description is both
- *   sufficient and the only version-agnostic option. That goes for `state` too: it names exactly the two members of the
- *   previous ledger's `ZswapLocalState` the projection reads — the set of unspent coins and `firstFree`, the size the
- *   commitment tree had reached — which that ledger's own state object satisfies as it is. The values behind the
- *   description may live in WASM; the projection copies them out eagerly and keeps no reference (see
- *   {@link makeCrossLedgerMigration}).
+ *   crossing reads is plain data — the ledger's key and network types are all string aliases — with one exception,
+ *   `state`, which is named by the single capability the crossing uses: it can serialize itself. Both ledger versions'
+ *   `ZswapLocalState` satisfies that as it is, and describing it that narrowly is what keeps this type version-agnostic
+ *   — the bytes are the interface, not the object (see {@link makeCrossLedgerMigration}).
  *
  *   `progress` is where the migrated wallet resumes from: the post-fork timeline continues the indexer's event ids rather
  *   than restarting them, so the previous variant's cursor is the position the next one has to start at (see
@@ -96,53 +94,48 @@ export type PreviousLedgerWallet = Readonly<{
   networkId: string;
   protocolVersion: bigint;
   progress: SyncProgress.SyncProgressData;
-  state: Readonly<{
-    coins: ReadonlySet<Readonly<{ type: string; nonce: string; value: bigint; mt_index: bigint }>>;
-    firstFree: bigint;
-  }>;
+  state: Readonly<{ serialize: () => Uint8Array }>;
 }>;
 
 /**
- * The migration across a ledger-version boundary: identity, position, and the coins flattened to plain data.
+ * The migration across a ledger-version boundary: the local state crosses as bytes, identity and position beside it.
  *
  * @remarks
  *   The chain's state translation carries every commitment across the fork in place — the post-fork tree continues at the
  *   index the pre-fork tree reached, and the indexer does **not** replay the pre-fork timeline as new-version events.
- *   So the coins must cross with the wallet, or they are gone. What migration cannot do is carry them as a ledger
- *   state: the previous version's serialized local state is unreadable here, and rebuilding a Merkle tree takes the
- *   secret keys — coins are indexed by nullifier — which migration by design does not hold.
+ *   So the wallet's own state must cross with it, or the coins are gone.
  *
- *   The projection therefore flattens each coin to a {@link CarriedCoin} — nothing but strings and bigints, copied out
- *   **eagerly** so no reference to the previous ledger's WASM-backed state or its collections survives the crossing —
- *   sorted by Merkle index, together with the tree size the gaps will be measured against. `CoreWallet.anchor`, run by
- *   the sync layer that does hold the keys, is what folds that payload back into a local state before any post-fork
- *   event is applied.
+ *   It crosses as bytes. The two ledger majors either side of this boundary serialize `ZswapLocalState` under the same
+ *   `zswap-local-state` codec — the transaction codec moved at the fork, this one did not — so the previous version's
+ *   serialization is something this version can simply read. The crossing is therefore a round-trip and not a
+ *   reconstruction, and everything survives it: the coins at the Merkle indices the chain gave them, the height the
+ *   tree had reached, and the outputs the wallet was still expecting, which no reconstruction from spendable coins
+ *   could have recovered. `src/v2/test/byteCrossing.test.ts` pins that codec against both real ledgers, and states what
+ *   to do if it ever goes red.
+ *
+ *   Read through `LedgerOps.ledgerTry`, so a codec that has moved is a `WalletError` at the boundary and never a throw:
+ *   the failure mode of a future major moving `zswap-local-state` is loud, and lands here, where the
+ *   {@link StateMigration} seam can be given the ledger team's own translation instead.
  *
  *   Sync progress is **parked at the fork** rather than rewound: the indexer numbers post-fork events onwards from
  *   whatever id it had reached when the fork happened, never from zero, so the inherited cursor is exactly where this
  *   wallet's reading resumes. A wallet that rewound to zero would wait on a stretch of the timeline this ledger
  *   version's events do not occupy.
- *
- *   If the ledger team ships a byte-level translation for wallet local state, it replaces this instance without touching
- *   anything around it — that is the point of the {@link StateMigration} seam.
  * @returns A migration from a previous-ledger-version wallet.
  */
 export const makeCrossLedgerMigration = (): StateMigration<PreviousLedgerWallet> => ({
   migrate: (previousState) =>
-    Effect.succeed(
-      CoreWallet.fromPreviousVersion({
-        publicKeys: previousState.publicKeys,
-        networkId: previousState.networkId,
-        protocolVersion: previousState.protocolVersion,
-        progress: previousState.progress,
-        pendingAnchor: {
-          coins: pipe(
-            [...previousState.state.coins],
-            EArray.map((coin) => ({ type: coin.type, nonce: coin.nonce, value: coin.value, mtIndex: coin.mt_index })),
-            EArray.sort(Order.mapInput(Order.bigint, (coin: CarriedCoin) => coin.mtIndex)),
-          ),
-          treeSize: previousState.state.firstFree,
-        },
-      }),
+    pipe(
+      LedgerOps.ledgerTry(() => ledger.ZswapLocalState.deserialize(previousState.state.serialize())),
+      Either.map((state) =>
+        CoreWallet.fromPreviousVersion({
+          state,
+          publicKeys: previousState.publicKeys,
+          networkId: previousState.networkId,
+          protocolVersion: previousState.protocolVersion,
+          progress: previousState.progress,
+        }),
+      ),
+      EitherOps.toEffect,
     ),
 });

@@ -143,11 +143,22 @@ describe('V2 Wallet serialization', () => {
   });
 
   describe('a wallet caught mid-crossing', () => {
-    // The wallet as the cross-ledger migration leaves it: identity and a cursor on an empty tree, with the previous
-    // ledger's coins waiting as plain data to be re-anchored. A snapshot taken in that window must not lose them.
+    // The wallet as the cross-ledger migration leaves it: a full local state — carried across the boundary as bytes —
+    // beside an empty hash map, because deriving hashes needs secret keys a migration is not given. That combination
+    // is exactly what `restoreWithCoinHashes` refuses as inconsistent, so a snapshot taken in this window is only
+    // loadable because it declares itself.
     const crossingKeys = (): ledger.ZswapSecretKeys => ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 5));
+    const heldCoin = (): ledger.ShieldedCoinInfo => ({
+      type: ledger.shieldedToken().raw,
+      nonce: 'bb'.repeat(32),
+      value: 100n,
+    });
+    const crossedState = (): ledger.ZswapLocalState =>
+      new ledger.ZswapLocalState().insertCoin(crossingKeys(), heldCoin());
+
     const midCrossing = (): CoreWallet =>
       CoreWallet.fromPreviousVersion({
+        state: crossedState(),
         publicKeys: {
           coinPublicKey: crossingKeys().coinPublicKey,
           encryptionPublicKey: crossingKeys().encryptionPublicKey,
@@ -161,31 +172,24 @@ describe('V2 Wallet serialization', () => {
           highestRelevantIndex: 4400n,
           isConnected: false,
         },
-        pendingAnchor: {
-          coins: [
-            { type: 'aa'.repeat(32), nonce: 'bb'.repeat(32), value: 100n, mtIndex: 0n },
-            { type: 'aa'.repeat(32), nonce: 'cc'.repeat(32), value: 200n, mtIndex: 4n },
-          ],
-          treeSize: 6n,
-        },
       });
 
-    it('restores the anchor payload losslessly', () => {
+    it('restores a full state with no hashes over it, still marked pending', () => {
       const capability = makeDefaultV2SerializationCapability();
       const wallet = midCrossing();
+      expect(wallet.coinHashes).toEqual({});
 
       const serialized = capability.serialize(wallet);
       const restored = pipe(capability.deserialize(null, serialized), EitherOps.getOrThrowLeft);
 
-      // Pinned against the literal payload, not against `wallet.pendingAnchor`, so that a wallet which never carried
-      // the payload in the first place cannot make this pass with undefined on both sides.
-      expect(restored.pendingAnchor).toEqual({
-        coins: [
-          { type: 'aa'.repeat(32), nonce: 'bb'.repeat(32), value: 100n, mtIndex: 0n },
-          { type: 'aa'.repeat(32), nonce: 'cc'.repeat(32), value: 200n, mtIndex: 4n },
-        ],
-        treeSize: 6n,
-      });
+      // Pinned against the literal coin, not against `wallet.state`, so that a restore which dropped the state could
+      // not make this pass with nothing on both sides.
+      expect([...restored.state.coins].map((coin) => [coin.nonce, coin.value, coin.mt_index])).toEqual([
+        [heldCoin().nonce, heldCoin().value, 0n],
+      ]);
+      expect(restored.state.firstFree).toBe(1n);
+      expect(restored.coinHashes).toEqual({});
+      expect(restored.coinHashesPending).toBe(true);
       expect(capability.serialize(restored)).toEqual(serialized);
     });
 
@@ -197,7 +201,7 @@ describe('V2 Wallet serialization', () => {
 
       const parsed: unknown = JSON.parse(capability.serialize(settled));
 
-      expect(parsed).not.toHaveProperty('pendingAnchor');
+      expect(parsed).not.toHaveProperty('coinHashesPending');
     });
 
     it('reads a snapshot without the field as a wallet with nothing pending', () => {
@@ -206,7 +210,22 @@ describe('V2 Wallet serialization', () => {
 
       const restored = pipe(capability.deserialize(null, capability.serialize(settled)), EitherOps.getOrThrowLeft);
 
-      expect(restored.pendingAnchor).toBeUndefined();
+      expect(restored.coinHashesPending).toBeUndefined();
+    });
+
+    it('goes on refusing a snapshot whose hashes do not cover its coins and does not declare itself', () => {
+      // The check the marker buys an exemption from, still doing its job for everybody else: without the declaration,
+      // a state holding a coin with no hash for it is a corrupt snapshot and not a crossing.
+      const capability = makeDefaultV2SerializationCapability();
+      const undeclared: string = JSON.stringify(
+        Object.fromEntries(
+          Object.entries(JSON.parse(capability.serialize(midCrossing())) as Record<string, unknown>).filter(
+            ([key]) => key !== 'coinHashesPending',
+          ),
+        ),
+      );
+
+      expect(Either.isLeft(capability.deserialize(null, undeclared))).toBe(true);
     });
   });
 

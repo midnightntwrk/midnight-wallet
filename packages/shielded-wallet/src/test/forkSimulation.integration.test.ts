@@ -12,26 +12,26 @@
 // limitations under the License.
 
 /**
- * The fidelity link: the tree a crossing wallet rebuilds is the tree the real translation produced.
+ * The fidelity link: the tree a crossing wallet carries is the tree the real translation produced.
  *
  * @remarks
- *   `forkSimulation.test.ts` proves the crossing — hand-over, carried coins, re-anchoring, a post-fork payment, a spend —
+ *   `forkSimulation.test.ts` proves the crossing — hand-over, the state arriving whole, a post-fork payment, a spend —
  *   and needs no ledger translation to do it, because `translationStub.ts` reconstructs the post-fork ledger from the
- *   same coins the pre-fork chain was paid. What it cannot prove is that the reconstruction is faithful: the collapsed
- *   updates the wallet anchors from come off a chain the suite built itself.
+ *   same coins the pre-fork chain was paid. What it cannot prove is that the reconstruction is faithful: the chain the
+ *   wallet's tree is compared against is one the suite built itself.
  *
  *   This closes that gap against the ledger team's real v8-to-v9 state translation. The pre-fork chain hands its own
  *   serialized ledger to the translation and the post-fork chain continues from the result — the chain's own account of
- *   what survived the fork — and the wallet, which crossed carrying nothing but plain data, rebuilds its commitment
- *   tree out of _that_ state. Two independent reconstructions of one tree, checked against each other two ways:
+ *   what survived the fork — while the wallet crosses independently, by handing its own serialized local state to this
+ *   ledger version's deserializer. Two independent crossings of one tree, checked against each other two ways:
  *
- *   - **The roots agree.** The tree the wallet re-anchors has the same Merkle root as the tree the translation produced. A
+ *   - **The roots agree.** The tree the wallet carried has the same Merkle root as the tree the translation produced. A
  *       single number, and a byte-level claim: commitments are a function of coin and owner, so equality here means the
  *       two ledger versions computed every one of them identically.
  *   - **The translated chain accepts the wallet's spend.** A spend carries a Merkle path built from the wallet's tree, and
  *       the post-fork ledger recognises it only if that path resolves to a root the translated state holds. So a wallet
- *       that arrived with nothing but four coins' worth of strings and bigints transacts against the real translation.
- *       That is the money test, and nothing short of a real translation can support it.
+ *       whose state crossed as bytes transacts against the real translation. That is the money test, and nothing short
+ *       of a real translation can support it.
  *
  *   **Integration tier because of a build step, not infra.** The translation is a WASM artifact built from
  *   `packages/state-translation/wasm`, so it has to be compiled first; this package's `turbo.json` declares
@@ -63,8 +63,8 @@ import { V2Tag } from '../v2/index.js';
 import { type MintedCoin, mintable, preForkPayment, simulatedChainRoot } from './translationStub.js';
 import { makeForkWallet } from './forkHarness.js';
 import {
+  awaitingCoinHashes,
   carried,
-  carriedPayload,
   coinIndices,
   coinValues,
   merkleRoot,
@@ -153,7 +153,7 @@ describe('the two ledger versions agree on what the wallet owns', () => {
 });
 
 describe('a shielded wallet crossing a byte-faithful hard fork', () => {
-  it('re-anchors its carried coins into the truly translated tree, and spends against it', async () =>
+  it('arrives holding the truly translated tree, and spends against it', async () =>
     Effect.gen(function* () {
       const coins = chainCoins();
       const fork = yield* ForkSimulator.init(baseConfig);
@@ -188,16 +188,17 @@ describe('a shielded wallet crossing a byte-faithful hard fork', () => {
       expect(translatedRoot).toBe(preForkRoot);
       expect(yield* translated.query((state) => state.ledger.zswap.firstFree)).toBe(treeSizeAtFork);
 
-      // --- the wallet hands over carrying its coins as plain data -----------------------------------------------
+      // --- the wallet hands over carrying its whole local state -------------------------------------------------
       const migration = yield* wallet.awaitMigration;
       expect(yield* wallet.activeTag).toBe(V2Tag);
       expect(migration.from.protocolVersion).toBe(forkVersion);
       expect(migration.from.appliedIndex).toBe(forkBlock);
-      expect(migration.to.carriedCoinCount).toBe(walletValues.length);
-      expect(migration.to.carriedTreeSize).toBe(treeSizeAtFork);
-      // Carried, not yet rebuilt: the tree is empty until sync, which holds the keys, anchors it.
-      expect(migration.to.coinCount).toBe(0);
-      expect(migration.to.firstFree).toBe(0n);
+      // Complete at the moment of the hand-over: the tree crossed as bytes, so the coins are there and the height is
+      // the height the pre-fork chain reached.
+      expect(migration.to.coinCount).toBe(walletValues.length);
+      expect(migration.to.firstFree).toBe(treeSizeAtFork);
+      // Everything except the hashes, which need secret keys a migration is not given.
+      expect(migration.to.coinHashesPending).toBe(true);
       // Parked on the boundary, not rewound: the post-fork timeline continues the indexer's event ids.
       expect(migration.to.appliedIndex).toBe(forkBlock);
 
@@ -210,11 +211,11 @@ describe('a shielded wallet crossing a byte-faithful hard fork', () => {
       expect(coinValues(postFork.state)).toEqual([...walletValues]);
       expect(coinIndices(postFork.state)).toEqual(walletIndices);
       expect(treeSize(postFork.state)).toBe(treeSizeAtFork);
-      expect(carriedPayload(postFork.state)).toBeUndefined();
+      expect(awaitingCoinHashes(postFork.state)).toBe(false);
 
-      // **The fidelity link.** The wallet arrived with four coins' worth of strings and bigints and fast-forwarded
-      // over the rest of the tree using collapsed updates taken off the translated state. That tree is the translated
-      // tree, down to its root.
+      // **The fidelity link.** The wallet's tree was decoded out of the pre-fork ledger's bytes by the post-fork
+      // ledger; the chain's was produced by the ledger team's own state translation from the same pre-fork ledger.
+      // Two independent crossings of one tree, and they agree down to the root.
       expect(merkleRoot(postFork.state)).toBe(translatedRoot);
 
       // Nothing was re-announced. The translated chain has produced exactly one block — its genesis, holding the
@@ -231,9 +232,9 @@ describe('a shielded wallet crossing a byte-faithful hard fork', () => {
       );
       const spend = carried<v9.UnprovenTransaction>(transfer, forkVersion).eraseProofs();
 
-      // Submitted to the chain that holds the *translated* ledger. The Merkle path in this spend was built from a
-      // tree the wallet re-anchored out of that ledger's own collapsed updates; the chain recognises it only if the
-      // root it resolves to is one it holds.
+      // Submitted to the chain that holds the *translated* ledger. The Merkle path in this spend was built from the
+      // tree the wallet carried across the boundary; the chain recognises it only if the root it resolves to is one
+      // that ledger holds.
       const onTranslatedChain = yield* translated.submitTransaction(spend);
       expect(onTranslatedChain.transactions[0].result.type).toBe('success');
       expect(onTranslatedChain.number).toBeGreaterThan(forkBlock);
