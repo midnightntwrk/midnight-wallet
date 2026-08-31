@@ -16,7 +16,7 @@ import { Record, Array, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { makeDefaultCoinsAndBalancesCapability, type AvailableCoin, type PendingCoin } from '../CoinsAndBalances.js';
-import { CoreWallet } from '../CoreWallet.js';
+import { CoreWallet, PublicKeys } from '../CoreWallet.js';
 
 type ShieldedTokenType = { tokenType: ledger.ShieldedTokenType; value: bigint };
 
@@ -261,6 +261,48 @@ describe('DefaultCoinsAndBalancesCapability', () => {
         expect(state.state.pendingSpends.size).toBe(spends.length);
       }),
       { numRuns: 10 },
+    );
+  });
+
+  it('answers totally for a wallet whose coin hashes are still pending, and names the coins once they resolve', () => {
+    // A byte-crossed wallet holds its full local state before it holds the hashes for it — computing them needs the
+    // secret keys the migration deliberately does not have. The crossing window is exactly when an application
+    // refreshes its views, so every read here must answer rather than assume the join is populated; the coins are not
+    // yet nameable, and they surface the moment the first keyed update resolves the hashes.
+    const secretKeys = ledger.ZswapSecretKeys.fromSeed(new Uint8Array(32).fill(1));
+    const networkId = NetworkId.NetworkId.Undeployed;
+    const capability = makeDefaultCoinsAndBalancesCapability();
+    const inputs = fc.sample(coinArbitrary, { seed: 42, numRuns: 3 });
+    const setupCoins = inputs.map((c) => toAvailableCoin(c, secretKeys));
+    const expected = inputs.map((c) => toPendingCoin(c, secretKeys));
+
+    // One expected output beside the settled coins, because both joins read the same map.
+    const localState = createInitialState(secretKeys, setupCoins).watchFor(secretKeys.coinPublicKey, expected[0]!.coin);
+    const crossing = CoreWallet.restoreWithPendingCoinHashes(
+      PublicKeys.fromSecretKeys(secretKeys),
+      localState,
+      {
+        appliedIndex: 0n,
+        highestRelevantWalletIndex: 0n,
+        highestIndex: 0n,
+        highestRelevantIndex: 0n,
+        isConnected: true,
+      },
+      2_000_000n,
+      networkId,
+    );
+
+    expect(capability.getAvailableCoins(crossing)).toEqual([]);
+    expect(capability.getPendingCoins(crossing)).toEqual([]);
+    expect(capability.getTotalCoins(crossing)).toEqual([]);
+    expect(capability.getTotalBalances(crossing)).toEqual({});
+
+    const resolved = CoreWallet.resolveCoinHashes(crossing, secretKeys);
+    expect(resolved.coinHashesPending).toBeUndefined();
+    expect(groupByTokenType(capability.getAvailableCoins(resolved))).toEqual(groupByTokenType(setupCoins));
+    expect(capability.getPendingCoins(resolved)).toHaveLength(1);
+    expect(groupByTokenType(capability.getTotalCoins(resolved))).toEqual(
+      groupByTokenType([...setupCoins, expected[0]!]),
     );
   });
 });
