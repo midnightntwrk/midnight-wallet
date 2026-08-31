@@ -20,11 +20,16 @@
  *   application start actually is.
  *
  *   Where it begins turns on one question: whether it asked the chain. A wallet given a way to ask starts at the variant
- *   that owns the version the chain reports, which on a chain past the boundary is the post-fork one from the first
- *   moment — no hand-over, and the right epoch before a single event has arrived. A wallet with no way to ask, or one
- *   whose question went unanswered, begins on the pre-fork variant, because that is where a wallet with no history
- *   belongs, and hands over on the first batch it sees. Both are specified here: the second is not a fallback in name
- *   only, it is what every offline-first application and every wallet built without a probe does.
+ *   that owns the version the chain reports, which on a chain past the boundary from its genesis is the post-fork one
+ *   from the first moment — no hand-over, and the right epoch before a single event has arrived. A wallet with no way
+ *   to ask, or one whose question went unanswered, begins on the pre-fork variant, because that is where a wallet with
+ *   no history belongs, and hands over on the first batch it sees. Both are specified here: the second is not a
+ *   fallback in name only, it is what every offline-first application and every wallet built without a probe does.
+ *
+ *   What the chain is asked is which version its timeline _starts_ under, not which version it has reached, because what
+ *   the answer decides is which ledger version can read the first event a fresh wallet fetches. The two coincide on
+ *   every chain here that carries one version from its genesis; the pair of starts in the middle of this file is the
+ *   case where they do not, and where the difference is the wallet's money.
  *
  *   All of it asserts the boundary by comparison with `forkVersion` and never by the number itself: which protocol
  *   version a chain reports is a property of the chain, and the real fork's value is not final.
@@ -45,7 +50,14 @@ import {
   ShieldedEncryptionPublicKey,
 } from '@midnightntwrk/wallet-sdk-address-format';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import { V8, genesisStrictness, immediateBlockProducer } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import {
+  ForkSimulator,
+  type LedgerTranslationError,
+  type Simulator,
+  V8,
+  genesisStrictness,
+  immediateBlockProducer,
+} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Cause, Effect, Option, Runtime, type Scope } from 'effect';
@@ -53,8 +65,14 @@ import { describe, expect, it } from 'vitest';
 import { V1Tag } from '../v1/index.js';
 import { V2Tag } from '../v2/index.js';
 import { type ForkWallet, makeForkWallet } from './forkHarness.js';
-import { type MintedCoin, makePayingPostForkChain, mintable, preForkPayment } from './translationStub.js';
-import { carried, coinValues, totalValue } from './forkWalletAssertions.js';
+import {
+  type MintedCoin,
+  makePayingPostForkChain,
+  mintable,
+  preForkPayment,
+  translationStub,
+} from './translationStub.js';
+import { carried, carriedPayload, coinValues, totalValue } from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -168,11 +186,27 @@ const preForkTransaction = (): AnyTx =>
 const postForkTransaction = (): AnyTx =>
   WalletTransaction.adopt('Unproven', v9.Transaction.fromParts(networkId), forkVersion);
 
-/** A probe answering as a chain on `version` would. */
+/**
+ * A probe answering `version`.
+ *
+ * @remarks
+ *   What a real probe answers is the version the chain's timeline _starts_ under, because that is the one that decides
+ *   which ledger version can read the first event a fresh wallet fetches. On the chains above, which carry a single
+ *   version from genesis, that is the same number as the tip's; the pair of starts below is where the two differ, and
+ *   each of those reads its answer off the chain rather than naming one.
+ */
 const chainReporting =
   (version: ProtocolVersion.ProtocolVersion): ChainVersionProbe =>
   () =>
     Promise.resolve(version);
+
+/** The version a chain's timeline starts under: what its first block was reported as, which is what a probe answers. */
+const timelineStartVersion = (chain: V8.Simulator): Effect.Effect<ProtocolVersion.ProtocolVersion> =>
+  chain.query((state) => state.blocks[0].protocolVersion);
+
+/** The version a chain has reached — a true statement about the chain, and the wrong one to start a fresh wallet on. */
+const tipVersion = (chain: Simulator): Effect.Effect<ProtocolVersion.ProtocolVersion> =>
+  chain.query((state) => state.protocolVersion);
 
 /**
  * A probe that never answers.
@@ -270,6 +304,117 @@ describe('a shielded wallet that asks the chain where it is starting', () => {
       expect(synced.state.protocolVersion).toBeLessThan(forkVersion);
 
       expect(yield* wallet.activeTag).toBe(V1Tag);
+      expect(yield* wallet.migration).toStrictEqual(Option.none());
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/**
+ * A fresh wallet meeting a chain that forked after it was paid — the shape the 2026-08-28 drill broke on.
+ *
+ * @remarks
+ *   Every start above meets a chain carrying one protocol version from its genesis, where the version the timeline starts
+ *   under and the version the chain has reached are the same number and nothing turns on the difference. This is the
+ *   case where they differ: the wallet's coins were paid before the boundary, in bytes only the pre-fork ledger version
+ *   can read, and the chain has since crossed it. A fresh wallet has read none of that history, so the variant it needs
+ *   is the one that can read the _first_ event it will fetch — which is a fact about the bottom of the timeline, not
+ *   about the tip.
+ *
+ *   Nothing on the other side re-announces those coins: the fork carried the commitment tree across in place (see
+ *   `translationStub.ts`), and the post-fork chain here contains no transaction at all. So a wallet that starts on the
+ *   wrong side of the boundary does not merely start late — it never comes to hold anything, which is exactly what the
+ *   drill saw. Both answers are put to the same chain below, and read off that chain rather than named.
+ */
+describe('a fresh shielded wallet on a chain that forked after paying it', () => {
+  /** The chain: this wallet's coins in its pre-fork history, its tip past the boundary, and nothing said since. */
+  const chainForkedAfterPaying = (
+    coins: readonly MintedCoin[],
+  ): Effect.Effect<
+    Readonly<{ preFork: V8.Simulator; postFork: Simulator }>,
+    LedgerOps.LedgerError | LedgerTranslationError,
+    Scope.Scope
+  > =>
+    Effect.gen(function* () {
+      const fork = yield* ForkSimulator.init({
+        networkId,
+        forkBlock,
+        forkVersion,
+        preForkVersion: beforeFork,
+        preForkBlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
+        postForkBlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        translator: translationStub({ networkId, coins }),
+      });
+      yield* Effect.forEach(coins, (coin) => fork.preFork.submitTransaction(preForkPayment(networkId, coin)), {
+        discard: true,
+      });
+      const postFork = yield* fork.advanceToFork();
+      return { preFork: fork.preFork, postFork };
+    });
+
+  it('starts where its unread history starts, and crosses carrying what it read there', async () =>
+    Effect.gen(function* () {
+      const coins = chainCoins();
+      const { preFork, postFork } = yield* chainForkedAfterPaying(coins);
+
+      const wallet = yield* makeForkWallet({
+        preFork,
+        postFork: Effect.succeed(postFork),
+        networkId,
+        forkVersion,
+        seed,
+        chainVersionProbe: chainReporting(yield* timelineStartVersion(preFork)),
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+
+      // Below the boundary although the chain is past it, because that is where the history this wallet has not read
+      // begins — and handing those pre-fork bytes to the post-fork ledger version is handing it bytes it cannot read.
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+
+      yield* wallet.start;
+
+      // It read its coins on the side that can read them. The carry is made of what the pre-fork variant held, so a
+      // wallet that had found nothing there would cross with nothing.
+      const migration = yield* wallet.awaitMigration;
+      expect(migration.to.carriedCoinCount).toBe(walletValues.length);
+      expect(migration.from.appliedIndex).toBe(forkBlock);
+
+      // And it arrives holding them. The post-fork chain announced no coin — it contains no transaction at all — so
+      // everything this wallet has here it brought across.
+      const crossed = yield* wallet.awaitState(
+        (state) => state.version >= forkVersion && totalValue(state.state) === walletTotal,
+      );
+      expect(yield* wallet.activeTag).toBe(V2Tag);
+      expect(coinValues(crossed.state)).toEqual([...walletValues]);
+      expect(carriedPayload(crossed.state)).toBeUndefined();
+      expect(yield* postFork.query((state) => state.blocks.flatMap((block) => block.transactions))).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('is left empty by an answer that names the version the chain has reached', async () =>
+    Effect.gen(function* () {
+      // The cost of the other answer, kept as a permanent negative: the same chain, the same wallet, and a probe that
+      // reports the tip. The wallet starts above the boundary, where its own history is unreadable and nothing is
+      // re-announced, and there is no path back down — the runtime hands over forwards only.
+      const coins = chainCoins();
+      const { preFork, postFork } = yield* chainForkedAfterPaying(coins);
+
+      const wallet = yield* makeForkWallet({
+        preFork,
+        postFork: Effect.succeed(postFork),
+        networkId,
+        forkVersion,
+        seed,
+        chainVersionProbe: chainReporting(yield* tipVersion(postFork)),
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      expect(yield* wallet.activeTag).toBe(V2Tag);
+
+      yield* wallet.start;
+
+      // It reads the post-fork chain to its end and is still empty: its coins are behind it, on a side it never
+      // stood on. (In the drill this also produced an endless deserialize failure, which needs a source serving
+      // pre-fork bytes to a post-fork variant — the two chains here each serve their own.)
+      const read = yield* wallet.awaitState((state) => state.state.progress.appliedIndex > forkBlock);
+      expect(totalValue(read.state)).toBe(0n);
+      expect(yield* wallet.activeTag).toBe(V2Tag);
       expect(yield* wallet.migration).toStrictEqual(Option.none());
     }).pipe(Effect.scoped, Effect.runPromise));
 });

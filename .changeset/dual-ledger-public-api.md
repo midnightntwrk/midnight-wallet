@@ -23,9 +23,9 @@ ledger from it, and applications no longer import a ledger package.
   deleted with no shim; use `startWithSeed` (or `WalletFacade.start(seeds)` with `WalletSeeds.fromMasterSeed`), or
   `startWithKeys` with key objects for both ledger versions. A seed is the only key material valid on both sides of a
   boundary.
-- Starts are asynchronous and return a `Promise`: a wallet first asks the chain its protocol version and starts on the
-  matching variant. A failed probe never fails a start — the wallet then starts pre-fork and migrates on the first
-  synced update.
+- Starts are asynchronous and return a `Promise`: a wallet first asks the chain which protocol version its timeline
+  starts under — where its unread history begins — and starts on the matching variant. A failed probe never fails a
+  start; the wallet then starts pre-fork and migrates on the first synced update.
 - The `secretKeys` parameter is gone from every transaction-building method; the active variant derives what it needs
   from what the wallet was started with.
 

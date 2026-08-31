@@ -285,13 +285,19 @@ export type DefaultShieldedConfiguration = {
    */
   forkVersion: ProtocolVersion.ProtocolVersion;
   /**
-   * How the wallet asks the chain which protocol version it is on, before it chooses a variant to start at.
+   * How the wallet asks the chain which protocol version its timeline starts under, before it chooses a variant to
+   * start at.
    *
    * @remarks
    *   Optional, and defaulted rather than absent: left unset, the wallet asks the indexer named by
    *   {@link indexerClientConnection}, which it is about to synchronize from anyway. Supply one to ask something else —
-   *   a cache, a node RPC, a value the application already holds. The answer is best-effort wherever it comes from: a
-   *   chain that cannot be reached leaves the wallet starting exactly where it started before there was a probe.
+   *   a cache, a node RPC, a value the application already holds — and have it answer the same question: the version of
+   *   the chain's **first** block, not its latest. A fresh wallet reads history from the start, so the variant it needs
+   *   is the one that can deserialize the first event it fetches; a probe reporting the tip of a chain that forked over
+   *   its own history starts the wallet on a ledger version that cannot read what it is about to be served.
+   *
+   *   The answer is best-effort wherever it comes from: a chain that cannot be reached leaves the wallet starting exactly
+   *   where it started before there was a probe.
    */
   chainVersionProbe?: ChainVersionProbe;
 };

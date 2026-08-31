@@ -102,9 +102,12 @@ const seeds = WalletSeeds.fromMasterSeed(
 const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, configuration.networkId);
 
 // The starts are asynchronous because choosing where to begin means asking the chain: each wallet probes the indexer
-// for the protocol version the chain is on and starts directly at the variant that owns it. Without an answer it
-// begins pre-fork — where a wallet with no history belongs — and is handed over on the first batch that reports a
-// post-fork version. Nothing about the probe can make a start fail.
+// for the protocol version the chain's timeline *starts* under and begins at the variant that owns it — where its
+// unread history begins, which is what decides which ledger version can read it. A chain that has been post-fork since
+// its genesis therefore starts these wallets post-fork directly; one that forked over existing history starts them
+// pre-fork, and they cross with what they read there. Without an answer a wallet begins pre-fork — where a wallet with
+// no history belongs — and is handed over on the first batch that reports a post-fork version. Nothing about the probe
+// can make a start fail.
 const wallet: WalletFacade = await WalletFacade.init({
   configuration,
   shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
