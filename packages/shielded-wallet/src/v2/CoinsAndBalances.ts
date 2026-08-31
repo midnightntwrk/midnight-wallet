@@ -12,7 +12,7 @@
 // limitations under the License.
 import { type CoreWallet } from './CoreWallet.js';
 import type * as ledger from '@midnightntwrk/ledger-v9';
-import { pipe, Array } from 'effect';
+import { pipe, Array, Option } from 'effect';
 import { RecordOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 export type AvailableCoin = {
@@ -73,30 +73,34 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
     );
   };
 
+  // Both joins are total over the crossing window. A wallet that crossed the ledger-version boundary holds its full
+  // local state before it holds the hashes for it — computing a commitment or nullifier needs the secret keys the
+  // migration deliberately does not have — so a coin without its hash entry is not yet nameable and is left out of
+  // the view, rather than assumed present and dereferenced. The window closes on the first sync update, which
+  // carries the keys and resolves the map (see CoreWallet.resolveCoinHashes).
   const getAvailableCoins = (state: CoreWallet): AvailableCoin[] => {
     const pendingSpends = new Set([...state.state.pendingSpends.values()].map(([coin]) => coin.nonce));
     return pipe(
       [...state.state.coins],
       Array.filter((coin) => !pendingSpends.has(coin.nonce)),
-      Array.map((coin) => {
-        return {
-          coin,
-          commitment: state.coinHashes[coin.nonce].commitment,
-          nullifier: state.coinHashes[coin.nonce].nullifier,
-        };
-      }),
+      Array.filterMap((coin) =>
+        pipe(
+          Option.fromNullable(state.coinHashes[coin.nonce]),
+          Option.map(({ commitment, nullifier }) => ({ coin, commitment, nullifier })),
+        ),
+      ),
     );
   };
 
   const getPendingCoins = (state: CoreWallet): PendingCoin[] =>
     pipe(
       [...state.state.pendingOutputs.values()],
-      Array.map(([coin, ttl]) => ({
-        coin,
-        ttl,
-        commitment: state.coinHashes[coin.nonce].commitment,
-        nullifier: state.coinHashes[coin.nonce].nullifier,
-      })),
+      Array.filterMap(([coin, ttl]) =>
+        pipe(
+          Option.fromNullable(state.coinHashes[coin.nonce]),
+          Option.map(({ commitment, nullifier }) => ({ coin, ttl, commitment, nullifier })),
+        ),
+      ),
     );
 
   const getTotalCoins = (state: CoreWallet): Array<Coin> => [...getAvailableCoins(state), ...getPendingCoins(state)];
