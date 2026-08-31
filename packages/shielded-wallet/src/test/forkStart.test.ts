@@ -380,12 +380,14 @@ describe('a fresh shielded wallet on a chain that forked after paying it', () =>
 
       // And it arrives holding them. The post-fork chain announced no coin — it contains no transaction at all — so
       // everything this wallet has here it brought across.
+      // The byte-crossed state holds its full value at the instant of migration; the coin hashes resolve on the
+      // first keyed update after it. Settled means both.
       const crossed = yield* wallet.awaitState(
-        (state) => state.version >= forkVersion && totalValue(state.state) === walletTotal,
+        (state) =>
+          state.version >= forkVersion && totalValue(state.state) === walletTotal && !awaitingCoinHashes(state.state),
       );
       expect(yield* wallet.activeTag).toBe(V2Tag);
       expect(coinValues(crossed.state)).toEqual([...walletValues]);
-      expect(awaitingCoinHashes(crossed.state)).toBe(false);
       expect(yield* postFork.query((state) => state.blocks.flatMap((block) => block.transactions))).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 
