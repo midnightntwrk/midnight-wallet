@@ -972,9 +972,14 @@ export class WalletFacade {
     return Option.getOrElse(this.#observedProtocolVersion.getValue(), () => ProtocolVersion.MinSupportedVersion);
   }
 
+  /** The range of protocol versions on the same side of the boundary as a given one. */
+  private epochOf(version: ProtocolVersion.ProtocolVersion): ProtocolVersion.ProtocolVersion.Range {
+    return ProtocolVersion.epochOf(version, this.#forkVersion);
+  }
+
   /** The range of protocol versions on the facade's current side of the boundary. */
   private currentEpoch(): ProtocolVersion.ProtocolVersion.Range {
-    return ProtocolVersion.epochOf(this.currentVersion(), this.#forkVersion);
+    return this.epochOf(this.currentVersion());
   }
 
   /**
@@ -1806,12 +1811,17 @@ export class WalletFacade {
       // Reverting is total over the stages: a transaction at any of them may have booked coins, and the pending set
       // recognises only the finalized ones. Narrowing rather than casting is what says so.
       await this.pendingTransactionsService.clear(tx as FinalizedTx);
-      // A transaction of the other epoch has no history entry of this session's to land on, so there is nothing to
-      // key and nothing to record — the same reason the wallets treat it as nothing of theirs to release.
-      const key = Option.match(Either.getRight(WalletTransaction.unwrapWithin<Carried>(tx, this.currentEpoch())), {
-        onNone: () => undefined,
-        onSome: revertTxHistoryKey,
-      });
+      // Read at the epoch the transaction was built for, not the one the facade now acts at. A verdict on a
+      // transaction submitted before a protocol boundary can only arrive after it — a chain rejection, a TTL run out,
+      // or the wallet giving up on bytes that can never be included — and by then the facade has crossed. The pending
+      // entry that verdict has to land on was written by this same session before the crossing, and it is the only
+      // record an application has that the transaction will never be included; keying it against the current epoch
+      // would leave it saying `pending` for the rest of the session. The stamp is what chooses the reader, which is
+      // what the stamp is for.
+      const key = Option.match(
+        Either.getRight(WalletTransaction.unwrapWithin<Carried>(tx, this.epochOf(tx.protocolVersion))),
+        { onNone: () => undefined, onSome: revertTxHistoryKey },
+      );
       if (key !== undefined) {
         await this.#txHistoryStorage.gotRejected({
           ...key,

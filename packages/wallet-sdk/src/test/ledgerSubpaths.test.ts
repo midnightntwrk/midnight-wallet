@@ -16,7 +16,6 @@ import {
   NetworkId,
   ProtocolVersion,
   ProtocolVersionMismatchError,
-  type Signing,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as PreForkSignatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
@@ -91,6 +90,7 @@ describe('the ledger subpaths an author builds transactions with', () => {
       'ProtocolVersion',
       'protocolPhaseOf',
       // Signing, which is the one scalar whose shape genuinely changed at the boundary.
+      'Signing',
       'UnsupportedSignatureKindError',
     ]) {
       expect(Object.keys(sdk)).toContain(name);
@@ -105,7 +105,7 @@ describe('the ledger subpaths an author builds transactions with', () => {
 describe('the signature shape the SDK speaks', () => {
   it('is the current ledger version shape, so a signer already written against it compiles unchanged', () => {
     const signature: ledgerV9.Signature = { tag: 'schnorr', value: 'aa' };
-    const asSdk: Signing.Signature = signature;
+    const asSdk: sdk.Signing.Signature = signature;
     const backAgain: ledgerV9.Signature = { ...asSdk };
 
     expect(backAgain).toStrictEqual(signature);
@@ -114,7 +114,7 @@ describe('the signature shape the SDK speaks', () => {
   it('lifts what the pre-fork ledger version writes as bare hexadecimal', () => {
     // The pre-fork ledger has exactly one scheme, so naming it is never a guess — which is why lifting is total and
     // lowering is not.
-    const lifted: Signing.Signature = PreForkSignatures.liftSignature('aa');
+    const lifted: sdk.Signing.Signature = PreForkSignatures.liftSignature('aa');
 
     expect(lifted).toStrictEqual({ tag: 'schnorr', value: 'aa' });
     expect(Either.getOrThrow(PreForkSignatures.lowerSignature(lifted))).toBe('aa');

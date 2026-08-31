@@ -45,9 +45,14 @@ yarn workspace @midnightntwrk/wallet-sdk-state-translation build:wasm
 Output lands in `wasm/pkg/`, which `src/` imports directly. Roughly 1.7 MB of wasm after `wasm-opt`.
 
 You rarely need to run it by hand: `turbo` builds it before any `test:integration` in this package or in
-`@midnightntwrk/wallet-sdk-capabilities`, which declare a dependency on the `build:wasm` task. That is also why running
+`@midnightntwrk/wallet-sdk-capabilities`, which declare a dependency on the `artifacts` task. That is also why running
 those integration tests needs a Rust toolchain, while `dist`, `typecheck`, `lint` and `test:unit` do not — the `.d.ts`
 the import types against is committed.
+
+`artifacts` is this package's one public build task: a command-less gate meaning _the WASM exists and is known to
+translate_, which is `build:wasm` followed by the `verify:wasm` below. Anything outside this package depends on that
+gate rather than on `build:wasm`, so the toolchain, the `wasm-bindgen` pin and the vendored storage patch stay ours to
+change.
 
 It needs a Rust toolchain and, on macOS, Homebrew's LLVM; the script checks for each and says what is missing. See
 [`wasm/README.md`](./wasm/README.md) for the toolchain and for the vendored `midnight-storage` patch the script applies

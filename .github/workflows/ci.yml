@@ -164,8 +164,8 @@ jobs:
         run: yarn workspace @midnightntwrk/wallet-sdk-state-translation verify:wasm
 
       # The integration matrix restores this rather than rebuilding. `test:integration` in `capabilities` and
-      # `state-translation` declares a dependency on `build:wasm`, so without a cache hit each of those jobs would
-      # recompile the crate from scratch.
+      # `state-translation` depends on `state-translation`'s `artifacts` gate, and so on `build:wasm` behind it, so
+      # without a cache hit each of those jobs would recompile the crate from scratch.
       - name: Save turbo cache
         if: always()
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
