@@ -15,4 +15,5 @@ export * from './DustLedgerEvents.js';
 export * from './DustNullifierTransactions.js';
 export * from './ShieldedTransactions.js';
 export * from './UnshieldedTransactions.js';
+export * from './ZswapEventTip.js';
 export * from './ZswapEvents.js';

@@ -20,7 +20,8 @@ Applications supplying their own `chainVersionProbe` should answer the same ques
 block. One that reports the tip is not wrong about the chain, it is answering a different question, and on a forked
 chain with history it strands the wallet on a ledger version that cannot read what it is served.
 
-One known consequence, tracked separately: on a chain that has forked but produced no post-fork traffic this wallet can
-see, a fresh wallet now sits on the pre-fork variant until an event carries the new version to it. Nothing is lost, but
-the wallet believes it is pre-fork for as long as the chain stays quiet. Closing that needs a version watcher that
-observes the boundary independently of the events the wallet is served, which is the next increment.
+A consequence of routing on the timeline's start is that on a chain which has forked but produced no traffic this wallet
+can see, a wallet sits on the pre-fork variant until something carries the new version to it. For the shielded wallet
+that something no longer has to be an event: it now checks the chain's version on a timer as well (see its own release
+note). Nothing was ever lost either way — the wallet simply believed it was pre-fork for as long as the chain stayed
+quiet.

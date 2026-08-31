@@ -187,6 +187,16 @@ const withBatchLogging = <A, E, R>(
   });
 };
 
+/**
+ * The version watcher, off.
+ *
+ * @remarks
+ *   These suites are about how the event timeline is batched. The periodic tip-version check is a second source merged
+ *   into the same stream, and leaving it on would let a poll add elements to the batches being counted — and, wherever
+ *   the test clock is wound past an interval, put a real query on the wire from a unit test.
+ */
+const noVersionWatch = { intervalMs: 0 } as const;
+
 describe('Wallet subscription', () => {
   const batchSize = 50;
   const batchTimeout = Duration.seconds(10);
@@ -209,13 +219,14 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
+          versionWatch: noVersionWatch,
           batchUpdates: { size: batchSize },
         });
 
         const updates = yield* syncService.updates(initialState, secretKeys).pipe(Stream.runCollect);
         const batchSizes = pipe(
           updates,
-          Chunk.map((update) => update.updates.length),
+          Chunk.map((update) => eventsOf(update).length),
         );
 
         // Verify size-based batching: should have full batches of batchSize, plus possibly a final partial batch
@@ -253,6 +264,7 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
+          versionWatch: noVersionWatch,
           batchUpdates: { size: 100, timeout: 10_000 },
         });
 
@@ -267,7 +279,7 @@ describe('Wallet subscription', () => {
         // All events should land in a single batch because the timeout (10s)
         // is much larger than the total event delivery time
         expect(Chunk.size(updates)).toBe(1);
-        expect(updates.pipe(Chunk.unsafeHead).updates.length).toBe(eventCount);
+        expect(eventsOf(updates.pipe(Chunk.unsafeHead)).length).toBe(eventCount);
       }).pipe(
         Effect.provideService(ZswapEvents.tag, mockSubscriptionFn),
         Effect.provide(TestContext.TestContext),
@@ -295,6 +307,7 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
+          versionWatch: noVersionWatch,
           batchUpdates: { size: 10, spacing: 500 },
         });
 
@@ -344,6 +357,7 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
+          versionWatch: noVersionWatch,
         });
 
         const { stream, batches } = yield* withBatchLogging(
@@ -408,6 +422,7 @@ describe('Wallet subscription', () => {
           indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
           indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
         },
+        versionWatch: noVersionWatch,
       });
 
       await syncService
@@ -456,6 +471,7 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
+          versionWatch: noVersionWatch,
           batchUpdates: { size: batchSize, spacing: 0 },
         });
 
