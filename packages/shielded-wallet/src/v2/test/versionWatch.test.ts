@@ -48,12 +48,7 @@ import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utiliti
 import { Chunk, Effect, Ref, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
-import {
-  VersionSignalSyncUpdate,
-  type WalletSyncUpdate,
-  makeEventsSyncCapability,
-  makeEventsSyncService,
-} from '../Sync.js';
+import { VersionSignalSyncUpdate, makeEventsSyncCapability, makeEventsSyncService } from '../Sync.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -230,8 +225,6 @@ const service = (intervalMs: number) =>
     batchUpdates: { size: 100, timeout: 60_000, spacing: 0 },
     versionWatch: { intervalMs },
   });
-
-const tagsOf = (updates: readonly WalletSyncUpdate[]): readonly string[] => updates.map((update) => update._tag);
 
 describe('watching the chain for a version the events never mention', () => {
   it('keeps signalling the tip version on a quiet chain, with the highest event id the source holds', async () => {
