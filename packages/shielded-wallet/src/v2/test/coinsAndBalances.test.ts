@@ -277,7 +277,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
     const expected = inputs.map((c) => toPendingCoin(c, secretKeys));
 
     // One expected output beside the settled coins, because both joins read the same map.
-    const localState = createInitialState(secretKeys, setupCoins).watchFor(secretKeys.coinPublicKey, expected[0]!.coin);
+    const localState = createInitialState(secretKeys, setupCoins).watchFor(secretKeys.coinPublicKey, expected[0].coin);
     const crossing = CoreWallet.restoreWithPendingCoinHashes(
       PublicKeys.fromSecretKeys(secretKeys),
       localState,
@@ -302,7 +302,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
     expect(groupByTokenType(capability.getAvailableCoins(resolved))).toEqual(groupByTokenType(setupCoins));
     expect(capability.getPendingCoins(resolved)).toHaveLength(1);
     expect(groupByTokenType(capability.getTotalCoins(resolved))).toEqual(
-      groupByTokenType([...setupCoins, expected[0]!]),
+      groupByTokenType([...setupCoins, expected[0]]),
     );
   });
 });
