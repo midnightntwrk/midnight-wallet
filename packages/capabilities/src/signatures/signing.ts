@@ -25,9 +25,11 @@
  *   and a scheme the pre-fork ledger has never heard of is refused rather than handed over as bytes it would misread.
  *   Speaking the older shape would have made the common case lossy instead.
  *
- *   Stated here, in a package that names no ledger version, so an application can annotate a signer without importing
- *   one. These are structurally the current ledger version's own types: a signer already written against them compiles
- *   unchanged.
+ *   Kept beside that lifting and lowering rather than among the abstractions a variant implements, because this is the
+ *   vocabulary those two functions are stated in and nothing else in the SDK is defined against it. It names no ledger
+ *   version itself, so an application can annotate a signer without importing one, and nothing on the way to it loads
+ *   either ledger's WebAssembly. These are structurally the current ledger version's own types: a signer already
+ *   written against them compiles unchanged.
  */
 
 /** The signature schemes the chain knows. Only `schnorr` exists before the protocol boundary. */
