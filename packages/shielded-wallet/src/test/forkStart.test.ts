@@ -72,7 +72,7 @@ import {
   preForkPayment,
   translationStub,
 } from './translationStub.js';
-import { carried, carriedPayload, coinValues, totalValue } from './forkWalletAssertions.js';
+import { awaitingCoinHashes, carried, coinValues, totalValue } from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -371,20 +371,23 @@ describe('a fresh shielded wallet on a chain that forked after paying it', () =>
 
       yield* wallet.start;
 
-      // It read its coins on the side that can read them. The carry is made of what the pre-fork variant held, so a
-      // wallet that had found nothing there would cross with nothing.
+      // It read its coins on the side that can read them. The crossing is made of what the pre-fork variant held, so
+      // a wallet that had found nothing there would cross with nothing — and here the migrated state holds the coins
+      // themselves, not a promise of them.
       const migration = yield* wallet.awaitMigration;
-      expect(migration.to.carriedCoinCount).toBe(walletValues.length);
+      expect(migration.to.coinCount).toBe(walletValues.length);
       expect(migration.from.appliedIndex).toBe(forkBlock);
 
       // And it arrives holding them. The post-fork chain announced no coin — it contains no transaction at all — so
       // everything this wallet has here it brought across.
+      // The byte-crossed state holds its full value at the instant of migration; the coin hashes resolve on the
+      // first keyed update after it. Settled means both.
       const crossed = yield* wallet.awaitState(
-        (state) => state.version >= forkVersion && totalValue(state.state) === walletTotal,
+        (state) =>
+          state.version >= forkVersion && totalValue(state.state) === walletTotal && !awaitingCoinHashes(state.state),
       );
       expect(yield* wallet.activeTag).toBe(V2Tag);
       expect(coinValues(crossed.state)).toEqual([...walletValues]);
-      expect(carriedPayload(crossed.state)).toBeUndefined();
       expect(yield* postFork.query((state) => state.blocks.flatMap((block) => block.transactions))).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 

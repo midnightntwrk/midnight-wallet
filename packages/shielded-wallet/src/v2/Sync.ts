@@ -27,14 +27,9 @@ import {
   Stream,
 } from 'effect';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { CoreWallet, type PendingAnchor } from './CoreWallet.js';
+import { CoreWallet } from './CoreWallet.js';
 import { type Simulator, type SimulatorState, getLastBlock } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import {
-  BlockHash,
-  ZswapEventTip,
-  ZswapEvents,
-  ZswapMerkleTreeCollapsedUpdate,
-} from '@midnightntwrk/wallet-sdk-indexer-client';
+import { BlockHash, ZswapEventTip, ZswapEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import {
   ConnectionHelper,
   HttpQueryClient,
@@ -209,34 +204,7 @@ export const SecretKeysResource = {
   },
 };
 
-/**
- * The step that rebuilds a migrated wallet's commitment tree, before any of the source's timeline is applied.
- *
- * @remarks
- *   Shared by both sources, because what a wallet needs to be anchored does not depend on where the collapsed updates
- *   came from: one per gap of {@link CoreWallet.anchorGaps}, in gap order, plus the keys, since re-inserting the carried
- *   coins indexes them by nullifier. An empty `updates` is ordinary rather than a degenerate case — a wallet whose
- *   coins leave no gap still has to be anchored, which is what inserts them and clears the pending payload.
- */
-export type AnchorSyncUpdate = Readonly<{
-  _tag: 'Anchor';
-  updates: readonly ledger.MerkleTreeCollapsedUpdate[];
-  secretKeys: ledger.ZswapSecretKeys;
-}>;
-export const AnchorSyncUpdate = {
-  create: (
-    updates: readonly ledger.MerkleTreeCollapsedUpdate[],
-    secretKeys: ledger.ZswapSecretKeys,
-  ): AnchorSyncUpdate => {
-    return {
-      _tag: 'Anchor',
-      updates,
-      secretKeys,
-    };
-  },
-};
-
-/** The ordinary arm of {@link WalletSyncUpdate}: a batch of the indexer's event timeline, still encoded. */
+/** A batch of the indexer's event timeline, still encoded. */
 export type EventsWalletSyncUpdate = {
   _tag: 'Events';
   updates: EventsSyncUpdate[];
@@ -254,7 +222,7 @@ export type EventsWalletSyncUpdate = {
  *   `highestEventId` is what makes the record safe to make. Handing over parks the sync cursor where it stands, and the
  *   variant that takes over re-fetches from there — so an event still unread below the source's tip would reach it as
  *   bytes of the version that preceded it, which its ledger cannot deserialize, and which may in any case be carrying a
- *   coin that would then never enter the carried state. The signal therefore travels with the far end of the source's
+ *   coin the crossed local state does not yet contain. The signal therefore travels with the far end of the source's
  *   event timeline, so the capability can refuse it while anything remains unread. `null` means the source provably
  *   holds no zswap event at all, which is the one case where nothing can be unread.
  */
@@ -279,10 +247,10 @@ export const VersionSignalSyncUpdate = {
  * What the indexer-backed sync source emits.
  *
  * @remarks
- *   Ordinarily a batch of events; at the head of a migrated wallet's stream, the anchor step that has to precede them;
- *   and, on a timer, what the chain says about its own version when its timeline says nothing.
+ *   Ordinarily a batch of events; and, on a timer, what the chain says about its own version when its timeline says
+ *   nothing.
  */
-export type WalletSyncUpdate = EventsWalletSyncUpdate | AnchorSyncUpdate | VersionSignalSyncUpdate;
+export type WalletSyncUpdate = EventsWalletSyncUpdate | VersionSignalSyncUpdate;
 export const WalletSyncUpdate = {
   create: (updates: EventsSyncUpdate[], secretKeys: ledger.ZswapSecretKeys): EventsWalletSyncUpdate => {
     return {
@@ -380,78 +348,6 @@ const EventsSyncUpdateFromPayload = Schema.transform(EventsSyncUpdatePayload, Ev
  * @throws ParseError if the bytes are not an event this ledger version can deserialize.
  */
 export const readEvent = (update: EventsSyncUpdate): ledger.Event => Schema.decodeSync(HexedLedgerEvent)(update.raw);
-
-const MerkleTreeCollapsedUpdateSchema = Schema.declare(
-  (input: unknown): input is ledger.MerkleTreeCollapsedUpdate => input instanceof ledger.MerkleTreeCollapsedUpdate,
-).annotations({
-  identifier: 'ledger.MerkleTreeCollapsedUpdate',
-});
-
-const MerkleTreeCollapsedUpdateFromUint8Array: Schema.Schema<ledger.MerkleTreeCollapsedUpdate, Uint8Array> =
-  Schema.transformOrFail(Uint8ArraySchema, MerkleTreeCollapsedUpdateSchema, {
-    encode: (update) =>
-      Effect.try({
-        try: () => update.serialize(),
-        catch: (error) => new ParseResult.Unexpected(error, 'Could not serialize collapsed Merkle update'),
-      }),
-    decode: (bytes) =>
-      Effect.try({
-        try: () => ledger.MerkleTreeCollapsedUpdate.deserialize(bytes),
-        catch: (error) => new ParseResult.Unexpected(error, 'Could not deserialize collapsed Merkle update'),
-      }),
-  });
-
-/**
- * A collapsed Merkle update as the indexer served it.
- *
- * @remarks
- *   Unlike an event, this is decoded the moment it arrives: it is fetched for a range this variant computed itself and is
- *   about to apply, so there is no version ambiguity to defer — bytes it cannot read are a failure of the fetch, and
- *   the stream's retry is exactly the right answer to it.
- */
-const HexedMerkleTreeCollapsedUpdate: Schema.Schema<ledger.MerkleTreeCollapsedUpdate, string> = pipe(
-  Schema.Uint8ArrayFromHex,
-  Schema.compose(MerkleTreeCollapsedUpdateFromUint8Array),
-);
-
-/**
- * Fetches from the indexer the collapsed updates that anchor a migrated wallet.
- *
- * @remarks
- *   One query per gap of {@link CoreWallet.anchorGaps}, run **in sequence** so the updates come back in the order the fold
- *   expects them — it pairs them with the gaps positionally, and has no way to tell one range's update from another's.
- *   Zero gaps is an ordinary answer, not a reason to skip the step: the anchor update still has to be emitted, since
- *   anchoring is also what inserts the carried coins and clears the pending payload.
- * @param config The sync configuration, for the indexer to query.
- * @param pendingAnchor The payload the wallet crossed with.
- * @param secretKeys The wallet's keys, carried on the update for the capability that folds it.
- * @returns The anchor update, or the fetch/decode failure as a {@link SyncWalletError}.
- */
-const fetchAnchorUpdates = (
-  config: DefaultSyncConfiguration,
-  pendingAnchor: PendingAnchor,
-  secretKeys: ledger.ZswapSecretKeys,
-): Effect.Effect<AnchorSyncUpdate, WalletError> =>
-  pipe(
-    Effect.forEach(CoreWallet.anchorGaps(pendingAnchor), (gap) =>
-      pipe(
-        ZswapMerkleTreeCollapsedUpdate.run({ startIndex: Number(gap.start), endIndex: Number(gap.end) }),
-        Effect.flatMap((result) =>
-          Schema.decode(HexedMerkleTreeCollapsedUpdate)(result.zswapMerkleTreeCollapsedUpdate.update),
-        ),
-      ),
-    ),
-    Effect.map((updates) => AnchorSyncUpdate.create(updates, secretKeys)),
-    Effect.provide(HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl })),
-    Effect.scoped,
-    Effect.mapError(
-      (error) =>
-        new SyncWalletError({
-          message: `Could not fetch the collapsed Merkle updates this wallet needs to be anchored: ${error.message}`,
-          cause: error,
-        }),
-    ),
-  );
 
 /** How often the chain is asked its version when the configuration does not say. */
 const DEFAULT_VERSION_WATCH_INTERVAL_MS = 30_000;
@@ -660,20 +556,9 @@ export const makeEventsSyncService = (
       // The timeline is what the source is for, so it decides when the source is done: `haltStrategy: 'left'` stops the
       // watcher with it rather than leaving a poll loop running against a stream nobody is reading. It has nothing to
       // say about failure — a failing timeline still fails the merged stream, where the variant's retry can see it.
-      const watched = Stream.merge(timeline, versionWatch(config, indexerWsUrl, resumeFrom, state.protocolVersion), {
+      return Stream.merge(timeline, versionWatch(config, indexerWsUrl, resumeFrom, state.protocolVersion), {
         haltStrategy: 'left',
       });
-
-      // A wallet that crossed the ledger-version boundary has to be anchored before it sees a single event: the
-      // indexer numbers post-fork commitments onwards from where the pre-fork chain left off, so applying one to the
-      // empty tree the migration produced is a non-linear insertion the ledger rejects — and goes on rejecting. The
-      // anchor is prepended outside the batch spacing, which is about pacing the timeline and has nothing to say here.
-      // Concatenating it in front of the merge is also what keeps a version signal from overtaking it: the second
-      // stream does not begin, so the watcher's first tick cannot fire, until the anchor has been emitted.
-      const { pendingAnchor } = state;
-      return pendingAnchor === undefined
-        ? watched
-        : Stream.concat(Stream.fromEffect(fetchAnchorUpdates(config, pendingAnchor, secretKeys)), watched);
     },
   };
 };
@@ -685,80 +570,52 @@ const noChanges = (state: CoreWallet): ChangesResult => ({
 });
 
 /**
- * Folds the anchor step into the wallet state.
- *
- * @remarks
- *   The one update that is not an observation of the chain: it rebuilds what the wallet already owned on the other side
- *   of the boundary, so it produces no changes and moves no cursor — where sync has got to is unaffected by learning
- *   what the wallet holds there.
- *
- *   A failure is raised rather than returned, exactly as {@link readEvent}'s is and for the same reason: a variant that
- *   cannot rebuild its own tree has no correct state to return, `SyncCapability.applyUpdate` is total in its own
- *   domain, and `RunningV2Variant` already turns a throw from it into a typed synchronization error — which the sync
- *   stream then retries, so a transiently wrong set of updates gets another attempt with the payload still pending.
- * @param state The wallet to anchor, carrying a pending payload.
- * @param update The collapsed updates and the keys to rebuild it with.
- * @returns The anchored wallet, and an empty result.
- * @throws WalletError if the updates cannot rebuild the carried tree, or if nothing was pending.
- */
-const applyAnchor = (state: CoreWallet, update: AnchorSyncUpdate): [CoreWallet, ChangesResult] => [
-  Either.getOrThrowWith(CoreWallet.anchor(state, update.secretKeys, update.updates), identity),
-  noChanges(state),
-];
-
-/**
  * Folds what the chain said about its own version into the wallet state.
  *
  * @remarks
  *   The same recording the event path makes through {@link annotateVersion}, and nothing else: no cursor moves, no coin
- *   changes hands, no tree grows. A signal is an observation about the chain, not a piece of it.
+ *   changes hands, no tree grows. A signal is an observation about the chain, not a piece of it — which is also why it
+ *   does not resolve pending coin hashes: it carries no keys, and the first batch of the timeline does.
  *
- *   Two situations make the observation unsafe to record, and both leave the state exactly as it was. Unread events below
+ *   One situation makes the observation unsafe to record, and it leaves the state exactly as it was: unread events below
  *   the source's tip mean the hand-over would park the cursor in front of history the next variant cannot read — and
- *   those events carry the version themselves, so nothing is lost by waiting for them. A pending anchor means the
- *   wallet's tree does not exist yet, and moving a wallet whose coins are still plain data is precisely what the anchor
- *   step exists to prevent. Neither is an error: the next tick asks again.
+ *   those events carry the version themselves, so nothing is lost by waiting for them. Not an error: the next tick asks
+ *   again.
  *
  *   A version at or below the one already recorded needs no guard of its own — {@link annotateVersion} never goes
  *   backwards — so a source briefly answering from a lagging replica cannot drag a wallet back over a boundary.
- * @param state The wallet to record on.
+ * @param wallet The wallet to record on.
  * @param update What the chain said, and how far its event timeline goes.
  * @returns The wallet, annotated or untouched, and an empty result.
  */
-const applyVersionSignal = (state: CoreWallet, update: VersionSignalSyncUpdate): [CoreWallet, ChangesResult] => {
-  const appliedIndex = state.progress?.appliedIndex ?? 0n;
+const applyVersionSignal = (wallet: CoreWallet, update: VersionSignalSyncUpdate): [CoreWallet, ChangesResult] => {
+  const appliedIndex = wallet.progress?.appliedIndex ?? 0n;
   const unreadEvents = update.highestEventId !== null && BigInt(update.highestEventId) > appliedIndex;
 
   return [
-    state.pendingAnchor !== undefined || unreadEvents
-      ? state
-      : annotateVersion(state, Option.some(ProtocolVersion.ProtocolVersion(BigInt(update.version)))),
-    noChanges(state),
+    unreadEvents
+      ? wallet
+      : annotateVersion(wallet, Option.some(ProtocolVersion.ProtocolVersion(BigInt(update.version)))),
+    noChanges(wallet),
   ];
 };
 
 export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
   return {
     applyUpdate: (
-      state: CoreWallet,
+      wallet: CoreWallet,
       wrappedUpdate: WalletSyncUpdate,
       activeRange: ProtocolVersion.ProtocolVersion.Range,
     ): [CoreWallet, ChangesResult] => {
-      if (wrappedUpdate._tag === 'Anchor') {
-        return applyAnchor(state, wrappedUpdate);
-      }
-
       if (wrappedUpdate._tag === 'VersionSignal') {
-        return applyVersionSignal(state, wrappedUpdate);
+        return applyVersionSignal(wallet, wrappedUpdate);
       }
 
-      // Unreachable through the service, which leads with the anchor for exactly this state. Asserted here anyway,
-      // because applying an event to an un-anchored tree is the wedge itself: the commitment would land at an index
-      // the empty tree cannot accept. Nothing is consumed and the cursor does not move, so the events are still
-      // waiting to be re-fetched once anchoring has happened.
-      if (state.pendingAnchor !== undefined) {
-        return [state, noChanges(state)];
-      }
+      // First, and before any early return: a wallet that crossed the ledger-version boundary arrives with its whole
+      // local state but no hashes for it, and this update is the first place its keys are at hand. An empty batch is
+      // exactly the case that must not skip this — a wallet whose timeline has gone quiet still has to be able to name
+      // the coins it crossed with.
+      const state = CoreWallet.resolveCoinHashes(wallet, wrappedUpdate.secretKeys);
 
       if (wrappedUpdate.updates.length === 0) {
         return [state, noChanges(state)];
@@ -816,24 +673,14 @@ export type SimulatorSyncConfiguration = {
   simulator: Simulator;
 };
 
-/** The ordinary arm of {@link SimulatorSyncUpdate}: the simulator's state, from which the pending blocks are read. */
-export type EventsSimulatorSyncUpdate = {
+/** What the simulator-backed sync source emits: the simulator's state, from which the pending blocks are read. */
+export type SimulatorSyncUpdate = {
   _tag: 'Events';
   update: SimulatorState;
   secretKeys: ledger.ZswapSecretKeys;
 };
-
-/**
- * What the simulator-backed sync source emits.
- *
- * @remarks
- *   The twin of {@link WalletSyncUpdate}: the same two arms over the same {@link AnchorSyncUpdate}, differing only in where
- *   the timeline comes from. Anchoring is a property of the wallet that crossed, not of the source it syncs from, so a
- *   wallet driven by the simulator is anchored exactly as one driven by the indexer is.
- */
-export type SimulatorSyncUpdate = EventsSimulatorSyncUpdate | AnchorSyncUpdate;
 export const SimulatorSyncUpdate = {
-  create: (update: SimulatorState, secretKeys: ledger.ZswapSecretKeys): EventsSimulatorSyncUpdate => {
+  create: (update: SimulatorState, secretKeys: ledger.ZswapSecretKeys): SimulatorSyncUpdate => {
     return {
       _tag: 'Events',
       update,
@@ -842,52 +689,17 @@ export const SimulatorSyncUpdate = {
   },
 };
 
-/**
- * Builds the collapsed updates that anchor a migrated wallet, off the chain the simulator is running.
- *
- * @remarks
- *   The simulator's counterpart of {@link fetchAnchorUpdates}: the same updates, from the chain state itself rather than
- *   from a source that serves it. The ledger throws on a range the tree cannot answer for, so construction is wrapped —
- *   a chain that is not as tall as the payload claims is a sync failure, not a defect.
- * @param config The sync configuration, for the simulator to read the chain state from.
- * @param pendingAnchor The payload the wallet crossed with.
- * @param secretKeys The wallet's keys, carried on the update for the capability that folds it.
- * @returns The anchor update, or the construction failure as a {@link SyncWalletError}.
- */
-const simulatedAnchorUpdates = (
-  config: SimulatorSyncConfiguration,
-  pendingAnchor: PendingAnchor,
-  secretKeys: ledger.ZswapSecretKeys,
-): Effect.Effect<AnchorSyncUpdate, WalletError> =>
-  pipe(
-    config.simulator.getLatestState(),
-    Effect.flatMap((simulatorState) =>
-      Effect.try({
-        try: () =>
-          CoreWallet.anchorGaps(pendingAnchor).map(
-            (gap) => new ledger.MerkleTreeCollapsedUpdate(simulatorState.ledger.zswap, gap.start, gap.end),
-          ),
-        catch: (error) =>
-          new SyncWalletError({
-            message: 'Could not build the collapsed Merkle updates this wallet needs to be anchored',
-            cause: error,
-          }),
-      }),
-    ),
-    Effect.map((updates) => AnchorSyncUpdate.create(updates, secretKeys)),
-  );
-
 export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,
 ): SyncService<CoreWallet, ledger.ZswapSecretKeys, SimulatorSyncUpdate> => {
   return {
-    updates: (state: CoreWallet, secretKeys: ledger.ZswapSecretKeys) => {
+    updates: (_state: CoreWallet, secretKeys: ledger.ZswapSecretKeys) => {
       // Get the initial state immediately to ensure we process the genesis block.
       // Then subscribe to state$ for subsequent changes, but deduplicate by block number
       // to avoid processing the same block twice.
       let lastSeenBlockNumber: bigint | undefined;
 
-      const timeline = pipe(
+      return pipe(
         Stream.fromEffect(config.simulator.getLatestState()),
         Stream.concat(config.simulator.state$),
         Stream.filter((simulatorState) => {
@@ -905,12 +717,6 @@ export const makeSimulatorSyncService = (
         }),
         Stream.map((simulatorState) => SimulatorSyncUpdate.create(simulatorState, secretKeys)),
       );
-
-      // Same rule as the indexer source: a wallet that crossed the boundary is anchored before it is shown a block.
-      const { pendingAnchor } = state;
-      return pendingAnchor === undefined
-        ? timeline
-        : Stream.concat(Stream.fromEffect(simulatedAnchorUpdates(config, pendingAnchor, secretKeys)), timeline);
     },
   };
 };
@@ -918,22 +724,16 @@ export const makeSimulatorSyncService = (
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate, ChangesResult> => {
   return {
     applyUpdate: (
-      state: CoreWallet,
+      wallet: CoreWallet,
       update: SimulatorSyncUpdate,
       activeRange: ProtocolVersion.ProtocolVersion.Range,
     ): [CoreWallet, ChangesResult] => {
-      if (update._tag === 'Anchor') {
-        return applyAnchor(state, update);
-      }
-
-      // Defensive, and unreachable through the service for the same reason as on the indexer path: the anchor comes
-      // first, so no block is ever offered to a tree that has not been rebuilt yet. The cursor stays put, leaving the
-      // blocks to be re-read once it has.
-      if (state.pendingAnchor !== undefined) {
-        return [state, noChanges(state)];
-      }
-
       const { update: simulatorState, secretKeys } = update;
+
+      // The same first step as the indexer capability's, for the same reason: this is where a migrated wallet's keys
+      // and its carried state first meet, and a block that turns out to hold nothing must not skip it.
+      const state = CoreWallet.resolveCoinHashes(wallet, secretKeys);
+
       const lastBlock = getLastBlock(simulatorState);
       if (lastBlock === undefined) {
         return [state, noChanges(state)];

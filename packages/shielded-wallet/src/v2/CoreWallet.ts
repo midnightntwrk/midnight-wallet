@@ -12,9 +12,8 @@
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
-import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { Either, Iterable, Order, pipe, Record, Array as Arr } from 'effect';
-import { AnchoringError, InvalidCoinHashesError, type WalletError } from './WalletError.js';
+import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
+import { InvalidCoinHashesError, type WalletError } from './WalletError.js';
 
 export type PublicKeys = {
   coinPublicKey: ledger.CoinPublicKey;
@@ -70,37 +69,6 @@ export const CoinHashesMap = {
   },
 };
 
-/**
- * A coin carried across the ledger-version boundary as plain data.
- *
- * @remarks
- *   The projection of the previous ledger's `QualifiedShieldedCoinInfo`: token type, nonce and value are what
- *   {@link ledger.ZswapLocalState.insertCoin} needs to re-create the coin, and `mtIndex` (the previous ledger's
- *   `mt_index`) is where its commitment sits in the global tree — the position the re-created coin must land at again
- *   for its Merkle paths to be the chain's. Plain strings and bigints on purpose: this is the shape that crosses a
- *   WASM-module boundary and a serialization boundary unchanged.
- */
-export type CarriedCoin = Readonly<{
-  type: string;
-  nonce: string;
-  value: bigint;
-  mtIndex: bigint;
-}>;
-
-/**
- * What a wallet still owes itself after crossing the ledger-version boundary: its coins, and the tree they lived in.
- *
- * @remarks
- *   Present on a {@link CoreWallet} from the cross-ledger migration until {@link CoreWallet.anchor} completes, and
- *   serialized with the wallet so a snapshot taken mid-crossing loses nothing. `treeSize` is the previous local state's
- *   `firstFree`: the index the rebuilt commitment tree has to reach — coins where the wallet's own commitments sit,
- *   collapsed updates everywhere else — before the wallet can sync or spend on this side of the fork.
- */
-export type PendingAnchor = Readonly<{
-  coins: readonly CarriedCoin[];
-  treeSize: bigint;
-}>;
-
 export type CoreWallet = Readonly<{
   state: ledger.ZswapLocalState;
   publicKeys: PublicKeys;
@@ -108,8 +76,19 @@ export type CoreWallet = Readonly<{
   progress: SyncProgress.SyncProgress;
   networkId: string;
   coinHashes: CoinHashesMap;
-  /** Set between the cross-ledger migration and {@link CoreWallet.anchor}; absent on a wallet that is not crossing. */
-  pendingAnchor?: PendingAnchor;
+  /**
+   * This wallet's coin hashes have never been computed, and {@link CoinHashesMap.empty} means "not yet", not "none".
+   *
+   * @remarks
+   *   Set by the cross-ledger migration and cleared by the first sync update, which is the first moment secret keys are
+   *   at hand — see {@link CoreWallet.fromPreviousVersion} and {@link CoreWallet.resolveCoinHashes}. Stated as a field
+   *   rather than inferred from "empty map beside a non-empty state" because an empty map is a perfectly good value for
+   *   a wallet holding nothing, and overloading it would make one shape mean two things. Being a field, it is also what
+   *   lets a snapshot taken mid-crossing declare itself: {@link CoreWallet.restoreWithCoinHashes} goes on rejecting a
+   *   snapshot whose hashes do not cover its coins, because only a wallet carrying this marker is permitted the gap.
+   *   `true` is the only inhabitant, so "pending" and "absent" are the only two states.
+   */
+  coinHashesPending?: true;
 }>;
 
 export const CoreWallet = {
@@ -175,6 +154,41 @@ export const CoreWallet = {
     );
   },
 
+  /**
+   * Restores a wallet whose coin hashes were never computed — a snapshot taken mid-crossing.
+   *
+   * @remarks
+   *   The counterpart of {@link CoreWallet.restoreWithCoinHashes} for the one shape that validation would otherwise
+   *   refuse: a full local state, carried across the ledger-version boundary as bytes, beside an empty hash map. The
+   *   hashes are commitments and nullifiers, and computing them needs the secret keys a deserializer does not hold, so
+   *   the wallet comes back still marked pending and the first sync update fills them in
+   *   ({@link CoreWallet.resolveCoinHashes}). Total: there is nothing here to reject, which is exactly why it is a
+   *   separate entry point rather than a flag on the validating one.
+   * @param publicKeys The identity the snapshot declared.
+   * @param localState The local state the snapshot carried.
+   * @param syncProgress Where the snapshot's reading had got to.
+   * @param protocolVersion The version the snapshot was written under.
+   * @param networkId The network the snapshot claims.
+   * @returns A wallet holding that state, its coin hashes still pending.
+   */
+  restoreWithPendingCoinHashes(
+    publicKeys: PublicKeys,
+    localState: ledger.ZswapLocalState,
+    syncProgress: SyncProgress.SyncProgressData,
+    protocolVersion: bigint,
+    networkId: string,
+  ): CoreWallet {
+    return {
+      state: localState,
+      publicKeys,
+      networkId,
+      coinHashes: CoinHashesMap.empty,
+      coinHashesPending: true,
+      progress: SyncProgress.createSyncProgress(syncProgress),
+      protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
+    };
+  },
+
   initEmpty(keys: ledger.ZswapSecretKeys, networkId: string): CoreWallet {
     return this.empty(PublicKeys.fromSecretKeys(keys), networkId);
   },
@@ -196,16 +210,16 @@ export const CoreWallet = {
   },
 
   /**
-   * Projects a wallet inherited from the previous ledger version onto a fresh state of this one.
+   * Adopts a wallet inherited from the previous ledger version: its local state, its identity, and its position.
    *
    * @remarks
-   *   No ledger object crosses the boundary. Serialized local state is not readable by this ledger version, so what
-   *   crosses is identity, position, and — as plain data — the coins: the public keys, the network, the protocol
-   *   version that triggered the hand-over (kept so the new variant starts inside its own activation range rather than
-   *   immediately signalling backwards), the cursor the previous variant stopped at, and the {@link PendingAnchor}
-   *   payload the migration projected out of the previous local state. The local Merkle tree itself starts empty:
-   *   rebuilding it takes the secret keys — coins are indexed by nullifier — which migration by design does not hold.
-   *   {@link CoreWallet.anchor}, run by the sync layer that does hold them, is what turns the payload back into a tree.
+   *   The state passed in is this ledger version's own object, decoded from the previous version's bytes — the two majors
+   *   share the `zswap-local-state` codec, so the crossing is a round-trip rather than a reconstruction (see
+   *   `Migration.makeCrossLedgerMigration`, and the characterization test that pins the codec). So everything the
+   *   previous wallet's tree held arrives intact: its coins at the Merkle indices the chain gave them, the height it
+   *   had reached, and the outputs it was still expecting. What also crosses is the public keys, the network, the
+   *   protocol version that triggered the hand-over (kept so the new variant starts inside its own activation range
+   *   rather than immediately signalling backwards), and the cursor the previous variant stopped at.
    *
    *   **Sync progress is parked at the fork, not rewound**: the previous wallet's cursor crosses unchanged. The indexer
    *   numbers post-fork events onwards from whatever id it had reached when the fork happened, never from zero, so
@@ -213,163 +227,58 @@ export const CoreWallet = {
    *   a stretch of history that this ledger version's events do not occupy. What does not cross is `isConnected`: no
    *   sync is running behind this state yet.
    *
-   *   Coin hashes start empty for the same reason the tree does: they are commitments and nullifiers computed under the
-   *   previous ledger's codec, and this version recomputes its own from the keys once anchoring rebuilds the state.
-   * @param previous The plain data read off the previous ledger version's wallet.
-   * @returns A wallet of this ledger version positioned at the fork, its coins pending re-anchoring.
+   *   The one thing the bytes cannot supply is the coin hashes: commitments and nullifiers are computed from the secret
+   *   keys, which a migration by design does not hold. They are therefore left empty and marked
+   *   {@link CoreWallet.coinHashesPending}, for {@link CoreWallet.resolveCoinHashes} to fill in at the first sync update
+   *   — the first place in this variant where keys and state meet.
+   * @param previous The identity and position read off the previous ledger version's wallet, and its decoded state.
+   * @returns A wallet of this ledger version holding what its predecessor held, positioned at the fork.
    */
   fromPreviousVersion(previous: {
+    readonly state: ledger.ZswapLocalState;
     readonly publicKeys: PublicKeys;
     readonly networkId: string;
     readonly protocolVersion: bigint;
     readonly progress: SyncProgress.SyncProgressData;
-    readonly pendingAnchor?: PendingAnchor;
   }): CoreWallet {
     return {
-      state: new ledger.ZswapLocalState(),
+      state: previous.state,
       publicKeys: previous.publicKeys,
       networkId: previous.networkId,
       coinHashes: CoinHashesMap.empty,
+      coinHashesPending: true,
       progress: SyncProgress.createSyncProgress({ ...previous.progress, isConnected: false }),
       protocolVersion: ProtocolVersion.ProtocolVersion(previous.protocolVersion),
-      ...(previous.pendingAnchor !== undefined ? { pendingAnchor: previous.pendingAnchor } : {}),
     };
   },
 
   /**
-   * The stretches of the pre-fork commitment tree that anchoring has to fast-forward over.
+   * Computes the coin hashes a wallet crossed the ledger-version boundary without.
    *
    * @remarks
-   *   The carried coins occupy some of the indices in `[0, treeSize)`; these are the maximal runs of everything else —
-   *   the other parties' commitments the rebuilt tree needs as collapsed updates but not as coins. Bounds are
-   *   **inclusive** on both ends, matching what `new MerkleTreeCollapsedUpdate(state, start, end)` takes, and the
-   *   ranges come back ascending and non-adjacent whatever order the coins were listed in: together with the coin
-   *   indices they partition `[0, treeSize)` exactly. No coins means one gap spanning the whole tree; `treeSize === 0`
-   *   means no gaps at all.
+   *   The other half of {@link CoreWallet.fromPreviousVersion}. A migrated wallet arrives holding its whole local state
+   *   but no commitments or nullifiers for it, because deriving those needs the secret keys — so the first sync update,
+   *   which carries them, is where the gap closes. Applied at the head of both sync capabilities, before anything else
+   *   they do, so a batch that turns out to be empty still resolves them: a wallet that crossed into a quiet timeline
+   *   must not be left unable to name its own coins.
    *
-   *   Assumes what holds for any payload projected off a real ledger state: every `mtIndex` is distinct and below
-   *   `treeSize`. A payload violating that cannot describe a tree, and {@link CoreWallet.anchor} answers it with a Left
-   *   rather than anything here needing to.
-   * @param pendingAnchor The carried coins and the size of the tree they lived in.
-   * @returns The inclusive index ranges between and around the carried coins, ascending.
+   *   Idempotent and self-clearing: without the marker this is the identity, so it costs a field read on every update
+   *   thereafter and nothing else.
+   * @param wallet The wallet to complete.
+   * @param secretKeys The keys the update arrived with.
+   * @returns `wallet` unchanged if its hashes were never pending, otherwise a copy holding them.
    */
-  anchorGaps(pendingAnchor: PendingAnchor): readonly Readonly<{ start: bigint; end: bigint }>[] {
-    const start: Readonly<{ cursor: bigint; gaps: readonly Readonly<{ start: bigint; end: bigint }>[] }> = {
-      cursor: 0n,
-      gaps: [],
-    };
-    const walked = pipe(
-      pendingAnchor.coins,
-      Arr.map((coin) => coin.mtIndex),
-      Arr.sort(Order.bigint),
-      Arr.reduce(start, ({ cursor, gaps }, index) => ({
-        cursor: index + 1n,
-        gaps: index > cursor ? [...gaps, { start: cursor, end: index - 1n }] : gaps,
-      })),
-    );
-    return walked.cursor < pendingAnchor.treeSize
-      ? [...walked.gaps, { start: walked.cursor, end: pendingAnchor.treeSize - 1n }]
-      : walked.gaps;
-  },
-
-  /**
-   * Rebuilds this wallet's local state from its carried coins and the collapsed updates covering everything else.
-   *
-   * @remarks
-   *   The inverse of what the cross-ledger migration flattened: starting from an empty local state, the fold walks `[0,
-   *   treeSize)` in Merkle-index order, inserting each carried coin at the index it used to occupy and applying one
-   *   collapsed update per gap of {@link CoreWallet.anchorGaps} — `updates` must correspond to those gaps one to one, in
-   *   order. On success the wallet's coin hashes are recomputed from the keys and the rebuilt state, the pending
-   *   payload is cleared, and identity, cursor, network and protocol version cross unchanged.
-   *
-   *   The fold checks its own arithmetic instead of trusting the ledger to: applying a collapsed update built for the
-   *   wrong range does **not** throw — the local tree silently adopts the range and jumps `firstFree` to its end — so
-   *   after every update the fold verifies `firstFree` reached the end of the gap the update stood in for, before every
-   *   insertion that the coin lands at its recorded index, and at the end that the tree is exactly `treeSize` tall.
-   *   Total on purpose: every failure, the ledger's own throws included, comes back as a Left, and a wallet with
-   *   nothing pending is refused rather than passed through — asking to anchor one is a wiring fault the caller should
-   *   hear about, not smooth over.
-   * @param wallet A wallet carrying a {@link PendingAnchor}.
-   * @param secretKeys The wallet's keys; insertion indexes coins by nullifier, which cannot be computed without them.
-   * @param updates One collapsed update per gap of {@link CoreWallet.anchorGaps}, in ascending gap order.
-   * @returns The anchored wallet, or the {@link AnchoringError} (or ledger error) that stopped the rebuild.
-   */
-  anchor(
-    wallet: CoreWallet,
-    secretKeys: ledger.ZswapSecretKeys,
-    updates: readonly ledger.MerkleTreeCollapsedUpdate[],
-  ): Either.Either<CoreWallet, WalletError> {
-    type Step = Readonly<{
-      position: bigint;
-      run: (state: ledger.ZswapLocalState) => Either.Either<ledger.ZswapLocalState, WalletError>;
-    }>;
-
-    const rebuild = (pending: PendingAnchor): Either.Either<ledger.ZswapLocalState, WalletError> => {
-      const freshState: Either.Either<ledger.ZswapLocalState, WalletError> = Either.right(new ledger.ZswapLocalState());
-      const gaps = CoreWallet.anchorGaps(pending);
-      const gapSteps: readonly Step[] = Arr.zipWith(gaps, updates, (gap, update) => ({
-        position: gap.start,
-        run: (state) =>
-          pipe(
-            LedgerOps.ledgerTry(() => state.applyCollapsedUpdate(update)),
-            Either.filterOrLeft(
-              (next) => next.firstFree === gap.end + 1n,
-              (next) =>
-                new AnchoringError({
-                  message: `A collapsed update did not cover the gap it stands in for: expected to fast-forward to index ${gap.end + 1n}, reached ${next.firstFree}`,
-                }),
-            ),
-          ),
-      }));
-      const coinSteps: readonly Step[] = pending.coins.map((coin) => ({
-        position: coin.mtIndex,
-        run: (state) =>
-          state.firstFree === coin.mtIndex
-            ? LedgerOps.ledgerTry(() =>
-                state.insertCoin(secretKeys, { type: coin.type, nonce: coin.nonce, value: coin.value }),
-              )
-            : Either.left(
-                new AnchoringError({
-                  message: `A carried coin would land at index ${state.firstFree} instead of the index ${coin.mtIndex} it had in the pre-fork tree`,
-                }),
-              ),
-      }));
-
-      return updates.length !== gaps.length
-        ? Either.left(
-            new AnchoringError({
-              message: `Anchoring needs exactly one collapsed update per gap: ${gaps.length} gaps, ${updates.length} updates`,
-            }),
-          )
-        : pipe(
-            [...gapSteps, ...coinSteps],
-            Arr.sort(Order.mapInput(Order.bigint, (step: Step) => step.position)),
-            Arr.reduce(freshState, (acc, step) => Either.flatMap(acc, step.run)),
-            Either.filterOrLeft(
-              (state) => state.firstFree === pending.treeSize,
-              (state) =>
-                new AnchoringError({
-                  message: `The rebuilt tree reached index ${state.firstFree} instead of the carried tree size ${pending.treeSize}`,
-                }),
-            ),
-          );
-    };
-
-    return pipe(
-      Either.fromNullable(
-        wallet.pendingAnchor,
-        () => new AnchoringError({ message: 'Nothing to anchor: this wallet carries no pending anchor payload' }),
-      ),
-      Either.flatMap(rebuild),
-      Either.map((state): CoreWallet => ({
-        state,
-        publicKeys: wallet.publicKeys,
-        networkId: wallet.networkId,
-        coinHashes: CoinHashesMap.init(secretKeys, CoinHashesMap.pickAllCoins(state)),
-        progress: wallet.progress,
-        protocolVersion: wallet.protocolVersion,
-      })),
-    );
+  resolveCoinHashes(wallet: CoreWallet, secretKeys: ledger.ZswapSecretKeys): CoreWallet {
+    return wallet.coinHashesPending === undefined
+      ? wallet
+      : {
+          state: wallet.state,
+          publicKeys: wallet.publicKeys,
+          networkId: wallet.networkId,
+          coinHashes: CoinHashesMap.init(secretKeys, CoinHashesMap.pickAllCoins(wallet.state)),
+          progress: wallet.progress,
+          protocolVersion: wallet.protocolVersion,
+        };
   },
 
   applyCollapsedUpdate(wallet: CoreWallet, collapsed: ledger.MerkleTreeCollapsedUpdate): CoreWallet {

@@ -47,9 +47,8 @@ import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-clien
 import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Chunk, Effect, Ref, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { CoreWallet, type PendingAnchor, PublicKeys } from '../CoreWallet.js';
+import { CoreWallet } from '../CoreWallet.js';
 import {
-  type AnchorSyncUpdate,
   VersionSignalSyncUpdate,
   type WalletSyncUpdate,
   makeEventsSyncCapability,
@@ -139,17 +138,10 @@ describe('folding a version signal into the wallet state', () => {
     expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
   });
 
-  it('ignores a signal while the wallet still has coins to re-anchor', () => {
-    // A crossing wallet's tree does not exist yet. Recording anything here would ask the runtime to move a wallet whose
-    // coins are still plain data, so the anchor step — which the source always leads with — must land first.
-    const pendingAnchor: PendingAnchor = { coins: [], treeSize: 6n };
-    const crossing = CoreWallet.fromPreviousVersion({
-      publicKeys: PublicKeys.fromSecretKeys(keys()),
-      networkId,
-      protocolVersion: ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)),
-      progress: progressAt(41n),
-      pendingAnchor,
-    });
+  it('adopts a signal on a wallet still awaiting its coin hashes, and leaves the marker standing', () => {
+    // A byte-crossed wallet is complete except for its coin hashes, which need keys a signal does not carry. The
+    // observation is safe to record — the tree already exists — and the marker survives for the first keyed batch.
+    const crossing = { ...syncedWallet(41n), coinHashesPending: true as const };
 
     const [state, result] = capability.applyUpdate(
       crossing,
@@ -157,9 +149,8 @@ describe('folding a version signal into the wallet state', () => {
       activeRange,
     );
 
-    expect(state).toBe(crossing);
-    expect(state.pendingAnchor).toEqual(pendingAnchor);
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.coinHashesPending).toBe(true);
     expect(result.changes).toEqual([]);
   });
 
@@ -351,36 +342,6 @@ describe('watching the chain for a version the events never mention', () => {
 
     expect(Chunk.toArray(collected)).toEqual([]);
     expect(Effect.runSync(Ref.get(eventTipAsked))).toEqual([]);
-  });
-
-  it('never puts a signal in front of the anchor a crossing wallet is waiting for', async () => {
-    // The anchor rebuilds the tree the wallet crossed with, and the capability refuses a signal until it has. Ordering
-    // it first in the source as well means that refusal is never exercised in anger.
-    const crossing = CoreWallet.fromPreviousVersion({
-      publicKeys: PublicKeys.fromSecretKeys(keys()),
-      networkId,
-      protocolVersion: ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)),
-      progress: progressAt(41n),
-      pendingAnchor: { coins: [], treeSize: 0n },
-    });
-
-    const collected = await service(1)
-      .updates(crossing, keys())
-      .pipe(
-        Stream.take(2),
-        Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(postForkVersion, 42), recorder())),
-        Effect.provideService(ZswapEventTip.tag, servingEventTip(41, recorder())),
-        Effect.provideService(ZswapEvents.tag, quietChain),
-        Effect.scoped,
-        Effect.runPromise,
-      );
-
-    // `treeSize: 0n` leaves no gaps, so the anchor needs no collapsed update and is emitted straight away — which is
-    // exactly the ordering that has to hold when a signal is racing to be first.
-    const updates = Chunk.toArray(collected);
-    expect(tagsOf(updates)).toEqual(['Anchor', 'VersionSignal']);
-    expect((updates[0] as AnchorSyncUpdate).updates).toEqual([]);
   });
 
   it('does not watch at all when the interval is turned off', async () => {

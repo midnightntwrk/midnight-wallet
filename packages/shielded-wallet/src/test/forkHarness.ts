@@ -56,12 +56,12 @@ import * as V2 from '../v2/index.js';
  *   Recorded as plain data rather than by keeping the wallets themselves: the pre-fork state is built on the other
  *   ledger's wasm objects, whose lifetime ends with the variant scope the migration closes.
  *
- *   The `from` side is what the projection was allowed to see; the `to` side is what it produced. The interesting claim
- *   is on the `to` side, and it is about the payload: a wallet crossing a fork carries its coins as plain data, because
- *   nothing on the other side will ever announce them again. The tree itself is still empty at this point —
- *   re-inserting the coins takes the secret keys, which migration by design does not hold — so `coinCount`/`firstFree`
- *   read zero here and the carry is visible only as `carriedCoinCount`/`carriedTreeSize`. What turns one into the other
- *   is the anchor step at the head of sync.
+ *   The `from` side is what the migration was allowed to see; the `to` side is what it produced. The interesting claim is
+ *   on the `to` side, and it is that the crossing is complete the moment it happens: the local state arrives whole —
+ *   its coins at the indices the chain gave them, its height, and the outputs it was still expecting — because nothing
+ *   on the other side will ever announce any of it again. `coinHashCount` and `coinHashesPending` are the one
+ *   exception, and the only thing left for sync to finish: hashes are derived from the secret keys, which a migration
+ *   by design does not hold.
  *
  *   `appliedIndex` is captured on both sides because comparing them is where the parked cursor is directly observable:
  *   the post-fork timeline continues the indexer's event ids rather than restarting them, so a migration that rewound
@@ -83,10 +83,11 @@ export type CapturedMigration = Readonly<{
     appliedIndex: bigint;
     coinCount: number;
     firstFree: bigint;
+    /** The outputs the wallet was still expecting — the part of what it owns that no chain re-announces. */
+    pendingOutputCount: number;
     coinHashCount: number;
-    /** How many coins the migration carried as plain data, and the tree size they have to be re-anchored into. */
-    carriedCoinCount: number;
-    carriedTreeSize: bigint | undefined;
+    /** Whether the hashes are still to be computed, which they are until the first sync update supplies the keys. */
+    coinHashesPending: boolean;
   }>;
 }>;
 
@@ -106,9 +107,9 @@ const captureOutput = (migrated: V2.CoreWallet): CapturedMigration['to'] => ({
   appliedIndex: migrated.progress.appliedIndex,
   coinCount: [...migrated.state.coins].length,
   firstFree: migrated.state.firstFree,
+  pendingOutputCount: migrated.state.pendingOutputs.size,
   coinHashCount: Object.keys(migrated.coinHashes).length,
-  carriedCoinCount: migrated.pendingAnchor?.coins.length ?? 0,
-  carriedTreeSize: migrated.pendingAnchor?.treeSize,
+  coinHashesPending: migrated.coinHashesPending === true,
 });
 
 /** The real cross-ledger migration, with both ends recorded on the way through. */
@@ -195,7 +196,7 @@ export type ForkWalletConfig = Readonly<{
    * The post-fork source — the chain carrying the translated state — which only exists once the fork has happened.
    *
    * It re-announces nothing: everything the wallet owned before the boundary is already in the tree its genesis block
-   * holds, which is why a crossing wallet has to arrive carrying its coins.
+   * holds, which is why a crossing wallet has to arrive holding its own state.
    */
   postFork: Effect.Effect<Simulator, LedgerTranslationError>;
   networkId: NetworkId.NetworkId;

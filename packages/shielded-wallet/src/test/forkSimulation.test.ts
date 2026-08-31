@@ -23,14 +23,15 @@
  *   **A fork re-announces nothing.** The chain's state translation carries every commitment across in place: the
  *   post-fork chain opens holding the pre-fork tree, continues inserting at the index that tree reached, and the
  *   indexer numbers its events onwards from where it had got to. Nothing about the pre-fork timeline is served again.
- *   So the coins have to travel with the wallet — as plain data, since no ledger object crosses — and the wallet has to
- *   rebuild its commitment tree around them before it applies a single post-fork event. That is what these tests are
- *   about, and the post-fork chain here announces nothing precisely so that no assertion below can be satisfied by
- *   re-discovery.
+ *   So the wallet's own state has to travel with it — which it does, as bytes: the two ledger majors either side of
+ *   this boundary share the `zswap-local-state` codec, so the migration hands the previous version's serialization to
+ *   this version's deserializer and the tree arrives whole (`src/v2/test/byteCrossing.test.ts` pins that codec). These
+ *   tests are about what that buys, and the post-fork chain here announces nothing precisely so that no assertion below
+ *   can be satisfied by re-discovery.
  *
- *   The last test in the file is the failure mode of the design this replaced, kept deliberately: a migration that
- *   carries nothing leaves the wallet with an empty tree in front of a chain that is six commitments tall, and the
- *   ledger refuses every event it is shown, forever.
+ *   The last test in the file is the failure mode of a migration that does not carry the state, kept deliberately: an
+ *   empty tree in front of a chain that is six commitments tall, and the ledger refuses every event it is shown,
+ *   forever.
  *
  *   **Unit tier, and complete.** The one thing this tier cannot supply is the real v8-to-v9 translation, which is a WASM
  *   artifact; `translationStub.ts` reconstructs the post-fork ledger instead, and `forkSimulation.integration.test.ts`
@@ -67,11 +68,13 @@ import {
   translationStub,
 } from './translationStub.js';
 import {
+  type ExpectedCoin,
   ascending,
+  awaitingCoinHashes,
   carried,
-  carriedPayload,
   coinIndices,
   coinValues,
+  expectedCoins,
   merkleRoot,
   totalValue,
   treeSize,
@@ -119,15 +122,24 @@ const recipientAddress = (): ShieldedAddress => {
   );
 };
 
+/** The wallet's own address, for a transfer it makes to itself — the plainest way to be owed an output. */
+const ownAddress = (): ShieldedAddress => {
+  const us = walletRecipient();
+  return new ShieldedAddress(
+    ShieldedCoinPublicKey.fromHexString(us.coinPublicKey),
+    ShieldedEncryptionPublicKey.fromHexString(us.encryptionPublicKey),
+  );
+};
+
 const walletValues = [100n, 200n, 300n, 400n] as const;
 const walletTotal = walletValues.reduce((sum, value) => sum + value, 0n);
 /**
  * Where the wallet's coins sit in the commitment tree.
  *
  * @remarks
- *   Non-contiguous and short of the tip on purpose: a stranger is paid at index 3 and again at 5, so re-anchoring has to
- *   fast-forward over commitments the wallet cannot decrypt, both in the middle of its own run and after it — and land
- *   exactly on the tip regardless. A densely minted wallet would exercise neither.
+ *   Non-contiguous and short of the tip on purpose: a stranger is paid at index 3 and again at 5, so the tree that
+ *   crosses holds commitments the wallet cannot decrypt, both in the middle of its own run and after it — and reaches
+ *   the tip regardless. A densely minted wallet would exercise neither.
  */
 const walletIndices = [0n, 1n, 2n, 4n];
 const treeSizeAtFork = 6n;
@@ -170,11 +182,11 @@ const driveTo = (chain: V8.Simulator, height: bigint): Effect.Effect<void, Ledge
   });
 
 /**
- * The wallet has handed over, re-anchored, and read the boundary block — holding everything it held before.
+ * The wallet has handed over and read the boundary block — holding everything it held before.
  *
  * @remarks
- *   All three conjuncts are needed and all three are monotone. Anchoring moves no cursor, so a wallet that has rebuilt
- *   its tree but not yet applied the empty boundary block already satisfies the balance; waiting for the cursor to pass
+ *   All three conjuncts are needed and all three are monotone. The crossing itself moves no cursor, so a wallet that has
+ *   arrived but not yet applied the empty boundary block already satisfies the balance; waiting for the cursor to pass
  *   the boundary too is what makes the state these tests assert on a single, settled one rather than whichever of the
  *   two the stream happened to publish last.
  */
@@ -192,12 +204,14 @@ type Crossing = Readonly<{
   wallet: ForkWallet;
   migration: CapturedMigration;
   /**
-   * The root of the tree the wallet held on the pre-fork side — what re-anchoring has to reproduce.
+   * The root of the tree the wallet held on the pre-fork side — what the crossing has to reproduce exactly.
    *
    * A number rather than the state it came from: the pre-fork state is built on the other ledger's wasm objects, whose
    * lifetime ends with the variant scope the migration closes.
    */
   preForkRoot: bigint | undefined;
+  /** The outputs the wallet was still expecting on the pre-fork side — see {@link expectedCoins}. */
+  preForkExpected: readonly ExpectedCoin[];
 }>;
 
 /**
@@ -208,7 +222,11 @@ type Crossing = Readonly<{
  *   pre-fork state is awaited _before_ the chain is driven to the boundary, so the premise each test builds on — that
  *   the wallet genuinely held these coins on the other side — is established rather than inferred from the end state.
  */
-const crossTheFork = (coins: readonly MintedCoin[]): Effect.Effect<Crossing, unknown, Scope.Scope> =>
+const crossTheFork = (
+  coins: readonly MintedCoin[],
+  /** Anything the wallet is made to do on the pre-fork side after it has synced and before the boundary arrives. */
+  beforeTheBoundary: (wallet: ForkWallet) => Effect.Effect<void, unknown> = () => Effect.void,
+): Effect.Effect<Crossing, unknown, Scope.Scope> =>
   Effect.gen(function* () {
     const fork = yield* forkingChain(coins);
 
@@ -226,21 +244,30 @@ const crossTheFork = (coins: readonly MintedCoin[]): Effect.Effect<Crossing, unk
     yield* Effect.forEach(coins, (coin) => fork.preFork.submitTransaction(preForkPayment(networkId, coin)), {
       discard: true,
     });
-    const preForkState = yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+    const synced = yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
     expect(yield* wallet.activeTag).toBe(V1Tag);
-    expect(coinValues(preForkState.state)).toEqual([...walletValues]);
-    expect(coinIndices(preForkState.state)).toEqual(walletIndices);
-    expect(treeSize(preForkState.state)).toBe(treeSizeAtFork);
+    expect(coinValues(synced.state)).toEqual([...walletValues]);
+    expect(coinIndices(synced.state)).toEqual(walletIndices);
+    expect(treeSize(synced.state)).toBe(treeSizeAtFork);
+
+    yield* beforeTheBoundary(wallet);
+    const preForkState = yield* wallet.currentState;
 
     // --- the chain reaches the boundary and its ledger is translated ---------------------------------------------
     const postFork = yield* fork.advanceToFork();
     const migration = yield* wallet.awaitMigration;
 
-    return { postFork, wallet, migration, preForkRoot: merkleRoot(preForkState.state) };
+    return {
+      postFork,
+      wallet,
+      migration,
+      preForkRoot: merkleRoot(preForkState.state),
+      preForkExpected: expectedCoins(preForkState.state),
+    };
   });
 
 describe('a shielded wallet crossing a hard fork', () => {
-  it('carries its coins across and re-anchors them against a chain that announces nothing', async () =>
+  it('arrives holding the tree it held, against a chain that announces nothing', async () =>
     Effect.gen(function* () {
       const { postFork, wallet, migration, preForkRoot } = yield* crossTheFork(chainCoins());
       expect(yield* wallet.activeTag).toBe(V2Tag);
@@ -251,20 +278,20 @@ describe('a shielded wallet crossing a hard fork', () => {
       expect(migration.from.protocolVersion).toBe(forkVersion);
       expect(migration.from.appliedIndex).toBe(forkBlock);
 
-      // And what it produced: the coins, as plain data. Nothing on the other side of a fork re-announces them, so a
-      // migration that dropped them would be dropping the wallet's money.
-      expect(migration.to.carriedCoinCount).toBe(walletValues.length);
-      expect(migration.to.carriedTreeSize).toBe(treeSizeAtFork);
-      // Carried, but not yet a tree: re-inserting the coins indexes them by nullifier, which needs the secret keys
-      // migration by design does not hold. Until sync anchors it, this wallet's local state is empty.
-      expect(migration.to.coinCount).toBe(0);
-      expect(migration.to.firstFree).toBe(0n);
+      // And what it produced, at the moment it produced it: not a promise of coins but the coins themselves, in a
+      // tree as tall as the one left behind. Nothing on the other side of a fork re-announces any of it, so a
+      // migration that arrived empty would be arriving without the wallet's money.
+      expect(migration.to.coinCount).toBe(walletValues.length);
+      expect(migration.to.firstFree).toBe(treeSizeAtFork);
+      // The one thing the bytes cannot carry: hashes are derived from the secret keys, which a migration does not
+      // hold, so they are declared pending for the first sync update to fill in.
       expect(migration.to.coinHashCount).toBe(0);
+      expect(migration.to.coinHashesPending).toBe(true);
       // **Parked, not rewound.** The post-fork timeline continues the indexer's event ids from where the fork found
       // them, so this wallet resumes on the cursor its predecessor stopped at.
       expect(migration.to.appliedIndex).toBe(migration.from.appliedIndex);
       expect(migration.to.appliedIndex).toBe(forkBlock);
-      // Identity crosses too: without these keys the carried coins cannot be re-inserted at all.
+      // Identity crosses too: without these keys the crossed coins cannot be recognised as this wallet's at all.
       expect(migration.to.coinPublicKey).toBe(v9.ZswapSecretKeys.fromSeed(seed).coinPublicKey);
       expect(migration.to.encryptionPublicKey).toBe(v9.ZswapSecretKeys.fromSeed(seed).encryptionPublicKey);
       expect(migration.to.networkId).toBe(networkId);
@@ -275,11 +302,11 @@ describe('a shielded wallet crossing a hard fork', () => {
       const crossed = yield* settled(wallet);
       expect(coinValues(crossed.state)).toEqual([...walletValues]);
       expect(coinIndices(crossed.state)).toEqual(walletIndices);
-      // The whole tree, not just the leaves it owns: the strangers' commitments were fast-forwarded over as collapsed
-      // updates, which is what puts the wallet's own leaves at the indices the chain has them at.
+      // The whole tree, not just the leaves it owns: the strangers' commitments crossed with it, which is what keeps
+      // the wallet's own leaves at the indices the chain has them at.
       expect(treeSize(crossed.state)).toBe(treeSizeAtFork);
-      // The payload is spent, not merely present: anchoring is what clears it.
-      expect(carriedPayload(crossed.state)).toBeUndefined();
+      // And the hashes were computed on arrival — one per coin — so the wallet can name what it holds.
+      expect(awaitingCoinHashes(crossed.state)).toBe(false);
       // And the tree is the tree it had before the boundary, down to its root — which is also the chain's.
       expect(preForkRoot).toBeDefined();
       expect(merkleRoot(crossed.state)).toBe(preForkRoot);
@@ -297,12 +324,12 @@ describe('a shielded wallet crossing a hard fork', () => {
     Effect.gen(function* () {
       // The regression the 2026-08-28 drill found on real infrastructure. The chain goes on inserting at the index the
       // pre-fork tree reached, so the first commitment a crossed wallet meets is at `treeSize` — an index an empty
-      // local state rejects as a non-linear insertion, and goes on rejecting. Against a re-anchored tree it is simply
-      // the next leaf.
+      // local state rejects as a non-linear insertion, and goes on rejecting. Against the tree that crossed with the
+      // wallet it is simply the next leaf.
       //
       // Paid without waiting for the wallet to settle first, deliberately: the drill's wallet met a post-fork event
-      // while it had done nothing about the fork yet, and that ordering is half the regression. Anchoring still comes
-      // first because the sync source leads with it, not because the test arranged for a quiet moment.
+      // while it had done nothing about the fork yet, and that ordering is half the regression. It survives it because
+      // the migration is what completes the crossing, not something sync has still to do afterwards.
       const { postFork, wallet } = yield* crossTheFork(chainCoins());
 
       const late = mintable(v9.shieldedToken().raw, 900n, walletRecipient());
@@ -316,6 +343,31 @@ describe('a shielded wallet crossing a hard fork', () => {
       expect(coinValues(advanced.state)).toEqual([...walletValues, 900n].toSorted(ascending));
       expect(treeSize(advanced.state)).toBe(treeSizeAtFork + 1n);
       expect(advanced.state.progress.appliedIndex).toBe(block.number + 1n);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('carries the outputs it was still expecting, which nothing on the far side would announce again', async () =>
+    Effect.gen(function* () {
+      // A wallet owns more than the leaves in its tree: it also owns what it is *about* to receive. Building a
+      // transfer to itself makes the wallet watch for an output whose commitment it knows and whose leaf is not on
+      // chain — and the transfer is deliberately never submitted, so the expectation is still outstanding when the
+      // boundary arrives. A crossing that reconstructs the wallet from its spendable coins alone drops it, and the
+      // change of every in-flight transfer with it.
+      const { wallet, preForkExpected } = yield* crossTheFork(chainCoins(), (running) =>
+        Effect.promise(() =>
+          running.shielded.transferTransaction([
+            { amount: 150n, type: v8.shieldedToken().raw, receiverAddress: ownAddress() },
+          ]),
+        ).pipe(Effect.asVoid),
+      );
+
+      // The premise: the pre-fork wallet really was expecting something. Without this the comparison below could be
+      // satisfied by two empty lists.
+      expect(preForkExpected.length).toBeGreaterThan(0);
+
+      const crossed = yield* settled(wallet);
+      // Commitment for commitment, not merely count: a commitment is a function of the coin and its owner, so equal
+      // commitments on either side of the boundary say these are the same expected coins and not new ones.
+      expect(expectedCoins(crossed.state)).toEqual(preForkExpected);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('spends a carried coin against the post-fork chain', async () =>
@@ -335,7 +387,7 @@ describe('a shielded wallet crossing a hard fork', () => {
       );
       // The chain accepting this is the claim, and it is the only one that cannot be faked: a spend carries a Merkle
       // path built from the wallet's own tree, and the ledger recognises it only if that path resolves to a root the
-      // chain holds. A tree re-anchored one index off, or built over the wrong gaps, would not reach one.
+      // chain holds. A tree that crossed one index off, or lost a stranger's leaf on the way, would not reach one.
       expect(block.transactions[0].result.type).toBe('success');
 
       const afterSpend = yield* wallet.awaitState((state) => state.state.progress.appliedIndex > block.number);
@@ -401,10 +453,10 @@ describe('a shielded wallet crossing a hard fork', () => {
 
       const migration = yield* wallet.awaitMigration;
       expect(migration.from.appliedIndex).toBe(forkBlock);
-      // Reached in one batch rather than two, and the same payload crosses: where the split happened does not change
+      // Reached in one batch rather than two, and the same state crosses: where the split happened does not change
       // what the next variant inherits.
-      expect(migration.to.carriedCoinCount).toBe(walletValues.length);
-      expect(migration.to.carriedTreeSize).toBe(treeSizeAtFork);
+      expect(migration.to.coinCount).toBe(walletValues.length);
+      expect(migration.to.firstFree).toBe(treeSizeAtFork);
       expect(migration.to.appliedIndex).toBe(forkBlock);
 
       // The end state is the same as the live transition reaches, which is the point: how the timeline was delivered
@@ -414,12 +466,12 @@ describe('a shielded wallet crossing a hard fork', () => {
       expect(coinValues(crossed.state).toSorted(ascending)).toEqual([...walletValues]);
       expect(coinIndices(crossed.state)).toEqual(walletIndices);
       expect(treeSize(crossed.state)).toBe(treeSizeAtFork);
-      expect(carriedPayload(crossed.state)).toBeUndefined();
+      expect(awaitingCoinHashes(crossed.state)).toBe(false);
       expect(crossed.state.progress.appliedIndex).toBe(forkBlock + 1n);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
-describe('the design the carry replaced', () => {
+describe('a migration that leaves the wallet’s state behind', () => {
   /** What a sync failure was really caused by — the ledger's throw, which the variant wraps as it comes past. */
   const underlying = (error: unknown): string =>
     error instanceof WalletError.OtherWalletError ? String(error.cause) : String(error);
@@ -469,12 +521,12 @@ describe('the design the carry replaced', () => {
         );
     });
 
-  it('wedges a wallet whose migration left its coins behind, on the first post-fork event it meets', async () =>
+  it('wedges on the first post-fork event it meets', async () =>
     Effect.gen(function* () {
-      // Kept as a permanent negative: this is what the shipped wallet did before the carry existed, and what the
-      // 2026-08-28 hard-fork drill hit on real infrastructure. It passes only because the coinless state genuinely
-      // wedges — if a later change made an un-anchored wallet survive a post-fork event, this test would fail and the
-      // carry could be reconsidered on the evidence.
+      // Kept as a permanent negative: this is what the shipped wallet did before its state crossed the boundary, and
+      // what the 2026-08-28 hard-fork drill hit on real infrastructure. It passes only because the empty state
+      // genuinely wedges — if a later change made a wallet that arrived empty survive a post-fork event, this test
+      // would fail and carrying the state could be reconsidered on the evidence.
       const coins = chainCoins();
       const fork = yield* forkingChain(coins);
       yield* Effect.forEach(coins, (coin) => fork.preFork.submitTransaction(preForkPayment(networkId, coin)), {
@@ -482,15 +534,15 @@ describe('the design the carry replaced', () => {
       });
       const postFork = yield* fork.advanceToFork();
 
-      // The state the old migration produced: identity and a parked cursor, and nothing else. Hand-built rather than
-      // obtained by disabling the carry, which stays exactly as it ships.
+      // A wallet arriving with identity, a parked cursor, and an empty tree. Hand-built rather than obtained by
+      // disabling the crossing, which stays exactly as it ships.
       const coinless = CoreWallet.fromPreviousVersion({
+        state: new v9.ZswapLocalState(),
         publicKeys: PublicKeys.fromSecretKeys(v9.ZswapSecretKeys.fromSeed(seed)),
         networkId,
         protocolVersion: forkVersion,
         progress: parkedAtFork,
       });
-      expect(coinless.pendingAnchor).toBeUndefined();
       expect(coinless.state.firstFree).toBe(0n);
 
       // Somebody pays this wallet after the fork. The commitment lands at the index the pre-fork tree ended on, which

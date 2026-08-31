@@ -24,10 +24,10 @@
  *   pre-fork half and fail the post-fork one; a router that always answered with the last registration would do the
  *   reverse. Only routing on the snapshot's own declared version passes both.
  *
- *   The third case is the awkward one: a snapshot taken _during_ a crossing. Handing over and re-anchoring are two steps
- *   and an application may serialize between them, so a wallet's coins can be in the snapshot as a carried payload
- *   rather than as a tree. Restoring must bring that payload back and the resumed sync must finish the job — otherwise
- *   a snapshot taken in the wrong second silently costs the wallet everything it owns.
+ *   The third case is the awkward one: a snapshot taken _during_ a crossing. A migrated wallet holds its whole tree
+ *   immediately, but not the hashes over it — those need secret keys the migration has none of — and an application may
+ *   serialize in that window. Restoring must bring such a snapshot back rather than refusing it as inconsistent, and
+ *   the resumed sync must finish the job.
  *
  *   The snapshots are the suite's own: each is written by a running wallet through `serializeState()`, so what is
  *   restored is what this package actually produces rather than a fixture that could drift from it.
@@ -59,7 +59,7 @@ import {
   preForkPayment,
   translationStub,
 } from './translationStub.js';
-import { carriedPayload, coinIndices, coinValues, totalValue, treeSize } from './forkWalletAssertions.js';
+import { awaitingCoinHashes, coinIndices, coinValues, totalValue, treeSize } from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -95,8 +95,9 @@ const chainCoins = (): readonly MintedCoin[] =>
  * The same coins with a stranger's between them, for the crossing case.
  *
  * @remarks
- *   Interleaved so re-anchoring has a gap to fast-forward over: with the wallet's own coins packed at the bottom of the
- *   tree the anchor step needs no collapsed update at all, and would prove the easy half of itself.
+ *   Interleaved so the crossing has a stranger's leaf to carry over: with the wallet's own coins packed at the bottom of
+ *   the tree, a state that lost everything it does not own would still land its coins at the right indices, and the
+ *   round trip would prove the easy half of itself.
  */
 const crossingCoins = (): readonly MintedCoin[] => [
   mintable(v8.shieldedToken().raw, walletValues[0], walletRecipient()),
@@ -248,7 +249,7 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       expect(state.state.publicKeys).toStrictEqual(synced.state.publicKeys);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('restores a snapshot written mid-crossing, and finishes the anchoring on resume', async () =>
+  it('restores a snapshot written mid-crossing, and completes it on resume', async () =>
     Effect.gen(function* () {
       const coins = crossingCoins();
       const fork = yield* ForkSimulator.init({
@@ -259,9 +260,9 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
         postForkBlockProducer: immediateBlockProducer(undefined, genesisStrictness),
         translator: translationStub({ networkId, coins }),
       });
-      // Withholding the post-fork source is what makes the crossing observable: the hand-over happens, and the anchor
-      // that would immediately follow it cannot, because nothing is answering yet. That is the second a snapshot may
-      // land in.
+      // Withholding the post-fork source is what holds the wallet in the mid-crossing window: the hand-over happens,
+      // and the first sync update that would complete it cannot arrive, because nothing is answering yet. That is the
+      // second a snapshot may land in.
       const answering = yield* Deferred.make<Simulator>();
 
       const wallet = yield* makeForkWallet({
@@ -281,14 +282,14 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       const postFork = yield* fork.advanceToFork();
 
       const migration = yield* wallet.awaitMigration;
-      expect(migration.to.carriedCoinCount).toBe(walletValues.length);
-      expect(migration.to.carriedTreeSize).toBe(treeSizeAtCrossing);
+      expect(migration.to.coinCount).toBe(walletValues.length);
+      expect(migration.to.firstFree).toBe(treeSizeAtCrossing);
 
-      // Mid-crossing: on the post-fork variant, carrying its coins, holding none.
-      const crossing = yield* wallet.awaitState((state) => carriedPayload(state.state) !== undefined);
+      // Mid-crossing: on the post-fork variant, holding its whole tree, with no hashes over it yet.
+      const crossing = yield* wallet.awaitState((state) => awaitingCoinHashes(state.state));
       expect(yield* wallet.activeTag).toBe(V2Tag);
-      expect(coinValues(crossing.state)).toEqual([]);
-      expect(treeSize(crossing.state)).toBe(0n);
+      expect(coinValues(crossing.state)).toEqual([...walletValues]);
+      expect(treeSize(crossing.state)).toBe(treeSizeAtCrossing);
 
       const snapshot = yield* Effect.promise(() => wallet.shielded.serializeState());
       expect(Option.getOrThrow(peekProtocolVersion(snapshot))).toBe(forkVersion);
@@ -297,23 +298,23 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
       expect(yield* runningTag(restored)).toBe(V2Tag);
 
-      // The payload survived the round trip. Nothing else could stand in for it: the tree is still empty, so a
-      // snapshot that dropped it would restore a wallet with no way left of ever finding these coins.
+      // The tree survived the round trip, hashes still declared pending. The declaration is what makes this snapshot
+      // loadable at all: a full state beside an empty hash map is otherwise exactly what deserialization refuses.
       const asRestored = yield* restoredStates(restored, () => true);
-      expect(carriedPayload(asRestored.state)?.coins.map((coin) => coin.value)).toEqual([...walletValues]);
-      expect(carriedPayload(asRestored.state)?.coins.map((coin) => coin.mtIndex)).toEqual(crossingIndices);
-      expect(carriedPayload(asRestored.state)?.treeSize).toBe(treeSizeAtCrossing);
-      expect(coinValues(asRestored.state)).toEqual([]);
+      expect(coinValues(asRestored.state)).toEqual([...walletValues]);
+      expect(coinIndices(asRestored.state)).toEqual(crossingIndices);
+      expect(treeSize(asRestored.state)).toBe(treeSizeAtCrossing);
+      expect(awaitingCoinHashes(asRestored.state)).toBe(true);
 
       // The chain answers, and the resumed wallet finishes what the snapshot interrupted.
       yield* Deferred.succeed(answering, postFork);
       yield* Effect.promise(() => restored.start(v9.ZswapSecretKeys.fromSeed(seed)));
 
-      const anchored = yield* restoredStates(restored, (state) => totalValue(state.state) === walletTotal);
-      expect(carriedPayload(anchored.state)).toBeUndefined();
-      expect(coinValues(anchored.state)).toEqual([...walletValues]);
-      expect(coinIndices(anchored.state)).toEqual(crossingIndices);
-      expect(treeSize(anchored.state)).toBe(treeSizeAtCrossing);
+      const resumed = yield* restoredStates(restored, (state) => !awaitingCoinHashes(state.state));
+      expect(coinValues(resumed.state)).toEqual([...walletValues]);
+      expect(coinIndices(resumed.state)).toEqual(crossingIndices);
+      expect(treeSize(resumed.state)).toBe(treeSizeAtCrossing);
+      expect(totalValue(resumed.state)).toBe(walletTotal);
 
       // And it goes on: the next commitment the chain produces lands on top of the tree it just rebuilt.
       const block = yield* postFork.submitTransaction(
