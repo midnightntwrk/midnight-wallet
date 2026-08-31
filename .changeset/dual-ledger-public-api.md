@@ -54,7 +54,8 @@ applies them; the testkit's helpers take seeds and a fork version.
 - `FacadeState.protocolVersion`, `activeProtocolVersion` and `protocol` — a `Settled` / `Crossing` reading of whether
   the three wallets sit on one side of the boundary or are still crossing it.
 - `Token.night` and `parseTokenType` — token types without importing a ledger — and `Signing` types in the current
-  ledger's shape, lowered automatically for the pre-fork variant.
+  ledger's shape, lowered automatically for the pre-fork variant. Both reach an application through the umbrella
+  package's root; `Signing` lives beside that lowering, in `@midnightntwrk/wallet-sdk-capabilities/signatures`.
 - `WalletSeeds.fromMasterSeed(masterSeed, options?)` — the specified derivation from one master seed to the three
   per-wallet seeds, with test vectors in the wallet specification.
 - `tryRestore` beside `restore` on all three wallets, returning the reason a snapshot cannot be read instead of
