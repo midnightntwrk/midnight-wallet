@@ -164,7 +164,8 @@ yarn effect-language-service quickfixes --file "$(pwd)/path/to/file.ts"
 
 The repo is TypeScript apart from one crate, `packages/state-translation/wasm`, which wraps the ledger's v8-to-v9 state
 translation. **`dist`, `typecheck`, `lint` and `test:unit` need no Rust**; only the integration tests in `capabilities`
-and `state-translation` do, because their `test:integration` declares a turbo dependency on `build:wasm`.
+and `state-translation` do, because their `test:integration` depends on the state-translation package's `artifacts`
+task, which builds and verifies the WASM.
 
 Requires `rustup` (the toolchain and wasm32 target come from the root `rust-toolchain.toml`), `wasm-bindgen-cli` at
 **exactly 0.2.104**, `binaryen` for `wasm-opt`, and on macOS Homebrew's `llvm` — Apple's clang cannot target wasm32.
