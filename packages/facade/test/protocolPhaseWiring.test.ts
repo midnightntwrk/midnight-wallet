@@ -41,20 +41,29 @@ import {
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import type { PendingTransactionsService } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
-import { DustWallet, DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet, ShieldedWalletState, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
+import { DustWallet, type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { ShieldedWallet, type ShieldedWalletState, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
   PublicKey,
   UnshieldedWallet,
-  UnshieldedWalletState,
+  type UnshieldedWalletState,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { Option } from 'effect';
 import * as rx from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
 
-import { createPreForkMockProvingService, getDustSeed, getShieldedSeed, getUnshieldedSeed } from './utils/index.js';
+import {
+  createPreForkMockProvingService,
+  drivenBy,
+  dustAt,
+  getDustSeed,
+  getShieldedSeed,
+  getUnshieldedSeed,
+  shieldedAt,
+  unshieldedAt,
+} from './utils/index.js';
 
 /** The boundary the facade reads `protocol` against. */
 const forkVersion = V9_NATIVE_FORK_VERSION;
@@ -102,58 +111,6 @@ class SilentPendingTransactions implements PendingTransactionsService<FinalizedT
     return Promise.resolve();
   }
 }
-
-/**
- * The same wallet state, restated at another protocol version.
- *
- * @remarks
- *   Everything but the version is the wallet's own: the core state it published and its own projections, delegated
- *   through. Only what a crossing would change is changed, so what reaches the facade is a state of exactly the shape
- *   the wallet publishes.
- */
-const shieldedAt = (state: ShieldedWalletState, version: ProtocolVersion.ProtocolVersion): ShieldedWalletState =>
-  new ShieldedWalletState(version, state.state, {
-    balances: () => state.balances,
-    totalCoins: () => state.totalCoins,
-    availableCoins: () => state.availableCoins,
-    pendingCoins: () => state.pendingCoins,
-    coinPublicKey: () => state.coinPublicKey,
-    encryptionPublicKey: () => state.encryptionPublicKey,
-    address: () => state.address,
-    serialize: () => state.serialize(),
-  });
-
-const unshieldedAt = (state: UnshieldedWalletState, version: ProtocolVersion.ProtocolVersion): UnshieldedWalletState =>
-  new UnshieldedWalletState(version, state.state, {
-    balances: () => state.balances,
-    totalCoins: () => state.totalCoins,
-    availableCoins: () => state.availableCoins,
-    pendingCoins: () => state.pendingCoins,
-    address: () => state.address,
-    serialize: () => state.serialize(),
-  });
-
-const dustAt = (state: DustWalletState, version: ProtocolVersion.ProtocolVersion): DustWalletState =>
-  new DustWalletState(version, state.state, {
-    totalCoins: () => state.totalCoins,
-    availableCoins: () => state.availableCoins,
-    pendingCoins: () => state.pendingCoins,
-    publicKey: () => state.publicKey,
-    address: () => state.address,
-    balance: (time) => state.balance(time),
-    estimateDustGeneration: (utxos, time) => state.estimateDustGeneration(utxos, time),
-    splitNightUtxos: (utxos) => state.splitNightUtxos(utxos),
-    serialize: () => state.serialize(),
-  });
-
-/** Replaces a wallet's state stream with one this suite drives, leaving everything else about the wallet real. */
-const drivenBy = <TWallet extends object, TState>(
-  wallet: TWallet,
-  states: rx.Observable<TState>,
-): rx.Observable<TState> => {
-  Object.defineProperty(wallet, 'state', { value: states, configurable: true });
-  return states;
-};
 
 describe('three wallets that disagree about which side of the boundary the chain is on', () => {
   let facade: WalletFacade;

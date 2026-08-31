@@ -22,8 +22,8 @@
  *   heard of cannot be lowered at all, and says so rather than being handed over as bytes it would misread.
  */
 import type * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import { type Signing } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Data, Either } from 'effect';
+import type * as Signing from './signing.js';
 
 /** The signature scheme the pre-fork ledger version has, and the only one a lowered value can name. */
 const PRE_FORK_SIGNATURE_KIND: Signing.SignatureKind = 'schnorr';

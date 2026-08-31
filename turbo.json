@@ -100,6 +100,16 @@
       "outputs": ["wasm/pkg/**", "!wasm/pkg/*.d.ts"],
       "outputLogs": "new-only"
     },
+    "verify:wasm": {
+      // The other half of build:wasm, and declared beside it for that reason: compiling proves very little, since an
+      // artifact built against an unpatched midnight-storage links fine and then traps on the first real state. This
+      // translates one. It reaches the artifact through the package's own dist, so it needs both edges — everything
+      // else it depends on arrives through those two hashes.
+      "inputs": ["scripts/verify-wasm.mjs"],
+      "outputs": [],
+      "outputLogs": "new-only",
+      "dependsOn": ["build:wasm", "dist"]
+    },
     "dist": {
       "inputs": [
         "index.html",

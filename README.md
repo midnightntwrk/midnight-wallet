@@ -96,7 +96,8 @@ turbo command.
 The repository is TypeScript apart from one Rust crate, `packages/state-translation/wasm`, which compiles the ledger's
 v8-to-v9 state translation to WASM. **Most work needs none of this**: `yarn dist`, `typecheck`, `lint` and `test:unit`
 have no Rust dependency. It is required to run the **integration tests** in `packages/capabilities` and
-`packages/state-translation`, whose `test:integration` declares a turbo dependency on the `build:wasm` task.
+`packages/state-translation`, whose `test:integration` declares a turbo dependency on that package's `artifacts` task —
+the gate that builds the WASM and verifies it translates.
 
 ```shell
 brew install rustup binaryen llvm          # or your platform's equivalents

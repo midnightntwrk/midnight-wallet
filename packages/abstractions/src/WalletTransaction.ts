@@ -34,6 +34,16 @@ import * as ProtocolVersion from './ProtocolVersion.js';
 import * as SerializedTransaction from './SerializedTransaction.js';
 
 /**
+ * The three stages, as the one thing that decides what they are.
+ *
+ * @remarks
+ *   Declared here rather than beside the wire envelope that reads it, because {@link TransactionStage} — the type an
+ *   application names — is read back off it. Stating the three words once means the type a caller is held to and the
+ *   values an envelope is parsed against cannot come to disagree: adding a stage to one adds it to the other.
+ */
+const TransactionStageSchema = Schema.Literal('Unproven', 'Unbound', 'Finalized');
+
+/**
  * How far along the building of a transaction a handle is.
  *
  * @remarks
@@ -42,7 +52,7 @@ import * as SerializedTransaction from './SerializedTransaction.js';
  *   network takes. Both ledger versions have all three, and the words mean the same thing on either side of a protocol
  *   boundary, which is why the stage can be plain data on a version-agnostic handle.
  */
-export type TransactionStage = 'Unproven' | 'Unbound' | 'Finalized';
+export type TransactionStage = Schema.Schema.Type<typeof TransactionStageSchema>;
 
 /** What a handle can carry: anything that can write itself out as bytes, which is every ledger's transaction. */
 type Serializable = Readonly<{ serialize: () => Uint8Array }>;
@@ -85,8 +95,6 @@ export class WireFormatError extends Data.TaggedError(
  *   envelope" from "I do not know this ledger version", because only the second is a chain fact.
  */
 const WIRE_FORMAT = 1;
-
-const TransactionStageSchema: Schema.Schema<TransactionStage> = Schema.Literal('Unproven', 'Unbound', 'Finalized');
 
 /**
  * The envelope a handle crosses a process boundary in.

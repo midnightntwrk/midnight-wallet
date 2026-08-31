@@ -15,8 +15,8 @@
  * The adapter's own behaviour, against the real WASM translation.
  *
  * **Integration tier, and not for want of trying:** the import is static, so these need `wasm/pkg/` to exist. `turbo`
- * builds it first via this package's `build:wasm` task. There is nothing left to stub — the module is a fixed import,
- * so a unit test here could only test the WASM itself.
+ * builds it first via this package's `artifacts` task. There is nothing left to stub — the module is a fixed import, so
+ * a unit test here could only test the WASM itself.
  *
  * What this file covers is the seam between the WASM and its callers: that bytes survive the trip, and that a refusal
  * arrives as a typed error carrying the reason. That the translation is _correct_ — that state crosses the fork intact
