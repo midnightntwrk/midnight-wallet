@@ -38,7 +38,11 @@ import * as v8 from '@midnight-ntwrk/ledger-v8';
 import * as v9 from '@midnightntwrk/ledger-v9';
 import { Array as EArray, Either, Order, pipe } from 'effect';
 import * as fc from 'fast-check';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Every test here does real cryptography in two WASM ledgers at once; on a loaded CI runner that
+// legitimately outlasts the 30s default (observed: the property suite timing out while green locally).
+vi.setConfig({ testTimeout: 120_000 });
 
 // =============================================================================
 // Instruments
