@@ -17,4 +17,3 @@ export * from './DustCommitmentMerkleTreeUpdate.js';
 export * from './FetchTermsAndConditions.js';
 export * from './TransactionStatus.js';
 export * from './TransactionHistoryDetail.js';
-export * from './ZswapMerkleTreeCollapsedUpdate.js';

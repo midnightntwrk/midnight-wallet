@@ -1,6 +1,5 @@
 ---
 '@midnightntwrk/wallet-sdk-shielded': minor
-'@midnightntwrk/wallet-sdk-indexer-client': minor
 ---
 
 **Crossing a hard fork, the shielded wallet now carries its local state instead of starting empty.** The two ledger
@@ -31,9 +30,6 @@ previous wallet's local state, described by the one thing the crossing needs of 
 previous variant's own state object satisfies this as it is, so wallets built through the SDK are unaffected; only code
 that hand-builds a migration input rather than letting the wallet layer pass the previous variant's state has to add
 the field.
-
-`@midnightntwrk/wallet-sdk-indexer-client` gains the `zswapMerkleTreeCollapsedUpdate` query, which fetches the collapsed
-Merkle-tree update covering an index range, usable on its own.
 
 The dust and unshielded crossings are unchanged and remain correct as they are: the chain itself wipes dust state at the
 fork and replays it, so the dust wallet re-discovers its own through ordinary synchronization, and unshielded state is
