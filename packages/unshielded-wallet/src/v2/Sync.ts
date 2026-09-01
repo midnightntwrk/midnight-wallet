@@ -10,19 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import {
-  Duration,
-  Effect,
-  type Scope,
-  Stream,
-  Schema,
-  Schedule,
-  identity,
-  Option,
-  pipe,
-  Either,
-  HashMap,
-} from 'effect';
+import { Effect, type Scope, Stream, Schema, pipe, Either, HashMap } from 'effect';
 import { ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import { CoreWallet } from './CoreWallet.js';
 import { UtxoWithMeta } from './UnshieldedState.js';
@@ -31,17 +19,18 @@ import {
   type SimulatorState,
   getCurrentBlockNumber,
 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { BlockHash, UnshieldedTransactionTip, UnshieldedTransactions } from '@midnightntwrk/wallet-sdk-indexer-client';
-import {
-  WsSubscriptionClient,
-  HttpQueryClient,
-  ConnectionHelper,
-} from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { UnshieldedTransactions } from '@midnightntwrk/wallet-sdk-indexer-client';
+import { WsSubscriptionClient, ConnectionHelper } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, type WalletError } from './WalletError.js';
 import { WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { VersionSignalSyncUpdate, type WalletSyncUpdate, WalletSyncUpdateSchema } from './SyncSchema.js';
+import {
+  type IndexerSyncUpdate,
+  VersionSignalSyncUpdate,
+  type WalletSyncUpdate,
+  WalletSyncUpdateSchema,
+} from './SyncSchema.js';
 
 export interface SyncService<TState, TUpdate> {
   updates: (state: TState) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
@@ -96,171 +85,49 @@ export type IndexerClientConnection = {
   keepAlive?: number;
 };
 
-/**
- * How often the sync source re-asks the chain which protocol version it is on.
- *
- * @remarks
- *   The subscription this source reads is scoped to one address, and its progress arm carries no version — it says how
- *   far this address's timeline goes and nothing else. A wallet therefore observes the chain's protocol version only
- *   through transactions that touch its own address, and on a chain that crosses a protocol boundary and then pays this
- *   address nothing it observes no version at all — it stays on the variant it was running, and everything built
- *   through it stays routed to that variant's ledger. Asking on a timer is what closes that, and the cost of asking is
- *   one small query per interval on a chain that has not moved.
- */
-export type VersionWatchConfig = {
-  /**
-   * Milliseconds between checks. Zero or less turns the watcher off entirely, which is what a source driving a wallet
-   * from something other than a live chain wants.
-   *
-   * @default 30000
-   */
-  readonly intervalMs?: number;
-};
-
 export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
-  versionWatch?: VersionWatchConfig;
 };
 
 export type DefaultSyncContext = {
   transactionHistoryService: TransactionHistoryService;
 };
 
-/** How often the chain is asked its version when the configuration does not say. */
-const DEFAULT_VERSION_WATCH_INTERVAL_MS = 30_000;
-
 /**
- * How long one address-tip probe is given to produce its single answer.
+ * Splits the chain's protocol version off a progress frame, into a signal of its own.
  *
  * @remarks
- *   Only a stall guard. The indexer's progress loop emits before its first sleep, so the answer arrives at once or the
- *   transport is broken; without a bound, a half-open socket would leave the poll loop parked on a tick that never
- *   completes and the wallet would stop asking altogether. A bound turns that into a skipped tick.
+ *   This is how a wallet nobody pays learns that the chain moved. Ordinarily a version reaches it on a transaction it was
+ *   served, and it is served only the transactions that touch its own address — so on a chain that crosses a protocol
+ *   boundary and then pays this address nothing, it would observe no version at all and stay on the variant it was
+ *   running, with everything built through it routed to that variant's ledger. The progress arm has no such silence:
+ *   the indexer emits it before its first sleep and keeps emitting it, on an address the chain has never mentioned
+ *   exactly as on a busy one, and it states the version at the chain's tip.
+ *
+ *   Split off rather than folded in place, because the two things a frame says are governed by different rules. Progress
+ *   is bookkeeping and always applies. A version may be recorded only when the wallet is level with the far end of this
+ *   address's timeline, or the hand-over would park the sync cursor in front of history that the next variant would
+ *   then apply without ever having seen what led to it. Keeping the signal a message of its own leaves that gate
+ *   exactly where the capability already implements it — and the frame states both halves in one indexed instant, so
+ *   the version can no longer be read against a timeline end that moved between two separate answers.
+ *
+ *   Two frames are worth no signal. Zero is the source reporting that it has indexed no block yet, not a chain at version
+ *   zero; read as a version it would be a claim nobody made. And a version at or below the one the wallet already held
+ *   could only ever be a no-op, because the recorded version never goes backwards — suppressing it is what keeps a
+ *   settled wallet's progress frames from putting a redundant message on the stream for the rest of its life.
+ * @param update The decoded subscription message.
+ * @param knownVersion The version the wallet held when this stream opened — a lower bound on what it holds now.
+ * @returns The message, followed by the signal when the frame carries a version worth recording.
  */
-const ADDRESS_TIP_PROBE_TIMEOUT = Duration.seconds(10);
-
-/**
- * Asks the source how far this address's transaction timeline goes.
- *
- * @remarks
- *   Over the subscription rather than a query, because the schema has no query that answers it: nothing aggregates
- *   transactions per owner, and `Query.transactions` reaches one only by an offset the caller would have to know
- *   already. The subscription's progress arm is where the indexer states it, and it states it eagerly — the progress
- *   loop yields before its first sleep, on any address, reporting zero for one the chain has never mentioned.
- *
- *   The cursor is **one past** the wallet's own, unlike the sync stream's. The indexer's cursor is inclusive, so asking
- *   at the cursor itself re-delivers the already-applied boundary transaction; the two arms of the subscription are
- *   merged by readiness rather than ordered, so that frame could win the race indefinitely and every tick would read it
- *   as unapplied history. One past, the transaction arm is provably empty for a caught-up wallet, so the progress frame
- *   is the only thing that can arrive first.
- * @param config The sync configuration, for the keep-alive the source's subscriptions use.
- * @param url Where to subscribe.
- * @param address The wallet's own address; the timeline this asks about is nobody else's.
- * @param appliedId The last transaction id the wallet applied.
- * @returns The highest transaction id for this address, or nothing when the source answered with a transaction still
- *   waiting to be applied — or did not answer at all.
- */
-const highestTransactionId = (
-  config: DefaultSyncConfiguration,
-  url: URL | string,
-  address: string,
-  appliedId: bigint,
-): Effect.Effect<Option.Option<number>> =>
-  pipe(
-    UnshieldedTransactionTip.run({ address, transactionId: Number(appliedId + 1n) }),
-    Stream.runHead,
-    Effect.map(
-      Option.flatMap((answer) =>
-        answer.unshieldedTransactions.type === 'UnshieldedTransactionsProgress'
-          ? Option.some(answer.unshieldedTransactions.highestTransactionId)
-          : Option.none(),
-      ),
-    ),
-    Effect.provide(WsSubscriptionClient.layer({ url, keepAlive: config.indexerClientConnection.keepAlive })),
-    Effect.scoped,
-    Effect.timeout(ADDRESS_TIP_PROBE_TIMEOUT),
-    Effect.catchAll(() => Effect.succeedNone),
-  );
-
-/**
- * One check of the chain's protocol version, gated on the wallet being caught up on this address's transaction ids.
- *
- * @remarks
- *   The order of the two questions is load-bearing. The tip is read **first**: a tip reported at a version means the
- *   source has indexed through the block that carries it, so every transaction below it is already counted in the
- *   address tip read afterwards. Asked the other way round, a transaction indexed between the two answers could be one
- *   of the version that preceded the tip — unapplied, uncounted, and exactly what the gate exists to catch.
- *
- *   The one short-circuit is an answer rather than a shortcut: a tip at or below the version the wallet already held is a
- *   signal that could only be a no-op, so no probe is opened and nothing is emitted — which is what keeps a settled
- *   wallet from polling a subscription for the rest of its life.
- *
- *   Everything else is swallowed. A tick that fails says nothing about the chain, so it must neither reach the state nor
- *   take the sync stream down with it; the next tick is the retry, and costs nothing to wait for.
- * @param config The sync configuration, for the indexer to ask.
- * @param url Where to run the address-tip probe.
- * @param address The wallet's own address.
- * @param appliedId The last transaction id the wallet applied, for the probe's cursor.
- * @param knownVersion The version the wallet already held when this stream opened — a lower bound on what it holds now.
- * @returns The signal, or nothing when there is nothing to say or nobody said it.
- */
-const readVersionSignal = (
-  config: DefaultSyncConfiguration,
-  url: URL | string,
-  address: string,
-  appliedId: bigint,
+const withVersionSignal = (
+  update: IndexerSyncUpdate,
   knownVersion: ProtocolVersion.ProtocolVersion,
-): Effect.Effect<Option.Option<VersionSignalSyncUpdate>> =>
-  pipe(
-    BlockHash.run({ offset: null }),
-    Effect.provide(HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl })),
-    Effect.scoped,
-    Effect.flatMap((answer) =>
-      Option.match(Option.fromNullable(answer.block), {
-        onNone: () => Effect.succeedNone,
-        onSome: (tip) =>
-          BigInt(tip.protocolVersion) <= knownVersion
-            ? Effect.succeedNone
-            : pipe(
-                highestTransactionId(config, url, address, appliedId),
-                Effect.map(Option.map((highest) => VersionSignalSyncUpdate.create(tip.protocolVersion, highest))),
-              ),
-      }),
-    ),
-    Effect.catchAll(() => Effect.succeedNone),
-  );
-
-/**
- * The chain's version, re-asked on a timer for as long as sync runs.
- *
- * @remarks
- *   Deliberately silent about ticks that say nothing: a tick that finds the chain where the wallet left it, that finds
- *   history still waiting to be applied, or that cannot reach the chain at all, emits no element rather than an empty
- *   one, so nothing downstream has to know that polling is how the answer was arrived at.
- * @param config The sync configuration, carrying the interval.
- * @param url Where to run the address-tip probe.
- * @param address The wallet's own address.
- * @param appliedId The last transaction id the wallet applied, for the probe's cursor.
- * @param knownVersion The version the wallet held when this stream opened.
- * @returns The signals, or an empty stream when watching is turned off.
- */
-const versionWatch = (
-  config: DefaultSyncConfiguration,
-  url: URL | string,
-  address: string,
-  appliedId: bigint,
-  knownVersion: ProtocolVersion.ProtocolVersion,
-): Stream.Stream<VersionSignalSyncUpdate> => {
-  const intervalMs = config.versionWatch?.intervalMs ?? DEFAULT_VERSION_WATCH_INTERVAL_MS;
-
-  return intervalMs <= 0
-    ? Stream.empty
-    : pipe(
-        Stream.fromSchedule(Schedule.spaced(Duration.millis(intervalMs))),
-        Stream.mapEffect(() => readVersionSignal(config, url, address, appliedId, knownVersion)),
-        Stream.filterMap(identity),
-      );
-};
+): readonly WalletSyncUpdate[] =>
+  update.type === 'UnshieldedTransactionsProgress' &&
+  update.protocolVersion !== 0 &&
+  BigInt(update.protocolVersion) > knownVersion
+    ? [update, VersionSignalSyncUpdate.create(update.protocolVersion, update.highestTransactionId)]
+    : [update];
 
 export const makeDefaultSyncService = (config: DefaultSyncConfiguration): SyncService<CoreWallet, WalletSyncUpdate> => {
   return {
@@ -293,7 +160,7 @@ export const makeDefaultSyncService = (config: DefaultSyncConfiguration): SyncSe
       const { appliedId } = state.progress;
       const { address } = state.publicKey;
 
-      const timeline = pipe(
+      return pipe(
         UnshieldedTransactions.run({ address, transactionId: Number(appliedId) }),
         Stream.provideLayer(
           WsSubscriptionClient.layer({ url: indexerWsUrl, keepAlive: indexerClientConnection.keepAlive }),
@@ -308,14 +175,8 @@ export const makeDefaultSyncService = (config: DefaultSyncConfiguration): SyncSe
             EitherOps.toEffect,
           );
         }),
+        Stream.mapConcat((update) => withVersionSignal(update, state.protocolVersion)),
       );
-
-      // The timeline is what the source is for, so it decides when the source is done: `haltStrategy: 'left'` stops the
-      // watcher with it rather than leaving a poll loop running against a stream nobody is reading. It has nothing to
-      // say about failure — a failing timeline still fails the merged stream, where the variant's retry can see it.
-      return Stream.merge(timeline, versionWatch(config, indexerWsUrl, address, appliedId, state.protocolVersion), {
-        haltStrategy: 'left',
-      });
     },
   };
 };
@@ -348,9 +209,11 @@ export const makeDefaultSyncCapability = (
             : annotateVersion(state, update.version),
         );
       } else if (update.type === 'UnshieldedTransactionsProgress') {
-        // A progress message reports the tip of the source, not a transaction, and the wire schema carries no protocol
-        // version on it. It therefore never annotates: reading one as version zero would drag a wallet that has
-        // already crossed a boundary back below it.
+        // A progress message reports how far the source has got with this address, not a transaction, so it moves the
+        // far end of the cursor and nothing else. The chain version it also carries is deliberately not read here: the
+        // source splits that off into its own `VersionSignal`, which is the only message allowed to annotate, and
+        // which alone carries the gate above. Annotating from both places would put the gate on one route and not the
+        // other.
         return Either.right(
           CoreWallet.updateProgress(state, {
             highestTransactionId: BigInt(update.highestTransactionId),

@@ -79,10 +79,17 @@ export const fixtureTransaction = (params: {
   };
 };
 
-/** A progress message. It carries no protocol version at all — the wire schema has no field for one. */
-export const fixtureProgress = (highestTransactionId: number): WalletSyncUpdate => ({
+/**
+ * A progress message: how far the source has got with this address, and the version at the chain's tip.
+ *
+ * @remarks
+ *   The version is the chain's, not this timeline's, which is why the fold ignores it — only the signal the source splits
+ *   off a frame may annotate, because only that one is gated on unread history.
+ */
+export const fixtureProgress = (highestTransactionId: number, protocolVersion: number): WalletSyncUpdate => ({
   type: 'UnshieldedTransactionsProgress',
   highestTransactionId,
+  protocolVersion,
 });
 
 /**
