@@ -14,7 +14,7 @@ import { Either, pipe, Schema } from 'effect';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { UnshieldedState } from './UnshieldedState.js';
+import { UnshieldedState, UtxoWithMeta } from './UnshieldedState.js';
 
 export type SerializationCapability<TWallet, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
@@ -74,8 +74,20 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
         Either.mapLeft((err) => new OtherWalletError(err)),
         Either.map((snapshot) => {
+          // The decoded snapshot is a plain object; UtxoWithMeta is a Data.Class, so rebuild it rather than relying on
+          // structural assignability. A snapshot written by an older version may carry a `booking` on an entry's meta;
+          // the schema no longer reads it, and `UnshieldedState.restore` takes no bookings, so it is dropped here.
+          const toUtxoWithMeta = (entry: Schema.Schema.Type<typeof UtxoWithMetaSchema>): UtxoWithMeta =>
+            new UtxoWithMeta({
+              utxo: entry.utxo,
+              meta: { ctime: entry.meta.ctime, registeredForDustGeneration: entry.meta.registeredForDustGeneration },
+            });
+
           return CoreWallet.restore(
-            UnshieldedState.restore(snapshot.state.availableUtxos, snapshot.state.pendingUtxos),
+            UnshieldedState.restore(
+              snapshot.state.availableUtxos.map(toUtxoWithMeta),
+              snapshot.state.pendingUtxos.map(toUtxoWithMeta),
+            ),
             snapshot.publicKey,
             {
               highestTransactionId: snapshot.appliedId ?? 0n,

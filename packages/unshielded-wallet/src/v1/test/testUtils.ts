@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as fc from 'fast-check';
-import { type UnshieldedUpdate, type UpdateStatus, UtxoWithMeta } from '../UnshieldedState.js';
+import { type UnshieldedUpdate, type UpdateStatus, type UtxoBooking, UtxoWithMeta } from '../UnshieldedState.js';
 
 export type UtxoOverrides = {
   owner?: string;
@@ -90,3 +90,11 @@ export const seedHex = (length: number = 64, seed: number = 42): string =>
   Array.from({ length }, (_, i) => ((seed + i) % 16).toString(16)).join('');
 
 export const blockTime = (blockTime: Date): bigint => BigInt(Math.ceil(+blockTime / 1000));
+
+/**
+ * A booking whose expiry is far enough in the future that no test hits it by accident. Tests that exercise expiry pass
+ * their own booking with an expiry they control.
+ */
+export const defaultTestBooking: UtxoBooking = {
+  expiresAt: new Date('2099-01-01T00:00:00.000Z'),
+};

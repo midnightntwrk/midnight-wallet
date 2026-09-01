@@ -14,6 +14,20 @@ import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Data, Either, HashMap, Option, pipe } from 'effect';
 import { ApplyTransactionError, UtxoNotFoundError } from './WalletError.js';
 
+/**
+ * The reservation held on a UTxO while a transaction that spends it is in flight.
+ *
+ * Inputs are booked during balancing, not submission, so a failure in between (proving fails, the process dies) can
+ * leave a booking with no transaction behind it. `expiresAt` is the TTL of the transaction the booking was taken for:
+ * past that instant the ledger would reject the transaction, so the booking cannot still be valid and is released.
+ *
+ * A booking is never persisted — see ADR 0008. It expresses the intent of a caller in this process, and that intent
+ * does not outlive the process.
+ */
+export interface UtxoBooking {
+  readonly expiresAt: Date;
+}
+
 export interface UtxoMeta {
   readonly ctime: Date;
   readonly registeredForDustGeneration: boolean;
@@ -34,61 +48,128 @@ export interface UnshieldedUpdate {
   readonly status: UpdateStatus;
 }
 
+/**
+ * Every UTxO this wallet owns, and the reservations currently held against them.
+ *
+ * A coin is stored once, in `utxos`. A booking is a key into that map, in `bookings`. The available and pending views
+ * consumers read are derived from the two (see {@link UnshieldedState.availableUtxos} and
+ * {@link UnshieldedState.pendingUtxos}), so they cannot disagree and a coin cannot be in both — the defect in #697 is
+ * not representable in this shape. ADR 0008 records the reasoning.
+ */
 export interface UnshieldedState {
-  readonly availableUtxos: HashMap.HashMap<UtxoHash, UtxoWithMeta>;
-  readonly pendingUtxos: HashMap.HashMap<UtxoHash, UtxoWithMeta>;
+  readonly utxos: HashMap.HashMap<UtxoHash, UtxoWithMeta>;
+  readonly bookings: HashMap.HashMap<UtxoHash, UtxoBooking>;
 }
 
-const UtxoHash = (utxo: ledger.Utxo): UtxoHash => `${utxo.intentHash}#${utxo.outputNo}`;
+/**
+ * The canonical identity of a UTxO, and the key of both maps in {@link UnshieldedState}. Exported so no other layer
+ * re-derives it: a second spelling of this key that drifts from the map keying would silently break any lookup or
+ * change-detection built on it.
+ */
+export const UtxoHash = (utxo: ledger.Utxo): UtxoHash => `${utxo.intentHash}#${utxo.outputNo}`;
+
+const hashesOf = (utxos: readonly UtxoWithMeta[]): readonly UtxoHash[] => utxos.map((utxo) => UtxoHash(utxo.utxo));
+
+const entriesOf = (utxos: readonly UtxoWithMeta[]): readonly (readonly [UtxoHash, UtxoWithMeta])[] =>
+  utxos.map((utxo) => [UtxoHash(utxo.utxo), utxo] as const);
 
 export const UnshieldedState = {
   empty: (): UnshieldedState => ({
-    availableUtxos: HashMap.empty(),
-    pendingUtxos: HashMap.empty(),
+    utxos: HashMap.empty(),
+    bookings: HashMap.empty(),
   }),
 
+  /**
+   * Restores state from persisted arrays.
+   *
+   * Both arrays are coins this wallet owns, so they are unioned into one map. Any booking the snapshot implied by
+   * placing a coin in `pendingUtxos` is discarded: the process that took it is gone. This also repairs a snapshot
+   * written by a version that could hold the same coin in both arrays — a map keyed by `intentHash#outputNo` cannot
+   * hold it twice.
+   *
+   * @param availableUtxos - Coins the snapshot recorded as spendable.
+   * @param pendingUtxos - Coins the snapshot recorded as booked.
+   * @returns State owning every given coin, with no bookings.
+   */
   restore: (availableUtxos: readonly UtxoWithMeta[], pendingUtxos: readonly UtxoWithMeta[]): UnshieldedState => ({
-    availableUtxos: HashMap.fromIterable(availableUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo])),
-    pendingUtxos: HashMap.fromIterable(pendingUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo])),
+    utxos: HashMap.fromIterable([...entriesOf(availableUtxos), ...entriesOf(pendingUtxos)]),
+    bookings: HashMap.empty(),
   }),
 
-  spend: (state: UnshieldedState, utxo: UtxoWithMeta): Either.Either<UnshieldedState, UtxoNotFoundError> =>
+  /** The coins coin selection may draw on: owned, and not booked. */
+  availableUtxos: (state: UnshieldedState): HashMap.HashMap<UtxoHash, UtxoWithMeta> =>
+    HashMap.filter(state.utxos, (_, hash) => !HashMap.has(state.bookings, hash)),
+
+  /** The coins a transaction in flight has reserved: owned, and booked. */
+  pendingUtxos: (state: UnshieldedState): HashMap.HashMap<UtxoHash, UtxoWithMeta> =>
+    HashMap.filter(state.utxos, (_, hash) => HashMap.has(state.bookings, hash)),
+
+  spend: (
+    state: UnshieldedState,
+    utxo: UtxoWithMeta,
+    booking: UtxoBooking,
+  ): Either.Either<UnshieldedState, UtxoNotFoundError> =>
     Either.gen(function* () {
       const hash = UtxoHash(utxo.utxo);
-      if (!HashMap.has(state.availableUtxos, hash)) {
+      if (!HashMap.has(state.utxos, hash) || HashMap.has(state.bookings, hash)) {
         return yield* Either.left(new UtxoNotFoundError({ utxo: utxo.utxo }));
       }
-      return {
-        availableUtxos: HashMap.remove(state.availableUtxos, hash),
-        pendingUtxos: HashMap.set(state.pendingUtxos, hash, utxo),
-      };
+      // The coin itself does not move or change: booking it only adds a key.
+      return { utxos: state.utxos, bookings: HashMap.set(state.bookings, hash, booking) };
     }),
 
   rollbackSpend: (state: UnshieldedState, utxo: UtxoWithMeta): Either.Either<UnshieldedState, never> => {
     // Rollbacks can't fail due to a utxo not found as it is possible and expected if there is a race between sync and revert call
     const hash = UtxoHash(utxo.utxo);
-    if (!HashMap.has(state.pendingUtxos, hash)) {
+    if (!HashMap.has(state.bookings, hash)) {
       return Either.right(state);
     }
     return Either.right({
-      availableUtxos: HashMap.set(state.availableUtxos, hash, utxo),
-      pendingUtxos: HashMap.remove(state.pendingUtxos, hash),
+      utxos: HashMap.has(state.utxos, hash) ? state.utxos : HashMap.set(state.utxos, hash, utxo),
+      bookings: HashMap.remove(state.bookings, hash),
     });
   },
 
-  spendByUtxo: (state: UnshieldedState, utxo: ledger.Utxo): Either.Either<UnshieldedState, UtxoNotFoundError> =>
+  spendByUtxo: (
+    state: UnshieldedState,
+    utxo: ledger.Utxo,
+    booking: UtxoBooking,
+  ): Either.Either<UnshieldedState, UtxoNotFoundError> =>
     Either.gen(function* () {
       const hash = UtxoHash(utxo);
+      // Probed directly rather than through the derived availableUtxos view: this runs once per selected input while
+      // balancing, and materializing the filtered map would make each probe O(owned coins).
       const found = yield* Either.fromOption(
-        HashMap.get(state.availableUtxos, hash),
+        HashMap.has(state.bookings, hash) ? Option.none() : HashMap.get(state.utxos, hash),
         () => new UtxoNotFoundError({ utxo }),
       );
-      return yield* UnshieldedState.spend(state, found);
+      return yield* UnshieldedState.spend(state, found, booking);
     }),
+
+  /**
+   * Releases every booking that has reached its expiry.
+   *
+   * Inputs are booked during balancing, and the paths that release a booking on failure (the facade's proving and
+   * submission catches, and an on-chain FAILURE) all require the transaction to have reached proving. A caller that
+   * balances and then abandons the transaction before that — a different branch taken, its own code throwing — leaves
+   * the booking outstanding with nothing to release it. Expiry is the reaper for that case.
+   *
+   * @param state - State to sweep.
+   * @param now - Instant to judge expiry against.
+   * @returns State with expired bookings removed; the same state if none had expired.
+   */
+  expireBookings: (state: UnshieldedState, now: Date): UnshieldedState => {
+    const expired = Array.from(HashMap.entries(state.bookings))
+      .filter(([, booking]) => booking.expiresAt.getTime() <= now.getTime())
+      .map(([hash]) => hash);
+
+    return expired.length === 0 ? state : { utxos: state.utxos, bookings: HashMap.removeMany(state.bookings, expired) };
+  },
 
   rollbackSpendByUtxo: (state: UnshieldedState, utxo: ledger.Utxo): Either.Either<UnshieldedState, never> =>
     pipe(
-      HashMap.get(state.pendingUtxos, UtxoHash(utxo)),
+      // Same direct probe as spendByUtxo, for the same hot-path reason.
+      HashMap.has(state.bookings, UtxoHash(utxo)) ? HashMap.get(state.utxos, UtxoHash(utxo)) : Option.none(),
       Option.match({
         onNone: () => Either.right(state),
         onSome: (found) => UnshieldedState.rollbackSpend(state, found),
@@ -104,18 +185,16 @@ export const UnshieldedState = {
         return yield* Either.left(new ApplyTransactionError({ message: `Invalid status: ${update.status}` }));
       }
 
+      const spentHashes = hashesOf(update.spentUtxos);
+
+      // A replayed creation of a coin that is currently booked overwrites its entry rather than adding a second one,
+      // and its booking is untouched. That is the property the two-map shape could not offer.
       return {
-        availableUtxos: HashMap.union(
-          HashMap.removeMany(
-            state.availableUtxos,
-            update.spentUtxos.map((utxo) => UtxoHash(utxo.utxo)),
-          ),
-          HashMap.fromIterable(update.createdUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo])),
+        utxos: HashMap.union(
+          HashMap.removeMany(state.utxos, spentHashes),
+          HashMap.fromIterable(entriesOf(update.createdUtxos)),
         ),
-        pendingUtxos: HashMap.removeMany(
-          state.pendingUtxos,
-          update.spentUtxos.map((utxo) => UtxoHash(utxo.utxo)),
-        ),
+        bookings: HashMap.removeMany(state.bookings, spentHashes),
       };
     }),
 
@@ -128,15 +207,11 @@ export const UnshieldedState = {
         return yield* Either.left(new ApplyTransactionError({ message: `Invalid status: ${update.status}` }));
       }
 
+      const spentHashes = hashesOf(update.spentUtxos);
+
       return {
-        availableUtxos: HashMap.union(
-          state.availableUtxos,
-          HashMap.fromIterable(update.spentUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo])),
-        ),
-        pendingUtxos: HashMap.removeMany(
-          state.pendingUtxos,
-          update.spentUtxos.map((utxo) => UtxoHash(utxo.utxo)),
-        ),
+        utxos: HashMap.union(state.utxos, HashMap.fromIterable(entriesOf(update.spentUtxos))),
+        bookings: HashMap.removeMany(state.bookings, spentHashes),
       };
     }),
 
@@ -146,7 +221,7 @@ export const UnshieldedState = {
     readonly availableUtxos: readonly UtxoWithMeta[];
     readonly pendingUtxos: readonly UtxoWithMeta[];
   } => ({
-    availableUtxos: HashMap.toValues(state.availableUtxos),
-    pendingUtxos: HashMap.toValues(state.pendingUtxos),
+    availableUtxos: HashMap.toValues(UnshieldedState.availableUtxos(state)),
+    pendingUtxos: HashMap.toValues(UnshieldedState.pendingUtxos(state)),
   }),
 } as const;

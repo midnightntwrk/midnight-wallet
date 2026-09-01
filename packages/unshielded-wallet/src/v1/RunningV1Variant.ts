@@ -242,6 +242,14 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     });
   }
 
+  bookTransaction(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Effect.Effect<void, WalletError> {
+    return SubscriptionRef.updateEffect(this.#context.stateRef, (state) => {
+      return pipe(this.#v1Context.transactingCapability.bookTransaction(state, transaction), EitherOps.toEffect);
+    });
+  }
+
   serializeState(state: CoreWallet): TSerialized {
     return this.#v1Context.serializationCapability.serialize(state);
   }

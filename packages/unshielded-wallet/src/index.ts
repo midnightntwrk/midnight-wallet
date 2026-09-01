@@ -17,3 +17,8 @@ export {
   mergeUnshieldedSections,
 } from './v1/TransactionHistory.js';
 export * from './KeyStore.js';
+export { type Booking } from './v1/CoinsAndBalances.js';
+// The canonical UTxO identity and the own-inputs extractor, exported so downstream layers (the facade's booking
+// attribution) need no deep import into the v1 module graph.
+export { UtxoHash } from './v1/UnshieldedState.js';
+export { TransactionOps } from './v1/TransactionOps.js';

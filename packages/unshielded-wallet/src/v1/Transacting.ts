@@ -110,6 +110,11 @@ export interface TransactingCapability<TState> {
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Either.Either<CoreWallet, WalletError>;
 
+  bookTransaction(
+    wallet: CoreWallet,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Either.Either<CoreWallet, WalletError>;
+
   signUnboundTransaction(
     transaction: UnboundTransaction,
     signSegment: (data: Uint8Array) => ledger.Signature,
@@ -227,7 +232,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
 
-      const { newState, offer } = yield* this.#prepareOffer(wallet, recipe);
+      const { newState, offer } = yield* this.#prepareOffer(wallet, recipe, intent!.ttl);
 
       const balancingIntent = ledger.Intent.new(intent!.ttl);
       balancingIntent.guaranteedUnshieldedOffer = offer;
@@ -277,10 +282,11 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
         this.getCoinSelection(),
       );
 
-      const { newState, offer } = yield* this.#prepareOffer(wallet, {
-        inputs: recipe.inputs,
-        outputs: [...recipe.outputs, ...ledgerOutputs],
-      });
+      const { newState, offer } = yield* this.#prepareOffer(
+        wallet,
+        { inputs: recipe.inputs, outputs: [...recipe.outputs, ...ledgerOutputs] },
+        ttl,
+      );
 
       const intent = ledger.Intent.new(ttl);
 
@@ -343,7 +349,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       };
 
       const allUtxos = [...guaranteedUtxos, ...fallibleUtxos].map(({ utxo }) => utxo);
-      const [, walletAfterBooking] = yield* CoreWallet.spendUtxos(wallet, allUtxos);
+      const [, walletAfterBooking] = yield* CoreWallet.spendUtxos(wallet, allUtxos, { expiresAt: ttl });
 
       const guaranteedOffer = makeOffer(guaranteedUtxos);
       const fallibleOffer = makeOffer(fallibleUtxos);
@@ -415,10 +421,11 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       const recipe = yield* this.#balanceSegment(wallet, Imbalances.empty(), targetImbalances, this.getCoinSelection());
 
-      const { newState, offer } = yield* this.#prepareOffer(wallet, {
-        inputs: recipe.inputs,
-        outputs: [...recipe.outputs, ...ledgerOutputs],
-      });
+      const { newState, offer } = yield* this.#prepareOffer(
+        wallet,
+        { inputs: recipe.inputs, outputs: [...recipe.outputs, ...ledgerOutputs] },
+        ttl,
+      );
 
       const intent = ledger.Intent.new(ttl);
       intent.guaranteedUnshieldedOffer = offer;
@@ -492,6 +499,62 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   }
 
   /**
+   * Books every input of the given transaction that this wallet owns, expiring at the transaction's own TTL.
+   *
+   * The mirror of {@link revertTransaction}, and the operation that replaces a persisted booking. Bookings are not
+   * persisted (ADR 0008), so after a restart the coins a transaction in flight is spending must be reserved again from
+   * the transaction itself — the durable record of an in-flight spend is the transaction, held by the
+   * pending-transactions service, not a reservation standing in for it.
+   *
+   * An input this wallet no longer owns is skipped rather than failing: the spend may have confirmed before the
+   * restart, in which case sync has already removed the coin, and one such entry must not break startup. An input
+   * already booked is likewise left as it is.
+   *
+   * @example
+   *   const booked = transacting.bookTransaction(wallet, pendingTx);
+   *
+   * @param wallet - The wallet to book the transaction's inputs in.
+   * @param transaction - The in-flight transaction whose inputs to reserve.
+   * @returns The wallet with those inputs booked.
+   */
+  bookTransaction(
+    wallet: CoreWallet,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Either.Either<CoreWallet, WalletError> {
+    const booking = { expiresAt: this.#latestTtl(transaction) };
+
+    return pipe(
+      this.txOps.extractOwnInputs(transaction, wallet.publicKey.publicKey),
+      Arr.reduce(Either.right(wallet), (walletAcc: Either.Either<CoreWallet, WalletError>, utxo: ledger.Utxo) =>
+        pipe(
+          walletAcc,
+          // A coin that is gone, or already booked, leaves the wallet as it is: spendUtxos would fail on both, and
+          // neither is an error here.
+          Either.map((w) => CoreWallet.spend(w, utxo, booking).pipe(Either.getOrElse(() => w))),
+        ),
+      ),
+    );
+  }
+
+  /**
+   * The latest instant at which any part of this transaction could still be accepted, used as the expiry of a booking
+   * re-derived from it. Taking the latest of the intents' TTLs keeps a coin reserved for as long as any segment might
+   * still land; a transaction with no intents cannot land at all, so its bookings expire immediately.
+   *
+   * Invariant this must preserve: a booking must never expire before the pending-transaction record it protects. The
+   * facade's `hasTTLExpired` judges a pending transaction dead at the MINIMUM of its intent TTLs (a grace deadline can
+   * only lower that minimum further), so max-of-TTLs here is always at or after it — and when the pending record dies
+   * first, its FAILURE result flows through the facade's revert, which releases the booking anyway.
+   */
+  #latestTtl(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): Date {
+    return pipe(
+      Array.from(transaction.intents?.values() ?? []),
+      Arr.map((intent) => intent.ttl),
+      Arr.reduce(new Date(0), (latest, ttl) => (ttl.getTime() > latest.getTime() ? ttl : latest)),
+    );
+  }
+
+  /**
    * Balances a segment of a transaction
    *
    * @param wallet - The wallet to balance the segment for
@@ -553,9 +616,11 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   #prepareOffer(
     wallet: CoreWallet,
     balanceRecipe: BalanceRecipe<ledger.Utxo, ledger.UtxoOutput>,
+    expiresAt: Date,
   ): Either.Either<{ newState: CoreWallet; offer: ledger.UnshieldedOffer<ledger.SignatureEnabled> }, WalletError> {
+    const booking = { expiresAt };
     return Either.gen(function* () {
-      const [spentInputs, updatedWallet] = yield* CoreWallet.spendUtxos(wallet, balanceRecipe.inputs);
+      const [spentInputs, updatedWallet] = yield* CoreWallet.spendUtxos(wallet, balanceRecipe.inputs, booking);
       const { publicKey } = wallet.publicKey;
 
       const ledgerInputs = spentInputs.map((input) => ({
@@ -643,7 +708,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
         const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
 
-        const { offer } = yield* this.#prepareOffer(wallet, recipe);
+        const { offer } = yield* this.#prepareOffer(wallet, recipe, intent.ttl);
 
         const targetOffer =
           segment !== GUARANTEED_SEGMENT ? intent.fallibleUnshieldedOffer : intent.guaranteedUnshieldedOffer;

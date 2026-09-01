@@ -40,17 +40,31 @@ import {
 } from '@midnightntwrk/wallet-sdk-shielded';
 import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import {
+  type Booking,
   type UnshieldedWalletState,
   UnshieldedSectionSchema,
   mergeUnshieldedSections,
+  TransactionOps,
+  UtxoHash,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { DustSectionSchema, mergeDustSections } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Array as Arr, pipe, Schema } from 'effect';
+import { Array as Arr, HashMap, type Option, pipe, Schema } from 'effect';
 import { TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import { combineLatest, map, type Observable, firstValueFrom, type Subscription, concatMap } from 'rxjs';
+import {
+  combineLatest,
+  map,
+  type Observable,
+  firstValueFrom,
+  type Subscription,
+  concatMap,
+  distinctUntilChanged,
+  catchError,
+  from as rxFrom,
+  EMPTY,
+} from 'rxjs';
 import {
   type DefaultPendingTransactionsServiceConfiguration,
   PendingTransactions,
@@ -278,11 +292,48 @@ export type UtxoWithMeta = {
   };
 };
 
+/**
+ * An unshielded booking together with the in-flight transaction that holds it, if any.
+ *
+ * `transaction` is the pending transaction that spends the booked coin. `Option.none` means no in-flight transaction
+ * accounts for the booking: either the caller has balanced but not yet proved, or the caller abandoned the transaction
+ * and should release the booking with {@link WalletFacade.revert}.
+ */
+export type UnshieldedBookingStatus = {
+  readonly booking: Booking;
+  readonly transaction: Option.Option<ledger.FinalizedTransaction>;
+};
+
 export class FacadeState {
   public readonly shielded: ShieldedWalletState;
   public readonly unshielded: UnshieldedWalletState;
   public readonly dust: DustWalletState;
   public readonly pending: PendingTransactions.PendingTransactions<ledger.FinalizedTransaction>;
+
+  /**
+   * Every outstanding unshielded booking, each attributed to the in-flight transaction that spends its coin.
+   *
+   * @example
+   *   const abandoned = state.unshieldedBookings.filter((b) => Option.isNone(b.transaction));
+   */
+  public get unshieldedBookings(): readonly UnshieldedBookingStatus[] {
+    // The transaction that booked a coin is the in-flight transaction that spends it. Matching on inputs rather than on
+    // an identity recorded at booking time is deliberate: the intent is still mutated after the unshielded wallet books
+    // (fee balancing attaches dust actions), so any hash taken then would not survive to the finalized transaction.
+    // Only unresolved transactions attribute — a failed one no longer accounts for anything, which is what the
+    // Option.none contract promises. Inputs are extracted once per transaction, not once per booking.
+    const verifyingKey = this.unshielded.state.publicKey.publicKey;
+    const spenders = HashMap.fromIterable(
+      PendingTransactions.allPending(this.pending).flatMap((item) =>
+        TransactionOps.extractOwnInputs(item.tx, verifyingKey).map((input) => [UtxoHash(input), item.tx] as const),
+      ),
+    );
+
+    return this.unshielded.bookings.map((booking) => ({
+      booking,
+      transaction: HashMap.get(spenders, UtxoHash(booking.utxo.utxo)),
+    }));
+  }
 
   public get isSynced(): boolean {
     return (
@@ -512,6 +563,10 @@ export class WalletFacade {
             clock,
           }),
     );
+
+    // Re-reserving the coins of in-flight transactions is the constructor's job, via a subscription to the unshielded
+    // wallet's own state — see #unshieldedBookingSubscription. Doing it here as well would only duplicate the first
+    // pass, since that state stream emits what the wallet was restored with as soon as it is subscribed.
     return new WalletFacade(
       shielded,
       unshielded,
@@ -535,6 +590,7 @@ export class WalletFacade {
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
   readonly clock: Clock.Clock;
   #pendingSubscription: Subscription;
+  #unshieldedBookingSubscription: Subscription;
 
   /**
    * Constructor is private on purpose - much of initialization of the facade is potentially asynchronous, and adding
@@ -569,6 +625,47 @@ export class WalletFacade {
         concatMap((item) => this.revert(item.tx)),
       )
       .subscribe();
+
+    // Unshielded bookings are not persisted (ADR 0008), so the coins an in-flight transaction is spending have to be
+    // reserved again from the transaction itself. Doing that once at init is not enough: after a restart the coins may
+    // still be arriving by sync, and a coin booked before it is owned is skipped. So re-reserve whenever the set of
+    // owned coins changes.
+    //
+    // Keying on the owned set, rather than on any state emission, is what stops this feeding itself: booking changes
+    // only the bookings, never the coins, so a re-reservation cannot trigger another one.
+    this.#unshieldedBookingSubscription = this.unshielded.state
+      .pipe(
+        // The owned-coin set is what booking follows, and booking changes neither of these: a reservation advances no
+        // sync cursor and adds or removes no coin. So this key cannot self-trigger, and it is O(1) per emission where
+        // hashing every coin would be O(n log n) on every sync update.
+        map((state) => ({ appliedId: state.progress.appliedId, coins: HashMap.size(state.state.state.utxos) })),
+        distinctUntilChanged((a, b) => a.appliedId === b.appliedId && a.coins === b.coins),
+        // One failed pass must not kill the subscription: this pipeline is what re-reserves in-flight coins after a
+        // restart, and with it dead, coin selection could hand out a coin an unconfirmed transaction is spending.
+        concatMap(() =>
+          rxFrom(this.#bookInFlightTransactions()).pipe(
+            catchError((error: unknown) => {
+              // eslint-disable-next-line no-console -- surfacing a swallowed rejection is the point; matches WasmProver's precedent.
+              console.warn('Re-reserving in-flight transactions failed; will retry on the next state change.', error);
+              return EMPTY;
+            }),
+          ),
+        ),
+      )
+      .subscribe();
+  }
+
+  /**
+   * Reserves the inputs of every transaction currently in flight that this wallet still owns and has not already
+   * booked. Idempotent: an input already booked, or no longer owned, is skipped.
+   *
+   * Only unresolved transactions count as in flight. An item already resolved as FAILURE or PARTIAL_SUCCESS is on its
+   * way out through the failure watcher's revert, and booking it here would race that revert: a booking taken after the
+   * release, for a transaction about to be cleared, has no release path left.
+   */
+  async #bookInFlightTransactions(): Promise<void> {
+    const pending = await firstValueFrom(this.pendingTransactionsService.state());
+    await Promise.all(PendingTransactions.allPending(pending).map((item) => this.unshielded.bookTransaction(item.tx)));
   }
 
   private defaultTtl(): Date {
@@ -1382,6 +1479,7 @@ export class WalletFacade {
       this.submissionService.close(),
       this.pendingTransactionsService.stop(),
       Promise.resolve(this.#pendingSubscription?.unsubscribe()),
+      Promise.resolve(this.#unshieldedBookingSubscription?.unsubscribe()),
     ]);
   }
 

@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Effect, type Scope, Stream, Schema, pipe, Either, HashMap } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
-import { UtxoWithMeta } from './UnshieldedState.js';
+import { UtxoHash, UtxoWithMeta } from './UnshieldedState.js';
 import {
   type Simulator,
   type SimulatorState,
@@ -23,7 +23,7 @@ import { WsSubscriptionClient, ConnectionHelper } from '@midnightntwrk/wallet-sd
 import { SyncWalletError, type WalletError } from './WalletError.js';
 import { WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
-import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { Clock, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type WalletSyncUpdate, WalletSyncUpdateSchema } from './SyncSchema.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 
@@ -43,6 +43,8 @@ export type IndexerClientConnection = {
 
 export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
+  /** Clock used to decide which bookings have expired on each applied update. Defaults to system time. */
+  clock?: Clock.Clock;
 };
 
 export type DefaultSyncContext = {
@@ -101,11 +103,17 @@ export const makeDefaultSyncService = (config: DefaultSyncConfiguration): SyncSe
 };
 
 export const makeDefaultSyncCapability = (
-  _config: DefaultSyncConfiguration,
+  config: DefaultSyncConfiguration,
   getContext: () => DefaultSyncContext,
 ): SyncCapability<CoreWallet, WalletSyncUpdate> => {
+  const clock = config.clock ?? Clock.systemClock;
+
   return {
-    applyUpdate: (state: CoreWallet, update: WalletSyncUpdate): Either.Either<CoreWallet, WalletError> => {
+    applyUpdate: (walletBeforeExpiry: CoreWallet, update: WalletSyncUpdate): Either.Either<CoreWallet, WalletError> => {
+      // Sweep expired bookings before applying anything. Sync is the only thing still running after a booking is
+      // abandoned between balancing and submission, so this is where a leaked reservation gets reaped.
+      const state = CoreWallet.expireBookings(walletBeforeExpiry, clock.now());
+
       if (update.type === 'UnshieldedTransactionsProgress') {
         return Either.right(
           CoreWallet.updateProgress(state, {
@@ -180,11 +188,17 @@ export const makeSimulatorSyncService = (
  * accuracy.
  */
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => {
-  const utxoKey = (utxo: { intentHash: string; outputNo: number }) => `${utxo.intentHash}#${utxo.outputNo}`;
+  // Keyed by the state layer's own UtxoHash so the reconciliation can never drift from the maps it reconciles.
 
   return {
-    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): Either.Either<CoreWallet, WalletError> => {
+    applyUpdate: (
+      walletBeforeExpiry: CoreWallet,
+      update: SimulatorSyncUpdate,
+    ): Either.Either<CoreWallet, WalletError> => {
       const { ledger: ledgerState, currentTime } = update.update;
+      // Expiry is measured against simulator time, not wall-clock time, so a simulated wallet reaps its bookings on
+      // the same timeline the transactions it built are judged on.
+      const state = CoreWallet.expireBookings(walletBeforeExpiry, currentTime);
       const walletAddress = state.publicKey.addressHex;
       const nativeTokenType = ledger.nativeToken().raw;
 
@@ -194,7 +208,7 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
       // Build a Map of simulator UTXOs keyed by intent hash + output number
       const simulatorUtxoMap = new Map(
         Array.from(ledgerState.utxo.filter(walletAddress)).map((utxo) => [
-          utxoKey(utxo),
+          UtxoHash(utxo),
           new UtxoWithMeta({
             utxo,
             meta: {
@@ -205,18 +219,13 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
         ]),
       );
 
-      // Created: in simulator but not in wallet (neither available nor pending)
+      // Created: in the simulator but not owned by the wallet. One map of owned coins means one check, booked or not.
       const createdUtxos = Array.from(simulatorUtxoMap)
-        .filter(
-          ([hash]) => !HashMap.has(state.state.availableUtxos, hash) && !HashMap.has(state.state.pendingUtxos, hash),
-        )
+        .filter(([hash]) => !HashMap.has(state.state.utxos, hash))
         .map(([, utxo]) => utxo);
 
-      // Spent: in wallet (pending or available) but no longer in simulator
-      const spentUtxos = [
-        ...Array.from(HashMap.entries(state.state.pendingUtxos)),
-        ...Array.from(HashMap.entries(state.state.availableUtxos)),
-      ]
+      // Spent: owned by the wallet but no longer in the simulator.
+      const spentUtxos = Array.from(HashMap.entries(state.state.utxos))
         .filter(([hash]) => !simulatorUtxoMap.has(hash))
         .map(([, utxo]) => utxo);
 

@@ -66,11 +66,15 @@ describe('Facade submission', () => {
         return mockedShielded;
       },
       unshielded: (config) => {
-        const mockedUnshielded = vi.mockObject(
-          UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(createKeystore(seed, config.networkId))),
+        // The real wallet, with only the network-touching lifecycle neutralized. vi.mockObject would also erase the
+        // `state` getter, which the facade subscribes to for re-reserving in-flight coins; spying keeps it real, so
+        // the facade reads genuine (empty) wallet states rather than a hand-maintained stub shape.
+        const unshielded = UnshieldedWallet(config).startWithPublicKey(
+          PublicKey.fromKeyStore(createKeystore(seed, config.networkId)),
         );
-        mockedUnshielded.start.mockResolvedValue(undefined);
-        return mockedUnshielded;
+        vi.spyOn(unshielded, 'start').mockResolvedValue(undefined);
+        vi.spyOn(unshielded, 'stop').mockResolvedValue(undefined);
+        return unshielded;
       },
       dust: (config) => {
         const mockedDust = vi.mockObject(

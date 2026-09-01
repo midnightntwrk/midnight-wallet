@@ -25,7 +25,7 @@ import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type SerializationCapability } from './v1/Serialization.js';
 import { type TransactionHistoryService } from './v1/TransactionHistory.js';
-import { type CoinsAndBalancesCapability } from './v1/CoinsAndBalances.js';
+import { type Booking, type CoinsAndBalancesCapability } from './v1/CoinsAndBalances.js';
 import { type KeysCapability } from './v1/Keys.js';
 import {
   type TokenTransfer,
@@ -65,20 +65,86 @@ export class UnshieldedWalletState<TSerialized = string> {
   readonly capabilities: UnshieldedWalletCapabilities<TSerialized>;
   readonly services: UnshieldedWalletServices;
 
+  /**
+   * The balance of the coins this wallet can spend right now, per token type.
+   *
+   * This is the **available** side only: a coin booked by a transaction that has been balanced but not yet resolved is
+   * excluded, so this number drops the moment a transaction is balanced and returns when it settles or its booking is
+   * released. A consumer that wants "what this wallet owns", and so should not flash a lower figure mid-transaction,
+   * sums {@link totalCoins} — which already includes the booked coins — rather than adding {@link pendingCoins} onto
+   * this.
+   *
+   * @example
+   *   const spendableNight = wallet.balances[nativeToken().raw] ?? 0n;
+   *
+   * @returns Summed value per token type over {@link availableCoins}.
+   */
   get balances(): Record<ledger.RawTokenType, bigint> {
     return this.capabilities.coinsAndBalances.getAvailableBalances(this.state);
   }
 
+  /**
+   * Every coin this wallet owns: {@link availableCoins} followed by {@link pendingCoins}.
+   *
+   * The two are disjoint by construction — booking a coin moves it from one to the other, never copies it — so no coin
+   * appears twice here and a consumer needs no de-duplication by `intentHash`/`outputNo`.
+   *
+   * @example
+   *   const owned = wallet.totalCoins.length;
+   *
+   * @returns The concatenation of {@link availableCoins} and {@link pendingCoins}.
+   */
   get totalCoins(): readonly UtxoWithMeta[] {
     return this.capabilities.coinsAndBalances.getTotalCoins(this.state);
   }
 
+  /**
+   * The coins coin selection can draw on: owned, and not booked by a transaction in flight.
+   *
+   * @example
+   *   const utxosToRegister = wallet.availableCoins.filter((coin) => !coin.meta.registeredForDustGeneration);
+   *
+   * @returns The coins this wallet can spend right now.
+   */
   get availableCoins(): readonly UtxoWithMeta[] {
     return this.capabilities.coinsAndBalances.getAvailableCoins(this.state);
   }
 
+  /**
+   * The coins booked by a transaction that has been balanced but has not yet settled.
+   *
+   * A coin here is owned but unspendable: coin selection skips it until its booking is released. Bookings are taken at
+   * balance time, not submission, so a caller that abandons a transaction in between must release the booking with
+   * `facade.revert`; otherwise the wallet reaps it at expiry. {@link bookings} reports the same coins with the expiry
+   * that governs each one.
+   *
+   * @example
+   *   const bookedNight = wallet.pendingCoins.filter((coin) => coin.utxo.type === nativeToken().raw);
+   *
+   * @returns The coins currently booked, disjoint from {@link availableCoins}.
+   */
   get pendingCoins(): readonly UtxoWithMeta[] {
     return this.capabilities.coinsAndBalances.getPendingCoins(this.state);
+  }
+
+  /**
+   * The reservations currently held on this wallet's UTxOs, one per pending coin.
+   *
+   * Inputs are booked when a transaction is balanced, not when it is submitted, so a caller that abandons a transaction
+   * in between — proving fails, or the process dies — holds a booking that no submit-path revert will ever see. Each
+   * entry carries the TTL of the transaction it was taken for, so a caller can tell an in-flight reservation from a
+   * stale one. The wallet releases a booking past its expiry on its next sync; a caller that wants it back sooner calls
+   * `facade.revert` with the recipe that booked it.
+   *
+   * A booking never survives a restart (ADR 0008), so a restored wallet reports none until this process books again.
+   *
+   * @example
+   *   const stale = wallet.bookings.filter((booking) => booking.expiresAt.getTime() <= Date.now());
+   *
+   * @returns One {@link Booking} per coin in {@link pendingCoins}.
+   */
+  get bookings(): readonly Booking[] {
+    return this.capabilities.coinsAndBalances.getBookings(this.state);
   }
 
   get address(): UnshieldedAddress {
@@ -162,6 +228,23 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
   waitForSyncedState(allowedGap?: bigint): Promise<UnshieldedWalletState<TSerialized>>;
 
   revertTransaction(
+    transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+  ): Promise<void>;
+
+  /**
+   * Books every input of the given transaction that this wallet owns, expiring at that transaction's TTL.
+   *
+   * Bookings are not persisted, so the coins a transaction in flight is spending must be reserved again after a
+   * restart. Call this for each transaction the pending-transactions service restored, before the wallet is used to
+   * balance anything, or coin selection may hand out a coin an unconfirmed transaction is already spending. An input
+   * the wallet no longer owns, or one already booked, is skipped.
+   *
+   * @example
+   *   await Promise.all(PendingTransactions.allPending(pending).map((item) => wallet.bookTransaction(item.tx)));
+   *
+   * @param transaction - The in-flight transaction whose inputs to reserve.
+   */
+  bookTransaction(
     transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
   ): Promise<void>;
 
@@ -334,6 +417,16 @@ export function CustomUnshieldedWallet<
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.revertTransaction(transaction),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    bookTransaction(
+      transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    ): Promise<void> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.bookTransaction(transaction),
         })
         .pipe(Effect.runPromise);
     }
