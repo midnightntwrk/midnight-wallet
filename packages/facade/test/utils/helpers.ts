@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
-import { WalletFacade, type Clock } from '../../src/index.js';
+import { WalletFacade, type Clock, type CombinedTokenTransfer, type BalancingRecipe } from '../../src/index.js';
 import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   Sync as ShieldedSync,
@@ -32,6 +32,7 @@ import {
   type UnshieldedWalletAPI,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type PendingTransactionsService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { type WalletEntry } from '../../src/index.js';
 import {
   Sync as UnshieldedSync,
@@ -44,7 +45,7 @@ import {
   type ProvingService,
   type UnboundTransaction,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
-import { type Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { makeSimulatorBlockDataFetcher } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { Effect, type Scope } from 'effect';
@@ -268,6 +269,11 @@ export const makeSimulatorFacade = (
   config: SimulatorConfig,
   keys: WalletKeys,
   factories: SimulatorWalletFactories,
+  /**
+   * Pending-transactions service to start with, in place of an empty one. Pass a pre-populated service to reproduce a
+   * restart: the transactions the previous process had in flight, restored before the facade exists.
+   */
+  pendingTransactionsService?: PendingTransactionsService<ledger.FinalizedTransaction>,
 ): Effect.Effect<WalletFacade, never, Scope.Scope> => {
   const dustParameters = ledger.LedgerParameters.initialParameters().dust;
   const provingService = createSimulatorProvingService();
@@ -288,6 +294,7 @@ export const makeSimulatorFacade = (
         dust: () => factories.createDustWallet(keys.dustKey, dustParameters),
         provingService: () => provingService,
         submissionService: () => submissionService,
+        ...(pendingTransactionsService ? { pendingTransactionsService: () => pendingTransactionsService } : {}),
         fetchBlockData: () => makeSimulatorBlockDataFetcher(config.simulator),
         clock: () => simulatorClock(config.simulator),
       });
@@ -322,3 +329,45 @@ export const waitForUnshieldedBalance = (
       ),
     ),
   );
+
+/** Genesis mint putting `amount` of Night under this wallet's key, the seed for every unshielded facade test. */
+export const nightGenesisMint = (
+  verifyingKey: ledger.SignatureVerifyingKey,
+  userAddress: ledger.UserAddress,
+  amount: bigint = tokenValue(100_000n),
+): GenesisMint => ({
+  type: 'unshielded',
+  tokenType: ledger.nativeToken().raw,
+  amount,
+  recipient: userAddress,
+  verifyingKey,
+});
+
+/** A simulator holding this wallet's Night, ready to build a facade against. */
+export const setUpNightSimulator = (
+  keys: WalletKeys,
+  networkId: NetworkId.NetworkId,
+): Effect.Effect<SimulatorConfig, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    const simulator = yield* Simulator.init({
+      networkId,
+      blockProducer: immediateBlockProducer(),
+      genesisMints: [nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress)],
+    });
+    const config: SimulatorConfig = { simulator, networkId, costParameters: { feeBlocksMargin: 0 } };
+    return config;
+  });
+
+/** Balances a small Night transfer back to this wallet — which books its inputs — and returns the recipe. */
+export const balanceNightTransfer = (facade: WalletFacade, keys: WalletKeys): Effect.Effect<BalancingRecipe> =>
+  Effect.promise(async () => {
+    const receiverAddress = await facade.unshielded.getAddress();
+    const outputs: CombinedTokenTransfer[] = [
+      { type: 'unshielded', outputs: [{ type: ledger.nativeToken().raw, amount: tokenValue(1n), receiverAddress }] },
+    ];
+    return facade.transferTransaction(
+      outputs,
+      { shieldedSecretKeys: keys.shieldedKeys, dustSecretKey: keys.dustKey },
+      { ttl: new Date(Date.now() + 60 * 60 * 1000), payFees: false },
+    );
+  });

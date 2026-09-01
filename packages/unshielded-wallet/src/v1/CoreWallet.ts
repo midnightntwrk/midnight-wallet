@@ -13,7 +13,7 @@
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { createSyncProgress, type SyncProgress, type SyncProgressData } from './SyncProgress.js';
 import { type PublicKey } from '../KeyStore.js';
-import { UnshieldedState, type UnshieldedUpdate } from './UnshieldedState.js';
+import { UnshieldedState, type UnshieldedUpdate, type UtxoBooking } from './UnshieldedState.js';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Either, Array as Arr, pipe } from 'effect';
 import { ApplyTransactionError, RollbackUtxoError, SpendUtxoError, type WalletError } from './WalletError.js';
@@ -79,6 +79,11 @@ export const CoreWallet = {
     );
   },
 
+  /** Releases every booking that has reached its expiry. See {@link UnshieldedState.expireBookings}. */
+  expireBookings(coreWallet: CoreWallet, now: Date): CoreWallet {
+    return { ...coreWallet, state: UnshieldedState.expireBookings(coreWallet.state, now) };
+  },
+
   rollbackUtxo(coreWallet: CoreWallet, utxo: ledger.Utxo): Either.Either<CoreWallet, WalletError> {
     return UnshieldedState.rollbackSpendByUtxo(coreWallet.state, utxo).pipe(
       Either.map((state) => ({ ...coreWallet, state })),
@@ -86,8 +91,8 @@ export const CoreWallet = {
     );
   },
 
-  spend(coreWallet: CoreWallet, utxo: ledger.Utxo): Either.Either<CoreWallet, WalletError> {
-    return UnshieldedState.spendByUtxo(coreWallet.state, utxo).pipe(
+  spend(coreWallet: CoreWallet, utxo: ledger.Utxo, booking: UtxoBooking): Either.Either<CoreWallet, WalletError> {
+    return UnshieldedState.spendByUtxo(coreWallet.state, utxo, booking).pipe(
       Either.map((state) => ({ ...coreWallet, state })),
       Either.mapLeft((error) => new SpendUtxoError(error)),
     );
@@ -96,6 +101,7 @@ export const CoreWallet = {
   spendUtxos(
     wallet: CoreWallet,
     utxos: ReadonlyArray<ledger.Utxo>,
+    booking: UtxoBooking,
   ): Either.Either<[ReadonlyArray<ledger.Utxo>, CoreWallet], WalletError> {
     return pipe(
       utxos,
@@ -104,7 +110,7 @@ export const CoreWallet = {
         (acc, utxoToSpend) =>
           acc.pipe(
             Either.flatMap(([accUtxos, state]) =>
-              UnshieldedState.spendByUtxo(state, utxoToSpend).pipe(
+              UnshieldedState.spendByUtxo(state, utxoToSpend, booking).pipe(
                 Either.map(
                   (nextState) => [accUtxos.concat([utxoToSpend]), nextState] as [ledger.Utxo[], UnshieldedState],
                 ),

@@ -20,10 +20,14 @@ import { getUnshieldedSeed, createWalletConfig, waitForCoins } from './testUtils
 import { createKeystore, PublicKey } from '../src/KeyStore.js';
 import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { type UtxoWithMeta } from '../src/v1/UnshieldedState.js';
 
 vi.setConfig({ testTimeout: 100_000, hookTimeout: 100_000 });
 
 const environmentId = randomUUID();
+const NIGHT = ledger.nativeToken().raw;
+const utxoHash = (coin: UtxoWithMeta): string => `${coin.utxo.intentHash}#${coin.utxo.outputNo}`;
 
 const environmentVars = buildTestEnvironmentVariables(['APP_INFRA_SECRET'], {
   additionalVars: {
@@ -127,5 +131,64 @@ describe('UnshieldedWallet', () => {
     if (startedEnvironment) {
       await startedEnvironment.down();
     }
+  });
+
+  it('does not duplicate a booked utxo on replay, and restores it unbooked', async () => {
+    // Reproduces the reported chain against a real node and indexer: book an input, never submit, restart from a
+    // cursor that predates the input's creation so the indexer replays it, then sync.
+    const config = createWalletConfig(indexerPort);
+    const keystore = createKeystore(unshieldedSeed, config.networkId);
+    const wallet = UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(keystore));
+    await wallet.start();
+    await waitForCoins(wallet);
+    const funded = await wallet.waitForSyncedState();
+    const fundedHashes = funded.availableCoins.map(utxoHash).sort();
+    const fundedBalance = funded.balances[NIGHT] ?? 0n;
+    expect(fundedHashes.length).toBeGreaterThan(0);
+
+    // Balancing books the inputs. The transaction is then abandoned: not proved, not submitted, not reverted.
+    const ownAddress = await wallet.getAddress();
+    await wallet.transferTransaction(
+      [{ amount: 1n, type: NIGHT, receiverAddress: ownAddress }],
+      new Date(Date.now() + 60 * 60 * 1000),
+    );
+    const booked = await firstValueFrom(wallet.state);
+    expect(booked.pendingCoins.length).toBeGreaterThan(0);
+
+    const snapshot = await wallet.serializeState();
+    await wallet.stop();
+
+    // Restart from a cursor predating the inputs' creation, which makes the indexer replay the transactions that
+    // created them -- the replay the guard in applyUpdate exists for.
+    const rewound = JSON.stringify({ ...JSON.parse(snapshot), appliedId: '0' });
+    const restored = UnshieldedWallet(createWalletConfig(indexerPort)).restore(rewound);
+
+    // The invariant is checked on every state the wallet emits while it syncs, not only the last one: a duplicate that
+    // appeared mid-sync and then collapsed would be invisible in the end state, and mid-sync is exactly when the
+    // replayed creation of a coin arrives.
+    const duplicatedMidSync: string[][] = [];
+    const watch = restored.state.subscribe((s) => {
+      const pendingNow = s.pendingCoins.map(utxoHash);
+      const both = s.availableCoins.map(utxoHash).filter((h) => pendingNow.includes(h));
+      if (both.length > 0) duplicatedMidSync.push(both);
+    });
+
+    await restored.start();
+    const synced = await restored.waitForSyncedState();
+    watch.unsubscribe();
+
+    expect(duplicatedMidSync).toEqual([]);
+
+    const available = synced.availableCoins.map(utxoHash);
+    const pending = synced.pendingCoins.map(utxoHash);
+    // A booking is not persisted (ADR 0008), so the abandoned one does not come back at all — there is nothing to
+    // release and no window in which the coin is both booked and spendable.
+    expect(pending).toEqual([]);
+    expect(synced.bookings).toEqual([]);
+    // And the wallet is back to exactly what it held, counted once.
+    expect([...available].sort()).toEqual(fundedHashes);
+    expect(synced.balances[NIGHT] ?? 0n).toEqual(fundedBalance);
+
+    await restored.stop();
   });
 });

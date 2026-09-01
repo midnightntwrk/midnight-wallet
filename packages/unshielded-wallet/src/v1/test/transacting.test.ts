@@ -202,17 +202,19 @@ describe('Unshielded wallet transacting', () => {
           .pipe(EitherOps.getOrThrowLeft);
 
         // Verify that some coins are now pending
-        const pendingCountAfterTransfer = HashMap.size(newState.state.pendingUtxos);
+        const pendingCountAfterTransfer = HashMap.size(UnshieldedState.pendingUtxos(newState.state));
         expect(pendingCountAfterTransfer).toBeGreaterThan(0);
 
         // Revert the transaction - this should move coins back from pending to available
         const revertedWallet = transacting.revertTransaction(newState, transaction).pipe(EitherOps.getOrThrowLeft);
 
         // Verify that pending coins are cleared and moved back to available
-        expect(HashMap.size(revertedWallet.state.pendingUtxos)).toBe(0);
+        expect(HashMap.size(UnshieldedState.pendingUtxos(revertedWallet.state))).toBe(0);
 
         // Verify the reverted wallet has the same available coins as the original wallet
-        expect(HashMap.size(revertedWallet.state.availableUtxos)).toBe(HashMap.size(wallet.state.availableUtxos));
+        expect(HashMap.size(UnshieldedState.availableUtxos(revertedWallet.state))).toBe(
+          HashMap.size(UnshieldedState.availableUtxos(wallet.state)),
+        );
       }),
     );
   });
@@ -237,28 +239,28 @@ describe('Unshielded wallet transacting', () => {
         const { newState: stateAfterTx1, transaction: tx1 } = transacting
           .makeTransfer(wallet, firstOutputMapped, ttl)
           .pipe(EitherOps.getOrThrowLeft);
-        const pendingCountAfterTx1 = HashMap.size(stateAfterTx1.state.pendingUtxos);
+        const pendingCountAfterTx1 = HashMap.size(UnshieldedState.pendingUtxos(stateAfterTx1.state));
         expect(pendingCountAfterTx1).toBeGreaterThan(0);
 
         const { newState: stateAfterTx2, transaction: tx2 } = transacting
           .makeTransfer(stateAfterTx1, remainingOutputs, ttl)
           .pipe(EitherOps.getOrThrowLeft);
 
-        const pendingCountAfterTx2 = HashMap.size(stateAfterTx2.state.pendingUtxos);
+        const pendingCountAfterTx2 = HashMap.size(UnshieldedState.pendingUtxos(stateAfterTx2.state));
         expect(pendingCountAfterTx2).toBeGreaterThan(pendingCountAfterTx1);
 
         const walletAfterRevert = transacting.revertTransaction(stateAfterTx2, tx1).pipe(EitherOps.getOrThrowLeft);
 
-        const pendingCountAfterRevert = HashMap.size(walletAfterRevert.state.pendingUtxos);
+        const pendingCountAfterRevert = HashMap.size(UnshieldedState.pendingUtxos(walletAfterRevert.state));
         expect(pendingCountAfterRevert).toBe(pendingCountAfterTx2 - pendingCountAfterTx1);
 
         const walletAfterBothReverts = transacting
           .revertTransaction(walletAfterRevert, tx2)
           .pipe(EitherOps.getOrThrowLeft);
 
-        expect(HashMap.size(walletAfterBothReverts.state.pendingUtxos)).toBe(0);
-        expect(HashMap.size(walletAfterBothReverts.state.availableUtxos)).toBe(
-          HashMap.size(wallet.state.availableUtxos),
+        expect(HashMap.size(UnshieldedState.pendingUtxos(walletAfterBothReverts.state))).toBe(0);
+        expect(HashMap.size(UnshieldedState.availableUtxos(walletAfterBothReverts.state))).toBe(
+          HashMap.size(UnshieldedState.availableUtxos(wallet.state)),
         );
       }),
     );
@@ -344,8 +346,8 @@ describe('Unshielded wallet transacting', () => {
         .rotateUtxos(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
         .pipe(EitherOps.getOrThrowLeft);
 
-      expect(HashMap.size(newState.state.availableUtxos)).toBe(0);
-      expect(HashMap.size(newState.state.pendingUtxos)).toBe(utxos.length);
+      expect(HashMap.size(UnshieldedState.availableUtxos(newState.state))).toBe(0);
+      expect(HashMap.size(UnshieldedState.pendingUtxos(newState.state))).toBe(utxos.length);
     });
 
     it('builds an intent with the guaranteed UTxO in the guaranteed offer and the rest in the fallible offer', () => {
@@ -464,16 +466,60 @@ describe('Unshielded wallet transacting', () => {
         .pipe(EitherOps.getOrThrowLeft);
 
       // Sanity check: booking did move every UTxO from available to pending.
-      expect(HashMap.size(bookedState.state.availableUtxos)).toBe(0);
-      expect(HashMap.size(bookedState.state.pendingUtxos)).toBe(utxos.length);
+      expect(HashMap.size(UnshieldedState.availableUtxos(bookedState.state))).toBe(0);
+      expect(HashMap.size(UnshieldedState.pendingUtxos(bookedState.state))).toBe(utxos.length);
 
       const restoredState = transacting.revertTransaction(bookedState, transaction).pipe(EitherOps.getOrThrowLeft);
 
       // Revert contract: every booked UTxO returns to availableUtxos, pendingUtxos drains to empty.
       // This is the primitive the facade's catch block relies on when a later build step fails after
       // rotateUtxos has already booked.
-      expect(HashMap.size(restoredState.state.availableUtxos)).toBe(utxos.length);
-      expect(HashMap.size(restoredState.state.pendingUtxos)).toBe(0);
+      expect(HashMap.size(UnshieldedState.availableUtxos(restoredState.state))).toBe(utxos.length);
+      expect(HashMap.size(UnshieldedState.pendingUtxos(restoredState.state))).toBe(0);
+    });
+
+    // ADR 0008: bookings are not persisted, so after a restart the coins a submitted-but-unconfirmed transaction is
+    // spending have to be re-reserved from the transaction itself. This is the operation the facade calls at init for
+    // every transaction the pending-transactions service restored.
+    it('bookTransaction books this wallet s inputs, expiring at the transaction s ttl', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(2);
+      const [first, ...rest] = utxos;
+      const { transaction } = transacting
+        .rotateUtxos(wallet, [first], rest, wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      // A fresh wallet owning the same coins: the restart case, where nothing is booked yet.
+      const booked = transacting.bookTransaction(wallet, transaction).pipe(EitherOps.getOrThrowLeft);
+
+      expect(HashMap.size(UnshieldedState.pendingUtxos(booked.state))).toBe(utxos.length);
+      expect(HashMap.size(UnshieldedState.availableUtxos(booked.state))).toBe(0);
+      // The ledger stores an intent's TTL to whole seconds, so the expiry read back off the transaction is the
+      // second-truncated ttl, not the millisecond one passed to rotateUtxos.
+      const ttlInLedger = new Date(Math.floor(ttl.getTime() / 1000) * 1000);
+      expect(Array.from(HashMap.values(booked.state.bookings)).map((b) => b.expiresAt)).toEqual(
+        utxos.map(() => ttlInLedger),
+      );
+    });
+
+    it('bookTransaction skips a coin this wallet no longer owns', () => {
+      // The spend may have confirmed before the restart, in which case sync has already removed the coin. Re-reserving
+      // must not fail on it, or one stale pending entry would break every wallet's startup.
+      const { wallet, utxos } = buildWalletWithNightUtxos(2);
+      const [first, ...rest] = utxos;
+      const { transaction } = transacting
+        .rotateUtxos(wallet, [first], rest, wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const withoutFirst = CoreWallet.applyUpdate(wallet, {
+        createdUtxos: [],
+        spentUtxos: [first],
+        status: 'SUCCESS',
+      }).pipe(EitherOps.getOrThrowLeft);
+
+      const booked = transacting.bookTransaction(withoutFirst, transaction).pipe(EitherOps.getOrThrowLeft);
+
+      expect(HashMap.size(UnshieldedState.pendingUtxos(booked.state))).toBe(rest.length);
+      expect(HashMap.size(booked.state.bookings)).toBe(rest.length);
     });
 
     it('fails when no UTxOs are provided in either section', () => {

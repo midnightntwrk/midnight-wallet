@@ -22,6 +22,7 @@ You can install the required package globally by running "npm install -g adr-log
   Builders and Facades
 - [ADR-0007](0007-npmjs-trusted-publishing-and-scope-rename.md) - npmjs Trusted Publishing and scope rename to
   `@midnightntwrk`
+- [ADR-0008](0008-unshielded-bookings-are-not-persisted.md) - Unshielded bookings are process state, not persisted state
 
 <!-- adrlogstop -->
 
