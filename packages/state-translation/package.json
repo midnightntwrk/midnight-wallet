@@ -38,6 +38,6 @@
   },
   "devDependencies": {
     "@midnight-ntwrk/ledger-v8": "^8.1.0",
-    "@midnightntwrk/ledger-v9": "1.0.0-rc.3"
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.4"
   }
 }
