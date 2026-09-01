@@ -124,7 +124,8 @@ export type UtxoLike = {
 };
 
 /**
- * The migration across a ledger-version boundary: a structural carry of everything the wallet holds.
+ * The migration across a ledger-version boundary: a structural carry of everything the wallet holds, all of it
+ * spendable.
  *
  * @remarks
  *   This is where unshielded parts company with shielded and dust. Those two start the new variant on a **fresh, empty**
@@ -134,11 +135,30 @@ export type UtxoLike = {
  *   the other side — no replay to wait for, no keys required, and no window in which the wallet reports a zero balance
  *   it does not have.
  *
- *   So everything crosses: available and pending UTXOs field for field, the address, the network, and the protocol
- *   version that triggered the hand-over. The one transformation is the verifying key, which gains the scheme tag that
- *   ledger-v9 requires and ledger-v8 had no room for — the same widening the deserializer already performs on legacy
- *   snapshots, which is where the `schnorr` default comes from: ledger-v8 had exactly one signature scheme, so a key
- *   that reaches here can only have been a schnorr key.
+ *   So every UTXO crosses, field for field, along with the address, the network, and the protocol version that triggered
+ *   the hand-over. **Bookings do not.** A UTXO the previous variant had reserved for a transaction still in flight is
+ *   restored as _available_, and the new state crosses with nothing pending, because the transaction that reserved it
+ *   cannot exist on this side: the transaction codec moved at the boundary, so a transaction built by the previous
+ *   ledger version can never be included in a post-fork block. A booking exists only to stop a UTXO being spent twice
+ *   while its transaction might still land, and past the boundary it never can — its reason expires at the boundary
+ *   itself. Carrying one over would lock those funds for the wallet's lifetime instead: nothing on this side can
+ *   un-book them, because the transaction that would identify them is unreadable to this ledger version, and the
+ *   booking outlives serialization.
+ *
+ *   Releasing is **exact** here rather than merely eventually consistent. The hand-over fires only once the previous
+ *   variant has applied the complete pre-fork timeline: a transaction the source reports at or beyond the boundary is
+ *   left entirely unapplied and only annotates the version, so everything before it is already folded in, and the
+ *   version signal a quiet chain hands over on is recorded only when the wallet is caught up on its own transaction
+ *   ids. A pre-fork transaction that did land has therefore already confirmed by the time this runs — clearing its own
+ *   bookings as it was applied — and whatever is still booked belongs to a transaction that never will land. Even if an
+ *   unapplied pre-fork event were somehow to reach the new variant afterwards, the release stays safe rather than
+ *   merely lucky: {@link UnshieldedState.applyUpdate} removes a confirmed spend from **both** maps, so a
+ *   released-then-confirmed UTXO leaves the available set exactly as if it had never been released.
+ *
+ *   The one transformation is the verifying key, which gains the scheme tag that ledger-v9 requires and ledger-v8 had no
+ *   room for — the same widening the deserializer already performs on legacy snapshots, which is where the `schnorr`
+ *   default comes from: ledger-v8 had exactly one signature scheme, so a key that reaches here can only have been a
+ *   schnorr key.
  *
  *   Sync progress is carried **unchanged** — parked, not rewound and not advanced. The boundary transaction was observed
  *   and annotated but deliberately never applied, so the cursor still points just before it; the new variant re-fetches
@@ -151,8 +171,11 @@ export const makeCrossLedgerMigration = (): StateMigration<PreviousLedgerWallet>
     Effect.succeed(
       CoreWallet.restore(
         UnshieldedState.restore(
-          Array.from(HashMap.values(previousState.state.availableUtxos), carryUtxo),
-          Array.from(HashMap.values(previousState.state.pendingUtxos), carryUtxo),
+          [
+            ...Array.from(HashMap.values(previousState.state.availableUtxos), carryUtxo),
+            ...Array.from(HashMap.values(previousState.state.pendingUtxos), carryUtxo),
+          ],
+          [],
         ),
         {
           // ledger-v8 had a single signature scheme, so an untagged key crossing this boundary is a schnorr key.

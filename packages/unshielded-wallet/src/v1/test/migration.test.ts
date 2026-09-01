@@ -13,7 +13,9 @@
 //
 // The migration seam, ledger-v8 side. Kept symmetric with the ledger-v9 tree so the seam has the same shape in both,
 // though nothing precedes ledger-v8 in this SDK: this variant's cross-ledger migration is a pure structural carry with
-// no key transformation to perform, since v8 verifying keys are already bare hex strings on both sides.
+// no key transformation to perform, since v8 verifying keys are already bare hex strings on both sides. Every UTXO
+// crosses, and every one of them crosses as AVAILABLE — a booking made for a transaction of the previous ledger
+// version outlives its own reason at the boundary.
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, HashMap } from 'effect';
 import { describe, expect, it } from 'vitest';
@@ -91,19 +93,36 @@ describe('unshielded state migration', () => {
       ).toEqual([7n, 100n, 250n]);
     });
 
-    it('carries pending UTXOs as pending', async () => {
+    it('releases previously booked UTXOs into the available set', async () => {
+      const booked = fixtureUtxo(owner, 55n, 9);
       const previous = previousWallet({
         available: [fixtureUtxo(owner, 100n, 0)],
-        pending: [fixtureUtxo(owner, 55n, 9)],
+        pending: [booked],
         appliedId: 4n,
         protocolVersion: 7n,
       });
 
       const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previous));
 
-      expect(HashMap.size(wallet.state.availableUtxos)).toBe(1);
-      expect(HashMap.size(wallet.state.pendingUtxos)).toBe(1);
-      expect([...HashMap.values(wallet.state.pendingUtxos)][0].utxo.value).toBe(55n);
+      // A booking exists to stop a UTXO being spent twice while the transaction that reserved it might still land. The
+      // transaction codec moves at a ledger-version boundary, so a transaction of the previous ledger version can never
+      // be included past it: the booking's reason expires at the boundary itself, and the UTXO crosses as available.
+      expect(HashMap.size(wallet.state.availableUtxos)).toBe(2);
+      expect(HashMap.size(wallet.state.pendingUtxos)).toBe(0);
+
+      // Released, not merely counted: the freed UTXO is the one that was booked, field for field.
+      const released = [...HashMap.values(wallet.state.availableUtxos)].filter(
+        (held) => held.utxo.outputNo === booked.utxo.outputNo,
+      );
+
+      expect(released).toHaveLength(1);
+      expect(released[0].utxo.value).toBe(booked.utxo.value);
+      expect(released[0].utxo.owner).toBe(booked.utxo.owner);
+      expect(released[0].utxo.type).toBe(booked.utxo.type);
+      expect(released[0].utxo.intentHash).toBe(booked.utxo.intentHash);
+      expect(released[0].utxo.outputNo).toBe(booked.utxo.outputNo);
+      expect(released[0].meta.ctime.getTime()).toBe(booked.meta.ctime.getTime());
+      expect(released[0].meta.registeredForDustGeneration).toBe(booked.meta.registeredForDustGeneration);
     });
 
     it('preserves each UTXO field, not merely the count', async () => {

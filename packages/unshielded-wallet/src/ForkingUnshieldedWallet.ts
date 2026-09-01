@@ -706,10 +706,16 @@ export function CustomForkingUnshieldedWallet<
      * Un-books the UTxOs a transaction of this wallet's had reserved, returning them to the available set.
      *
      * @remarks
-     *   A transaction built on the other side of the boundary cannot have booked any of this variant's UTxOs, so there is
-     *   nothing to release and this resolves having done nothing. That is the one place a version mismatch is not an
-     *   error: the facade reverts all three wallets together when a submission fails, and a refusal here would strand
-     *   that whole path over a transaction this wallet was never holding anything for.
+     *   A transaction built on the other side of the boundary has nothing booked in the running variant to release, so
+     *   this resolves having done nothing. That is a fact about the crossing rather than an assumption made here:
+     *   {@link Migration.makeCrossLedgerMigration} restores every UTxO the pre-fork variant had booked as _available_,
+     *   precisely because a pre-fork transaction can never be included past the boundary — so by the time the post-fork
+     *   variant is running, no pre-fork handle is holding anything. Doing nothing is therefore the whole of the correct
+     *   behaviour, not a release quietly skipped.
+     *
+     *   It is also the one place a version mismatch is not an error: the facade reverts all three wallets together when a
+     *   submission fails, and a refusal here would strand that whole path over a transaction this wallet was never
+     *   holding anything for.
      * @param transaction The transaction to un-book.
      */
     revertTransaction(transaction: AnyTx): Promise<void> {

@@ -402,28 +402,32 @@ describe('an unshielded wallet starting on a chain that has not forked', () => {
       expect(carried).not.toBeInstanceOf(v9.Transaction);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('rotates UTxOs on the pre-fork variant, which is what raises when the UTxO is not one a ledger can read', async () =>
+  it('rotates UTxOs on the pre-fork variant, with the pre-fork ledger', async () =>
     Effect.gen(function* () {
-      // The UTxOs this harness's timeline carries are plain sync fixtures rather than ledger-real ones, so a rotation
-      // cannot be completed here. What is asserted instead is the thing the refusal it replaced hid: the call reaches
-      // the pre-fork variant's own transacting and is answered by the pre-fork *ledger*, rather than turned away at
-      // the wallet layer.
+      // The UTxO handed in is one the wallet really synchronized, and the timeline's UTxOs are ledger-readable, so
+      // this rotation completes — which is what makes the routing assertable on the answer rather than on a refusal:
+      // the call reaches the pre-fork variant's own transacting and is answered by the pre-fork *ledger*, so what
+      // comes back is a v8 transaction sealed below the boundary.
       const wallet = yield* syncedPreForkWallet;
       const held = yield* heldUtxo(wallet);
 
-      // Raised by the ledger rather than reported through the typed failure channel, which is itself the point: it is
-      // the pre-fork ledger's own complaint about the bytes, from inside the pre-fork variant.
-      const rejection = yield* Effect.promise(() =>
-        wallet.unshielded
-          .rotateUtxos([held], [], v9.signatureVerifyingKey(v9.sampleSigningKey()), new Date(Date.now() + 3_600_000))
-          .then(
-            () => undefined,
-            (error: unknown) => error,
-          ),
+      const built = yield* Effect.promise(() =>
+        wallet.unshielded.rotateUtxos(
+          [held],
+          [],
+          v9.signatureVerifyingKey(v9.sampleSigningKey()),
+          new Date(Date.now() + 3_600_000),
+        ),
       );
 
-      expect(rejection).not.toBeInstanceOf(ProtocolVersionMismatchError);
-      expect(String(rejection)).toContain('Invalid character');
+      const carried = Either.getOrThrow(
+        WalletTransaction.unwrapWithin<v8.UnprovenTransaction>(
+          built,
+          ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, forkVersion),
+        ),
+      );
+      expect(carried).toBeInstanceOf(v8.Transaction);
+      expect(carried).not.toBeInstanceOf(v9.Transaction);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('refuses a transaction built on the other side of the boundary, naming both versions', async () =>

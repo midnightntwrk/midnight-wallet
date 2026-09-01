@@ -27,13 +27,32 @@
 // data and the wire format is JSON, so there is no ledger encoding for a translation to be faithful to. The two
 // variants are nonetheless the genuine ledger-v8 and ledger-v9 trees, each with its own ledger module, and the
 // identities are derived through each version's real keystore.
-import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Effect, identity, Option } from 'effect';
+import { NetworkId, ProtocolVersion, type UnprovenTx } from '@midnightntwrk/wallet-sdk-abstractions';
+import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { Effect, identity, Option, pipe, type Scope, Stream } from 'effect';
+import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
+import { type UnshieldedWalletState } from '../UnshieldedWallet.js';
 import { V1Tag } from '../v1/index.js';
 import { V2Tag } from '../v2/index.js';
-import { forkSeed, postForkIdentity, preForkIdentity, timelineTransaction } from './forkTimeline.js';
-import { makeForkWallet, utxosOf, type CarriedUtxo } from './forkHarness.js';
+import {
+  forkSeed,
+  postForkIdentity,
+  preForkIdentity,
+  timelineTokenType,
+  timelineTransaction,
+  type TimelineItem,
+} from './forkTimeline.js';
+import {
+  bookedUtxosOf,
+  type CarriedUtxo,
+  type ForkedState,
+  type ForkWallet,
+  makeForkWallet,
+  utxosOf,
+} from './forkHarness.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 /** The pre-fork variant owns everything below this; the post-fork variant takes over at it. */
@@ -192,4 +211,209 @@ describe('unshielded hard-fork crossing', () => {
     expect(valuesOf(utxosOf(final))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
     expect(final.progress.appliedId).toBe(6n);
   });
+});
+
+// =============================================================================
+// A transfer the wallet was still holding UTXOs for when the boundary arrived
+// =============================================================================
+
+/**
+ * The pre-fork prefix of the timeline, with nothing at or past the boundary.
+ *
+ * @remarks
+ *   A wallet reading only this settles on the pre-fork variant and stays there, which is what makes "build a transfer
+ *   while the old ledger version is still the current one" a fact rather than a race against the hand-over.
+ */
+const beforeTheFork = timeline.filter((item) => item.protocolVersion < Number(forkVersion));
+
+/** Somebody else's address, so a transfer really takes value out of the wallet. */
+const stranger = new UnshieldedAddress(Buffer.alloc(32, 7));
+
+/** Far enough ahead that nothing here expires. */
+const ttl = new Date(2_000_000_000_000);
+
+/**
+ * More than any two of the wallet's three pre-fork UTXOs cover, so all three are booked whatever order coin selection
+ * considers them in — and less than all three, so the transfer also produces change.
+ */
+const transferAmount = 550n;
+
+/** What the transfer hands back to the wallet: 600 held, 550 sent. */
+const changeAmount = 50n;
+
+/** The wallet's current state, as its public API projects it. */
+const publicState = (wallet: ForkWallet['unshielded']): Effect.Effect<UnshieldedWalletState<string>> =>
+  Effect.promise(() => rx.firstValueFrom(wallet.state));
+
+/**
+ * The harness's own settle-wait, for a wallet the harness did not start.
+ *
+ * @remarks
+ *   A wallet restored from a snapshot comes from the wallet _class_, not from `makeForkWallet`, so it arrives without the
+ *   harness's observation channels. This is the one of them these proofs need. Same caveat as the harness's: fork it
+ *   before starting, and use monotone predicates only.
+ */
+const awaitStateOf = (
+  wallet: ForkWallet['unshielded'],
+  predicate: (state: ForkedState) => boolean,
+): Effect.Effect<ForkedState, WalletRuntimeError> =>
+  pipe(
+    wallet.runtime.stateChanges,
+    Stream.filter(predicate),
+    Stream.take(1),
+    Stream.runHead,
+    Effect.map(Option.getOrThrow),
+  );
+
+/** The value of every coin in a projection, however the wallet is holding it. */
+const totalOf = (coins: readonly { readonly utxo: { readonly value: bigint } }[]): bigint =>
+  ArrayOps.sumBigInt(coins.map((coin) => coin.utxo.value));
+
+/**
+ * A pre-fork wallet that has built a transfer and never gets to submit it.
+ *
+ * @remarks
+ *   The wallet is the shipped one and the transfer is built through its public API, so the booking is the real one: the
+ *   inputs coin selection picked have moved out of the available set and into the pending one, exactly as they would
+ *   while the application waited for the transaction to be included.
+ *
+ *   It is handed on as a **snapshot** rather than as a running wallet because the hand-over is what has to be observed
+ *   next, and a wallet whose timeline already contains the boundary would cross it the moment it caught up — long
+ *   before a test could build anything. Saving a wallet with a transaction in flight and reopening it is also the
+ *   ordinary way an application meets this: the transfer is built, the process restarts, and the chain has forked by
+ *   the time the wallet syncs again.
+ */
+const walletWithATransferInFlight: Effect.Effect<
+  { readonly handle: UnprovenTx; readonly snapshot: string; readonly state: UnshieldedWalletState<string> },
+  never,
+  Scope.Scope
+> = Effect.gen(function* () {
+  const wallet = yield* makeForkWallet({ timeline: beforeTheFork, forkVersion, publicKey: postFork });
+  yield* Effect.addFinalizer(() => wallet.stop);
+
+  const settled = yield* Effect.fork(wallet.awaitState((state) => state.state.progress.appliedId === 3n));
+  yield* wallet.start;
+  yield* settled.await.pipe(Effect.flatMap(identity), Effect.orDie);
+
+  const handle = yield* Effect.promise(() =>
+    wallet.unshielded.transferTransaction(
+      [{ amount: transferAmount, type: timelineTokenType, receiverAddress: stranger }],
+      ttl,
+    ),
+  );
+
+  const state = yield* publicState(wallet.unshielded);
+  return { handle, snapshot: state.serialize(), state };
+});
+
+/** A wallet reopened from `snapshot` onto a timeline that forks, run until it has consumed all of it. */
+const crossTheFork = (params: {
+  readonly snapshot: string;
+  readonly timeline: readonly TimelineItem[];
+  readonly settleAt: bigint;
+}): Effect.Effect<{ readonly crossed: ForkWallet['unshielded']; readonly host: ForkWallet }, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    // Restoring is a class-level entry point, so the class has to come from somewhere: this host wallet is built only
+    // to supply it — and its capturing migration, which is what lets the crossing be awaited rather than guessed at.
+    const host = yield* makeForkWallet({ timeline: params.timeline, forkVersion, publicKey: postFork });
+    yield* Effect.addFinalizer(() => host.stop);
+
+    const crossed = host.walletClass.restore(params.snapshot);
+    yield* Effect.addFinalizer(() => Effect.promise(() => crossed.stop()));
+
+    const settled = yield* Effect.fork(
+      awaitStateOf(crossed, (state) => state.state.progress.appliedId === params.settleAt),
+    );
+    yield* Effect.promise(() => crossed.start());
+    yield* host.awaitMigration;
+    yield* settled.await.pipe(Effect.flatMap(identity), Effect.orDie);
+
+    return { crossed, host };
+  });
+
+describe('an unshielded wallet crossing the boundary with a transfer still in flight', () => {
+  it('releases the UTXOs that transfer had booked back into the available set', async () =>
+    Effect.gen(function* () {
+      const inFlight = yield* walletWithATransferInFlight;
+
+      // The premise, asserted rather than assumed: building the transfer really did book all three UTXOs, leaving the
+      // wallet with nothing available to spend.
+      expect(valuesOf(bookedUtxosOf(inFlight.state.state))).toEqual([100n, 200n, 300n]);
+      expect(valuesOf(utxosOf(inFlight.state.state))).toEqual([]);
+
+      const { crossed } = yield* crossTheFork({ snapshot: inFlight.snapshot, timeline, settleAt: 6n });
+      const state = yield* publicState(crossed);
+
+      // That transfer was built for the pre-fork ledger version and can never be included past the boundary, so the
+      // UTXOs it reserved are the wallet's to spend again — and nobody had to call anything for that to happen.
+      expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);
+      expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
+      // Nothing is merely hidden: every coin the wallet holds after the crossing, it can spend.
+      expect(state.balances[timelineTokenType]).toBe(totalOf(state.totalCoins));
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('has nothing left to do when the pre-fork transaction is reverted after the crossing', async () =>
+    Effect.gen(function* () {
+      const inFlight = yield* walletWithATransferInFlight;
+      const { crossed } = yield* crossTheFork({ snapshot: inFlight.snapshot, timeline, settleAt: 6n });
+
+      const before = yield* publicState(crossed);
+      const reverted = yield* Effect.promise(() => crossed.revertTransaction(inFlight.handle));
+      const after = yield* publicState(crossed);
+
+      // The claim `revertTransaction` makes about a handle from the other side of the boundary — that there is nothing
+      // of this variant's booked against it — is true because the crossing already released it. So the call is a
+      // genuine no-op rather than a silently skipped release.
+      expect(reverted).toBeUndefined();
+      expect(valuesOf(utxosOf(after.state))).toEqual(valuesOf(utxosOf(before.state)));
+      expect(valuesOf(bookedUtxosOf(after.state))).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('writes a snapshot that reopens with nothing booked', async () =>
+    Effect.gen(function* () {
+      const inFlight = yield* walletWithATransferInFlight;
+      const { crossed, host } = yield* crossTheFork({ snapshot: inFlight.snapshot, timeline, settleAt: 6n });
+
+      const snapshot = yield* Effect.promise(() => crossed.serializeState());
+      const reopened = host.walletClass.restore(snapshot);
+      yield* Effect.addFinalizer(() => Effect.promise(() => reopened.stop()));
+
+      // The stuck state must not outlive the process that produced it: what a released wallet persists is a released
+      // wallet, so an application that saves and restores does not re-acquire the booking.
+      const state = yield* publicState(reopened);
+      expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);
+      expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('does not resurrect a booked UTXO whose transaction confirmed before the boundary', async () =>
+    Effect.gen(function* () {
+      const inFlight = yield* walletWithATransferInFlight;
+
+      // The other order of events, and the one the release has to be safe against: the transfer lands in a pre-fork
+      // block after all. The indexer reports it as the UTXOs it consumed alongside the change it produced.
+      const confirmedBeforeTheFork: readonly TimelineItem[] = [
+        ...beforeTheFork,
+        timelineTransaction({
+          id: 4,
+          protocolVersion: preForkVersion,
+          owner: preFork.addressHex,
+          value: changeAmount,
+          spentUtxos: inFlight.state.pendingCoins,
+        }),
+        timelineTransaction({ id: 5, protocolVersion: Number(forkVersion), owner: preFork.addressHex, value: 444n }),
+      ];
+
+      const { crossed } = yield* crossTheFork({
+        snapshot: inFlight.snapshot,
+        timeline: confirmedBeforeTheFork,
+        settleAt: 5n,
+      });
+      const state = yield* publicState(crossed);
+
+      // Spent is spent. The pre-fork variant applies the confirmation before it ever sees the boundary — the cursor
+      // gates the hand-over — and applying it removes those UTXOs from BOTH maps, so the crossing has nothing left to
+      // release and cannot hand back a coin the chain has already consumed.
+      expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);
+      expect(valuesOf(utxosOf(state.state))).toEqual([changeAmount, 444n]);
+    }).pipe(Effect.scoped, Effect.runPromise));
 });

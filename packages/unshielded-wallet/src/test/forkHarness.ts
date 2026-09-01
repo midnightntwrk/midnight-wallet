@@ -121,6 +121,17 @@ const sortedCarried = (utxos: readonly CarriedUtxo[]): readonly CarriedUtxo[] =>
 export const utxosOf = (wallet: PreForkWallet | PostForkWallet): readonly CarriedUtxo[] =>
   sortedCarried(Array.from(HashMap.values(wallet.state.availableUtxos), plainUtxo));
 
+/**
+ * Every _booked_ UTXO, as plain data, in the same stable order.
+ *
+ * @remarks
+ *   The sibling of {@link utxosOf}, and the one a proof about the crossing needs: a UTXO that is neither released nor
+ *   spent is still held by the wallet and would pass any assertion made only about totals. Only reading the booked map
+ *   separately distinguishes "returned to the available set" from "still reserved for a transaction that cannot land".
+ */
+export const bookedUtxosOf = (wallet: PreForkWallet | PostForkWallet): readonly CarriedUtxo[] =>
+  sortedCarried(Array.from(HashMap.values(wallet.state.pendingUtxos), plainUtxo));
+
 /** Wraps the real cross-ledger migration so the test can see exactly what crossed. */
 const capturingCrossLedgerMigration = (
   captured: Deferred.Deferred<CapturedMigration>,
