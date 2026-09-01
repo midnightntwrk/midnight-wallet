@@ -67,7 +67,6 @@ export const UnshieldedTransactions = Subscription.make(
         ... on UnshieldedTransactionsProgress {
           type: __typename
           highestTransactionId
-          protocolVersion
         }
       }
     }

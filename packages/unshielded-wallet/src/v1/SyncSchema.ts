@@ -147,11 +147,6 @@ export type UnshieldedUpdate = Schema.Schema.Type<typeof UnshieldedUpdateSchema>
 export const ProgressSchema = Schema.Struct({
   type: Schema.Literal('UnshieldedTransactionsProgress'),
   highestTransactionId: Schema.Number,
-  /**
-   * The protocol version at the CHAIN'S tip — not the version of anything on this address's timeline, which may be far
-   * behind it or empty. Zero is not a version: it is the source reporting that it has indexed no block yet.
-   */
-  protocolVersion: Schema.Number,
 });
 
 export const WalletSyncUpdateSchema = Schema.Union(UnshieldedUpdateSchema, ProgressSchema);
@@ -165,8 +160,8 @@ export type IndexerSyncUpdate = Schema.Schema.Type<typeof WalletSyncUpdateSchema
  * @remarks
  *   An observation, not a piece of the chain: it moves no cursor, creates and spends nothing. All it can do is record a
  *   protocol version, which is enough, because recording one outside the running variant's activation range is exactly
- *   what makes the runtime hand over. It is not decoded off the wire like the other two arms — the source splits it off
- *   a progress frame — so it is a plain type rather than a schema.
+ *   what makes the runtime hand over. It is not decoded off the wire like the other two arms — the source assembles it
+ *   from two answers the indexer gives separately — so it is a plain type rather than a schema.
  *
  *   `highestTransactionId` is what makes the record safe to make. Handing over parks the sync cursor where it stands, and
  *   the variant that takes over resumes from there — so a transaction still unapplied below the address's tip would be
@@ -174,10 +169,6 @@ export type IndexerSyncUpdate = Schema.Schema.Type<typeof WalletSyncUpdateSchema
  *   therefore travels with the far end of this address's timeline, so the capability can refuse it while anything
  *   remains unapplied. Zero means the indexer holds no transaction for this address at all, which is the one case where
  *   nothing can be unapplied no matter what the wallet has done.
- *
- *   The two travel together because one frame states both. A progress frame reports the far end of this address's
- *   timeline and the version at the chain's tip in the same message, indexed at the same instant, so the version can no
- *   longer be read against a timeline end that moved between two separate answers.
  */
 export type VersionSignalSyncUpdate = Readonly<{
   type: 'VersionSignal';
@@ -200,7 +191,7 @@ export const VersionSignalSyncUpdate = {
  * What the indexer-backed sync source emits.
  *
  * @remarks
- *   What the subscription decoded; and, split off its progress frames, what the chain says about its own version when
- *   this address's timeline says nothing.
+ *   Ordinarily what the subscription decoded; and, on a timer, what the chain says about its own version when the
+ *   subscription says nothing.
  */
 export type WalletSyncUpdate = IndexerSyncUpdate | VersionSignalSyncUpdate;
