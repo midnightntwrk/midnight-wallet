@@ -11,10 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// The migration seam. Unshielded's cross-ledger migration is a STRUCTURAL CARRY, not the fresh-state-and-replay that
-// shielded and dust use: unshielded state is public UTXO data, so there is nothing to decrypt, nothing to re-anchor,
-// and no reason to drop it and wait for a replay. Every UTXO crosses; the only real transformation is the key, which
-// goes from ledger-v8's bare hex string to ledger-v9's `{tag, value}` record.
+// The migration seam. Unshielded's cross-ledger migration is a STRUCTURAL CARRY, field for field rather than the
+// byte-level round trip shielded uses or the fresh-state-and-replay dust uses: unshielded state is public UTXO data,
+// so there is nothing to decrypt and no reason to drop it and wait for a replay. Every UTXO crosses; the only real
+// transformation is the key, which goes from ledger-v8's bare hex string to ledger-v9's `{tag, value}` record.
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, HashMap } from 'effect';
 import { describe, expect, it } from 'vitest';
