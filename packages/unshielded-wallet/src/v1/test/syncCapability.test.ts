@@ -211,10 +211,8 @@ describe('unshielded sync capability at a variant boundary', () => {
   it('progress messages never touch the recorded version', () => {
     const { capability } = setup();
 
-    // Even one reporting a chain past the boundary. Annotating here would be an ungated hand-over: the version would be
-    // recorded without anything having checked that the 41 transactions below the frame's tip have been applied.
     const result = capability
-      .applyUpdate(emptyWallet(3n, 1n), fixtureProgress(42, 9), activeRange)
+      .applyUpdate(emptyWallet(3n, 1n), fixtureProgress(42), activeRange)
       .pipe(EitherOps.getOrThrowLeft);
 
     expect(result.progress.highestTransactionId).toBe(42n);
@@ -227,7 +225,7 @@ describe('unshielded sync capability at a variant boundary', () => {
     const { capability } = setup();
 
     const result = capability
-      .applyUpdate(emptyWallet(0n, 0n), fixtureProgress(7, 9), activeRange)
+      .applyUpdate(emptyWallet(0n, 0n), fixtureProgress(7), activeRange)
       .pipe(EitherOps.getOrThrowLeft);
 
     expect(result.protocolVersion).toBe(0n);
