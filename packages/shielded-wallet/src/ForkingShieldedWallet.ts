@@ -43,6 +43,7 @@ import {
   Variant,
   type VariantBuilder,
   type WalletLike,
+  type WalletRuntimeError,
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
 import { Duration, Effect, Either, Option, Ref, type Scope, pipe } from 'effect';
@@ -159,13 +160,61 @@ export type ShieldedKeysByEpoch = Readonly<{
   v9: ledger.ZswapSecretKeys;
 }>;
 
-/** A running shielded wallet that spans a protocol boundary. */
+/**
+ * A running shielded wallet that spans a protocol boundary.
+ *
+ * @remarks
+ *   Its two extra starts are the instance counterparts of the class-level ones, and they are here rather than on
+ *   {@link ShieldedWalletAPI} because only a wallet with a variant either side of a boundary has anything to do with
+ *   them: a single-variant wallet speaks one ledger version, and the key material `start` takes is always the right
+ *   one.
+ */
 export type ForkingShieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate> = ShieldedWalletAPI<
   ledger.ZswapSecretKeys,
   ledger.FinalizedTransaction,
   string
 > &
-  WalletLike.WalletLike<ForkingShieldedVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>>;
+  WalletLike.WalletLike<ForkingShieldedVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>> & {
+    /**
+     * Starts this wallet from a seed, which answers for the variant either side of the boundary.
+     *
+     * @remarks
+     *   The instance counterpart of {@link ForkingShieldedWalletClass.startWithSeed}, and what a wallet restored from a
+     *   snapshot written below the boundary is started with. A snapshot carries no key material by design, and the
+     *   variant it restores onto is the pre-fork one, whose synchronization the post-fork keys
+     *   {@link ShieldedWalletAPI.start} takes cannot serve. The class-level start answers for both sides too — but it
+     *   builds a _fresh_ wallet, which is the opposite of what a caller who has just restored one wants.
+     *
+     *   The seed itself is not kept: both ledger versions' keys are derived from it here and retained instead, which is
+     *   the same capability with a shorter-lived secret.
+     * @example
+     *   ```typescript
+     *   const wallet = ShieldedWallet(configuration).restore(snapshot);
+     *   await wallet.startWithSeed(seed);
+     *   ```;
+     *
+     * @param seed The seed to derive both ledger versions' keys from.
+     * @returns Nothing; resolves once synchronization has been started on whichever variant is current.
+     */
+    startWithSeed(seed: Uint8Array): Promise<void>;
+    /**
+     * Starts this wallet from key objects of both ledger versions.
+     *
+     * @remarks
+     *   The instance counterpart of {@link ForkingShieldedWalletClass.startWithKeys}, for a caller that will not part with
+     *   a seed. Both sides are required for the same reason they are there: key objects belong to one ledger version's
+     *   runtime, so a wallet given one side alone could not read the other side of the chain.
+     * @example
+     *   ```typescript
+     *   const wallet = ShieldedWallet(configuration).restore(snapshot);
+     *   await wallet.startWithKeys({ v8: preForkKeys, v9: postForkKeys });
+     *   ```;
+     *
+     * @param keys One ledger version's Zswap secret keys per side of the boundary.
+     * @returns Nothing; resolves once synchronization has been started on whichever variant is current.
+     */
+    startWithKeys(keys: ShieldedKeysByEpoch): Promise<void>;
+  };
 
 /** The class a forking shielded wallet is started from. */
 export interface ForkingShieldedWalletClass<
@@ -334,9 +383,10 @@ export function CustomForkingShieldedWallet<
             Option.isNone(retained.preFork) && Option.isNone(retained.postFork)
               ? `This wallet holds no key material: it has not been started, or it has been stopped. Start it ` +
                 `before asking it to synchronize or to build a transaction.`
-              : `This wallet was started with key material of the other protocol version, which the variant ` +
-                `${String(variantTag)} cannot use: key objects belong to one ledger version's runtime. Start it from ` +
-                `a seed, or hand it both versions' keys.`,
+              : `This wallet holds key material of the other protocol version only, which the variant ` +
+                `${String(variantTag)} cannot use: key objects belong to one ledger version's runtime. Start this ` +
+                `wallet with material that answers for either side — startWithSeed(seed), or ` +
+                `startWithKeys({ v8, v9 }).`,
           variantTag,
         }),
     );
@@ -575,23 +625,22 @@ export function CustomForkingShieldedWallet<
     }
 
     /**
-     * Starts background synchronization on whichever variant is current, and keeps the keys for the next one.
+     * Everything a start does once the wallet holds its key material: watch for the next variant, synchronize on this
+     * one.
      *
      * @remarks
-     *   The keys are the post-fork ledger version's, so they are retained against that variant alone. A wallet still on
-     *   the pre-fork variant is started from what it retained instead — which a wallet built from a seed can always
-     *   answer, and a wallet built from key objects cannot.
-     * @param secretKeys The post-fork ledger version's Zswap secret keys.
+     *   The same work whichever start was called — what the three differ in is only what they retained a moment earlier —
+     *   so it is stated once. The watcher is registered before the first dispatch and only once per wallet:
+     *   `onVariantActivation` resolves only after its subscription is live, so an activation racing a start is queued
+     *   rather than missed, and watchers accumulate, so registering per call would restart synchronization once per
+     *   historical start.
+     *
+     *   Both branches of the dispatch resolve their keys from what was retained rather than from what the caller passed,
+     *   because the variant that is current is not the caller's to know: a wallet restored below the boundary is on the
+     *   pre-fork one whatever the application holds.
      */
-    start(secretKeys: ledger.ZswapSecretKeys): Promise<void> {
+    #startSynchronizing(): Effect.Effect<void, StartMaterial.MissingStartAuxError | WalletRuntimeError> {
       return Effect.gen(this, function* () {
-        // The post-fork side only: these keys belong to that ledger version's runtime. Whatever the wallet already
-        // holds for the pre-fork side is left as it is, so a wallet built from a seed keeps the ability to read a
-        // chain that has not forked yet.
-        yield* Ref.update(this.#retainedKeys, (retained) => ({ ...retained, postFork: Option.some(secretKeys) }));
-
-        // Registered before the first dispatch, and only once: `onVariantActivation` resolves only after its
-        // subscription is live, so an activation racing this call is queued rather than missed.
         const alreadyRegistered = yield* Ref.getAndSet(this.#watcherRegistered, true);
         if (!alreadyRegistered) {
           yield* this.runtime.onVariantActivation({
@@ -602,8 +651,49 @@ export function CustomForkingShieldedWallet<
 
         yield* this.runtime.dispatch({
           [V1Tag]: (v1) => this.#resumeSyncOn(v1, preForkAux),
-          [V2Tag]: (v2) => v2.startSyncInBackground(secretKeys),
+          [V2Tag]: (v2) => this.#resumeSyncOn(v2, postForkAux),
         });
+      });
+    }
+
+    /**
+     * Starts background synchronization on whichever variant is current, and keeps the keys for the next one.
+     *
+     * @remarks
+     *   The keys are the post-fork ledger version's, so they are retained against that variant alone and answer for it
+     *   alone. A wallet still on the pre-fork variant is started from whatever it holds for _that_ side — which a
+     *   wallet built from a seed, or from both versions' keys, can always answer and one holding only these cannot.
+     *
+     *   That is the position of a wallet restored from a snapshot written below the boundary: a snapshot carries no key
+     *   material, so these keys leave it with nothing the running variant can use, and it says so rather than
+     *   pretending to have started. {@link ForkingShieldedWallet.startWithSeed} and
+     *   {@link ForkingShieldedWallet.startWithKeys} are the same wallet started with material that answers for either
+     *   side.
+     * @param secretKeys The post-fork ledger version's Zswap secret keys.
+     */
+    start(secretKeys: ledger.ZswapSecretKeys): Promise<void> {
+      return Effect.gen(this, function* () {
+        // The post-fork side only: these keys belong to that ledger version's runtime. Whatever the wallet already
+        // holds for the pre-fork side is left as it is, so a wallet built from a seed keeps the ability to read a
+        // chain that has not forked yet.
+        yield* Ref.update(this.#retainedKeys, (retained) => ({ ...retained, postFork: Option.some(secretKeys) }));
+        yield* this.#startSynchronizing();
+      }).pipe(Effect.runPromise);
+    }
+
+    startWithSeed(seed: Uint8Array): Promise<void> {
+      return Effect.gen(this, function* () {
+        // Replaced rather than merged: a seed answers for every variant, so whatever partial material the wallet held
+        // has nothing left to contribute.
+        yield* Ref.set(this.#retainedKeys, keysFromSeed(WalletSeed.WalletSeed(seed)));
+        yield* this.#startSynchronizing();
+      }).pipe(Effect.runPromise);
+    }
+
+    startWithKeys(keys: ShieldedKeysByEpoch): Promise<void> {
+      return Effect.gen(this, function* () {
+        yield* Ref.set(this.#retainedKeys, { preFork: Option.some(keys.v8), postFork: Option.some(keys.v9) });
+        yield* this.#startSynchronizing();
       }).pipe(Effect.runPromise);
     }
 

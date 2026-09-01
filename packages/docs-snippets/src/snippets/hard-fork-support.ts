@@ -167,6 +167,13 @@ const snapshot = await wallet.shielded.serializeState();
 const restored = ShieldedWallet(configuration).tryRestore(snapshot);
 console.log('Restored the snapshot this wallet just wrote?', Either.isRight(restored));
 if (Either.isRight(restored)) {
+  // A restored wallet holds no key material — a snapshot deliberately carries none — so it synchronizes nothing until
+  // it is started again. Which start depends on where the snapshot was written: `startWithSeed` (and its sibling
+  // `startWithKeys({ v8, v9 })`) answers for the variant either side of the boundary, so it works whichever side the
+  // snapshot came from; `start(secretKeys)` takes the post-fork ledger version's key alone and so serves only a
+  // snapshot written at or past the boundary. Neither is the class-level start of the same name: those build a fresh
+  // wallet, which would discard the state just restored.
+  await restored.right.startWithSeed(seeds.shielded);
   await restored.right.stop();
 }
 

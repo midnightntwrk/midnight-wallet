@@ -211,6 +211,14 @@ export type ForkWalletConfig = Readonly<{
   /** The seed both variants derive their keys from. */
   seed: Uint8Array;
   /**
+   * Which class-level start the wallet is built through.
+   *
+   * Absent means the seed, which is what every proof here wants unless the escape hatch itself is the subject: a wallet
+   * built from `startWithKeys` holds the same two key objects a seed would have derived, and nothing else about it
+   * differs.
+   */
+  startFrom?: 'seed' | 'keys';
+  /**
    * How the wallet asks the chain which protocol version it is on before choosing a variant to start at.
    *
    * Absent means it does not ask, which is the behaviour of every wallet built without one: it starts at the head
@@ -268,7 +276,7 @@ export type ForkWallet = Readonly<{
  * @returns The running wallet and its observation channels.
  */
 export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWallet> => {
-  const { preFork, postFork, networkId, forkVersion, seed, chainVersionProbe } = config;
+  const { preFork, postFork, networkId, forkVersion, seed, startFrom, chainVersionProbe } = config;
 
   const preForkKeys = v8.ZswapSecretKeys.fromSeed(seed);
   const postForkKeys = v9.ZswapSecretKeys.fromSeed(seed);
@@ -304,7 +312,11 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     { builder: postForkBuilder, configuration: { networkId, postFork } },
   );
 
-  return Effect.promise(() => WalletClass.startWithSeed(seed)).pipe(
+  return Effect.promise(() =>
+    startFrom === 'keys'
+      ? WalletClass.startWithKeys({ v8: preForkKeys, v9: postForkKeys })
+      : WalletClass.startWithSeed(seed),
+  ).pipe(
     Effect.map((wallet) => {
       const runtime = wallet.runtime;
 

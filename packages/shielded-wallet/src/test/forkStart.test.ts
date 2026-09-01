@@ -635,3 +635,64 @@ describe('a shielded wallet on a chain that has shown it no events', () => {
       expect(yield* wallet.activeTag).toBe(V2Tag);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
+
+/**
+ * The escape hatch for a caller that will not part with a seed, put to the test it exists for.
+ *
+ * @remarks
+ *   `startWithKeys` is documented as fork-safe — that is the whole reason it demands both sides rather than the one key
+ *   an application holds — and every other proof in this package reaches its fork from a seed. So the claim that the
+ *   two key objects are as good as the seed they would have been derived from is the one thing about this start that is
+ *   worth stating, and it is stated by making it cross: the pre-fork variant reads the pre-fork chain with the pre-fork
+ *   key, and what the wallet carries over arrives whole.
+ */
+describe('a shielded wallet built from both ledger versions’ keys rather than a seed', () => {
+  it('syncs the chain below the boundary and crosses it, carrying what it read there', async () =>
+    Effect.gen(function* () {
+      const coins = chainCoins();
+      const fork = yield* ForkSimulator.init({
+        networkId,
+        forkBlock,
+        forkVersion,
+        preForkVersion: beforeFork,
+        preForkBlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
+        postForkBlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        translator: translationStub({ networkId, coins }),
+      });
+
+      const wallet = yield* makeForkWallet({
+        preFork: fork.preFork,
+        postFork: fork.awaitPostFork(),
+        networkId,
+        forkVersion,
+        seed,
+        // The one difference from every other start in this file: two key objects, and no seed retained anywhere.
+        startFrom: 'keys',
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      yield* wallet.start;
+
+      // Read below the boundary, by the ledger version that produced those bytes — which is the half a wallet holding
+      // only the post-fork key could not do.
+      yield* Effect.forEach(coins, (coin) => fork.preFork.submitTransaction(preForkPayment(networkId, coin)), {
+        discard: true,
+      });
+      const synced = yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+      expect(coinValues(synced.state)).toEqual([...walletValues]);
+
+      const postFork = yield* fork.advanceToFork();
+      const migration = yield* wallet.awaitMigration;
+      expect(migration.to.coinCount).toBe(walletValues.length);
+
+      // And it arrives holding them. The post-fork chain contains no transaction at all, so everything the wallet has
+      // here it brought across.
+      const crossed = yield* wallet.awaitState(
+        (state) =>
+          state.version >= forkVersion && totalValue(state.state) === walletTotal && !awaitingCoinHashes(state.state),
+      );
+      expect(yield* wallet.activeTag).toBe(V2Tag);
+      expect(coinValues(crossed.state)).toEqual([...walletValues]);
+      expect(yield* postFork.query((state) => state.blocks.flatMap((block) => block.transactions))).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});

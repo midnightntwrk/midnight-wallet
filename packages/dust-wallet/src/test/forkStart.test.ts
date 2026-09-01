@@ -527,3 +527,59 @@ describe('projections fast-sync and the two-variant wallet', () => {
       expect(yield* belowBoundary.activeTag).toBe(V1Tag);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
+
+/**
+ * The escape hatch for a caller that will not part with a seed, put to the test it exists for.
+ *
+ * @remarks
+ *   `startWithKeys` is documented as fork-safe — that is the whole reason it demands both sides rather than the one key
+ *   an application holds — and every other proof in this package reaches its fork from a seed. So the claim that the
+ *   two dust keys are as good as the seed they would have been derived from is the one thing about this start worth
+ *   stating, and it is stated by making it cross: the pre-fork variant reads the pre-fork timeline with the pre-fork
+ *   key, and the post-fork variant re-discovers the same dust from the replay.
+ */
+describe('a dust wallet built from both ledger versions’ dust keys rather than a seed', () => {
+  it('syncs the timeline below the boundary and crosses it, re-discovering the same dust', async () =>
+    Effect.gen(function* () {
+      const chain = yield* Effect.promise(() => buildDustChain());
+      const history = numberedFrom(chain.eventBytes, 1, Number(beforeFork));
+      const replay = numberedFrom(chain.eventBytes, DUST_EVENT_COUNT + 1, Number(forkVersion));
+      const wire = yield* Queue.unbounded<readonly TimelineEvent[]>();
+      const replayed = yield* Deferred.make<readonly TimelineEvent[]>();
+
+      const wallet = yield* makeForkWallet({
+        preFork: Stream.fromQueue(wire),
+        replayed: Deferred.await(replayed),
+        networkId,
+        forkVersion,
+        seed: dustSeed(),
+        // The one difference from every other start in this file: two key objects, and no seed retained anywhere.
+        startFrom: 'keys',
+        dustParameters,
+        syncTime: chain.syncTime,
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      yield* wallet.start;
+
+      // Read below the boundary, by the ledger version that framed those events — which is the half a wallet holding
+      // only the post-fork key could not do.
+      yield* Queue.offer(wire, history);
+      const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+      const preForkBalance = balanceAt(synced.state, chain.syncTime);
+      expect(preForkBalance).toBeGreaterThan(0n);
+
+      // And across: the boundary event reaches the still-open pre-fork subscription, and the replay answers.
+      yield* Queue.offer(wire, [replay[0]]);
+      yield* Deferred.succeed(replayed, replay);
+
+      const migration = yield* wallet.awaitMigration;
+      expect(migration.to.dustCount).toBe(0);
+
+      const crossed = yield* wallet.awaitState(
+        (state) => state.version >= forkVersion && dustCount(state.state) === DUST_EVENT_COUNT,
+      );
+      expect(yield* wallet.activeTag).toBe(V2Tag);
+      expect(balanceAt(crossed.state, chain.syncTime)).toBe(preForkBalance);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});

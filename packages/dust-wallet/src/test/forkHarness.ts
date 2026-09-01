@@ -290,6 +290,14 @@ export type ForkWalletConfig = Readonly<{
   /** The seed both variants derive their dust key from. */
   seed: Uint8Array;
   /**
+   * Which class-level start the wallet is built through.
+   *
+   * Absent means the seed, which is what every proof here wants unless the escape hatch itself is the subject: a wallet
+   * built from `startWithKeys` holds the same two dust keys a seed would have derived, and nothing else about it
+   * differs.
+   */
+  startFrom?: 'seed' | 'keys';
+  /**
    * The dust parameters each side values dust against.
    *
    * @remarks
@@ -359,7 +367,8 @@ export type ForkWallet = Readonly<{
  * @returns The running wallet and its observation channels.
  */
 export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWallet> => {
-  const { preFork, replayed, networkId, forkVersion, seed, dustParameters, syncTime, chainVersionProbe } = config;
+  const { preFork, replayed, networkId, forkVersion, seed, startFrom, dustParameters, syncTime, chainVersionProbe } =
+    config;
 
   const preForkKey = PreForkSecretKey.fromSeed(seed);
   const postForkKey = PostForkSecretKey.fromSeed(seed);
@@ -413,7 +422,11 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     },
   );
 
-  return Effect.promise(() => WalletClass.startWithSeed(seed, dustParameters.postFork)).pipe(
+  return Effect.promise(() =>
+    startFrom === 'keys'
+      ? WalletClass.startWithKeys({ v8: preForkKey, v9: postForkKey }, dustParameters.postFork)
+      : WalletClass.startWithSeed(seed, dustParameters.postFork),
+  ).pipe(
     Effect.map((wallet) => {
       const runtime = wallet.runtime;
 

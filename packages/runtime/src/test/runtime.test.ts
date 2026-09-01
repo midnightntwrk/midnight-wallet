@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Deferred, Effect, Either, Option, Ref } from 'effect';
+import { Cause, Deferred, Effect, Either, LogLevel, Logger, Option, Ref } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { StateChange, VersionChangeType, WalletRuntimeError } from '../abstractions/index.js';
@@ -529,6 +529,92 @@ describe('Variant activation and context', () => {
       yield* recorder.done;
       expect(yield* recorder.tags).toEqual([B, C]);
     }).pipe(Effect.scoped, Effect.runPromise));
+
+  /** One log record, reduced to what an assertion about a swallowed watcher failure reads. */
+  type CapturedLog = Readonly<{ level: LogLevel.LogLevel; rendered: string }>;
+
+  /**
+   * A logger that records what it is handed, and the reading of what it recorded.
+   *
+   * @remarks
+   *   Built outside the effect it is provided to, because what it captures has to outlive that effect: the assertion runs
+   *   inside, but the watcher consumer that does the logging is a forked fiber which inherits the loggers of whichever
+   *   fiber registered it.
+   */
+  const capturingLogger = (): Readonly<{
+    captured: Effect.Effect<readonly CapturedLog[]>;
+    logger: Logger.Logger<unknown, void>;
+  }> => {
+    const records = Ref.unsafeMake<readonly CapturedLog[]>([]);
+    return {
+      captured: Ref.get(records),
+      logger: Logger.make<unknown, void>(({ logLevel, message, cause }) =>
+        Ref.update(records, (entries) => [
+          ...entries,
+          { level: logLevel, rendered: `${String(message)} ${Cause.pretty(cause)}` },
+        ]).pipe(Effect.runSync),
+      ),
+    };
+  };
+
+  it('carries on when a watcher fails, notifying the others on that same activation and logging the failure', () => {
+    // Characterization of the swallow at `onVariantActivation` — `Effect.ignoreLogged` — so a future refactor cannot
+    // change what it gives us without saying so. Application-visible surfacing of watcher failures is a separate
+    // question; what is pinned here is that a failure costs nothing but a debug line.
+    const { captured, logger } = capturingLogger();
+    return Effect.gen(function* () {
+      const wallet = yield* startTwoVariantWallet();
+      const recorder = yield* makeActivationRecorder(1);
+
+      // Two watchers on one runtime, registered independently as two callers would register them. The first fails on
+      // the activation the second must still see.
+      yield* wallet.runtime.onVariantActivation({
+        [First]: () => Effect.void,
+        [Second]: () => Effect.fail(new WalletRuntimeError({ message: 'watcher boom' })),
+      });
+      yield* wallet.runtime.onVariantActivation({
+        [First]: () => recorder.record(First),
+        [Second]: () => recorder.record(Second),
+      });
+
+      yield* firstStateWhere(wallet.rawState);
+      yield* wallet.runtime.dispatch({
+        [First]: (variant: InterceptingRunningVariant<typeof First, number>) =>
+          variant.emitProtocolVersionChange(
+            VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(100n) }),
+          ),
+        [Second]: () => Effect.void,
+      });
+
+      // The surviving watcher observed the very activation the other one failed on.
+      yield* recorder.done;
+      expect(yield* recorder.tags).toEqual([Second]);
+
+      // And the runtime is unharmed: it dispatches to the variant that was activated, and its state still flows.
+      const nowSecond = yield* wallet.runtime.dispatch({
+        [First]: () => Effect.succeed(false),
+        [Second]: () => Effect.succeed(true),
+      });
+      expect(nowSecond).toBe(true);
+      yield* wallet.runtime.dispatch({
+        [First]: () => Effect.void,
+        [Second]: (variant: InterceptingRunningVariant<typeof Second, number>) =>
+          variant.emit(StateChange.State({ state: 7 })),
+      });
+      yield* firstStateWhere(wallet.rawState, ({ state }) => state === 7);
+
+      // Swallowed, but not silently: the cause is logged once, at debug level, which is the whole of what a failing
+      // watcher leaves behind today.
+      expect((yield* captured).filter((entry) => entry.rendered.includes('watcher boom'))).toEqual([
+        expect.objectContaining({ level: LogLevel.Debug }),
+      ]);
+    }).pipe(
+      Effect.scoped,
+      Effect.provide(Logger.replace(Logger.defaultLogger, logger)),
+      Logger.withMinimumLogLevel(LogLevel.Debug),
+      Effect.runPromise,
+    );
+  });
 
   it('has the activation subscription live as soon as onVariantActivation resolves', () =>
     Effect.gen(function* () {
