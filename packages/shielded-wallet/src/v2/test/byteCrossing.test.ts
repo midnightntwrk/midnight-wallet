@@ -331,10 +331,10 @@ describe('money built on a crossed state', () => {
  * Kept from the re-anchoring suite this file replaced.
  *
  * @remarks
- *   The crossing no longer builds a tree out of collapsed updates, but they are still how a wallet skips over commitments
- *   it does not own during ordinary sync, how `CoreWallet.applyCollapsedUpdate` is used, and how every chain root in
- *   this file is read. The arithmetic is exact and the documentation of it is one sentence long ("both ends of updates
- *   _are_ included", ledger-v9.d.ts), so it is pinned rather than assumed.
+ *   The crossing no longer builds a tree out of collapsed updates, but they are still how every chain root in this file
+ *   is read — and they are what a re-anchoring fallback would be built from, should the codec pin above ever go red
+ *   before a ledger-shipped translation exists. The arithmetic is exact and the documentation of it is one sentence
+ *   long ("both ends of updates _are_ included", ledger-v9.d.ts), so it is pinned rather than assumed.
  */
 describe('what the ledger itself guarantees about collapsed updates', () => {
   it('takes inclusive bounds: [0, firstFree - 1] covers the whole tree, and an empty tree has no index at all', () => {
