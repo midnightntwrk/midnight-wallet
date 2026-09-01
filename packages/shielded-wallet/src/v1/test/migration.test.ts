@@ -120,8 +120,8 @@ describe('the cross-ledger migration', () => {
 
   it('starts from an empty local state rather than carrying the previous version coins', async () => {
     // Shape parity, not a working crossing: this is the oldest registered variant, no ledger version below it exists,
-    // so nothing ever migrates into here. The coin carry and re-anchoring live in the v2 twin, which is where a real
-    // fork lands, and are deliberately not mirrored into a seam no chain can reach.
+    // so nothing ever migrates into here. The byte crossing lives in the v2 twin, which is where a real fork lands,
+    // and is deliberately not mirrored into a seam no chain can reach.
     const previous = previousWallet();
     expect(previous.state.coins.length).toBeGreaterThan(0);
 
