@@ -151,8 +151,8 @@ const createMockSubscriptionFn = (
  * The events a batch carries.
  *
  * @remarks
- *   The stream's element type also admits the anchor step, which only a wallet that crossed the ledger-version boundary
- *   triggers — none of the wallets here carry one, so every element these tests see is an event batch.
+ *   The stream's element is a tagged update rather than a bare batch, so elements that are not event batches can travel
+ *   the same stream. Everything the wallets here produce is an event batch, and this unwraps it.
  */
 const eventsOf = (update: WalletSyncUpdate): readonly EventsSyncUpdate[] =>
   update._tag === 'Events' ? update.updates : [];
