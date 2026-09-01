@@ -19,7 +19,7 @@ services:
       start_period: 10s
 
   indexer:
-    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.4.0-pre-alpha.15-l91r3-n2r3-bridge-and-events-epics-blockhash-dust-f06af4b4'
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.4.0-rc.2-25da0487'
     container_name: indexer_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
