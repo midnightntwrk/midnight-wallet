@@ -56,6 +56,12 @@ it on the _new_ node binary alongside an indexer and a proof server, syncs a fac
 on the new protocol version with its balances intact, and restores from its post-fork snapshot. Its compose file is
 `infra/compose/docker-compose-fork-dynamic.yml`.
 
+It then spends what it carried. The chain-side dust replay covers cNIGHT holders only, so a wallet holding native NIGHT
+arrives on the far side with no dust and has to re-register its Night for dust generation before it can pay a fee at
+all; the drill does that, then sends both an unshielded and a shielded transfer to a second wallet started on the same
+forked chain. The shielded one is the sharp end: those coins crossed the boundary as bytes in a translated local state,
+and the spend only succeeds if their Merkle paths still resolve against the post-fork tree.
+
 To run it locally (from the repository root):
 
 ```shell
