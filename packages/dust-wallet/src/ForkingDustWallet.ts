@@ -50,7 +50,12 @@ import { type Clock, EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilitie
 import { Duration, Effect, Either, Option, Ref, type Scope, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
-import { type DefaultDustConfiguration, type DustWalletAPI, DustWalletState } from './DustWallet.js';
+import {
+  claimableFeePayment,
+  type DefaultDustConfiguration,
+  type DustWalletAPI,
+  DustWalletState,
+} from './DustWallet.js';
 import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import { CoreWallet as PreForkCoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
 import { type WalletSyncUpdate as PreForkSyncUpdate } from './v1/Sync.js';
@@ -1042,13 +1047,7 @@ export function CustomForkingDustWallet<
       // generation projection depends on a current-time reading, which advances continuously.
       await rx.firstValueFrom(
         rx.combineLatest([this.state, rx.timer(0, 1000)]).pipe(
-          rx.filter(([dustState]) => {
-            const maxGeneratedNow = dustState
-              .estimateDustGeneration(nightUtxos, clock.now())
-              .filter((u) => !u.utxo.registeredForDustGeneration)
-              .reduce((max, u) => (u.dust.generatedNow > max ? u.dust.generatedNow : max), 0n);
-            return maxGeneratedNow >= requiredAmount;
-          }),
+          rx.filter(([dustState]) => claimableFeePayment(dustState, nightUtxos, clock.now()) >= requiredAmount),
           rx.timeout({ first: timeoutMs }),
         ),
       );

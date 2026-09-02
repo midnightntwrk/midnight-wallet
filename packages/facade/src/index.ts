@@ -1158,13 +1158,16 @@ export class WalletFacade {
       throw error;
     }
 
-    // Step 4 (first-time registration only) — Fail fast if the dust generated so far by the
-    // unregistered guaranteed UTxOs is below the registration's own fee. Submitting would fail
-    // on-chain with BalanceCheckOverspend. Skip for re-registration (all guaranteed UTxOs already
-    // registered) since `feePayment` is 0 by design and the caller is expected to balance the fee
-    // externally via `balanceUnprovenTransaction({ tokenKindsToBalance: ['dust'] })`.
-    const hasUnregisteredGuaranteed = split.guaranteedUtxos.some((u) => !u.utxo.registeredForDustGeneration);
-    if (isRegistration && hasUnregisteredGuaranteed) {
+    // Step 4 (self-funding registration only) — Fail fast if the dust the guaranteed UTxOs may claim
+    // towards this registration's own fee is below that fee. Submitting would fail on-chain with
+    // BalanceCheckOverspend. Skip when no guaranteed UTxO is generationless, since `feePayment` is
+    // then 0 by design and the caller is expected to balance the fee externally via
+    // `balanceUnprovenTransaction({ tokenKindsToBalance: ['dust'] })`.
+    //
+    // Which registrations are self-funding is the dust wallet's answer, read off its own dust holdings — NOT
+    // `meta.registeredForDustGeneration`, which is a creation-time reading the indexer never revises and which,
+    // after the v8 -> v9 fork wipes dust state, says `true` for Night that generates nothing.
+    if (isRegistration && split.hasGenerationlessGuaranteed) {
       const fee = await this.dust.calculateFee([txWithDustActions]);
       if (split.feePayment < fee) {
         await this.unshielded.revertTransaction(txWithOffers);

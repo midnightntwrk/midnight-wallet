@@ -90,6 +90,7 @@ type DustProjections<TSerialized> = Readonly<{
   publicKey: () => DustPublicKey;
   address: () => DustAddress;
   balance: (time: Date) => Balance;
+  isGenerationless: (utxo: UtxoWithMeta) => boolean;
   estimateDustGeneration: (
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     currentTime: Date,
@@ -127,6 +128,7 @@ export class DustWalletState<TSerialized = string> {
       publicKey: () => variant.keys.getPublicKey(state.state),
       address: () => variant.keys.getAddress(state.state),
       balance: (time) => variant.coinsAndBalances.getWalletBalance(state.state, time),
+      isGenerationless: (utxo) => variant.coinsAndBalances.isGenerationless(state.state, utxo),
       estimateDustGeneration: (nightUtxos, currentTime) =>
         variant.coinsAndBalances.estimateDustGeneration(state.state, nightUtxos, currentTime),
       splitNightUtxos: (nightUtxos) => variant.coinsAndBalances.splitNightUtxos(nightUtxos),
@@ -175,6 +177,20 @@ export class DustWalletState<TSerialized = string> {
     return this.#projections.balance(time);
   }
 
+  /**
+   * Whether this Night UTxO generates no Dust for this wallet.
+   *
+   * @remarks
+   *   The ledger's `generationless` condition, answered from the wallet's own Dust holdings rather than from the
+   *   indexer's `registeredForDustGeneration` flag, which is a creation-time reading and is stale after a hard fork
+   *   wipes Dust generation state. It is what decides whether a registration over this UTxO may fund its own fee.
+   * @param utxo The Night UTxO to judge.
+   * @returns `true` when no Dust coin this wallet holds names this UTxO as its backing Night.
+   */
+  isGenerationless(utxo: UtxoWithMeta): boolean {
+    return this.#projections.isGenerationless(utxo);
+  }
+
   estimateDustGeneration(
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     currentTime: Date,
@@ -203,6 +219,32 @@ export class DustWalletState<TSerialized = string> {
     return this.#projections.serialize();
   }
 }
+
+/**
+ * The largest fee payment a registration over `nightUtxos` could claim for itself, right now.
+ *
+ * @remarks
+ *   What {@link DustWalletAPI.waitForGeneratedDust} waits to reach the fee, and the reading behind it. Two things shape
+ *   it. Only Night the ledger considers generationless earns the retroactive Dust a registration may spend on its own
+ *   fee, and whether a UTxO is one of those is the wallet's own Dust holdings' answer, not the indexer's
+ *   `registeredForDustGeneration` flag — see {@link DustWalletState.isGenerationless}. And the allowance is capped at
+ *   the _single_ highest-generation UTxO, because `splitNightUtxos` puts exactly one in the registration's guaranteed
+ *   slot; summing across UTxOs would resolve the wait optimistically and the registration would still fail the fee
+ *   check on-chain.
+ * @param state The dust wallet state to read.
+ * @param nightUtxos The Night UTxOs the registration would carry.
+ * @param currentTime The time to project generation to.
+ * @returns The claimable fee payment, in Specks. `0n` when every UTxO already generates.
+ */
+export const claimableFeePayment = <TSerialized>(
+  state: DustWalletState<TSerialized>,
+  nightUtxos: ReadonlyArray<UtxoWithMeta>,
+  currentTime: Date,
+): bigint =>
+  state
+    .estimateDustGeneration(nightUtxos, currentTime)
+    .filter((estimate) => state.isGenerationless(estimate.utxo))
+    .reduce((max, estimate) => (estimate.dust.generatedNow > max ? estimate.dust.generatedNow : max), 0n);
 
 export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
   readonly state: rx.Observable<DustWalletState<TSerialized>>;
@@ -708,17 +750,7 @@ export function CustomDustWallet<
       // state emissions on a quiet wallet, and the wait would hang.
       await rx.firstValueFrom(
         rx.combineLatest([this.state, rx.timer(0, 1000)]).pipe(
-          rx.filter(([dustState]) => {
-            // The registration's allow_fee_payment is capped at the single highest-generation
-            // unregistered Night UTxO (splitNightUtxos puts only 1 UTxO in the guaranteed slot),
-            // so the wait must track that same quantity — summing across UTxOs would resolve
-            // optimistically and the registration would still fail the fee check.
-            const maxGeneratedNow = dustState
-              .estimateDustGeneration(nightUtxos, clock.now())
-              .filter((u) => !u.utxo.registeredForDustGeneration)
-              .reduce((max, u) => (u.dust.generatedNow > max ? u.dust.generatedNow : max), 0n);
-            return maxGeneratedNow >= requiredAmount;
-          }),
+          rx.filter(([dustState]) => claimableFeePayment(dustState, nightUtxos, clock.now()) >= requiredAmount),
           rx.timeout({ first: timeoutMs }),
         ),
       );

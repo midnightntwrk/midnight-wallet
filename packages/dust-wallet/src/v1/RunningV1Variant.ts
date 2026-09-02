@@ -303,9 +303,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
           resolvedTime,
         );
       }),
-      Effect.flatMap(({ utxosWithDustValue, resolvedTime }) => {
+      Effect.flatMap(({ currentState, utxosWithDustValue, resolvedTime }) => {
         return this.#v1Context.transactingCapability
           .createDustGenerationTransaction(
+            currentState,
             resolvedTime,
             ttl,
             utxosWithDustValue,
@@ -333,6 +334,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         currentTime,
       );
       return this.#v1Context.transactingCapability.splitNightUtxosForDustRegistration(
+        currentState,
         utxosWithDustValue,
         isRegistration,
       );
