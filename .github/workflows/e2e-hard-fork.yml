@@ -1,11 +1,11 @@
-# Hard-fork drill — the only lane in which a wallet crosses a real protocol boundary.
+# Hard-fork e2e — the only lane in which a wallet crosses a real protocol boundary.
 #
 # Every other live-infra lane (PR smoke in ci.yml, the nightly undeployed run in e2e-tests-local.yml, the integration
 # matrix) boots the current node on its own genesis, so the chain is post-fork from block 1 and no wallet ever crosses
 # anything. This lane instead builds a genesis from the OLD node's spec (ledger 8), runs it on the NEW binary with an
 # indexer and a proof server, syncs a facade wallet pre-fork, enacts the ledger 8 -> 9 upgrade through the node
 # toolkit's governance `runtime-upgrade`, and asserts the wallet crosses, settles, keeps its balances and restores from
-# its post-fork snapshot. Three bugs found by the hand-run drill (#699, #701, #702) were invisible to every fork test in
+# its post-fork snapshot. Three bugs found by running this scenario by hand (#699, #701, #702) were invisible to every fork test in
 # CI; this is what makes them visible.
 #
 # Why it is NOT part of the required `Tests` gate in ci.yml:
@@ -17,8 +17,8 @@
 #     and the lane has run green nightly for a couple of weeks.
 #
 # So: nightly, on demand (with image tags as inputs, to follow node release candidates), and on PRs that touch the
-# lane's own files — editing the drill exercises the drill.
-name: E2E - hard-fork drill
+# lane's own files — editing the lane exercises the lane.
+name: E2E - hard fork
 
 on:
   schedule:
@@ -52,15 +52,15 @@ on:
         required: false
         default: '9.0.0-rc.7'
   pull_request:
-    # Exactly the lane's own files. Everything else about the drill lives in these six paths, so a PR that does not
-    # touch them cannot change what the drill does.
+    # Exactly the lane's own files. Everything about the lane lives in these six paths, so a PR that does not
+    # touch them cannot change what it does.
     paths:
       - 'infra/compose/docker-compose-fork-dynamic.yml'
       - 'packages/e2e-tests/src/tests/fork-fixture.ts'
       - 'packages/e2e-tests/src/tests/hardFork.fork.test.ts'
       - 'packages/e2e-tests/vitest.config.ts'
       - 'packages/e2e-tests/package.json'
-      - '.github/workflows/e2e-fork-drill.yml'
+      - '.github/workflows/e2e-hard-fork.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
@@ -79,10 +79,10 @@ env:
 permissions: {}
 
 jobs:
-  fork-drill:
-    name: Hard-fork drill
+  hard-fork:
+    name: Hard fork
     runs-on: ubuntu-latest-8-core-x64
-    # The drill is ~6-10 min end to end (spec build + boot ~1 min, indexer ready ~1 min, pre-fork sync ~1 min,
+    # The run is ~6-10 min end to end (spec build + boot ~1 min, indexer ready ~1 min, pre-fork sync ~1 min,
     # governance + finality ~2 min, crossing ~1-2 min). 30 leaves room for a cold image pull without letting a hung
     # Docker stack sit on a runner for the default six hours.
     timeout-minutes: 30
@@ -142,14 +142,14 @@ jobs:
 
       # `test-fork` pulls the fork compose images itself before handing over to vitest, so the tag env above reaches
       # both the pull and the fixture's `DockerComposeEnvironment`.
-      - name: Run hard-fork drill
+      - name: Run hard-fork e2e
         run: yarn turbo test-fork
 
-      - name: Publish hard-fork drill test report
+      - name: Publish hard-fork e2e test report
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
         if: always()
         with:
-          name: Hard-fork drill Junit Test Report
+          name: Hard-fork Junit Test Report
           reporter: java-junit
           path: |
             ./packages/e2e-tests/reports/test-report.xml
@@ -158,9 +158,9 @@ jobs:
       # testcontainers tears the compose project down in afterAll — a workflow step running `docker compose logs` after
       # the test would find nothing left to read. Uploading the whole reports/ directory therefore gets both the junit
       # XML and the container logs a post-mortem actually needs.
-      - name: Upload drill reports and container logs
+      - name: Upload reports and container logs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: fork-drill-reports-${{ github.run_id }}
+          name: hard-fork-reports-${{ github.run_id }}
           path: packages/e2e-tests/reports

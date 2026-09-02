@@ -1,10 +1,10 @@
-# The hard-fork drill stack: a chain whose genesis carries the pre-fork (ledger 8) runtime, running
+# The hard-fork e2e stack: a chain whose genesis carries the pre-fork (ledger 8) runtime, running
 # on the post-fork binary, with the indexer and proof server the smoke lane uses, plus the node
 # toolkit on hand to enact the fork through governance.
 #
 # Driven by `packages/e2e-tests/src/tests/fork-fixture.ts` (vitest project `fork`). Every image tag is
 # overridable so the lane can follow node release candidates without an edit here. Ports bind to
-# `127.0.0.1::<port>` (ephemeral host port) so a hand-run drill stack on the fixed ports can coexist.
+# `127.0.0.1::<port>` (ephemeral host port) so a hand-run stack on the fixed ports can coexist.
 services:
   # One-shot. The OLD release writes the genesis, so the chain starts on the runtime the fork moves
   # off. Runs as root purely to write into the shared volume, and only re-builds if the spec is absent.
@@ -31,7 +31,7 @@ services:
       - no-new-privileges:true
 
   # One-shot. Lifts the new runtime blob out of the new node image into a volume the toolkit can read,
-  # which is what the drill's `hardfork.sh wasm` did with `docker create` + `docker cp` on the host.
+  # in place of a `docker create` + `docker cp` on the host.
   runtime-blob:
     image: 'ghcr.io/midnight-ntwrk/midnight-node:${NODE_TAG:-2.1.0-beta.1}'
     container_name: runtime-blob_$TESTCONTAINERS_UID
@@ -52,7 +52,7 @@ services:
     security_opt:
       - no-new-privileges:true
 
-  # New binary, old chain. `restart: "no"` on purpose: if the boundary breaks the node, the drill
+  # New binary, old chain. `restart: "no"` on purpose: if the boundary breaks the node, the test
   # should show that rather than paper over it with a restart.
   node:
     image: 'ghcr.io/midnight-ntwrk/midnight-node:${NODE_TAG:-2.1.0-beta.1}'

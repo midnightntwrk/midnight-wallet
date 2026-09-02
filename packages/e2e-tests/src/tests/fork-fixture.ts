@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// The fixture behind the hard-fork drill (`hardFork.fork.test.ts`): a chain whose genesis carries
+// The fixture behind the hard-fork e2e (`hardFork.fork.test.ts`): a chain whose genesis carries
 // the pre-fork runtime, running on the post-fork binary, and the means to enact the fork on it.
 //
 // It is deliberately a sibling of `useTestContainersFixture` rather than a mode of it: the stack is
@@ -181,7 +181,7 @@ export function useForkFixture(): () => ForkFixture {
     const environmentVars = buildTestEnvironmentVariables(['APP_INFRA_SECRET'], {
       additionalVars: { TESTCONTAINERS_UID: uid, ...imageTagOverrides() },
     });
-    logger.info(`Spinning up the hard-fork drill stack (project fork-${uid})...`);
+    logger.info(`Spinning up the hard-fork stack (project fork-${uid})...`);
 
     const composeEnvironment: StartedDockerComposeEnvironment = await new DockerComposeEnvironment(
       getComposeDirectory(),
@@ -202,20 +202,20 @@ export function useForkFixture(): () => ForkFixture {
 
     fixture = new ForkFixture(composeEnvironment, uid, environmentVars);
     await fixture.captureContainerLogs();
-    logger.info('Hard-fork drill stack started');
+    logger.info('Hard-fork stack started');
   }, 900_000);
 
   afterAll(async () => {
-    logger.info('Tearing down the hard-fork drill stack...');
+    logger.info('Tearing down the hard-fork stack...');
     await fixture?.down();
-    logger.info('Hard-fork drill stack torn down');
+    logger.info('Hard-fork stack torn down');
   }, 120_000);
 
   return () => fixture!;
 }
 
 /**
- * The hard-fork drill's stack, and the governance call that moves it across the boundary.
+ * The hard-fork e2e's stack, and the governance call that moves it across the boundary.
  *
  * @remarks
  *   Extends {@link TestContainersFixture} for the wallet-configuration accessors the rest of the e2e suite uses, and pins
@@ -285,7 +285,7 @@ export class ForkFixture extends TestContainersFixture {
    *   technical committee are built from — well-known constants, not secrets.
    *
    *   The toolkit runs through `docker compose run` rather than as a testcontainer so it joins the project network and
-   *   reaches the node under its service name, exactly as the manual drill did.
+   *   reaches the node under its service name, exactly as running it by hand did.
    * @returns The spec versions either side of the boundary and the height at which the new code applied.
    * @throws If the governance call fails, if no block ever reports a higher spec version, or if the ledger state is
    *   unreadable at the boundary.

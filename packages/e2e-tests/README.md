@@ -46,19 +46,19 @@ To run tests from a specific file:
 yarn test-e2e src/tests/emptyWallet.universal.test.ts
 ```
 
-## Hard-fork drill
+## Hard-fork e2e
 
-The hard-fork drill is a further e2e sub-project, `fork` (`src/tests/*.fork.test.ts`), and the only lane in which a
-wallet crosses a real protocol boundary. The `undeployed` and `remote` stacks boot the current node on its own genesis,
-so their chain is post-fork from block 1. The drill instead builds a genesis from the _old_ node's spec (ledger 8), runs
-it on the _new_ node binary alongside an indexer and a proof server, syncs a facade wallet pre-fork, enacts the ledger 8
-→ 9 upgrade through the node toolkit's governance `runtime-upgrade`, and then asserts that the wallet crosses, settles
-on the new protocol version with its balances intact, and restores from its post-fork snapshot. Its compose file is
+The hard-fork e2e is a further sub-project, `fork` (`src/tests/*.fork.test.ts`), and the only lane in which a wallet
+crosses a real protocol boundary. The `undeployed` and `remote` stacks boot the current node on its own genesis, so
+their chain is post-fork from block 1. This lane instead builds a genesis from the _old_ node's spec (ledger 8), runs it
+on the _new_ node binary alongside an indexer and a proof server, syncs a facade wallet pre-fork, enacts the ledger 8 →
+9 upgrade through the node toolkit's governance `runtime-upgrade`, and then asserts that the wallet crosses, settles on
+the new protocol version with its balances intact, and restores from its post-fork snapshot. Its compose file is
 `infra/compose/docker-compose-fork-dynamic.yml`.
 
 It then spends what it carried. The chain-side dust replay covers cNIGHT holders only, so a wallet holding native NIGHT
 arrives on the far side with no dust and has to re-register its Night for dust generation before it can pay a fee at
-all; the drill does that, then sends both an unshielded and a shielded transfer to a second wallet started on the same
+all; the test does that, then sends both an unshielded and a shielded transfer to a second wallet started on the same
 forked chain. The shielded one is the sharp end: those coins crossed the boundary as bytes in a translated local state,
 and the spend only succeeds if their Merkle paths still resolve against the post-fork tree.
 
@@ -94,7 +94,7 @@ report lands at `packages/e2e-tests/reports/test-report.xml` as for the other pr
 fixture rather than collected afterwards because testcontainers tears the compose project down as soon as the suite
 ends, leaving nothing for a `docker compose logs` to read.
 
-In CI the drill has its own workflow, `.github/workflows/e2e-fork-drill.yml`: nightly at 02:00 UTC, on demand via
+In CI the lane has its own workflow, `.github/workflows/e2e-hard-fork.yml`: nightly at 02:00 UTC, on demand via
 `workflow_dispatch` (which exposes the five image tags as inputs), and on pull requests that touch the lane's own files.
 It is deliberately not part of the required `Tests` gate — see the comment at the top of that workflow.
 

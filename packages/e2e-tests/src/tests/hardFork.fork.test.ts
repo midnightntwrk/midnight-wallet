@@ -11,12 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// The hard-fork drill, as a test. One facade wallet syncs a chain whose genesis carries the
+// The hard-fork crossing, as a test. One facade wallet syncs a chain whose genesis carries the
 // pre-fork (ledger 8) runtime, the fork is enacted through governance while it watches, and the
 // wallet has to cross to its post-fork variants with the same money it had before.
 //
-// This is the automated form of `.context/hardfork-drill/wallet-drill.mjs` plus the chain-level
-// checks the drill's `hardfork.sh verify` made. It is its own vitest project (`fork`) rather than
+// It is the automated form of the scenario first run by hand: the wallet half, plus the chain-level
+// checks that run's `hardfork.sh verify` step made. It is its own vitest project (`fork`) rather than
 // an `*.undeployed.test.ts`, because it needs a different stack and must never be retried: a retry
 // would re-run against an already-forked chain and fail for an unrelated reason.
 import * as rx from 'rxjs';
@@ -42,7 +42,7 @@ import * as utils from './utils.js';
 import { carried } from './helpers/transactions.js';
 import { logger } from './logger.js';
 
-/** The dev preset's funded account — the same master seed the manual drill runs on. */
+/** The dev preset's funded account. */
 const FUNDED_SEED = '0000000000000000000000000000000000000000000000000000000000000001';
 
 /** An account with nothing on it, which is what makes the post-fork spends' arrival assertions exact. */
@@ -145,7 +145,7 @@ const hasCrossed = (state: FacadeState | undefined): boolean =>
   state.activeProtocolVersion >= V9_NATIVE_FORK_VERSION &&
   state.isSynced;
 
-describe.sequential('Hard fork drill @fork', () => {
+describe.sequential('Hard fork crossing @fork', () => {
   const getFixture = useForkFixture();
 
   let fixture: ForkFixture;

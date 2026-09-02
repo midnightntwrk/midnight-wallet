@@ -392,11 +392,11 @@ integration. They live in the `e2e-tests` package as `*.undeployed.test.ts` and 
 subset on PRs, full suite nightly) — not in the integration matrix. The docs-snippets runner is also e2e and runs in
 that lane while staying in its own package.
 
-`e2e-tests` also holds a fourth e2e sub-project, `fork` (`*.fork.test.ts`, `yarn turbo test-fork`): the hard-fork drill,
-which boots a chain from the pre-fork node's spec, runs it on the current binary, and enacts the real ledger 8 → 9
-runtime upgrade so a wallet crosses an actual protocol boundary — something no other lane does, since every other stack
-is post-fork from block 1. It is in neither the PR smoke lane nor the nightly undeployed run; it has its own
-nightly/dispatch workflow, `.github/workflows/e2e-fork-drill.yml`, and is documented in `packages/e2e-tests/README.md`.
+`e2e-tests` also holds a fourth e2e sub-project, `fork` (`*.fork.test.ts`, `yarn turbo test-fork`): the hard-fork
+crossing, which boots a chain from the pre-fork node's spec, runs it on the current binary, and enacts the real ledger 8
+→ 9 runtime upgrade so a wallet crosses an actual protocol boundary — something no other lane does, since every other
+stack is post-fork from block 1. It is in neither the PR smoke lane nor the nightly undeployed run; it has its own
+nightly/dispatch workflow, `.github/workflows/e2e-hard-fork.yml`, and is documented in `packages/e2e-tests/README.md`.
 New fork-crossing behaviour that needs live infra to exercise belongs there, not in `*.undeployed.test.ts`.
 
 ### Test-Driven Development (MANDATORY)
