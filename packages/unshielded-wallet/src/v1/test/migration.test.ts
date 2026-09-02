@@ -151,6 +151,33 @@ describe('unshielded state migration', () => {
       expect(wallet.publicKey.address).toBe(owner.address);
     });
 
+    it('carries every UTXO as generating no dust, whatever the previous version reported', async () => {
+      // The fork wipes the ledger's dust generation state outright. Its chain-side replay restores generation for
+      // cNIGHT-backed Night only, so a wallet holding native NIGHT arrives on the other side generating nothing —
+      // and the indexer, which reports this flag as a creation-time value it never revises, has no post-fork event
+      // with which to say so. Carrying the previous version's `true` would be carrying a statement about a ledger
+      // that no longer exists. The node's own fork test says the same in the other direction: "the fork wipes dust
+      // state ... the registration funds itself from the retroactive DUST" (`util/toolkit/tests/hardfork_e2e.rs`,
+      // step 5c) — retroactive dust only accrues to Night the ledger considers generationless.
+      //
+      // Known limitation: cNIGHT-backed Night *is* restored chain-side and reads `false` here until its next
+      // sync-time update says otherwise. Nothing breaks for it — the dust wallet decides fee funding from the dust
+      // coins it actually holds, not from this flag, which is display metadata.
+      const utxo = { ...fixtureUtxo(owner, 100n, 4) };
+      const registered = { utxo: utxo.utxo, meta: { ...utxo.meta, registeredForDustGeneration: true } };
+      const previous = previousWallet({ available: [registered], appliedId: 4n, protocolVersion: 7n });
+
+      const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previous));
+      const carried = [...HashMap.values(wallet.state.availableUtxos)][0];
+
+      expect(carried.meta.registeredForDustGeneration).toBe(false);
+      // Everything else about the UTXO is untouched — this is one field, not a re-reading of the UTXO.
+      expect(carried.utxo.value).toBe(registered.utxo.value);
+      expect(carried.utxo.intentHash).toBe(registered.utxo.intentHash);
+      expect(carried.utxo.outputNo).toBe(registered.utxo.outputNo);
+      expect(carried.meta.ctime.getTime()).toBe(registered.meta.ctime.getTime());
+    });
+
     it('leaves the sync cursor exactly where the previous variant left it', async () => {
       const previous = previousWallet({ available: [], appliedId: 4n, protocolVersion: 7n });
 

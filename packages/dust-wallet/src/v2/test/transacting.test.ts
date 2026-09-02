@@ -20,12 +20,14 @@ import {
   makeDefaultCoinsAndBalancesCapability,
   type UtxoWithFullDustDetails,
 } from '../CoinsAndBalances.js';
+import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
 import {
   type DefaultTransactingConfiguration,
   type DefaultTransactingContext,
   makeDefaultTransactingCapability,
 } from '../Transacting.js';
+import { type Dust } from '../types/Dust.js';
 import { ProofMarker, SignatureMarker } from '../Utils.js';
 import { TransactingError } from '../WalletError.js';
 
@@ -69,6 +71,42 @@ const makeUtxoWithDust = (
     generatedNow,
     rate: 1n,
   },
+});
+
+// A dust wallet's own state is what decides whether a Night UTxO still generates dust: every dust coin the wallet
+// holds names the Night that backs it (`backingNight`), and a Night UTxO's own initial nonce is derivable from its
+// intent hash and output number. The fixtures below build states holding, or not holding, such a coin — which is the
+// only thing the ledger's `generationless_fee_availability` rule looks at.
+const dustSecretKey = ledger.DustSecretKey.fromSeed(Uint8Array.from({ length: 32 }, (_, i) => (i * 7 + 3) % 256));
+const dustParameters = ledger.LedgerParameters.initialParameters().dust;
+
+const emptyDustWallet = (): CoreWallet =>
+  CoreWallet.initEmpty(dustParameters, dustSecretKey, NetworkId.NetworkId.Undeployed);
+
+/** The dust coin the ledger mints when `utxo` is registered: one whose `backingNight` is that UTxO's initial nonce. */
+const dustCoinBacking = (utxo: UtxoWithFullDustDetails, nonce: bigint): Dust => ({
+  initialValue: 1_000n,
+  owner: dustSecretKey.publicKey,
+  nonce,
+  seq: 0,
+  ctime: new Date(0),
+  backingNight: ledger.dustInitialNonce(BigInt(utxo.utxo.outputNo), utxo.utxo.intentHash),
+  mtIndex: 0n,
+});
+
+/** A wallet whose confirmed dust holdings are exactly `coins`. */
+const walletHolding = (coins: readonly Dust[]): CoreWallet => {
+  const base = emptyDustWallet();
+  return {
+    ...base,
+    state: coins.reduce((state, coin) => state.addUtxo(ledger.dustNullifier(coin, dustSecretKey), coin), base.state),
+  };
+};
+
+/** A wallet whose dust holdings are exactly `coins`, all of them booked against a transaction in flight. */
+const walletPending = (coins: readonly Dust[]): CoreWallet => ({
+  ...emptyDustWallet(),
+  pendingDust: coins.map((coin) => ({ ...coin, nullifier: ledger.dustNullifier(coin, dustSecretKey) })),
 });
 
 const sampleVerifyingKey = (): ledger.SignatureVerifyingKey => ledger.signatureVerifyingKey(ledger.sampleSigningKey());
@@ -120,43 +158,103 @@ describe('splitNightUtxosForDustRegistration', () => {
   // The real splitNightUtxos sorts by `dust.generatedNow` descending and takes the first as
   // the guaranteed slot; the rest go to fallible. The tests below pick generatedNow values
   // explicitly so the guaranteed-vs-fallible split is predictable.
+  //
+  // What a UTxO may contribute to `feePayment` is the ledger's `generationless_fee_availability`: only Night whose
+  // initial nonce the chain does NOT hold a generation for earns the retroactive dust a registration can spend on
+  // its own fee. The wallet reads that off its own dust holdings, not off the indexer's `registeredForDustGeneration`
+  // flag — which is a creation-time reading and, after a hard fork wipes dust state, a stale one.
 
-  it('registration: feePayment equals generatedNow of the guaranteed UTxO when it is unregistered', () => {
+  it('registration: feePayment equals generatedNow of the guaranteed UTxO when no dust coin backs it', () => {
     const guaranteed = makeUtxoWithDust(0, 1_000n, 200n, false); // highest dust → guaranteed
     const fallible = makeUtxoWithDust(1, 1_000n, 100n, false);
 
-    const result = transacting.splitNightUtxosForDustRegistration([guaranteed, fallible], true);
+    const result = transacting.splitNightUtxosForDustRegistration(emptyDustWallet(), [guaranteed, fallible], true);
 
     expect(result.feePayment).toBe(200n);
     expect(result.guaranteedUtxos).toEqual([guaranteed]);
     expect(result.fallibleUtxos).toEqual([fallible]);
+    expect(result.hasGenerationlessGuaranteed).toBe(true);
   });
 
-  it('registration: feePayment is 0n when the guaranteed UTxO is already registered', () => {
-    const guaranteed = makeUtxoWithDust(0, 1_000n, 200n, true); // already registered → excluded from fee
-    const fallible = makeUtxoWithDust(1, 1_000n, 100n, false);
+  it('registration: a UTxO the indexer still flags as registered funds the fee when no dust coin backs it', () => {
+    // The post-fork case. The fork wipes dust state and the chain-side replay restores cNIGHT-backed generation
+    // only, so a native-NIGHT holder arrives with no dust at all — while every carried UTxO still reports the flag
+    // it was created with. The registration that repairs this must pay its own fee out of retroactive dust.
+    const guaranteed = makeUtxoWithDust(0, 1_000n, 200n, true);
+    const fallible = makeUtxoWithDust(1, 1_000n, 100n, true);
 
-    const result = transacting.splitNightUtxosForDustRegistration([guaranteed, fallible], true);
+    const result = transacting.splitNightUtxosForDustRegistration(emptyDustWallet(), [guaranteed, fallible], true);
+
+    expect(result.feePayment).toBe(200n);
+    expect(result.hasGenerationlessGuaranteed).toBe(true);
+  });
+
+  it('registration: feePayment is 0n when a dust coin in state backs the guaranteed UTxO', () => {
+    // The re-registration case, decided by the wallet's own holdings rather than by the flag: this UTxO's flag says
+    // unregistered, and the dust coin backing it says otherwise. The chain would reject a fee payment claimed for it.
+    const guaranteed = makeUtxoWithDust(0, 1_000n, 200n, false);
+    const fallible = makeUtxoWithDust(1, 1_000n, 100n, false);
+    const state = walletHolding([dustCoinBacking(guaranteed, 1n)]);
+
+    const result = transacting.splitNightUtxosForDustRegistration(state, [guaranteed, fallible], true);
 
     expect(result.feePayment).toBe(0n);
     expect(result.guaranteedUtxos).toEqual([guaranteed]);
+    expect(result.hasGenerationlessGuaranteed).toBe(false);
+  });
+
+  it('registration: a dust coin booked against a transaction in flight backs its Night just as a confirmed one does', () => {
+    const guaranteed = makeUtxoWithDust(0, 1_000n, 200n, true);
+    const state = walletPending([dustCoinBacking(guaranteed, 2n)]);
+
+    const result = transacting.splitNightUtxosForDustRegistration(state, [guaranteed], true);
+
+    expect(result.feePayment).toBe(0n);
+    expect(result.hasGenerationlessGuaranteed).toBe(false);
   });
 
   it('deregistration: feePayment is 0n even when the guaranteed UTxO has generated dust', () => {
     const u1 = makeUtxoWithDust(0, 1_000n, 200n, false);
     const u2 = makeUtxoWithDust(1, 1_000n, 100n, false);
 
-    const result = transacting.splitNightUtxosForDustRegistration([u1, u2], false);
+    const result = transacting.splitNightUtxosForDustRegistration(emptyDustWallet(), [u1, u2], false);
 
     expect(result.feePayment).toBe(0n);
   });
 
   it('empty input yields empty guaranteed/fallible lists and 0n feePayment', () => {
-    const result = transacting.splitNightUtxosForDustRegistration([], true);
+    const result = transacting.splitNightUtxosForDustRegistration(emptyDustWallet(), [], true);
 
     expect(result.guaranteedUtxos).toEqual([]);
     expect(result.fallibleUtxos).toEqual([]);
     expect(result.feePayment).toBe(0n);
+    expect(result.hasGenerationlessGuaranteed).toBe(false);
+  });
+});
+
+describe('isGenerationless', () => {
+  const coinsAndBalances = context.coinsAndBalancesCapability;
+
+  it('calls a Night UTxO generationless when no dust coin in the wallet names it as its backing Night', () => {
+    const utxo = makeUtxoWithDust(3, 1_000n, 0n, true);
+
+    expect(coinsAndBalances.isGenerationless(emptyDustWallet(), utxo.utxo)).toBe(true);
+  });
+
+  it('does not, once the wallet holds a dust coin whose backingNight is that UTxO initial nonce', () => {
+    const utxo = makeUtxoWithDust(3, 1_000n, 0n, false);
+    const state = walletHolding([dustCoinBacking(utxo, 5n)]);
+
+    expect(coinsAndBalances.isGenerationless(state, utxo.utxo)).toBe(false);
+  });
+
+  it('reads the backing per UTxO, not per wallet: another UTxO dust coin says nothing about this one', () => {
+    const registered = makeUtxoWithDust(3, 1_000n, 0n, false);
+    const other = makeUtxoWithDust(4, 1_000n, 0n, false);
+    const state = walletHolding([dustCoinBacking(registered, 5n)]);
+
+    expect(coinsAndBalances.isGenerationless(state, registered.utxo)).toBe(false);
+    expect(coinsAndBalances.isGenerationless(state, other.utxo)).toBe(true);
   });
 });
 

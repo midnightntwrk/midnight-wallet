@@ -64,6 +64,7 @@ export const dustAt = (state: DustWalletState, version: ProtocolVersion.Protocol
     publicKey: () => state.publicKey,
     address: () => state.address,
     balance: (time) => state.balance(time),
+    isGenerationless: (utxo) => state.isGenerationless(utxo),
     estimateDustGeneration: (utxos, time) => state.estimateDustGeneration(utxos, time),
     splitNightUtxos: (utxos) => state.splitNightUtxos(utxos),
     serialize: () => state.serialize(),
