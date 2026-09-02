@@ -70,6 +70,18 @@
       "cache": false,
       "env": ["NETWORK", "APP_INFRA_SECRET"]
     },
+    "test-fork": {
+      "cache": false,
+      "env": [
+        "NETWORK",
+        "APP_INFRA_SECRET",
+        "FORK_FROM_NODE_TAG",
+        "NODE_TAG",
+        "TOOLKIT_TAG",
+        "INDEXER_TAG",
+        "PROOF_SERVER_TAG"
+      ]
+    },
     "test-remote": {
       "cache": false,
       "env": [
