@@ -67,6 +67,15 @@ export type CoinsAndBalancesCapability<TState> = {
    *   a native-NIGHT wallet's carried UTxOs all still say `true` while nothing they own generates a speck. It remains
    *   useful as display metadata; it may not decide fee funding.
    *
+   *   **Known limitation, deliberately accepted for now.** Night registered to generate Dust for _another_ wallet has
+   *   generation on the ledger but no coin here, so this reads it as generationless: a later re-registration by this
+   *   wallet would claim a self-funding allowance the ledger does not grant and be refused with
+   *   `InsufficientDustForRegistrationFee` — it fails closed, but a redesignation from a delegating wallet cannot be
+   *   built until then. The flag is the only signal that could tell those apart, and it cannot be trusted yet: the
+   *   indexer reports it as of the UTxO's creation and never revises it (verified post-fork: genesis outputs still read
+   *   `true` while the node holds no generation for them). Once the indexer reports it as of the queried block, combine
+   *   the two — generationless iff no backing coin AND the flag is false — and this limitation goes away.
+   *
    *   Registration mints exactly one Dust coin per Night UTxO, naming it in `backingNight`, and spending Dust replaces
    *   that coin with a successor carrying the same `backingNight` — so a Night UTxO that generates for this wallet
    *   always has a coin here, available or booked, and one that does not, has none.

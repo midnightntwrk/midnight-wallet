@@ -24,3 +24,10 @@ reports carried Night UTxOs as generating no dust, which is what the ledger says
 fee at all; `claimableFeePayment(dustState, nightUtxos, now)` is exported from the dust wallet for callers that want
 the amount `waitForGeneratedDust` waits on. Callers of the dust wallet's public API are unaffected — the added state
 argument is internal to the variant capabilities.
+
+Known limitation, deliberately accepted until the indexer reports `registeredForDustGeneration` as of the queried block
+rather than as of the UTxO's creation: Night registered to generate dust for _another_ wallet has no dust coin in the
+registering wallet, so it reads as generationless there, and a later re-registration by that wallet would claim a
+self-funding allowance the ledger does not grant. The node refuses it (`InsufficientDustForRegistrationFee`), so nothing
+is lost, but such a redesignation cannot be built for now. When the indexer flag becomes trustworthy the rule will
+combine both signals: generationless iff no backing dust coin and the flag is false.
