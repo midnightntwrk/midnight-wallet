@@ -610,6 +610,17 @@ export const doEventlessSync = (
         Number(lastSyncedCommitmentIndex) +
         state.state.nullifiers.size * Number(maxCommitmentTreeIndex);
 
+      // What this pass resumed from, in one line. A projections pass is a single snapshot fetch, so when it comes back
+      // with less than expected the only question worth asking is where it started — and the three cursors that decide
+      // that are otherwise invisible to anything outside this function, including to a wallet that arrived here by
+      // migration and is running its first pass on the far side of a fork.
+      yield* Effect.logDebug(
+        `Projections sync resuming from block height ${lastSyncedBlockHeight}, generation index` +
+          ` ${lastSyncedGenerationIndex}, commitment index ${lastSyncedCommitmentIndex}; chain at block` +
+          ` ${latestBlock.height} with generation index ${maxGeneratingTreeIndex} and commitment index` +
+          ` ${maxCommitmentTreeIndex}`,
+      );
+
       yield* Effect.promise(() =>
         emit.single(ProgressUpdate({ highestRelevantIndex: highestInitialIndex, appliedIndex: initialAppliedIndex })),
       );
