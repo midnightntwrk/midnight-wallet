@@ -265,12 +265,15 @@ export type CustomWallets = {
    *
    * @remarks
    *   Typed by what a start actually owes the facade rather than by `DustWalletClass`, so a **single-variant**
-   *   composition is still acceptable here — which is the only way the projections fast-sync path can be exercised.
-   *   That path is a post-fork capability (it needs `DustLocalState` APIs no pre-fork ledger has), so a two-variant
-   *   wallet would boot on the pre-fork variant, replay every event, and only reach projections after migrating.
+   *   composition is still acceptable here — which is the shortest way to exercise the projections fast-sync path on a
+   *   chain that is post-fork from its first block. That path is a post-fork capability (it needs `DustLocalState` APIs
+   *   no pre-fork ledger has), so a two-variant wallet boots on the pre-fork variant, replays every event, and reaches
+   *   projections only after migrating — which on a chain that actually forks is the thing worth testing, and is why a
+   *   start that resolves asynchronously is accepted too: a wallet spanning a boundary may ask the chain where it is
+   *   before it chooses a variant to start at.
    */
   dustWallet?: (config: DefaultDustConfiguration) => {
-    startWithSeed(seed: Uint8Array, dustParameters?: ledger.DustParameters): DustWalletAPI;
+    startWithSeed(seed: Uint8Array, dustParameters?: ledger.DustParameters): DustWalletAPI | Promise<DustWalletAPI>;
   };
   manualSync?: boolean;
 };

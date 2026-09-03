@@ -115,6 +115,23 @@ const immediateHistoryService = (recorded: Ref.Ref<number>): TransactionHistoryS
   put: () => Ref.update(recorded, (n) => n + 1),
 });
 
+/**
+ * A sync service that counts how many times it was asked for updates and whose stream ends after a single batch.
+ *
+ * @remarks
+ *   The shape of a source that hands over a snapshot rather than following the chain — which is what the projections sync
+ *   service is. How often it was opened is therefore how many synchronization passes actually ran.
+ */
+const countingSyncService = (subscriptions: Ref.Ref<number>): SyncService<CoreWallet, null, FakeSyncUpdate> => ({
+  updates: () =>
+    Stream.unwrap(
+      Ref.update(subscriptions, (n) => n + 1).pipe(
+        Effect.as(Stream.fromIterable([['a1']] as readonly FakeSyncUpdate[])),
+      ),
+    ),
+  blockData: () => syncServiceOf([]).blockData(),
+});
+
 const variantContextOf = (
   batches: readonly FakeSyncUpdate[],
   transactionHistoryService: TransactionHistoryService,
@@ -273,21 +290,11 @@ describe('RunningV1Variant sync serialization', () => {
       const subscriptions = yield* Ref.make(0);
       const recorded = yield* Ref.make(0);
 
-      const countingSyncService: SyncService<CoreWallet, null, FakeSyncUpdate> = {
-        updates: () =>
-          Stream.unwrap(
-            Ref.update(subscriptions, (n) => n + 1).pipe(
-              Effect.as(Stream.fromIterable([['a1']] as readonly FakeSyncUpdate[])),
-            ),
-          ),
-        blockData,
-      };
-
       const { stateRef, scope } = yield* stateAndScope();
       const variant = new RunningV1Variant(
         scope,
         { stateRef, activationRange: fullRange },
-        variantContextOf([], immediateHistoryService(recorded), countingSyncService),
+        variantContextOf([], immediateHistoryService(recorded), countingSyncService(subscriptions)),
       );
 
       yield* variant.sync(null);
@@ -295,6 +302,37 @@ describe('RunningV1Variant sync serialization', () => {
       yield* Scope.close(scope, Exit.void);
 
       return yield* Ref.get(subscriptions);
+    }).pipe(Effect.runPromise);
+
+    expect(result).toBe(2);
+  });
+
+  it('runs a further pass after a background drain whose stream ended', async () => {
+    // The twin of the post-fork variant's pin. This variant never runs the projections source — no published pre-fork
+    // ledger has the state APIs it needs — but the runner is shared by both sync styles, so the rule it depends on is
+    // asserted here too rather than left to hold by accident.
+    const result = await Effect.gen(function* () {
+      const subscriptions = yield* Ref.make(0);
+      const recorded = yield* Ref.make(0);
+
+      const { stateRef, scope } = yield* stateAndScope();
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef, activationRange: fullRange },
+        variantContextOf([], immediateHistoryService(recorded), countingSyncService(subscriptions)),
+      );
+
+      yield* variant.startSyncInBackground(null);
+      // Nothing in the background pass waits on anything: once the source has been opened, the fiber only has to be
+      // let run. Waiting for the count and then yielding the thread is enough for it to have finished.
+      yield* Effect.repeat(Ref.get(subscriptions), { until: (count) => count > 0 });
+      yield* Effect.sleep(Duration.millis(50));
+
+      yield* variant.sync(null);
+      const opened = yield* Ref.get(subscriptions);
+      yield* Scope.close(scope, Exit.void);
+
+      return opened;
     }).pipe(Effect.runPromise);
 
     expect(result).toBe(2);

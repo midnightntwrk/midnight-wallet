@@ -35,11 +35,21 @@ import {
   type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import {
+  asPreForkDustParameters,
+  CustomForkingDustWallet,
+  type DefaultDustConfiguration,
+  DustWallet,
+  makeEventLessSyncCapability,
+  makeEventLessSyncService,
+} from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { Migration, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import { type FacadeState, type WalletEntry, WalletFacade } from '@midnightntwrk/wallet-sdk-facade';
 import { type ForkFixture, useForkFixture } from './fork-fixture.js';
 import * as utils from './utils.js';
 import { carried } from './helpers/transactions.js';
+import { rootsEqual, sameDustCoins } from './helpers/dustComparison.js';
 import { logger } from './logger.js';
 
 /** The dev preset's funded account. */
@@ -139,6 +149,69 @@ const stateWhere = (
 ): Promise<FacadeState> =>
   rx.firstValueFrom(wallet.state().pipe(rx.filter(settled), failingAfter(label, milliseconds)));
 
+/**
+ * A wallet's states, each paired with the sequence of protocol phases observed up to it.
+ *
+ * @remarks
+ *   Replayed and reference-counted off, so a later subscriber sees the phases that were observed before it arrived — a
+ *   crossing that has already happened must still be readable by the test that asserts it.
+ */
+const trackPhases = (facade: WalletFacade): rx.Observable<Tracked> =>
+  facade.state().pipe(
+    rx.scan<FacadeState, Tracked>(
+      (accumulated, state) => {
+        const phase = phaseOf(state);
+        return {
+          state,
+          phases: accumulated.phases.at(-1) === phase ? accumulated.phases : [...accumulated.phases, phase],
+        };
+      },
+      { state: undefined, phases: [] },
+    ),
+    rx.shareReplay({ bufferSize: 1, refCount: false }),
+  );
+
+/**
+ * The dust wallet the projections twin runs: the shipped two-variant composition, with the post-fork variant's
+ * synchronization swapped for the projections fast sync.
+ *
+ * @remarks
+ *   The one composition no other suite reaches. `projectionsBasedSync.undeployed.test.ts` exercises projections on a
+ *   chain that is post-fork from its first block, so it can use a single-variant wallet and never crosses anything; the
+ *   shipped `DustWallet` crosses but syncs by events on both sides. This one does both: the pre-fork variant reads the
+ *   chain by event replay, hands its state to {@link Migration.makeCrossLedgerMigration}, and everything after the
+ *   boundary is read by `makeEventLessSyncService` — which means a synced post-fork state _is_ the proof that the
+ *   projections path ran on a migrated state.
+ *
+ *   No `chainVersionProbe` is configured, deliberately: this chain's genesis carries the pre-fork runtime, so the probe
+ *   the shipped wallet defaults to would answer "pre-fork" and choose exactly the variant a wallet with no probe starts
+ *   on. Leaving it out keeps the crossing this test is about the only thing being tested.
+ */
+const projectionsTwinDustWallet = (configuration: DefaultDustConfiguration) => {
+  const dustParameters = configuration.dustParameters ?? ledger.LedgerParameters.initialParameters().dust;
+  return CustomForkingDustWallet(
+    configuration,
+    {
+      builder: new V1Builder().withDefaults(),
+      // The one field that cannot be shared, exactly as the shipped composition handles it: `dustParameters` is a WASM
+      // object of whichever ledger module produced it, so the pre-fork variant gets the pre-fork rebuild of the rates.
+      configuration: { ...configuration, dustParameters: asPreForkDustParameters(dustParameters) },
+    },
+    {
+      builder: new V2Builder()
+        .withDefaults()
+        .withSync(makeEventLessSyncService, makeEventLessSyncCapability)
+        // Restated because `withSync` drops it: a sync service names the key material it is started with, so choosing
+        // one un-chooses whatever derivation the previous choice had. This service is started with the same
+        // `DustSecretKey` the default one is, and a two-variant wallet needs the derivation by name — it is how a
+        // start from a seed answers for both sides of the boundary at once.
+        .withStartAuxDefaults()
+        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters })),
+      configuration,
+    },
+  );
+};
+
 const hasCrossed = (state: FacadeState | undefined): boolean =>
   state !== undefined &&
   state.protocol._tag === 'Settled' &&
@@ -157,6 +230,35 @@ describe.sequential('Hard fork crossing @fork', () => {
   let enactment: Awaited<ReturnType<ForkFixture['enactFork']>>;
   let postFork: FacadeState;
   let receiver: utils.WalletInit | undefined;
+  let twin: utils.WalletInit;
+  let twinTracked: rx.Observable<Tracked>;
+  let twinSubscription: rx.Subscription;
+
+  /**
+   * Both wallets' dust holdings at one of the comparison points, so a failure has the numbers next to it.
+   *
+   * @remarks
+   *   `progress.highestIndex` is logged with them because it is the cursor the projections sync resumes from, read as a
+   *   block height. Only the projections path ever writes it, so the value the twin carries while it is still on the
+   *   event path — the one at the pre-fork comparison — is exactly what the migration parks and hands to the first
+   *   post-fork pass.
+   */
+  const logDustCounts = (label: string, eventsState: FacadeState, twinState: FacadeState): void => {
+    logger.info(
+      `${label} dust coins: events=${eventsState.dust.state.state.utxos.length}` +
+        ` projections=${twinState.dust.state.state.utxos.length};` +
+        ` seq events=[${eventsState.dust.state.state.utxos.map((utxo) => utxo.seq).join(',')}]` +
+        ` projections=[${twinState.dust.state.state.utxos.map((utxo) => utxo.seq).join(',')}];` +
+        ` highestIndex events=${eventsState.dust.state.progress.highestIndex}` +
+        ` projections=${twinState.dust.state.progress.highestIndex}`,
+    );
+  };
+
+  /** The twin, re-synced by hand: its post-fork sync hands over one snapshot and ends, rather than following the chain. */
+  const resyncTwin = async (): Promise<FacadeState> => {
+    await twin.wallet.doSync(twin.seeds);
+    return await twin.wallet.waitForSyncedState();
+  };
 
   beforeAll(async () => {
     fixture = getFixture();
@@ -179,30 +281,34 @@ describe.sequential('Hard fork crossing @fork', () => {
     });
     await wallet.start(seeds);
 
-    tracked = wallet.state().pipe(
-      rx.scan<FacadeState, Tracked>(
-        (accumulated, state) => {
-          const phase = phaseOf(state);
-          return {
-            state,
-            phases: accumulated.phases.at(-1) === phase ? accumulated.phases : [...accumulated.phases, phase],
-          };
-        },
-        { state: undefined, phases: [] },
-      ),
-      rx.shareReplay({ bufferSize: 1, refCount: false }),
-    );
+    tracked = trackPhases(wallet);
     subscription = tracked
       .pipe(
         rx.map(({ state }) => (state === undefined ? '' : summarize(state))),
         rx.distinctUntilChanged(),
       )
       .subscribe((line) => logger.info(`STATE ${line}`));
+
+    // Registered before the fork, on the same funded seed, so that it genuinely crosses: a twin attached afterwards
+    // would start on the post-fork variant and prove nothing about the hand-over. It only reads — every transaction in
+    // this file is built by the wallet above.
+    twin = await utils.initWalletWithSeed(FUNDED_SEED, fixture, 'schnorr', {
+      dustWallet: projectionsTwinDustWallet,
+    });
+    twinTracked = trackPhases(twin.wallet);
+    twinSubscription = twinTracked
+      .pipe(
+        rx.map(({ state }) => (state === undefined ? '' : summarize(state))),
+        rx.distinctUntilChanged(),
+      )
+      .subscribe((line) => logger.info(`TWIN STATE ${line}`));
   }, 300_000);
 
   afterAll(async () => {
     subscription?.unsubscribe();
+    twinSubscription?.unsubscribe();
     await wallet?.stop();
+    await twin?.wallet.stop();
     await receiver?.wallet.stop();
   }, 60_000);
 
@@ -219,6 +325,31 @@ describe.sequential('Hard fork crossing @fork', () => {
     expect(preFork.unshielded.balances[NIGHT]).toBeGreaterThan(0n);
     expect(Object.keys(preFork.shielded.balances).length).toBeGreaterThan(0);
   });
+
+  test(
+    'the projections twin holds the same dust on the pre-fork chain',
+    async () => {
+      // Both wallets read the chain by event replay here — the twin's projections sync belongs to its post-fork
+      // variant, which no chain below the boundary activates. This is the baseline the later comparisons move from:
+      // whatever the two disagree about after the fork cannot be blamed on them having started out apart.
+      const twinState = await within(
+        'the projections twin to sync to the pre-fork tip',
+        CROSSING_TIMEOUT_MS,
+        twin.wallet.waitForSyncedState(),
+      );
+      const eventsState = await wallet.waitForSyncedState();
+      logDustCounts('A pre-fork', eventsState, twinState);
+      logger.info(
+        'A the cursor the twin will carry across the fork, and the one its first projections pass will resume from:' +
+          ` ${twinState.dust.state.progress.highestIndex}`,
+      );
+
+      expect(twinState.protocolVersion.dust).toBeLessThan(V9_NATIVE_FORK_VERSION);
+      expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+    },
+    CROSSING_TIMEOUT_MS,
+  );
 
   test('enacts the ledger 8 to 9 hard fork through governance', async () => {
     enactment = await fixture.enactFork();
@@ -251,6 +382,32 @@ describe.sequential('Hard fork crossing @fork', () => {
     expect(firstCrossing).toBeLessThan(observed.phases.length - 1);
     expect(observed.phases.at(-1)).toBe(phaseOf(postFork));
   });
+
+  test(
+    'the projections twin crosses onto the projections sync',
+    async () => {
+      const observed = await rx.firstValueFrom(
+        twinTracked.pipe(
+          rx.filter(({ state }) => hasCrossed(state)),
+          rx.take(1),
+          rx.timeout({ first: CROSSING_TIMEOUT_MS }),
+        ),
+      );
+      const twinState = observed.state!;
+      const eventsState = await wallet.waitForSyncedState();
+      logger.info(`TWIN POST-FORK SETTLED ${summarize(twinState)}`);
+      logger.info(`twin phase transitions observed: ${observed.phases.join('  ->  ')}`);
+      logDustCounts('B post-fork', eventsState, twinState);
+
+      expect(twinState.protocol._tag).toBe('Settled');
+      expect(twinState.activeProtocolVersion).toBeGreaterThanOrEqual(V9_NATIVE_FORK_VERSION);
+      expect(twinState.isSynced).toBe(true);
+      // The twin's post-fork variant has exactly one synchronization — the projections one — so a settled post-fork
+      // state is itself the proof that the projections path ran, and ran on a state produced by the migration.
+      expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+    },
+    CROSSING_TIMEOUT_MS + 60_000,
+  );
 
   test('carries its balances across the boundary', () => {
     logger.info(
@@ -348,6 +505,29 @@ describe.sequential('Hard fork crossing @fork', () => {
       expect(registered.unshielded.balances[NIGHT]).toBe(postFork.unshielded.balances[NIGHT]);
     },
     15 * 60 * 1000,
+  );
+
+  test(
+    'the projections twin sees the post-fork re-registration',
+    async () => {
+      // The first projections pass on a migrated state that has something to find. The registration is post-fork, so
+      // nothing the pre-fork variant ever applied accounts for this dust — the twin can only be holding it because the
+      // projections path fetched it, resuming from whatever cursor the migration parked.
+      const eventsState = await wallet.waitForSyncedState();
+      const twinState = await within('the projections twin to re-sync', DUST_TIMEOUT_MS, resyncTwin());
+      logDustCounts('C after the re-registration', eventsState, twinState);
+
+      const now = new Date();
+      logger.info(
+        `C dust balances: events=${eventsState.dust.balance(now)} projections=${twinState.dust.balance(now)}`,
+      );
+
+      expect(eventsState.dust.state.state.utxos.length).toBeGreaterThan(0);
+      expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(twinState.dust.balance(now)).toBe(eventsState.dust.balance(now));
+    },
+    DUST_TIMEOUT_MS + 60_000,
   );
 
   test(
@@ -514,5 +694,27 @@ describe.sequential('Hard fork crossing @fork', () => {
       expect(receiverAfter.shielded.balances[shieldedToken]).toBe(TRANSFER_AMOUNT);
     },
     20 * 60 * 1000,
+  );
+
+  test(
+    'the projections twin sees the dust the post-fork spends paid with',
+    async () => {
+      // Both spends paid their fee in dust, so each consumed a dust UTxO and left its successor behind. A projections
+      // pass reads that as a snapshot rather than as a spend event, and has to arrive at the same holdings.
+      const eventsState = await wallet.waitForSyncedState();
+      const twinState = await within('the projections twin to re-sync', DUST_TIMEOUT_MS, resyncTwin());
+      logDustCounts('D after the two spends', eventsState, twinState);
+
+      const now = new Date();
+      logger.info(
+        `D dust balances: events=${eventsState.dust.balance(now)} projections=${twinState.dust.balance(now)}`,
+      );
+
+      expect(eventsState.dust.state.state.utxos.length).toBeGreaterThan(0);
+      expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(twinState.dust.balance(now)).toBe(eventsState.dust.balance(now));
+    },
+    DUST_TIMEOUT_MS + 60_000,
   );
 });

@@ -12,7 +12,6 @@
 // limitations under the License.
 import { describe, test, expect } from 'vitest';
 import * as rx from 'rxjs';
-import { Array as Arr } from 'effect';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import * as utils from './utils.js';
@@ -28,6 +27,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import { carried } from './helpers/transactions.js';
+import { dustStatesEqual, rootsEqual, sameItems, stringifyWithBigInts } from './helpers/dustComparison.js';
 
 /** @group undeployed */
 
@@ -73,30 +73,6 @@ describe('Projections-based synchronisation model', () => {
     await receiverEventsSynced.wallet.stop();
     await receiver.wallet.stop();
   }, 20_000);
-
-  const stringifyWithBigInts = (value: unknown) =>
-    JSON.stringify(value, (_, v: unknown) => (typeof v === 'bigint' ? v.toString() : v));
-
-  const sameItems = <T>(left: readonly T[], right: readonly T[], equal: (leftItem: T, rightItem: T) => boolean) =>
-    left.length === right.length &&
-    Arr.differenceWith<T>(equal)(left, right).length === 0 &&
-    Arr.differenceWith<T>(equal)(right, left).length === 0;
-
-  // The dust state a facade emission carries is whichever variant produced it, so this reads the union rather than
-  // ledger-v9's class by name. Both versions declare everything compared below.
-  type SyncedDustState = FacadeState['dust']['state']['state'];
-
-  const rootsEqual = (state1: SyncedDustState, state2: SyncedDustState) =>
-    state1.commitmentTreeRoot() === state2.commitmentTreeRoot() &&
-    state1.generatingTreeRoot() === state2.generatingTreeRoot();
-
-  const dustStatesEqual = (state1: SyncedDustState, state2: SyncedDustState) =>
-    rootsEqual(state1, state2) &&
-    sameItems(
-      state1.utxos,
-      state2.utxos,
-      (utxo1, utxo2) => stringifyWithBigInts(utxo1) === stringifyWithBigInts(utxo2),
-    );
 
   const unshieldedCoinsEqual = (coins1: readonly UtxoWithMeta[], coins2: readonly UtxoWithMeta[]) =>
     sameItems(
