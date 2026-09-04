@@ -64,10 +64,12 @@ const initWalletWithSeed = async (seed: Buffer) => {
     shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
     dust: (config) => DustWallet(config).startWithSeed(seeds.dust),
-    // In-process proving instead of a proof server. The prover is built against the post-fork ledger's circuits, so it
-    // is registered from `forkVersion` — the same way a proof server is under `provingServers`. A transaction is proved
-    // by the backend registered for the version its own bytes were authored at, and one authored below the boundary is
-    // refused (`UnsupportedProvingVersionError`) rather than proved with the wrong circuits.
+    // In-process proving instead of a proof server. The prover holds the post-fork ledger's circuits, so it answers
+    // from `forkVersion`, the way a proof server does under `provingServers`: a transaction is proved by the backend
+    // registered for the version its own bytes were authored at. The pre-fork ledger has no in-process prover, so on a
+    // chain below the boundary that range is served by a proof server built for it — one more entry in the same
+    // registry, `{ range: makeRange(MinSupportedVersion, forkVersion), value: makeServerProvingServiceEffect({ url }) }`,
+    // once such a server is deployed. Until then this wallet proves nothing below `forkVersion`.
     provingService: () =>
       wrapVersionedEffectService(makeVersionedProvingServiceEffect(makeWasmProvingServices(V9_NATIVE_FORK_VERSION))),
   });

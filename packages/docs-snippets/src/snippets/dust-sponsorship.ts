@@ -10,8 +10,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
-import { generateRandomSeed, Token, type UnboundTx, WalletTransaction } from '@midnightntwrk/wallet-sdk';
+import * as v8 from '@midnightntwrk/wallet-sdk/ledger/v8';
+import * as v9 from '@midnightntwrk/wallet-sdk/ledger/v9';
+import {
+  type FacadeState,
+  generateRandomSeed,
+  Token,
+  type UnboundTx,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { aFakeProvingProvider, configuration, initWalletWithSeed } from '../utils.ts';
@@ -67,43 +74,39 @@ const userReceivedNight = await rx.firstValueFrom(
 );
 console.log('User received night for main transaction', userReceivedNight.unshielded.balances[Token.night]);
 
-// Authoring is choosing a ledger version, and the module imported above is the post-fork one. A transaction it builds
-// is sealed with the version the wallets are acting at, which is what every wallet entry point checks a handle against.
-// Below the boundary the import would be `@midnightntwrk/wallet-sdk/ledger/v8`, so this example refuses to run there
-// rather than hand post-fork bytes to a wallet on the pre-fork ledger.
-const authoredFor = userReceivedNight.activeProtocolVersion;
-if (authoredFor < configuration.forkVersion) {
-  throw new Error(
-    `This example authors with the post-fork ledger, but the chain is at protocol version ${authoredFor}`,
-  );
-}
-
-const prepareTransactionToBalance = async (): Promise<UnboundTx> => {
-  const unshieldedOffer = ledger.UnshieldedOffer.new(
-    [],
-    [
-      {
-        value: nightAmountToSend,
-        owner: sponsor.unshieldedKeystore.getAddress(),
-        type: Token.night,
-      },
-    ],
-    [],
-  );
-  const intent = ledger.Intent.new(new Date(Date.now() + 30 * 60 * 1000));
-  intent.fallibleUnshieldedOffer = unshieldedOffer;
-  const unprovenTransaction = ledger.Transaction.fromParts(configuration.networkId, undefined, undefined, intent);
+// Authoring is choosing a ledger version, and the wallet says which: the version the wallets are acting at decides
+// whether the bytes follow the pre-fork ledger's rules or the post-fork one's. It is read when the transaction is
+// built, not once at start — a wallet that follows the chain across the fork moves from one ledger to the other, and
+// the code that authors for it has to move with it. The two bodies below are the same call for call; only the module
+// differs. The handle is sealed with that version, which is how the wallet knows which of its variants may read it.
+const prepareTransactionToBalance = async (state: FacadeState): Promise<UnboundTx> => {
+  const ttl = new Date(Date.now() + 30 * 60 * 1000);
+  const output = { value: nightAmountToSend, owner: sponsor.unshieldedKeystore.getAddress(), type: Token.night };
+  const authoredFor = state.activeProtocolVersion;
   // Fake proving will work here as no proofs are involved. This is a major difference compared to real flow
-  const proven = await unprovenTransaction.prove(
-    aFakeProvingProvider,
-    ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
-  );
+  const authorPreFork = () => {
+    const intent = v8.Intent.new(ttl);
+    intent.fallibleUnshieldedOffer = v8.UnshieldedOffer.new([], [output], []);
+    return v8.Transaction.fromParts(configuration.networkId, undefined, undefined, intent).prove(
+      aFakeProvingProvider,
+      v8.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
+    );
+  };
+  const authorPostFork = () => {
+    const intent = v9.Intent.new(ttl);
+    intent.fallibleUnshieldedOffer = v9.UnshieldedOffer.new([], [output], []);
+    return v9.Transaction.fromParts(configuration.networkId, undefined, undefined, intent).prove(
+      aFakeProvingProvider,
+      v9.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
+    );
+  };
+  const proven = await (authoredFor < configuration.forkVersion ? authorPreFork() : authorPostFork());
   // A transaction an application built for itself is handed to the wallet as a handle, saying which ledger version
   // made it.
   return WalletTransaction.adopt('Unbound', proven, authoredFor);
 };
 //Transaction as DApp could prepare it
-const transactionToBalance = await prepareTransactionToBalance();
+const transactionToBalance = await prepareTransactionToBalance(userReceivedNight);
 
 // Balanced by user without paying fees
 const transactionWithoutFees = await user.wallet

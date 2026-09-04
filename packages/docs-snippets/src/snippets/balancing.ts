@@ -10,8 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { generateRandomSeed, Token, WalletTransaction } from '@midnightntwrk/wallet-sdk';
-import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
+import { type FacadeState, generateRandomSeed, Token, WalletTransaction } from '@midnightntwrk/wallet-sdk';
+import * as v8 from '@midnightntwrk/wallet-sdk/ledger/v8';
+import * as v9 from '@midnightntwrk/wallet-sdk/ledger/v9';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { configuration, initWalletWithSeed } from '../utils.ts';
@@ -24,41 +25,34 @@ const receiver = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 const initialSenderState = await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
 const initialBalance = initialSenderState.unshielded.balances[Token.night] ?? 0n;
 
-// Authoring is choosing a ledger version, and the module imported above is the post-fork one. A transaction it builds
-// is sealed with the version the wallets are acting at, which is what every wallet entry point checks a handle against.
-// Below the boundary the import would be `@midnightntwrk/wallet-sdk/ledger/v8`, so this example refuses to run there
-// rather than hand post-fork bytes to a wallet on the pre-fork ledger.
-const authoredFor = initialSenderState.activeProtocolVersion;
-if (authoredFor < configuration.forkVersion) {
-  throw new Error(
-    `This example authors with the post-fork ledger, but the chain is at protocol version ${authoredFor}`,
-  );
-}
-
-const makeTransactionBlueprint = () => {
-  const unshieldedOffer = ledger.UnshieldedOffer.new(
-    [],
-    [
-      {
-        value: initialBalance,
-        owner: receiver.unshieldedKeystore.getAddress(),
-        type: Token.night,
-      },
-    ],
-    [],
-  );
-  const intent = ledger.Intent.new(new Date(Date.now() + 30 * 60 * 1000));
-  intent.fallibleUnshieldedOffer = unshieldedOffer;
-  // An application that builds its own transaction is the one thing that has to say which ledger version built it.
+// Authoring is choosing a ledger version, and the wallet says which: the version the wallets are acting at decides
+// whether the bytes follow the pre-fork ledger's rules or the post-fork one's. It is read when the transaction is
+// built, not once at start — a wallet that follows the chain across the fork moves from one ledger to the other, and
+// the code that authors for it has to move with it. The two bodies below are the same call for call; only the module
+// differs. The handle is sealed with that version, which is how the wallet knows which of its variants may read it.
+const makeTransactionBlueprint = (state: FacadeState) => {
+  const ttl = new Date(Date.now() + 30 * 60 * 1000);
+  const output = { value: initialBalance, owner: receiver.unshieldedKeystore.getAddress(), type: Token.night };
+  const authoredFor = state.activeProtocolVersion;
+  const authorPreFork = () => {
+    const intent = v8.Intent.new(ttl);
+    intent.fallibleUnshieldedOffer = v8.UnshieldedOffer.new([], [output], []);
+    return v8.Transaction.fromParts(configuration.networkId, undefined, undefined, intent);
+  };
+  const authorPostFork = () => {
+    const intent = v9.Intent.new(ttl);
+    intent.fallibleUnshieldedOffer = v9.UnshieldedOffer.new([], [output], []);
+    return v9.Transaction.fromParts(configuration.networkId, undefined, undefined, intent);
+  };
   return WalletTransaction.adopt(
     'Unproven',
-    ledger.Transaction.fromParts(configuration.networkId, undefined, undefined, intent),
+    authoredFor < configuration.forkVersion ? authorPreFork() : authorPostFork(),
     authoredFor,
   );
 };
 
 await sender.wallet
-  .balanceUnprovenTransaction(makeTransactionBlueprint(), {
+  .balanceUnprovenTransaction(makeTransactionBlueprint(initialSenderState), {
     ttl: new Date(Date.now() + 30 * 60 * 1000),
   })
   .then((recipe) => {
