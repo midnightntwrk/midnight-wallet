@@ -43,7 +43,11 @@ describe('Projections-based synchronisation model', () => {
   const eventLessDustWallet = (config: DefaultDustConfiguration) =>
     CustomDustWallet(
       config,
-      new V2Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
+      new V2Builder()
+        .withDefaults()
+        .withSync(makeEventLessSyncService, makeEventLessSyncCapability)
+        // Restated because `withSync` drops it: the seed-to-key derivation a start from a seed needs.
+        .withStartAuxDefaults(),
     );
 
   let fixture: TestContainersFixture;

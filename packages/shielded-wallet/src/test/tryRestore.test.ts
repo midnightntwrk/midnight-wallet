@@ -25,7 +25,7 @@ import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { UnsupportedSnapshotVersionError } from '../Restore.js';
-import { type DefaultShieldedConfiguration, V9_NATIVE_FORK_VERSION } from '../ShieldedWallet.js';
+import { type DefaultShieldedConfiguration } from '../ShieldedWallet.js';
 import { ShieldedWallet } from '../ForkingShieldedWallet.js';
 import { TransactionHistory } from '../v2/index.js';
 
@@ -33,7 +33,7 @@ const configuration: DefaultShieldedConfiguration = {
   networkId: NetworkId.NetworkId.Undeployed,
   indexerClientConnection: { indexerHttpUrl: 'http://localhost:8088/api/v4/graphql' },
   txHistoryStorage: new InMemoryTransactionHistoryStorage(TransactionHistory.ShieldedTransactionHistoryEntrySchema),
-  forkVersion: V9_NATIVE_FORK_VERSION,
+  forkVersion: ProtocolVersion.V9NativeForkVersion,
 };
 
 /** A snapshot declaring a protocol version far beyond anything this build registers a variant for. */

@@ -24,8 +24,8 @@ while maintaining verifiability. It provides:
 ### Starting the Wallet
 
 ```typescript
-import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
-import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import { InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { TransactionHistory } from '@midnightntwrk/wallet-sdk-shielded/v2';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { randomBytes } from 'node:crypto';
@@ -40,7 +40,7 @@ const configuration = {
   txHistoryStorage: new InMemoryTransactionHistoryStorage(TransactionHistory.ShieldedTransactionHistoryEntrySchema),
   // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so it is supplied per environment.
-  forkVersion: V9_NATIVE_FORK_VERSION,
+  forkVersion: ProtocolVersion.V9NativeForkVersion,
 };
 
 // Create secret keys from a shielded seed

@@ -42,7 +42,7 @@ import {
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import type { PendingTransactionsService } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { DustWallet, type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet, type ShieldedWalletState, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, type ShieldedWalletState } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
   PublicKey,
@@ -66,7 +66,7 @@ import {
 } from './utils/index.js';
 
 /** The boundary the facade reads `protocol` against. */
-const forkVersion = V9_NATIVE_FORK_VERSION;
+const forkVersion = ProtocolVersion.V9NativeForkVersion;
 
 /** Three versions below the boundary, all different: ordinary drift within one epoch. */
 const beforeFork = {

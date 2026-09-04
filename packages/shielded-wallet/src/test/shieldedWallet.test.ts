@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Scope, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import {
@@ -26,7 +26,7 @@ const configuration: DefaultShieldedConfiguration = {
   networkId: NetworkId.NetworkId.Undeployed,
   indexerClientConnection: { indexerHttpUrl: 'http://localhost:8088/api/v4/graphql' },
   txHistoryStorage: new InMemoryTransactionHistoryStorage(TransactionHistory.ShieldedTransactionHistoryEntrySchema),
-  forkVersion: V9_NATIVE_FORK_VERSION,
+  forkVersion: ProtocolVersion.V9NativeForkVersion,
 };
 
 /**
@@ -167,5 +167,11 @@ describe('CustomShieldedWallet post-migration sync restart', () => {
 
     expect(recorder.watchers).toEqual([]);
     expect(recorder.resumed).toEqual([]);
+  });
+});
+
+describe('V9_NATIVE_FORK_VERSION', () => {
+  it('is the same value as ProtocolVersion.V9NativeForkVersion, kept only so existing imports keep working', () => {
+    expect(V9_NATIVE_FORK_VERSION).toBe(ProtocolVersion.V9NativeForkVersion);
   });
 });
