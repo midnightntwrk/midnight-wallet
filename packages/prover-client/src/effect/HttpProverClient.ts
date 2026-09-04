@@ -40,13 +40,13 @@ type PayloadFraming = Readonly<{
   parseCheckResult: (result: Uint8Array) => (bigint | undefined)[];
 }>;
 
-const currentLedgerFraming: PayloadFraming = {
+const v9Framing: PayloadFraming = {
   createProvingPayload: (preimage, binding) => ledger.createProvingPayload(preimage, binding),
   createCheckPayload: (preimage) => ledger.createCheckPayload(preimage),
   parseCheckResult: (result) => ledger.parseCheckResult(result),
 };
 
-const preForkFraming: PayloadFraming = {
+const v8Framing: PayloadFraming = {
   createProvingPayload: (preimage, binding) => preForkLedger.createProvingPayload(preimage, binding),
   createCheckPayload: (preimage) => preForkLedger.createCheckPayload(preimage),
   parseCheckResult: (result) => preForkLedger.parseCheckResult(result),
@@ -181,7 +181,7 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     costModel: ledger.CostModel,
   ): Effect.Effect<ledger.Transaction<S, ledger.Proof, B>, ClientError | ServerError> {
     return pipe(
-      Effect.succeed(this.serverProverProvider(currentLedgerFraming)),
+      Effect.succeed(this.serverProverProvider(v9Framing)),
       Effect.flatMap((provider) =>
         Effect.tryPromise({
           try: () => transaction.prove(provider, costModel),
@@ -195,10 +195,14 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
   }
 
   asProvingProvider(): ledger.ProvingProvider {
-    return this.serverProverProvider(currentLedgerFraming);
+    return this.serverProverProvider(v9Framing);
   }
 
-  asPreForkProvingProvider(): preForkLedger.ProvingProvider {
-    return this.serverProverProvider(preForkFraming);
+  asV9ProvingProvider(): ledger.ProvingProvider {
+    return this.asProvingProvider();
+  }
+
+  asV8ProvingProvider(): preForkLedger.ProvingProvider {
+    return this.serverProverProvider(v8Framing);
   }
 }

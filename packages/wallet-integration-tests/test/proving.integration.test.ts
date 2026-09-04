@@ -12,7 +12,7 @@
 // limitations under the License.
 import {
   type ProvingServiceEffect,
-  makePreForkServerProvingServiceEffect,
+  makeV8ServerProvingServiceEffect,
   makeWasmProvingServiceEffect,
   fromProvingProvider,
   makeServerProvingServiceEffect,
@@ -28,7 +28,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { getNonDustImbalance } from './utils.js';
 
 const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:9.0.0-rc.7';
-/** The proof server of the epoch before the boundary: no image serves both sides, so the pre-fork case needs its own. */
+/** The proof server of the epoch before the boundary: no image serves both sides, so the ledger-v8 case needs its own. */
 const PRE_FORK_PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:8.1.0';
 const PROOF_SERVER_PORT: number = 6300;
 
@@ -165,13 +165,13 @@ describe('Server Proving Service', () => {
  * Proving a transaction of the epoch before the boundary, at the proof server of that epoch.
  *
  * @remarks
- *   The other end of the routing the SDK already did: the pre-fork backend is not a variation on the current one, it is a
- *   different ledger version driving the proof, and no proof server serves both sides. What is checked here is the only
- *   thing that finally settles it — the pre-fork ledger accepting, under a strictness that verifies native proofs, what
- *   the pre-fork prover produced.
+ *   The other end of the routing the SDK already did: the ledger-v8 backend is not a variation on the current one, it is
+ *   a different ledger version driving the proof, and no proof server serves both sides. What is checked here is the
+ *   only thing that finally settles it — ledger-v8 accepting, under a strictness that verifies native proofs, what the
+ *   ledger-v8 prover produced.
  */
-describe('Pre-fork Server Proving', () => {
-  const preForkProofServer = Effect.acquireRelease(
+describe('Ledger-v8 Server Proving', () => {
+  const v8ProofServer = Effect.acquireRelease(
     Effect.tryPromise({
       try: () =>
         new GenericContainer(PRE_FORK_PROOF_SERVER_IMAGE)
@@ -188,19 +188,19 @@ describe('Pre-fork Server Proving', () => {
     Effect.retry(Schedule.spaced(Duration.millis(10))),
   );
 
-  const aPreForkTransaction = (): preForkLedger.UnprovenTransaction => {
+  const aV8Transaction = (): preForkLedger.UnprovenTransaction => {
     const recipient = preForkLedger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
-    const preForkShieldedTokenType = preForkLedger.shieldedToken().raw;
-    const coin = preForkLedger.createShieldedCoinInfo(preForkShieldedTokenType, 42n);
+    const v8ShieldedTokenType = preForkLedger.shieldedToken().raw;
+    const coin = preForkLedger.createShieldedCoinInfo(v8ShieldedTokenType, 42n);
     const output = preForkLedger.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
-    const offer = preForkLedger.ZswapOffer.fromOutput(output, preForkShieldedTokenType, 42n);
+    const offer = preForkLedger.ZswapOffer.fromOutput(output, v8ShieldedTokenType, 42n);
     return preForkLedger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
   };
 
-  it('proves a pre-fork transaction at a pre-fork proof server, and the pre-fork ledger verifies the proof', async () => {
+  it('proves a ledger-v8 transaction at a ledger-v8 proof server, and ledger-v8 verifies the proof', async () => {
     const proven = await Effect.gen(function* () {
-      const provingServerUrl = yield* preForkProofServer;
-      return yield* makePreForkServerProvingServiceEffect({ provingServerUrl }).prove(aPreForkTransaction());
+      const provingServerUrl = yield* v8ProofServer;
+      return yield* makeV8ServerProvingServiceEffect({ provingServerUrl }).prove(aV8Transaction());
     }).pipe(Effect.scoped, Effect.runPromise);
 
     expect(proven).toBeInstanceOf(preForkLedger.Transaction);

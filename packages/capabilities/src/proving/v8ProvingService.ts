@@ -11,14 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /**
- * Proving on the pre-fork ledger version.
+ * Proving on ledger-v8.
  *
  * @remarks
- *   The pre-fork twin of the backends in `provingService.ts`: structurally the same three steps — obtain a proving
+ *   The ledger-v8 twin of the backends in `provingService.ts`: structurally the same three steps — obtain a proving
  *   provider, drive the transaction's own `prove` with that ledger version's cost model, report failures as a
  *   {@link ProvingError} — against a different ledger version's classes. It is the classes that make this a separate
- *   module: a pre-fork transaction handed the current ledger's cost model fails at the wasm-bindgen boundary, and a
- *   proof-server request framed by the current ledger is not the request the pre-fork one would have sent.
+ *   module: a ledger-v8 transaction handed ledger-v9's cost model fails at the wasm-bindgen boundary, and a
+ *   proof-server request framed by ledger-v9 is not the request ledger-v8 would have sent.
  */
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { HttpProverClient, WasmProver } from '@midnightntwrk/wallet-sdk-prover-client/effect';
@@ -36,25 +36,25 @@ import {
   type WasmProvingConfiguration,
 } from './provingService.js';
 
-/** A pre-fork transaction that has not been proved yet. */
-export type PreForkUnprovenTransaction = ledger.UnprovenTransaction;
+/** A ledger-v8 transaction that has not been proved yet. */
+export type V8UnprovenTransaction = ledger.UnprovenTransaction;
 
-/** A pre-fork transaction that has been proved but not yet bound. */
-export type PreForkUnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
+/** A ledger-v8 transaction that has been proved but not yet bound. */
+export type V8UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
-/** A proving backend written against the pre-fork ledger version. */
-export type PreForkProvingServiceEffect = ProvingServiceEffect<PreForkUnboundTransaction, PreForkUnprovenTransaction>;
+/** A proving backend written against ledger-v8. */
+export type V8ProvingServiceEffect = ProvingServiceEffect<V8UnboundTransaction, V8UnprovenTransaction>;
 
 /**
- * Drives a pre-fork transaction's proving with a low-level proving provider.
+ * Drives a ledger-v8 transaction's proving with a low-level proving provider.
  *
  * @param provider The proving provider, or the reason one could not be built.
- * @returns A backend that proves pre-fork transactions.
+ * @returns A backend that proves ledger-v8 transactions.
  */
-export const fromPreForkProvingProviderEffect = (
+export const fromV8ProvingProviderEffect = (
   provider: Effect.Effect<ledger.ProvingProvider, InvalidProtocolSchemeError>,
-): PreForkProvingServiceEffect => ({
-  prove(transaction: PreForkUnprovenTransaction): Effect.Effect<PreForkUnboundTransaction, ProvingFailure> {
+): V8ProvingServiceEffect => ({
+  prove(transaction: V8UnprovenTransaction): Effect.Effect<V8UnboundTransaction, ProvingFailure> {
     return pipe(
       provider,
       Effect.flatMap((provider) =>
@@ -72,47 +72,43 @@ export const fromPreForkProvingProviderEffect = (
 });
 
 /**
- * Drives a pre-fork transaction's proving with a low-level proving provider.
+ * Drives a ledger-v8 transaction's proving with a low-level proving provider.
  *
  * @param provider The proving provider.
- * @returns A backend that proves pre-fork transactions.
+ * @returns A backend that proves ledger-v8 transactions.
  */
-export const fromPreForkProvingProvider = (provider: ledger.ProvingProvider): PreForkProvingServiceEffect =>
-  fromPreForkProvingProviderEffect(Effect.succeed(provider));
+export const fromV8ProvingProvider = (provider: ledger.ProvingProvider): V8ProvingServiceEffect =>
+  fromV8ProvingProviderEffect(Effect.succeed(provider));
 
 /**
- * Proves pre-fork transactions at a proof server.
+ * Proves ledger-v8 transactions at a proof server.
  *
- * @param configuration The proof server to send pre-fork proving requests to.
- * @returns A backend that proves pre-fork transactions over HTTP.
+ * @param configuration The proof server to send ledger-v8 proving requests to.
+ * @returns A backend that proves ledger-v8 transactions over HTTP.
  */
-export const makePreForkServerProvingServiceEffect = (
-  configuration: ServerProvingConfiguration,
-): PreForkProvingServiceEffect =>
+export const makeV8ServerProvingServiceEffect = (configuration: ServerProvingConfiguration): V8ProvingServiceEffect =>
   pipe(
     HttpProverClient.create({ url: configuration.provingServerUrl }),
-    Effect.map((client) => client.asPreForkProvingProvider()),
-    fromPreForkProvingProviderEffect,
+    Effect.map((client) => client.asV8ProvingProvider()),
+    fromV8ProvingProviderEffect,
   );
 
 /**
- * Proves pre-fork transactions in this process.
+ * Proves ledger-v8 transactions in this process.
  *
  * @remarks
  *   The zkir runtime the bundled prover drives is shared by both ledger lines, so there is nothing version-specific about
- *   the proving loop — and the key material the pre-fork ledger accepts turns out to be the same line the current one
- *   uses, which is why no key-material override is applied here. See the pre-fork spike in `prover-client`'s
- *   `preForkWasmProver.integration.test.ts` for the evidence.
+ *   the proving loop — and the key material ledger-v8 accepts turns out to be the same line the current one uses, which
+ *   is why no key-material override is applied here. See the ledger-v8 spike in `prover-client`'s
+ *   `v8WasmProver.integration.test.ts` for the evidence.
  * @param configuration Optional key material override.
- * @returns A backend that proves pre-fork transactions in-process.
+ * @returns A backend that proves ledger-v8 transactions in-process.
  */
-export const makePreForkWasmProvingServiceEffect = (
-  configuration?: WasmProvingConfiguration,
-): PreForkProvingServiceEffect =>
+export const makeV8WasmProvingServiceEffect = (configuration?: WasmProvingConfiguration): V8ProvingServiceEffect =>
   pipe(
     WasmProver.create({
       keyMaterialProvider: configuration?.keyMaterialProvider ?? WasmProver.makeDefaultKeyMaterialProvider(),
     }),
     Effect.map((prover) => prover.asProvingProvider()),
-    fromPreForkProvingProviderEffect,
+    fromV8ProvingProviderEffect,
   );

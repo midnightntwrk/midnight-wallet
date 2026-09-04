@@ -109,7 +109,7 @@ import { makeDefaultVersionedProvingService } from '@midnightntwrk/wallet-sdk-ca
 const service = makeDefaultVersionedProvingService(
   {
     provers: [
-      { sinceVersion: ProtocolVersion.MinSupportedVersion, backend: { kind: 'server', url: preForkProofServer } },
+      { sinceVersion: ProtocolVersion.MinSupportedVersion, backend: { kind: 'server', url: v8ProofServer } },
       { sinceVersion: forkVersion, backend: { kind: 'wasm' } },
     ],
   },
@@ -125,7 +125,7 @@ const service = makeDefaultVersionedProvingService(
 - Each registered backend refuses the other ledger version's transaction with `ProvingEpochMismatchError` rather than
   handing it to a ledger that cannot read it.
 - `makeServerProvingServiceEffect` / `makeWasmProvingServiceEffect` build a single current-ledger backend;
-  `makePreForkServerProvingServiceEffect` / `makePreForkWasmProvingServiceEffect` are their pre-fork twins.
+  `makeV8ServerProvingServiceEffect` / `makeV8WasmProvingServiceEffect` are their ledger-v8 twins.
 
 ## Exports
 

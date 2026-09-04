@@ -48,11 +48,11 @@ const IMAGE_TAG_VARIABLES = [
   'TOOLKIT_TAG',
   'INDEXER_TAG',
   'PROOF_SERVER_TAG',
-  'PROOF_SERVER_PRE_FORK_TAG',
+  'PROOF_SERVER_V8_TAG',
 ] as const;
 
 /** Services whose logs are streamed to disk, so a teardown does not take the evidence with it. */
-const LOGGED_SERVICES = ['node', 'indexer', 'proof-server', 'proof-server-pre-fork'] as const;
+const LOGGED_SERVICES = ['node', 'indexer', 'proof-server', 'proof-server-v8'] as const;
 
 /**
  * `twox128("CNightObservation") ++ twox128(<item>)`. The cNIGHT dust replay is node-team territory: these are read and
@@ -198,7 +198,7 @@ export function useForkFixture(): () => ForkFixture {
       // healthcheck cannot answer this, and a listening port alone does not mean it is serving.
       .withWaitStrategy(`indexer_${uid}`, Wait.forHttp('/ready', TestContainersFixture.INDEXER_PORT))
       .withWaitStrategy(`proof-server_${uid}`, Wait.forListeningPorts())
-      .withWaitStrategy(`proof-server-pre-fork_${uid}`, Wait.forListeningPorts())
+      .withWaitStrategy(`proof-server-v8_${uid}`, Wait.forListeningPorts())
       .withStartupTimeout(600_000)
       .up();
 
@@ -262,9 +262,9 @@ export class ForkFixture extends TestContainersFixture {
    *   no published image serves both. This lane is the only one that needs both at once, because it is the only one
    *   whose wallet is on each side in turn.
    */
-  public getPreForkProverUri(): string {
+  public getV8ProverUri(): string {
     return `http://localhost:${this.composeEnvironment
-      .getContainer(`proof-server-pre-fork_${this.#uid}`)
+      .getContainer(`proof-server-v8_${this.#uid}`)
       .getMappedPort(TestContainersFixture.PROOF_SERVER_PORT)}`;
   }
 

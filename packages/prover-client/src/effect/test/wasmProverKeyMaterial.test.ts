@@ -16,8 +16,8 @@
  * @remarks
  *   The line is a property of the circuits the keys were generated for, not of the ledger version driving the proof, so
  *   it has to be nameable. Which line pairs with which ledger is settled empirically in
- *   `preForkWasmProver.integration.test.ts`; this file only pins down that naming a line reads that line, and that
- *   naming none reads the one both ledgers accept.
+ *   `v8WasmProver.integration.test.ts`; this file only pins down that naming a line reads that line, and that naming
+ *   none reads the one both ledgers accept.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as WasmProver from '../WasmProver.js';

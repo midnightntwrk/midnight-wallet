@@ -15,7 +15,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Cause, Effect, Either, Exit, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { fromPreForkProvingProvider } from '../preForkProvingService.js';
+import { fromV8ProvingProvider } from '../v8ProvingService.js';
 import { ProvingConfigurationError, ProvingEpochMismatchError, resolveProvingBackends } from '../provingService.js';
 import { makeDefaultProvingServices, makeDefaultVersionedProvingServiceEffect } from '../versionedProving.js';
 
@@ -35,8 +35,8 @@ const aFakeProvingProvider: preForkLedger.ProvingProvider = {
   prove: () => Promise.resolve(new Uint8Array(0)),
 };
 
-/** A pre-fork transaction with nothing in it that needs a proof. */
-const aPreForkTransaction = (): preForkLedger.UnprovenTransaction =>
+/** A ledger-v8 transaction with nothing in it that needs a proof. */
+const aV8Transaction = (): preForkLedger.UnprovenTransaction =>
   preForkLedger.Transaction.fromParts(
     'undeployed',
     undefined,
@@ -57,11 +57,11 @@ const failureOf = async <A, E>(effect: Effect.Effect<A, E>): Promise<E> => {
 /** A URL no test ever connects to: nothing in this file has anything to prove, so no request is ever made. */
 const unusedServer = (host: string) => new URL(`http://${host}:6300`);
 
-describe('Proving with the pre-fork ledger', () => {
-  it("drives the transaction with the pre-fork ledger, and hands back that ledger version's transaction", async () => {
-    const service = fromPreForkProvingProvider(aFakeProvingProvider);
+describe('Proving with ledger-v8', () => {
+  it("drives the transaction with ledger-v8, and hands back that ledger version's transaction", async () => {
+    const service = fromV8ProvingProvider(aFakeProvingProvider);
 
-    const proven = await Effect.runPromise(service.prove(aPreForkTransaction()));
+    const proven = await Effect.runPromise(service.prove(aV8Transaction()));
 
     expect(proven).toBeInstanceOf(preForkLedger.Transaction);
     expect(proven).not.toBeInstanceOf(ledger.Transaction);
@@ -76,16 +76,16 @@ describe('Composing proving backends either side of the protocol boundary', () =
     ],
   } as const;
 
-  it('proves a transaction stamped below the fork with the pre-fork ledger', async () => {
+  it('proves a transaction stamped below the fork with ledger-v8', async () => {
     const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORK));
 
-    const proven = await Effect.runPromise(router.prove(aPreForkTransaction(), BEFORE_FORK));
+    const proven = await Effect.runPromise(router.prove(aV8Transaction(), BEFORE_FORK));
 
     expect(proven).toBeInstanceOf(preForkLedger.Transaction);
     expect(proven).not.toBeInstanceOf(ledger.Transaction);
   });
 
-  it('proves a transaction stamped at the fork with the current ledger', async () => {
+  it('proves a transaction stamped at the fork with ledger-v9', async () => {
     const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORK));
 
     const proven = await Effect.runPromise(router.prove(aCurrentLedgerTransaction(), FORK));
@@ -107,7 +107,7 @@ describe('Composing proving backends either side of the protocol boundary', () =
     const router = Either.getOrThrow(
       makeDefaultVersionedProvingServiceEffect({ provingServerUrl: unusedServer('only') }, FORK),
     );
-    expect(await Effect.runPromise(router.prove(aPreForkTransaction(), BEFORE_FORK))).toBeInstanceOf(
+    expect(await Effect.runPromise(router.prove(aV8Transaction(), BEFORE_FORK))).toBeInstanceOf(
       preForkLedger.Transaction,
     );
     expect(await Effect.runPromise(router.prove(aCurrentLedgerTransaction(), FORK))).toBeInstanceOf(ledger.Transaction);
@@ -144,10 +144,10 @@ describe('Composing proving backends either side of the protocol boundary', () =
     );
   });
 
-  it('refuses a pre-fork transaction handed to the current ledger, naming the epoch that backend serves', async () => {
+  it('refuses a ledger-v8 transaction handed to ledger-v9, naming the epoch that backend serves', async () => {
     const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORK));
 
-    const error = await failureOf(router.prove(aPreForkTransaction(), FORK));
+    const error = await failureOf(router.prove(aV8Transaction(), FORK));
 
     expect(error).toBeInstanceOf(ProvingEpochMismatchError);
     expect((error as ProvingEpochMismatchError).epoch).toStrictEqual(

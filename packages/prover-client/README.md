@@ -58,8 +58,8 @@ framed and read back by that same version. `HttpProverClient` therefore offers o
 ```typescript
 const client = await Effect.runPromise(HttpProverClient.create({ url: proofServerUrl }));
 
-client.asProvingProvider(); // frames with @midnightntwrk/ledger-v9 (the current ledger)
-client.asPreForkProvingProvider(); // frames with @midnight-ntwrk/ledger-v8 (the pre-fork ledger)
+client.asV9ProvingProvider(); // frames with @midnightntwrk/ledger-v9; asProvingProvider() is the same provider
+client.asV8ProvingProvider(); // frames with @midnight-ntwrk/ledger-v8
 ```
 
 `WasmProver` offers both names too, and returns the same provider for each: the in-process prover drives a zkir runtime

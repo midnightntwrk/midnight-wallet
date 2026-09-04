@@ -193,14 +193,14 @@ describe('Proving with the backend configured for the epoch a transaction belong
   };
 
   /**
-   * A pre-fork transaction with nothing in it that needs a proof, stamped below the boundary.
+   * A ledger-v8 transaction with nothing in it that needs a proof, stamped below the boundary.
    *
    * @remarks
    *   Nothing to prove means no backend is ever reached over the network, which is what lets these tests name proof
    *   servers that do not exist. What is observable is the only thing that matters here: which ledger version drove the
    *   proving, and therefore which ledger version's transaction comes back.
    */
-  const aPreForkTransaction = () =>
+  const aV8Transaction = () =>
     WalletTransaction.adopt(
       'Unproven',
       preForkLedger.Transaction.fromParts(
@@ -212,7 +212,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
       PRE_FORK,
     );
 
-  /** A current-ledger transaction wearing a pre-fork stamp: the stamp the facade reads, the bytes it does not. */
+  /** A ledger-v9 transaction wearing a pre-fork stamp: the stamp the facade reads, the bytes it does not. */
   const aMisstampedCurrentLedgerTransaction = () =>
     WalletTransaction.adopt(
       'Unproven',
@@ -243,7 +243,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
       WalletTransaction.unwrapWithin<unknown>(finalized, ProtocolVersion.epochOf(PRE_FORK, V9_NATIVE_FORK_VERSION)),
     );
 
-  const preForkServerAndPostForkWasm: Partial<DefaultConfiguration> = {
+  const v8ServerAndV9Wasm: Partial<DefaultConfiguration> = {
     provers: [
       {
         sinceVersion: ProtocolVersion.MinSupportedVersion,
@@ -253,10 +253,10 @@ describe('Proving with the backend configured for the epoch a transaction belong
     ],
   };
 
-  it('proves a transaction built below the fork with the pre-fork ledger', async () => {
-    const facade = await started(preForkServerAndPostForkWasm);
+  it('proves a transaction built below the fork with ledger-v8', async () => {
+    const facade = await started(v8ServerAndV9Wasm);
 
-    const finalized = await facade.finalizeTransaction(aPreForkTransaction());
+    const finalized = await facade.finalizeTransaction(aV8Transaction());
 
     expect(provenBy(finalized)).toBeInstanceOf(preForkLedger.Transaction);
   });
@@ -266,13 +266,13 @@ describe('Proving with the backend configured for the epoch a transaction belong
     // boundary is that the facade hands proving the same fork version it hands its wallets.
     const facade = await started({ provingServerUrl: new URL('http://only-prover:6300') });
 
-    const finalized = await facade.finalizeTransaction(aPreForkTransaction());
+    const finalized = await facade.finalizeTransaction(aV8Transaction());
 
     expect(provenBy(finalized)).toBeInstanceOf(preForkLedger.Transaction);
   });
 
-  it('refuses a current-ledger transaction wearing a pre-fork stamp, rather than handing it to a ledger that cannot read it', async () => {
-    const facade = await started(preForkServerAndPostForkWasm);
+  it('refuses a ledger-v9 transaction wearing a pre-fork stamp, rather than handing it to a ledger that cannot read it', async () => {
+    const facade = await started(v8ServerAndV9Wasm);
 
     const failure = await facade.finalizeTransaction(aMisstampedCurrentLedgerTransaction()).then(
       () => undefined,
@@ -292,7 +292,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
       ],
     });
 
-    const failure = await facade.finalizeTransaction(aPreForkTransaction()).then(
+    const failure = await facade.finalizeTransaction(aV8Transaction()).then(
       () => undefined,
       (error: unknown) => error,
     );

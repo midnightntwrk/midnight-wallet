@@ -26,11 +26,11 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Either } from 'effect';
 import {
-  makePreForkServerProvingServiceEffect,
-  makePreForkWasmProvingServiceEffect,
-  type PreForkUnboundTransaction,
-  type PreForkUnprovenTransaction,
-} from './preForkProvingService.js';
+  makeV8ServerProvingServiceEffect,
+  makeV8WasmProvingServiceEffect,
+  type V8UnboundTransaction,
+  type V8UnprovenTransaction,
+} from './v8ProvingService.js';
 import {
   makeServerProvingServiceEffect,
   makeVersionedProvingServiceEffect,
@@ -56,10 +56,16 @@ import {
  *   A genuine union: the two ledger versions' transaction types are nominally distinct, so a caller holding one of them
  *   is holding something the other version's backend provably cannot read.
  */
-export type AnyVersionUnprovenTransaction = ledger.UnprovenTransaction | PreForkUnprovenTransaction;
+/** Ledger-v9's unproven transaction, named for symmetry with {@link V8UnprovenTransaction}. */
+export type V9UnprovenTransaction = ledger.UnprovenTransaction;
+
+/** Ledger-v9's proven-but-unbound transaction, named for symmetry with {@link V8UnboundTransaction}. */
+export type V9UnboundTransaction = UnboundTransaction;
+
+export type AnyVersionUnprovenTransaction = V9UnprovenTransaction | V8UnprovenTransaction;
 
 /** Every proved-but-unbound transaction either ledger version can hand back. */
-export type AnyVersionUnboundTransaction = UnboundTransaction | PreForkUnboundTransaction;
+export type AnyVersionUnboundTransaction = V9UnboundTransaction | V8UnboundTransaction;
 
 /** A backend registered in a two-version registry, whichever ledger version it was written against. */
 export type VersionProvingServiceEffect = ProvingServiceEffect<
@@ -96,12 +102,11 @@ const onlyFrom = <TUnproven extends AnyVersionUnprovenTransaction, TUnbound exte
         ),
 });
 
-const isPreForkTransaction = (transaction: AnyVersionUnprovenTransaction): transaction is PreForkUnprovenTransaction =>
+const isV8Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is V8UnprovenTransaction =>
   transaction instanceof preForkLedger.Transaction;
 
-const isCurrentLedgerTransaction = (
-  transaction: AnyVersionUnprovenTransaction,
-): transaction is ledger.UnprovenTransaction => transaction instanceof ledger.Transaction;
+const isV9Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is ledger.UnprovenTransaction =>
+  transaction instanceof ledger.Transaction;
 
 /** The in-process backend's configuration, with a key material override only when one was named. */
 const wasmConfigurationOf = (backend: Extract<ProvingBackend, { kind: 'wasm' }>): WasmProvingConfiguration =>
@@ -116,16 +121,16 @@ const makeBackend = (
   epoch[1] <= forkVersion
     ? onlyFrom(
         backend.kind === 'server'
-          ? makePreForkServerProvingServiceEffect({ provingServerUrl: backend.url })
-          : makePreForkWasmProvingServiceEffect(wasmConfigurationOf(backend)),
-        isPreForkTransaction,
+          ? makeV8ServerProvingServiceEffect({ provingServerUrl: backend.url })
+          : makeV8WasmProvingServiceEffect(wasmConfigurationOf(backend)),
+        isV8Transaction,
         epoch,
       )
     : onlyFrom(
         backend.kind === 'server'
           ? makeServerProvingServiceEffect({ provingServerUrl: backend.url })
           : makeWasmProvingServiceEffect(wasmConfigurationOf(backend)),
-        isCurrentLedgerTransaction,
+        isV9Transaction,
         epoch,
       );
 
@@ -136,7 +141,7 @@ const makeBackend = (
  *   A range that straddles the boundary is a description of _where_ to prove that says nothing about _which_ ledger
  *   frames the request — and both are needed. Splitting it keeps the operator's answer to the first question and lets
  *   the boundary answer the second, which is what makes "one proof server for every version" mean the right thing on
- *   both sides rather than the current ledger's thing on both.
+ *   both sides rather than ledger-v9's thing on both.
  */
 const splitAtFork = (
   entry: ProtocolVersion.RegistryEntry<ProvingBackend>,
@@ -155,7 +160,7 @@ const splitAtFork = (
  * Registers a proving backend either side of the protocol boundary.
  *
  * @param configuration The proving configuration.
- * @param forkVersion The protocol version at which the chain hands over to the current ledger version.
+ * @param forkVersion The protocol version at which the chain hands over to ledger-v9.
  * @returns The backends and the version ranges they serve, or the reason the configuration names none.
  */
 export const makeDefaultProvingServices = (
@@ -168,7 +173,7 @@ export const makeDefaultProvingServices = (
   resolveProvingBackends(configuration).pipe(
     Either.map((backends) => ({
       // A chain whose boundary is at or below the minimum supported version has no pre-fork epoch to register for, so
-      // nothing is split and every range is the current ledger's.
+      // nothing is split and every range is ledger-v9's.
       entries: backends.entries
         .flatMap((entry) =>
           forkVersion > ProtocolVersion.MinSupportedVersion ? splitAtFork(entry, forkVersion) : [entry],
@@ -181,7 +186,7 @@ export const makeDefaultProvingServices = (
  * Builds the version-routed proving service an SDK spanning a protocol boundary proves with.
  *
  * @param configuration The proving configuration.
- * @param forkVersion The protocol version at which the chain hands over to the current ledger version.
+ * @param forkVersion The protocol version at which the chain hands over to ledger-v9.
  * @returns A proving service that routes on the version a transaction was built for, or the reason the configuration
  *   names no backend.
  */

@@ -25,7 +25,7 @@ import { inspect } from 'node:util';
 import { Cause, Either, Option, Runtime } from 'effect';
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 // Both ledgers, because this file is the one that authors on both sides of the boundary: the spend before the fork is
-// the pre-fork ledger's transaction and everything from `re-registers its NIGHT` onwards is the post-fork ledger's.
+// ledger-v8's transaction and everything from `re-registers its NIGHT` onwards is ledger-v9's.
 import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
@@ -66,7 +66,7 @@ const FUNDED_SEED = '00000000000000000000000000000000000000000000000000000000000
 const RECEIVER_SEED = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
 
 /** A second empty account, for the spend made before the boundary: the post-fork receiver must still start at zero. */
-const PRE_FORK_RECEIVER_SEED = '4c1d1e0e9a2a4a3f8b5c6d7e8f90112233445566778899aabbccddeeff001122';
+const V8_RECEIVER_SEED = '4c1d1e0e9a2a4a3f8b5c6d7e8f90112233445566778899aabbccddeeff001122';
 
 /**
  * Native NIGHT. Written out rather than read from a ledger binding on purpose: the wallet holds this balance on both
@@ -324,7 +324,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       provers: [
         {
           sinceVersion: ProtocolVersion.MinSupportedVersion,
-          backend: { kind: 'server', url: new URL(fixture.getPreForkProverUri()) },
+          backend: { kind: 'server', url: new URL(fixture.getV8ProverUri()) },
         },
         { sinceVersion: V9_NATIVE_FORK_VERSION, backend: { kind: 'server', url: new URL(fixture.getProverUri()) } },
       ] as const satisfies DefaultConfiguration['provers'],
@@ -411,13 +411,13 @@ describe.sequential('Hard fork crossing @fork', () => {
   );
 
   test(
-    'spends before the fork, proving at the pre-fork proof server',
+    'spends before the fork, proving at the ledger-v8 proof server',
     async () => {
-      // The half of proving no other lane can reach. Below the boundary the wallet builds pre-fork bytes, and only the
-      // pre-fork ledger can frame a proving request for them and only a pre-fork proof server can answer it — so what
+      // The half of proving no other lane can reach. Below the boundary the wallet builds ledger-v8 bytes, and only the
+      // ledger-v8 can frame a proving request for them and only a ledger-v8 proof server can answer it — so what
       // this proves is that the version-keyed backends were honoured, not merely accepted by configuration. The same
       // wallet proves at the other server after the fork, which is the acceptance criterion for the pair.
-      preForkReceiver = await utils.initWalletWithSeed(PRE_FORK_RECEIVER_SEED, fixture);
+      preForkReceiver = await utils.initWalletWithSeed(V8_RECEIVER_SEED, fixture);
       const receiverBefore = await within(
         'the pre-fork receiver to sync',
         CROSSING_TIMEOUT_MS,
@@ -444,8 +444,8 @@ describe.sequential('Hard fork crossing @fork', () => {
       const signed = await wallet.signRecipe(recipe, unshieldedKeystore.signDataAsync);
       const finalizedTx = await wallet.finalizeRecipe(signed);
 
-      // The proof came back as the pre-fork ledger's transaction, which is only true if the pre-fork backend produced
-      // it: the current ledger's classes are a different type and would have been unwrapped as one.
+      // The proof came back as ledger-v8's transaction, which is only true if the ledger-v8 backend produced
+      // it: ledger-v9's classes are a different type and would have been unwrapped as one.
       expect(carried<preForkLedger.FinalizedTransaction>(finalizedTx)).toBeInstanceOf(preForkLedger.Transaction);
 
       const txId = await wallet.submitTransaction(finalizedTx);

@@ -72,7 +72,7 @@ const firstPreimageOf = async (
   return preimage;
 };
 
-const aPreForkPreimage = (): Promise<Uint8Array> => {
+const aV8Preimage = (): Promise<Uint8Array> => {
   const shielded = preForkLedger.shieldedToken();
   const coin = preForkLedger.createShieldedCoinInfo(shielded.raw, 1_000n);
   const output = preForkLedger.ZswapOutput.new(
@@ -123,10 +123,10 @@ describe('What the HTTP prover client sends to a proof server', () => {
 
   const client = () => Effect.runSync(HttpProverClient.create({ url: PROVER_URL }));
 
-  it('frames a pre-fork proving request with the pre-fork ledger, and posts it to /prove', async () => {
-    const preimage = await aPreForkPreimage();
+  it('frames a ledger-v8 proving request with it, and posts it to /prove', async () => {
+    const preimage = await aV8Preimage();
 
-    const proof = await client().asPreForkProvingProvider().prove(preimage, 'midnight/zswap/output', 7n);
+    const proof = await client().asV8ProvingProvider().prove(preimage, 'midnight/zswap/output', 7n);
 
     expect(observed).toHaveLength(1);
     expect(observed[0].url).toBe('http://prover.test:6300/prove');
@@ -135,10 +135,10 @@ describe('What the HTTP prover client sends to a proof server', () => {
     expect(proof).toStrictEqual(aCheckResponseBody);
   });
 
-  it('frames a pre-fork check request with the pre-fork ledger, posts it to /check, and reads the reply with it', async () => {
-    const preimage = await aPreForkPreimage();
+  it('frames a ledger-v8 check request with it, posts it to /check, and reads the reply with it', async () => {
+    const preimage = await aV8Preimage();
 
-    const result = await client().asPreForkProvingProvider().check(preimage, 'midnight/zswap/output');
+    const result = await client().asV8ProvingProvider().check(preimage, 'midnight/zswap/output');
 
     expect(observed).toHaveLength(1);
     expect(observed[0].url).toBe('http://prover.test:6300/check');
@@ -146,7 +146,7 @@ describe('What the HTTP prover client sends to a proof server', () => {
     expect(result).toStrictEqual(preForkLedger.parseCheckResult(aCheckResponseBody));
   });
 
-  it('frames a current-ledger proving request with the current ledger, unchanged', async () => {
+  it('frames a current-ledger proving request with ledger-v9, unchanged', async () => {
     const preimage = await aCurrentLedgerPreimage();
 
     await client().asProvingProvider().prove(preimage, 'midnight/zswap/output', 7n);
@@ -156,7 +156,7 @@ describe('What the HTTP prover client sends to a proof server', () => {
     expect(observed[0].body).toStrictEqual(ledger.createProvingPayload(preimage, 7n));
   });
 
-  it('frames a current-ledger check request with the current ledger, unchanged', async () => {
+  it('frames a current-ledger check request with ledger-v9, unchanged', async () => {
     const preimage = await aCurrentLedgerPreimage();
 
     const result = await client().asProvingProvider().check(preimage, 'midnight/zswap/output');

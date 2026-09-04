@@ -48,18 +48,21 @@ export declare namespace ProverClient {
       costModel?: ledger.CostModel,
     ): Effect.Effect<ledger.Transaction<S, ledger.Proof, B>, ClientError | ServerError>;
 
-    /** A proving provider that frames its requests with the current ledger version. */
+    /** A proving provider that frames its requests with ledger-v9. */
     asProvingProvider(): ledger.ProvingProvider;
 
+    /** The same provider as {@link asProvingProvider}, named for the ledger version it frames with. */
+    asV9ProvingProvider(): ledger.ProvingProvider;
+
     /**
-     * A proving provider that frames its requests with the pre-fork ledger version.
+     * A proving provider that frames its requests with ledger-v8.
      *
      * @remarks
      *   A preimage is produced by the ledger version that built the transaction, and has to be framed and read back by
-     *   that same version — so a client serving a pre-fork transaction is asked for this provider rather than the
+     *   that same version — so a client serving a ledger-v8 transaction is asked for this provider rather than the
      *   other. An in-process prover has nothing to distinguish: it works on bytes, and offers the same provider for
      *   both.
      */
-    asPreForkProvingProvider(): preForkLedger.ProvingProvider;
+    asV8ProvingProvider(): preForkLedger.ProvingProvider;
   }
 }

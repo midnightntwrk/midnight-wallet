@@ -133,9 +133,9 @@ services:
   # The proof server of the epoch before the boundary. A second service rather than a second tag on the
   # first: no image serves both sides, and this lane is the one place a wallet has to prove on each in
   # turn. It runs from the start, because the pre-fork transfer happens before the fork is enacted.
-  proof-server-pre-fork:
-    image: 'ghcr.io/midnight-ntwrk/proof-server:${PROOF_SERVER_PRE_FORK_TAG:-8.1.0}'
-    container_name: proof-server-pre-fork_$TESTCONTAINERS_UID
+  proof-server-v8:
+    image: 'ghcr.io/midnight-ntwrk/proof-server:${PROOF_SERVER_V8_TAG:-8.1.0}'
+    container_name: proof-server-v8_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
     security_opt:

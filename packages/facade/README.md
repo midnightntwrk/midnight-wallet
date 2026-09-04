@@ -51,7 +51,7 @@ import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 const configuration = {
   // ... the rest of the wallet configuration, including `forkVersion`
   provers: [
-    // Below the boundary: a proof server built against the pre-fork ledger.
+    // Below the boundary: a proof server built against ledger-v8.
     {
       sinceVersion: ProtocolVersion.MinSupportedVersion,
       backend: { kind: 'server', url: new URL('http://localhost:6301') },

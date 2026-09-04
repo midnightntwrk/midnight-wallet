@@ -307,13 +307,13 @@ export const resolveProvingBackends = (
       );
 
 /**
- * Registers the in-process WASM prover, driven by the current ledger version, from a given protocol version upwards.
+ * Registers the in-process WASM prover, driven by ledger-v9, from a given protocol version upwards.
  *
  * @remarks
- *   Every entry here is the current ledger version's backend, so `sinceVersion` should not be below a protocol boundary:
- *   what a version below it needs is the pre-fork driver, which `makeDefaultProvingServices` registers from the fork
- *   version it is given. Registering nothing below is what turns that into an {@link UnsupportedProvingVersionError}
- *   naming the version, rather than a pre-fork transaction handed to a ledger that cannot read it.
+ *   Every entry here is ledger-v9's backend, so `sinceVersion` should not be below a protocol boundary: what a version
+ *   below it needs is the ledger-v8 driver, which `makeDefaultProvingServices` registers from the fork version it is
+ *   given. Registering nothing below is what turns that into an {@link UnsupportedProvingVersionError} naming the
+ *   version, rather than a ledger-v8 transaction handed to a ledger that cannot read it.
  * @param sinceVersion The first protocol version to register the bundled prover for.
  * @param configuration Optional key material override.
  * @returns The proving backends, keyed by version.

@@ -199,10 +199,14 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
    *
    * @remarks
    *   The in-process prover drives a zkir runtime over bytes and never looks at a ledger version, so there is nothing for
-   *   a pre-fork variant to do differently. It is offered under both names because the caller choosing a backend for an
-   *   epoch should not have to know which backends care about the epoch and which do not.
+   *   a ledger-v8 variant to do differently. It is offered under both names because the caller choosing a backend for
+   *   an epoch should not have to know which backends care about the epoch and which do not.
    */
-  asPreForkProvingProvider() {
+  asV9ProvingProvider() {
+    return this.wasmProverProvider();
+  }
+
+  asV8ProvingProvider() {
     return this.wasmProverProvider();
   }
 }
@@ -214,9 +218,9 @@ export type KeyMaterialConfig = {
    *
    * @remarks
    *   Not a ledger version, despite reading like one. Line 9 is what both ledger versions the SDK carries accept today —
-   *   the pre-fork ledger's own line predates the zkir runtime they share and its verifier keys are rejected outright —
-   *   which is why it is the default on both sides. The setting exists so an operator whose bucket says otherwise can
-   *   say so, not because a fork implies a change of line.
+   *   ledger-v8's own line predates the zkir runtime they share and its verifier keys are rejected outright — which is
+   *   why it is the default on both sides. The setting exists so an operator whose bucket says otherwise can say so,
+   *   not because a fork implies a change of line.
    */
   circuits?: 8 | 9;
 };
