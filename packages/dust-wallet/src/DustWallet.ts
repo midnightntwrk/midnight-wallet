@@ -368,9 +368,8 @@ export type DefaultDustConfiguration = {
    *   application points at, not of the SDK.
    *
    *   A node reporting a 2.x runtime version reports protocol version `2000000`, which is therefore the value for a
-   *   ledger-v9-native chain — the shielded package publishes it as `V9_NATIVE_FORK_VERSION`. The final mainnet fork
-   *   constant is not yet fixed; a `ProtocolVersion.Forks.*` default will ship once it is, and this field keeps working
-   *   unchanged.
+   *   ledger-v9-native chain — published as `ProtocolVersion.V9NativeForkVersion`. The final mainnet fork constant is
+   *   not yet fixed; it will join that one once it is, and this field keeps working unchanged.
    */
   forkVersion: ProtocolVersion.ProtocolVersion;
   /**

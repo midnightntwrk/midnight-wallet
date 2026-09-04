@@ -126,9 +126,8 @@ export const createWalletConfig = (
     networkId: NetworkId.NetworkId.Undeployed,
     txHistoryStorage: new InMemoryTransactionHistoryStorage(UnshieldedEntrySchema),
     // The ledger-v9-native node line these suites run against reports this protocol version, so the wallet reaches its
-    // post-fork variant. Spelled out rather than imported: it is published as `V9_NATIVE_FORK_VERSION` by the shielded
-    // package, which this one does not depend on.
-    forkVersion: ProtocolVersion.ProtocolVersion(2_000_000n),
+    // post-fork variant.
+    forkVersion: ProtocolVersion.V9NativeForkVersion,
   };
 
   return { ...defaultConfig, ...overrides };

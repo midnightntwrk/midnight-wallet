@@ -25,8 +25,7 @@ Unlike shielded transactions, unshielded operations do not use zero-knowledge pr
 
 ```typescript
 import { UnshieldedWallet, createKeystore, PublicKey } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
-import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { randomBytes } from 'node:crypto';
 
 // Configuration for the wallet
@@ -39,7 +38,7 @@ const configuration = {
   txHistoryStorage: new InMemoryTransactionHistoryStorage(),
   // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so it is supplied per environment.
-  forkVersion: V9_NATIVE_FORK_VERSION,
+  forkVersion: ProtocolVersion.V9NativeForkVersion,
 };
 
 // Create a keystore from a random unshielded seed

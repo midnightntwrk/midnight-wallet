@@ -21,7 +21,7 @@ import {
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
@@ -47,7 +47,7 @@ describe('Wallet Facade handling pending transactions', () => {
   beforeEach(async () => {
     configuration = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forkVersion: V9_NATIVE_FORK_VERSION,
+      forkVersion: ProtocolVersion.V9NativeForkVersion,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',

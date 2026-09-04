@@ -10,8 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
+import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import {
   type DustWalletConfiguration,
@@ -89,7 +88,7 @@ export const makeEnvironment = (
       // Every environment this testkit drives runs the ledger-v9-native node line, which reports this
       // protocol version, so the wallet reaches its post-fork variant. Defined once here rather than at
       // each construction site; the final mainnet fork constant is still an open question.
-      forkVersion: V9_NATIVE_FORK_VERSION,
+      forkVersion: ProtocolVersion.V9NativeForkVersion,
     };
   },
   getDustWalletConfig(): DustWalletConfiguration {
@@ -104,7 +103,7 @@ export const makeEnvironment = (
       },
       // The same boundary the shielded configuration names, for the same reason: this testkit's environments all run
       // the ledger-v9-native node line, so the dust wallet reaches its post-fork variant too.
-      forkVersion: V9_NATIVE_FORK_VERSION,
+      forkVersion: ProtocolVersion.V9NativeForkVersion,
     };
   },
   down: options.down ?? (async () => {}),

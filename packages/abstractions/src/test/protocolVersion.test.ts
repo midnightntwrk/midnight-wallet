@@ -29,6 +29,18 @@ describe('ProtocolVersion', () => {
     });
   });
 
+  describe('V9NativeForkVersion', () => {
+    it('is the version a midnight-node 2.x reports on its ledger events, 2000000', () => {
+      expect(ProtocolVersion.V9NativeForkVersion).toBe(2_000_000n);
+      expect(ProtocolVersion.is(ProtocolVersion.V9NativeForkVersion)).toBeTruthy();
+    });
+
+    it('lies strictly inside the supported range, so it splits it into two non-empty epochs', () => {
+      expect(ProtocolVersion.V9NativeForkVersion).toBeGreaterThan(ProtocolVersion.MinSupportedVersion);
+      expect(ProtocolVersion.V9NativeForkVersion).toBeLessThan(ProtocolVersion.MaxSupportedVersion);
+    });
+  });
+
   it.each([ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion])(
     'should be encodable and decodable',
     (input) => {
