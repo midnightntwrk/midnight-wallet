@@ -11,21 +11,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /**
- * The facade's registration fail-fast, when the indexer's flag and the ledger disagree.
+ * Which registrations the facade's fail-fast applies to.
  *
  * @remarks
  *   `createDustActionTransaction` refuses to build a registration whose own fee exceeds the dust it may claim, because
  *   the node would answer such a transaction with `Malformed(BalanceCheckOverspend)` and the caller would have nothing
- *   to go on. Which registrations get that check is the question here.
+ *   to go on. That check belongs only to a registration that funds its own fee — a first-time registration, over Night
+ *   the chain holds no dust generation for. A registration over Night that already generates claims nothing by design
+ *   (`feePayment` is `0n`) and the caller balances its fee externally with `balanceUnprovenTransaction({
+ *   tokenKindsToBalance: ['dust'] })`; running the check over it would refuse it for no reason.
  *
- *   The old answer read `meta.registeredForDustGeneration` — a creation-time value the indexer never revises. After the
- *   v8 -> v9 hard fork that value lies: the fork wipes dust generation state and the chain-side replay restores
- *   cNIGHT-backed generation only, so a native-NIGHT wallet's carried UTxOs all still say `true` while nothing they own
- *   generates a speck. Trusting the flag skipped the check, built a zero-fee registration, and let the node reject it.
- *
- *   These tests state the flag can no longer decide it. Rather than reproduce a fork here — which would prove the
- *   wallets, not the facade — they hand the facade UTxOs whose flag says `true` while the dust wallet holds nothing
- *   backing them, which is exactly the post-fork shape and exactly what the flag alone cannot tell apart.
+ *   Which of the two a registration is, is the indexer's `registeredForDustGeneration` reading on the Night, carried
+ *   through on `meta`. The indexer scopes that flag to the current dust epoch, so it is the wallet's one authority on
+ *   whether a UTxO generates, and the facade reads nothing else.
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
@@ -64,20 +62,20 @@ const nightGenesisMint = (
 });
 
 /**
- * The same UTxO, reported as the indexer reports one that was created while its address was registered.
+ * The same UTxO, reported as the indexer reports one that generates dust in the current epoch.
  *
  * @remarks
- *   Nothing else about it changes, and nothing about the wallet's dust state changes: no dust coin backs it either way.
- *   That is the whole point — the flag is the only difference between this and a plainly unregistered UTxO, and the fee
- *   decision must not turn on it.
+ *   Nothing else about it changes, and nothing about the wallet's dust state changes: the wallet holds no dust either
+ *   way. The flag is the only difference between this and a plainly unregistered UTxO, and it is what the fee decision
+ *   must turn on.
  */
 const flaggedRegistered = (coin: UtxoWithMeta): UtxoWithMeta => ({
   utxo: coin.utxo,
   meta: { ...coin.meta, registeredForDustGeneration: true },
 });
 
-describe('Dust registration fail-fast follows the ledger, not the indexer flag', () => {
-  it('fires for Night flagged as registered that no dust coin backs, and releases the booking', async () => {
+describe("Dust registration fail-fast follows the indexer's registeredForDustGeneration flag", () => {
+  it('fires for Night flagged unregistered whose accrued dust is below the fee, and releases the booking', async () => {
     return Effect.gen(function* () {
       const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
 
@@ -94,9 +92,9 @@ describe('Dust registration fail-fast follows the ledger, not the indexer flag',
       const stateBefore: FacadeState = yield* Effect.promise(() =>
         rx.firstValueFrom(facade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0))),
       );
-      const nightUtxos = stateBefore.unshielded.availableCoins
-        .filter((c) => c.utxo.type === NIGHT && c.meta.registeredForDustGeneration === false)
-        .map(flaggedRegistered);
+      const nightUtxos = stateBefore.unshielded.availableCoins.filter(
+        (c) => c.utxo.type === NIGHT && c.meta.registeredForDustGeneration === false,
+      );
       expect(nightUtxos.length).toBeGreaterThan(0);
       const bookedKeys = new Set(nightUtxos.map(utxoKey));
 
@@ -131,6 +129,41 @@ describe('Dust registration fail-fast follows the ledger, not the indexer flag',
       yield* waitForUnshieldedBalance(facade, NIGHT, 1n);
       yield* simulator.fastForward(10_000n);
 
+      const stateBefore: FacadeState = yield* Effect.promise(() =>
+        rx.firstValueFrom(facade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0))),
+      );
+      const nightUtxos = stateBefore.unshielded.availableCoins.filter(
+        (c) => c.utxo.type === NIGHT && c.meta.registeredForDustGeneration === false,
+      );
+      expect(nightUtxos.length).toBeGreaterThan(0);
+
+      const recipe = yield* Effect.promise(() =>
+        facade.registerNightUtxosForDustGeneration(
+          nightUtxos,
+          keys.signatureVerifyingKey,
+          keys.unshieldedKeystore.signDataAsync,
+        ),
+      );
+
+      expect(recipe.type).toBe('UNPROVEN_TRANSACTION');
+    }).pipe(Effect.scoped, Effect.runPromise);
+  });
+
+  it('does not fire for Night flagged registered, whose fee the caller balances externally', async () => {
+    return Effect.gen(function* () {
+      const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
+
+      const simulator = yield* Simulator.init({
+        genesisMints: [nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress)],
+        blockProducer: immediateBlockProducer(),
+      });
+      const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
+      const factories = createSimulatorWalletFactories(config);
+      const facade = yield* makeSimulatorFacade(config, keys, factories);
+
+      // Same standing as the firing case above — no fastForward, so nothing has accrued and the wallet holds no
+      // dust at all. Only the flag differs, and it takes the registration out of the fail-fast's reach entirely.
+      yield* waitForUnshieldedBalance(facade, NIGHT, 1n);
       const stateBefore: FacadeState = yield* Effect.promise(() =>
         rx.firstValueFrom(facade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0))),
       );

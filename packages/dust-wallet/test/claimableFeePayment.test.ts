@@ -16,11 +16,12 @@
 // The wait exists so a first-time registration can pay its own fee: the ledger lets a registration spend the
 // retroactive dust its still-generationless Night has accrued (`generationless_fee_availability`), and the wait is
 // how a caller finds out when that has reached the fee. Everything about the wait — how long it takes, whether it
-// ever resolves — is decided by one pure reading over the wallet's state, which is what these tests pin.
+// ever resolves — is decided by one pure reading over the Night UTxOs handed to it, which is what these tests pin.
 //
-// The reading may NOT be the indexer's `registeredForDustGeneration` flag. That flag is a creation-time value the
-// indexer never revises, and after the v8 -> v9 hard fork wipes dust state it says `true` for Night that generates
-// nothing at all — a wallet trusting it waits forever for dust that is already there.
+// The reading is the indexer's `registeredForDustGeneration` flag and nothing else. The indexer scopes that flag to
+// the current dust epoch, so it is the one authority on whether a UTxO still generates; the wallet's own dust
+// holdings do not enter into it, and a UTxO the flag calls registered is never waited on however little dust the
+// wallet has.
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { describe, expect, it } from 'vitest';
@@ -49,8 +50,8 @@ const capabilities = {
 const CREATED_AT = new Date(1_700_000_000_000);
 const NOW = new Date(CREATED_AT.getTime() + 60 * 60 * 1000);
 
-const nightUtxo = (outputNo: number, registeredForDustGeneration: boolean): UtxoWithMeta => ({
-  value: 1_000_000_000n,
+const nightUtxo = (outputNo: number, registeredForDustGeneration: boolean, value = 1_000_000_000n): UtxoWithMeta => ({
+  value,
   owner: ledger.sampleUserAddress(),
   type: NIGHT,
   intentHash: ledger.sampleIntentHash(),
@@ -84,34 +85,47 @@ const stateHolding = (coins: readonly Dust[]): DustWalletState => {
 };
 
 describe('claimableFeePayment', () => {
-  it('counts a Night UTxO the chain flags as registered when no dust coin backs it', () => {
-    // The post-fork native-NIGHT wallet: flag says registered, dust state says nothing generates. The registration
-    // that repairs it is a first-time registration as far as the ledger is concerned, and funds its own fee.
-    const utxo = nightUtxo(0, true);
+  it('counts a Night UTxO the indexer flags as unregistered', () => {
+    const utxo = nightUtxo(0, false);
 
-    expect(claimableFeePayment(stateHolding([]), [utxo], NOW)).toBeGreaterThan(0n);
+    expect(claimableFeePayment(stateHolding([]), [utxo], NOW) > 0n).toBe(true);
   });
 
   it('is exactly the dust that UTxO is estimated to have generated', () => {
-    const utxo = nightUtxo(0, true);
+    const utxo = nightUtxo(0, false);
     const state = stateHolding([]);
     const [estimated] = state.estimateDustGeneration([utxo], NOW);
 
     expect(claimableFeePayment(state, [utxo], NOW)).toBe(estimated.dust.generatedNow);
   });
 
-  it('ignores a Night UTxO a dust coin in the wallet already backs, whatever its flag says', () => {
-    const utxo = nightUtxo(0, false);
+  it('ignores a Night UTxO the indexer flags as registered, whatever dust the wallet holds', () => {
+    // Both readings of "whatever dust the wallet holds": a wallet with the dust coin that Night mints, and a wallet
+    // with none at all. The flag alone decides, so both claim nothing — including the empty wallet, whose holdings
+    // say the UTxO generates nothing while the indexer says it does.
+    const utxo = nightUtxo(0, true);
 
     expect(claimableFeePayment(stateHolding([dustCoinBacking(utxo, 1n)]), [utxo], NOW)).toBe(0n);
+    expect(claimableFeePayment(stateHolding([]), [utxo], NOW)).toBe(0n);
   });
 
-  it('takes the largest single generationless UTxO, since only one lands in the guaranteed slot', () => {
-    const backed = nightUtxo(0, false);
-    const free = nightUtxo(1, false);
-    const state = stateHolding([dustCoinBacking(backed, 1n)]);
-    const [freeEstimate] = state.estimateDustGeneration([free], NOW);
+  it('takes the largest single flag-false UTxO, since only one lands in the guaranteed slot', () => {
+    const small = nightUtxo(0, false, 1_000_000_000n);
+    const large = nightUtxo(1, false, 3_000_000_000n);
+    const state = stateHolding([]);
+    const [smallEstimate, largeEstimate] = state.estimateDustGeneration([small, large], NOW);
 
-    expect(claimableFeePayment(state, [backed, free], NOW)).toBe(freeEstimate.dust.generatedNow);
+    // Not the sum: the guaranteed slot holds one UTxO, so only one UTxO's retroactive dust is ever claimable.
+    expect(smallEstimate.dust.generatedNow > 0n).toBe(true);
+    expect(claimableFeePayment(state, [small, large], NOW)).toBe(largeEstimate.dust.generatedNow);
+  });
+
+  it('a flag-true UTxO does not raise the ceiling a flag-false one sets', () => {
+    const registered = nightUtxo(0, true, 3_000_000_000n);
+    const unregistered = nightUtxo(1, false, 1_000_000_000n);
+    const state = stateHolding([]);
+    const [, unregisteredEstimate] = state.estimateDustGeneration([registered, unregistered], NOW);
+
+    expect(claimableFeePayment(state, [registered, unregistered], NOW)).toBe(unregisteredEstimate.dust.generatedNow);
   });
 });
