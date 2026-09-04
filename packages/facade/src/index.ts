@@ -1158,16 +1158,18 @@ export class WalletFacade {
       throw error;
     }
 
-    // Step 4 (self-funding registration only) — Fail fast if the dust the guaranteed UTxOs may claim
-    // towards this registration's own fee is below that fee. Submitting would fail on-chain with
-    // BalanceCheckOverspend. Skip when no guaranteed UTxO is generationless, since `feePayment` is
-    // then 0 by design and the caller is expected to balance the fee externally via
-    // `balanceUnprovenTransaction({ tokenKindsToBalance: ['dust'] })`.
+    // Step 4 (first-time registration only) — Fail fast if the dust generated so far by the
+    // unregistered guaranteed UTxOs is below the registration's own fee. Submitting would fail
+    // on-chain with BalanceCheckOverspend. Skip for re-registration (all guaranteed UTxOs already
+    // registered) since `feePayment` is 0 by design and the caller is expected to balance the fee
+    // externally via `balanceUnprovenTransaction({ tokenKindsToBalance: ['dust'] })`.
     //
-    // Which registrations are self-funding is the dust wallet's answer, read off its own dust holdings — NOT
-    // `meta.registeredForDustGeneration`, which is a creation-time reading the indexer never revises and which,
-    // after the v8 -> v9 fork wipes dust state, says `true` for Night that generates nothing.
-    if (isRegistration && split.hasGenerationlessGuaranteed) {
+    // `registeredForDustGeneration` is the indexer's answer as of the chain's current dust epoch (indexer
+    // >= 4.4.0-rc.5), so it is the one authority on which of the two a registration is. Night carried across the
+    // v8 -> v9 fork arrives with it set to `false` — the fork wipes dust generation state and the unshielded
+    // crossing carries the flag accordingly — so a post-fork re-registration is correctly treated as first-time.
+    const hasUnregisteredGuaranteed = split.guaranteedUtxos.some((u) => !u.utxo.registeredForDustGeneration);
+    if (isRegistration && hasUnregisteredGuaranteed) {
       const fee = await this.dust.calculateFee([txWithDustActions]);
       if (split.feePayment < fee) {
         await this.unshielded.revertTransaction(txWithOffers);

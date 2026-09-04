@@ -62,16 +62,6 @@ export type NightUtxoSplitForDustRegistration = {
   readonly guaranteedUtxos: ReadonlyArray<UtxoWithFullDustDetails>;
   readonly fallibleUtxos: ReadonlyArray<UtxoWithFullDustDetails>;
   readonly feePayment: bigint;
-  /**
-   * Whether any guaranteed UTxO is generationless, and so whether this registration funds its own fee at all.
-   *
-   * @remarks
-   *   A caller that checks `feePayment` against the fee needs to know which registrations that check applies to: one
-   *   whose Night already generates claims nothing and balances its fee from Dust the wallet holds instead, and
-   *   comparing `0n` against a fee would refuse it for no reason. Reported here because the wallet's own state is what
-   *   decides it — see `CoinsAndBalancesCapability.isGenerationless`.
-   */
-  readonly hasGenerationlessGuaranteed: boolean;
 };
 
 // This interface should abstract over the transaction types used
@@ -80,7 +70,6 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
   readonly networkId: NetworkId;
   readonly costParams: TotalCostParameters;
   createDustGenerationTransaction(
-    state: TState,
     currentTime: Date,
     ttl: Date,
     nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
@@ -96,7 +85,6 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
    * For deregistration (`isRegistration === false`) the fee-payment allowance is always `0n`.
    */
   splitNightUtxosForDustRegistration(
-    state: TState,
     utxosWithDustValue: ReadonlyArray<UtxoWithFullDustDetails>,
     isRegistration: boolean,
   ): NightUtxoSplitForDustRegistration;
@@ -251,7 +239,6 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   }
 
   createDustGenerationTransaction(
-    state: CoreWallet,
     currentTime: Date,
     ttl: Date,
     nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
@@ -291,7 +278,14 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         const splitResult = this.getCoins().splitNightUtxos(nightUtxos);
 
         // if receiver is `undefined`, it means the coin(s) are being deregistered so the allowFeePayment should not be used
-        const feePayment = receiver ? this.generationlessFeeAvailability(state, splitResult.guaranteed) : 0n;
+        const feePayment = receiver
+          ? pipe(
+              splitResult.guaranteed,
+              IterableOps.filter((coin) => !coin.utxo.registeredForDustGeneration),
+              IterableOps.map((coin) => coin.dust.generatedNow),
+              BigIntOps.sumAll,
+            )
+          : 0n;
 
         const maybeGuaranteedOffer = makeOffer(splitResult.guaranteed);
         const maybeFallibleOffer = makeOffer(splitResult.fallible);
@@ -340,43 +334,25 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   }
 
   splitNightUtxosForDustRegistration(
-    state: CoreWallet,
     utxosWithDustValue: ReadonlyArray<UtxoWithFullDustDetails>,
     isRegistration: boolean,
   ): NightUtxoSplitForDustRegistration {
     const splitResult = this.getCoins().splitNightUtxos(utxosWithDustValue);
     // Deregistration must not claim dust as fee payment (matches the historical
     // `dustReceiverAddress === undefined` branch of createDustGenerationTransaction).
-    const feePayment = isRegistration ? this.generationlessFeeAvailability(state, splitResult.guaranteed) : 0n;
+    const feePayment = isRegistration
+      ? pipe(
+          splitResult.guaranteed,
+          IterableOps.filter((coin) => !coin.utxo.registeredForDustGeneration),
+          IterableOps.map((coin) => coin.dust.generatedNow),
+          BigIntOps.sumAll,
+        )
+      : 0n;
     return {
       guaranteedUtxos: splitResult.guaranteed,
       fallibleUtxos: splitResult.fallible,
       feePayment,
-      hasGenerationlessGuaranteed: splitResult.guaranteed.some((coin) =>
-        this.getCoins().isGenerationless(state, coin.utxo),
-      ),
     };
-  }
-
-  /**
-   * The Dust a registration over these guaranteed UTxOs may claim towards its own fee.
-   *
-   * @remarks
-   *   The ledger's `generationless_fee_availability`, in the wallet's terms: the Dust each input would have generated
-   *   since its creation, summed over the inputs the chain holds no generation for, and nothing for the rest. Which
-   *   inputs those are is the wallet's own state's answer, not the indexer's `registeredForDustGeneration` flag — see
-   *   `CoinsAndBalancesCapability.isGenerationless` for why the flag cannot be trusted across a hard fork.
-   * @param state Current state of the wallet.
-   * @param guaranteed The UTxOs bound for the guaranteed section.
-   * @returns The claimable fee payment, in Specks.
-   */
-  private generationlessFeeAvailability(state: CoreWallet, guaranteed: ReadonlyArray<UtxoWithFullDustDetails>): bigint {
-    return pipe(
-      guaranteed,
-      IterableOps.filter((coin) => this.getCoins().isGenerationless(state, coin.utxo)),
-      IterableOps.map((coin) => coin.dust.generatedNow),
-      BigIntOps.sumAll,
-    );
   }
 
   attachDustRegistration(

@@ -50,40 +50,6 @@ export const chooseCoin: CoinSelection = (coins) =>
 
 export type CoinsAndBalancesCapability<TState> = {
   getWalletBalance(state: TState, time: Date): Balance;
-
-  /**
-   * Whether a Night UTxO generates no Dust for this wallet — the ledger's `generationless` condition, read off the
-   * wallet's own holdings.
-   *
-   * @remarks
-   *   This is what decides whether a registration may fund its own fee. The ledger's `generationless_fee_availability`
-   *   credits a registration with the Dust its Night _would_ have generated, but only over the inputs whose initial
-   *   nonce it holds no generation for; claiming it for Night that already generates is an overspend the node rejects
-   *   outright.
-   *
-   *   The answer is the wallet's own dust holdings, not the indexer's `registeredForDustGeneration` flag on the UTxO.
-   *   That flag is a creation-time reading the indexer never revises, and across the v8 -> v9 hard fork it is simply
-   *   wrong: the fork wipes dust generation state and the chain-side replay restores cNIGHT-backed generation only, so
-   *   a native-NIGHT wallet's carried UTxOs all still say `true` while nothing they own generates a speck. It remains
-   *   useful as display metadata; it may not decide fee funding.
-   *
-   *   **Known limitation, deliberately accepted for now.** Night registered to generate Dust for _another_ wallet has
-   *   generation on the ledger but no coin here, so this reads it as generationless: a later re-registration by this
-   *   wallet would claim a self-funding allowance the ledger does not grant and be refused with
-   *   `InsufficientDustForRegistrationFee` — it fails closed, but a redesignation from a delegating wallet cannot be
-   *   built until then. The flag is the only signal that could tell those apart, and it cannot be trusted yet: the
-   *   indexer reports it as of the UTxO's creation and never revises it (verified post-fork: genesis outputs still read
-   *   `true` while the node holds no generation for them). Once the indexer reports it as of the queried block, combine
-   *   the two — generationless iff no backing coin AND the flag is false — and this limitation goes away.
-   *
-   *   Registration mints exactly one Dust coin per Night UTxO, naming it in `backingNight`, and spending Dust replaces
-   *   that coin with a successor carrying the same `backingNight` — so a Night UTxO that generates for this wallet
-   *   always has a coin here, available or booked, and one that does not, has none.
-   * @param state Current state of the wallet.
-   * @param utxo The Night UTxO to judge.
-   * @returns `true` when no Dust coin the wallet holds is backed by this UTxO.
-   */
-  isGenerationless(state: TState, utxo: UtxoWithMeta): boolean;
   getAvailableCoins(state: TState, time?: Date): readonly DustFullInfo[];
   getPendingCoins(state: TState, time?: Date): readonly DustFullInfo[];
   getTotalCoins(state: TState, time?: Date): ReadonlyArray<DustFullInfo>;
@@ -124,12 +90,6 @@ export const makeDefaultCoinsAndBalancesCapability = (
 ): CoinsAndBalancesCapability<CoreWallet> => {
   const getWalletBalance = (state: CoreWallet, time: Date): Balance => {
     return state.state.walletBalance(time);
-  };
-
-  const isGenerationless = (state: CoreWallet, utxo: UtxoWithMeta): boolean => {
-    const initialNonce = ledger.dustInitialNonce(BigInt(utxo.outputNo), utxo.intentHash);
-    // Booked coins count: a Dust coin spent by a transaction still in flight is still a coin this Night generated.
-    return ![...state.state.utxos, ...state.pendingDust].some((coin) => coin.backingNight === initialNonce);
   };
 
   const getGenerationInfo = (state: CoreWallet, coin: Dust): DustGenerationInfo | undefined => {
@@ -244,7 +204,6 @@ export const makeDefaultCoinsAndBalancesCapability = (
 
   return {
     getWalletBalance,
-    isGenerationless,
     getAvailableCoins,
     getPendingCoins,
     getTotalCoins,
