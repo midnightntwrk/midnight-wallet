@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
+import type { V8UnboundTransaction } from '../proving/v8ProvingService.js';
 import {
   makeValidationServiceEffect,
   type AnyLedgerParameters,
@@ -20,8 +21,14 @@ import {
   type WellFormedStrictnessFlags,
 } from './validationService.js';
 
-/** A pre-fork transaction that has been proven but not yet bound. */
-export type PreForkUnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
+/**
+ * A ledger-v8 transaction that has been proven but not yet bound.
+ *
+ * @remarks
+ *   Taken from proving rather than restated, exactly as ledger-v9's `UnboundTransaction` is: it is the ledger-v8 prover
+ *   that produces this shape, and validation is one of the things that can be asked about it.
+ */
+export type PreForkUnboundTransaction = V8UnboundTransaction;
 
 /**
  * Every pre-fork transaction shape well-formedness can be asked about — the pre-fork counterpart of

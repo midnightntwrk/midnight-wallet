@@ -10,11 +10,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+/*
+ * Proving in this process, either side of a protocol boundary.
+ *
+ * The bundled prover drives a zkir runtime over bytes and never looks at a ledger version, so — unlike a proof server,
+ * which is built against one — the same backend serves both epochs. One `provers` entry starting at the minimum
+ * supported version therefore covers the whole timeline: the SDK splits its range at `forkVersion` and drives each side
+ * with its own ledger.
+ */
 import {
   WalletSeeds,
   type DefaultConfiguration,
   DustWallet,
   InMemoryTransactionHistoryStorage,
+  ProtocolVersion,
   WalletEntrySchema,
   WalletFacade,
   ShieldedWallet,
@@ -24,11 +33,6 @@ import {
   mergeWalletEntries,
   V9_NATIVE_FORK_VERSION,
 } from '@midnightntwrk/wallet-sdk';
-import {
-  makeVersionedProvingServiceEffect,
-  makeWasmProvingServices,
-  wrapVersionedEffectService,
-} from '@midnightntwrk/wallet-sdk/capabilities';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
 
@@ -46,6 +50,9 @@ const configuration: DefaultConfiguration = {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
+  // The in-process prover, for every protocol version. `keyMaterialProvider` can be supplied here to point the prover
+  // at key material of your own; left out, it reads the published circuits, which both ledger versions accept.
+  provers: [{ sinceVersion: ProtocolVersion.MinSupportedVersion, backend: { kind: 'wasm' } }],
   indexerClientConnection: {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
@@ -64,14 +71,6 @@ const initWalletWithSeed = async (seed: Buffer) => {
     shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
     dust: (config) => DustWallet(config).startWithSeed(seeds.dust),
-    // In-process proving instead of a proof server. The prover holds the post-fork ledger's circuits, so it answers
-    // from `forkVersion`, the way a proof server does under `provingServers`: a transaction is proved by the backend
-    // registered for the version its own bytes were authored at. The pre-fork ledger has no in-process prover, so on a
-    // chain below the boundary that range is served by a proof server built for it — one more entry in the same
-    // registry, `{ range: makeRange(MinSupportedVersion, forkVersion), value: makeServerProvingServiceEffect({ url }) }`,
-    // once such a server is deployed. Until then this wallet proves nothing below `forkVersion`.
-    provingService: () =>
-      wrapVersionedEffectService(makeVersionedProvingServiceEffect(makeWasmProvingServices(V9_NATIVE_FORK_VERSION))),
   });
 
   await wallet.start(seeds);

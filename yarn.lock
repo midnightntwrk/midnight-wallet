@@ -2407,6 +2407,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-integration-tests@workspace:packages/wallet-integration-tests"
   dependencies:
+    "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
     "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.4"
     "@midnightntwrk/wallet-sdk-abstractions": "npm:^3.0.0-beta.0"
     "@midnightntwrk/wallet-sdk-address-format": "npm:^4.0.0-beta.2"
@@ -2455,6 +2456,7 @@ __metadata:
   resolution: "@midnight/wallet-e2e-tests@workspace:packages/e2e-tests"
   dependencies:
     "@cardano-sdk/key-management": "npm:0.29.18"
+    "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
     "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.4"
     "@midnightntwrk/wallet-sdk-abstractions": "workspace:*"
     "@midnightntwrk/wallet-sdk-address-format": "workspace:*"
@@ -2679,6 +2681,7 @@ __metadata:
   resolution: "@midnightntwrk/wallet-sdk-prover-client@workspace:packages/prover-client"
   dependencies:
     "@effect/platform": "npm:^0.96.0"
+    "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
     "@midnight-ntwrk/zkir-v2": "npm:^2.1.0"
     "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.4"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.2.1"
