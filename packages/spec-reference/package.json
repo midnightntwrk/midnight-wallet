@@ -18,7 +18,7 @@
     "commander": "^14.0.0"
   },
   "devDependencies": {
-    "tsx": "4.22.4"
+    "tsx": "4.23.12"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
