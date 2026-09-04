@@ -24,8 +24,8 @@ no longer import a ledger package.
 ### Breaking: configuration and starting
 
 - `forkVersion` is required in the shielded, dust, unshielded and facade configurations: the protocol version at which
-  the chain switches ledgers. There is no default. `V9_NATIVE_FORK_VERSION`, exported from the shielded package, is the
-  value a 2.x chain reports (2000000); the final mainnet constant is not fixed yet, so supply it per environment.
+  the chain switches ledgers. There is no default. `ProtocolVersion.V9NativeForkVersion`, from the abstractions package, is
+  the value a 2.x chain reports (2000000); the final mainnet constant is not fixed yet, so supply it per environment.
 - `chainVersionProbe` is a new optional setting on all three wallets. By default a wallet asks the indexer, on every
   start, which protocol version the chain's first block was produced under, with a 5-second timeout, and starts on the
   matching side. A failed probe never fails a start: the wallet starts pre-fork and crosses on its first synced update.
@@ -79,7 +79,7 @@ no longer import a ledger package.
   `SchemeMismatchError`; `Simulator` on `./v1` is the ledger-v8 simulator only. Both subpaths gain a `Migration`
   namespace, and their builders gain `withStartAux`, `withStartAuxDefaults`, `withMigration` and
   `withMigrationDefaults`.
-- Root entry points keep their names and gain the forking wallet types, `V9_NATIVE_FORK_VERSION`, `DustGenerationRates`
+- Root entry points keep their names and gain the forking wallet types, `ProtocolVersion.V9NativeForkVersion`, `DustGenerationRates`
   with `asPreForkDustParameters` and `asPostForkDustParameters`, and snapshot inspection: `Restore` (shielded) and
   `UnshieldedRestore` namespaces, and the dust `peekProtocolVersion` and `UnsupportedSnapshotVersionError`.
 - Existing snapshots restore; `restore` and the new `tryRestore` route on the protocol version a snapshot declares, and

@@ -15,7 +15,6 @@ import {
   type ShieldedWalletClass,
   type ShieldedWalletState,
   type DefaultShieldedConfiguration,
-  V9_NATIVE_FORK_VERSION,
 } from '@midnightntwrk/wallet-sdk-shielded';
 import { UnshieldedWallet, createKeystore, PublicKey } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import * as ledger from '@midnightntwrk/ledger-v9';
@@ -29,7 +28,7 @@ import { firstValueFrom } from 'rxjs';
 import * as rx from 'rxjs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed } from './utils.js';
-import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
@@ -58,7 +57,7 @@ describe('Wallet serialization and restoration', () => {
     indexerPort = startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088);
 
     shieldedConfiguration = {
-      forkVersion: V9_NATIVE_FORK_VERSION,
+      forkVersion: ProtocolVersion.V9NativeForkVersion,
       indexerClientConnection: {
         indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
       },
@@ -69,7 +68,7 @@ describe('Wallet serialization and restoration', () => {
     unshieldedConfiguration = {
       // The same boundary the shielded configuration names, for the same reason: this stack runs the
       // ledger-v9-native node line, so the unshielded wallet reaches its post-fork variant too.
-      forkVersion: V9_NATIVE_FORK_VERSION,
+      forkVersion: ProtocolVersion.V9NativeForkVersion,
       indexerClientConnection: {
         indexerWsUrl: `ws://localhost:${indexerPort}/api/v4/graphql/ws`,
         indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,

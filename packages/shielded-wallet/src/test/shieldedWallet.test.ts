@@ -26,7 +26,7 @@ const configuration: DefaultShieldedConfiguration = {
   networkId: NetworkId.NetworkId.Undeployed,
   indexerClientConnection: { indexerHttpUrl: 'http://localhost:8088/api/v4/graphql' },
   txHistoryStorage: new InMemoryTransactionHistoryStorage(TransactionHistory.ShieldedTransactionHistoryEntrySchema),
-  forkVersion: V9_NATIVE_FORK_VERSION,
+  forkVersion: ProtocolVersion.V9NativeForkVersion,
 };
 
 /**

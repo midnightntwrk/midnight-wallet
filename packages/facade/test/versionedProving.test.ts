@@ -29,7 +29,7 @@ import {
   type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { Cause, Either, Option, Runtime } from 'effect';
 import * as rx from 'rxjs';
@@ -71,7 +71,7 @@ describe('Proving a transaction at the version it was built for', () => {
   beforeEach(async () => {
     configuration = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forkVersion: V9_NATIVE_FORK_VERSION,
+      forkVersion: ProtocolVersion.V9NativeForkVersion,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       provingServers: [{ sinceVersion: ProtocolVersion.MinSupportedVersion, url: new URL('http://localhost:6300') }],
@@ -146,7 +146,7 @@ describe('Proving a transaction at the version it was built for', () => {
   });
 
   it('refuses a transaction built on the other side of the boundary, without asking any prover', async () => {
-    const failure = await facade.finalizeTransaction(anyTransaction(V9_NATIVE_FORK_VERSION)).then(
+    const failure = await facade.finalizeTransaction(anyTransaction(ProtocolVersion.V9NativeForkVersion)).then(
       () => undefined,
       (error: unknown) => error,
     );
@@ -167,7 +167,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
   const started = async (proving: Partial<DefaultConfiguration>): Promise<WalletFacade> => {
     const configuration: DefaultConfiguration = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forkVersion: V9_NATIVE_FORK_VERSION,
+      forkVersion: ProtocolVersion.V9NativeForkVersion,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       costParameters: { feeBlocksMargin: 0 },
@@ -240,7 +240,10 @@ describe('Proving with the backend configured for the epoch a transaction belong
 
   const provenBy = (finalized: WalletTransaction<WalletTransaction.Stage>) =>
     Either.getOrThrow(
-      WalletTransaction.unwrapWithin<unknown>(finalized, ProtocolVersion.epochOf(PRE_FORK, V9_NATIVE_FORK_VERSION)),
+      WalletTransaction.unwrapWithin<unknown>(
+        finalized,
+        ProtocolVersion.epochOf(PRE_FORK, ProtocolVersion.V9NativeForkVersion),
+      ),
     );
 
   const v8ServerAndV9Wasm: Partial<DefaultConfiguration> = {
@@ -249,7 +252,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
         sinceVersion: ProtocolVersion.MinSupportedVersion,
         backend: { kind: 'server', url: new URL('http://pre-fork-prover:6300') },
       },
-      { sinceVersion: V9_NATIVE_FORK_VERSION, backend: { kind: 'wasm' } },
+      { sinceVersion: ProtocolVersion.V9NativeForkVersion, backend: { kind: 'wasm' } },
     ],
   };
 
@@ -286,7 +289,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
     const facade = await started({
       provers: [
         {
-          sinceVersion: V9_NATIVE_FORK_VERSION,
+          sinceVersion: ProtocolVersion.V9NativeForkVersion,
           backend: { kind: 'server', url: new URL('http://post-fork-prover:6300') },
         },
       ],

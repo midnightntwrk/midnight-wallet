@@ -41,7 +41,7 @@ import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pend
 import type { PendingTransactionsService } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet, type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet, type ShieldedWalletState, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, type ShieldedWalletState } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
   PublicKey,
@@ -72,7 +72,7 @@ import {
 } from './utils/index.js';
 
 /** The boundary this chain forks at. */
-const forkVersion = V9_NATIVE_FORK_VERSION;
+const forkVersion = ProtocolVersion.V9NativeForkVersion;
 
 /** Where the three wallets are before it: one epoch, ordinary drift within it. */
 const beforeFork = ProtocolVersion.ProtocolVersion(3n);

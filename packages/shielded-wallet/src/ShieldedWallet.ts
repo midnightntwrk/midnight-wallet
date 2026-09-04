@@ -237,20 +237,13 @@ export type CustomizedShieldedWallet<
   WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
 /**
- * The protocol version a ledger-v9-native chain hands over at, for the current node line.
+ * The protocol version a ledger-v9-native chain hands over at.
  *
- * @remarks
- *   Measured, not assumed: a `midnight-node` 2.x reports protocol version `2000000` on its ledger events — the runtime
- *   version, scaled, rather than a small ordinal or the ledger major. A chain of the previous node line reports a
- *   1.x-encoded value, which is below this, so a wallet configured with it stays on the pre-fork variant there and
- *   reaches the post-fork variant on any v9-native chain.
- *
- *   Offered as a named value so applications and test suites pointed at a v9-native chain do not each invent a magic
- *   number. It is **not** a default: {@link DefaultShieldedConfiguration.forkVersion} stays required, because the right
- *   value is a property of the chain an application points at. The final mainnet fork constant is still an open
- *   question; when it is fixed a `ProtocolVersion.Forks.*` value will join this one.
+ * @deprecated Use {@link ProtocolVersion.V9NativeForkVersion} from `@midnightntwrk/wallet-sdk-abstractions` (or the
+ *   umbrella package) — the value is a property of the chain, not of the shielded wallet, and lives with the version
+ *   type now. This alias is the same value and will be removed in a later release.
  */
-export const V9_NATIVE_FORK_VERSION: ProtocolVersion.ProtocolVersion = ProtocolVersion.ProtocolVersion(2_000_000n);
+export const V9_NATIVE_FORK_VERSION: ProtocolVersion.ProtocolVersion = ProtocolVersion.V9NativeForkVersion;
 
 /**
  * The configuration a default {@link ShieldedWallet} is built from.

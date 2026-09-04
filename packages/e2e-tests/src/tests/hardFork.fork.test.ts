@@ -30,7 +30,7 @@ import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type WalletSeeds as WalletSeedsType, WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
-import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
   PublicKey,
@@ -265,7 +265,7 @@ const projectionsTwinDustWallet = (configuration: DefaultDustConfiguration) => {
 const hasCrossed = (state: FacadeState | undefined): boolean =>
   state !== undefined &&
   state.protocol._tag === 'Settled' &&
-  state.activeProtocolVersion >= V9_NATIVE_FORK_VERSION &&
+  state.activeProtocolVersion >= ProtocolVersion.V9NativeForkVersion &&
   state.isSynced;
 
 describe.sequential('Hard fork crossing @fork', () => {
@@ -326,7 +326,10 @@ describe.sequential('Hard fork crossing @fork', () => {
           sinceVersion: ProtocolVersion.MinSupportedVersion,
           backend: { kind: 'server', url: new URL(fixture.getV8ProverUri()) },
         },
-        { sinceVersion: V9_NATIVE_FORK_VERSION, backend: { kind: 'server', url: new URL(fixture.getProverUri()) } },
+        {
+          sinceVersion: ProtocolVersion.V9NativeForkVersion,
+          backend: { kind: 'server', url: new URL(fixture.getProverUri()) },
+        },
       ] as const satisfies DefaultConfiguration['provers'],
     };
     unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, fixture.getNetworkId());
@@ -376,7 +379,7 @@ describe.sequential('Hard fork crossing @fork', () => {
     logger.info(`PRE-FORK SYNCED ${summarize(preFork)}`);
 
     expect(preFork.protocol._tag).toBe('Settled');
-    expect(preFork.activeProtocolVersion).toBeLessThan(V9_NATIVE_FORK_VERSION);
+    expect(preFork.activeProtocolVersion).toBeLessThan(ProtocolVersion.V9NativeForkVersion);
 
     const specVersion = await fixture.specVersionAtHead();
     expect(specVersion).toBe(PRE_FORK_SPEC_VERSION);
@@ -403,7 +406,7 @@ describe.sequential('Hard fork crossing @fork', () => {
           ` ${twinState.dust.state.progress.highestIndex}`,
       );
 
-      expect(twinState.protocolVersion.dust).toBeLessThan(V9_NATIVE_FORK_VERSION);
+      expect(twinState.protocolVersion.dust).toBeLessThan(ProtocolVersion.V9NativeForkVersion);
       expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
       expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
     },
@@ -426,7 +429,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       expect(receiverBefore.unshielded.balances[NIGHT] ?? 0n).toBe(0n);
 
       const before = await wallet.waitForSyncedState();
-      expect(before.activeProtocolVersion).toBeLessThan(V9_NATIVE_FORK_VERSION);
+      expect(before.activeProtocolVersion).toBeLessThan(ProtocolVersion.V9NativeForkVersion);
       const nightBefore = before.unshielded.balances[NIGHT];
 
       // Dust accrues with time, and this chain is seconds old: for the first half-minute of it there is not enough for
@@ -487,7 +490,7 @@ describe.sequential('Hard fork crossing @fork', () => {
     logger.info(`phase transitions observed: ${observed.phases.join('  ->  ')}`);
 
     expect(postFork.protocol._tag).toBe('Settled');
-    expect(postFork.activeProtocolVersion).toBeGreaterThanOrEqual(V9_NATIVE_FORK_VERSION);
+    expect(postFork.activeProtocolVersion).toBeGreaterThanOrEqual(ProtocolVersion.V9NativeForkVersion);
     expect(postFork.isSynced).toBe(true);
 
     // The wallets do not cross together: each learns of the change when its own synchronization
@@ -515,7 +518,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       logDustCounts('B post-fork', eventsState, twinState);
 
       expect(twinState.protocol._tag).toBe('Settled');
-      expect(twinState.activeProtocolVersion).toBeGreaterThanOrEqual(V9_NATIVE_FORK_VERSION);
+      expect(twinState.activeProtocolVersion).toBeGreaterThanOrEqual(ProtocolVersion.V9NativeForkVersion);
       expect(twinState.isSynced).toBe(true);
       // The twin's post-fork variant has exactly one synchronization — the projections one — so a settled post-fork
       // state is itself the proof that the projections path ran, and ran on a state produced by the migration.

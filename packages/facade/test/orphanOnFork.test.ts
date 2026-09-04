@@ -25,7 +25,7 @@ import {
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import type { PendingTransactionsService } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { DateTime, Option } from 'effect';
 import * as rx from 'rxjs';
@@ -101,7 +101,7 @@ describe('A pending transaction the fork left behind', () => {
   beforeEach(async () => {
     configuration = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forkVersion: V9_NATIVE_FORK_VERSION,
+      forkVersion: ProtocolVersion.V9NativeForkVersion,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       provingServerUrl: new URL('http://localhost:6300'),
@@ -191,7 +191,7 @@ describe('A pending transaction the fork left behind', () => {
           result: {
             status: 'ORPHANED_BY_FORK',
             authoredFor: ProtocolVersion.MinSupportedVersion,
-            chainNow: V9_NATIVE_FORK_VERSION,
+            chainNow: ProtocolVersion.V9NativeForkVersion,
           },
         },
       ],
