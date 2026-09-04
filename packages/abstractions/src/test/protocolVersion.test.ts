@@ -55,3 +55,17 @@ describe('ProtocolVersion', () => {
     },
   );
 });
+
+describe('ForkSchedule', () => {
+  it('names where each ledger version after the first begins, keyed by ledger version', () => {
+    const schedule: ProtocolVersion.ForkSchedule = { v9: ProtocolVersion.V9NativeForkVersion };
+    expect(schedule.v9).toBe(ProtocolVersion.V9NativeForkVersion);
+  });
+
+  it('has no entry for ledger-v8, which begins at MinSupportedVersion', () => {
+    // A type-level fact stated as a value: were `v8` a key, this annotation would be `true` and the assignment would
+    // not compile.
+    const v8Scheduled: 'v8' extends keyof ProtocolVersion.ForkSchedule ? true : false = false;
+    expect(v8Scheduled).toBe(false);
+  });
+});

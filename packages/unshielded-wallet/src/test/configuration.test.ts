@@ -31,7 +31,7 @@ describe('DefaultUnshieldedConfiguration', () => {
           networkId: NetworkId.NetworkId;
           indexerClientConnection: V2Sync.IndexerClientConnection;
           txHistoryStorage: V2TransactionHistory.UnshieldedHistoryStorage;
-          forkVersion: ProtocolVersion.ProtocolVersion;
+          forks: ProtocolVersion.ForkSchedule;
           chainVersionProbe?: ChainVersionProbe;
         }
       >
@@ -48,9 +48,9 @@ describe('DefaultUnshieldedConfiguration', () => {
     // here so a divergence shows up as a compile error rather than as a wallet that cannot be built for one of them.
     type _2 = Expect<CanAssign<DefaultUnshieldedConfiguration, DefaultV1Configuration>>;
 
-    // `forkVersion` is the wallet layer's alone: neither variant knows there is another one.
-    type _3 = Expect<Equal<'forkVersion' extends keyof DefaultV1Configuration ? true : false, false>>;
-    type _4 = Expect<Equal<'forkVersion' extends keyof DefaultV2Configuration ? true : false, false>>;
+    // `forks` is the wallet layer's alone: neither variant knows there is another one.
+    type _3 = Expect<Equal<'forks' extends keyof DefaultV1Configuration ? true : false, false>>;
+    type _4 = Expect<Equal<'forks' extends keyof DefaultV2Configuration ? true : false, false>>;
 
     // And so is the question of where to start, for the same reason: a variant that does not know there is another
     // one has no use for the answer.
