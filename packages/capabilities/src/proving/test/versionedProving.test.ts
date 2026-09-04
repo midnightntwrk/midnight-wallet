@@ -13,14 +13,24 @@
 import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { Cause, Effect, Either, Exit, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { fromV8ProvingProvider } from '../v8ProvingService.js';
-import { ProvingConfigurationError, ProvingEpochMismatchError, resolveProvingBackends } from '../provingService.js';
+import {
+  ProvingConfigurationError,
+  ProvingEpochMismatchError,
+  resolveProvingBackends,
+  UnsupportedProvingVersionError,
+  type DefaultProvingConfiguration,
+  type ProvingBackend,
+  type ProvingBackends,
+} from '../provingService.js';
 import { makeDefaultProvingServices, makeDefaultVersionedProvingServiceEffect } from '../versionedProving.js';
 
 const version = (value: bigint): ProtocolVersion.ProtocolVersion => ProtocolVersion.ProtocolVersion(value);
 const FORK = version(2_000_000n);
+const FORKS: ProtocolVersion.ForkSchedule = { v9: FORK };
 const BEFORE_FORK = version(5n);
 
 /**
@@ -70,14 +80,14 @@ describe('Proving with ledger-v8', () => {
 
 describe('Composing proving backends either side of the protocol boundary', () => {
   const bothSides = {
-    provers: [
-      { sinceVersion: ProtocolVersion.MinSupportedVersion, backend: { kind: 'server', url: unusedServer('pre-fork') } },
-      { sinceVersion: FORK, backend: { kind: 'server', url: unusedServer('post-fork') } },
-    ],
+    provers: {
+      v8: { kind: 'server', url: unusedServer('pre-fork') },
+      v9: { kind: 'server', url: unusedServer('post-fork') },
+    },
   } as const;
 
   it('proves a transaction stamped below the fork with ledger-v8', async () => {
-    const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORK));
+    const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORKS));
 
     const proven = await Effect.runPromise(router.prove(aV8Transaction(), BEFORE_FORK));
 
@@ -86,7 +96,7 @@ describe('Composing proving backends either side of the protocol boundary', () =
   });
 
   it('proves a transaction stamped at the fork with ledger-v9', async () => {
-    const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORK));
+    const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORKS));
 
     const proven = await Effect.runPromise(router.prove(aCurrentLedgerTransaction(), FORK));
 
@@ -94,10 +104,26 @@ describe('Composing proving backends either side of the protocol boundary', () =
     expect(proven).not.toBeInstanceOf(preForkLedger.Transaction);
   });
 
-  it('splits a backend whose range straddles the fork, so each side is driven by its own ledger', async () => {
+  it('takes the range each backend serves from the fork schedule, and from nowhere else', () => {
+    // The configuration names a backend per ledger version and says nothing about protocol versions; where one ledger
+    // version ends and the next begins is the chain's fork schedule, stated once. Moving the boundary moves the ranges.
+    const atTheNativeFork = Either.getOrThrow(makeDefaultProvingServices(bothSides, FORKS));
+    expect(atTheNativeFork.entries.map((entry) => entry.range)).toStrictEqual([
+      ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, FORK),
+      ProtocolVersion.makeRange(FORK, ProtocolVersion.MaxSupportedVersion),
+    ]);
+
+    const atSeven = Either.getOrThrow(makeDefaultProvingServices(bothSides, { v9: version(7n) }));
+    expect(atSeven.entries.map((entry) => entry.range)).toStrictEqual([
+      ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, version(7n)),
+      ProtocolVersion.makeRange(version(7n), ProtocolVersion.MaxSupportedVersion),
+    ]);
+  });
+
+  it('drives the single-server shorthand with each ledger version on its own side of the fork', async () => {
     // One server for every version says nothing about ledger versions, and cannot: the two epochs frame their proving
-    // requests differently. Splitting the range at the boundary is what makes the same URL mean the right thing twice.
-    const services = Either.getOrThrow(makeDefaultProvingServices({ provingServerUrl: unusedServer('only') }, FORK));
+    // requests differently. Registering the same URL once per side is what makes it mean the right thing twice.
+    const services = Either.getOrThrow(makeDefaultProvingServices({ provingServerUrl: unusedServer('only') }, FORKS));
 
     expect(services.entries.map((entry) => entry.range)).toStrictEqual([
       ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, FORK),
@@ -105,7 +131,7 @@ describe('Composing proving backends either side of the protocol boundary', () =
     ]);
 
     const router = Either.getOrThrow(
-      makeDefaultVersionedProvingServiceEffect({ provingServerUrl: unusedServer('only') }, FORK),
+      makeDefaultVersionedProvingServiceEffect({ provingServerUrl: unusedServer('only') }, FORKS),
     );
     expect(await Effect.runPromise(router.prove(aV8Transaction(), BEFORE_FORK))).toBeInstanceOf(
       preForkLedger.Transaction,
@@ -113,28 +139,45 @@ describe('Composing proving backends either side of the protocol boundary', () =
     expect(await Effect.runPromise(router.prove(aCurrentLedgerTransaction(), FORK))).toBeInstanceOf(ledger.Transaction);
   });
 
-  it('registers a single epoch for a chain whose boundary is at or below the minimum supported version', async () => {
-    const services = Either.getOrThrow(
-      makeDefaultProvingServices({ provingServerUrl: unusedServer('only') }, ProtocolVersion.MinSupportedVersion),
-    );
+  it('registers nothing below the fork when no ledger-v8 backend is named, and says so for a transaction stamped there', async () => {
+    const postForkOnly = { provers: { v9: { kind: 'server', url: unusedServer('post-fork') } } } as const;
 
+    const services = Either.getOrThrow(makeDefaultProvingServices(postForkOnly, FORKS));
     expect(services.entries.map((entry) => entry.range)).toStrictEqual([
-      ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion),
+      ProtocolVersion.makeRange(FORK, ProtocolVersion.MaxSupportedVersion),
     ]);
 
-    const router = Either.getOrThrow(
-      makeDefaultVersionedProvingServiceEffect(
-        { provingServerUrl: unusedServer('only') },
-        ProtocolVersion.MinSupportedVersion,
+    const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(postForkOnly, FORKS));
+    const error = await failureOf(router.prove(aV8Transaction(), BEFORE_FORK));
+    expect(error).toBeInstanceOf(UnsupportedProvingVersionError);
+    expect((error as UnsupportedProvingVersionError).protocolVersion).toStrictEqual(BEFORE_FORK);
+  });
+
+  it('registers a single ledger-v9 epoch for a chain whose boundary is at or below the minimum supported version', async () => {
+    // Such a chain has no history ledger-v8 authored, so a ledger-v8 backend has no epoch to serve, whether it was named
+    // outright or implied by the single-server shorthand.
+    const bornOnV9: ProtocolVersion.ForkSchedule = { v9: ProtocolVersion.MinSupportedVersion };
+    const wholeTimeline = [
+      ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion),
+    ];
+
+    expect(
+      Either.getOrThrow(makeDefaultProvingServices(bothSides, bornOnV9)).entries.map((entry) => entry.range),
+    ).toStrictEqual(wholeTimeline);
+    expect(
+      Either.getOrThrow(makeDefaultProvingServices({ provingServerUrl: unusedServer('only') }, bornOnV9)).entries.map(
+        (entry) => entry.range,
       ),
-    );
+    ).toStrictEqual(wholeTimeline);
+
+    const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, bornOnV9));
     expect(await Effect.runPromise(router.prove(aCurrentLedgerTransaction(), BEFORE_FORK))).toBeInstanceOf(
       ledger.Transaction,
     );
   });
 
   it('refuses a transaction from the other side of the boundary, naming the epoch the backend serves', async () => {
-    const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORK));
+    const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORKS));
 
     const error = await failureOf(router.prove(aCurrentLedgerTransaction(), BEFORE_FORK));
 
@@ -145,7 +188,7 @@ describe('Composing proving backends either side of the protocol boundary', () =
   });
 
   it('refuses a ledger-v8 transaction handed to ledger-v9, naming the epoch that backend serves', async () => {
-    const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORK));
+    const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORKS));
 
     const error = await failureOf(router.prove(aV8Transaction(), FORK));
 
@@ -156,61 +199,35 @@ describe('Composing proving backends either side of the protocol boundary', () =
   });
 });
 
-describe('Reading which backend serves which protocol version', () => {
-  it('reads the version-keyed backends as the versions they each start serving', () => {
-    const registry = Either.getOrThrow(
+describe('Reading which backend proves for which ledger version', () => {
+  it('reads the backends keyed by ledger version as given', () => {
+    const backends = Either.getOrThrow(
       resolveProvingBackends({
-        provers: [
-          { sinceVersion: ProtocolVersion.MinSupportedVersion, backend: { kind: 'server', url: unusedServer('pre') } },
-          { sinceVersion: FORK, backend: { kind: 'wasm' } },
-        ],
+        provers: { v8: { kind: 'server', url: unusedServer('pre') }, v9: { kind: 'wasm' } },
       }),
     );
 
-    expect(ProtocolVersion.select(registry, BEFORE_FORK)).toStrictEqual(
-      Option.some({ kind: 'server', url: unusedServer('pre') }),
-    );
-    expect(ProtocolVersion.select(registry, FORK)).toStrictEqual(Option.some({ kind: 'wasm' }));
+    expect(backends).toStrictEqual({ v8: { kind: 'server', url: unusedServer('pre') }, v9: { kind: 'wasm' } });
   });
 
-  it('prefers the version-keyed backends over both server shorthands', () => {
-    const registry = Either.getOrThrow(
-      resolveProvingBackends({
-        provingServerUrl: unusedServer('ignored'),
-        provingServers: [{ sinceVersion: ProtocolVersion.MinSupportedVersion, url: unusedServer('also-ignored') }],
-        provers: [
-          {
-            sinceVersion: ProtocolVersion.MinSupportedVersion,
-            backend: { kind: 'server', url: unusedServer('named') },
-          },
-        ],
-      }),
-    );
+  it('reads the single-server shorthand as that server for every ledger version', () => {
+    const backends = Either.getOrThrow(resolveProvingBackends({ provingServerUrl: unusedServer('only') }));
 
-    expect(ProtocolVersion.select(registry, FORK)).toStrictEqual(
-      Option.some({ kind: 'server', url: unusedServer('named') }),
-    );
+    expect(backends).toStrictEqual({
+      v8: { kind: 'server', url: unusedServer('only') },
+      v9: { kind: 'server', url: unusedServer('only') },
+    });
   });
 
-  it('prefers the version-keyed server list over the single-server shorthand', () => {
-    const registry = Either.getOrThrow(
+  it('prefers the backends keyed by ledger version over the single-server shorthand', () => {
+    const backends = Either.getOrThrow(
       resolveProvingBackends({
         provingServerUrl: unusedServer('ignored'),
-        provingServers: [{ sinceVersion: ProtocolVersion.MinSupportedVersion, url: unusedServer('listed') }],
+        provers: { v9: { kind: 'server', url: unusedServer('named') } },
       }),
     );
 
-    expect(ProtocolVersion.select(registry, FORK)).toStrictEqual(
-      Option.some({ kind: 'server', url: unusedServer('listed') }),
-    );
-  });
-
-  it('reads the single-server shorthand as one server for every version', () => {
-    const registry = Either.getOrThrow(resolveProvingBackends({ provingServerUrl: unusedServer('only') }));
-
-    expect(ProtocolVersion.select(registry, ProtocolVersion.MinSupportedVersion)).toStrictEqual(
-      Option.some({ kind: 'server', url: unusedServer('only') }),
-    );
+    expect(backends).toStrictEqual({ v9: { kind: 'server', url: unusedServer('named') } });
   });
 
   it('refuses a configuration that names no backend at all', () => {
@@ -220,22 +237,19 @@ describe('Reading which backend serves which protocol version', () => {
     expect(Either.getLeft(failure).pipe(Option.getOrThrow)).toBeInstanceOf(ProvingConfigurationError);
   });
 
-  it('refuses backends that are not in ascending version order', () => {
-    const failure = resolveProvingBackends({
-      provers: [
-        { sinceVersion: FORK, backend: { kind: 'server', url: unusedServer('later') } },
-        {
-          sinceVersion: ProtocolVersion.MinSupportedVersion,
-          backend: { kind: 'server', url: unusedServer('earlier') },
-        },
-      ],
-    });
-
-    expect(Either.isLeft(failure)).toBe(true);
-    expect(Either.getLeft(failure).pipe(Option.getOrThrow)).toBeInstanceOf(ProvingConfigurationError);
+  it('keys the backends the way the fork schedule is keyed, plus the ledger version the schedule leaves implicit', () => {
+    // The two maps must not be able to drift: every ledger version the schedule can place a boundary for is one a
+    // backend can be named for, and ledger-v8, which begins at the minimum supported version, is the one key beyond.
+    type _1 = Expect<Equal<Exclude<keyof ProvingBackends, 'v8'>, keyof ProtocolVersion.ForkSchedule>>;
   });
 
-  it('refuses an empty list of backends, rather than reading it as no configuration at all', () => {
-    expect(Either.isLeft(makeDefaultProvingServices({ provers: [] }, FORK))).toBe(true);
+  it('requires the newest ledger version to have a backend and leaves the older one optional', () => {
+    type _1 = Expect<Equal<ProvingBackends['v9'], ProvingBackend>>;
+    type _2 = Expect<Equal<Pick<ProvingBackends, 'v8'>, { readonly v8?: ProvingBackend }>>;
+  });
+
+  it('no longer takes backends keyed by the protocol version each starts serving', () => {
+    type _1 = Expect<Equal<'provingServers' extends keyof DefaultProvingConfiguration ? true : false, false>>;
+    type _2 = Expect<Equal<DefaultProvingConfiguration['provers'], ProvingBackends | undefined>>;
   });
 });

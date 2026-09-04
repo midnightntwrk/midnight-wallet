@@ -15,7 +15,6 @@ import { Cause, Effect, Either, Exit, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import {
   makeVersionedProvingServiceEffect,
-  resolveProvingServers,
   singleVersionProvingServiceEffect,
   UnsupportedProvingVersionError,
   type ProvingServiceEffect,
@@ -75,58 +74,5 @@ describe('Routing a transaction to the prover for the version it was built for',
 
     await expect(Effect.runPromise(anywhere.prove('tx', version(0n)))).resolves.toBe('only:tx');
     await expect(Effect.runPromise(anywhere.prove('tx', FORK))).resolves.toBe('only:tx');
-  });
-});
-
-describe('Configuring which proof server serves which protocol version', () => {
-  it('reads a list of servers as the versions they each start serving', () => {
-    const registry = Either.getOrThrow(
-      resolveProvingServers({
-        provingServers: [
-          { sinceVersion: ProtocolVersion.MinSupportedVersion, url: new URL('http://pre-fork:6300') },
-          { sinceVersion: FORK, url: new URL('http://post-fork:6300') },
-        ],
-      }),
-    );
-
-    expect(ProtocolVersion.select(registry, version(5n))).toStrictEqual(Option.some(new URL('http://pre-fork:6300')));
-    expect(ProtocolVersion.select(registry, FORK)).toStrictEqual(Option.some(new URL('http://post-fork:6300')));
-  });
-
-  it('reads the single-server configuration as one server for every version', () => {
-    const registry = Either.getOrThrow(resolveProvingServers({ provingServerUrl: new URL('http://only:6300') }));
-
-    expect(ProtocolVersion.select(registry, ProtocolVersion.MinSupportedVersion)).toStrictEqual(
-      Option.some(new URL('http://only:6300')),
-    );
-    expect(ProtocolVersion.select(registry, FORK)).toStrictEqual(Option.some(new URL('http://only:6300')));
-  });
-
-  it('prefers the version-keyed list when both are given', () => {
-    const registry = Either.getOrThrow(
-      resolveProvingServers({
-        provingServerUrl: new URL('http://ignored:6300'),
-        provingServers: [{ sinceVersion: ProtocolVersion.MinSupportedVersion, url: new URL('http://listed:6300') }],
-      }),
-    );
-
-    expect(ProtocolVersion.select(registry, FORK)).toStrictEqual(Option.some(new URL('http://listed:6300')));
-  });
-
-  it('refuses a configuration that names no proof server at all', () => {
-    expect(Either.isLeft(resolveProvingServers({}))).toBe(true);
-  });
-
-  it('refuses a server list that is not in ascending version order', () => {
-    expect(
-      Either.isLeft(
-        resolveProvingServers({
-          provingServers: [
-            { sinceVersion: FORK, url: new URL('http://later:6300') },
-            { sinceVersion: ProtocolVersion.MinSupportedVersion, url: new URL('http://earlier:6300') },
-          ],
-        }),
-      ),
-    ).toBe(true);
   });
 });
