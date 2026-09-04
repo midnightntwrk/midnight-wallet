@@ -28,6 +28,6 @@ BREAKING CHANGE — replace the field in every configuration you build:
 { forks: { v9: ProtocolVersion.V9NativeForkVersion }, ... }
 ```
 
-Factories that take a single boundary directly (`makeDefaultVersionedProvingService(configuration, forkVersion)`,
-`defaultLedgerParametersCodecs(forkVersion)`, `ProtocolVersion.epochOf`) are unchanged; the facade passes
-`configuration.forks.v9` to them.
+Factories that take a single boundary directly (`defaultLedgerParametersCodecs(forkVersion)`, `ProtocolVersion.epochOf`)
+are unchanged; the facade passes `configuration.forks.v9` to them. Proving takes the whole schedule, since its backends
+are keyed the same way — see the proving changeset.

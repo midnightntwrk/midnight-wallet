@@ -13,33 +13,30 @@ ledger-v8 transaction ledger-v9's cost model fails at the wasm-bindgen boundary 
 CostModel`. There is now a backend per ledger version, and the registration that says which serves which range of
 protocol versions.
 
-Proving backends are configured with `provers`, which — unlike `provingServers` — can also name the in-process prover:
+Proving backends are configured with `provers`, a backend per ledger version, which — unlike a proof server URL — can
+also name the in-process prover:
 
 ```ts
 const configuration = {
-  forkVersion,
-  provers: [
-    { sinceVersion: ProtocolVersion.MinSupportedVersion, backend: { kind: 'server', url: v8ProofServer } },
-    { sinceVersion: forkVersion, backend: { kind: 'wasm' } },
-  ],
+  forks: { v9 },
+  provers: { v8: { kind: 'server', url: v8ProofServer }, v9: { kind: 'wasm' } },
 };
 ```
 
-`provingServers` and `provingServerUrl` are unchanged and still supported; precedence is `provers` > `provingServers` >
-`provingServerUrl`, and naming none is still a `ProvingConfigurationError`. A backend whose range spans `forkVersion` —
-which `provingServerUrl` always does — is split at the boundary and driven by each ledger version in turn, so the same
-description frames correctly on both sides. Whether one proof server can in fact prove both is an operational fact
-about that server, not something the SDK can enforce: no published image serves both today, so a chain with history
-below the boundary wants an entry per side. The in-process prover works on bytes and does serve both, with the same
-published circuits.
+`provingServerUrl` is unchanged and still supported as the shorthand for one proof server under every key; `provers`
+wins when both are given, and naming neither is still a `ProvingConfigurationError`. The single URL is driven by each
+ledger version on its own side of `forks.v9`, so the same description frames correctly on both sides. Whether one proof
+server can in fact prove both is an operational fact about that server, not something the SDK can enforce: no published
+image serves both today, so a chain with history below the boundary wants `provers` with a server per side. The
+in-process prover works on bytes and does serve both, with the same published circuits.
 
 Each registered backend refuses the other ledger version's transaction with a new `ProvingEpochMismatchError` naming
 the epoch it serves, rather than passing a foreign object to a ledger that cannot read it.
 
 BREAKING CHANGE (`@midnightntwrk/wallet-sdk-capabilities`) — `makeDefaultVersionedProvingService` and
-`makeDefaultVersionedProvingServiceEffect` take the chain's fork version as a second argument, and a new
-`makeDefaultProvingServices(configuration, forkVersion)` exposes the registry they build. The facade passes
-`configuration.forks.v9` for you; only a direct caller of these factories is affected. `ProvingServiceEffect`'s error
+`makeDefaultVersionedProvingServiceEffect` take the chain's fork schedule as a second argument, and a new
+`makeDefaultProvingServices(configuration, forks)` exposes the registry they build. The facade passes
+`configuration.forks` for you; only a direct caller of these factories is affected. `ProvingServiceEffect`'s error
 channel widens from `ProvingError` to `ProvingFailure` (`ProvingError | ProvingEpochMismatchError`) — existing
 implementations stay assignable. The facade's `InitParams.provingService` widens to
 `VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>`, which existing ledger-v9

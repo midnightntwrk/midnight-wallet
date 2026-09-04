@@ -42,35 +42,31 @@ await facade.start(shieldedSecretKeys, dustSecretKey);
 
 ### Configuring where proving happens
 
-A transaction is proved by the backend registered for the protocol version its own bytes were authored at, never by the
-version the chain has since reached. Backends are named ascending by the version each starts serving:
+A transaction is proved by the backend for the ledger version that authored its bytes, never by the version the chain
+has since reached. Backends are named per ledger version, keyed the way `forks` is, and the range each serves is read
+off `forks` rather than restated:
 
 ```typescript
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-
 const configuration = {
-  // ... the rest of the wallet configuration, including `forks`
-  provers: [
-    // Below the boundary: a proof server built against ledger-v8.
-    {
-      sinceVersion: ProtocolVersion.MinSupportedVersion,
-      backend: { kind: 'server', url: new URL('http://localhost:6301') },
-    },
-    // From the boundary: proving in this process, with the published circuits.
-    { sinceVersion: forks.v9, backend: { kind: 'wasm' } },
-  ],
+  // ... the rest of the wallet configuration, including `forks: { v9 }`
+  provers: {
+    // Below `forks.v9`: a proof server built against ledger-v8.
+    v8: { kind: 'server', url: new URL('http://localhost:6301') },
+    // From `forks.v9`: proving in this process, with the published circuits.
+    v9: { kind: 'wasm' },
+  },
 };
 ```
 
-Two shorthands remain: `provingServers: [{ sinceVersion, url }]` is the same list with every entry a server, and
-`provingServerUrl: url` is one server for every version. Both are read only when `provers` is absent.
+`v9` is required, because it is what every new transaction is proved with. `v8` may be left out on a chain whose history
+below the boundary the wallet never authors for; a transaction stamped there then fails with
+`UnsupportedProvingVersionError`, naming the version.
 
-A backend whose range spans `configuration.forks.v9` — which `provingServerUrl` always does — is split at the boundary
-and driven by each ledger version in turn, so the same description means the right thing on both sides. A proof server,
-though, is built against one ledger version: no published image serves both, so a chain with history below the boundary
-wants an entry per side. The in-process prover works on bytes and does serve both.
-
-A version no backend covers fails with `UnsupportedProvingVersionError`, naming the version.
+One shorthand remains: `provingServerUrl: url` is one proof server under every key, read only when `provers` is absent.
+The SDK drives it with each ledger version on its own side of `forks.v9`, so the same URL frames its requests correctly
+on both. A proof server, though, is built against one ledger version: no published image serves both, so a chain with
+history below the boundary wants `provers` with a server per side. The in-process prover works on bytes and does serve
+both, under both keys.
 
 ### Observing Combined State
 

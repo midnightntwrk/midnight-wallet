@@ -18,13 +18,13 @@
  * @remarks
  *   The routing already existed and the backends already existed; what this module supplies is the only thing neither
  *   could: the registration that says which range of protocol versions each backend answers for, taken from the same
- *   fork version the wallets are built with. Written the same way validation's `versionedValidation.ts` is, because it
+ *   fork schedule the wallets are built with. Written the same way validation's `versionedValidation.ts` is, because it
  *   is the same problem.
  */
 import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Effect, Either } from 'effect';
+import { Effect, Either, Option } from 'effect';
 import {
   makeV8ServerProvingServiceEffect,
   makeV8WasmProvingServiceEffect,
@@ -112,97 +112,98 @@ const isV9Transaction = (transaction: AnyVersionUnprovenTransaction): transactio
 const wasmConfigurationOf = (backend: Extract<ProvingBackend, { kind: 'wasm' }>): WasmProvingConfiguration =>
   backend.keyMaterialProvider === undefined ? {} : { keyMaterialProvider: backend.keyMaterialProvider };
 
-/** Builds the backend a description names, on the ledger version the epoch it is registered for belongs to. */
-const makeBackend = (
+/** Builds the backend a description names, driven by ledger-v8, for the epoch below `forks.v9`. */
+const makeV8Backend = (
   backend: ProvingBackend,
   epoch: ProtocolVersion.ProtocolVersion.Range,
-  forkVersion: ProtocolVersion.ProtocolVersion,
 ): VersionProvingServiceEffect =>
-  epoch[1] <= forkVersion
-    ? onlyFrom(
-        backend.kind === 'server'
-          ? makeV8ServerProvingServiceEffect({ provingServerUrl: backend.url })
-          : makeV8WasmProvingServiceEffect(wasmConfigurationOf(backend)),
-        isV8Transaction,
-        epoch,
-      )
-    : onlyFrom(
-        backend.kind === 'server'
-          ? makeServerProvingServiceEffect({ provingServerUrl: backend.url })
-          : makeWasmProvingServiceEffect(wasmConfigurationOf(backend)),
-        isV9Transaction,
-        epoch,
-      );
+  onlyFrom(
+    backend.kind === 'server'
+      ? makeV8ServerProvingServiceEffect({ provingServerUrl: backend.url })
+      : makeV8WasmProvingServiceEffect(wasmConfigurationOf(backend)),
+    isV8Transaction,
+    epoch,
+  );
+
+/** Builds the backend a description names, driven by ledger-v9, for the epoch from `forks.v9`. */
+const makeV9Backend = (
+  backend: ProvingBackend,
+  epoch: ProtocolVersion.ProtocolVersion.Range,
+): VersionProvingServiceEffect =>
+  onlyFrom(
+    backend.kind === 'server'
+      ? makeServerProvingServiceEffect({ provingServerUrl: backend.url })
+      : makeWasmProvingServiceEffect(wasmConfigurationOf(backend)),
+    isV9Transaction,
+    epoch,
+  );
 
 /**
- * Splits a registered range at the protocol boundary, so no single entry spans two ledger versions.
+ * The range of protocol versions each ledger version reads on a chain, from where the chain says the hand-over is.
  *
  * @remarks
- *   A range that straddles the boundary is a description of _where_ to prove that says nothing about _which_ ledger
- *   frames the request — and both are needed. Splitting it keeps the operator's answer to the first question and lets
- *   the boundary answer the second, which is what makes "one proof server for every version" mean the right thing on
- *   both sides rather than ledger-v9's thing on both.
+ *   A chain whose boundary is at or below the minimum supported version has no history ledger-v8 authored, so there is no
+ *   pre-fork epoch on it and a ledger-v8 backend has nothing to serve.
  */
-const splitAtFork = (
-  entry: ProtocolVersion.RegistryEntry<ProvingBackend>,
-  forkVersion: ProtocolVersion.ProtocolVersion,
-): readonly ProtocolVersion.RegistryEntry<ProvingBackend>[] => {
-  const [start, end] = entry.range;
-  return start < forkVersion && forkVersion < end
-    ? [
-        { range: ProtocolVersion.makeRange(start, forkVersion), value: entry.value },
-        { range: ProtocolVersion.makeRange(forkVersion, end), value: entry.value },
-      ]
-    : [entry];
-};
+const epochsOf = (forks: ProtocolVersion.ForkSchedule) => ({
+  v8:
+    forks.v9 > ProtocolVersion.MinSupportedVersion
+      ? Option.some(ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, forks.v9))
+      : Option.none(),
+  v9: ProtocolVersion.epochOf(forks.v9, forks.v9),
+});
 
 /**
  * Registers a proving backend either side of the protocol boundary.
  *
+ * @remarks
+ *   The configuration names a backend per ledger version and the fork schedule says where each ledger version begins; the
+ *   range a backend serves is the meeting of the two, computed here and nowhere else, so the wallets and their provers
+ *   cannot place the boundary differently.
  * @param configuration The proving configuration.
- * @param forkVersion The protocol version at which the chain hands over to ledger-v9.
+ * @param forks Where each ledger version begins on the chain.
  * @returns The backends and the version ranges they serve, or the reason the configuration names none.
  */
 export const makeDefaultProvingServices = (
   configuration: DefaultProvingConfiguration,
-  forkVersion: ProtocolVersion.ProtocolVersion,
+  forks: ProtocolVersion.ForkSchedule,
 ): Either.Either<
   ProvingServices<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>,
   ProvingConfigurationError
 > =>
   resolveProvingBackends(configuration).pipe(
-    Either.map((backends) => ({
-      // A chain whose boundary is at or below the minimum supported version has no pre-fork epoch to register for, so
-      // nothing is split and every range is ledger-v9's.
-      entries: backends.entries
-        .flatMap((entry) =>
-          forkVersion > ProtocolVersion.MinSupportedVersion ? splitAtFork(entry, forkVersion) : [entry],
-        )
-        .map((entry) => ({ range: entry.range, value: makeBackend(entry.value, entry.range, forkVersion) })),
-    })),
+    Either.map((backends) => {
+      const epochs = epochsOf(forks);
+      const preFork = Option.all([Option.fromNullable(backends.v8), epochs.v8]).pipe(
+        Option.map(([backend, range]) => ({ range, value: makeV8Backend(backend, range) })),
+      );
+      return {
+        entries: [...Option.toArray(preFork), { range: epochs.v9, value: makeV9Backend(backends.v9, epochs.v9) }],
+      };
+    }),
   );
 
 /**
  * Builds the version-routed proving service an SDK spanning a protocol boundary proves with.
  *
  * @param configuration The proving configuration.
- * @param forkVersion The protocol version at which the chain hands over to ledger-v9.
+ * @param forks Where each ledger version begins on the chain.
  * @returns A proving service that routes on the version a transaction was built for, or the reason the configuration
  *   names no backend.
  */
 export const makeDefaultVersionedProvingServiceEffect = (
   configuration: DefaultProvingConfiguration,
-  forkVersion: ProtocolVersion.ProtocolVersion,
+  forks: ProtocolVersion.ForkSchedule,
 ): Either.Either<
   VersionedProvingServiceEffect<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>,
   ProvingConfigurationError
-> => makeDefaultProvingServices(configuration, forkVersion).pipe(Either.map(makeVersionedProvingServiceEffect));
+> => makeDefaultProvingServices(configuration, forks).pipe(Either.map(makeVersionedProvingServiceEffect));
 
 /** The promise-facing surface of {@link makeDefaultVersionedProvingServiceEffect}, for the facade to expose. */
 export const makeDefaultVersionedProvingService = (
   configuration: DefaultProvingConfiguration,
-  forkVersion: ProtocolVersion.ProtocolVersion,
+  forks: ProtocolVersion.ForkSchedule,
 ): Either.Either<
   VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>,
   ProvingConfigurationError
-> => makeDefaultVersionedProvingServiceEffect(configuration, forkVersion).pipe(Either.map(wrapVersionedEffectService));
+> => makeDefaultVersionedProvingServiceEffect(configuration, forks).pipe(Either.map(wrapVersionedEffectService));

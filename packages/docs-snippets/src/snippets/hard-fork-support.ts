@@ -21,7 +21,7 @@
  *
  * This file is the copy-paste shape, in the order the code runs:
  *
- * 1. version-keyed proving configuration (`provers`)
+ * 1. a proving backend per ledger version (`provers`)
  * 2. the seed-first start, which is the primary and the only one that crosses a fork
  * 3. reading the protocol phase off the state (`Settled` / `Crossing`)
  * 4. finding transactions the fork orphaned (`PendingStatus.Orphaned`)
@@ -60,7 +60,7 @@ const INDEXER_HTTP_URL = `http://localhost:${INDEXER_PORT}/api/v4/graphql`;
 const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
 // ---------------------------------------------------------------------------------------------------------------------
-// 1. Version-keyed proving configuration
+// 1. A proving backend per ledger version
 // ---------------------------------------------------------------------------------------------------------------------
 
 const configuration: DefaultConfiguration = {
@@ -72,29 +72,23 @@ const configuration: DefaultConfiguration = {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
-  // Proving backends keyed by the protocol version each starts serving, in ascending order. A transaction is proved by
-  // the backend registered for the version its own bytes were authored at, so a fork landing between building a
-  // transaction and proving it cannot send it to the wrong prover — and, just as importantly, the ledger version that
-  // built those bytes is the one that frames the proving request.
+  // Proving backends keyed by ledger version, the way `forks` is: `v8` proves below `forks.v9`, `v9` from it, and the
+  // boundary is read off `forks` rather than restated here. A transaction is proved by the backend for the ledger
+  // version that authored its bytes, so a fork landing between building a transaction and proving it cannot send it to
+  // the wrong prover — and, just as importantly, the ledger version that built those bytes is the one that frames the
+  // proving request.
   //
   // Two entries, because a proof server is built against one ledger version and no published image serves both: the
   // pre-fork half of a chain that has history below `forks.v9` needs its own deployment. On a chain that has been
-  // post-fork since genesis — like the one this runs against — the first entry is simply never reached.
+  // post-fork since genesis — like the one this runs against — the `v8` entry is simply never reached.
   //
-  // `provingServerUrl: url` is the shortest form and means one server for every version; the SDK splits its range at
-  // `forks.v9` so each side is framed by its own ledger, which makes it correct but rarely what an operator wants,
-  // since the one URL then has to answer for both. `provingServers: [...]` is the same list as below with every entry
-  // a server.
-  provers: [
-    {
-      sinceVersion: ProtocolVersion.MinSupportedVersion,
-      backend: { kind: 'server', url: new URL(`http://localhost:${V8_PROOF_SERVER_PORT}`) },
-    },
-    {
-      sinceVersion: ProtocolVersion.V9NativeForkVersion,
-      backend: { kind: 'server', url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
-    },
-  ],
+  // `provingServerUrl: url` is the shortest form and means one server under every key; the SDK drives it with each
+  // ledger version on its own side of `forks.v9`, which makes it correct but rarely what an operator wants, since the
+  // one URL then has to answer for both.
+  provers: {
+    v8: { kind: 'server', url: new URL(`http://localhost:${V8_PROOF_SERVER_PORT}`) },
+    v9: { kind: 'server', url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
+  },
   indexerClientConnection: {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,

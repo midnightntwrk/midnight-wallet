@@ -46,19 +46,13 @@ export const configuration: DefaultConfiguration = {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
-  // One proof server per ledger version: the one built against ledger-v8 answers below `forks.v9`, the one built
-  // against ledger-v9 from it. A transaction is proved by the entry for the version its bytes were authored at, so the
-  // wallet proves on either side of the fork and across it. `hard-fork-support.ts` explains the shape in full.
-  provers: [
-    {
-      sinceVersion: ProtocolVersion.MinSupportedVersion,
-      backend: { kind: 'server', url: new URL(`http://localhost:${V8_PROOF_SERVER_PORT}`) },
-    },
-    {
-      sinceVersion: ProtocolVersion.V9NativeForkVersion,
-      backend: { kind: 'server', url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
-    },
-  ],
+  // One proof server per ledger version, keyed the way `forks` is: `v8` answers below `forks.v9`, `v9` from it. A
+  // transaction is proved by the backend for the ledger version that authored its bytes, so the wallet proves on either
+  // side of the fork and across it. `hard-fork-support.ts` explains the shape in full.
+  provers: {
+    v8: { kind: 'server', url: new URL(`http://localhost:${V8_PROOF_SERVER_PORT}`) },
+    v9: { kind: 'server', url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
+  },
   indexerClientConnection: {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,

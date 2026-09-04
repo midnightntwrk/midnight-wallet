@@ -779,14 +779,14 @@ export class WalletFacade {
    * Builds the proving service a configuration describes.
    *
    * @remarks
-   *   Handed the same fork version the wallets are built with, because a proving backend is chosen by the epoch a
+   *   Handed the same fork schedule the wallets are built with, because a proving backend is chosen by the epoch a
    *   transaction belongs to and the two ends of that question must not be able to compute the boundary differently.
    */
   private static makeDefaultProvingService<TConfig extends DefaultConfiguration>(
     config: TConfig,
   ): VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction> {
     return Either.getOrThrowWith(
-      makeDefaultVersionedProvingService(config, config.forks.v9),
+      makeDefaultVersionedProvingService(config, config.forks),
       (error) => new Error(error.message),
     );
   }
