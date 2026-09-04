@@ -203,10 +203,10 @@ export const makeCrossLedgerMigration = (): StateMigration<PreviousLedgerWallet>
  *   state ... the registration funds itself from the retroactive DUST its now-generationless NIGHT accrued"
  *   (`util/toolkit/tests/hardfork_e2e.rs`, step 5c).
  *
- *   The crossing is the only place the wallet's copy of the flag can be brought in line. The indexer (>= 4.4.0-rc.5)
- *   reports it as of the current Dust epoch at read time, so a fresh sync after the fork reads `false` — but it never
- *   re-emits a UTxO the wallet already synced pre-fork with `true`, and there is no post-fork event that would revise
- *   it. Flipping it here is what makes a carried UTxO say what the indexer would say of it today.
+ *   The crossing is the only place the wallet's copy of the flag can be brought in line. The indexer reports it as of the
+ *   current Dust epoch at read time, so a fresh sync after the fork reads `false` — but it never re-emits a UTxO the
+ *   wallet already synced pre-fork with `true`, and there is no post-fork event that would revise it. Flipping it here
+ *   is what makes a carried UTxO say what the indexer would say of it today.
  *
  *   Known limitation: cNIGHT-backed Night _is_ restored chain-side, and reads `false` here until a later sync-time update
  *   says otherwise. It fails closed — a registration built over it claims a fee allowance the ledger does not grant and

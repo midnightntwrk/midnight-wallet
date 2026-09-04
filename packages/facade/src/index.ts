@@ -1164,10 +1164,10 @@ export class WalletFacade {
     // registered) since `feePayment` is 0 by design and the caller is expected to balance the fee
     // externally via `balanceUnprovenTransaction({ tokenKindsToBalance: ['dust'] })`.
     //
-    // `registeredForDustGeneration` is the indexer's answer as of the chain's current dust epoch (indexer
-    // >= 4.4.0-rc.5), so it is the one authority on which of the two a registration is. Night carried across the
-    // v8 -> v9 fork arrives with it set to `false` — the fork wipes dust generation state and the unshielded
-    // crossing carries the flag accordingly — so a post-fork re-registration is correctly treated as first-time.
+    // `registeredForDustGeneration` is the indexer's answer as of the chain's current dust epoch, so it is the one
+    // authority on which of the two a registration is. Night carried across the v8 -> v9 fork arrives with it set to
+    // `false` — the fork wipes dust generation state and the unshielded crossing carries the flag accordingly — so a
+    // post-fork re-registration is correctly treated as first-time.
     const hasUnregisteredGuaranteed = split.guaranteedUtxos.some((u) => !u.utxo.registeredForDustGeneration);
     if (isRegistration && hasUnregisteredGuaranteed) {
       const fee = await this.dust.calculateFee([txWithDustActions]);
