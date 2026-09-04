@@ -46,7 +46,7 @@ const makeTransactionBlueprint = (state: FacadeState) => {
   };
   return WalletTransaction.adopt(
     'Unproven',
-    authoredFor < configuration.forkVersion ? authorPreFork() : authorPostFork(),
+    authoredFor < configuration.forks.v9 ? authorPreFork() : authorPostFork(),
     authoredFor,
   );
 };

@@ -69,7 +69,7 @@ describe('Syncing', () => {
           },
           txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
           // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
-          forkVersion: fixture.getWalletConfig().forkVersion,
+          forks: fixture.getWalletConfig().forks,
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystores[i]));
       }
 

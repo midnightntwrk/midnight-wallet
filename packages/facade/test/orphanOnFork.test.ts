@@ -101,7 +101,7 @@ describe('A pending transaction the fork left behind', () => {
   beforeEach(async () => {
     configuration = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forkVersion: ProtocolVersion.V9NativeForkVersion,
+      forks: { v9: ProtocolVersion.V9NativeForkVersion },
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       provingServerUrl: new URL('http://localhost:6300'),
@@ -212,7 +212,7 @@ describe('A pending transaction the fork left behind', () => {
     );
     expect(rejected[0].identifiers).toStrictEqual(
       Option.getOrThrow(
-        ProtocolVersion.select(finalizedTransactionTraits(configuration.forkVersion), finalized.protocolVersion),
+        ProtocolVersion.select(finalizedTransactionTraits(configuration.forks.v9), finalized.protocolVersion),
       ).ids(finalized),
     );
   });

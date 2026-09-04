@@ -39,7 +39,7 @@ the epoch it serves, rather than passing a foreign object to a ledger that canno
 BREAKING CHANGE (`@midnightntwrk/wallet-sdk-capabilities`) — `makeDefaultVersionedProvingService` and
 `makeDefaultVersionedProvingServiceEffect` take the chain's fork version as a second argument, and a new
 `makeDefaultProvingServices(configuration, forkVersion)` exposes the registry they build. The facade passes
-`configuration.forkVersion` for you; only a direct caller of these factories is affected. `ProvingServiceEffect`'s error
+`configuration.forks.v9` for you; only a direct caller of these factories is affected. `ProvingServiceEffect`'s error
 channel widens from `ProvingError` to `ProvingFailure` (`ProvingError | ProvingEpochMismatchError`) — existing
 implementations stay assignable. The facade's `InitParams.provingService` widens to
 `VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>`, which existing ledger-v9

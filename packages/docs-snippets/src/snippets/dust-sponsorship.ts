@@ -100,7 +100,7 @@ const prepareTransactionToBalance = async (state: FacadeState): Promise<UnboundT
       v9.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
     );
   };
-  const proven = await (authoredFor < configuration.forkVersion ? authorPreFork() : authorPostFork());
+  const proven = await (authoredFor < configuration.forks.v9 ? authorPreFork() : authorPostFork());
   // A transaction an application built for itself is handed to the wallet as a handle, saying which ledger version
   // made it.
   return WalletTransaction.adopt('Unbound', proven, authoredFor);

@@ -15,7 +15,7 @@
  *
  * The bundled prover drives a zkir runtime over bytes and never looks at a ledger version, so — unlike a proof server,
  * which is built against one — the same backend serves both epochs. One `provers` entry starting at the minimum
- * supported version therefore covers the whole timeline: the SDK splits its range at `forkVersion` and drives each side
+ * supported version therefore covers the whole timeline: the SDK splits its range at `forks.v9` and drives each side
  * with its own ledger.
  */
 import {
@@ -44,7 +44,7 @@ const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
   // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
-  forkVersion: ProtocolVersion.V9NativeForkVersion,
+  forks: { v9: ProtocolVersion.V9NativeForkVersion },
   costParameters: {
     feeBlocksMargin: 5,
   },

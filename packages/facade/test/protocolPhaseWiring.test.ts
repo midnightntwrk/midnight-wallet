@@ -121,7 +121,7 @@ describe('three wallets that disagree about which side of the boundary the chain
   beforeEach(async () => {
     const configuration: DefaultConfiguration = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forkVersion,
+      forks: { v9: forkVersion },
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       provingServerUrl: new URL('http://localhost:6300'),

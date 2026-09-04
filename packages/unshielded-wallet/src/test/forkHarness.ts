@@ -317,7 +317,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
   const WalletClass = CustomForkingUnshieldedWallet(
     {
       networkId,
-      forkVersion: config.forkVersion,
+      forks: { v9: config.forkVersion },
       ...(config.chainVersionProbe !== undefined ? { chainVersionProbe: config.chainVersionProbe } : {}),
     },
     { builder: preForkBuilder, configuration: variantConfiguration },

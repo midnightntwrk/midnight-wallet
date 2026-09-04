@@ -399,7 +399,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     .withMigration(() => capturingCrossLedgerMigration(dustParameters.postFork, captured));
 
   const WalletClass = CustomForkingDustWallet(
-    { networkId, forkVersion, ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}) },
+    { networkId, forks: { v9: forkVersion }, ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}) },
     {
       builder: preForkBuilder,
       configuration: {

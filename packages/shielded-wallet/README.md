@@ -40,7 +40,7 @@ const configuration = {
   txHistoryStorage: new InMemoryTransactionHistoryStorage(TransactionHistory.ShieldedTransactionHistoryEntrySchema),
   // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so it is supplied per environment.
-  forkVersion: ProtocolVersion.V9NativeForkVersion,
+  forks: { v9: ProtocolVersion.V9NativeForkVersion },
 };
 
 // Create secret keys from a shielded seed

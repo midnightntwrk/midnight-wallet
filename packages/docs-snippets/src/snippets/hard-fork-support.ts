@@ -14,7 +14,7 @@
 /*
  * The wallet across a hard fork.
  *
- * The SDK runs one ledger version below the chain's `forkVersion` and another from it, and each of the three wallets
+ * The SDK runs one ledger version below the chain's `forks.v9` and another from it, and each of the three wallets
  * registers a variant either side. Nothing here is a migration an application performs: a wallet started from a seed
  * follows the chain across the boundary on its own. What an application does have to do is say where the boundary is,
  * read which side of it the wallets are on, and — if it authors its own transactions — author for the right side.
@@ -67,7 +67,7 @@ const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
   // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
-  forkVersion: ProtocolVersion.V9NativeForkVersion,
+  forks: { v9: ProtocolVersion.V9NativeForkVersion },
   costParameters: {
     feeBlocksMargin: 5,
   },
@@ -78,11 +78,11 @@ const configuration: DefaultConfiguration = {
   // built those bytes is the one that frames the proving request.
   //
   // Two entries, because a proof server is built against one ledger version and no published image serves both: the
-  // pre-fork half of a chain that has history below `forkVersion` needs its own deployment. On a chain that has been
+  // pre-fork half of a chain that has history below `forks.v9` needs its own deployment. On a chain that has been
   // post-fork since genesis — like the one this runs against — the first entry is simply never reached.
   //
   // `provingServerUrl: url` is the shortest form and means one server for every version; the SDK splits its range at
-  // `forkVersion` so each side is framed by its own ledger, which makes it correct but rarely what an operator wants,
+  // `forks.v9` so each side is framed by its own ledger, which makes it correct but rarely what an operator wants,
   // since the one URL then has to answer for both. `provingServers: [...]` is the same list as below with every entry
   // a server.
   provers: [

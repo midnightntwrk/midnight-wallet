@@ -249,7 +249,7 @@ export class TestContainersFixture {
       // Every environment these suites run against is on the ledger-v9-native node line, which reports
       // this protocol version, so the wallet reaches its post-fork variant. Defined once here rather than
       // at each construction site; the final mainnet fork constant is still an open question.
-      forkVersion: ProtocolVersion.V9NativeForkVersion,
+      forks: { v9: ProtocolVersion.V9NativeForkVersion },
     };
   }
 

@@ -168,19 +168,22 @@ export type DefaultUnshieldedConfiguration = {
   indexerClientConnection: IndexerClientConnection;
   txHistoryStorage: UnshieldedHistoryStorage;
   /**
-   * The protocol version at which this chain hands over from the pre-fork ledger to the post-fork one.
+   * Where each ledger version begins on this chain: under `v9`, the protocol version at which it hands over from
+   * ledger-v8 to ledger-v9.
    *
    * @remarks
-   *   Required, and deliberately without a default: the wallet registers one variant either side of it, so a wrong value
-   *   does not degrade — it decides which ledger version reads the chain. Below this version the pre-fork variant is
-   *   active; from it, the post-fork one. The SDK cannot guess it, because it is a property of the chain the
+   *   Required, and deliberately without a default: the wallet registers one variant either side of the boundary, so a
+   *   wrong value does not degrade — it decides which ledger version reads the chain. Below `forks.v9` the pre-fork
+   *   variant is active; from it, the post-fork one. The SDK cannot guess it, because it is a property of the chain the
    *   application points at, not of the SDK.
    *
-   *   A node reporting a 2.x runtime version reports protocol version `2000000`, which is therefore the value for a
-   *   ledger-v9-native chain — published as `ProtocolVersion.V9NativeForkVersion`. The final mainnet fork constant is
-   *   not yet fixed; it will join that one once it is, and this field keeps working unchanged.
+   *   A map keyed by ledger version rather than a single number, so the next hard fork adds a key instead of changing the
+   *   shape of every application's configuration — see {@link ProtocolVersion.ForkSchedule}. A node reporting a 2.x
+   *   runtime version reports protocol version `2000000`, which is therefore the value for a ledger-v9-native chain —
+   *   published as `ProtocolVersion.V9NativeForkVersion`. The final mainnet fork constant is not yet fixed; it will
+   *   join that one once it is, and this field keeps working unchanged.
    */
-  forkVersion: ProtocolVersion.ProtocolVersion;
+  forks: ProtocolVersion.ForkSchedule;
   /**
    * How the wallet asks the chain which protocol version its timeline starts under, before it chooses a variant to
    * start at.

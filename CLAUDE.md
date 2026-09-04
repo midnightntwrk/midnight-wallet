@@ -304,8 +304,8 @@ Capabilities operate on state synchronously; services provide data that capabili
 Each of the three wallet packages holds **two variants of the same wallet**, one per ledger version, in sibling
 directories under `src/`:
 
-- **`src/v1`** - the **pre-fork** variant, on `@midnight-ntwrk/ledger-v8`. Active below the chain's `forkVersion`.
-- **`src/v2`** - the **current** variant, on `@midnightntwrk/ledger-v9`. Active from `forkVersion` upwards.
+- **`src/v1`** - the **pre-fork** variant, on `@midnight-ntwrk/ledger-v8`. Active below the chain's `forks.v9`.
+- **`src/v2`** - the **current** variant, on `@midnightntwrk/ledger-v9`. Active from `forks.v9` upwards.
 
 The two trees are near-identical modulo the ledger import: same file names, same exports with `V1`/`V2` in their names.
 
@@ -320,7 +320,7 @@ each is documented where it is excluded. Do not "fix" a missing `v1` counterpart
 them.
 
 **The wallet layer above the twins is single.** `ShieldedWallet` / `DustWallet` / `UnshieldedWallet` each register both
-variants and hand over at `configuration.forkVersion`; the package's own `Default*Configuration` is declared by the
+variants and hand over at `configuration.forks.v9`; the package's own `Default*Configuration` is declared by the
 package, not aliased to either variant's. `Custom*Wallet(configuration, builder)` is the single-variant composition.
 
 ### State Management

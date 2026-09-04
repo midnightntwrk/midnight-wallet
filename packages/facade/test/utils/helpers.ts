@@ -326,7 +326,7 @@ export const makeSimulatorFacade = (
           ...config,
           // A simulator that runs only the current ledger version has never had two epochs, whatever protocol version
           // its blocks report — so the boundary is at the bottom and everything it produces is post-fork.
-          forkVersion: ProtocolVersion.MinSupportedVersion,
+          forks: { v9: ProtocolVersion.MinSupportedVersion },
           // Dummy values - not used in simulation mode
           indexerClientConnection: { indexerHttpUrl: 'http://unused' },
           relayURL: new URL('ws://unused'),
