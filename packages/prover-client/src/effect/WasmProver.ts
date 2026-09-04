@@ -193,12 +193,38 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
   asProvingProvider() {
     return this.wasmProverProvider();
   }
+
+  /**
+   * The same provider {@link asProvingProvider} returns.
+   *
+   * @remarks
+   *   The in-process prover drives a zkir runtime over bytes and never looks at a ledger version, so there is nothing for
+   *   a pre-fork variant to do differently. It is offered under both names because the caller choosing a backend for an
+   *   epoch should not have to know which backends care about the epoch and which do not.
+   */
+  asPreForkProvingProvider() {
+    return this.wasmProverProvider();
+  }
 }
 
-export const makeDefaultKeyMaterialProvider = (): KeyMaterialProvider => {
+/** Which line of the key-material bucket to read: the circuits the keys were generated for. */
+export type KeyMaterialConfig = {
+  /**
+   * The circuit line to read.
+   *
+   * @remarks
+   *   Not a ledger version, despite reading like one. Line 9 is what both ledger versions the SDK carries accept today —
+   *   the pre-fork ledger's own line predates the zkir runtime they share and its verifier keys are rejected outright —
+   *   which is why it is the default on both sides. The setting exists so an operator whose bucket says otherwise can
+   *   say so, not because a fork implies a change of line.
+   */
+  circuits?: 8 | 9;
+};
+
+export const makeDefaultKeyMaterialProvider = (config?: KeyMaterialConfig): KeyMaterialProvider => {
   const cache = new Map<string, ProvingKeyMaterial | Uint8Array>();
   const s3 = 'https://midnight-s3-fileshare-dev-eu-west-1.s3.eu-west-1.amazonaws.com';
-  const ver = 9;
+  const ver = config?.circuits ?? 9;
 
   const fetchWithRetry = async (url: string, retries = 5): Promise<Response> => {
     for (let i = 0; i < retries; i++) {

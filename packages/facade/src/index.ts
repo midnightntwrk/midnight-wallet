@@ -17,10 +17,11 @@ import {
   type SubmissionService,
 } from '@midnightntwrk/wallet-sdk-capabilities';
 import {
+  type AnyVersionUnboundTransaction,
+  type AnyVersionUnprovenTransaction,
   type DefaultProvingConfiguration,
   makeDefaultVersionedProvingService,
   type VersionedProvingService,
-  type UnboundTransaction,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import {
   type DefaultDustConfiguration,
@@ -726,7 +727,9 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
   clock?: (config: TConfig) => MaybePromise<Clock.Clock>;
   submissionService?: (config: TConfig) => MaybePromise<SubmissionService<FinalizedTx>>;
   pendingTransactionsService?: (config: TConfig) => MaybePromise<PendingTransactionsService<FinalizedTx>>;
-  provingService?: (config: TConfig) => MaybePromise<VersionedProvingService<UnboundTransaction>>;
+  provingService?: (
+    config: TConfig,
+  ) => MaybePromise<VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>>;
   /**
    * Optional factory for the block-data fetcher used by validation. Defaults to an HTTP indexer-backed fetcher built
    * from `configuration.indexerClientConnection`. Override for simulator-based tests with
@@ -772,10 +775,20 @@ export class WalletFacade {
     });
   }
 
-  private static makeDefaultProvingService<TConfig extends DefaultProvingConfiguration>(
+  /**
+   * Builds the proving service a configuration describes.
+   *
+   * @remarks
+   *   Handed the same fork version the wallets are built with, because a proving backend is chosen by the epoch a
+   *   transaction belongs to and the two ends of that question must not be able to compute the boundary differently.
+   */
+  private static makeDefaultProvingService<TConfig extends DefaultConfiguration>(
     config: TConfig,
-  ): VersionedProvingService<UnboundTransaction> {
-    return Either.getOrThrowWith(makeDefaultVersionedProvingService(config), (error) => new Error(error.message));
+  ): VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction> {
+    return Either.getOrThrowWith(
+      makeDefaultVersionedProvingService(config, config.forkVersion),
+      (error) => new Error(error.message),
+    );
   }
 
   /**
@@ -889,7 +902,7 @@ export class WalletFacade {
   readonly dust: DustWalletAPI;
   readonly submissionService: SubmissionService<FinalizedTx>;
   readonly pendingTransactionsService: PendingTransactionsService<FinalizedTx>;
-  readonly provingService: VersionedProvingService<UnboundTransaction>;
+  readonly provingService: VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>;
   readonly validationService: VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>;
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
   readonly clock: Clock.Clock;
@@ -919,7 +932,7 @@ export class WalletFacade {
     dustWallet: DustWalletAPI,
     submissionService: SubmissionService<FinalizedTx>,
     pendingTransactionsService: PendingTransactionsService<FinalizedTx>,
-    provingService: VersionedProvingService<UnboundTransaction>,
+    provingService: VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>,
     validationService: VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>,
     txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>,
     forkVersion: ProtocolVersion.ProtocolVersion,

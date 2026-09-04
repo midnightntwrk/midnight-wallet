@@ -48,9 +48,14 @@ on:
         default: '4.4.0-rc.5'
       proof_server_tag:
         type: string
-        description: proof-server image
+        description: proof-server image (post-fork, ledger 9)
         required: false
         default: '9.0.0-rc.7'
+      proof_server_pre_fork_tag:
+        type: string
+        description: proof-server image the pre-fork half proves at (ledger 8)
+        required: false
+        default: '8.1.0'
   pull_request:
     # Exactly the lane's own files. Everything about the lane lives in these six paths, so a PR that does not
     # touch them cannot change what it does.
@@ -98,6 +103,7 @@ jobs:
       TOOLKIT_TAG: ${{ inputs.toolkit_tag || '2.1.0-beta.1' }}
       INDEXER_TAG: ${{ inputs.indexer_tag || '4.4.0-rc.5' }}
       PROOF_SERVER_TAG: ${{ inputs.proof_server_tag || '9.0.0-rc.7' }}
+      PROOF_SERVER_PRE_FORK_TAG: ${{ inputs.proof_server_pre_fork_tag || '8.1.0' }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 

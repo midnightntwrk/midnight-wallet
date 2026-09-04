@@ -36,7 +36,7 @@ import {
   type Transacting,
 } from '@midnightntwrk/wallet-sdk-shielded/v2';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { Effect, Either, pipe } from 'effect';
+import { Effect, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -45,7 +45,8 @@ import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntw
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
 import {
-  makeDefaultVersionedProvingServiceEffect,
+  makeServerProvingServiceEffect,
+  singleVersionProvingServiceEffect,
   type DefaultProvingConfiguration,
   type VersionedProvingServiceEffect,
   type UnboundTransaction,
@@ -76,6 +77,9 @@ const shieldedTokenType = ledger.shieldedToken().raw;
 describe.skip('Wallet transacting', () => {
   let startedEnvironment: StartedDockerComposeEnvironment;
   let configuration: DefaultV2Configuration & Submission.DefaultSubmissionConfiguration & DefaultProvingConfiguration;
+  // Named separately from the configuration it also goes into: this suite builds a single current-ledger wallet, so it
+  // wants one current-ledger backend for every version rather than a boundary-aware registry.
+  let provingServerUrl: URL;
 
   beforeEach(async () => {
     const environmentId = randomUUID();
@@ -94,13 +98,14 @@ describe.skip('Wallet transacting', () => {
 
     startedEnvironment = await environment.up();
 
+    provingServerUrl = new URL(
+      `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
+    );
     configuration = {
       indexerClientConnection: {
         indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
       },
-      provingServerUrl: new URL(
-        `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
-      ),
+      provingServerUrl,
       relayURL: new URL(
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
@@ -162,7 +167,7 @@ describe.skip('Wallet transacting', () => {
 
   beforeEach(async () => {
     submissionService = Submission.makeDefaultSubmissionServiceEffect<ledger.FinalizedTransaction>(configuration);
-    provingService = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(configuration));
+    provingService = singleVersionProvingServiceEffect(makeServerProvingServiceEffect({ provingServerUrl }));
     Wallet = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V2Builder().withDefaults())
       .build(configuration);

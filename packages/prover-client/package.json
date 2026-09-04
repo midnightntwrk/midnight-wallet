@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@effect/platform": "^0.96.0",
+    "@midnight-ntwrk/ledger-v8": "^8.1.0",
     "@midnight-ntwrk/zkir-v2": "^2.1.0",
     "@midnightntwrk/ledger-v9": "1.0.0-rc.4",
     "@midnightntwrk/wallet-sdk-utilities": "1.2.1",

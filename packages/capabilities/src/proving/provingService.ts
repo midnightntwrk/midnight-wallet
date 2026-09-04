@@ -27,6 +27,27 @@ export class ProvingError extends Data.TaggedError('Wallet.Proving')<{
 }> {}
 
 /**
+ * Raised when a proving backend is handed a transaction from the other side of a protocol boundary.
+ *
+ * @remarks
+ *   Every backend is written against exactly one ledger version, and the two ledger versions' transactions are different
+ *   classes that neither can read. The router has already chosen a backend by the version stamped on the transaction,
+ *   so reaching this error means the stamp and the bytes disagreed — which is worth saying out loud, and in terms of
+ *   the epoch the backend serves, rather than letting a foreign object reach the wasm-bindgen boundary and fail there
+ *   as something unreadable.
+ */
+export class ProvingEpochMismatchError extends Data.TaggedError(
+  '@midnightntwrk/wallet-sdk-capabilities/proving/provingService/ProvingEpochMismatchError',
+)<{
+  readonly message: string;
+  /** The range of protocol versions the backend that refused the transaction serves. */
+  readonly epoch: ProtocolVersion.ProtocolVersion.Range;
+}> {}
+
+/** Everything a proving backend can fail with. */
+export type ProvingFailure = ProvingError | ProvingEpochMismatchError;
+
+/**
  * Turns an unproven transaction into a proven one.
  *
  * @typeParam TProven The proven transaction this backend produces.
@@ -35,7 +56,7 @@ export class ProvingError extends Data.TaggedError('Wallet.Proving')<{
  *   {@link VersionedProvingServiceEffect}'s job and not this interface's.
  */
 export interface ProvingServiceEffect<TProven, TUnproven = ledger.UnprovenTransaction> {
-  prove(transaction: TUnproven): Effect.Effect<TProven, ProvingError>;
+  prove(transaction: TUnproven): Effect.Effect<TProven, ProvingFailure>;
 }
 
 export interface ProvingService<TProven, TUnproven = ledger.UnprovenTransaction> {
@@ -63,7 +84,7 @@ export interface VersionedProvingServiceEffect<TProven, TUnproven = ledger.Unpro
   prove(
     transaction: TUnproven,
     protocolVersion: ProtocolVersion.ProtocolVersion,
-  ): Effect.Effect<TProven, ProvingError | UnsupportedProvingVersionError>;
+  ): Effect.Effect<TProven, ProvingFailure | UnsupportedProvingVersionError>;
 }
 
 export interface VersionedProvingService<TProven, TUnproven = ledger.UnprovenTransaction> {
@@ -132,7 +153,7 @@ export const fromProvingProviderEffect = (
   provider: Effect.Effect<ledger.ProvingProvider, InvalidProtocolSchemeError>,
 ): ProvingServiceEffect<UnboundTransaction> => {
   return {
-    prove(transaction: ledger.UnprovenTransaction): Effect.Effect<UnboundTransaction, ProvingError> {
+    prove(transaction: ledger.UnprovenTransaction): Effect.Effect<UnboundTransaction, ProvingFailure> {
       return pipe(
         provider,
         Effect.flatMap((provider) =>
@@ -176,18 +197,44 @@ export type ProvingServerActivation = Readonly<{
 }>;
 
 /**
- * Which proof server serves which protocol version.
+ * Where proving happens: at a proof server over HTTP, or in this process.
  *
  * @remarks
- *   The two settings are alternatives, not a pair: `provingServers` is the version-keyed form, and `provingServerUrl` is
- *   the single-server form that reads as one server for every version. Giving both is not an error — the list wins —
- *   but naming neither is, because there is then nothing to prove with.
+ *   Deliberately says nothing about a ledger version. Which ledger drives a backend follows from the protocol versions it
+ *   is registered for, so the same description can be registered on either side of a fork and mean the right thing both
+ *   times.
+ */
+export type ProvingBackend =
+  Readonly<{ kind: 'server'; url: URL }> | Readonly<{ kind: 'wasm'; keyMaterialProvider?: KeyMaterialProvider }>;
+
+/** A proving backend together with the protocol version it starts serving. */
+export type ProverActivation = Readonly<{
+  sinceVersion: ProtocolVersion.ProtocolVersion;
+  backend: ProvingBackend;
+}>;
+
+/**
+ * Which proving backend serves which protocol version.
+ *
+ * @remarks
+ *   The three settings are alternatives, not a set: `provers` is the general form, `provingServers` is the shorthand for
+ *   "these proof servers", and `provingServerUrl` the shorthand for "this one proof server, for every version". Giving
+ *   more than one is not an error — `provers` wins, then `provingServers` — but naming none is, because there is then
+ *   nothing to prove with.
+ *
+ *   A backend registered across a protocol boundary (which is what `provingServerUrl` always is, and what a `provers`
+ *   list with a single entry at the minimum version is) is split at that boundary and driven by each ledger version in
+ *   turn. That is what makes one URL frame its requests correctly on both sides. Whether a given proof server can in
+ *   fact serve both is an operational fact about that server, not something the SDK can know or enforce — today's
+ *   images serve one side each, so a chain that spans a fork wants two entries.
  */
 export type DefaultProvingConfiguration = {
   /** One proof server for every protocol version. */
   provingServerUrl?: URL;
   /** Proof servers keyed by the protocol version each one starts serving, in ascending order. */
   provingServers?: readonly ProvingServerActivation[];
+  /** Proving backends keyed by the protocol version each one starts serving, in ascending order. */
+  provers?: readonly ProverActivation[];
 };
 
 /** Raised when the proving configuration names no proof server, or names them out of order. */
@@ -198,9 +245,24 @@ export class ProvingConfigurationError extends Data.TaggedError(
   readonly cause?: unknown;
 }> {}
 
+const noBackendNamed = () =>
+  new ProvingConfigurationError({
+    message:
+      "Missing required configuration: set 'provers' (or 'provingServers', or 'provingServerUrl'), or provide a custom provingService in init parameters.",
+  });
+
+const outOfOrder = (cause: unknown) =>
+  new ProvingConfigurationError({
+    message: 'Proving backends must be listed in strictly ascending order of the version each starts serving.',
+    cause,
+  });
+
 /**
  * Reads a proving configuration as the proof servers it names, keyed by protocol version.
  *
+ * @remarks
+ *   The server-only view of {@link resolveProvingBackends}, which is what a caller that can only talk to a proof server
+ *   wants. A configuration that names in-process backends is not readable this way, and says so.
  * @param configuration The proving configuration.
  * @returns The proof server URLs by version range, or the reason the configuration names none.
  */
@@ -215,62 +277,44 @@ export const resolveProvingServers = (
         : [];
 
   return activations.length === 0
-    ? Either.left(
-        new ProvingConfigurationError({
-          message:
-            "Missing required configuration: set 'provingServers' (or 'provingServerUrl'), or provide a custom provingService in init parameters.",
-        }),
-      )
-    : ProtocolVersion.makeRegistryFromActivations(activations).pipe(
-        Either.mapLeft(
-          (cause) =>
-            new ProvingConfigurationError({
-              message: 'Proof servers must be listed in strictly ascending order of the version each starts serving.',
-              cause,
-            }),
-        ),
-      );
+    ? Either.left(noBackendNamed())
+    : ProtocolVersion.makeRegistryFromActivations(activations).pipe(Either.mapLeft(outOfOrder));
 };
 
 /**
- * Builds the version-routed proving service a proving configuration describes.
- *
- * @param configuration The proving configuration.
- * @returns The routed proving service, or the reason the configuration names no proof server.
- */
-export const makeDefaultVersionedProvingServiceEffect = (
-  configuration: DefaultProvingConfiguration,
-): Either.Either<VersionedProvingServiceEffect<UnboundTransaction>, ProvingConfigurationError> =>
-  resolveProvingServers(configuration).pipe(
-    Either.map((servers) =>
-      makeVersionedProvingServiceEffect<UnboundTransaction, ledger.UnprovenTransaction>({
-        entries: servers.entries.map((entry) => ({
-          range: entry.range,
-          value: makeServerProvingServiceEffect({ provingServerUrl: entry.value }),
-        })),
-      }),
-    ),
-  );
-
-/**
- * Builds the version-routed proving service a proving configuration describes, on the promise-facing surface.
- *
- * @param configuration The proving configuration.
- * @returns The routed proving service, or the reason the configuration names no proof server.
- */
-export const makeDefaultVersionedProvingService = (
-  configuration: DefaultProvingConfiguration,
-): Either.Either<VersionedProvingService<UnboundTransaction>, ProvingConfigurationError> =>
-  makeDefaultVersionedProvingServiceEffect(configuration).pipe(Either.map(wrapVersionedEffectService));
-
-/**
- * Registers the in-process WASM prover for the protocol versions it can actually prove.
+ * Reads a proving configuration as the backends it names, keyed by protocol version.
  *
  * @remarks
- *   The bundled prover resolves its key material at a single, fixed ledger version, so there is no local proving for
- *   anything below the fork. Registering nothing there is what turns that into an {@link UnsupportedProvingVersionError}
- *   naming the version, rather than a proof built from the wrong keys.
- * @param sinceVersion The first protocol version the bundled prover's key material covers.
+ *   Where the precedence between the three settings is decided, once, so that reading a configuration and building
+ *   services from it cannot disagree about which one was meant.
+ * @param configuration The proving configuration.
+ * @returns The backends by version range, or the reason the configuration names none.
+ */
+export const resolveProvingBackends = (
+  configuration: DefaultProvingConfiguration,
+): Either.Either<ProtocolVersion.Registry<ProvingBackend>, ProvingConfigurationError> =>
+  configuration.provers !== undefined && configuration.provers.length > 0
+    ? ProtocolVersion.makeRegistryFromActivations(
+        configuration.provers.map(({ sinceVersion, backend }) => ({ sinceVersion, value: backend })),
+      ).pipe(Either.mapLeft(outOfOrder))
+    : resolveProvingServers(configuration).pipe(
+        Either.map((servers) => ({
+          entries: servers.entries.map((entry) => ({
+            range: entry.range,
+            value: { kind: 'server', url: entry.value } as const,
+          })),
+        })),
+      );
+
+/**
+ * Registers the in-process WASM prover, driven by the current ledger version, from a given protocol version upwards.
+ *
+ * @remarks
+ *   Every entry here is the current ledger version's backend, so `sinceVersion` should not be below a protocol boundary:
+ *   what a version below it needs is the pre-fork driver, which `makeDefaultProvingServices` registers from the fork
+ *   version it is given. Registering nothing below is what turns that into an {@link UnsupportedProvingVersionError}
+ *   naming the version, rather than a pre-fork transaction handed to a ledger that cannot read it.
+ * @param sinceVersion The first protocol version to register the bundled prover for.
  * @param configuration Optional key material override.
  * @returns The proving backends, keyed by version.
  */

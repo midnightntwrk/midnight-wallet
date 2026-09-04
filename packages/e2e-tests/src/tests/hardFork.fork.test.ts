@@ -22,11 +22,13 @@
 import * as rx from 'rxjs';
 import { Buffer } from 'node:buffer';
 import { inspect } from 'node:util';
-import { Either } from 'effect';
+import { Cause, Either, Option, Runtime } from 'effect';
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
-// The post-fork ledger, and the only one these tests author at: everything from `re-registers its NIGHT`
-// onwards is built after the boundary, so a v9 token constant is the right way to name what is moved.
+// Both ledgers, because this file is the one that authors on both sides of the boundary: the spend before the fork is
+// the pre-fork ledger's transaction and everything from `re-registers its NIGHT` onwards is the post-fork ledger's.
+import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type WalletSeeds as WalletSeedsType, WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import {
@@ -45,7 +47,12 @@ import {
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { Migration, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
-import { type FacadeState, type WalletEntry, WalletFacade } from '@midnightntwrk/wallet-sdk-facade';
+import {
+  type DefaultConfiguration,
+  type FacadeState,
+  type WalletEntry,
+  WalletFacade,
+} from '@midnightntwrk/wallet-sdk-facade';
 import { type ForkFixture, useForkFixture } from './fork-fixture.js';
 import * as utils from './utils.js';
 import { carried } from './helpers/transactions.js';
@@ -57,6 +64,9 @@ const FUNDED_SEED = '00000000000000000000000000000000000000000000000000000000000
 
 /** An account with nothing on it, which is what makes the post-fork spends' arrival assertions exact. */
 const RECEIVER_SEED = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
+
+/** A second empty account, for the spend made before the boundary: the post-fork receiver must still start at zero. */
+const PRE_FORK_RECEIVER_SEED = '4c1d1e0e9a2a4a3f8b5c6d7e8f90112233445566778899aabbccddeeff001122';
 
 /**
  * Native NIGHT. Written out rather than read from a ledger binding on purpose: the wallet holds this balance on both
@@ -72,6 +82,9 @@ const CROSSING_TIMEOUT_MS = 8 * 60 * 1000;
 
 /** How long the re-registration is given to settle and the first post-fork dust to appear. */
 const DUST_TIMEOUT_MS = 4 * 60 * 1000;
+
+/** How long to leave between attempts at a transaction the wallet could not yet pay for. */
+const DUST_POLL_MS = 5 * 1000;
 
 /** How long a post-fork spend is given to be proven, included, and observed by both sides. */
 const SPEND_TIMEOUT_MS = 10 * 60 * 1000;
@@ -139,6 +152,43 @@ const failingAfter = <T>(label: string, milliseconds: number): rx.MonoTypeOperat
 /** Caps a wait that would otherwise only be bounded by the file's hour-long test timeout. */
 const within = <T>(label: string, milliseconds: number, work: Promise<T>): Promise<T> =>
   rx.firstValueFrom(rx.from(work).pipe(failingAfter(label, milliseconds)));
+
+/**
+ * Whether a failure is the wallet saying it has not been given enough dust to pay for something.
+ *
+ * @remarks
+ *   Matched by tag rather than by class: each wallet raises its own class under this tag on each side of the boundary, so
+ *   `instanceof` would name one of six and treat the other five as something else. The failure arrives wrapped, because
+ *   the facade's balancing runs on an Effect runtime.
+ */
+const isDustShortfall = (error: unknown): boolean => {
+  const reported: unknown = Runtime.isFiberFailure(error)
+    ? Option.getOrElse(Cause.failureOption(error[Runtime.FiberFailureCauseId]), () => error)
+    : error;
+  return (
+    typeof reported === 'object' &&
+    reported !== null &&
+    '_tag' in reported &&
+    reported._tag === 'Wallet.InsufficientFunds'
+  );
+};
+
+/**
+ * Builds a transaction once the wallet has accrued enough dust to pay for it.
+ *
+ * @param build The build to attempt, afresh each time.
+ * @returns What `build` produced once it could be paid for.
+ */
+const onceEnoughDustHasBeenGenerated = <T>(build: () => Promise<T>): Promise<T> =>
+  rx.firstValueFrom(
+    rx.defer(build).pipe(
+      rx.retry({
+        delay: (error: unknown) =>
+          isDustShortfall(error) ? rx.timer(DUST_POLL_MS) : rx.throwError(() => error as Error),
+      }),
+      failingAfter('enough dust to have been generated for a pre-fork transfer', DUST_TIMEOUT_MS),
+    ),
+  );
 
 /** The first state satisfying `settled`, or a failure naming what never happened. */
 const stateWhere = (
@@ -230,6 +280,7 @@ describe.sequential('Hard fork crossing @fork', () => {
   let enactment: Awaited<ReturnType<ForkFixture['enactFork']>>;
   let postFork: FacadeState;
   let receiver: utils.WalletInit | undefined;
+  let preForkReceiver: utils.WalletInit | undefined;
   let twin: utils.WalletInit;
   let twinTracked: rx.Observable<Tracked>;
   let twinSubscription: rx.Subscription;
@@ -267,9 +318,16 @@ describe.sequential('Hard fork crossing @fork', () => {
     const configuration = {
       ...fixture.getWalletConfig(),
       ...fixture.getDustWalletConfig(),
-      // Version-keyed proving wins over the fixture's single `provingServerUrl`; named here so the
-      // wallet's post-fork proving routes exactly as an application crossing the fork would set it up.
-      provingServers: [{ sinceVersion: V9_NATIVE_FORK_VERSION, url: new URL(fixture.getProverUri()) }],
+      // Version-keyed proving wins over the fixture's single `provingServerUrl`, and names both epochs, because that
+      // is what an application crossing the fork actually has to configure: no proof server serves both ledger
+      // versions, so a wallet that spends on each side of the boundary needs one entry per side.
+      provers: [
+        {
+          sinceVersion: ProtocolVersion.MinSupportedVersion,
+          backend: { kind: 'server', url: new URL(fixture.getPreForkProverUri()) },
+        },
+        { sinceVersion: V9_NATIVE_FORK_VERSION, backend: { kind: 'server', url: new URL(fixture.getProverUri()) } },
+      ] as const satisfies DefaultConfiguration['provers'],
     };
     unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, fixture.getNetworkId());
 
@@ -310,6 +368,7 @@ describe.sequential('Hard fork crossing @fork', () => {
     await wallet?.stop();
     await twin?.wallet.stop();
     await receiver?.wallet.stop();
+    await preForkReceiver?.wallet.stop();
   }, 60_000);
 
   test('syncs to the pre-fork tip on the old ledger', async () => {
@@ -349,6 +408,62 @@ describe.sequential('Hard fork crossing @fork', () => {
       expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
     },
     CROSSING_TIMEOUT_MS,
+  );
+
+  test(
+    'spends before the fork, proving at the pre-fork proof server',
+    async () => {
+      // The half of proving no other lane can reach. Below the boundary the wallet builds pre-fork bytes, and only the
+      // pre-fork ledger can frame a proving request for them and only a pre-fork proof server can answer it — so what
+      // this proves is that the version-keyed backends were honoured, not merely accepted by configuration. The same
+      // wallet proves at the other server after the fork, which is the acceptance criterion for the pair.
+      preForkReceiver = await utils.initWalletWithSeed(PRE_FORK_RECEIVER_SEED, fixture);
+      const receiverBefore = await within(
+        'the pre-fork receiver to sync',
+        CROSSING_TIMEOUT_MS,
+        preForkReceiver.wallet.waitForSyncedState(),
+      );
+      expect(receiverBefore.unshielded.balances[NIGHT] ?? 0n).toBe(0n);
+
+      const before = await wallet.waitForSyncedState();
+      expect(before.activeProtocolVersion).toBeLessThan(V9_NATIVE_FORK_VERSION);
+      const nightBefore = before.unshielded.balances[NIGHT];
+
+      // Dust accrues with time, and this chain is seconds old: for the first half-minute of it there is not enough for
+      // the wallet to pay for anything, and it says so by refusing to balance. What a transfer costs cannot be asked
+      // before there is a transfer to price, so "enough has accrued" is expressed as the build succeeding, retried
+      // until it does. That the wallet leaves the inputs of a build it could not pay for booked is why the first
+      // attempts cost it coins it does not get back — enough of them remain for the one that succeeds.
+      const receiverAddress = await preForkReceiver.wallet.unshielded.getAddress();
+      const recipe = await onceEnoughDustHasBeenGenerated(() =>
+        wallet.transferTransaction(
+          [{ type: 'unshielded', outputs: [{ type: NIGHT, amount: TRANSFER_AMOUNT, receiverAddress }] }],
+          { ttl: new Date(Date.now() + TTL_MS) },
+        ),
+      );
+      const signed = await wallet.signRecipe(recipe, unshieldedKeystore.signDataAsync);
+      const finalizedTx = await wallet.finalizeRecipe(signed);
+
+      // The proof came back as the pre-fork ledger's transaction, which is only true if the pre-fork backend produced
+      // it: the current ledger's classes are a different type and would have been unwrapped as one.
+      expect(carried<preForkLedger.FinalizedTransaction>(finalizedTx)).toBeInstanceOf(preForkLedger.Transaction);
+
+      const txId = await wallet.submitTransaction(finalizedTx);
+      logger.info(`pre-fork unshielded transfer submitted: ${txId}`);
+
+      // The receiver's arrival, not the sender's bookkeeping, is what says the chain took the transaction: the sender
+      // books a spend the moment it submits one, and the coins the earlier attempts booked make its own balances a
+      // poor witness. An empty account seeing exactly what was sent to it is decided by inclusion and nothing else.
+      const receiverAfter = await stateWhere(
+        'the pre-fork receiver to see the transferred Night',
+        preForkReceiver.wallet,
+        (state) => state.isSynced && (state.unshielded.balances[NIGHT] ?? 0n) > 0n,
+      );
+      logger.info(`AFTER PRE-FORK SPEND ${summarize(receiverAfter)}`);
+      expect(receiverAfter.unshielded.balances[NIGHT]).toBe(TRANSFER_AMOUNT);
+      expect(nightBefore).toBe(preFork.unshielded.balances[NIGHT]);
+    },
+    SPEND_TIMEOUT_MS + 5 * 60 * 1000,
   );
 
   test('enacts the ledger 8 to 9 hard fork through governance', async () => {
@@ -415,7 +530,13 @@ describe.sequential('Hard fork crossing @fork', () => {
         ` post coins=${postFork.dust.totalCoins.length} balance=${postFork.dust.balance(new Date())}`,
     );
 
-    expect(postFork.unshielded.balances).toEqual(preFork.unshielded.balances);
+    // Everything the wallet had at the pre-fork tip, less the one transfer it made below the boundary — which is the
+    // only Night that legitimately left it there, and is stated rather than read back from the wallet so that what
+    // crossed is compared against what the chain was asked for.
+    expect(postFork.unshielded.balances).toEqual({
+      ...preFork.unshielded.balances,
+      [NIGHT]: preFork.unshielded.balances[NIGHT] - TRANSFER_AMOUNT,
+    });
     expect(postFork.shielded.balances).toEqual(preFork.shielded.balances);
     expect(postFork.pending.length).toBe(0);
   });

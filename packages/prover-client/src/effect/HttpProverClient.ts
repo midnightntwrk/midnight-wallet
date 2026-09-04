@@ -20,10 +20,37 @@ import {
   ServerError,
 } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { BlobOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
+import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
 
 const PROVE_TX_PATH = '/prove';
 const CHECK_TX_PATH = '/check';
+
+/**
+ * How one ledger version frames a proof server request and reads its reply.
+ *
+ * @remarks
+ *   The only thing that differs between the two ledger versions' providers, so it is the only thing named. A preimage is
+ *   produced by one ledger version and has to be framed by that same one; that the two framings agree byte for byte on
+ *   today's preimages is a coincidence of the current releases, not a property to build on.
+ */
+type PayloadFraming = Readonly<{
+  createProvingPayload: (serializedPreimage: Uint8Array, overwriteBindingInput: bigint | undefined) => Uint8Array;
+  createCheckPayload: (serializedPreimage: Uint8Array) => Uint8Array;
+  parseCheckResult: (result: Uint8Array) => (bigint | undefined)[];
+}>;
+
+const currentLedgerFraming: PayloadFraming = {
+  createProvingPayload: (preimage, binding) => ledger.createProvingPayload(preimage, binding),
+  createCheckPayload: (preimage) => ledger.createCheckPayload(preimage),
+  parseCheckResult: (result) => ledger.parseCheckResult(result),
+};
+
+const preForkFraming: PayloadFraming = {
+  createProvingPayload: (preimage, binding) => preForkLedger.createProvingPayload(preimage, binding),
+  createCheckPayload: (preimage) => preForkLedger.createCheckPayload(preimage),
+  parseCheckResult: (result) => preForkLedger.parseCheckResult(result),
+};
 
 /**
  * Creates a layer for a {@link ProverClient} that sends requests to a Proof Server over HTTP.
@@ -126,12 +153,12 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     );
   }
 
-  private serverProverProvider = (): ledger.ProvingProvider => ({
+  private serverProverProvider = (framing: PayloadFraming): ledger.ProvingProvider => ({
     check: async (serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> =>
       pipe(
-        Effect.succeed(ledger.createCheckPayload(serializedPreimage)),
+        Effect.succeed(framing.createCheckPayload(serializedPreimage)),
         Effect.flatMap((tx) => this.request(CHECK_TX_PATH, tx, 'Failed to check')),
-        Effect.map((response) => ledger.parseCheckResult(response)),
+        Effect.map((response) => framing.parseCheckResult(response)),
         Effect.runPromise,
       ),
     prove: async (
@@ -140,7 +167,7 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
       overwriteBindingInput?: bigint,
     ): Promise<Uint8Array> =>
       pipe(
-        Effect.succeed(ledger.createProvingPayload(serializedPreimage, overwriteBindingInput)),
+        Effect.succeed(framing.createProvingPayload(serializedPreimage, overwriteBindingInput)),
         Effect.flatMap((tx) => this.request(PROVE_TX_PATH, tx, 'Failed to prove')),
         Effect.runPromise,
       ),
@@ -154,7 +181,7 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     costModel: ledger.CostModel,
   ): Effect.Effect<ledger.Transaction<S, ledger.Proof, B>, ClientError | ServerError> {
     return pipe(
-      Effect.succeed(this.serverProverProvider()),
+      Effect.succeed(this.serverProverProvider(currentLedgerFraming)),
       Effect.flatMap((provider) =>
         Effect.tryPromise({
           try: () => transaction.prove(provider, costModel),
@@ -167,7 +194,11 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     );
   }
 
-  asProvingProvider() {
-    return this.serverProverProvider();
+  asProvingProvider(): ledger.ProvingProvider {
+    return this.serverProverProvider(currentLedgerFraming);
+  }
+
+  asPreForkProvingProvider(): preForkLedger.ProvingProvider {
+    return this.serverProverProvider(preForkFraming);
   }
 }
