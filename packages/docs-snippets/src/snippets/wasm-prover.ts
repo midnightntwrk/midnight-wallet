@@ -10,12 +10,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+/*
+ * Proving in this process, either side of a protocol boundary.
+ *
+ * The bundled prover drives a zkir runtime over bytes and never looks at a ledger version, so — unlike a proof server,
+ * which is built against one — the same backend serves both epochs. One `provers` entry starting at the minimum
+ * supported version therefore covers the whole timeline: the SDK splits its range at `forkVersion` and drives each side
+ * with its own ledger.
+ */
 import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   WalletSeeds,
   type DefaultConfiguration,
   DustWallet,
   InMemoryTransactionHistoryStorage,
+  ProtocolVersion,
   WalletEntrySchema,
   WalletFacade,
   ShieldedWallet,
@@ -24,7 +33,6 @@ import {
   UnshieldedWallet,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk';
-import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk/capabilities';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
 
@@ -42,6 +50,9 @@ const configuration: DefaultConfiguration = {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
+  // The in-process prover, for every protocol version. `keyMaterialProvider` can be supplied here to point the prover
+  // at key material of your own; left out, it reads the published circuits, which both ledger versions accept.
+  provers: [{ sinceVersion: ProtocolVersion.MinSupportedVersion, backend: { kind: 'wasm' } }],
   indexerClientConnection: {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
@@ -60,7 +71,6 @@ const initWalletWithSeed = async (seed: Buffer) => {
     shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
     dust: (config) => DustWallet(config).startWithSeed(seeds.dust),
-    provingService: () => makeWasmProvingService(),
   });
 
   await wallet.start(seeds);

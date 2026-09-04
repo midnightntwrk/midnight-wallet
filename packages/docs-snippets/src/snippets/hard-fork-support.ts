@@ -21,7 +21,7 @@
  *
  * This file is the copy-paste shape, in the order the code runs:
  *
- * 1. version-keyed proving configuration (`provingServers`)
+ * 1. version-keyed proving configuration (`provers`)
  * 2. the seed-first start, which is the primary and the only one that crosses a fork
  * 3. reading the protocol phase off the state (`Settled` / `Crossing`)
  * 4. finding transactions the fork orphaned (`PendingStatus.Orphaned`)
@@ -37,6 +37,7 @@ import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
   type DefaultConfiguration,
+  ProtocolVersion,
   DustWallet,
   InMemoryTransactionHistoryStorage,
   mergeWalletEntries,
@@ -53,6 +54,9 @@ import { Either } from 'effect';
 const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
 const NODE_PORT = Number.parseInt(process.env['NODE_PORT'] ?? '9944', 10);
 const PROOF_SERVER_PORT = Number.parseInt(process.env['PROOF_SERVER_PORT'] ?? '6300', 10);
+// The proof server built against ledger-v8. A separate deployment from the one above — see the `provers`
+// comment below — and never contacted on a chain that has been post-fork since genesis.
+const V8_PROOF_SERVER_PORT = Number.parseInt(process.env['V8_PROOF_SERVER_PORT'] ?? '6301', 10);
 const INDEXER_HTTP_URL = `http://localhost:${INDEXER_PORT}/api/v4/graphql`;
 const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
@@ -69,18 +73,28 @@ const configuration: DefaultConfiguration = {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
-  // Proof servers keyed by the protocol version each starts serving, in ascending order. A transaction is proved by
-  // the server registered for the version its own bytes were authored at, so a fork landing between building a
-  // transaction and proving it cannot send it to the wrong prover. `provingServerUrl: url` is the single-server form
-  // and means exactly `[{ sinceVersion: ProtocolVersion.MinSupportedVersion, url }]` — one server for every version.
+  // Proving backends keyed by the protocol version each starts serving, in ascending order. A transaction is proved by
+  // the backend registered for the version its own bytes were authored at, so a fork landing between building a
+  // transaction and proving it cannot send it to the wrong prover — and, just as importantly, the ledger version that
+  // built those bytes is the one that frames the proving request.
   //
-  // A pre-fork entry would point at a proof server built against the pre-fork ledger: a separate external deployment,
-  // not yet available, which is why the line below is commented out rather than pointed somewhere. Without it, this
-  // configuration can prove nothing below `forkVersion` — which is correct for a chain already past it, and is what an
-  // application still expecting pre-fork traffic has to add.
-  provingServers: [
-    { sinceVersion: V9_NATIVE_FORK_VERSION, url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
-    // { sinceVersion: ProtocolVersion.MinSupportedVersion, url: new URL('http://localhost:6301') },
+  // Two entries, because a proof server is built against one ledger version and no published image serves both: the
+  // pre-fork half of a chain that has history below `forkVersion` needs its own deployment. On a chain that has been
+  // post-fork since genesis — like the one this runs against — the first entry is simply never reached.
+  //
+  // `provingServerUrl: url` is the shortest form and means one server for every version; the SDK splits its range at
+  // `forkVersion` so each side is framed by its own ledger, which makes it correct but rarely what an operator wants,
+  // since the one URL then has to answer for both. `provingServers: [...]` is the same list as below with every entry
+  // a server.
+  provers: [
+    {
+      sinceVersion: ProtocolVersion.MinSupportedVersion,
+      backend: { kind: 'server', url: new URL(`http://localhost:${V8_PROOF_SERVER_PORT}`) },
+    },
+    {
+      sinceVersion: V9_NATIVE_FORK_VERSION,
+      backend: { kind: 'server', url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
+    },
   ],
   indexerClientConnection: {
     indexerHttpUrl: INDEXER_HTTP_URL,

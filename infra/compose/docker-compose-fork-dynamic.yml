@@ -130,6 +130,22 @@ services:
     # No healthcheck, for the same reason as the indexer: no curl in the image. The fixture waits on
     # the listening port, exactly as the smoke fixture does.
 
+  # The proof server of the epoch before the boundary. A second service rather than a second tag on the
+  # first: no image serves both sides, and this lane is the one place a wallet has to prove on each in
+  # turn. It runs from the start, because the pre-fork transfer happens before the fork is enacted.
+  proof-server-v8:
+    image: 'ghcr.io/midnight-ntwrk/proof-server:${PROOF_SERVER_V8_TAG:-8.1.0}'
+    container_name: proof-server-v8_$TESTCONTAINERS_UID
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - '127.0.0.1::6300'
+    environment:
+      RUST_BACKTRACE: 'full'
+      EXTRA_ARGS: -v
+
   # Never started by `up` — the fixture drives it with
   # `docker compose … --profile tools run --rm toolkit runtime-upgrade …`, which joins the project
   # network so `ws://node:9944` resolves. No `container_name`: `compose run` names its own container.

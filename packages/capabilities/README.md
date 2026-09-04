@@ -95,6 +95,38 @@ try {
 }
 ```
 
+### Proving, either side of a protocol boundary
+
+A proving backend is written against one ledger version — it drives that version's `Transaction.prove` with that
+version's cost model, and frames its proof-server requests with that version's payload helpers. Which backend answers
+for which protocol version is therefore a registration, and it is made from the same `forkVersion` the wallets are built
+with:
+
+```typescript
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { makeDefaultVersionedProvingService } from '@midnightntwrk/wallet-sdk-capabilities/proving';
+
+const service = makeDefaultVersionedProvingService(
+  {
+    provers: [
+      { sinceVersion: ProtocolVersion.MinSupportedVersion, backend: { kind: 'server', url: v8ProofServer } },
+      { sinceVersion: forkVersion, backend: { kind: 'wasm' } },
+    ],
+  },
+  forkVersion,
+); // Either<VersionedProvingService, ProvingConfigurationError>
+```
+
+- `provers` > `provingServers` > `provingServerUrl`; naming none is a `ProvingConfigurationError`, as is naming them out
+  of order.
+- A range that spans `forkVersion` is split at it, so each side is driven by its own ledger version. That is what makes
+  the single-URL form frame correctly on both sides; whether one server can actually prove both is an operational fact
+  about that server, not something the SDK enforces.
+- Each registered backend refuses the other ledger version's transaction with `ProvingEpochMismatchError` rather than
+  handing it to a ledger that cannot read it.
+- `makeServerProvingServiceEffect` / `makeWasmProvingServiceEffect` build a single current-ledger backend;
+  `makeV8ServerProvingServiceEffect` / `makeV8WasmProvingServiceEffect` are their ledger-v8 twins.
+
 ## Exports
 
 ### Balancer
