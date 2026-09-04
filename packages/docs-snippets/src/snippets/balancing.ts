@@ -10,11 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { generateRandomSeed, ProtocolVersion, Token, WalletTransaction } from '@midnightntwrk/wallet-sdk';
+import { generateRandomSeed, Token, WalletTransaction } from '@midnightntwrk/wallet-sdk';
 import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
-import { initWalletWithSeed } from '../utils.ts';
+import { configuration, initWalletWithSeed } from '../utils.ts';
 
 const sender = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
@@ -23,6 +23,17 @@ const receiver = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
 const initialSenderState = await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
 const initialBalance = initialSenderState.unshielded.balances[Token.night] ?? 0n;
+
+// Authoring is choosing a ledger version, and the module imported above is the post-fork one. A transaction it builds
+// is sealed with the version the wallets are acting at, which is what every wallet entry point checks a handle against.
+// Below the boundary the import would be `@midnightntwrk/wallet-sdk/ledger/v8`, so this example refuses to run there
+// rather than hand post-fork bytes to a wallet on the pre-fork ledger.
+const authoredFor = initialSenderState.activeProtocolVersion;
+if (authoredFor < configuration.forkVersion) {
+  throw new Error(
+    `This example authors with the post-fork ledger, but the chain is at protocol version ${authoredFor}`,
+  );
+}
 
 const makeTransactionBlueprint = () => {
   const unshieldedOffer = ledger.UnshieldedOffer.new(
@@ -38,12 +49,11 @@ const makeTransactionBlueprint = () => {
   );
   const intent = ledger.Intent.new(new Date(Date.now() + 30 * 60 * 1000));
   intent.fallibleUnshieldedOffer = unshieldedOffer;
-  // Sealed together with the protocol version the ledger module above serves: an application that builds its own
-  // transaction is the one thing that has to say which ledger version built it.
+  // An application that builds its own transaction is the one thing that has to say which ledger version built it.
   return WalletTransaction.adopt(
     'Unproven',
-    ledger.Transaction.fromParts('undeployed', undefined, undefined, intent),
-    ProtocolVersion.MinSupportedVersion,
+    ledger.Transaction.fromParts(configuration.networkId, undefined, undefined, intent),
+    authoredFor,
   );
 };
 

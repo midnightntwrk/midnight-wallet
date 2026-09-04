@@ -10,8 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
-import type * as ledger from '@midnightntwrk/ledger-v9';
+import type * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
 import {
   type DefaultConfiguration,
   DustWallet,
@@ -25,6 +24,7 @@ import {
   type UnshieldedKeystore,
   WalletSeeds,
   mergeWalletEntries,
+  V9_NATIVE_FORK_VERSION,
 } from '@midnightntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
 
@@ -34,7 +34,7 @@ const PROOF_SERVER_PORT = Number.parseInt(process.env['PROOF_SERVER_PORT'] ?? '6
 const INDEXER_HTTP_URL = `http://localhost:${INDEXER_PORT}/api/v4/graphql`;
 const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
-const configuration: DefaultConfiguration = {
+export const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
   // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so this is supplied per environment.

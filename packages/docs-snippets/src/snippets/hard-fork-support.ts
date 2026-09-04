@@ -33,7 +33,6 @@
  * executable proof of it lives in each wallet package's `src/test/forkSimulation.test.ts` and
  * `src/test/forkStart.test.ts`.
  */
-import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
   type DefaultConfiguration,
@@ -46,6 +45,7 @@ import {
   WalletEntrySchema,
   WalletFacade,
   WalletSeeds,
+  V9_NATIVE_FORK_VERSION,
 } from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 import { Either } from 'effect';

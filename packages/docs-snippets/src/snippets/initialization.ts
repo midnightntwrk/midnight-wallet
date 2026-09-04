@@ -10,7 +10,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   WalletSeeds,
   type DefaultConfiguration,
@@ -23,6 +22,7 @@ import {
   PublicKey,
   UnshieldedWallet,
   mergeWalletEntries,
+  V9_NATIVE_FORK_VERSION,
 } from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';

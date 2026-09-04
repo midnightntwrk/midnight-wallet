@@ -10,7 +10,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   WalletSeeds,
   type DefaultConfiguration,
@@ -23,8 +22,13 @@ import {
   PublicKey,
   UnshieldedWallet,
   mergeWalletEntries,
+  V9_NATIVE_FORK_VERSION,
 } from '@midnightntwrk/wallet-sdk';
-import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk/capabilities';
+import {
+  makeVersionedProvingServiceEffect,
+  makeWasmProvingServices,
+  wrapVersionedEffectService,
+} from '@midnightntwrk/wallet-sdk/capabilities';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
 
@@ -60,7 +64,12 @@ const initWalletWithSeed = async (seed: Buffer) => {
     shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
     dust: (config) => DustWallet(config).startWithSeed(seeds.dust),
-    provingService: () => makeWasmProvingService(),
+    // In-process proving instead of a proof server. The prover is built against the post-fork ledger's circuits, so it
+    // is registered from `forkVersion` — the same way a proof server is under `provingServers`. A transaction is proved
+    // by the backend registered for the version its own bytes were authored at, and one authored below the boundary is
+    // refused (`UnsupportedProvingVersionError`) rather than proved with the wrong circuits.
+    provingService: () =>
+      wrapVersionedEffectService(makeVersionedProvingServiceEffect(makeWasmProvingServices(V9_NATIVE_FORK_VERSION))),
   });
 
   await wallet.start(seeds);

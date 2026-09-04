@@ -10,7 +10,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   WalletSeeds,
   type DefaultConfiguration,
@@ -26,6 +25,7 @@ import {
   PublicKey,
   UnshieldedWallet,
   mergeWalletEntries,
+  V9_NATIVE_FORK_VERSION,
 } from '@midnightntwrk/wallet-sdk';
 import { V2Builder } from '@midnightntwrk/wallet-sdk/dust/v2';
 import { Buffer } from 'buffer';
@@ -73,7 +73,13 @@ const configuration: DefaultConfiguration = {
 const fastSyncDustWallet = (config: DefaultDustConfiguration) =>
   CustomDustWallet(
     { ...config, anonymityLevel: 7 },
-    new V2Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
+    new V2Builder()
+      .withDefaults()
+      .withSync(makeEventLessSyncService, makeEventLessSyncCapability)
+      // Restated because `withSync` drops it: a sync service names the key material it is started with, so choosing
+      // one un-chooses the derivation from a seed the defaults had set. This service is started with the same
+      // `DustSecretKey` the default one is, and `startWithSeed` below needs the derivation by name.
+      .withStartAuxDefaults(),
   );
 
 const initWalletWithSeed = async (seed: Buffer) => {

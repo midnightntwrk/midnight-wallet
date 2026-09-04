@@ -11,16 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
-import {
-  generateRandomSeed,
-  ProtocolVersion,
-  Token,
-  type UnboundTx,
-  WalletTransaction,
-} from '@midnightntwrk/wallet-sdk';
+import { generateRandomSeed, Token, type UnboundTx, WalletTransaction } from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
-import { aFakeProvingProvider, initWalletWithSeed } from '../utils.ts';
+import { aFakeProvingProvider, configuration, initWalletWithSeed } from '../utils.ts';
 
 /*
  * This file demonstrates the flow for "Dust sponsorship" - where the user's wallet is only used
@@ -73,6 +67,17 @@ const userReceivedNight = await rx.firstValueFrom(
 );
 console.log('User received night for main transaction', userReceivedNight.unshielded.balances[Token.night]);
 
+// Authoring is choosing a ledger version, and the module imported above is the post-fork one. A transaction it builds
+// is sealed with the version the wallets are acting at, which is what every wallet entry point checks a handle against.
+// Below the boundary the import would be `@midnightntwrk/wallet-sdk/ledger/v8`, so this example refuses to run there
+// rather than hand post-fork bytes to a wallet on the pre-fork ledger.
+const authoredFor = userReceivedNight.activeProtocolVersion;
+if (authoredFor < configuration.forkVersion) {
+  throw new Error(
+    `This example authors with the post-fork ledger, but the chain is at protocol version ${authoredFor}`,
+  );
+}
+
 const prepareTransactionToBalance = async (): Promise<UnboundTx> => {
   const unshieldedOffer = ledger.UnshieldedOffer.new(
     [],
@@ -87,15 +92,15 @@ const prepareTransactionToBalance = async (): Promise<UnboundTx> => {
   );
   const intent = ledger.Intent.new(new Date(Date.now() + 30 * 60 * 1000));
   intent.fallibleUnshieldedOffer = unshieldedOffer;
-  const unprovenTransaction = ledger.Transaction.fromParts('undeployed', undefined, undefined, intent);
+  const unprovenTransaction = ledger.Transaction.fromParts(configuration.networkId, undefined, undefined, intent);
   // Fake proving will work here as no proofs are involved. This is a major difference compared to real flow
   const proven = await unprovenTransaction.prove(
     aFakeProvingProvider,
     ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
   );
-  // Sealed with the protocol version the ledger module above serves: a transaction an application built for itself is
-  // handed to the wallet as a handle, saying which ledger version made it.
-  return WalletTransaction.adopt('Unbound', proven, ProtocolVersion.MinSupportedVersion);
+  // A transaction an application built for itself is handed to the wallet as a handle, saying which ledger version
+  // made it.
+  return WalletTransaction.adopt('Unbound', proven, authoredFor);
 };
 //Transaction as DApp could prepare it
 const transactionToBalance = await prepareTransactionToBalance();
