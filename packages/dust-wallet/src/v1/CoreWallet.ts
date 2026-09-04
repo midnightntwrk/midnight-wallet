@@ -22,20 +22,13 @@ import {
   type Signaturish,
   type Transaction,
   type Event,
-} from '@midnightntwrk/ledger-v9';
+} from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { Array as Arr, HashMap, Option, pipe } from 'effect';
+import { Array as Arr, Option, pipe } from 'effect';
 import { type Dust, type DustWithNullifier } from './types/Dust.js';
 import { type CoinWithValue } from './CoinsAndBalances.js';
 import { type NetworkId, type UnprovenDustSpend } from './types/ledger.js';
-import {
-  type CollapsedMerkleTree,
-  type NewDustGeneration,
-  type DustGenerationDtimUpdate,
-  type DustUtxoEntry,
-  type DustUtxoMap,
-} from './SyncSchema.js';
 
 export type PublicKey = {
   publicKey: DustPublicKey;
@@ -96,6 +89,46 @@ export const CoreWallet = {
     };
   },
 
+  /**
+   * Records an observed protocol version, monotonically.
+   *
+   * @remarks
+   *   Only ever raises it. A stale lower report — a late batch from behind the tip, a source that rewound — would
+   *   otherwise look like a downward version change and send the runtime migrating backwards into a variant this wallet
+   *   has already left.
+   */
+  withProtocolVersion(wallet: CoreWallet, version: ProtocolVersion.ProtocolVersion): CoreWallet {
+    return version > wallet.protocolVersion ? { ...wallet, protocolVersion: version } : wallet;
+  },
+
+  /**
+   * The first state of this ledger version, projected from the wallet of the version it replaced.
+   *
+   * @remarks
+   *   Identity and position only. The dust itself is deliberately absent: the indexer replays the timeline after the
+   *   fork, so the same dust is generated again by events of this ledger version and re-discovered by ordinary sync.
+   *
+   *   `dustParameters` has to be supplied rather than carried, and this is where dust departs from shielded:
+   *   `DustLocalState` is parameterised by the ledger's dust parameters, and those are a WASM object belonging to
+   *   whichever ledger module produced them. The previous variant's copy cannot be handed to this one.
+   */
+  fromPreviousVersion(previous: {
+    readonly publicKey: PublicKey;
+    readonly networkId: NetworkId;
+    readonly protocolVersion: bigint;
+    readonly progress: SyncProgress.SyncProgressData;
+    readonly dustParameters: DustParameters;
+  }): CoreWallet {
+    return {
+      state: new DustLocalState(previous.dustParameters),
+      publicKey: previous.publicKey,
+      networkId: previous.networkId,
+      pendingDust: [],
+      progress: SyncProgress.createSyncProgress({ ...previous.progress, isConnected: false }),
+      protocolVersion: ProtocolVersion.ProtocolVersion(previous.protocolVersion),
+    };
+  },
+
   applyEventsWithChanges(
     wallet: CoreWallet,
     secretKey: DustSecretKey,
@@ -114,96 +147,6 @@ export const CoreWallet = {
       },
       stateWithChanges.changes,
     ];
-  },
-
-  applyDustGenerations(
-    wallet: CoreWallet,
-    dustCollapsedGenTreeSnapshot: ReadonlyArray<CollapsedMerkleTree>, // a full snapshot starting from index 0
-    newGenerations: ReadonlyArray<NewDustGeneration>,
-    generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
-  ): CoreWallet {
-    // apply snapshot updates covering (lastIndex, nextGenerationIndex) — the gap before the next own generation,
-    // or every remaining update when there is no next generation
-    const applySnapshotGap = (state: DustLocalState, lastIndex: number, nextGenerationIndex?: number): DustLocalState =>
-      dustCollapsedGenTreeSnapshot
-        .filter(
-          ({ startIndex, endIndex }) =>
-            startIndex > lastIndex && (nextGenerationIndex === undefined || endIndex < nextGenerationIndex),
-        )
-        .reduce((current, update) => current.applyGenerationCollapsedUpdate(update.update), state);
-
-    const { state: stateWithGenerations, lastIndex } = newGenerations.reduce(
-      (acc, { generationMtIndex, genInfo, qdo }) => ({
-        state: applySnapshotGap(acc.state, acc.lastIndex, generationMtIndex).insertGenerationInfo(
-          BigInt(generationMtIndex),
-          genInfo,
-          qdo.backingNight,
-        ),
-        lastIndex: generationMtIndex,
-      }),
-      { state: wallet.state, lastIndex: -1 },
-    );
-
-    // apply the rest of the updates, then the dtime updates
-    const updatedState = generationDtimeUpdates.reduce(
-      (state, update) => state.updateGenerationTreeFromEvidence(update.treeInsertionPath),
-      applySnapshotGap(stateWithGenerations, lastIndex),
-    );
-
-    return {
-      ...wallet,
-      state: updatedState,
-    };
-  },
-
-  applyNewDustUtxos(wallet: CoreWallet, newDustUtxos: Readonly<DustUtxoMap>): CoreWallet {
-    const updatedState = [...newDustUtxos]
-      .toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex))
-      .reduce((state, [dustNullifier, utxoInfo]) => state.addUtxo(dustNullifier, utxoInfo.qdo), wallet.state);
-    return {
-      ...wallet,
-      state: updatedState,
-    };
-  },
-
-  applyDustCommitments(
-    wallet: CoreWallet,
-    newDustUtxos: Readonly<DustUtxoMap>,
-    collapsedCommitments: ReadonlyArray<CollapsedMerkleTree>,
-  ): CoreWallet {
-    const newUtxos = [...HashMap.values(newDustUtxos)].toSorted((a, b) => Number(a.qdo.mtIndex - b.qdo.mtIndex));
-
-    const insertCommitments = (state: DustLocalState, utxos: ReadonlyArray<DustUtxoEntry>): DustLocalState =>
-      utxos.reduce((current, utxoInfo) => current.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true), state);
-
-    const stateAfterCollapsed = collapsedCommitments.reduce((state, { startIndex, update }) => {
-      // apply utxos going before the current index, then the current update
-      const priorUtxos = newUtxos.filter(
-        (utxoInfo) =>
-          Number(utxoInfo.qdo.mtIndex) < startIndex && utxoInfo.qdo.mtIndex >= state.commitmentTreeFirstFree,
-      );
-      return insertCommitments(state, priorUtxos).applyCommitmentCollapsedUpdate(update);
-    }, wallet.state);
-
-    // insert the utxos after the last collapsed update — all of them when there were no collapsed updates
-    const lastCollapsedIndex = collapsedCommitments.at(-1);
-    const updatedState = insertCommitments(
-      stateAfterCollapsed,
-      lastCollapsedIndex !== undefined
-        ? newUtxos.filter((utxoInfo) => Number(utxoInfo.qdo.mtIndex) > lastCollapsedIndex.endIndex)
-        : newUtxos,
-    );
-
-    return { ...wallet, state: updatedState };
-  },
-
-  applySpentNullifiers(wallet: CoreWallet, spentNullifiers: ReadonlyArray<DustNullifier>): CoreWallet {
-    const updatedState = spentNullifiers.reduce((state, nullifier) => state.removeUtxo(nullifier), wallet.state);
-    return {
-      ...wallet,
-      pendingDust: wallet.pendingDust.filter((d) => !spentNullifiers.includes(d.nullifier)),
-      state: updatedState,
-    };
   },
 
   applyFailed(wallet: CoreWallet, tx: Transaction<Signaturish, Proofish, Bindingish>): CoreWallet {

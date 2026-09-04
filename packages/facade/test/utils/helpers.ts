@@ -10,21 +10,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import type * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
+import { HDWallet, Roles, type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import { WalletFacade, type Clock } from '../../src/index.js';
 import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   Sync as ShieldedSync,
   TransactionHistory as ShieldedTransactionHistory,
-  V1Builder as ShieldedV1Builder,
-} from '@midnightntwrk/wallet-sdk-shielded/v1';
+  V2Builder as ShieldedV2Builder,
+} from '@midnightntwrk/wallet-sdk-shielded/v2';
 import { CustomDustWallet, type DustWalletAPI } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import {
   SyncService as DustSyncService,
   TransactionHistory as DustTransactionHistory,
-  V1Builder as DustV1Builder,
-} from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+  V2Builder as DustV2Builder,
+} from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
   CustomUnshieldedWallet,
   createKeystore,
@@ -32,23 +33,29 @@ import {
   type UnshieldedSecretKey,
   type UnshieldedWalletAPI,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  type FinalizedTx,
+  NoOpTransactionHistoryStorage,
+  ProtocolVersion,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { type WalletEntry } from '../../src/index.js';
 import {
   Sync as UnshieldedSync,
-  V1Builder as UnshieldedV1Builder,
-} from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+  V2Builder as UnshieldedV2Builder,
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import {
   makeSimulatorProvingServiceEffect,
   type ProvingService,
   type UnboundTransaction,
+  type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { type Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { makeSimulatorBlockDataFetcher } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
-import { Effect, type Scope } from 'effect';
+import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 
 export const getShieldedSeed = (seed: string): Uint8Array => {
@@ -153,18 +160,27 @@ export const createSimulatorProvingService = (): ProvingService<UnboundTransacti
  * Creates a Promise-based wrapper around the Effect-based simulator submission service. Note: Uses type assertions
  * because simulator uses different transaction types internally.
  */
-export const createSimulatorSubmissionService = (
-  simulator: Simulator,
-): SubmissionService<ledger.FinalizedTransaction> => {
+export const createSimulatorSubmissionService = (simulator: Simulator): SubmissionService<FinalizedTx> => {
   const effectService = Submission.makeSimulatorSubmissionService<ledger.FinalizedTransaction>('InBlock')({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     simulator: simulator as any,
   });
+  // The simulator takes the ledger's own transaction rather than bytes, so the handle is opened here — at the one
+  // version this simulator ever runs.
+  const wholeTimeline = ProtocolVersion.epochOf(
+    ProtocolVersion.MinSupportedVersion,
+    ProtocolVersion.MinSupportedVersion,
+  );
   return {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    submitTransaction: ((tx: ledger.FinalizedTransaction, waitFor?: 'Submitted' | 'InBlock' | 'Finalized') =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      effectService.submitTransaction(tx, waitFor ?? 'InBlock').pipe(Effect.runPromise)) as any,
+    // The overloaded submit signature is stated once by the service type; this fake answers the widest of its
+    // overloads, which is the one every caller in these suites uses.
+    submitTransaction: ((tx: FinalizedTx, waitFor?: 'Submitted' | 'InBlock' | 'Finalized') =>
+      effectService
+        .submitTransaction(
+          Either.getOrThrow(WalletTransaction.unwrapWithin<ledger.FinalizedTransaction>(tx, wholeTimeline)),
+          waitFor ?? 'InBlock',
+        )
+        .pipe(Effect.runPromise)) as SubmissionService<FinalizedTx>['submitTransaction'],
     close: () => effectService.close().pipe(Effect.runPromise),
   };
 };
@@ -195,7 +211,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
       txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>(),
       indexerClientConnection: { indexerHttpUrl: 'http://unused:0' },
     },
-    new ShieldedV1Builder()
+    new ShieldedV2Builder()
       .withDefaultTransactionType()
       .withSync(ShieldedSync.makeSimulatorSyncService, ShieldedSync.makeSimulatorSyncCapability)
       .withSerializationDefaults()
@@ -203,13 +219,14 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
       .withCoinsAndBalancesDefaults()
       .withTransactionHistory(ShieldedTransactionHistory.makeSimulatorTransactionHistoryService)
       .withKeysDefaults()
+      .withStartAuxDefaults()
       .withCoinSelectionDefaults(),
   );
 
   // Dust wallet: all defaults except sync (uses simulator sync)
   const DustWalletFactory = CustomDustWallet(
     config,
-    new DustV1Builder()
+    new DustV2Builder()
       .withDefaultTransactionType()
       .withSync(DustSyncService.makeSimulatorSyncService, DustSyncService.makeSimulatorSyncCapability)
       .withSerializationDefaults()
@@ -217,13 +234,14 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
       .withCoinsAndBalancesDefaults()
       .withTransactionHistory(DustTransactionHistory.makeSimulatorTransactionHistoryService)
       .withKeysDefaults()
+      .withStartAuxDefaults()
       .withCoinSelectionDefaults(),
   );
 
   // Unshielded wallet: all defaults except sync (uses simulator sync)
   const UnshieldedWalletFactory = CustomUnshieldedWallet(
     { ...config, txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>() },
-    new UnshieldedV1Builder()
+    new UnshieldedV2Builder()
       .withSync(UnshieldedSync.makeSimulatorSyncService, UnshieldedSync.makeSimulatorSyncCapability)
       .withSerializationDefaults()
       .withTransactingDefaults()
@@ -245,6 +263,8 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
 export type WalletKeys = {
   shieldedKeys: ledger.ZswapSecretKeys;
   dustKey: ledger.DustSecretKey;
+  /** The per-wallet seeds the keys above were derived from, which is what the facade is started with. */
+  seeds: WalletSeeds;
   unshieldedKeystore: ReturnType<typeof createKeystore>;
   signatureVerifyingKey: ledger.SignatureVerifyingKey;
   userAddress: ledger.UserAddress;
@@ -274,7 +294,14 @@ export const deriveWalletKeys = (
   const signatureVerifyingKey = ledger.signatureVerifyingKey(ledgerSigningKey);
   const userAddress = ledger.addressFromKey(signatureVerifyingKey);
 
-  return { shieldedKeys, dustKey, unshieldedKeystore, signatureVerifyingKey, userAddress };
+  return {
+    shieldedKeys,
+    dustKey,
+    seeds: { shielded: shieldedSeed, unshielded: unshieldedSeed, dust: dustSeed },
+    unshieldedKeystore,
+    signatureVerifyingKey,
+    userAddress,
+  };
 };
 
 /**
@@ -297,6 +324,9 @@ export const makeSimulatorFacade = (
       const facade = await WalletFacade.init({
         configuration: {
           ...config,
+          // A simulator that runs only the current ledger version has never had two epochs, whatever protocol version
+          // its blocks report — so the boundary is at the bottom and everything it produces is post-fork.
+          forkVersion: ProtocolVersion.MinSupportedVersion,
           // Dummy values - not used in simulation mode
           indexerClientConnection: { indexerHttpUrl: 'http://unused' },
           relayURL: new URL('ws://unused'),
@@ -312,7 +342,7 @@ export const makeSimulatorFacade = (
       });
 
       // Start the wallet with keys
-      await facade.start(keys.shieldedKeys, keys.dustKey);
+      await facade.start(keys.seeds);
 
       return facade;
     }),
@@ -341,3 +371,23 @@ export const waitForUnshieldedBalance = (
       ),
     ),
   );
+
+/**
+ * A prover for the epoch a wallet with no history is in: the pre-fork one.
+ *
+ * @remarks
+ *   The SDK ships no pre-fork proving path — that is the one thing waiting on a proof server for the previous ledger
+ *   version — so a suite whose subject is what the facade does _around_ proving supplies its own. It mock-proves with
+ *   the pre-fork ledger version's own primitives, which is what makes it a fake of the right shape rather than a stand
+ *   in for the wrong one, and hands back something the facade can bind: the proving contract is
+ *   proved-but-not-yet-bound, and `mockProve` binds as it proves.
+ */
+export const createPreForkMockProvingService = (): VersionedProvingService<UnboundTransaction> => ({
+  prove: (tx: unknown) => {
+    const proven = (tx as preForkLedger.UnprovenTransaction).mockProve();
+    return Promise.resolve({
+      bind: () => proven,
+      serialize: () => proven.serialize(),
+    } as unknown as UnboundTransaction);
+  },
+});

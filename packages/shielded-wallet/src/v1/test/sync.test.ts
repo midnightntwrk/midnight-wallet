@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import { vi } from 'vitest';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import {
   Effect,
   Stream,
@@ -35,10 +35,10 @@ import type {
   ZswapEventsSubscription,
   ZswapEventsSubscriptionVariables,
 } from '@midnightntwrk/wallet-sdk-indexer-client';
-import { makeEventsSyncService } from '../Sync.js';
+import { type EventsSyncUpdate, type WalletSyncUpdate, makeEventsSyncService } from '../Sync.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Simulator, getLastBlock, getLastBlockEvents } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 
 vi.setConfig({
   testTimeout: 60_000,
@@ -49,7 +49,7 @@ const createMockEventHex = async (): Promise<string> => {
   // Use Simulator to generate a real event, then serialize it
   return await Effect.gen(function* () {
     const scope = yield* Scope.make();
-    const simulator = yield* Simulator.init({
+    const simulator = yield* V8.Simulator.init({
       genesisMints: [
         {
           type: 'shielded',
@@ -68,11 +68,11 @@ const createMockEventHex = async (): Promise<string> => {
       onSome: (s) => s,
     });
 
-    const lastBlock = getLastBlock(state);
+    const lastBlock = V8.getLastBlock(state);
     if (lastBlock === undefined) {
       throw new Error('No block from simulator');
     }
-    const events = getLastBlockEvents(state);
+    const events = V8.getLastBlockEvents(state);
     if (events.length === 0) {
       throw new Error('No events generated from simulator');
     }
@@ -98,6 +98,11 @@ const createMockSubscriptionFn = (
   totalRecords: number,
   mockEventHex: string,
   timingOptions?: TimingOptions,
+  /**
+   * The protocol version the indexer reports for each event id. Defaults to a constant 1. Per-item versions are what
+   * the boundary split in `applyUpdate` keys off, so they have to survive batching intact.
+   */
+  protocolVersionOf: (id: number) => number = () => 1,
 ): ((
   _variables: ZswapEventsSubscriptionVariables,
 ) => Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient>) => {
@@ -110,7 +115,7 @@ const createMockSubscriptionFn = (
         zswapLedgerEvents: {
           id,
           raw: mockEventHex,
-          protocolVersion: 1,
+          protocolVersion: protocolVersionOf(id),
           maxId: totalRecords,
         },
       })),
@@ -172,6 +177,26 @@ const withBatchLogging = <A, E, R>(
   });
 };
 
+/**
+ * The events a batch carries.
+ *
+ * @remarks
+ *   The stream's element type also admits the periodic version signal, which every suite here turns off — so every
+ *   element they see is an event batch.
+ */
+const eventsOf = (update: WalletSyncUpdate): readonly EventsSyncUpdate[] =>
+  update._tag === 'Events' ? update.updates : [];
+
+/**
+ * The version watcher, off.
+ *
+ * @remarks
+ *   These suites are about how the event timeline is batched. The periodic tip-version check is a second source merged
+ *   into the same stream, and leaving it on would let a poll add elements to the batches being counted — and, wherever
+ *   the test clock is wound past an interval, put a real query on the wire from a unit test.
+ */
+const noVersionWatch = { intervalMs: 0 } as const;
+
 describe('Wallet subscription', () => {
   const batchSize = 50;
   const batchTimeout = Duration.seconds(10);
@@ -194,13 +219,14 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
+          versionWatch: noVersionWatch,
           batchUpdates: { size: batchSize },
         });
 
         const updates = yield* syncService.updates(initialState, secretKeys).pipe(Stream.runCollect);
         const batchSizes = pipe(
           updates,
-          Chunk.map((update) => update.updates.length),
+          Chunk.map((update) => eventsOf(update).length),
         );
 
         // Verify size-based batching: should have full batches of batchSize, plus possibly a final partial batch
@@ -238,6 +264,7 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
+          versionWatch: noVersionWatch,
           batchUpdates: { size: 100, timeout: 10_000 },
         });
 
@@ -252,7 +279,7 @@ describe('Wallet subscription', () => {
         // All events should land in a single batch because the timeout (10s)
         // is much larger than the total event delivery time
         expect(Chunk.size(updates)).toBe(1);
-        expect(updates.pipe(Chunk.unsafeHead).updates.length).toBe(eventCount);
+        expect(eventsOf(updates.pipe(Chunk.unsafeHead)).length).toBe(eventCount);
       }).pipe(
         Effect.provideService(ZswapEvents.tag, mockSubscriptionFn),
         Effect.provide(TestContext.TestContext),
@@ -280,6 +307,7 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
+          versionWatch: noVersionWatch,
           batchUpdates: { size: 10, spacing: 500 },
         });
 
@@ -329,6 +357,7 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
+          versionWatch: noVersionWatch,
         });
 
         const { stream, batches } = yield* withBatchLogging(
@@ -393,6 +422,7 @@ describe('Wallet subscription', () => {
           indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
           indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
         },
+        versionWatch: noVersionWatch,
       });
 
       await syncService
@@ -420,6 +450,53 @@ describe('Wallet subscription', () => {
       const variables = await cursorFor(state, secretKeys);
 
       expect(variables).toEqual({ id: 4 });
+    });
+  });
+
+  describe('per-item protocol version decoding', () => {
+    // The version reported for a single event is what decides which side of the fork boundary that event falls on, so
+    // it has to arrive at `applyUpdate` per item — a batch-level summary would erase exactly the transition being
+    // looked for.
+    const versionOf = (id: number): number => (id <= 3 ? 3 : id <= 5 ? 9 : 11);
+
+    const collectUpdates = async (eventCount: number, batchSize: number) => {
+      const mockEventHex = await createMockEventHex();
+      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex, undefined, versionOf);
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
+
+      return await Effect.gen(function* () {
+        const syncService = makeEventsSyncService({
+          indexerClientConnection: {
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+          },
+          versionWatch: noVersionWatch,
+          batchUpdates: { size: batchSize, spacing: 0 },
+        });
+
+        return yield* syncService.updates(initialState, secretKeys).pipe(Stream.runCollect);
+      }).pipe(Effect.provideService(ZswapEvents.tag, mockSubscriptionFn), Effect.scoped, Effect.runPromise);
+    };
+
+    it('carries the indexer-reported version of every event through a single batch', async () => {
+      const updates = await collectUpdates(6, 10);
+
+      expect(Chunk.size(updates)).toBe(1);
+      const batch = updates.pipe(Chunk.unsafeHead);
+      expect(eventsOf(batch).map((u) => u.id)).toEqual([1, 2, 3, 4, 5, 6]);
+      expect(eventsOf(batch).map((u) => u.protocolVersion)).toEqual([3, 3, 3, 9, 9, 11]);
+    });
+
+    it('keeps each event paired with its own version when the batch boundary splits them', async () => {
+      const updates = await collectUpdates(6, 2);
+
+      expect(Chunk.size(updates)).toBe(3);
+      expect(Chunk.toArray(updates).map((batch) => eventsOf(batch).map((u) => u.protocolVersion))).toEqual([
+        [3, 3],
+        [3, 9],
+        [9, 11],
+      ]);
     });
   });
 });

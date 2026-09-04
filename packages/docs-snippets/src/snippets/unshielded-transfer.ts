@@ -12,9 +12,8 @@
 // limitations under the License.
 import { initWalletWithSeed } from '../utils.ts';
 import * as rx from 'rxjs';
-import * as ledger from '@midnightntwrk/ledger-v9';
 import { Buffer } from 'buffer';
-import { generateRandomSeed } from '@midnightntwrk/wallet-sdk';
+import { generateRandomSeed, Token } from '@midnightntwrk/wallet-sdk';
 
 const sender = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
@@ -32,15 +31,11 @@ await sender.wallet
           {
             amount: 1_000_000n,
             receiverAddress: await receiver.wallet.unshielded.getAddress(),
-            type: ledger.unshieldedToken().raw,
+            type: Token.night,
           },
         ],
       },
     ],
-    {
-      shieldedSecretKeys: sender.shieldedSecretKeys,
-      dustSecretKey: sender.dustSecretKey,
-    },
     {
       ttl: new Date(Date.now() + 30 * 60 * 1000),
     },
@@ -53,16 +48,13 @@ const receiverState = await rx.firstValueFrom(
   receiver.wallet.state().pipe(
     rx.filter((s) => s.isSynced),
     rx.filter((s) => {
-      const nightBalance = s.unshielded.balances[ledger.unshieldedToken().raw] ?? 0n;
+      const nightBalance = s.unshielded.balances[Token.night] ?? 0n;
       return nightBalance > 0n;
     }),
   ),
 );
 
-console.log(
-  'Unshielded transfer completed; night balance:',
-  receiverState.unshielded.balances[ledger.unshieldedToken().raw] ?? 0n,
-);
+console.log('Unshielded transfer completed; night balance:', receiverState.unshielded.balances[Token.night] ?? 0n);
 
 await receiver.wallet.stop();
 await sender.wallet.stop();

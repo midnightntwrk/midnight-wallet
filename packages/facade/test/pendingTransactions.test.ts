@@ -14,16 +14,26 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolVersion,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
-import { getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import {
+  createPreForkMockProvingService,
+  getDustSeed,
+  getShieldedSeed,
+  getUnshieldedSeed,
+  sleep,
+} from './utils/index.js';
 import * as rx from 'rxjs';
-import { finalizedTransactionTrait } from '../src/transaction.js';
 
 vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 
@@ -37,6 +47,7 @@ describe('Wallet Facade handling pending transactions', () => {
   beforeEach(async () => {
     configuration = {
       networkId: NetworkId.NetworkId.Undeployed,
+      forkVersion: V9_NATIVE_FORK_VERSION,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
@@ -52,17 +63,18 @@ describe('Wallet Facade handling pending transactions', () => {
     const unshieldedSeed = getUnshieldedSeed(seed);
     const dustSeed = getDustSeed(seed);
     const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: unshieldedSeed }, configuration.networkId);
-    shielded = ShieldedWallet(configuration).startWithSeed(shieldedSeed);
-    unshielded = UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
-    dust = DustWallet(configuration).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust);
+    shielded = await ShieldedWallet(configuration).startWithSeed(shieldedSeed);
+    unshielded = await UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
+    dust = await DustWallet(configuration).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust);
 
     facade = await WalletFacade.init({
       configuration,
       shielded: () => shielded,
       unshielded: () => unshielded,
       dust: () => dust,
+      provingService: () => createPreForkMockProvingService(),
     });
-    await facade?.start(ledger.ZswapSecretKeys.fromSeed(shieldedSeed), ledger.DustSecretKey.fromSeed(dustSeed));
+    await facade?.start({ shielded: shieldedSeed, unshielded: unshieldedSeed, dust: dustSeed });
   });
   afterEach(async () => {
     await facade?.stop();
@@ -74,11 +86,11 @@ describe('Wallet Facade handling pending transactions', () => {
     const spiedDustRevert = vi.spyOn(dust, 'revertTransaction');
 
     const ttl = new Date(Date.now() + 10);
-    const transaction = ledger.Transaction.fromParts(
-      configuration.networkId,
-      undefined,
-      undefined,
-      ledger.Intent.new(ttl),
+    const transaction = WalletTransaction.adopt(
+      'Unproven',
+      // The wallets here have never synced, so the facade is on the pre-fork side of the boundary.
+      preForkLedger.Transaction.fromParts(configuration.networkId, undefined, undefined, preForkLedger.Intent.new(ttl)),
+      ProtocolVersion.MinSupportedVersion,
     );
 
     const finalized = await facade.finalizeTransaction(transaction); //Submission and finalization actions do save transactions
@@ -90,6 +102,8 @@ describe('Wallet Facade handling pending transactions', () => {
     expect(spiedShieldedRevert).toHaveBeenCalled();
     expect(spiedUnshieldedRevert).toHaveBeenCalled();
     expect(spiedDustRevert).toHaveBeenCalled();
-    expect(PendingTransactions.has(state.pending, finalized, finalizedTransactionTrait)).toBe(true);
+    // Read off the state's own projection now, rather than through the pending set's trait machinery: what an
+    // application sees is a list of transactions with a status each.
+    expect(state.pending.map((entry) => entry.transaction)).toContain(finalized);
   });
 });

@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, Either, pipe, BigInt as BigIntOps, Iterable as IterableOps, Option } from 'effect';
+import { Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   DustActions,
   DustRegistration,
@@ -30,8 +31,7 @@ import {
   type UnprovenTransaction,
   addressFromKey,
   type LedgerParameters,
-  nativeToken,
-} from '@midnightntwrk/ledger-v9';
+} from '@midnight-ntwrk/ledger-v8';
 import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { OtherWalletError, TransactingError, type WalletError, InsufficientFundsError } from './WalletError.js';
 import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -262,7 +262,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       }));
       const output: UtxoOutput = {
         owner: addressFromKey(nightVerifyingKey),
-        type: nativeToken().raw,
+        type: Token.night,
         value: totalValue,
       };
 
@@ -532,14 +532,14 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
         const guaranteedSignatures = Array.from(
           { length: guaranteedUnshieldedOffer.inputs.length },
-          (_, i) => guaranteedUnshieldedOffer.signatures.at(i) ?? signature,
+          (_, i) => guaranteedUnshieldedOffer.signatures.at(i) ?? signatureData,
         );
         newIntent.guaranteedUnshieldedOffer = guaranteedUnshieldedOffer.addSignatures(guaranteedSignatures);
 
         if (fallibleUnshieldedOffer) {
           const fallibleSignatures = Array.from(
             { length: fallibleUnshieldedOffer.inputs.length },
-            (_, i) => fallibleUnshieldedOffer.signatures.at(i) ?? signature,
+            (_, i) => fallibleUnshieldedOffer.signatures.at(i) ?? signatureData,
           );
           newIntent.fallibleUnshieldedOffer = fallibleUnshieldedOffer.addSignatures(fallibleSignatures);
         }

@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -29,6 +29,7 @@ import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wal
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { pipe } from 'effect';
+import { carried, sealed } from './helpers/transactions.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
@@ -98,6 +99,7 @@ describe('Optional Balancing', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      forkVersion: V9_NATIVE_FORK_VERSION,
       costParameters: {
         feeBlocksMargin: 5,
       },
@@ -120,7 +122,7 @@ describe('Optional Balancing', () => {
       provingService: () => makeWasmProvingService(),
     });
 
-    await facade.start(ledger.ZswapSecretKeys.fromSeed(shieldedSeed), ledger.DustSecretKey.fromSeed(dustSeed));
+    await facade.start({ shielded: shieldedSeed, unshielded: shieldedSeed, dust: dustSeed });
   });
 
   afterEach(async () => {
@@ -162,16 +164,12 @@ describe('Optional Balancing', () => {
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
-      const recipe = await facade.balanceUnprovenTransaction(
-        arbitraryTx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl, tokenKindsToBalance: ['shielded'] },
-      );
+      const recipe = await facade.balanceUnprovenTransaction(sealed('Unproven', arbitraryTx), {
+        ttl,
+        tokenKindsToBalance: ['shielded'],
+      });
 
-      const imbalances = getImbalances(recipe.transaction, 0);
+      const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.transaction), 0);
 
       // Verify shielded IS balanced (imbalance = 0n)
       expect(imbalances.shielded).toEqual(0n);
@@ -189,14 +187,10 @@ describe('Optional Balancing', () => {
       const tx = pipe(createArbitraryShieldedOffer(), (offer) =>
         ledger.Transaction.fromParts(configuration.networkId, offer),
       );
-      const recipe = await facade.balanceUnprovenTransaction(
-        tx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl, tokenKindsToBalance: ['shielded'] },
-      );
+      const recipe = await facade.balanceUnprovenTransaction(sealed('Unproven', tx), {
+        ttl,
+        tokenKindsToBalance: ['shielded'],
+      });
 
       const signed = await facade.signRecipe(recipe, () => {
         throw new Error('Should not be called');
@@ -210,16 +204,12 @@ describe('Optional Balancing', () => {
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
 
-      const recipe = await facade.balanceUnprovenTransaction(
-        arbitraryTx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl, tokenKindsToBalance: ['unshielded'] },
-      );
+      const recipe = await facade.balanceUnprovenTransaction(sealed('Unproven', arbitraryTx), {
+        ttl,
+        tokenKindsToBalance: ['unshielded'],
+      });
 
-      const imbalances = getImbalances(recipe.transaction, 0);
+      const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.transaction), 0);
 
       // Verify unshielded IS balanced (imbalance = 0n)
       expect(imbalances.unshielded).toBe(0n);
@@ -236,16 +226,12 @@ describe('Optional Balancing', () => {
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
 
-      const recipe = await facade.balanceUnprovenTransaction(
-        arbitraryTx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl, tokenKindsToBalance: ['dust'] },
-      );
+      const recipe = await facade.balanceUnprovenTransaction(sealed('Unproven', arbitraryTx), {
+        ttl,
+        tokenKindsToBalance: ['dust'],
+      });
 
-      const imbalances = getImbalances(recipe.transaction, 0);
+      const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.transaction), 0);
 
       // Verify unshielded is NOT balanced (imbalance < 0n)
       expect(imbalances.unshielded).toBeLessThan(0n);
@@ -261,16 +247,9 @@ describe('Optional Balancing', () => {
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
-      const recipe = await facade.balanceUnprovenTransaction(
-        arbitraryTx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl },
-      );
+      const recipe = await facade.balanceUnprovenTransaction(sealed('Unproven', arbitraryTx), { ttl });
 
-      const imbalances = getImbalances(recipe.transaction, 0);
+      const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.transaction), 0);
 
       // Verify unshielded IS balanced (imbalance = 0n)
       expect(imbalances.unshielded).toEqual(0n);
@@ -291,20 +270,16 @@ describe('Optional Balancing', () => {
       const arbitraryTx = createArbitraryTx(configuration.networkId);
       const unboundTx = await provingService.prove(arbitraryTx);
 
-      const recipe = await facade.balanceUnboundTransaction(
-        unboundTx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl, tokenKindsToBalance: ['shielded'] },
-      );
+      const recipe = await facade.balanceUnboundTransaction(sealed('Unbound', unboundTx), {
+        ttl,
+        tokenKindsToBalance: ['shielded'],
+      });
 
       // Verify balancing transaction exists (shielded balancing creates a balancing tx)
       expect(recipe.balancingTransaction).toBeDefined();
 
-      const balancingImbalances = getImbalances(recipe.balancingTransaction!, 0);
-      const baseImbalances = getImbalances(recipe.baseTransaction, 0);
+      const balancingImbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.balancingTransaction!), 0);
+      const baseImbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.baseTransaction), 0);
 
       // Verify shielded IS balanced (provides surplus to offset base tx deficit)
       expect(balancingImbalances.shielded).toBeGreaterThan(0n);
@@ -335,14 +310,10 @@ describe('Optional Balancing', () => {
             ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
           ),
       );
-      const recipe = await facade.balanceUnboundTransaction(
-        tx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl, tokenKindsToBalance: ['shielded'] },
-      );
+      const recipe = await facade.balanceUnboundTransaction(sealed('Unbound', tx), {
+        ttl,
+        tokenKindsToBalance: ['shielded'],
+      });
 
       const signed = await facade.signRecipe(recipe, () => {
         throw new Error('Should not be called');
@@ -358,19 +329,15 @@ describe('Optional Balancing', () => {
       const arbitraryTx = createArbitraryTx(configuration.networkId);
       const unboundTx = await provingService.prove(arbitraryTx);
 
-      const recipe = await facade.balanceUnboundTransaction(
-        unboundTx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl, tokenKindsToBalance: ['unshielded'] },
-      );
+      const recipe = await facade.balanceUnboundTransaction(sealed('Unbound', unboundTx), {
+        ttl,
+        tokenKindsToBalance: ['unshielded'],
+      });
 
       // Verify balancing transaction does NOT exist (unshielded balancing occurs in place)
       expect(recipe.balancingTransaction).toBeUndefined();
 
-      const baseImbalances = getImbalances(recipe.baseTransaction, 0);
+      const baseImbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.baseTransaction), 0);
 
       // Verify base transaction IS balanced (unshielded = 0n)
       expect(baseImbalances.unshielded).toEqual(0n);
@@ -383,19 +350,15 @@ describe('Optional Balancing', () => {
       const arbitraryTx = createArbitraryTx(configuration.networkId);
       const unboundTx = await provingService.prove(arbitraryTx);
 
-      const recipe = await facade.balanceUnboundTransaction(
-        unboundTx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl, tokenKindsToBalance: ['dust'] },
-      );
+      const recipe = await facade.balanceUnboundTransaction(sealed('Unbound', unboundTx), {
+        ttl,
+        tokenKindsToBalance: ['dust'],
+      });
 
       // Verify balancing transaction exists with dust fees
       expect(recipe.balancingTransaction).toBeDefined();
 
-      const balancingImbalances = getImbalances(recipe.balancingTransaction!, 0);
+      const balancingImbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.balancingTransaction!), 0);
 
       // Verify dust IS balanced (dust imbalance > 0n - surplus)
       expect(balancingImbalances.dust).toBeGreaterThan(0n);
@@ -406,7 +369,7 @@ describe('Optional Balancing', () => {
       // Verify unshielded is NOT balanced (unshielded imbalance = 0n - no contribution)
       expect(balancingImbalances.unshielded).toEqual(0n);
 
-      const baseImbalances = getImbalances(recipe.baseTransaction, 0);
+      const baseImbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.baseTransaction), 0);
 
       // Verify base tx unshielded is NOT balanced (unshielded imbalance < 0n)
       expect(baseImbalances.unshielded).toBeLessThan(0n);
@@ -419,20 +382,13 @@ describe('Optional Balancing', () => {
       const arbitraryTx = createArbitraryTx(configuration.networkId);
       const unboundTx = await provingService.prove(arbitraryTx);
 
-      const recipe = await facade.balanceUnboundTransaction(
-        unboundTx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl },
-      );
+      const recipe = await facade.balanceUnboundTransaction(sealed('Unbound', unboundTx), { ttl });
 
       // Verify balancing transaction exists
       expect(recipe.balancingTransaction).toBeDefined();
 
-      const balancingImbalances = getImbalances(recipe.balancingTransaction!, 0);
-      const baseImbalances = getImbalances(recipe.baseTransaction, 0);
+      const balancingImbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.balancingTransaction!), 0);
+      const baseImbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.baseTransaction), 0);
 
       // Verify shielded IS balanced (provides surplus to offset base tx deficit)
       expect(balancingImbalances.shielded).toBeGreaterThan(0n);
@@ -465,16 +421,12 @@ describe('Optional Balancing', () => {
       await facade.waitForSyncedState();
 
       // Balance the finalized transaction with only shielded
-      const recipe = await facade.balanceFinalizedTransaction(
-        finalizedTx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl, tokenKindsToBalance: ['shielded'] },
-      );
+      const recipe = await facade.balanceFinalizedTransaction(sealed('Finalized', finalizedTx), {
+        ttl,
+        tokenKindsToBalance: ['shielded'],
+      });
 
-      const imbalances = getImbalances(recipe.balancingTransaction, 0);
+      const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.balancingTransaction), 0);
 
       // Verify balancing transaction has shielded balancing (shielded imbalance > 0n - surplus)
       expect(imbalances.shielded).toBeGreaterThan(0n);
@@ -494,14 +446,10 @@ describe('Optional Balancing', () => {
         (offer) => ledger.Transaction.fromParts(configuration.networkId, offer),
         (tx) => tx.mockProve(),
       );
-      const recipe = await facade.balanceFinalizedTransaction(
-        tx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl, tokenKindsToBalance: ['shielded'] },
-      );
+      const recipe = await facade.balanceFinalizedTransaction(sealed('Finalized', tx), {
+        ttl,
+        tokenKindsToBalance: ['shielded'],
+      });
 
       const signed = await facade.signRecipe(recipe, () => {
         throw new Error('Should not be called');
@@ -514,16 +462,12 @@ describe('Optional Balancing', () => {
       await facade.waitForSyncedState();
 
       // Balance the finalized transaction with only unshielded
-      const recipe = await facade.balanceFinalizedTransaction(
-        finalizedTx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl, tokenKindsToBalance: ['unshielded'] },
-      );
+      const recipe = await facade.balanceFinalizedTransaction(sealed('Finalized', finalizedTx), {
+        ttl,
+        tokenKindsToBalance: ['unshielded'],
+      });
 
-      const imbalances = getImbalances(recipe.balancingTransaction, 0);
+      const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.balancingTransaction), 0);
 
       // Verify shielded is NOT balanced (no shielded contribution, imbalance = 0)
       expect(imbalances.shielded).toBe(0n);
@@ -539,16 +483,12 @@ describe('Optional Balancing', () => {
       await facade.waitForSyncedState();
 
       // Balance the finalized transaction with only dust
-      const recipe = await facade.balanceFinalizedTransaction(
-        finalizedTx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl, tokenKindsToBalance: ['dust'] },
-      );
+      const recipe = await facade.balanceFinalizedTransaction(sealed('Finalized', finalizedTx), {
+        ttl,
+        tokenKindsToBalance: ['dust'],
+      });
 
-      const imbalances = getImbalances(recipe.balancingTransaction, 0);
+      const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.balancingTransaction), 0);
 
       // Verify shielded is NOT balanced (no shielded contribution, imbalance = 0)
       expect(imbalances.shielded).toBe(0n);
@@ -564,16 +504,9 @@ describe('Optional Balancing', () => {
       await facade.waitForSyncedState();
 
       // Balance the finalized transaction with all
-      const recipe = await facade.balanceFinalizedTransaction(
-        finalizedTx,
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
-        { ttl },
-      );
+      const recipe = await facade.balanceFinalizedTransaction(sealed('Finalized', finalizedTx), { ttl });
 
-      const imbalances = getImbalances(recipe.balancingTransaction, 0);
+      const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.balancingTransaction), 0);
 
       // Verify shielded is balanced (shielded imbalance > 0)
       expect(imbalances.shielded).toBeGreaterThan(0n);
@@ -608,14 +541,10 @@ describe('Optional Balancing', () => {
             ],
           },
         ],
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
         { ttl, payFees: false },
       );
 
-      const imbalances = getImbalances(recipe.transaction, 0);
+      const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.transaction), 0);
 
       // Verify dust fees are NOT paid (dust imbalance = 0n)
       expect(imbalances.dust).toEqual(0n);
@@ -642,14 +571,10 @@ describe('Optional Balancing', () => {
             ],
           },
         ],
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
         { ttl, payFees: true },
       );
 
-      const imbalances = getImbalances(recipe.transaction, 0);
+      const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.transaction), 0);
 
       // Verify dust fees ARE paid (dust imbalance > 0n)
       expect(imbalances.dust).toBeGreaterThan(0n);
@@ -676,10 +601,6 @@ describe('Optional Balancing', () => {
             ],
           },
         ],
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
         { ttl, payFees: false },
       );
 
@@ -708,14 +629,10 @@ describe('Optional Balancing', () => {
             ],
           },
         ],
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
         { ttl, payFees: false },
       );
 
-      const imbalances = getImbalances(recipe.transaction, 0);
+      const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.transaction), 0);
 
       // Verify dust fees are NOT paid (dust imbalance = 0n)
       expect(imbalances.dust).toEqual(0n);
@@ -737,14 +654,10 @@ describe('Optional Balancing', () => {
             ],
           },
         ],
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
         { ttl, payFees: true },
       );
 
-      const imbalances = getImbalances(recipe.transaction, 0);
+      const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.transaction), 0);
 
       // Verify dust fees ARE paid (dust imbalance > 0n)
       expect(imbalances.dust).toBeGreaterThan(0n);
@@ -766,10 +679,6 @@ describe('Optional Balancing', () => {
             ],
           },
         ],
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
-        },
         { ttl, payFees: false },
       );
 

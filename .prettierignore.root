@@ -13,3 +13,5 @@ reports/
 .turbo/
 .yarn/
 packages/
+# Rust build output (root Cargo workspace target dir)
+target/

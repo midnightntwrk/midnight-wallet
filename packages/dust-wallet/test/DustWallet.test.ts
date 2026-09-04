@@ -31,12 +31,12 @@ import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import { expect, vi } from 'vitest';
 import {
   CoreWallet,
-  type RunningV1Variant,
+  type RunningV2Variant,
   Transacting,
   type UtxoWithMeta,
-  V1Builder,
-  type V1Variant,
-} from '../src/v1/index.js';
+  V2Builder,
+  type V2Variant,
+} from '../src/v2/index.js';
 import {
   Simulator,
   type SimulatorState,
@@ -44,12 +44,12 @@ import {
   getLastBlock,
   getLastBlockResults,
 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { makeSimulatorSyncCapability, makeSimulatorSyncService, type SimulatorSyncUpdate } from '../src/v1/Sync.js';
+import { makeSimulatorSyncCapability, makeSimulatorSyncService, type SimulatorSyncUpdate } from '../src/v2/Sync.js';
 import {
   DustTransactionHistoryEntrySchema,
   makeSimulatorTransactionHistoryService,
-} from '../src/v1/TransactionHistory.js';
-import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+} from '../src/v2/TransactionHistory.js';
+import { InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { createUnshieldedKeystore, type UnshieldedKeystore } from './UnshieldedKeyStore.js';
 import { getDustSeed, sumUtxos } from './utils.js';
 
@@ -100,8 +100,8 @@ const expectWithMargin = (actual: bigint, expected: bigint, reference: bigint, m
   expect(diff).toBeLessThanOrEqual(margin);
 };
 
-type WalletVariant = V1Variant<string, SimulatorSyncUpdate, ProofErasedTransaction, DustSecretKey>;
-type RunningWallet = RunningV1Variant<string, SimulatorSyncUpdate, ProofErasedTransaction, DustSecretKey>;
+type WalletVariant = V2Variant<string, SimulatorSyncUpdate, ProofErasedTransaction, DustSecretKey>;
+type RunningWallet = RunningV2Variant<string, SimulatorSyncUpdate, ProofErasedTransaction, DustSecretKey>;
 
 describe('DustWallet', () => {
   const costParameters = {
@@ -200,13 +200,14 @@ describe('DustWallet', () => {
 
       simulator = yield* Simulator.init({ networkId: NETWORK }).pipe(Effect.provideService(Scope.Scope, scope));
 
-      walletVariant = new V1Builder()
+      walletVariant = new V2Builder()
         .withTransactionType<ProofErasedTransaction>()
         .withCoinSelectionDefaults()
         .withTransacting(Transacting.makeSimulatorTransactingCapability)
         .withSync(makeSimulatorSyncService, makeSimulatorSyncCapability)
         .withCoinsAndBalancesDefaults()
         .withKeysDefaults()
+        .withStartAuxDefaults()
         .withSerializationDefaults()
         .withTransactionHistory(makeSimulatorTransactionHistoryService)
         .build({
@@ -219,7 +220,15 @@ describe('DustWallet', () => {
 
       const initialState = CoreWallet.initEmpty(dustParameters, dustSecretKey, NETWORK);
       stateRef = yield* SubscriptionRef.make(initialState);
-      wallet = yield* walletVariant.start({ stateRef }).pipe(Effect.provideService(Scope.Scope, scope));
+      wallet = yield* walletVariant
+        .start({
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+        })
+        .pipe(Effect.provideService(Scope.Scope, scope));
       yield* wallet.startSyncInBackground(dustSecretKey);
 
       submissionService = Submission.makeSimulatorSubmissionService<ProofErasedTransaction>('InBlock')({ simulator });

@@ -1,6 +1,6 @@
 services:
   proof-server:
-    image: 'ghcr.io/midnight-ntwrk/proof-server:9.0.0-rc.3'
+    image: 'ghcr.io/midnight-ntwrk/proof-server:9.0.0-rc.7'
     container_name: proof-server_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
@@ -19,7 +19,7 @@ services:
       start_period: 10s
 
   indexer:
-    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.4.0-pre-alpha.15-l91r3-n2r3-bridge-and-events-epics-blockhash-dust-f06af4b4'
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.4.0-rc.2-25da0487'
     container_name: indexer_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
@@ -45,7 +45,7 @@ services:
       node:
         condition: service_healthy
   node:
-    image: 'ghcr.io/midnight-ntwrk/midnight-node:2.0.0-rc.3'
+    image: 'ghcr.io/midnight-ntwrk/midnight-node:2.1.0-beta.1'
     container_name: node_$TESTCONTAINERS_UID
     cap_drop:
       - ALL

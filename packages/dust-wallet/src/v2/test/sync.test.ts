@@ -1,0 +1,487 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+import { DustSecretKey, dustFirstNonce, dustNullifier, LedgerParameters } from '@midnightntwrk/ledger-v9';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { BlockHash, DustLedgerEvents, DustNullifierTransactions } from '@midnightntwrk/wallet-sdk-indexer-client';
+import type {
+  BlockHashQuery,
+  BlockHashQueryVariables,
+  DustLedgerEventsSubscription,
+  DustLedgerEventsSubscriptionVariables,
+  DustNullifierTransactionsSubscriptionVariables,
+} from '@midnightntwrk/wallet-sdk-indexer-client';
+import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { Cause, Chunk, Effect, Exit, Option, Stream } from 'effect';
+import { describe, expect, it } from 'vitest';
+import { CoreWallet } from '../CoreWallet.js';
+import {
+  createDustUtxoUpdates,
+  makeDefaultSyncService,
+  makeEventLessSyncCapability,
+  makeIndexerSyncService,
+  nullifierPhaseProgress,
+} from '../Sync.js';
+import {
+  type NullifierRegularTransaction,
+  type DustSpendProcessedEvent,
+  DustUtxoMap,
+  StateUpdate,
+} from '../SyncSchema.js';
+
+const networkId = NetworkId.NetworkId.Undeployed;
+
+/**
+ * The projections capability takes an activation range like every other sync capability, but has nothing to apply it to
+ * — see the note on `makeEventLessSyncCapability`. A full span is passed here so these tests keep asserting what they
+ * always asserted.
+ */
+const fullSpan = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion);
+const dustParameters = LedgerParameters.initialParameters().dust;
+const seedHex = '0000000000000000000000000000000000000000000000000000000000000001';
+
+describe('V2 dust wallet subscription', () => {
+  describe('initial subscription cursor', () => {
+    // Open one subscription against a recording stub and return the variables it was opened with. The
+    // stub yields nothing, so the surrounding pipeline drains immediately.
+    const cursorFor = async (
+      state: CoreWallet,
+      secretKey: DustSecretKey,
+    ): Promise<DustLedgerEventsSubscriptionVariables | undefined> => {
+      const recorded: { value?: DustLedgerEventsSubscriptionVariables } = {};
+      const recordingFn = (variables: DustLedgerEventsSubscriptionVariables) => {
+        recorded.value = variables;
+        return Stream.empty as Stream.Stream<
+          DustLedgerEventsSubscription,
+          ClientError | ServerError,
+          SubscriptionClient
+        >;
+      };
+
+      const syncService = makeDefaultSyncService({
+        indexerClientConnection: {
+          indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+          indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+        },
+        networkId,
+      });
+
+      await syncService
+        .updates(state, secretKey)
+        .pipe(
+          Stream.runDrain,
+          Effect.provideService(DustLedgerEvents.tag, recordingFn),
+          Effect.scoped,
+          Effect.runPromise,
+        );
+
+      return recorded.value;
+    };
+
+    it('omits the id (null) for a fresh wallet so the indexer streams from the very start', async () => {
+      const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+      const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+
+      const variables = await cursorFor(state, secretKey);
+
+      expect(variables).toEqual({ id: null });
+    });
+
+    it('requests one below the applied index for a restored wallet so the boundary event is re-delivered', async () => {
+      const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+      const state = CoreWallet.updateProgress(CoreWallet.initEmpty(dustParameters, secretKey, networkId), {
+        appliedIndex: 5n,
+      });
+
+      const variables = await cursorFor(state, secretKey);
+
+      expect(variables).toEqual({ id: 4 });
+    });
+  });
+});
+
+describe('V2 projections sync capability', () => {
+  const projectionUpdate = (
+    timestamp: Date,
+    dustCommitmentMerkleTreeRoot = '00',
+    dustGenerationMerkleTreeRoot = '00',
+  ) =>
+    StateUpdate({
+      dustGenerations: {
+        rawUpdates: [],
+        newGenerations: [],
+        generationDtimeUpdates: [],
+      },
+      newUtxos: DustUtxoMap.create([]),
+      spentUtxos: DustUtxoMap.create([]),
+      collapsedCommitments: [],
+      latestBlock: {
+        height: 1,
+        hash: '00'.repeat(32),
+        protocolVersion: 0,
+        ledgerParameters: LedgerParameters.initialParameters(),
+        timestamp,
+        zswapEndIndex: 0,
+        dustCommitmentEndIndex: 0,
+        dustGenerationEndIndex: 0,
+        dustCommitmentMerkleTreeRoot,
+        dustGenerationMerkleTreeRoot,
+      },
+    });
+
+  it('updates sync time on a fresh state without mutating the input state', () => {
+    const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+    const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const serializedInput = state.state.serialize();
+    const inputSyncTime = state.state.syncTime;
+    const timestamp = new Date('2026-07-14T10:00:00.000Z');
+
+    const [updatedState, result] = makeEventLessSyncCapability().applyUpdate(
+      state,
+      projectionUpdate(timestamp),
+      fullSpan,
+    );
+
+    expect(updatedState.state).not.toBe(state.state);
+    expect(updatedState.state.syncTime).toEqual(timestamp);
+    expect(updatedState.progress.highestIndex).toBe(1n);
+    expect(result.changes).toEqual([]);
+    expect(state.state.syncTime).toEqual(inputSyncTime);
+    expect(state.state.serialize()).toEqual(serializedInput);
+  });
+
+  it('does not annotate a protocol version, because a projections update carries none', () => {
+    // Documents a real gap rather than hiding it. The projections wire format has no per-item protocol version — a
+    // projections update is a folded snapshot, not a run of version-tagged timeline items — so this capability takes an
+    // activation range it cannot act on. A wallet syncing this way never hands over at a fork. Closing that needs a
+    // version on the projections format; until then this test is what keeps the gap visible.
+    const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+    const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const narrowRange = ProtocolVersion.makeRange(
+      ProtocolVersion.MinSupportedVersion,
+      ProtocolVersion.ProtocolVersion(1n),
+    );
+
+    const [updatedState, result] = makeEventLessSyncCapability().applyUpdate(
+      state,
+      projectionUpdate(new Date('2026-07-14T10:00:00.000Z')),
+      narrowRange,
+    );
+
+    // Applied in full despite the range being as narrow as it can be, and the version left exactly where it was.
+    expect(updatedState.progress.highestIndex).toBe(1n);
+    expect(updatedState.protocolVersion).toBe(state.protocolVersion);
+    expect(result.protocolVersion).toBe(Number(state.protocolVersion));
+  });
+
+  it('does not mutate or advance the input state when root validation fails', () => {
+    const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+    const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const serializedInput = state.state.serialize();
+    const inputSyncTime = state.state.syncTime;
+    const inputProgress = state.progress;
+    const timestamp = new Date('2026-07-14T10:00:00.000Z');
+
+    expect(() =>
+      makeEventLessSyncCapability().applyUpdate(
+        state,
+        projectionUpdate(timestamp, 'unexpected-commitment-root'),
+        fullSpan,
+      ),
+    ).toThrow('Root hashes don`t match');
+
+    expect(state.state.syncTime).toEqual(inputSyncTime);
+    expect(state.state.serialize()).toEqual(serializedInput);
+    expect(state.progress).toBe(inputProgress);
+  });
+});
+
+describe('V2 projections nullifier subscription', () => {
+  const ledgerParametersHex = Buffer.from(LedgerParameters.initialParameters().serialize()).toString('hex');
+
+  const wireRecord = (nullifierLeBytes: string) => ({
+    nullifierLeBytes,
+    commitmentLeBytes: '00'.repeat(32),
+    transactionId: 1,
+    transactionHash: 'ff'.repeat(32),
+    blockHeight: 10,
+    blockHash: 'ee'.repeat(32),
+    transaction: {
+      __typename: 'SystemTransaction',
+      block: { protocolVersion: 0, ledgerParameters: ledgerParametersHex },
+    } as const,
+  });
+
+  it('keeps exact matches in fixed-width LE form, including nullifiers with a zero top byte', async () => {
+    // topByteSet survives minimal-length (SCALE) encoding unchanged; topByteZero loses its final byte there,
+    // while the indexer always reports the fixed 32-byte little-endian form.
+    const topByteSet = (0x44n << 248n) | 0x12n;
+    const topByteZero = (1n << 240n) | 0x0cn;
+    const topByteSetHex = '12' + '00'.repeat(30) + '44';
+    const topByteZeroHex = '0c' + '00'.repeat(29) + '01' + '00';
+    const decoyHex = '12' + 'ff'.repeat(30) + '44'; // anonymity-set member sharing topByteSet's prefix
+
+    const recorded: { value?: DustNullifierTransactionsSubscriptionVariables } = {};
+    const stub = (variables: DustNullifierTransactionsSubscriptionVariables) => {
+      recorded.value = variables;
+      return Stream.fromIterable(
+        [topByteSetHex, decoyHex, topByteZeroHex].map((hex) => ({ dustNullifierTransactions: wireRecord(hex) })),
+      );
+    };
+
+    const service = makeIndexerSyncService({
+      indexerClientConnection: {
+        indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+        indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+      },
+      networkId,
+    });
+
+    const records = await service
+      .subscribeDustNullifierTransactions([topByteSet, topByteZero], 100, 2)
+      .pipe(
+        Stream.runCollect,
+        Effect.map(Chunk.toArray),
+        Effect.provideService(DustNullifierTransactions.tag, stub),
+        Effect.provide(service.connectionLayer()),
+        Effect.scoped,
+        Effect.runPromise,
+      );
+
+    expect(records.map((r) => r.nullifierLeBytes)).toEqual([topByteSetHex, topByteZeroHex]);
+    expect(recorded.value?.fromBlock).toBe(0);
+    expect(recorded.value?.toBlock).toBe(100);
+    expect(recorded.value?.nullifierLeBytesPrefixes).toHaveLength(2);
+    expect(recorded.value?.nullifierLeBytesPrefixes).toEqual(expect.arrayContaining(['12', '0c']));
+  });
+
+  it("drops a foreign malformed transaction without letting it break this wallet's sync", async () => {
+    const walletNullifier = 0x12n;
+    const walletNullifierHex = '12' + '00'.repeat(31);
+    const foreignNullifierHex = '12' + 'ff'.repeat(31);
+    const malformedForeignRecord = {
+      ...wireRecord(foreignNullifierHex),
+      transaction: {
+        __typename: 'SystemTransaction',
+        block: { protocolVersion: 0, ledgerParameters: 'not-hex' },
+      } as const,
+    };
+    const stub = (_variables: DustNullifierTransactionsSubscriptionVariables) =>
+      Stream.fromIterable([
+        { dustNullifierTransactions: wireRecord(walletNullifierHex) },
+        { dustNullifierTransactions: malformedForeignRecord },
+      ]);
+
+    const service = makeIndexerSyncService({
+      indexerClientConnection: {
+        indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+        indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+      },
+      networkId,
+    });
+
+    const records = await service
+      .subscribeDustNullifierTransactions([walletNullifier], 100, 1)
+      .pipe(
+        Stream.runCollect,
+        Effect.map(Chunk.toArray),
+        Effect.provideService(DustNullifierTransactions.tag, stub),
+        Effect.provide(service.connectionLayer()),
+        Effect.scoped,
+        Effect.runPromise,
+      );
+
+    expect(records.map((record) => record.nullifierLeBytes)).toEqual([walletNullifierHex]);
+  });
+});
+
+describe('V2 projections blockData', () => {
+  it('fails with a typed WalletError (not a defect) when the indexer returns no block', async () => {
+    // Cold indexer / reorg: the indexer resolves the query but with `block: null`. This is an EXPECTED
+    // condition and must surface as a typed FAILURE in the error channel, never as a defect (die) that
+    // bypasses catchAll and crashes the wallet. A synchronous `throw` inside the flatMap callback is
+    // captured by Effect as a defect; the fix must place the error in the typed channel via Effect.fail.
+    const noBlock: BlockHashQuery = { block: null };
+    // Hand-written stub (no vi.fn / vi.mock): the query tag is (variables) => Effect<BlockHashQuery>.
+    const stub = (_variables: BlockHashQueryVariables): Effect.Effect<BlockHashQuery> => Effect.succeed(noBlock);
+
+    const service = makeIndexerSyncService({
+      indexerClientConnection: {
+        indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+        indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+      },
+      networkId,
+    });
+
+    const exit = await service
+      .blockData(undefined)
+      .pipe(
+        Effect.provideService(BlockHash.tag, stub),
+        Effect.provide(service.queryClient()),
+        Effect.scoped,
+        Effect.runPromiseExit,
+      );
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      // Must be a typed failure, NOT a defect: with the current synchronous `throw` this is a die and both
+      // assertions below fail (RED). After the throw -> Effect.fail fix it is a typed failure (GREEN).
+      expect(Cause.isDie(exit.cause)).toBe(false);
+      const failure = Cause.failureOption(exit.cause);
+      expect(Option.isSome(failure)).toBe(true);
+      if (Option.isSome(failure)) {
+        expect(failure.value._tag).toBe('Wallet.Other');
+        expect(failure.value.message).toBe('Unable to fetch block data');
+        expect(failure.value.cause).toBeUndefined();
+      }
+    }
+  });
+
+  it('wraps a transport failure as an unexpected WalletError with the original cause', async () => {
+    const transportError = new ServerError({ message: 'indexer unavailable' });
+    const stub = (_variables: BlockHashQueryVariables): Effect.Effect<BlockHashQuery, ServerError> =>
+      Effect.fail(transportError);
+
+    const service = makeIndexerSyncService({
+      indexerClientConnection: {
+        indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+        indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+      },
+      networkId,
+    });
+
+    const exit = await service
+      .blockData(undefined)
+      .pipe(
+        Effect.provideService(BlockHash.tag, stub),
+        Effect.provide(service.queryClient()),
+        Effect.scoped,
+        Effect.runPromiseExit,
+      );
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      const failure = Cause.failureOption(exit.cause);
+      expect(Option.isSome(failure)).toBe(true);
+      if (Option.isSome(failure)) {
+        expect(failure.value._tag).toBe('Wallet.Other');
+        expect(failure.value.message).toBe('Encountered unexpected error: indexer unavailable');
+        expect(failure.value.cause).toBe(transportError);
+      }
+    }
+  });
+});
+
+describe('V2 projections dust spend resolution', () => {
+  const initialParameters = LedgerParameters.initialParameters();
+
+  const ledgerParametersHex = Buffer.from(initialParameters.serialize()).toString('hex');
+
+  /**
+   * The transaction a matched spend was carried by.
+   *
+   * Its events are no longer part of this fixture: reading them out of a transaction is now `matchedDustSpends`, so
+   * what this exercises — resolving a spend against the wallet's own dust — takes the spends directly.
+   */
+  const carryingTransaction = (): NullifierRegularTransaction => ({
+    __typename: 'RegularTransaction',
+    block: { protocolVersion: 1, ledgerParameters: ledgerParametersHex },
+    id: 42,
+    hash: 'ee'.repeat(32),
+    dustLedgerEvents: [],
+    zswapLedgerEvents: [],
+  });
+
+  const matched = (dustSpend: DustSpendProcessedEvent) => [{ transaction: carryingTransaction(), dustSpend }];
+
+  const dustSpend = (nullifier: bigint): DustSpendProcessedEvent => ({
+    tag: 'dustSpendProcessed',
+    commitment: 1n,
+    commitmentIndex: 9n,
+    nullifier,
+    vFee: 100n,
+    declaredTime: new Date(2_000_000),
+    blockTime: new Date(2_000_000),
+  });
+
+  it("skips dust spends whose nullifier is not this wallet's (multi-party transactions)", async () => {
+    const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+    const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const foreignNullifier = 123456789n;
+
+    const updates = await Effect.runPromise(
+      createDustUtxoUpdates(
+        state.state,
+        matched(dustSpend(foreignNullifier)),
+        secretKey,
+        DustUtxoMap.create([]),
+        new Map(),
+        [],
+      ),
+    );
+
+    expect(updates).toEqual([]);
+  });
+
+  it('resolves an owned spend into a spent update and its successor', async () => {
+    const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+    const state = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const backingNight = 'ab'.repeat(32);
+    const qdo = {
+      initialValue: 1_000_000_000n,
+      owner: secretKey.publicKey,
+      nonce: dustFirstNonce(backingNight, secretKey.publicKey),
+      seq: 0,
+      ctime: new Date(1_000_000),
+      backingNight,
+      mtIndex: 4n,
+    };
+    const nullifier = dustNullifier(qdo, secretKey);
+    const knownUtxos = DustUtxoMap.create([
+      {
+        dustNullifier: nullifier,
+        genInfo: { value: 5_000_000_000n, owner: secretKey.publicKey, nonce: backingNight, dtime: undefined },
+        generationMtIndex: 0,
+        qdo,
+        transactionId: 7,
+        transactionHash: 'cd'.repeat(32),
+      },
+    ]);
+
+    const updates = await Effect.runPromise(
+      createDustUtxoUpdates(state.state, matched(dustSpend(nullifier)), secretKey, knownUtxos, new Map(), []),
+    );
+
+    expect(updates).toHaveLength(2);
+    const [spent, successor] = updates;
+    expect(spent.isSpent).toBe(true);
+    expect(spent.dustNullifier).toBe(nullifier);
+    expect(successor.isSpent).toBe(false);
+    expect(successor.qdo.seq).toBe(1);
+    expect(successor.qdo.mtIndex).toBe(9n);
+  });
+});
+
+describe('nullifierPhaseProgress', () => {
+  it('counts settled nullifiers as a full commitment-space scan', () => {
+    expect(nullifierPhaseProgress(0n, 5, 0, 100)).toBe(500);
+  });
+
+  it('adds the merkle indices of still-live chains to the settled portion', () => {
+    expect(nullifierPhaseProgress(100n, 5, 2, 100)).toBe(400);
+  });
+
+  it('never exceeds the phase ceiling', () => {
+    expect(nullifierPhaseProgress(600n, 5, 2, 100)).toBe(500);
+  });
+});

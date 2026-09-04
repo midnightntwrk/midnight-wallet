@@ -13,8 +13,7 @@
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';
-import type * as ledger from '@midnightntwrk/ledger-v9';
-import { type FacadeState } from '@midnightntwrk/wallet-sdk';
+import { type FacadeState, type FinalizedTx } from '@midnightntwrk/wallet-sdk';
 
 const alice = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
@@ -38,7 +37,7 @@ console.log(
   bobInitialState.shielded.availableCoins.some((c) => c.coin.type === shieldedToken1 && c.coin.value === 1_000_000n),
 );
 
-const aliceSwapTx: ledger.FinalizedTransaction = await alice.wallet
+const aliceSwapTx: FinalizedTx = await alice.wallet
   .initSwap(
     { shielded: { [shieldedToken1]: 1_000_000n } },
     [
@@ -54,26 +53,15 @@ const aliceSwapTx: ledger.FinalizedTransaction = await alice.wallet
       },
     ],
     {
-      shieldedSecretKeys: alice.shieldedSecretKeys,
-      dustSecretKey: alice.dustSecretKey,
-    },
-    {
       ttl: new Date(Date.now() + 30 * 60 * 1000),
     },
   )
   .then((recipe) => alice.wallet.finalizeRecipe(recipe));
 
 await bob.wallet
-  .balanceFinalizedTransaction(
-    aliceSwapTx,
-    {
-      shieldedSecretKeys: bob.shieldedSecretKeys,
-      dustSecretKey: bob.dustSecretKey,
-    },
-    {
-      ttl: new Date(Date.now() + 30 * 60 * 1000),
-    },
-  )
+  .balanceFinalizedTransaction(aliceSwapTx, {
+    ttl: new Date(Date.now() + 30 * 60 * 1000),
+  })
   .then((recipe) => bob.wallet.finalizeRecipe(recipe))
   .then((tx) => bob.wallet.submitTransaction(tx));
 

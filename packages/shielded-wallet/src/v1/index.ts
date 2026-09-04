@@ -15,10 +15,13 @@ export * as Sync from './Sync.js';
 export * as Transacting from './Transacting.js';
 export * as TransactionHistory from './TransactionHistory.js';
 export * as Serialization from './Serialization.js';
+export * as Migration from './Migration.js';
 export * as CoinsAndBalances from './CoinsAndBalances.js';
 export * as Keys from './Keys.js';
 export * from './RunningV1Variant.js';
-export * as Simulator from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+// The pre-fork variant re-exports the ledger-v8 simulator twin, not the whole simulation index — the unqualified
+// names there are the ledger-v9 twin's.
+export { V8 as Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 export * as WalletError from './WalletError.js';
 export * from './CoreWallet.js';
 export * from './TransactionOps.js';

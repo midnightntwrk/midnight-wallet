@@ -1,0 +1,613 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+import type * as ledger from '@midnightntwrk/ledger-v9';
+import { Effect, type Either, Scope, type Types } from 'effect';
+import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type Variant, type VariantBuilder, WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { RunningV2Variant, V2Tag } from './RunningV2Variant.js';
+import { makeDefaultV2SerializationCapability, type SerializationCapability } from './Serialization.js';
+import {
+  type DefaultSyncContext,
+  type DefaultSyncConfiguration,
+  type SyncCapability,
+  type SyncService,
+  makeDefaultSyncService,
+  makeDefaultSyncCapability,
+} from './Sync.js';
+import { type WalletSyncUpdate } from './SyncSchema.js';
+import {
+  type DefaultTransactingConfiguration,
+  type DefaultTransactingContext,
+  makeDefaultTransactingCapability,
+  type TransactingCapability,
+} from './Transacting.js';
+import { type WalletError } from './WalletError.js';
+import { makeEmptyWalletMigration, type StateMigration } from './Migration.js';
+import { makeDefaultSigningService, type SigningService } from './Signing.js';
+import { type CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
+import { type CoinSelection, chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
+import { type CoreWallet } from './CoreWallet.js';
+import {
+  type DefaultTransactionHistoryConfiguration,
+  type TransactionHistoryService,
+  makeDefaultTransactionHistoryService,
+} from './TransactionHistory.js';
+import { type Expect, type Equal, type ItemType } from '@midnightntwrk/wallet-sdk-utilities/types';
+
+export type BaseV2Configuration = {
+  networkId: NetworkId.NetworkId;
+};
+
+export type DefaultV2Configuration = BaseV2Configuration &
+  DefaultSyncConfiguration &
+  DefaultTransactingConfiguration &
+  DefaultTransactionHistoryConfiguration;
+
+const V2BuilderSymbol: {
+  readonly typeId: unique symbol;
+} = {
+  typeId: Symbol('@midnight-ntwrk/unshielded-wallet#V2Builder') as (typeof V2BuilderSymbol)['typeId'],
+} as const;
+
+export type V2Variant<TSerialized, TSyncUpdate, TPreviousState = null> = Variant.Variant<
+  typeof V2Tag,
+  CoreWallet,
+  TPreviousState,
+  RunningV2Variant<TSerialized, TSyncUpdate>
+> & {
+  deserializeState: (serialized: TSerialized) => Either.Either<CoreWallet, WalletError>;
+  coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
+  keys: KeysCapability<CoreWallet>;
+  serialization: SerializationCapability<CoreWallet, TSerialized>;
+  transactionHistory: TransactionHistoryService;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyV2Variant = V2Variant<any, any, any>;
+export type DefaultV2Variant = V2Variant<string, WalletSyncUpdate, null>;
+
+export type TransactionOf<T extends AnyV2Variant> =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  T extends V2Variant<any, any, any>
+    ? ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>
+    : never;
+
+export type SerializedStateOf<T extends AnyV2Variant> =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  T extends V2Variant<infer TSerialized, any, any> ? TSerialized : never;
+
+export type DefaultV2Builder = V2Builder<
+  DefaultV2Configuration,
+  RunningV2Variant.Context<string, WalletSyncUpdate>,
+  string,
+  WalletSyncUpdate,
+  null
+>;
+
+export class V2Builder<
+  TConfig extends BaseV2Configuration = BaseV2Configuration,
+  TContext extends Partial<RunningV2Variant.AnyContext> = object,
+  TSerialized = never,
+  TSyncUpdate = never,
+  TPreviousState = null,
+> implements VariantBuilder.VariantBuilder<V2Variant<TSerialized, TSyncUpdate, TPreviousState>, TConfig> {
+  readonly #buildState: V2Builder.PartialBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TPreviousState>;
+
+  constructor(
+    buildState: V2Builder.PartialBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TPreviousState> = {},
+  ) {
+    this.#buildState = buildState;
+  }
+
+  withDefaults(): DefaultV2Builder {
+    return this.withSyncDefaults()
+      .withSerializationDefaults()
+      .withTransactingDefaults()
+      .withSigningDefaults()
+      .withCoinsAndBalancesDefaults()
+      .withTransactionHistoryDefaults()
+      .withKeysDefaults()
+      .withCoinSelectionDefaults() as DefaultV2Builder;
+  }
+
+  withSyncDefaults(): V2Builder<
+    TConfig & DefaultSyncConfiguration,
+    TContext & DefaultSyncContext,
+    TSerialized,
+    WalletSyncUpdate,
+    TPreviousState
+  > {
+    return this.withSync(makeDefaultSyncService, makeDefaultSyncCapability);
+  }
+
+  withSync<TSyncConfig, TSyncContext extends Partial<RunningV2Variant.AnyContext>, TSyncUpdate>(
+    syncService: (configuration: TSyncConfig, getContext: () => TSyncContext) => SyncService<CoreWallet, TSyncUpdate>,
+    syncCapability: (
+      configuration: TSyncConfig,
+      getContext: () => TSyncContext,
+    ) => SyncCapability<CoreWallet, TSyncUpdate>,
+  ): V2Builder<TConfig & TSyncConfig, TContext & TSyncContext, TSerialized, TSyncUpdate, TPreviousState> {
+    return new V2Builder<TConfig & TSyncConfig, TContext & TSyncContext, TSerialized, TSyncUpdate, TPreviousState>({
+      ...this.#buildState,
+      syncService,
+      syncCapability,
+    });
+  }
+
+  withSerializationDefaults(): V2Builder<TConfig, TContext, string, TSyncUpdate, TPreviousState> {
+    return this.withSerialization(makeDefaultV2SerializationCapability);
+  }
+
+  withSerialization<
+    TSerializationConfig,
+    TSerializationContext extends Partial<RunningV2Variant.AnyContext>,
+    TSerialized,
+  >(
+    serializationCapability: (
+      configuration: TSerializationConfig,
+      getContext: () => TSerializationContext,
+    ) => SerializationCapability<CoreWallet, TSerialized>,
+  ): V2Builder<
+    TConfig & TSerializationConfig,
+    TContext & TSerializationContext,
+    TSerialized,
+    TSyncUpdate,
+    TPreviousState
+  > {
+    return new V2Builder<
+      TConfig & TSerializationConfig,
+      TContext & TSerializationContext,
+      TSerialized,
+      TSyncUpdate,
+      TPreviousState
+    >({
+      ...this.#buildState,
+      serializationCapability,
+    });
+  }
+
+  withTransactingDefaults(
+    this: V2Builder<TConfig, TContext, TSerialized, TSyncUpdate, TPreviousState>,
+  ): V2Builder<
+    TConfig & DefaultTransactingConfiguration,
+    TContext & DefaultTransactingContext,
+    TSerialized,
+    TSyncUpdate,
+    TPreviousState
+  > {
+    return this.withTransacting(makeDefaultTransactingCapability);
+  }
+
+  withTransacting<TTransactingConfig, TTransactingContext extends Partial<RunningV2Variant.AnyContext>>(
+    transactingCapability: (
+      config: TTransactingConfig,
+      getContext: () => TTransactingContext,
+    ) => TransactingCapability<CoreWallet>,
+  ): V2Builder<TConfig & TTransactingConfig, TContext & TTransactingContext, TSerialized, TSyncUpdate, TPreviousState> {
+    return new V2Builder<
+      TConfig & TTransactingConfig,
+      TContext & TTransactingContext,
+      TSerialized,
+      TSyncUpdate,
+      TPreviousState
+    >({
+      ...this.#buildState,
+      transactingCapability,
+    });
+  }
+
+  withSigningDefaults(): V2Builder<TConfig, TContext, TSerialized, TSyncUpdate, TPreviousState> {
+    return this.withSigning(makeDefaultSigningService);
+  }
+
+  withSigning<TSigningConfig, TSigningContext extends Partial<RunningV2Variant.AnyContext>>(
+    signingService: (configuration: TSigningConfig, getContext: () => TSigningContext) => SigningService,
+  ): V2Builder<TConfig & TSigningConfig, TContext & TSigningContext, TSerialized, TSyncUpdate, TPreviousState> {
+    return new V2Builder<
+      TConfig & TSigningConfig,
+      TContext & TSigningContext,
+      TSerialized,
+      TSyncUpdate,
+      TPreviousState
+    >({
+      ...this.#buildState,
+      signingService,
+    });
+  }
+
+  /**
+   * Configures this variant to start from an empty wallet when there is nothing before it.
+   *
+   * @remarks
+   *   The default for a first-registered variant, and what `startEmpty` relies on.
+   * @returns A builder whose previous state is `null`.
+   */
+  withMigrationDefaults(
+    this: V2Builder<TConfig, TContext, TSerialized, TSyncUpdate, null>,
+  ): V2Builder<TConfig, TContext, TSerialized, TSyncUpdate, null> {
+    return this.withMigration((configuration: BaseV2Configuration) =>
+      makeEmptyWalletMigration({ networkId: configuration.networkId }),
+    );
+  }
+
+  /**
+   * Configures how this variant produces its first state from whatever variant preceded it.
+   *
+   * @remarks
+   *   The context is a method-level type parameter rather than the builder's own `TContext`, matching `withSync` and
+   *   `withKeys` in this file. Binding it to the builder's `TContext` would make the builder invariant in it and break
+   *   the partially-configured chains the tests build.
+   * @param migration Produces the strategy from the configuration and the variant context.
+   * @returns A builder whose previous state is whatever the strategy consumes.
+   */
+  withMigration<TMigrationConfig, TMigrationContext extends Partial<RunningV2Variant.AnyContext>, TPrevious>(
+    migration: (configuration: TMigrationConfig, getContext: () => TMigrationContext) => StateMigration<TPrevious>,
+  ): V2Builder<TConfig & TMigrationConfig, TContext & TMigrationContext, TSerialized, TSyncUpdate, TPrevious> {
+    // Only the capability half of the build state crosses: the strategy being replaced is typed against the OLD
+    // previous-state parameter, so it cannot ride along even though it is about to be overwritten.
+    const { migration: _replaced, ...capabilities } = this.#buildState;
+
+    return new V2Builder<TConfig & TMigrationConfig, TContext & TMigrationContext, TSerialized, TSyncUpdate, TPrevious>(
+      {
+        ...capabilities,
+        migration,
+      },
+    );
+  }
+
+  withCoinSelection<TCoinSelectionConfig, TCoinSelectionContext extends Partial<RunningV2Variant.AnyContext>>(
+    coinSelection: (
+      config: TCoinSelectionConfig,
+      getContext: () => TCoinSelectionContext,
+    ) => CoinSelection<ledger.Utxo>,
+  ): V2Builder<
+    TConfig & TCoinSelectionConfig,
+    TContext & TCoinSelectionContext,
+    TSerialized,
+    TSyncUpdate,
+    TPreviousState
+  > {
+    return new V2Builder<
+      TConfig & TCoinSelectionConfig,
+      TContext & TCoinSelectionContext,
+      TSerialized,
+      TSyncUpdate,
+      TPreviousState
+    >({
+      ...this.#buildState,
+      coinSelection,
+    });
+  }
+
+  withCoinSelectionDefaults(): V2Builder<TConfig, TContext, TSerialized, TSyncUpdate, TPreviousState> {
+    return this.withCoinSelection(() => chooseCoin);
+  }
+
+  withCoinsAndBalancesDefaults(): V2Builder<TConfig, TContext, TSerialized, TSyncUpdate, TPreviousState> {
+    return this.withCoinsAndBalances(makeDefaultCoinsAndBalancesCapability);
+  }
+
+  withCoinsAndBalances<TBalancesConfig, TBalancesContext extends Partial<RunningV2Variant.AnyContext>>(
+    coinsAndBalancesCapability: (
+      configuration: TBalancesConfig,
+      getContext: () => TBalancesContext,
+    ) => CoinsAndBalancesCapability<CoreWallet>,
+  ): V2Builder<TConfig & TBalancesConfig, TContext & TBalancesContext, TSerialized, TSyncUpdate, TPreviousState> {
+    return new V2Builder<
+      TConfig & TBalancesConfig,
+      TContext & TBalancesContext,
+      TSerialized,
+      TSyncUpdate,
+      TPreviousState
+    >({
+      ...this.#buildState,
+      coinsAndBalancesCapability,
+    });
+  }
+
+  withTransactionHistoryDefaults(
+    this: V2Builder<TConfig, TContext, TSerialized, TSyncUpdate, TPreviousState>,
+  ): V2Builder<TConfig & DefaultTransactionHistoryConfiguration, TContext, TSerialized, TSyncUpdate, TPreviousState> {
+    return this.withTransactionHistory(makeDefaultTransactionHistoryService);
+  }
+
+  withTransactionHistory<
+    TTransactionHistoryConfig,
+    TTransactionHistoryContext extends Partial<RunningV2Variant.AnyContext>,
+  >(
+    transactionHistoryService: (
+      configuration: TTransactionHistoryConfig,
+      getContext: () => TTransactionHistoryContext,
+    ) => TransactionHistoryService,
+  ): V2Builder<
+    TConfig & TTransactionHistoryConfig,
+    TContext & TTransactionHistoryContext,
+    TSerialized,
+    TSyncUpdate,
+    TPreviousState
+  > {
+    return new V2Builder<
+      TConfig & TTransactionHistoryConfig,
+      TContext & TTransactionHistoryContext,
+      TSerialized,
+      TSyncUpdate,
+      TPreviousState
+    >({
+      ...this.#buildState,
+      transactionHistoryService,
+    });
+  }
+
+  withKeysDefaults(): V2Builder<TConfig, TContext, TSerialized, TSyncUpdate, TPreviousState> {
+    return this.withKeys(makeDefaultKeysCapability);
+  }
+
+  withKeys<TKeysConfig, TKeysContext extends Partial<RunningV2Variant.AnyContext>>(
+    keysCapability: (configuration: TKeysConfig, getContext: () => TKeysContext) => KeysCapability<CoreWallet>,
+  ): V2Builder<TConfig & TKeysConfig, TContext & TKeysContext, TSerialized, TSyncUpdate, TPreviousState> {
+    return new V2Builder<TConfig & TKeysConfig, TContext & TKeysContext, TSerialized, TSyncUpdate, TPreviousState>({
+      ...this.#buildState,
+      keysCapability,
+    });
+  }
+
+  build(
+    this: V2Builder<
+      TConfig,
+      RunningV2Variant.Context<TSerialized, TSyncUpdate>,
+      TSerialized,
+      TSyncUpdate,
+      TPreviousState
+    >,
+    configuration: TConfig,
+  ): V2Variant<TSerialized, TSyncUpdate, TPreviousState> {
+    const v2Context = this.#buildContextFromBuildState(configuration);
+    const migration = this.#resolveMigration(configuration, () => v2Context);
+
+    return {
+      __polyTag__: V2Tag,
+      coinsAndBalances: v2Context.coinsAndBalancesCapability,
+      keys: v2Context.keysCapability,
+      serialization: v2Context.serializationCapability,
+      transactionHistory: v2Context.transactionHistoryService,
+      start(
+        context: Variant.VariantContext<CoreWallet>,
+      ): Effect.Effect<RunningV2Variant<TSerialized, TSyncUpdate>, WalletRuntimeError, Scope.Scope> {
+        return Effect.gen(function* () {
+          const scope = yield* Scope.Scope;
+          return new RunningV2Variant(scope, context, v2Context);
+        });
+      },
+      // Until this was wired, `migrateState` ignored its argument and rebuilt a placeholder wallet, so a wallet of the
+      // previous ledger version would have been silently replaced by an empty one rather than carried across.
+      migrateState(previousState: TPreviousState) {
+        return migration.migrate(previousState).pipe(
+          Effect.mapError(
+            (error) =>
+              new WalletRuntimeError({
+                message: 'Failed to migrate unshielded wallet state into this variant',
+                cause: error,
+              }),
+          ),
+        );
+      },
+
+      deserializeState: (serialized: TSerialized): Either.Either<CoreWallet, WalletError> => {
+        return v2Context.serializationCapability.deserialize(serialized);
+      },
+    };
+  }
+
+  /**
+   * The migration strategy to build with.
+   *
+   * @remarks
+   *   An unconfigured builder produces an empty wallet, which is what `startEmpty` asks of a first variant. The nullary
+   *   wrapper is what lets the `null`-consuming default stand in for a `TPreviousState`-consuming strategy without a
+   *   cast: the argument is simply not passed on.
+   */
+  #resolveMigration(
+    this: V2Builder<
+      TConfig,
+      RunningV2Variant.Context<TSerialized, TSyncUpdate>,
+      TSerialized,
+      TSyncUpdate,
+      TPreviousState
+    >,
+    configuration: TConfig,
+    getContext: () => RunningV2Variant.Context<TSerialized, TSyncUpdate>,
+  ): StateMigration<TPreviousState> {
+    const configured = this.#buildState.migration;
+    return configured === undefined
+      ? { migrate: () => makeEmptyWalletMigration({ networkId: configuration.networkId }).migrate(null) }
+      : configured(configuration, getContext);
+  }
+
+  #buildContextFromBuildState(
+    this: V2Builder<
+      TConfig,
+      RunningV2Variant.Context<TSerialized, TSyncUpdate>,
+      TSerialized,
+      TSyncUpdate,
+      TPreviousState
+    >,
+    configuration: TConfig,
+  ): RunningV2Variant.Context<TSerialized, TSyncUpdate> {
+    if (!isBuildStateFull(this.#buildState)) {
+      throw new Error('Not all components are configured in V2 Builder');
+    }
+
+    const {
+      syncCapability,
+      syncService,
+      transactingCapability,
+      signingService,
+      serializationCapability,
+      coinSelection,
+      coinsAndBalancesCapability,
+      keysCapability,
+      transactionHistoryService,
+    } = this.#buildState;
+
+    const getContext = (): RunningV2Variant.Context<TSerialized, TSyncUpdate> => context;
+
+    const context = {
+      serializationCapability: serializationCapability(configuration, getContext),
+      syncCapability: syncCapability(configuration, getContext),
+      syncService: syncService(configuration, getContext),
+      transactingCapability: transactingCapability(configuration, getContext),
+      signingService: signingService(configuration, getContext),
+      coinsAndBalancesCapability: coinsAndBalancesCapability(configuration, getContext),
+      keysCapability: keysCapability(configuration, getContext),
+      coinSelection: coinSelection(configuration, getContext),
+      transactionHistoryService: transactionHistoryService(configuration, getContext),
+    };
+
+    return context;
+  }
+}
+
+/** @internal */
+declare namespace V2Builder {
+  type HasSync<TConfig, TContext, TSyncUpdate> = {
+    readonly syncService: (configuration: TConfig, getContext: () => TContext) => SyncService<CoreWallet, TSyncUpdate>;
+    readonly syncCapability: (
+      configuration: TConfig,
+      getContext: () => TContext,
+    ) => SyncCapability<CoreWallet, TSyncUpdate>;
+  };
+
+  type HasTransacting<TConfig, TContext> = {
+    readonly transactingCapability: (
+      configuration: TConfig,
+      getContext: () => TContext,
+    ) => TransactingCapability<CoreWallet>;
+  };
+
+  type HasSigning<TConfig, TContext> = {
+    readonly signingService: (configuration: TConfig, getContext: () => TContext) => SigningService;
+  };
+
+  type HasCoinSelection<TConfig, TContext> = {
+    readonly coinSelection: (configuration: TConfig, getContext: () => TContext) => CoinSelection<ledger.Utxo>;
+  };
+
+  type HasSerialization<TConfig, TContext, TSerialized> = {
+    readonly serializationCapability: (
+      configuration: TConfig,
+      getContext: () => TContext,
+    ) => SerializationCapability<CoreWallet, TSerialized>;
+  };
+
+  type HasCoinsAndBalances<TConfig, TContext> = {
+    readonly coinsAndBalancesCapability: (
+      configuration: TConfig,
+      getContext: () => TContext,
+    ) => CoinsAndBalancesCapability<CoreWallet>;
+  };
+
+  type HasTransactionHistory<TConfig, TContext> = {
+    readonly transactionHistoryService: (
+      configuration: TConfig,
+      getContext: () => TContext,
+    ) => TransactionHistoryService;
+  };
+
+  type HasKeys<TConfig, TContext> = {
+    readonly keysCapability: (configuration: TConfig, getContext: () => TContext) => KeysCapability<CoreWallet>;
+  };
+
+  /** The internal build state of {@link V2Builder}. */
+  type FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate> = Types.Simplify<
+    HasSync<TConfig, TContext, TSyncUpdate> &
+      HasSerialization<TConfig, TContext, TSerialized> &
+      HasTransacting<TConfig, TContext> &
+      HasSigning<TConfig, TContext> &
+      HasCoinSelection<TConfig, TContext> &
+      HasCoinsAndBalances<TConfig, TContext> &
+      HasKeys<TConfig, TContext> &
+      HasTransactionHistory<TConfig, TContext>
+  >;
+  type PartialBuildState<
+    TConfig = object,
+    TContext = object,
+    TSerialized = never,
+    TSyncUpdate = never,
+    TPreviousState = null,
+  > = {
+    [K in keyof FullBuildState<never, never, never, never>]?:
+      FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate>[K] | undefined;
+  } & {
+    /**
+     * Deliberately outside {@link FullBuildState}: a builder with no migration configured is complete, and falls back to
+     * the empty-wallet strategy. Requiring it would break every existing `build({ ... })` call site.
+     */
+    readonly migration?: (configuration: TConfig, getContext: () => TContext) => StateMigration<TPreviousState>;
+  };
+
+  /** Utility interface that manages the type variance of {@link V2Builder}. */
+  interface Variance<R> {
+    readonly [V2BuilderSymbol.typeId]: {
+      readonly _R: Types.Covariant<R>;
+    };
+  }
+}
+
+const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate, TPreviousState>(
+  buildState: V2Builder.PartialBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TPreviousState>,
+): buildState is V2Builder.PartialBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TPreviousState> &
+  V2Builder.FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate> => {
+  const allBuildStateKeys = [
+    'syncService',
+    'syncCapability',
+    'transactingCapability',
+    'signingService',
+    'coinSelection',
+    'serializationCapability',
+    'coinsAndBalancesCapability',
+    'keysCapability',
+    'transactionHistoryService',
+  ] as const;
+  /** This type will fail compilation if any key is omitted, letting the `isFull` check work properly */
+  type _1 = Expect<
+    Equal<keyof V2Builder.FullBuildState<never, never, never, never>, ItemType<typeof allBuildStateKeys>>
+  >;
+  return allBuildStateKeys.every((key) => typeof buildState[key] == 'function');
+};
+
+/** @internal */
+declare namespace _V2BuilderMethods {
+  type WithSyncDefaults = 'withSyncDefaults';
+  type WithSyncMethod = 'withSync';
+  type WithTransactingMethod = 'withTransacting';
+  type WithTransactingDefaults = 'withTransactingDefaults';
+  type WithSerializationMethod = 'withSerialization';
+  type WithSerializationDefaults = 'withSerializationDefaults';
+  type WithCoinsAndBalancesDefaults = 'withCoinsAndBalancesDefaults';
+  type WithKeysDefaults = 'withKeysDefaults';
+  type WithTransactionHistoryDefaults = 'withTransactionHistoryDefaults';
+  type AllSyncMethods = WithSyncDefaults | WithSyncMethod;
+  type AllTransactingMethods = WithTransactingMethod | WithTransactingDefaults;
+  type AllSerializationMethods = WithSerializationMethod | WithSerializationDefaults;
+  type AllCoinsAndBalancesMethods = 'withCoinsAndBalancesDefaults';
+  type AllKeysMethods = 'withKeysDefaults';
+  type AllTransactionHistoryMethods = 'withTransactionHistoryDefaults';
+  type AllMethods =
+    | AllSyncMethods
+    | AllTransactingMethods
+    | AllSerializationMethods
+    | AllCoinsAndBalancesMethods
+    | AllKeysMethods
+    | AllTransactionHistoryMethods;
+}

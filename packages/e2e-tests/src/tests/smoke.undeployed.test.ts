@@ -28,6 +28,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-facade';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet, type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { carried } from './helpers/transactions.js';
 
 /** Smoke tests */
 
@@ -118,21 +119,14 @@ describe('Smoke tests', () => {
           ],
         },
       ];
-      const txRecipe = await funded.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 30 * 60 * 1000),
-        },
-      );
+      const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      });
       const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, unshieldedFundedKeyStore.signDataAsync);
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
-      const txHash = finalizedTx.transactionHash();
+      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
 
       const pendingState = await utils.waitForFacadePending(funded.wallet);
       expect(pendingState.shielded.totalCoins.length).toBe(7);
@@ -250,13 +244,15 @@ describe('Smoke tests', () => {
         { kind: 'schnorr', secret: utils.getUnshieldedSeed(seedFunded) },
         fixture.getNetworkId(),
       );
-      const initialWallet = UnshieldedWallet({
+      const initialWallet = await UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage: unshieldedTxHistoryStorage,
+        // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+        forkVersion: fixture.getWalletConfig().forkVersion,
       }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
       await initialWallet.start();
       logger.info(`Waiting to sync...`);
@@ -281,6 +277,8 @@ describe('Smoke tests', () => {
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage: restoredTxHistoryStorage,
+        // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+        forkVersion: fixture.getWalletConfig().forkVersion,
       }).restore(serializedState);
 
       await restoredWallet.start();

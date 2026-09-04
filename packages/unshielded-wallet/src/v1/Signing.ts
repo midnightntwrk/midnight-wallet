@@ -15,10 +15,16 @@
 // For an in-process keystore that is instantaneous, but MPC (threshold protocols with network round-trips) and HSM
 // (on-device PKCS#11) signers are inherently asynchronous. The signer is therefore an async callback, and the
 // orchestration that invokes it lives here — in the Effect (imperative-shell) layer — while the pure transformations
-// (which segments to sign, scheme validation, signature attachment) stay in `TransactionOps`.
+// (which segments to sign, signature attachment) stay in `TransactionOps`.
+//
+// This is the pre-fork (ledger-v8) twin of the ledger-v9 variant's signing service. The split itself is not a v9
+// feature — it is the architecture the shared wallet layer now requires of every variant — so the v8 variant adopts it
+// rather than keeping the synchronous `Either`-returning signing it shipped with before the fork work. What stays out
+// is everything genuinely v9: this ledger version has a single signature scheme, so there is no scheme validation and
+// no `SchemeMismatchError` on this path.
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, pipe } from 'effect';
-import type * as ledger from '@midnightntwrk/ledger-v9';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { type SegmentSignature, TransactionOps, type UnboundTransaction } from './TransactionOps.js';
 import { SignError, type WalletError } from './WalletError.js';
 
@@ -43,9 +49,8 @@ export interface SigningService {
 
 /**
  * The default signing service: collect each segment's signable data (pure), invoke the async signer once per segment
- * (sequentially — segment counts are tiny), then attach the signatures (pure, with scheme validation). A signer
- * rejection or throw is wrapped in a {@link SignError}; a scheme mismatch short-circuits inside `attachSignatures`
- * before anything is attached, so no partially-signed transaction can escape.
+ * (sequentially — segment counts are tiny), then attach the signatures (pure). A signer rejection or throw is wrapped
+ * in a {@link SignError}.
  */
 export const makeDefaultSigningService = (): SigningService => ({
   sign(transaction, signSegment) {

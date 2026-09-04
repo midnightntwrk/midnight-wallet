@@ -90,16 +90,43 @@ const signedTx = await dustWallet.addDustGenerationSignature(dustGenerationTx, s
 - `SyncService` - Synchronization service
 - `Transacting` - Transaction utilities
 - `CoinsAndBalances` - Coin and balance management
+- Current (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-dust-wallet/v2`
+- Pre-fork (ledger-v8) variant internals via `@midnightntwrk/wallet-sdk-dust-wallet/v1`
 
-## V1 Builder
+## V2 Builder
 
-Use the V1 builder pattern for wallet construction:
+Use the V2 builder pattern for wallet construction:
 
 ```typescript
-import { V1Builder, RunningV1Variant } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { V2Builder, RunningV2Variant } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 
-// Build a V1 dust wallet variant
+// Build a V2 dust wallet variant
 ```
+
+## Sync: the pre-fork variant replays events, permanently
+
+The two variants do not offer the same synchronisation options, and this is not a temporary gap.
+
+`./v2` (ledger-v9) can sync either way: by replaying the indexer's dust ledger events, or through the projections-based
+**eventless fast sync** (`makeEventLessSyncService` / `makeEventLessSyncCapability`).
+
+`./v1` (ledger-v8) offers **event replay only** — the same mechanism the shipped 1.x wallet uses in production today. It
+does not export the projection schema types, the `DustProjectionsUpdate` union, or the eventless sync service and
+capability. The reason is the ledger, not the wallet: the eventless path is built on four `DustLocalState` members that
+exist only in ledger-v9, and no published ledger-v8 (checked through 8.1.1, the latest) has any of them —
+
+| Member                             | Used for                                                     |
+| ---------------------------------- | ------------------------------------------------------------ |
+| `updateGenerationTreeFromEvidence` | applying generation-tree dtime updates from indexer evidence |
+| `commitmentTreeFirstFree`          | placing commitments relative to collapsed-tree updates       |
+| `generatingTreeFirstFree`          | the same, for the generation tree                            |
+| `nullifiers`                       | resolving which dust UTxOs a projection has already spent    |
+
+There is no v8-compatible implementation of them anywhere, so the path cannot be back-ported. **Decided 2026-08-19: the
+pre-fork variant keeps event-replay sync permanently; no ledger change is being requested to close this.**
+
+Everything else in `./v1` does track the current variant with the ledger swapped — including the sync lock, the one-shot
+`sync` entry point, and typed (non-defect) `blockData` failures.
 
 ## License
 

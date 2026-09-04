@@ -26,11 +26,14 @@ re-exports the core wallet types, while dedicated sub-path exports give access t
 | `@midnightntwrk/wallet-sdk/capabilities/simulation`          | `@midnightntwrk/wallet-sdk-capabilities/simulation`                                                                                                                                                                                               |
 | `@midnightntwrk/wallet-sdk/capabilities/submission`          | `@midnightntwrk/wallet-sdk-capabilities/submission`                                                                                                                                                                                               |
 | `@midnightntwrk/wallet-sdk/dust`                             | `@midnightntwrk/wallet-sdk-dust-wallet`                                                                                                                                                                                                           |
-| `@midnightntwrk/wallet-sdk/dust/v1`                          | `@midnightntwrk/wallet-sdk-dust-wallet/v1`                                                                                                                                                                                                        |
+| `@midnightntwrk/wallet-sdk/dust/v1`                          | `@midnightntwrk/wallet-sdk-dust-wallet/v1` (pre-fork, ledger-v8 variant)                                                                                                                                                                          |
+| `@midnightntwrk/wallet-sdk/dust/v2`                          | `@midnightntwrk/wallet-sdk-dust-wallet/v2` (current, ledger-v9 variant)                                                                                                                                                                           |
 | `@midnightntwrk/wallet-sdk/facade`                           | `@midnightntwrk/wallet-sdk-facade`                                                                                                                                                                                                                |
 | `@midnightntwrk/wallet-sdk/hd`                               | `@midnightntwrk/wallet-sdk-hd`                                                                                                                                                                                                                    |
 | `@midnightntwrk/wallet-sdk/indexer-client`                   | `@midnightntwrk/wallet-sdk-indexer-client`                                                                                                                                                                                                        |
 | `@midnightntwrk/wallet-sdk/indexer-client/effect`            | `@midnightntwrk/wallet-sdk-indexer-client/effect`                                                                                                                                                                                                 |
+| `@midnightntwrk/wallet-sdk/ledger/v8`                        | `@midnight-ntwrk/ledger-v8` (pre-fork ledger version, for authors — see [Authoring transactions](#authoring-transactions))                                                                                                                        |
+| `@midnightntwrk/wallet-sdk/ledger/v9`                        | `@midnightntwrk/ledger-v9` (post-fork ledger version, for authors — see [Authoring transactions](#authoring-transactions))                                                                                                                        |
 | `@midnightntwrk/wallet-sdk/node-client`                      | `@midnightntwrk/wallet-sdk-node-client`                                                                                                                                                                                                           |
 | `@midnightntwrk/wallet-sdk/node-client/effect`               | `@midnightntwrk/wallet-sdk-node-client/effect`                                                                                                                                                                                                    |
 | `@midnightntwrk/wallet-sdk/node-client/testing`              | `@midnightntwrk/wallet-sdk-node-client/testing`                                                                                                                                                                                                   |
@@ -40,10 +43,12 @@ re-exports the core wallet types, while dedicated sub-path exports give access t
 | `@midnightntwrk/wallet-sdk/runtime`                          | `@midnightntwrk/wallet-sdk-runtime`                                                                                                                                                                                                               |
 | `@midnightntwrk/wallet-sdk/runtime/abstractions`             | `@midnightntwrk/wallet-sdk-runtime/abstractions`                                                                                                                                                                                                  |
 | `@midnightntwrk/wallet-sdk/shielded`                         | `@midnightntwrk/wallet-sdk-shielded`                                                                                                                                                                                                              |
-| `@midnightntwrk/wallet-sdk/shielded/v1`                      | `@midnightntwrk/wallet-sdk-shielded/v1`                                                                                                                                                                                                           |
+| `@midnightntwrk/wallet-sdk/shielded/v1`                      | `@midnightntwrk/wallet-sdk-shielded/v1` (pre-fork, ledger-v8 variant)                                                                                                                                                                             |
+| `@midnightntwrk/wallet-sdk/shielded/v2`                      | `@midnightntwrk/wallet-sdk-shielded/v2` (current, ledger-v9 variant)                                                                                                                                                                              |
 | `@midnightntwrk/wallet-sdk/testing`                          | Legacy alias for `@midnightntwrk/wallet-sdk/utilities/testing`                                                                                                                                                                                    |
 | `@midnightntwrk/wallet-sdk/unshielded`                       | `@midnightntwrk/wallet-sdk-unshielded-wallet`                                                                                                                                                                                                     |
-| `@midnightntwrk/wallet-sdk/unshielded/v1`                    | `@midnightntwrk/wallet-sdk-unshielded-wallet/v1`                                                                                                                                                                                                  |
+| `@midnightntwrk/wallet-sdk/unshielded/v1`                    | `@midnightntwrk/wallet-sdk-unshielded-wallet/v1` (pre-fork, ledger-v8 variant)                                                                                                                                                                    |
+| `@midnightntwrk/wallet-sdk/unshielded/v2`                    | `@midnightntwrk/wallet-sdk-unshielded-wallet/v2` (current, ledger-v9 variant)                                                                                                                                                                     |
 | `@midnightntwrk/wallet-sdk/utilities`                        | `@midnightntwrk/wallet-sdk-utilities`                                                                                                                                                                                                             |
 | `@midnightntwrk/wallet-sdk/utilities/networking`             | `@midnightntwrk/wallet-sdk-utilities/networking`                                                                                                                                                                                                  |
 | `@midnightntwrk/wallet-sdk/utilities/testing`                | `@midnightntwrk/wallet-sdk-utilities/testing`                                                                                                                                                                                                     |
@@ -145,6 +150,34 @@ const registrationRecipe = await facade.registerNightUtxosForDustGeneration(
 // Estimate registration costs
 const { fee, dustGenerationEstimations } = await facade.estimateRegistration(nightUtxos);
 ```
+
+### Authoring transactions
+
+Most applications never build a transaction themselves: they ask the wallet for a transfer or a swap and carry what
+comes back. An application that _does_ build one — reaching for `Intent.new` or `Transaction.fromParts` — has to choose
+which ledger version's rules the bytes follow, and both are shipped here so that choice is made in the import line
+rather than by reaching past this package for a ledger of your own:
+
+```typescript
+import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
+import { WalletTransaction } from '@midnightntwrk/wallet-sdk';
+
+const authored = ledger.Transaction.fromParts(networkId, undefined, undefined, intent);
+const handle = WalletTransaction.adopt('Unproven', authored, state.activeProtocolVersion);
+```
+
+`adopt` seals what you built into the same handle the wallet's own methods return, stamped with the protocol version you
+claim it was built for. The SDK holds you to that claim: a transaction stamped for one side of the protocol boundary is
+refused by a wallet acting on the other, with a typed `ProtocolVersionMismatchError`.
+
+**Which subpath to import is a property of the chain, not of this release.** A chain is pre-fork until it forks, and
+mainnet is pre-fork until then — so an authoring path that only ever imports `./ledger/v9` compiles cleanly and **fails
+at run time on every chain that has not yet crossed**. Read `state.activeProtocolVersion` and author against the version
+the chain is actually on; the check is a run-time one by design, because the compiler cannot know which chain the
+application will be pointed at.
+
+Neither subpath is re-exported from the package root. They are WebAssembly modules, and an application that only carries
+transactions should not pay for a ledger it never names.
 
 ## Types
 

@@ -73,7 +73,7 @@ Key documents:
 
 ### API Usage Examples
 
-**Package:** `packages/docs-snippets`
+**Package:** `packages/docs-snippets` (the snippets themselves are in `packages/docs-snippets/src/snippets/`)
 
 Contains working code examples for common wallet operations:
 
@@ -83,7 +83,16 @@ Contains working code examples for common wallet operations:
 - `swap.ts` - Token swap (intent creation)
 - `balancing.ts` - Transaction balancing
 - `initialization.ts` - Wallet initialization
+- `ecdsa-initialization.ts` - Wallet initialization with an ECDSA unshielded identity
 - `dust-fast-sync.ts` - Wallet initialization with projections-based dust fast sync
+- `designation.ts` / `redesignation.ts` / `deregistration.ts` - Registering Night for dust generation, and undoing it
+- `dust-sponsorship.ts` - Paying another party's fees
+- `hard-fork-support.ts` - Hard-fork-ready initialization: fork version, version-keyed proving, protocol phase, orphaned
+  transactions
+- `wasm-prover.ts` - In-process proving
+- `well-formed-validation.ts` - Validating a transaction before submission
+- `terms-and-conditions.ts` - Fetching terms and conditions
+- `addresses.no-net.ts` / `hd.no-net.ts` - Address formatting and HD derivation (no network needed)
 
 **IMPORTANT:** Always refer to docs-snippets for API usage patterns when implementing new features.
 
@@ -140,6 +149,14 @@ yarn changeset add
 # Check for missing changesets
 yarn changeset:check
 
+# --- Rust / WASM (only packages/state-translation) ---
+# Build the v8-to-v9 state translation WASM. NOT part of `yarn dist`; turbo runs it automatically before the
+# integration tests in capabilities and state-translation, which declare a dependency on it.
+yarn turbo run build:wasm --filter=@midnightntwrk/wallet-sdk-state-translation
+
+# Confirm a built artifact actually translates (compiling proves little — see the package's wasm/README.md)
+yarn workspace @midnightntwrk/wallet-sdk-state-translation verify:wasm
+
 # --- Effect Language Service (see section below) ---
 # Run Effect diagnostics on a specific file
 yarn effect-language-service diagnostics --file "$(pwd)/path/to/file.ts" --format pretty
@@ -151,6 +168,21 @@ yarn effect-language-service diagnostics --project "$(pwd)/packages/dust-wallet/
 yarn effect-language-service quickfixes --file "$(pwd)/path/to/file.ts"
 
 ```
+
+### Rust toolchain
+
+The repo is TypeScript apart from one crate, `packages/state-translation/wasm`, which wraps the ledger's v8-to-v9 state
+translation. **`dist`, `typecheck`, `lint` and `test:unit` need no Rust**; only the integration tests in `capabilities`
+and `state-translation` do, because their `test:integration` depends on the state-translation package's `artifacts`
+task, which builds and verifies the WASM.
+
+Requires `rustup` (the toolchain and wasm32 target come from the root `rust-toolchain.toml`), `wasm-bindgen-cli` at
+**exactly 0.2.104**, `binaryen` for `wasm-opt`, and on macOS Homebrew's `llvm` — Apple's clang cannot target wasm32.
+
+The root `Cargo.toml` is the Rust workspace; it holds the `[patch.crates-io]` block and the `wasm` profile, because
+Cargo only honours those in a workspace root. **Do not run `cargo` directly** — the build script materializes a
+vendored, patched `midnight-storage` that the `[patch]` points at, so a bare `cargo build` fails on the missing
+directory. See `packages/state-translation/wasm/README.md`.
 
 ### Effect Language Service
 
@@ -267,6 +299,30 @@ Each variant follows a Services + Capabilities pattern:
 
 Capabilities operate on state synchronously; services provide data that capabilities process.
 
+### The v1/v2 Twin Convention
+
+Each of the three wallet packages holds **two variants of the same wallet**, one per ledger version, in sibling
+directories under `src/`:
+
+- **`src/v1`** - the **pre-fork** variant, on `@midnight-ntwrk/ledger-v8`. Active below the chain's `forkVersion`.
+- **`src/v2`** - the **current** variant, on `@midnightntwrk/ledger-v9`. Active from `forkVersion` upwards.
+
+The two trees are near-identical modulo the ledger import: same file names, same exports with `V1`/`V2` in their names.
+
+**Working rule: edit `v2`, then mirror the change into `v1` with the ledger swapped.** `v2` is where a change belongs
+first, because it is what the chain will be running. A change that lands in only one twin is a bug that shows up as a
+wallet that misbehaves on one side of the fork.
+
+**Justified `v9`-only exclusions.** A few things are deliberately absent from `v1` because no published ledger-v8 has
+the API they need — the largest is dust's projections-based fast sync (`makeEventLessSyncService`), which rests on
+`DustLocalState` members that exist only in v9 and cannot be back-ported. These are permanent, not gaps to be closed;
+each is documented where it is excluded. Do not "fix" a missing `v1` counterpart without checking whether it is one of
+them.
+
+**The wallet layer above the twins is single.** `ShieldedWallet` / `DustWallet` / `UnshieldedWallet` each register both
+variants and hand over at `configuration.forkVersion`; the package's own `Default*Configuration` is declared by the
+package, not aliased to either variant's. `Custom*Wallet(configuration, builder)` is the single-variant composition.
+
 ### State Management
 
 Uses Effect library with `SubscriptionRef` for BLoC-like state management:
@@ -286,7 +342,15 @@ Uses Effect library with `SubscriptionRef` for BLoC-like state management:
     is configured in tsconfig.base.json as a TypeScript plugin.
 - **RxJS** (`rxjs`) - Observable streams for reactive state
   - Only in APIs exposed to the users of the SDK
-- **@midnight-ntwrk/ledger-v8** - Core ledger types and ZK proof types
+- **Two ledgers, side by side** - the SDK runs the pre-fork ledger below the protocol boundary and the current one from
+  it, so both are installed and both are real:
+  - **`@midnight-ntwrk/ledger-v8`** - the pre-fork ledger (`v1` variants)
+  - **`@midnightntwrk/ledger-v9`** - the current ledger (`v2` variants)
+  - **Watch the scope.** `@midnight-ntwrk` (hyphenated) and `@midnightntwrk` (not) are **two different npm orgs**, and
+    the two ledgers are published under different ones. One character decides which package you import; getting it wrong
+    yields a module-not-found for a package that plainly exists. Copy the specifier, do not type it.
+  - Never hardcode a ledger version in SDK code that a wallet runs. Version travels as `ProtocolVersion` data;
+    `packages/abstractions/src/WalletTransaction.ts` is how a transaction carries the version that built it.
 
 ## Testing
 
@@ -304,10 +368,10 @@ Tests are split by **filename suffix** so each type can run independently:
 file would need both, split it (see `BlockHash.test.ts` / `BlockHash.integration.test.ts` in `indexer-client`).
 
 Selection is wired via `unit` and `integration` Vitest projects in each SDK package's `vitest.config.ts` (the e2e
-packages differ — `e2e-tests` uses `undeployed`/`remote`/`universal`, and `docs-snippets` adds an `undeployed` project
-for its snippet runner; see the e2e tier below). The `unit` project must `exclude` the `**/*.integration.test.ts` glob
-(the default `**/*.test.ts` would otherwise match integration files); the `integration` project `include`s only that
-glob. Commands:
+packages differ — `e2e-tests` uses `undeployed`/`remote`/`universal`/`fork`, and `docs-snippets` adds an `undeployed`
+project for its snippet runner; see the e2e tier below). The `unit` project must `exclude` the
+`**/*.integration.test.ts` glob (the default `**/*.test.ts` would otherwise match integration files); the `integration`
+project `include`s only that glob. Commands:
 
 - `yarn test` — full suite (both projects).
 - `yarn test:unit` — unit only (fast gate; no Docker).
@@ -327,6 +391,13 @@ gates on unit, integration, and smoke e2e (`needs: [test-unit, integration, e2e-
 integration. They live in the `e2e-tests` package as `*.undeployed.test.ts` and run via `turbo test-undeployed` (smoke
 subset on PRs, full suite nightly) — not in the integration matrix. The docs-snippets runner is also e2e and runs in
 that lane while staying in its own package.
+
+`e2e-tests` also holds a fourth e2e sub-project, `fork` (`*.fork.test.ts`, `yarn turbo test-fork`): the hard-fork
+crossing, which boots a chain from the pre-fork node's spec, runs it on the current binary, and enacts the real ledger 8
+→ 9 runtime upgrade so a wallet crosses an actual protocol boundary — something no other lane does, since every other
+stack is post-fork from block 1. It is in neither the PR smoke lane nor the nightly undeployed run; it has its own
+nightly/dispatch workflow, `.github/workflows/e2e-hard-fork.yml`, and is documented in `packages/e2e-tests/README.md`.
+New fork-crossing behaviour that needs live infra to exercise belongs there, not in `*.undeployed.test.ts`.
 
 ### Test-Driven Development (MANDATORY)
 
@@ -489,7 +560,7 @@ const ProtocolVersion = Brand.nominal<ProtocolVersion>();
 
 **Canonical examples:**
 
-- `packages/dapp-connector-reference/src/parsing.ts` - `parseTokenType`, `parseShieldedAddress`
+- `packages/abstractions/src/TokenType.ts` - `parseTokenType` returns `Either<TokenType, InvalidTokenTypeError>`
 - `packages/abstractions/src/ProtocolVersion.ts` - Branded type with `Brand.nominal`
 - `packages/address-format/src/index.ts` - Bech32m parsing returns typed addresses
 
@@ -1033,19 +1104,25 @@ When implementing new features, refer to these exemplary files:
 | Tagged enum ADT                      | `packages/runtime/src/abstractions/StateChange.ts`                            |
 | Service/Capability separation        | `packages/capabilities/src/pendingTransactions/pendingTransactionsService.ts` |
 | Pure state transformations           | `packages/unshielded-wallet/src/v1/UnshieldedState.ts`                        |
-| Parse don't validate                 | `packages/dapp-connector-reference/src/parsing.ts`                            |
+| Parse don't validate                 | `packages/abstractions/src/TokenType.ts`                                      |
 | Branded types                        | `packages/abstractions/src/ProtocolVersion.ts`                                |
 
 ## Transaction Inspection
 
-When working with transactions (especially in tests), use the ledger types from `@midnight-ntwrk/ledger-v7`.
+When working with transactions (especially in tests), use the ledger types of the version that produced them. There are
+two, and which one applies is decided by the transaction's own protocol version, not by which one is easier to import:
+`@midnightntwrk/ledger-v9` from the protocol boundary, `@midnight-ntwrk/ledger-v8` below it (mind the scope hyphen — see
+Key Dependencies). A `WalletTransaction` handle carries that version as data;
+`WalletTransaction.unwrapWithin(handle, range)` is how a test gets at the transaction inside, and it refuses a stamp
+outside the range rather than handing bytes to a ledger that would misread them.
 
 ### Key References
 
 **Ledger TypeScript Types:**
 
-- `node_modules/@midnight-ntwrk/ledger-v7/ledger-v7.d.ts` - Full type definitions for Transaction, Intent, ZswapOffer,
-  DustActions, etc.
+- `node_modules/@midnightntwrk/ledger-v9/ledger-v9.d.ts` - Full type definitions for Transaction, Intent, ZswapOffer,
+  DustActions, etc. (current ledger)
+- `node_modules/@midnight-ntwrk/ledger-v8/ledger-v8.d.ts` - The same, for the pre-fork ledger
 
 **Ledger Specification (midnight-ledger repo):**
 
@@ -1056,15 +1133,16 @@ When working with transactions (especially in tests), use the ledger types from 
 
 **Wallet SDK Examples:**
 
-- `packages/unshielded-wallet/src/v1/Transacting.ts` - Transaction building patterns
-- `packages/unshielded-wallet/src/v1/test/transacting.test.ts` - Transaction test examples
-- `packages/docs-snippets/` - API usage examples for transfers, swaps, balancing
+- `packages/unshielded-wallet/src/v2/Transacting.ts` - Transaction building patterns (`v1` is its pre-fork twin)
+- `packages/unshielded-wallet/src/v2/test/transacting.test.ts` - Transaction test examples
+- `packages/docs-snippets/src/snippets/` - API usage examples for transfers, swaps, balancing
 
-**DApp Connector Reference Tests:**
+**Transaction inspection in tests:**
 
-- `packages/dapp-connector-reference/src/test/transfer.test.ts` - Transaction inspection helpers (deserialize, check
-  balance, count outputs, verify DustSpend)
-- `packages/dapp-connector-reference/src/test/intent.test.ts` - Intent imbalance verification helpers
+- `packages/dust-wallet/src/v2/test/transacting.test.ts` - Reading `intent.dustActions` registrations and spends off a
+  built transaction
+- `packages/e2e-tests/src/tests/optionalBalancing.undeployed.test.ts` - Checking a transaction's imbalances per segment
+- `packages/shielded-wallet/src/v2/test/transacting.test.ts` - Inspecting offers, inputs and outputs
 
 ### Key Concepts
 

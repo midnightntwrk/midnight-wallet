@@ -67,9 +67,9 @@ describe('Fresh wallet with empty state', () => {
       ...walletConfig,
       txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     });
-    shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
-    unshieldedWallet = Unshielded.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
-    dustWallet = Dust.startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust);
+    shieldedWallet = await Wallet.startWithSeed(utils.getShieldedSeed(walletSeed));
+    unshieldedWallet = await Unshielded.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
+    dustWallet = await Dust.startWithSeed(utils.getDustSeed(walletSeed));
     await shieldedWallet.start(walletSecretKey);
     await unshieldedWallet.start();
     await dustWallet.start(dustSecretKey);
@@ -83,7 +83,7 @@ describe('Fresh wallet with empty state', () => {
     await dustWallet.stop();
   });
 
-  test('Valid Midnight wallet can be built from a BIP32 compatible mnemonic seed phrase', () => {
+  test('Valid Midnight wallet can be built from a BIP32 compatible mnemonic seed phrase', async () => {
     const mnemonics = [
       'result',
       'off',
@@ -113,7 +113,7 @@ describe('Fresh wallet with empty state', () => {
 
     const entropy = Buffer.from(KeyManagement.util.mnemonicWordsToEntropy(mnemonics), 'hex');
     try {
-      Wallet.startWithSeed(entropy);
+      await Wallet.startWithSeed(entropy);
       // If we reach here, no error was thrown
       expect(true).toBe(true);
     } catch (error) {
@@ -122,24 +122,29 @@ describe('Fresh wallet with empty state', () => {
     }
 
     try {
-      UnshieldedWallet({
+      await UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+        // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+        forkVersion: fixture.getWalletConfig().forkVersion,
       }).startWithPublicKey(PublicKey.fromKeyStore(wallet.unshieldedKeystore));
     } catch (error) {
       expect(error).toBeUndefined();
     }
   });
 
-  test('Unable to start wallet with invalid seed', () => {
+  // Rejected rather than thrown: starting a wallet that spans a protocol boundary can mean asking the chain which
+  // version it is on, so the whole start is a promise — and a seed the SDK will not accept fails it before any
+  // question is asked.
+  test('Unable to start wallet with invalid seed', async () => {
     const shortSeed = Buffer.from('12345', 'hex');
-    expect(() => Wallet.startWithSeed(shortSeed)).toThrowError('Expected 32-byte seed');
+    await expect(Wallet.startWithSeed(shortSeed)).rejects.toThrowError('Expected 32-byte seed');
     const invalidSeed = Buffer.from('"000000000000000000000000000000000000000000000000000000000000009', 'hex');
-    expect(() => Wallet.startWithSeed(invalidSeed)).toThrowError('Expected 32-byte seed');
+    await expect(Wallet.startWithSeed(invalidSeed)).rejects.toThrowError('Expected 32-byte seed');
   });
 
   test(

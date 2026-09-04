@@ -11,8 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-shielded/v1';
-import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { type DefaultShieldedConfiguration } from '@midnightntwrk/wallet-sdk-shielded';
+import { type DefaultDustConfiguration } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { type DefaultProvingConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { type DefaultSubmissionConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/submission';
 
@@ -38,10 +38,17 @@ export interface ResolvedEndpoints {
 }
 
 /** Shielded + submission + proving configuration consumed by `ShieldedWallet`/`WalletFacade`. */
-export type WalletConfiguration = DefaultV1Configuration & DefaultSubmissionConfiguration & DefaultProvingConfiguration;
+// The shielded wallet's own configuration rather than its post-fork variant's: it carries `forkVersion`,
+// which says where this chain hands over from one ledger version to the other, and neither variant knows
+// there is another one.
+export type WalletConfiguration = DefaultShieldedConfiguration &
+  DefaultSubmissionConfiguration &
+  DefaultProvingConfiguration;
 
 /** Dust wallet configuration consumed by `DustWallet`. */
-export type DustWalletConfiguration = DefaultDustV1Configuration;
+// The dust wallet's own configuration rather than its post-fork variant's: it carries `forkVersion`, which says
+// where this chain hands over from one ledger version to the other, and neither variant knows there is another one.
+export type DustWalletConfiguration = DefaultDustConfiguration;
 
 /**
  * A provisioned wallet test environment. Produced by {@link createRemoteEnvironment} (no Docker) or

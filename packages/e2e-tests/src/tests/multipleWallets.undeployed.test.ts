@@ -24,7 +24,7 @@ import {
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { WalletFacade, WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
-import { DustWallet } from '../../../dust-wallet/dist/DustWallet.js';
+import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 
 /** Syncing tests */
 
@@ -56,18 +56,20 @@ describe('Syncing', () => {
     async function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
       for (let i = 0; i < seeds.length; i++) {
         unshieldedKeystores[i] = createKeystore({ kind: 'schnorr', secret: seeds[i] }, fixture.getNetworkId());
-        shieldedWallets[i] = Wallet.startWithSeed(seeds[i]);
-        dustWallets[i] = Dust.startWithSeed(seeds[i], dustParameters);
+        shieldedWallets[i] = await Wallet.startWithSeed(seeds[i]);
+        dustWallets[i] = await Dust.startWithSeed(seeds[i], dustParameters);
       }
 
       for (let i = 0; i < seeds.length; i++) {
-        unshieldedWallets[i] = UnshieldedWallet({
+        unshieldedWallets[i] = await UnshieldedWallet({
           networkId: fixture.getNetworkId(),
           indexerClientConnection: {
             indexerHttpUrl: fixture.getIndexerUri(),
             indexerWsUrl: fixture.getIndexerWsUri(),
           },
           txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+          // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+          forkVersion: fixture.getWalletConfig().forkVersion,
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystores[i]));
       }
 
@@ -82,7 +84,7 @@ describe('Syncing', () => {
           unshielded: () => unshieldedWallets[i],
           dust: () => dustWallets[i],
         });
-        await facades[i].start(ledger.ZswapSecretKeys.fromSeed(seeds[i]), ledger.DustSecretKey.fromSeed(seeds[i]));
+        await facades[i].start({ shielded: seeds[i], unshielded: seeds[i], dust: seeds[i] });
       }
     }
 

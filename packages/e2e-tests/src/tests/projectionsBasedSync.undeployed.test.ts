@@ -12,7 +12,6 @@
 // limitations under the License.
 import { describe, test, expect } from 'vitest';
 import * as rx from 'rxjs';
-import { Array as Arr } from 'effect';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import * as utils from './utils.js';
@@ -26,7 +25,9 @@ import {
   makeEventLessSyncCapability,
   makeEventLessSyncService,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { carried } from './helpers/transactions.js';
+import { dustStatesEqual, rootsEqual, sameItems, stringifyWithBigInts } from './helpers/dustComparison.js';
 
 /** @group undeployed */
 
@@ -42,7 +43,7 @@ describe('Projections-based synchronisation model', () => {
   const eventLessDustWallet = (config: DefaultDustConfiguration) =>
     CustomDustWallet(
       config,
-      new V1Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
+      new V2Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
     );
 
   let fixture: TestContainersFixture;
@@ -72,26 +73,6 @@ describe('Projections-based synchronisation model', () => {
     await receiverEventsSynced.wallet.stop();
     await receiver.wallet.stop();
   }, 20_000);
-
-  const stringifyWithBigInts = (value: unknown) =>
-    JSON.stringify(value, (_, v: unknown) => (typeof v === 'bigint' ? v.toString() : v));
-
-  const sameItems = <T>(left: readonly T[], right: readonly T[], equal: (leftItem: T, rightItem: T) => boolean) =>
-    left.length === right.length &&
-    Arr.differenceWith<T>(equal)(left, right).length === 0 &&
-    Arr.differenceWith<T>(equal)(right, left).length === 0;
-
-  const rootsEqual = (state1: ledger.DustLocalState, state2: ledger.DustLocalState) =>
-    state1.commitmentTreeRoot() === state2.commitmentTreeRoot() &&
-    state1.generatingTreeRoot() === state2.generatingTreeRoot();
-
-  const dustStatesEqual = (state1: ledger.DustLocalState, state2: ledger.DustLocalState) =>
-    rootsEqual(state1, state2) &&
-    sameItems<ledger.QualifiedDustOutput>(
-      state1.utxos,
-      state2.utxos,
-      (utxo1, utxo2) => stringifyWithBigInts(utxo1) === stringifyWithBigInts(utxo2),
-    );
 
   const unshieldedCoinsEqual = (coins1: readonly UtxoWithMeta[], coins2: readonly UtxoWithMeta[]) =>
     sameItems(
@@ -123,8 +104,8 @@ describe('Projections-based synchronisation model', () => {
     const receiverStateEventsSynced = await receiverEventsSynced.wallet.waitForSyncedState();
 
     // Projections-based sync
-    await funded.wallet.doSync(funded.dustSecretKey);
-    await receiver.wallet.doSync(receiver.dustSecretKey);
+    await funded.wallet.doSync(funded.seeds);
+    await receiver.wallet.doSync(receiver.seeds);
 
     const fundedState = await funded.wallet.waitForSyncedState();
     const receiverState = await receiver.wallet.waitForSyncedState();
@@ -185,18 +166,11 @@ describe('Projections-based synchronisation model', () => {
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
 
-    await funded.wallet.doSync(funded.dustSecretKey);
-    await receiver.wallet.doSync(receiver.dustSecretKey);
+    await funded.wallet.doSync(funded.seeds);
+    await receiver.wallet.doSync(receiver.seeds);
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const txRecipe = await funded.wallet.transferTransaction(
-      outputsToCreate,
-      {
-        shieldedSecretKeys: funded.shieldedSecretKeys,
-        dustSecretKey: funded.dustSecretKey,
-      },
-      { ttl },
-    );
+    const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, { ttl });
     const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
     const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
     const txId = await funded.wallet.submitTransaction(finalizedTx);
@@ -242,7 +216,7 @@ describe('Projections-based synchronisation model', () => {
     logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
-    await receiver.wallet.doSync(receiver.dustSecretKey);
+    await receiver.wallet.doSync(receiver.seeds);
 
     const receiverStateAfterRegistration = await utils.waitForStateAfterDustRegistration(
       receiver.wallet,
@@ -263,16 +237,12 @@ describe('Projections-based synchronisation model', () => {
           outputs: [{ type: shieldedTokenRaw, amount: outputValue, receiverAddress }],
         },
       ],
-      {
-        shieldedSecretKeys: fundedEventsSynced.shieldedSecretKeys,
-        dustSecretKey: fundedEventsSynced.dustSecretKey,
-      },
       { ttl: new Date(Date.now() + 30 * 60 * 1000) },
     );
     const finalizedTx = await fundedEventsSynced.wallet.finalizeRecipe(txRecipe);
     await fundedEventsSynced.wallet.submitTransaction(finalizedTx);
 
-    const txHash = finalizedTx.transactionHash();
+    const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
     await utils.waitForTxInHistory(txHash, fundedEventsSynced.wallet, {
       ready: (entry) => entry.shielded !== undefined && entry.dust !== undefined,
     });
@@ -293,7 +263,7 @@ describe('Projections-based synchronisation model', () => {
         expect(deepestDustChain).toBeGreaterThanOrEqual(expectedChainDepth);
       }
 
-      await funded.wallet.doSync(funded.dustSecretKey);
+      await funded.wallet.doSync(funded.seeds);
 
       const eventsState = await fundedEventsSynced.wallet.waitForSyncedState();
       const projectionsState = await funded.wallet.waitForSyncedState();
@@ -308,7 +278,7 @@ describe('Projections-based synchronisation model', () => {
       // receiver starts on a fresh blockchain with no prior UTXOs — the projection snapshot is
       // empty, so the sync should be purely a roundtrip to the indexer with no heavy computation.
       const start = Date.now();
-      await receiver.wallet.doSync(receiver.dustSecretKey);
+      await receiver.wallet.doSync(receiver.seeds);
       const elapsedMs = Date.now() - start;
 
       const state = await receiver.wallet.waitForSyncedState();
@@ -324,7 +294,7 @@ describe('Projections-based synchronisation model', () => {
     'Incremental projections-based sync after new blocks is near-instant',
     async () => {
       // Establish a clean baseline state for receiver (empty wallet).
-      await receiver.wallet.doSync(receiver.dustSecretKey);
+      await receiver.wallet.doSync(receiver.seeds);
       await receiver.wallet.waitForSyncedState();
 
       // Advance the chain without involving the receiver wallet.
@@ -334,7 +304,7 @@ describe('Projections-based synchronisation model', () => {
       await utils.waitForBlockAdvancement(fixture.getIndexerUri());
 
       const start = Date.now();
-      await receiver.wallet.doSync(receiver.dustSecretKey);
+      await receiver.wallet.doSync(receiver.seeds);
       const elapsedMs = Date.now() - start;
 
       const state = await receiver.wallet.waitForSyncedState();

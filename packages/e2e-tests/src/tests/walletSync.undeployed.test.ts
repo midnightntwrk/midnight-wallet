@@ -21,12 +21,12 @@ import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk
 import { type Variant, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  type DefaultV1Configuration,
-  type DefaultV1Variant,
-  V1Builder,
+  type DefaultV2Configuration,
+  type DefaultV2Variant,
+  V2Builder,
   type CoreWallet,
-  V1Tag,
-} from '@midnightntwrk/wallet-sdk-shielded/v1';
+  V2Tag,
+} from '@midnightntwrk/wallet-sdk-shielded/v2';
 import { randomUUID } from 'node:crypto';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import * as rx from 'rxjs';
@@ -60,7 +60,7 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
 
 describe('Wallet Sync', () => {
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultV1Configuration;
+  let configuration: DefaultV2Configuration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -78,8 +78,8 @@ describe('Wallet Sync', () => {
     await startedEnvironment?.down({ timeout: 10_000 });
   });
 
-  let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<DefaultV1Variant>]>;
-  let wallet: WalletLike.WalletLike<[Variant.VersionedVariant<DefaultV1Variant>]>;
+  let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<DefaultV2Variant>]>;
+  let wallet: WalletLike.WalletLike<[Variant.VersionedVariant<DefaultV2Variant>]>;
   type Wallet = WalletLike.WalletOf<typeof Wallet>;
 
   const waitForSync = (wallet: Wallet): Promise<CoreWallet> => {
@@ -94,13 +94,13 @@ describe('Wallet Sync', () => {
 
   beforeEach(async () => {
     Wallet = WalletBuilder.init()
-      .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
+      .withVariant(ProtocolVersion.MinSupportedVersion, new V2Builder().withDefaults())
       .build(configuration);
     const walletKeys = ledger.ZswapSecretKeys.fromSeed(
       getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000001'),
     );
     wallet = Wallet.startEmpty(Wallet);
-    await wallet.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(walletKeys) }).pipe(Effect.runPromise);
+    await wallet.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground(walletKeys) }).pipe(Effect.runPromise);
   });
 
   afterEach(async () => {
@@ -112,7 +112,7 @@ describe('Wallet Sync', () => {
   it('should resync an empty wallet', async () => {
     const syncedState = await waitForSync(wallet);
 
-    const coinsAndBalancesCapability = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
+    const coinsAndBalancesCapability = Wallet.allVariantsRecord()[V2Tag].variant.coinsAndBalances;
     const balances = coinsAndBalancesCapability.getTotalBalances(syncedState);
 
     expect(balances).toStrictEqual({

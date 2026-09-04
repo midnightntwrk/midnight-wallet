@@ -11,17 +11,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
+  DustLocalState,
   DustSecretKey,
   type DustStateChanges,
   type FinalizedTransaction,
   LedgerParameters,
-} from '@midnightntwrk/ledger-v9';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Duration, Effect, Exit, Ref, Scope, Stream, SubscriptionRef, TestClock, TestContext } from 'effect';
+} from '@midnight-ntwrk/ledger-v8';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  Chunk,
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Ref,
+  Scope,
+  Stream,
+  SubscriptionRef,
+  TestClock,
+  TestContext,
+} from 'effect';
 import { describe, expect, it } from 'vitest';
 import { chooseCoin, makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
-import { CoreWallet } from '../CoreWallet.js';
+import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
+import { StateChange, VersionChangeType } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { RunningV1Variant } from '../RunningV1Variant.js';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { type ChangesResult, type SyncCapability, type SyncService } from '../Sync.js';
@@ -49,13 +64,9 @@ const syncServiceOf = (batches: readonly FakeSyncUpdate[]): SyncService<CoreWall
     Effect.succeed({
       hash: 'block-hash',
       height: 1,
+      protocolVersion: 0,
       ledgerParameters: LedgerParameters.initialParameters(),
       timestamp: new Date(0),
-      zswapEndIndex: 0,
-      dustCommitmentEndIndex: 0,
-      dustGenerationEndIndex: 0,
-      dustCommitmentMerkleTreeRoot: 'dust-commitment-root',
-      dustGenerationMerkleTreeRoot: 'dust-generation-root',
     }),
 });
 
@@ -91,15 +102,46 @@ const trackingHistoryService = (counters: FanOutCounters): TransactionHistorySer
   put: () => Ref.update(counters.recorded, (n) => n + 1),
 });
 
+/** A tx-history service that records without parking, for the tests that run on the real clock. */
+const immediateHistoryService = (recorded: Ref.Ref<number>): TransactionHistoryService => ({
+  getTransactionDetails: (hash) =>
+    Effect.succeed({
+      hash,
+      block: { hash: 'block-hash', height: 1, timestamp: 1_700_000_000 },
+      status: 'SUCCESS' as const,
+      identifiers: [],
+      fees: null,
+    }),
+  put: () => Ref.update(recorded, (n) => n + 1),
+});
+
+/**
+ * A sync service that counts how many times it was asked for updates and whose stream ends after a single batch.
+ *
+ * @remarks
+ *   The shape of a source that hands over a snapshot rather than following the chain — which is what the projections sync
+ *   service is. How often it was opened is therefore how many synchronization passes actually ran.
+ */
+const countingSyncService = (subscriptions: Ref.Ref<number>): SyncService<CoreWallet, null, FakeSyncUpdate> => ({
+  updates: () =>
+    Stream.unwrap(
+      Ref.update(subscriptions, (n) => n + 1).pipe(
+        Effect.as(Stream.fromIterable([['a1']] as readonly FakeSyncUpdate[])),
+      ),
+    ),
+  blockData: () => syncServiceOf([]).blockData(),
+});
+
 const variantContextOf = (
   batches: readonly FakeSyncUpdate[],
   transactionHistoryService: TransactionHistoryService,
+  syncService: SyncService<CoreWallet, null, FakeSyncUpdate> = syncServiceOf(batches),
 ): RunningV1Variant.Context<string, FakeSyncUpdate, FinalizedTransaction, null> => {
   const keysCapability = makeDefaultKeysCapability();
   const coinsAndBalancesCapability = makeDefaultCoinsAndBalancesCapability(undefined, () => ({ keysCapability }));
   return {
     serializationCapability: makeDefaultV1SerializationCapability(),
-    syncService: syncServiceOf(batches),
+    syncService,
     syncCapability: fakeSyncCapability,
     transactingCapability: makeDefaultTransactingCapability(
       { networkId, costParameters: { feeBlocksMargin: 5 } },
@@ -134,7 +176,13 @@ describe('RunningV1Variant.startSync tx-history fan-out', () => {
       const scope = yield* Scope.make();
       const variant = new RunningV1Variant(
         scope,
-        { stateRef },
+        {
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+        },
         variantContextOf(batches, trackingHistoryService(counters)),
       );
 
@@ -156,5 +204,222 @@ describe('RunningV1Variant.startSync tx-history fan-out', () => {
     expect(result.maxInFlight).toBe(8);
     // The cap only queues work, it never drops it.
     expect(result.recorded).toBe(12);
+  });
+});
+
+describe('RunningV1Variant sync serialization', () => {
+  const stateAndScope = () =>
+    Effect.gen(function* () {
+      const secretKey = DustSecretKey.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.initEmpty(LedgerParameters.initialParameters().dust, secretKey, networkId),
+      );
+      const scope = yield* Scope.make();
+      return { stateRef, scope };
+    });
+
+  const fullRange = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion);
+
+  const blockData = () =>
+    Effect.succeed({
+      hash: 'block-hash',
+      height: 1,
+      protocolVersion: 0,
+      ledgerParameters: LedgerParameters.initialParameters(),
+      timestamp: new Date(0),
+    });
+
+  it('ignores a second start while the first sync stream is still running', async () => {
+    // The first subscription is held open by a gate; a second start must not open another one against the same
+    // state, which would apply every update twice.
+    const result = await Effect.gen(function* () {
+      const subscriptions = yield* Ref.make(0);
+      const recorded = yield* Ref.make(0);
+      const started = yield* Deferred.make<void>();
+      const gate = yield* Deferred.make<void>();
+
+      const gatedSyncService: SyncService<CoreWallet, null, FakeSyncUpdate> = {
+        updates: () =>
+          Stream.unwrap(
+            Effect.gen(function* () {
+              const subscription = yield* Ref.updateAndGet(subscriptions, (n) => n + 1);
+              if (subscription > 1) {
+                // Only the first subscription is held open, so a missing lock shows up as a failed
+                // assertion rather than a hang.
+                return Stream.fromIterable([['b1']] as readonly FakeSyncUpdate[]);
+              }
+              yield* Deferred.succeed(started, undefined);
+              return Stream.fromIterable([['a1']] as readonly FakeSyncUpdate[]).pipe(
+                Stream.concat(Stream.fromEffect(Deferred.await(gate)).pipe(Stream.drain)),
+              );
+            }),
+          ),
+        blockData,
+      };
+
+      const { stateRef, scope } = yield* stateAndScope();
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef, activationRange: fullRange },
+        variantContextOf([], immediateHistoryService(recorded), gatedSyncService),
+      );
+
+      const first = yield* Effect.fork(
+        variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope)),
+      );
+      yield* Deferred.await(started);
+
+      yield* variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope));
+      const subscriptionsDuringFirst = yield* Ref.get(subscriptions);
+
+      yield* Deferred.succeed(gate, undefined);
+      yield* Fiber.join(first);
+      yield* Scope.close(scope, Exit.void);
+
+      return { subscriptionsDuringFirst, recorded: yield* Ref.get(recorded) };
+    }).pipe(Effect.runPromise);
+
+    expect(result.subscriptionsDuringFirst).toBe(1);
+    expect(result.recorded).toBe(1);
+  });
+
+  it('releases the lock when the stream ends, so a one-shot sync can be run again', async () => {
+    // `sync` runs the same stream to completion instead of forking it into the background; the lock must not
+    // outlive the run, or the second call would silently do nothing.
+    const result = await Effect.gen(function* () {
+      const subscriptions = yield* Ref.make(0);
+      const recorded = yield* Ref.make(0);
+
+      const { stateRef, scope } = yield* stateAndScope();
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef, activationRange: fullRange },
+        variantContextOf([], immediateHistoryService(recorded), countingSyncService(subscriptions)),
+      );
+
+      yield* variant.sync(null);
+      yield* variant.sync(null);
+      yield* Scope.close(scope, Exit.void);
+
+      return yield* Ref.get(subscriptions);
+    }).pipe(Effect.runPromise);
+
+    expect(result).toBe(2);
+  });
+
+  it('runs a further pass after a background drain whose stream ended', async () => {
+    // The twin of the post-fork variant's pin. This variant never runs the projections source — no published pre-fork
+    // ledger has the state APIs it needs — but the runner is shared by both sync styles, so the rule it depends on is
+    // asserted here too rather than left to hold by accident.
+    const result = await Effect.gen(function* () {
+      const subscriptions = yield* Ref.make(0);
+      const recorded = yield* Ref.make(0);
+
+      const { stateRef, scope } = yield* stateAndScope();
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef, activationRange: fullRange },
+        variantContextOf([], immediateHistoryService(recorded), countingSyncService(subscriptions)),
+      );
+
+      yield* variant.startSyncInBackground(null);
+      // Nothing in the background pass waits on anything: once the source has been opened, the fiber only has to be
+      // let run. Waiting for the count and then yielding the thread is enough for it to have finished.
+      yield* Effect.repeat(Ref.get(subscriptions), { until: (count) => count > 0 });
+      yield* Effect.sleep(Duration.millis(50));
+
+      yield* variant.sync(null);
+      const opened = yield* Ref.get(subscriptions);
+      yield* Scope.close(scope, Exit.void);
+
+      return opened;
+    }).pipe(Effect.runPromise);
+
+    expect(result).toBe(2);
+  });
+});
+
+describe('RunningV1Variant.state protocol version signalling', () => {
+  /** The variant under test owns `[0, 7)`; 7 and above belong to whatever variant comes next. */
+  const activationRange = ProtocolVersion.makeRange(
+    ProtocolVersion.MinSupportedVersion,
+    ProtocolVersion.ProtocolVersion(7n),
+  );
+
+  const walletAtVersion = (protocolVersion: bigint): CoreWallet =>
+    CoreWallet.restore(
+      new DustLocalState(LedgerParameters.initialParameters().dust),
+      PublicKey.fromSecretKey(DustSecretKey.fromSeed(Buffer.alloc(32, 1))),
+      [],
+      { appliedIndex: 0n, highestRelevantWalletIndex: 0n, highestIndex: 0n, highestRelevantIndex: 0n },
+      protocolVersion,
+      networkId,
+    );
+
+  const versionChangesOf = (changes: Chunk.Chunk<StateChange.StateChange<CoreWallet>>): readonly bigint[] =>
+    Chunk.toArray(changes)
+      .filter(StateChange.isVersionChange)
+      .map(({ change }) => {
+        expect(VersionChangeType.isVersion(change)).toBe(true);
+        return VersionChangeType.isVersion(change) ? change.version : -1n;
+      });
+
+  /**
+   * Drains the variant's state stream for a fixed window and returns everything it emitted. A bounded window rather
+   * than `Stream.take(n)` on purpose: the point of these tests is _how many_ version changes appear, so a missing one
+   * has to surface as a failed assertion, not as a hang.
+   */
+  const emissionsWithin = (
+    initialState: CoreWallet,
+    act: (stateRef: SubscriptionRef.SubscriptionRef<CoreWallet>) => Effect.Effect<void> = () => Effect.void,
+  ): Promise<Chunk.Chunk<StateChange.StateChange<CoreWallet>>> =>
+    Effect.gen(function* () {
+      const stateRef = yield* SubscriptionRef.make(initialState);
+      const scope = yield* Scope.make();
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef, activationRange },
+        variantContextOf(
+          [],
+          trackingHistoryService({
+            inFlight: yield* Ref.make(0),
+            maxInFlight: yield* Ref.make(0),
+            recorded: yield* Ref.make(0),
+          }),
+        ),
+      );
+
+      const collector = yield* Effect.fork(
+        variant.state.pipe(Stream.interruptAfter(Duration.millis(300)), Stream.runCollect),
+      );
+      yield* Effect.sleep(Duration.millis(50));
+      yield* act(stateRef);
+      const collected = yield* Fiber.join(collector);
+      yield* Scope.close(scope, Exit.void);
+      return collected;
+    }).pipe(Effect.runPromise);
+
+  it('emits exactly one VersionChange when the state transitions to a new protocol version', async () => {
+    const collected = await emissionsWithin(walletAtVersion(0n), (stateRef) =>
+      SubscriptionRef.set(stateRef, walletAtVersion(5n)),
+    );
+
+    expect(versionChangesOf(collected)).toEqual([5n]);
+  });
+
+  it('emits an immediate healing VersionChange when the initial state is outside the activation range', async () => {
+    // A snapshot serialized after the version was annotated but before the runtime migrated restores here. Without a
+    // healing emission the wallet would sit on a version it does not own and never hand over.
+    const collected = await emissionsWithin(walletAtVersion(9n));
+
+    expect(versionChangesOf(collected)).toEqual([9n]);
+  });
+
+  it('emits no VersionChange when the initial state is inside the activation range', async () => {
+    const collected = await emissionsWithin(walletAtVersion(3n));
+
+    expect(versionChangesOf(collected)).toEqual([]);
+    // The stream still reports the state itself, so an empty result would be a false pass.
+    expect(Chunk.toArray(collected).filter(StateChange.isState).length).toBeGreaterThan(0);
   });
 });

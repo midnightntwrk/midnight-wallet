@@ -87,14 +87,7 @@ describe('Dust tests', () => {
     ];
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const txRecipe = await funded.wallet.transferTransaction(
-      outputsToCreate,
-      {
-        shieldedSecretKeys: funded.shieldedSecretKeys,
-        dustSecretKey: funded.dustSecretKey,
-      },
-      { ttl },
-    );
+    const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, { ttl });
     const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
     const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
     const txId = await funded.wallet.submitTransaction(finalizedTx);
@@ -220,10 +213,6 @@ describe('Dust tests', () => {
 
       const balancedTransactionRecipe = await receiver.wallet.balanceUnprovenTransaction(
         dustDeregistrationRecipe.transaction,
-        {
-          shieldedSecretKeys: receiver.shieldedSecretKeys,
-          dustSecretKey: receiver.dustSecretKey,
-        },
         { ttl: new Date(Date.now() + 30 * 60 * 1000) },
       );
 
@@ -322,14 +311,7 @@ describe('Dust tests', () => {
         },
       ];
       const ttl = new Date(Date.now() + 30 * 60 * 1000);
-      const txRecipe = await receiver.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: receiver.shieldedSecretKeys,
-          dustSecretKey: receiver.dustSecretKey,
-        },
-        { ttl },
-      );
+      const txRecipe = await receiver.wallet.transferTransaction(outputsToCreate, { ttl });
       const finalizedTx = await receiver.wallet.finalizeRecipe(txRecipe);
       const txId = await receiver.wallet.submitTransaction(finalizedTx);
       expect(txId).toBeDefined();
@@ -404,14 +386,7 @@ describe('Dust tests', () => {
         },
       ];
       const ttl = new Date(Date.now() + 30 * 60 * 1000);
-      const txRecipe = await receiver.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: receiver.shieldedSecretKeys,
-          dustSecretKey: receiver.dustSecretKey,
-        },
-        { ttl },
-      );
+      const txRecipe = await receiver.wallet.transferTransaction(outputsToCreate, { ttl });
       const signedTxRecipe = await receiver.wallet.signRecipe(txRecipe, receiver.unshieldedKeystore.signDataAsync);
       const finalizedTx = await receiver.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await receiver.wallet.submitTransaction(finalizedTx);

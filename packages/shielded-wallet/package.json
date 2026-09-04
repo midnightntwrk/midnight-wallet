@@ -27,10 +27,15 @@
     "./v1": {
       "types": "./dist/v1/index.d.ts",
       "import": "./dist/v1/index.js"
+    },
+    "./v2": {
+      "types": "./dist/v2/index.d.ts",
+      "import": "./dist/v2/index.js"
     }
   },
   "dependencies": {
-    "@midnightntwrk/ledger-v9": "1.0.0-rc.3",
+    "@midnight-ntwrk/ledger-v8": "^8.1.0",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.4",
     "@midnightntwrk/wallet-sdk-abstractions": "3.0.0-beta.0",
     "@midnightntwrk/wallet-sdk-address-format": "4.0.0-beta.2",
     "@midnightntwrk/wallet-sdk-capabilities": "4.0.0-beta.2",
@@ -39,6 +44,9 @@
     "@midnightntwrk/wallet-sdk-utilities": "1.2.1",
     "effect": "^3.19.19",
     "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@midnightntwrk/wallet-sdk-state-translation": "workspace:^"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",

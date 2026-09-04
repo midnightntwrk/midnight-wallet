@@ -70,6 +70,18 @@
       "cache": false,
       "env": ["NETWORK", "APP_INFRA_SECRET"]
     },
+    "test-fork": {
+      "cache": false,
+      "env": [
+        "NETWORK",
+        "APP_INFRA_SECRET",
+        "FORK_FROM_NODE_TAG",
+        "NODE_TAG",
+        "TOOLKIT_TAG",
+        "INDEXER_TAG",
+        "PROOF_SERVER_TAG"
+      ]
+    },
     "test-remote": {
       "cache": false,
       "env": [
@@ -83,6 +95,32 @@
         "SYNC_CACHE",
         "APP_INFRA_SECRET"
       ]
+    },
+    "build:wasm": {
+      // The one Rust task in the repo: compiles packages/state-translation/wasm and emits the WASM package the loader
+      // imports. Cached on the Cargo inputs, so a repeat build is instant rather than another six minutes of LTO.
+      "inputs": [
+        "wasm/src/**",
+        "wasm/Cargo.toml",
+        "wasm/patches/**",
+        "scripts/build-wasm.sh",
+        "$TURBO_ROOT$/Cargo.toml",
+        "$TURBO_ROOT$/Cargo.lock",
+        "$TURBO_ROOT$/rust-toolchain.toml"
+      ],
+      // The hand-written .d.ts in there is committed, not generated, so turbo must not own it.
+      "outputs": ["wasm/pkg/**", "!wasm/pkg/*.d.ts"],
+      "outputLogs": "new-only"
+    },
+    "verify:wasm": {
+      // The other half of build:wasm, and declared beside it for that reason: compiling proves very little, since an
+      // artifact built against an unpatched midnight-storage links fine and then traps on the first real state. This
+      // translates one. It reaches the artifact through the package's own dist, so it needs both edges — everything
+      // else it depends on arrives through those two hashes.
+      "inputs": ["scripts/verify-wasm.mjs"],
+      "outputs": [],
+      "outputLogs": "new-only",
+      "dependsOn": ["build:wasm", "dist"]
     },
     "dist": {
       "inputs": [

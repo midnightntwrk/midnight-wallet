@@ -10,12 +10,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  NetworkId,
+  InMemoryTransactionHistoryStorage,
+  ProtocolVersion,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { type SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { Either } from 'effect';
 import * as crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -25,6 +32,17 @@ import {
   isPendingWalletEntry,
   mergeWalletEntries,
 } from '../src/index.js';
+import { txHistoryHash } from '../src/transaction.js';
+import { createPreForkMockProvingService } from './utils/index.js';
+
+/**
+ * `vi.mockObject` does not carry accessors across, and a wallet's `state` is one. The facade watches all three wallets'
+ * states to know which protocol version the chain has reached, so a double without one is not a wallet.
+ */
+const withRealState = <TWallet extends { state: unknown }, TMocked>(mocked: TMocked, wallet: TWallet): TMocked => {
+  Object.defineProperty(mocked, 'state', { get: () => wallet.state, configurable: true });
+  return mocked;
+};
 
 describe('Facade submission', () => {
   it('is gracefully closed when wallet is stopped', async () => {
@@ -46,6 +64,7 @@ describe('Facade submission', () => {
     })();
     const configuration: DefaultConfiguration = {
       networkId: NetworkId.NetworkId.Undeployed,
+      forkVersion: V9_NATIVE_FORK_VERSION,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
@@ -60,30 +79,29 @@ describe('Facade submission', () => {
     const facade: WalletFacade = await WalletFacade.init({
       configuration,
       submissionService: () => fakeSubmission,
-      shielded: (config) => {
-        const mockedShielded = vi.mockObject(ShieldedWallet(config).startWithSeed(seed));
+      shielded: async (config) => {
+        const wallet = await ShieldedWallet(config).startWithSeed(seed);
+        const mockedShielded = withRealState(vi.mockObject(wallet), wallet);
         mockedShielded.start.mockResolvedValue(undefined);
         return mockedShielded;
       },
-      unshielded: (config) => {
-        const mockedUnshielded = vi.mockObject(
-          UnshieldedWallet(config).startWithPublicKey(
-            PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
-          ),
+      unshielded: async (config) => {
+        const wallet = await UnshieldedWallet(config).startWithPublicKey(
+          PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
         );
+        const mockedUnshielded = withRealState(vi.mockObject(wallet), wallet);
         mockedUnshielded.start.mockResolvedValue(undefined);
         return mockedUnshielded;
       },
-      dust: (config) => {
-        const mockedDust = vi.mockObject(
-          DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust),
-        );
+      dust: async (config) => {
+        const wallet = await DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
+        const mockedDust = withRealState(vi.mockObject(wallet), wallet);
         mockedDust.start.mockResolvedValue(undefined);
         return mockedDust;
       },
     });
 
-    await facade.start(ledger.ZswapSecretKeys.fromSeed(seed), ledger.DustSecretKey.fromSeed(seed));
+    await facade.start({ shielded: seed, unshielded: seed, dust: seed });
     await facade.stop();
 
     expect(fakeSubmission.gotClosed).toBe(true);
@@ -93,6 +111,7 @@ describe('Facade submission', () => {
     const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
     const config = {
       networkId: NetworkId.NetworkId.Undeployed,
+      forkVersion: V9_NATIVE_FORK_VERSION,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
@@ -104,11 +123,11 @@ describe('Facade submission', () => {
       txHistoryStorage,
     };
     const seed = crypto.randomBytes(32);
-    const shielded = ShieldedWallet(config).startWithSeed(seed);
-    const unshielded = UnshieldedWallet(config).startWithPublicKey(
+    const shielded = await ShieldedWallet(config).startWithSeed(seed);
+    const unshielded = await UnshieldedWallet(config).startWithPublicKey(
       PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
     );
-    const dust = DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
+    const dust = await DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
     const fakeSubmission = new (class implements SubmissionService<ledger.FinalizedTransaction> {
       submitTransaction = () => Promise.reject(new Error('Submission failed'));
       close = () => Promise.resolve();
@@ -119,6 +138,7 @@ describe('Facade submission', () => {
       shielded: () => shielded,
       unshielded: () => unshielded,
       dust: () => dust,
+      provingService: () => createPreForkMockProvingService(),
       submissionService: () => fakeSubmission,
     });
 
@@ -126,14 +146,18 @@ describe('Facade submission', () => {
     const spiedUnshieldedRevert = vi.spyOn(unshielded, 'revertTransaction');
     const spiedDustRevert = vi.spyOn(dust, 'revertTransaction');
 
-    const transaction = ledger.Transaction.fromParts(
-      config.networkId,
-      undefined,
-      undefined,
-      ledger.Intent.new(new Date(Date.now() + 1000)),
-    )
-      .mockProve()
-      .bind();
+    const transaction = WalletTransaction.adopt(
+      'Finalized',
+      preForkLedger.Transaction.fromParts(
+        config.networkId,
+        undefined,
+        undefined,
+        preForkLedger.Intent.new(new Date(Date.now() + 1000)),
+      )
+        .mockProve()
+        .bind(),
+      ProtocolVersion.MinSupportedVersion,
+    );
 
     const submissionResult = await facade.submitTransaction(transaction).then(
       () => 'succeeded',
@@ -149,7 +173,18 @@ describe('Facade submission', () => {
     // `txHistoryHash`), so the failed submission leaves a single entry transitioned in place — not an orphan pair.
     const entries = await txHistoryStorage.getAll();
     expect(entries).toHaveLength(1);
-    expect(entries[0].hash).toBe(transaction.transactionHash().toString());
+    // Read through the handle, because that is now the only way to reach the transaction it names: the key is the
+    // ledger transaction hash exactly as the submit and revert sides both compute it.
+    expect(entries[0].hash).toBe(
+      txHistoryHash(
+        Either.getOrThrow(
+          WalletTransaction.unwrapWithin<preForkLedger.FinalizedTransaction>(
+            transaction,
+            ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MinSupportedVersion),
+          ),
+        ),
+      ),
+    );
     expect(entries[0].lifecycle.status).toBe('rejected');
   });
 
@@ -157,6 +192,7 @@ describe('Facade submission', () => {
     const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
     const config = {
       networkId: NetworkId.NetworkId.Undeployed,
+      forkVersion: V9_NATIVE_FORK_VERSION,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
@@ -168,11 +204,11 @@ describe('Facade submission', () => {
       txHistoryStorage,
     };
     const seed = crypto.randomBytes(32);
-    const shielded = ShieldedWallet(config).startWithSeed(seed);
-    const unshielded = UnshieldedWallet(config).startWithPublicKey(
+    const shielded = await ShieldedWallet(config).startWithSeed(seed);
+    const unshielded = await UnshieldedWallet(config).startWithPublicKey(
       PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
     );
-    const dust = DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
+    const dust = await DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
     const fakeSubmission = new (class implements SubmissionService<ledger.FinalizedTransaction> {
       submitTransaction = () => Promise.reject(new Error('Submission failed'));
       close = () => Promise.resolve();
@@ -189,14 +225,16 @@ describe('Facade submission', () => {
     // The simulator submits proof-erased transactions, whose `transactionHash()` throws — so the key falls back to the
     // serialized bytes. The runtime tx type is erased exactly as the simulator submission service does (helpers.ts),
     // which the static `FinalizedTransaction` type can't express.
-    const proofErased = ledger.Transaction.fromParts(
+    const proofErased = preForkLedger.Transaction.fromParts(
       config.networkId,
       undefined,
       undefined,
-      ledger.Intent.new(new Date(Date.now() + 10_000)),
+      preForkLedger.Intent.new(new Date(Date.now() + 10_000)),
     ).eraseProofs();
     expect(() => proofErased.transactionHash()).toThrow();
-    const transaction = proofErased as unknown as ledger.FinalizedTransaction;
+    // Sealed at the finalized stage because that is the stage the facade takes: what the handle carries is a
+    // proof-erased transaction, which is exactly the case whose history key falls back to its bytes.
+    const transaction = WalletTransaction.adopt('Finalized', proofErased, ProtocolVersion.MinSupportedVersion);
 
     // Submission fails, so submitTransaction writes the pending entry and then reverts — both keyed off the same
     // serialized-bytes hash, so the result is a single entry transitioned in place rather than an orphan pending +
@@ -222,6 +260,7 @@ describe('Facade transaction history reads return entries regardless of lifecycl
     const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
     const config = {
       networkId: NetworkId.NetworkId.Undeployed,
+      forkVersion: V9_NATIVE_FORK_VERSION,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       provingServerUrl: new URL('http://localhost:6300'),

@@ -37,6 +37,10 @@
       "types": "./dist/capabilities/balancer.d.ts",
       "import": "./dist/capabilities/balancer.js"
     },
+    "./capabilities/codecs": {
+      "types": "./dist/capabilities/codecs.d.ts",
+      "import": "./dist/capabilities/codecs.js"
+    },
     "./capabilities/pendingTransactions": {
       "types": "./dist/capabilities/pendingTransactions.d.ts",
       "import": "./dist/capabilities/pendingTransactions.js"
@@ -61,6 +65,10 @@
       "types": "./dist/dust/v1.d.ts",
       "import": "./dist/dust/v1.js"
     },
+    "./dust/v2": {
+      "types": "./dist/dust/v2.d.ts",
+      "import": "./dist/dust/v2.js"
+    },
     "./facade": {
       "types": "./dist/facade.d.ts",
       "import": "./dist/facade.js"
@@ -68,6 +76,14 @@
     "./hd": {
       "types": "./dist/hd.d.ts",
       "import": "./dist/hd.js"
+    },
+    "./ledger/v8": {
+      "types": "./dist/ledger/v8.d.ts",
+      "import": "./dist/ledger/v8.js"
+    },
+    "./ledger/v9": {
+      "types": "./dist/ledger/v9.d.ts",
+      "import": "./dist/ledger/v9.js"
     },
     "./indexer-client": {
       "types": "./dist/indexer-client/index.d.ts",
@@ -117,6 +133,10 @@
       "types": "./dist/shielded/v1.d.ts",
       "import": "./dist/shielded/v1.js"
     },
+    "./shielded/v2": {
+      "types": "./dist/shielded/v2.d.ts",
+      "import": "./dist/shielded/v2.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
@@ -128,6 +148,10 @@
     "./unshielded/v1": {
       "types": "./dist/unshielded/v1.d.ts",
       "import": "./dist/unshielded/v1.js"
+    },
+    "./unshielded/v2": {
+      "types": "./dist/unshielded/v2.d.ts",
+      "import": "./dist/unshielded/v2.js"
     },
     "./utilities": {
       "types": "./dist/utilities/index.d.ts",
@@ -147,6 +171,8 @@
     }
   },
   "dependencies": {
+    "@midnight-ntwrk/ledger-v8": "^8.1.0",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.4",
     "@midnightntwrk/wallet-sdk-abstractions": "3.0.0-beta.0",
     "@midnightntwrk/wallet-sdk-address-format": "4.0.0-beta.2",
     "@midnightntwrk/wallet-sdk-capabilities": "4.0.0-beta.2",
@@ -163,6 +189,9 @@
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit --passWithNoTests",
+    "test:integration": "vitest run --project integration --passWithNoTests",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",

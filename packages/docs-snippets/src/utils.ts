@@ -10,20 +10,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
+import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
+import type * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type DefaultConfiguration,
   DustWallet,
   InMemoryTransactionHistoryStorage,
   WalletEntrySchema,
   WalletFacade,
-  HDWallet,
-  Roles,
   ShieldedWallet,
   createKeystore,
   PublicKey as UnshieldedPublicKey,
   UnshieldedWallet,
   type UnshieldedKeystore,
+  WalletSeeds,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
@@ -36,6 +36,9 @@ const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
 const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
+  // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
+  // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
+  forkVersion: V9_NATIVE_FORK_VERSION,
   costParameters: {
     feeBlocksMargin: 5,
   },
@@ -52,46 +55,26 @@ export const initWalletWithSeed = async (
   seed: Buffer,
 ): Promise<{
   wallet: WalletFacade;
-  shieldedSecretKeys: ledger.ZswapSecretKeys;
-  dustSecretKey: ledger.DustSecretKey;
+  seeds: WalletSeeds;
   unshieldedKeystore: UnshieldedKeystore;
 }> => {
-  const hdWallet = HDWallet.fromSeed(seed);
+  // One master seed, three wallet seeds. A seed is the only key material that crosses a protocol boundary, so this is
+  // what lets one wallet follow the chain through a fork.
+  const seeds = WalletSeeds.fromMasterSeed(seed);
 
-  if (hdWallet.type !== 'seedOk') {
-    throw new Error('Failed to initialize HDWallet');
-  }
-
-  const derivationResult = hdWallet.hdWallet
-    .selectAccount(0)
-    .selectRoles([Roles.Zswap, Roles.NightExternal, Roles.Dust])
-    .deriveKeysAt(0);
-
-  if (derivationResult.type !== 'keysDerived') {
-    throw new Error('Failed to derive keys');
-  }
-
-  hdWallet.hdWallet.clear();
-
-  const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(derivationResult.keys[Roles.Zswap]);
-  const dustSecretKey = ledger.DustSecretKey.fromSeed(derivationResult.keys[Roles.Dust]);
-  const unshieldedKeystore = createKeystore(
-    { kind: 'schnorr', secret: derivationResult.keys[Roles.NightExternal] },
-    configuration.networkId,
-  );
+  const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, configuration.networkId);
 
   const wallet: WalletFacade = await WalletFacade.init({
     configuration,
-    shielded: (config) => ShieldedWallet(config).startWithSecretKeys(shieldedSecretKeys),
+    shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
     unshielded: (config) =>
       UnshieldedWallet(config).startWithPublicKey(UnshieldedPublicKey.fromKeyStore(unshieldedKeystore)),
-    dust: (config) =>
-      DustWallet(config).startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust),
+    dust: (config) => DustWallet(config).startWithSeed(seeds.dust),
   });
 
-  await wallet.start(shieldedSecretKeys, dustSecretKey);
+  await wallet.start(seeds);
 
-  return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
+  return { wallet, seeds, unshieldedKeystore };
 };
 
 export const aFakeProvingProvider: ledger.ProvingProvider = {

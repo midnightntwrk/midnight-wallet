@@ -17,6 +17,8 @@ import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
+import { carried } from './helpers/transactions.js';
+import { Buffer } from 'buffer';
 
 /** Tests performing a token transfer */
 
@@ -121,22 +123,15 @@ describe('Token transfer', () => {
         },
       ];
 
-      const txRecipe = await sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 30 * 60 * 1000),
-        },
-      );
+      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      });
       logger.info(txRecipe);
       const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
-      logger.info(finalizedTx.toString());
+      logger.info(Buffer.from(finalizedTx.serialize()).toString('hex'));
       logger.info('Submitting tx:');
       const txId = await sender.wallet.submitTransaction(finalizedTx);
-      const txHash = finalizedTx.transactionHash();
+      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
       logger.info('Transaction hash: ' + txHash);
@@ -213,16 +208,9 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txRecipe = await sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 30 * 60 * 1000),
-        },
-      );
+      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      });
       const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
       const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);

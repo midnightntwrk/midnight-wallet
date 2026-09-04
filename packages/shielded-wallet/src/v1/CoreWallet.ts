@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
 import { InvalidCoinHashesError, type WalletError } from './WalletError.js';
@@ -143,6 +143,66 @@ export const CoreWallet = {
 
   initEmpty(keys: ledger.ZswapSecretKeys, networkId: string): CoreWallet {
     return this.empty(PublicKeys.fromSecretKeys(keys), networkId);
+  },
+
+  /**
+   * Records an observed protocol version on the wallet, never going backwards.
+   *
+   * @remarks
+   *   The version is a signal, not a measurement: writing one outside the running variant's activation range is what
+   *   makes it hand over to the next variant. A source that briefly reports an older version — a reconnect replaying
+   *   from an earlier cursor, say — must therefore not be able to drag the wallet back below a boundary it has already
+   *   crossed, which would ask the runtime to migrate backwards. Taking the maximum makes that unrepresentable.
+   * @param wallet The wallet to annotate.
+   * @param version The protocol version just observed.
+   * @returns `wallet` unchanged if it already records `version` or a later one, otherwise a copy recording `version`.
+   */
+  withProtocolVersion(wallet: CoreWallet, version: ProtocolVersion.ProtocolVersion): CoreWallet {
+    return version > wallet.protocolVersion ? { ...wallet, protocolVersion: version } : wallet;
+  },
+
+  /**
+   * Projects a wallet inherited from the previous ledger version onto a fresh state of this one.
+   *
+   * @remarks
+   *   No coin data crosses the boundary here, and that is a decision rather than an oversight. This is the oldest variant
+   *   the wallet registers and no ledger version below it exists, so nothing ever hands a state to this projection: it
+   *   is shape parity with the twin at `src/v2`, which is the variant a real crossing lands in. That twin adopts the
+   *   previous wallet's local state whole, by deserializing its bytes — the two ledger majors share the
+   *   `zswap-local-state` codec — because the chain's state translation continues the commitment tree across the fork
+   *   and the indexer re-emits none of the pre-fork timeline (see `src/v2/Migration.ts`). Mirroring that into a seam no
+   *   chain can reach would buy nothing, so this side stays as it is.
+   *
+   *   What crosses is therefore identity and position: the public keys — which decide whose coins the far side can
+   *   decrypt — the network, the protocol version that triggered the hand-over, kept so the new variant starts inside
+   *   its own activation range rather than immediately signalling backwards, and the cursor the previous variant
+   *   stopped at.
+   *
+   *   **Sync progress is parked at the fork, not rewound**: the previous wallet's cursor crosses unchanged. A fork does
+   *   not restart the timeline — event ids run onwards from whatever the indexer had reached when it happened, never
+   *   from zero — so resuming from the inherited cursor is what puts this wallet in front of what comes next. Rewinding
+   *   to zero would park it on a stretch of history that this ledger version's events do not occupy. What does not
+   *   cross is `isConnected`: no sync is running behind this state yet.
+   *
+   *   Coin hashes start empty for the same reason the tree does: they are commitments and nullifiers computed under the
+   *   previous ledger's codec, and this version recomputes its own from the keys and whatever state it ends up with.
+   * @param previous The plain data read off the previous ledger version's wallet.
+   * @returns A wallet of this ledger version holding no coins, positioned at the fork.
+   */
+  fromPreviousVersion(previous: {
+    readonly publicKeys: PublicKeys;
+    readonly networkId: string;
+    readonly protocolVersion: bigint;
+    readonly progress: SyncProgress.SyncProgressData;
+  }): CoreWallet {
+    return {
+      state: new ledger.ZswapLocalState(),
+      publicKeys: previous.publicKeys,
+      networkId: previous.networkId,
+      coinHashes: CoinHashesMap.empty,
+      progress: SyncProgress.createSyncProgress({ ...previous.progress, isConnected: false }),
+      protocolVersion: ProtocolVersion.ProtocolVersion(previous.protocolVersion),
+    };
   },
 
   applyCollapsedUpdate(wallet: CoreWallet, collapsed: ledger.MerkleTreeCollapsedUpdate): CoreWallet {

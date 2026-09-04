@@ -11,8 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 export * from './ShieldedWallet.js';
+export * from './ForkingShieldedWallet.js';
+export * as Restore from './Restore.js';
 export {
   type ShieldedTransactionHistoryEntry,
   ShieldedSectionSchema,
   mergeShieldedSections,
-} from './v1/TransactionHistory.js';
+} from './v2/TransactionHistory.js';

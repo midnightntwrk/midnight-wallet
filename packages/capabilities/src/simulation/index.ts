@@ -11,55 +11,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Re-export everything from SimulatorState
-export {
-  // State accessor functions (composable with simulator.query())
-  getLastBlock,
-  getCurrentBlockNumber,
-  getCurrentTime,
-  getBlockByNumber,
-  getLastBlockResults,
-  getLastBlockEvents,
-  getBlockEventsFrom,
-  getBlockEventsSince,
-  hasPendingTransactions,
-  // State transformation functions
-  resolveFullness,
-  allMempoolTransactions,
-  blankState,
-  addToMempool,
-  removeFromMempool,
-  advanceTime,
-  updateLedger,
-  appendBlock,
-  applyTransaction,
-  // Block production functions
-  processTransaction,
-  processTransactions,
-  createBlock,
-  createEmptyBlock,
-  type TransactionProcessingResult,
-  // Helper functions
-  createStrictness,
-  blockHash,
-  assignStrictness,
-  assignStrictnessToAll,
-  // Strictness constants
-  defaultStrictness,
-  genesisStrictness,
-  // Types
-  type SimulatorState,
-  type Block,
-  type BlockTransaction,
-  type BlockInfo,
-  type PendingTransaction,
-  type ReadyTransaction,
-  type BlockProductionRequest,
-  type BlockProducer,
-  type FullnessSpec,
-  type GenesisMint,
-  type StrictnessConfig,
-} from './SimulatorState.js';
+/**
+ * Simulated ledger environments for wallet testing.
+ *
+ * There is one simulator per ledger version, in `v8/` and `v9/`. They are twins: the same simulator over a different
+ * ledger, so a chain on either side of the hard fork is driven with the same API. Their shared, ledger-agnostic
+ * internals live in `core/`.
+ *
+ * - **{@link V9}** — the post-fork line, and the current one. Also re-exported unqualified below, so `Simulator` and
+ *   friends mean the v9 simulator; this is what existing code gets.
+ * - **{@link V8}** — the pre-fork line. Used to drive a chain before the fork, standalone or via {@link ForkSimulator}.
+ * - **{@link ForkSimulator}** — the two composed into a single chain that crosses the fork.
+ *
+ * Both namespaces are needed at once only when working across the boundary; the qualified form is what keeps the two
+ * apart, since the twins export identical names over structurally distinct ledger types.
+ */
 
-// Re-export from Simulator
-export { Simulator, immediateBlockProducer, type SimulatorConfig } from './Simulator.js';
+// The post-fork (ledger-v9) simulator, unqualified: the current line, and the default for code that does not care
+// about the fork.
+export * from './v9/index.js';
+
+/** The post-fork (ledger-v9) simulator. Same as the unqualified exports above, named for symmetry with {@link V8}. */
+export * as V9 from './v9/index.js';
+
+/** The pre-fork (ledger-v8) simulator. */
+export * as V8 from './v8/index.js';
+
+// A chain that crosses the fork, built from both twins.
+export { ForkSimulator, type ForkSimulatorConfig } from './ForkSimulator.js';
+
+// Carrying ledger state across the fork.
+export {
+  LedgerTranslationError,
+  translatorFromAsync,
+  unavailableTranslator,
+  type LedgerStateTranslator,
+} from './LedgerTranslation.js';

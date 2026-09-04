@@ -10,11 +10,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ShieldedWallet, type ShieldedWalletClass, type ShieldedWalletState } from '@midnightntwrk/wallet-sdk-shielded';
+import {
+  ShieldedWallet,
+  type ShieldedWalletClass,
+  type ShieldedWalletState,
+  type DefaultShieldedConfiguration,
+  V9_NATIVE_FORK_VERSION,
+} from '@midnightntwrk/wallet-sdk-shielded';
 import { UnshieldedWallet, createKeystore, PublicKey } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-shielded/v1';
-import { type DefaultV1Configuration as UnshieldedV1Configuration } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+
+import { type DefaultUnshieldedConfiguration } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
@@ -43,8 +49,8 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
 
 describe('Wallet serialization and restoration', () => {
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let shieldedConfiguration: DefaultV1Configuration;
-  let unshieldedConfiguration: UnshieldedV1Configuration;
+  let shieldedConfiguration: DefaultShieldedConfiguration;
+  let unshieldedConfiguration: DefaultUnshieldedConfiguration;
   let indexerPort: number;
 
   beforeAll(async () => {
@@ -52,6 +58,7 @@ describe('Wallet serialization and restoration', () => {
     indexerPort = startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088);
 
     shieldedConfiguration = {
+      forkVersion: V9_NATIVE_FORK_VERSION,
       indexerClientConnection: {
         indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
       },
@@ -60,6 +67,9 @@ describe('Wallet serialization and restoration', () => {
     };
 
     unshieldedConfiguration = {
+      // The same boundary the shielded configuration names, for the same reason: this stack runs the
+      // ledger-v9-native node line, so the unshielded wallet reaches its post-fork variant too.
+      forkVersion: V9_NATIVE_FORK_VERSION,
       indexerClientConnection: {
         indexerWsUrl: `ws://localhost:${indexerPort}/api/v4/graphql/ws`,
         indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
@@ -80,7 +90,7 @@ describe('Wallet serialization and restoration', () => {
 
   it('allows to restore an non-empty wallet from the serialized state', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-    const wallet = Wallet.startWithSeed(seed);
+    const wallet = await Wallet.startWithSeed(seed);
     await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
     try {
       const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
@@ -105,7 +115,7 @@ describe('Wallet serialization and restoration', () => {
 
   it('allows to restore an empty wallet from the serialized state', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000009');
-    const wallet = Wallet.startWithSeed(seed);
+    const wallet = await Wallet.startWithSeed(seed);
     await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
     try {
       const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
@@ -130,7 +140,7 @@ describe('Wallet serialization and restoration', () => {
 
   it('should restore shielded wallet from serialized transaction history', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-    const wallet = ShieldedWallet(shieldedConfiguration).startWithSeed(seed);
+    const wallet = await ShieldedWallet(shieldedConfiguration).startWithSeed(seed);
     await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
     try {
       await wallet.waitForSyncedState();
@@ -169,7 +179,7 @@ describe('Wallet serialization and restoration', () => {
     const unshieldedSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
     const keystore = createKeystore({ kind: 'schnorr', secret: unshieldedSeed }, unshieldedConfiguration.networkId);
 
-    const initialWallet = UnshieldedWallet(unshieldedConfiguration).startWithPublicKey(
+    const initialWallet = await UnshieldedWallet(unshieldedConfiguration).startWithPublicKey(
       PublicKey.fromKeyStore(keystore),
     );
     await initialWallet.start();

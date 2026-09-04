@@ -12,12 +12,18 @@
 // limitations under the License.
 import { Either, type Option, pipe, Array as Arr, Iterable as IterableOps } from 'effect';
 import { Imbalances } from '@midnightntwrk/wallet-sdk-capabilities';
-import type * as ledger from '@midnightntwrk/ledger-v9';
-import { addressFromKey, SignatureEnabled } from '@midnightntwrk/ledger-v9';
-import { assertSignatureMatchesKey } from '../SchemeConsistency.js';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import { addressFromKey } from '@midnight-ntwrk/ledger-v8';
 import { TransactingError, type WalletError } from './WalletError.js';
 
-/** Unbound transaction type. This is a transaction that has no signatures and is not bound yet. */
+/**
+ * Unbound transaction type. This is a transaction that has no signatures and is not bound yet.
+ *
+ * @remarks
+ *   Declared here rather than re-exported from the proving capability, unlike its post-fork twin: this one names the
+ *   pre-fork ledger's classes, so it is a different type and not a duplicate of one. Collapsing the two would make the
+ *   two ledgers interchangeable in the type system while they stay incompatible at runtime.
+ */
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
 /** Utility type to extract the Intent type from a Transaction type. Maps Transaction<S, P, B> to Intent<S, P, B>. */
@@ -28,27 +34,6 @@ export type SignableSegment = { readonly segment: number; readonly data: Uint8Ar
 
 /** A signature produced for a specific transaction segment, ready to be attached. */
 export type SegmentSignature = { readonly segment: number; readonly signature: ledger.Signature };
-
-/**
- * Asserts that `signature` shares the scheme of every input owner authorized in `segment`. Pure and synchronous: a
- * mismatch short-circuits with a typed `SchemeMismatchError` so a wrong-scheme signature is never attached.
- */
-const assertSignatureMatchesSegmentOwners = (
-  transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
-  segment: number,
-  signature: ledger.Signature,
-): Either.Either<ledger.Signature, WalletError> => {
-  const intent = transaction.intents?.get(segment);
-  const owners = [
-    ...(intent?.guaranteedUnshieldedOffer?.inputs ?? []),
-    ...(intent?.fallibleUnshieldedOffer?.inputs ?? []),
-  ].map((input) => input.owner);
-  const seed: Either.Either<ledger.Signature, WalletError> = Either.right(signature);
-  return pipe(
-    owners,
-    Arr.reduce(seed, (acc, owner) => Either.flatMap(acc, () => assertSignatureMatchesKey(owner, signature))),
-  );
-};
 
 export type TransactionOps = {
   getSignatureData: (
@@ -180,22 +165,15 @@ export const TransactionOps: TransactionOps = {
     transaction: TTransaction,
     signatures: readonly SegmentSignature[],
   ): Either.Either<TTransaction, WalletError> {
-    return Either.gen(function* () {
-      // Validate every signature's scheme against its segment's owners BEFORE attaching any of them, so a
-      // mismatch leaves the transaction untouched (no partially-signed transaction can escape toward the network).
-      yield* Either.all(
-        signatures.map(({ segment, signature }) =>
-          assertSignatureMatchesSegmentOwners(transaction, segment, signature),
-        ),
-      );
-      const seed: Either.Either<TTransaction, WalletError> = Either.right(transaction);
-      return yield* pipe(
-        signatures,
-        Arr.reduce(seed, (acc, { segment, signature }) =>
-          Either.flatMap(acc, (tx) => TransactionOps.addSignature(tx, signature, segment)),
-        ),
-      );
-    });
+    // No scheme validation here, unlike the ledger-v9 variant: this ledger version has a single signature scheme, so
+    // there is no scheme for a signature to disagree with. `SchemeConsistency` is deliberately v9-only.
+    const seed: Either.Either<TTransaction, WalletError> = Either.right(transaction);
+    return pipe(
+      signatures,
+      Arr.reduce(seed, (acc, { segment, signature }) =>
+        Either.flatMap(acc, (tx) => TransactionOps.addSignature(tx, signature, segment)),
+      ),
+    );
   },
   getImbalances(
     transaction: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
@@ -218,7 +196,7 @@ export const TransactionOps: TransactionOps = {
   ): Either.Either<ledger.UnshieldedOffer<ledger.SignatureEnabled>, WalletError> {
     return pipe(
       offer.inputs,
-      Arr.map((_, i) => offer.signatures.at(i) ?? new SignatureEnabled(signature)),
+      Arr.map((_, i) => offer.signatures.at(i) ?? signature),
       (signatures) =>
         Either.try({
           try: () => offer.addSignatures(signatures),
@@ -239,9 +217,9 @@ export const TransactionOps: TransactionOps = {
   ): ledger.Utxo[] {
     const segments = TransactionOps.getSegments(transaction);
     const ownerAddress = addressFromKey(signatureVerifyingKey);
-    const isOwn = (input: ledger.UtxoSpend): boolean =>
-      input.owner.tag === signatureVerifyingKey.tag && input.owner.value === signatureVerifyingKey.value;
-    // Intent inputs are UtxoSpends owned by a verifying key; a Utxo is owned by the derived address
+    // Intent inputs are UtxoSpends owned by a verifying key; a Utxo is owned by the derived address. Under ledger-v8
+    // both are hex strings, so returning the spend unchanged would typecheck while handing back a `Utxo` whose
+    // `owner` is a key — unlike every other Utxo the wallet holds.
     const toUtxo = (input: ledger.UtxoSpend): ledger.Utxo => ({ ...input, owner: ownerAddress });
 
     return pipe(
@@ -256,11 +234,11 @@ export const TransactionOps: TransactionOps = {
         const { guaranteedUnshieldedOffer, fallibleUnshieldedOffer } = intent;
 
         const ownedInputsfromGuaranteedSection = guaranteedUnshieldedOffer?.inputs
-          ? guaranteedUnshieldedOffer.inputs.filter(isOwn)
+          ? guaranteedUnshieldedOffer.inputs.filter((input) => input.owner === signatureVerifyingKey)
           : [];
 
         const ownedInputsfromFallibleSection = fallibleUnshieldedOffer
-          ? fallibleUnshieldedOffer.inputs.filter(isOwn)
+          ? fallibleUnshieldedOffer.inputs.filter((input) => input.owner === signatureVerifyingKey)
           : [];
 
         return [...ownedInputsfromGuaranteedSection, ...ownedInputsfromFallibleSection].map(toUtxo);

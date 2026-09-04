@@ -17,11 +17,18 @@ export * as Transacting from './Transacting.js';
 export * as Signing from './Signing.js';
 export * as TransactionHistory from './TransactionHistory.js';
 export * as Serialization from './Serialization.js';
+export * as Migration from './Migration.js';
 export * as CoinsAndBalances from './CoinsAndBalances.js';
 export * as Keys from './Keys.js';
 export * from './RunningV1Variant.js';
-export * as Simulator from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+// The ledger-v8 simulator twin only. The simulation entry point also exports the v9 twin unqualified, which this
+// variant must never touch.
+export { V8 as Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 export * as WalletError from './WalletError.js';
 export * from './CoreWallet.js';
+// Unlike the ledger-v9 variant, whose keystore is the package-root one, this variant carries its own: v8 keys are bare
+// hex strings where v9's are tagged records, so the two cannot share a module. Exported here because the `./v1` subpath
+// is the only way to reach it.
+export * from './KeyStore.js';
 export * from './TransactionOps.js';
 export * as UnshieldedState from './UnshieldedState.js';

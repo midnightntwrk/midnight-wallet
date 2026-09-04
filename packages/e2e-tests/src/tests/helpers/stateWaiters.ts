@@ -23,6 +23,8 @@ import {
   isFinalizedWalletEntry,
 } from '@midnightntwrk/wallet-sdk-facade';
 import { logger } from '../logger.js';
+import { carried } from './transactions.js';
+import { type FinalizedTx } from '@midnightntwrk/wallet-sdk';
 
 export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
   rx.firstValueFrom(
@@ -107,11 +109,13 @@ export const waitForUnshieldedCoinUpdate = (wallet: WalletFacade, initialNumAvai
     ),
   );
 
-export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalizedTx: ledger.FinalizedTransaction) =>
+export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalizedTx: FinalizedTx) =>
   rx.firstValueFrom(
     wallet.state().pipe(
       rx.mergeMap(async (state) => {
-        const txInHistory = await wallet.queryTxHistoryByHash(finalizedTx.transactionHash());
+        const txInHistory = await wallet.queryTxHistoryByHash(
+          carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash(),
+        );
 
         return {
           state,
@@ -126,13 +130,15 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
 /** Waits for a dust deregistration transaction to settle and the consolidated Night output to re-sync. */
 export const waitForStateAfterDustDeregistration = (
   wallet: WalletFacade,
-  finalizedTx: ledger.FinalizedTransaction,
+  finalizedTx: FinalizedTx,
   unshieldedTokenRaw: ledger.RawTokenType,
 ) =>
   rx.firstValueFrom(
     wallet.state().pipe(
       rx.mergeMap(async (state) => {
-        const txInHistory = await wallet.queryTxHistoryByHash(finalizedTx.transactionHash());
+        const txInHistory = await wallet.queryTxHistoryByHash(
+          carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash(),
+        );
 
         return {
           state,
