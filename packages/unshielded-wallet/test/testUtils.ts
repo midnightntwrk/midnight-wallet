@@ -22,13 +22,13 @@ import {
 import { Schema } from 'effect';
 import { UnshieldedSectionSchema } from '../src/v2/TransactionHistory.js';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type DefaultUnshieldedConfiguration } from '../src/UnshieldedWallet.js';
+import { type DefaultUnshieldedConfiguration } from '../src/UnshieldedWalletAPI.js';
 
 const UnshieldedEntrySchema = TransactionHistoryStorage.extendEntrySchema({
   unshielded: Schema.optional(UnshieldedSectionSchema),
 });
-import { type UnshieldedWalletState } from '../src/UnshieldedWallet.js';
-import { type UnshieldedWallet } from '../src/ForkingUnshieldedWallet.js';
+import { type UnshieldedWalletState } from '../src/UnshieldedWalletAPI.js';
+import { type UnshieldedWallet } from '../src/UnshieldedWallet.js';
 
 /** TODO: place in separate package with more additional mock functions */
 export const generateMockTransaction = (

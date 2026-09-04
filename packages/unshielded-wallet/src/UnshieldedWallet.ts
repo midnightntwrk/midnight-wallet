@@ -10,342 +10,472 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+/**
+ * An unshielded wallet that registers a variant either side of a protocol boundary and follows the chain across it.
+ *
+ * @remarks
+ *   One wallet, two ledger versions. Before the boundary the pre-fork variant reads the chain with the ledger version
+ *   that produced it; from the boundary the post-fork variant does, having been handed everything the pre-fork one held
+ *   — which for unshielded is everything, because its UTXOs are public ledger data the wallet keeps as plain records.
+ *   Nothing is re-earned from a replay, so the wallet never passes through a state in which it has forgotten what it
+ *   owns; `test/forkSimulation.test.ts` proves that, and proves the boundary transaction is applied exactly once, by
+ *   the new variant. Which variant is running is the runtime's business, not the application's: the wallet's public API
+ *   speaks the post-fork ledger version throughout.
+ *
+ *   This wallet retains nothing, and that is the honest difference from the shielded and dust wallets. Unshielded
+ *   synchronization is watch-only — the address is public and signing is supplied per call by the caller — so
+ *   `startSyncInBackground` takes no argument on either variant and there is no key material for a migration to strand.
+ *   The one place the two ledger versions genuinely disagree is the _shape_ of a verifying key, and that is resolved
+ *   once, at start, by {@link asPreForkPublicKey}.
+ *
+ *   `UnshieldedWallet(configuration)` at the bottom is how this package ships it. `CustomForkingUnshieldedWallet` is the
+ *   same wallet over builders the caller chooses, and `SingleVariantUnshieldedWallet.ts` is the composition that gives
+ *   up the crossing to run one variant only.
+ */
+import type * as v8 from '@midnight-ntwrk/ledger-v8';
+import type * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
   type NetworkId,
-  type ProtocolState,
   ProtocolVersion,
   type ProtocolVersionMismatchError,
   type UnboundTx,
   type UnprovenTx,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import {
-  type BaseV2Configuration,
-  type DefaultV2Configuration,
-  V2Tag,
-  type V2Variant,
-  CoreWallet,
-  type UnboundTransaction,
-} from './v2/index.js';
-import { type CoreWallet as PreForkCoreWallet } from './v1/CoreWallet.js';
-import type * as ledger from '@midnightntwrk/ledger-v9';
-import { Effect, Either, Ref, type Scope } from 'effect';
-import * as rx from 'rxjs';
-import { type SerializationCapability } from './v2/Serialization.js';
-import { type UnshieldedHistoryStorage } from './v2/TransactionHistory.js';
-import { type IndexerClientConnection } from './v2/Sync.js';
-import { type CoinsAndBalancesCapability } from './v2/CoinsAndBalances.js';
-import { type KeysCapability } from './v2/Keys.js';
-import { type TokenTransfer } from './v2/Transacting.js';
-import { type WalletSyncUpdate } from './v2/SyncSchema.js';
-import { type RunningV2Variant } from './v2/RunningV2Variant.js';
-import { type SignSegment } from './v2/Signing.js';
-import { type UtxoWithMeta } from './v2/UnshieldedState.js';
-import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
-import { type PublicKey } from './KeyStore.js';
-import { type SyncProgress } from './v2/SyncProgress.js';
 import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
-import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-
-/** The core state of whichever unshielded variant produced an emission. */
-export type UnshieldedCoreState = PreForkCoreWallet | CoreWallet;
+import {
+  type ChainVersionProbe,
+  makeIndexerChainVersionProbe,
+} from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
+import * as PreForkSignatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
+import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
+import { Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
+import { Duration, Effect, Either, Option, Ref, type Scope, pipe } from 'effect';
+import * as rx from 'rxjs';
+import { type PublicKey } from './KeyStore.js';
+import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
+import {
+  type DefaultUnshieldedConfiguration,
+  type UnshieldedWalletAPI,
+  UnshieldedWalletState,
+} from './UnshieldedWalletAPI.js';
+import { CoreWallet as PreForkCoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
+import { type PublicKey as PreForkPublicKey } from './v1/KeyStore.js';
+import { type WalletSyncUpdate as PreForkSyncUpdate } from './v1/SyncSchema.js';
+import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
+import { type SignSegment as PreForkSignSegment } from './v1/Signing.js';
+import { type UnboundTransaction as PreForkUnboundTransaction } from './v1/TransactionOps.js';
+import { type SignSegment } from './v2/Signing.js';
+import { type WalletSyncUpdate as PostForkSyncUpdate } from './v2/SyncSchema.js';
+import { type TokenTransfer } from './v2/Transacting.js';
+import { type UnboundTransaction } from './v2/TransactionOps.js';
+import { type UtxoWithMeta } from './v2/UnshieldedState.js';
+import { type WalletError as PreForkWalletError } from './v1/WalletError.js';
+import { type WalletError } from './v2/WalletError.js';
 
 /**
- * Everything a state emission projects, already bound to the variant that produced it.
+ * What restoring a unshielded wallet from a snapshot can fail with.
  *
  * @remarks
- *   Binding is the point. The capabilities that understand a state and the state itself must be chosen together, in the
- *   branch where the producing variant is known; the two variants' capability types are structurally identical, so a
- *   capability of one would type-check against a state of the other and be wrong at runtime. Once bound there is
- *   nothing left to mis-pair, and everything below is version-agnostic plain data — balances are `bigint` under string
- *   token types, a UTXO is a plain record of value, owner, type, intent hash and output number, and the address is the
- *   SDK's own type. The one genuinely version-bound reading a variant offers, the verifying key, is deliberately not
- *   projected here: it is a bare hex string on one side and a `{tag, value}` record on the other.
+ *   Two failures, and they mean different things. The snapshot may declare a protocol version no registered variant
+ *   reads, which is a fact about this build of the SDK rather than about the snapshot; or the variant that owns it may
+ *   be unable to make sense of the bytes, which is a fact about the snapshot. Either is an ordinary thing to meet when
+ *   restoring something a user supplied, which is why `tryRestore` reports them rather than throwing.
  */
-type UnshieldedProjections<TSerialized> = Readonly<{
-  balances: () => Record<ledger.RawTokenType, bigint>;
-  totalCoins: () => readonly UtxoWithMeta[];
-  availableCoins: () => readonly UtxoWithMeta[];
-  pendingCoins: () => readonly UtxoWithMeta[];
-  address: () => UnshieldedAddress;
-  serialize: () => TSerialized;
+export type UnshieldedRestoreError = UnsupportedSnapshotVersionError | PreForkWalletError | WalletError;
+
+/**
+ * What a transacting call can fail with.
+ *
+ * @remarks
+ *   Two failures beyond the variant's own: a transaction handed in may have been built on the other side of the boundary,
+ *   and a signature the caller's signer returns may name a scheme the pre-fork ledger version does not have.
+ */
+type TransactingError = WalletError | ProtocolVersionMismatchError | PreForkSignatures.UnsupportedSignatureKindError;
+
+/** The pre-fork variant a forking unshielded wallet registers: the one that reads the chain before the boundary. */
+export type PreForkUnshieldedVariant<TSyncUpdate> = V1Variant<string, TSyncUpdate>;
+
+/** The post-fork variant a forking unshielded wallet registers: the one the pre-fork wallet is migrated into. */
+export type PostForkUnshieldedVariant<TSyncUpdate> = V2Variant<string, TSyncUpdate, Migration.PreviousLedgerWallet>;
+
+/** The two variants a forking unshielded wallet runs, in registration order. */
+export type ForkingUnshieldedVariants<TPreForkSyncUpdate, TPostForkSyncUpdate> = [
+  Variant.VersionedVariant<PreForkUnshieldedVariant<TPreForkSyncUpdate>>,
+  Variant.VersionedVariant<PostForkUnshieldedVariant<TPostForkSyncUpdate>>,
+];
+
+/**
+ * A variant builder registered together with the configuration it alone is built from.
+ *
+ * @remarks
+ *   Per-variant rather than shared, because two variants either side of a protocol boundary can mean different and
+ *   mutually unassignable things by the same configuration key — a simulator or a transaction-history service belonging
+ *   to one ledger version or the other. A wallet-wide intersection of those is a configuration no single variant can
+ *   consume.
+ */
+export type SelfConfiguredUnshieldedVariant<
+  TVariant extends Variant.AnyVariant,
+  TConfiguration extends object,
+> = Readonly<{
+  builder: VariantBuilder.VariantBuilder<TVariant, TConfiguration>;
+  configuration: TConfiguration;
 }>;
 
-/**
- * What a variant has to offer for its own state to be projected — exactly that, and nothing more.
- *
- * @remarks
- *   Narrowed to the projected methods rather than naming the three capability types whole, because one of their members
- *   is the version break itself: `KeysCapability.getPublicKey` answers with a bare hex string on the pre-fork ledger
- *   version and a `{tag, value}` record on the post-fork one, so a type demanding it could only ever be satisfied by
- *   one of the two variants. Asking for what is projected keeps a wallet spanning the boundary buildable and keeps the
- *   unprojectable reading out of reach, in one stroke.
- */
-type UnshieldedStateCapabilities<TState, TSerialized> = Readonly<{
-  serialization: Pick<SerializationCapability<TState, TSerialized>, 'serialize'>;
-  coinsAndBalances: Pick<
-    CoinsAndBalancesCapability<TState>,
-    'getAvailableBalances' | 'getTotalCoins' | 'getAvailableCoins' | 'getPendingCoins'
-  >;
-  keys: Pick<KeysCapability<TState>, 'getAddress'>;
-}>;
-
-export class UnshieldedWalletState<TSerialized = string> {
-  /**
-   * Wraps a state emission with the capabilities of the variant that produced it.
-   *
-   * @remarks
-   *   Call this inside a branch that has narrowed on the emission's `variantTag`, so `variant` and `state` are known to
-   *   belong together. It is generic over the state type precisely so that pairing is checked.
-   */
-  static readonly fromVariant = <TState extends UnshieldedCoreState, TSerialized = string>(
-    variant: UnshieldedStateCapabilities<TState, TSerialized>,
-    state: ProtocolState.ProtocolState<TState>,
-  ): UnshieldedWalletState<TSerialized> =>
-    new UnshieldedWalletState<TSerialized>(state.version, state.state, {
-      balances: () => variant.coinsAndBalances.getAvailableBalances(state.state),
-      totalCoins: () => variant.coinsAndBalances.getTotalCoins(state.state),
-      availableCoins: () => variant.coinsAndBalances.getAvailableCoins(state.state),
-      pendingCoins: () => variant.coinsAndBalances.getPendingCoins(state.state),
-      address: () => variant.keys.getAddress(state.state),
-      serialize: () => variant.serialization.serialize(state.state),
-    });
-
-  readonly protocolVersion: ProtocolVersion.ProtocolVersion;
-  readonly state: UnshieldedCoreState;
-  readonly #projections: UnshieldedProjections<TSerialized>;
-
-  get balances(): Record<ledger.RawTokenType, bigint> {
-    return this.#projections.balances();
-  }
-
-  get totalCoins(): readonly UtxoWithMeta[] {
-    return this.#projections.totalCoins();
-  }
-
-  get availableCoins(): readonly UtxoWithMeta[] {
-    return this.#projections.availableCoins();
-  }
-
-  get pendingCoins(): readonly UtxoWithMeta[] {
-    return this.#projections.pendingCoins();
-  }
-
-  get address(): UnshieldedAddress {
-    return this.#projections.address();
-  }
-
-  get progress(): SyncProgress {
-    return this.state.progress;
-  }
-
-  constructor(
-    protocolVersion: ProtocolVersion.ProtocolVersion,
-    state: UnshieldedCoreState,
-    projections: UnshieldedProjections<TSerialized>,
-  ) {
-    this.protocolVersion = protocolVersion;
-    this.state = state;
-    this.#projections = projections;
-  }
-
-  serialize(): TSerialized {
-    return this.#projections.serialize();
-  }
-}
-
-/**
- * The configuration a default {@link UnshieldedWallet} is built from.
- *
- * @remarks
- *   Declared by this package rather than aliased to a variant's configuration. A wallet that spans a protocol boundary is
- *   built from more than one variant, so no single variant's configuration can be the wallet's public contract: the
- *   package states what it asks an application for, and maps it onto whichever variants it registers.
- *
- *   The field types are still the ones the variants declare, because they are version-agnostic — `configuration.test.ts`
- *   asserts that this type remains interchangeable with what _both_ variants are built from, so a divergence surfaces
- *   as a compile error here instead of as a wallet that cannot be built for one of its variants.
- */
-export type DefaultUnshieldedConfiguration = {
+/** What a forking unshielded wallet needs to know about itself, whatever its variants are built from. */
+export type ForkingUnshieldedConfiguration = {
   networkId: NetworkId.NetworkId;
-  indexerClientConnection: IndexerClientConnection;
-  txHistoryStorage: UnshieldedHistoryStorage;
-  /**
-   * The protocol version at which this chain hands over from the pre-fork ledger to the post-fork one.
-   *
-   * @remarks
-   *   Required, and deliberately without a default: the wallet registers one variant either side of it, so a wrong value
-   *   does not degrade — it decides which ledger version reads the chain. Below this version the pre-fork variant is
-   *   active; from it, the post-fork one. The SDK cannot guess it, because it is a property of the chain the
-   *   application points at, not of the SDK.
-   *
-   *   A node reporting a 2.x runtime version reports protocol version `2000000`, which is therefore the value for a
-   *   ledger-v9-native chain — published as `ProtocolVersion.V9NativeForkVersion`. The final mainnet fork constant is
-   *   not yet fixed; it will join that one once it is, and this field keeps working unchanged.
-   */
+  /** The protocol version at which the chain hands over from the pre-fork ledger version to the post-fork one. */
   forkVersion: ProtocolVersion.ProtocolVersion;
   /**
-   * How the wallet asks the chain which protocol version its timeline starts under, before it chooses a variant to
-   * start at.
+   * How the wallet asks the chain which protocol version it is on, before it chooses a variant to start at.
    *
    * @remarks
-   *   Optional, and defaulted rather than absent: left unset, the wallet asks the indexer named by
-   *   {@link indexerClientConnection}, which it is about to synchronize from anyway. Supply one to ask something else —
-   *   a cache, a node RPC, a value the application already holds — and have it answer the same question: the version of
-   *   the chain's **first** block, not its latest. A fresh wallet reads history from the start, so the variant it needs
-   *   is the one that can deserialize the first event it fetches; a probe reporting the tip of a chain that forked over
-   *   its own history starts the wallet on a ledger version that cannot read what it is about to be served.
+   *   Optional, and best-effort where present: a wallet with no probe — or one whose probe does not answer in time —
+   *   starts on the pre-fork variant and learns the version from the first message it sees, which is what a wallet with
+   *   no history has always done. What a probe buys is the two things that guess costs: a hand-over per start on a
+   *   chain entirely past the boundary, and, on a chain that has shown this wallet no messages at all, an epoch that
+   *   never gets corrected.
    *
-   *   The answer is best-effort wherever it comes from: a chain that cannot be reached leaves the wallet starting exactly
-   *   where it started before there was a probe.
+   *   It resolves where a wallet may start, never where it can: an identity only the post-fork ledger version can hold
+   *   starts there whatever the chain reports, because there is no decision left to inform.
+   *
+   *   Nothing about it can make a start fail. A rejection, a timeout, a version no registered variant covers: each leaves
+   *   the wallet exactly where a wallet that never asked would be.
    */
   chainVersionProbe?: ChainVersionProbe;
 };
 
-export type UnshieldedWalletAPI<TSerialized = string> = {
-  readonly state: rx.Observable<UnshieldedWalletState<TSerialized>>;
+/** A running unshielded wallet that spans a protocol boundary. */
+export type ForkingUnshieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate> = UnshieldedWalletAPI<string> &
+  WalletLike.WalletLike<ForkingUnshieldedVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>>;
 
-  start(): Promise<void>;
-
-  balanceFinalizedTransaction(tx: AnyTx): Promise<UnprovenTx | undefined>;
-
-  balanceUnboundTransaction(tx: AnyTx): Promise<UnboundTx | undefined>;
-
-  balanceUnprovenTransaction(tx: AnyTx): Promise<UnprovenTx | undefined>;
-
-  transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<UnprovenTx>;
-
+/** The class a forking unshielded wallet is started from. */
+export interface ForkingUnshieldedWalletClass<
+  TPreForkSyncUpdate,
+  TPostForkSyncUpdate,
+  TConfiguration extends ForkingUnshieldedConfiguration = ForkingUnshieldedConfiguration,
+> extends WalletLike.BaseWalletClass<
+  ForkingUnshieldedVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>,
+  TConfiguration
+> {
   /**
-   * Books a caller-supplied set of Night UTxOs and returns an unproven transaction that moves them back to the same
-   * owner, split between the guaranteed (segment 0) and fallible (segment 1) sections of a single intent. Booking moves
-   * the UTxOs from available to pending so a concurrent build call cannot reuse them. The fallible section is available
-   * for callers that want to attach further actions (e.g. a Dust registration) at segment 1.
+   * Builds a wallet that watches the chain for an identity.
+   *
+   * @remarks
+   *   There is no secret here and none is wanted: an unshielded wallet reads public UTXO data addressed to an address
+   *   anybody could compute, and signing is supplied per call by the caller. What the wallet does have to settle is
+   *   which variant can _hold_ the identity, and that turns on the signature scheme — see {@link asPreForkPublicKey}. An
+   *   ecdsa identity begins on the post-fork variant, because the pre-fork ledger version has no way to express it.
+   *
+   *   A schnorr identity can be held by either, so for it the second question is where the chain is. Asynchronous because
+   *   answering that can mean asking: with a {@link ForkingUnshieldedConfiguration.chainVersionProbe} configured, such a
+   *   wallet starts at the variant that owns the version the chain reports, which on a chain already past the boundary
+   *   is the post-fork one from the first moment. Without one, or when the question goes unanswered, it begins on the
+   *   pre-fork variant and follows the chain across.
+   * @param publicKey The identity to watch, in the post-fork ledger version's shape, which is the one this wallet's
+   *   public API speaks.
+   * @returns A started wallet, on the variant that can hold the identity and — where both can — the one the chain says
+   *   it is on.
    */
-  rotateUtxos(
-    guaranteedUtxos: readonly UtxoWithMeta[],
-    fallibleUtxos: readonly UtxoWithMeta[],
-    nightVerifyingKey: ledger.SignatureVerifyingKey,
-    ttl: Date,
-  ): Promise<UnprovenTx>;
-
-  initSwap(
-    desiredInputs: Record<ledger.RawTokenType, bigint>,
-    desiredOutputs: readonly TokenTransfer[],
-    ttl: Date,
-  ): Promise<UnprovenTx>;
-
-  signUnprovenTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnprovenTx>;
-
-  signUnboundTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnboundTx>;
-
-  serializeState(): Promise<TSerialized>;
-
-  waitForSyncedState(allowedGap?: bigint): Promise<UnshieldedWalletState<TSerialized>>;
-
-  revertTransaction(transaction: AnyTx): Promise<void>;
-
-  getAddress(): Promise<UnshieldedAddress>;
-
-  stop(): Promise<void>;
-};
-
-export type CustomizedUnshieldedWallet<
-  TSyncUpdate = WalletSyncUpdate,
-  TSerialized = string,
-> = UnshieldedWalletAPI<TSerialized> &
-  WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate>>]>;
-
-export interface CustomizedUnshieldedWalletClass<
-  TSyncUpdate = WalletSyncUpdate,
-  TSerialized = string,
-  TConfig extends BaseV2Configuration = DefaultV2Configuration,
-> extends WalletLike.BaseWalletClass<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate>>]> {
-  configuration: TConfig;
-  startWithPublicKey(publicKey: PublicKey): CustomizedUnshieldedWallet<TSyncUpdate, TSerialized>;
-  restore(serializedState: TSerialized): CustomizedUnshieldedWallet<TSyncUpdate, TSerialized>;
+  startWithPublicKey(publicKey: PublicKey): Promise<ForkingUnshieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>>;
+  /**
+   * Restores a wallet from a snapshot, into whichever registered variant wrote it.
+   *
+   * @param serializedState The serialized wallet state.
+   * @returns A wallet started from that state, on the variant that owns its protocol version.
+   * @throws UnsupportedSnapshotVersionError if the snapshot declares a version no registered variant reads.
+   */
+  restore(serializedState: string): ForkingUnshieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>;
+  /**
+   * Restores a wallet from a snapshot, reporting what it could not read rather than throwing.
+   *
+   * @remarks
+   *   Additive alongside {@link restore}, which is unchanged and still the right shape for a snapshot the application has
+   *   just written itself. This is the shape for one it has not: a snapshot a user supplied, or one written by a build
+   *   of the SDK that is no longer the one running, where "I cannot read this" is an ordinary answer rather than a bug.
+   *   The two cannot disagree — `restore` is this, with the reason thrown.
+   * @param serializedState The serialized wallet state.
+   * @returns A wallet started from that state, or the reason the snapshot could not be read. See
+   *   {@link UnshieldedRestoreError}.
+   */
+  tryRestore(
+    serializedState: string,
+  ): Either.Either<ForkingUnshieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>, UnshieldedRestoreError>;
 }
 
-export function CustomUnshieldedWallet<
-  TConfig extends BaseV2Configuration = DefaultV2Configuration,
-  TSyncUpdate = WalletSyncUpdate,
-  TSerialized = string,
+/**
+ * The same identity, as the pre-fork ledger version has it.
+ *
+ * @remarks
+ *   Unshielded's one genuine version break, and the whole of it. A ledger-v9 verifying key is a `{tag, value}` record
+ *   naming a signature scheme; a ledger-v8 one is the bare hex, with no room to name anything, because that ledger
+ *   version had exactly one scheme. So a schnorr identity narrows losslessly — dropping a tag whose value was never in
+ *   doubt — and the cross-ledger migration widens it back on the way over, which is where its `schnorr` default comes
+ *   from.
+ *
+ *   An ecdsa identity does not narrow at all, and `None` says so rather than dropping the tag and producing a pre-fork
+ *   wallet claiming an identity it does not have: an ecdsa key derives a _different_ address, and the migration back
+ *   would relabel it `schnorr`, so the round trip is not merely lossy but wrong. The address itself is a scheme-less
+ *   hash and is carried, not re-derived, which is why the schnorr narrowing needs no ledger call at all.
+ * @param publicKey The identity in the post-fork ledger version's shape.
+ * @returns The same identity as the pre-fork ledger version has it, or `None` when that version cannot express it.
+ */
+export const asPreForkPublicKey = (publicKey: PublicKey): Option.Option<PreForkPublicKey> =>
+  publicKey.publicKey.tag === 'schnorr'
+    ? Option.some({
+        publicKey: publicKey.publicKey.value,
+        addressHex: publicKey.addressHex,
+        address: publicKey.address,
+      })
+    : Option.none();
+
+/**
+ * Builds an unshielded wallet class over a variant either side of a protocol boundary.
+ *
+ * @remarks
+ *   The boundary is `configuration.forkVersion` and nothing else: the pre-fork variant is registered from the minimum
+ *   supported version and the post-fork one from the fork version, so the version at which the runtime hands over and
+ *   the version at which each variant stops applying are the same number, taken from one place.
+ *
+ *   Each variant is built from its own configuration — see {@link SelfConfiguredUnshieldedVariant}.
+ * @example
+ *   ```typescript
+ *   const Wallet = CustomForkingUnshieldedWallet(
+ *     { networkId, forkVersion },
+ *     { builder: new V1Builder().withDefaults(), configuration: preForkConfiguration },
+ *     { builder: new V2Builder().withDefaults().withMigration(...), configuration: postForkConfiguration },
+ *   );
+ *   const wallet = Wallet.startWithPublicKey(publicKey);
+ *   ```;
+ *
+ * @param configuration What the wallet layer needs: the network, and where the boundary lies.
+ * @param preFork The variant that reads the chain below the boundary, with the configuration it is built from.
+ * @param postFork The variant that reads it from the boundary, with the configuration it is built from.
+ * @returns The wallet class.
+ */
+export function CustomForkingUnshieldedWallet<
+  TPreForkSyncUpdate,
+  TPostForkSyncUpdate,
+  TPreForkConfig extends object,
+  TPostForkConfig extends object,
+  TConfiguration extends ForkingUnshieldedConfiguration = ForkingUnshieldedConfiguration,
 >(
-  configuration: TConfig,
-  builder: VariantBuilder.VariantBuilder<V2Variant<TSerialized, TSyncUpdate>, TConfig>,
-): CustomizedUnshieldedWalletClass<TSyncUpdate, TSerialized, TConfig> {
-  const buildArgs = [configuration] as WalletBuilder.BuildArguments<
-    [
-      VariantBuilder.VersionedVariantBuilder<
-        VariantBuilder.VariantBuilder<V2Variant<TSerialized, TSyncUpdate>, TConfig>
-      >,
-    ]
-  >;
-  const BaseWallet = WalletBuilder.init()
-    .withVariant(ProtocolVersion.MinSupportedVersion, builder)
-    .build(...buildArgs) as WalletLike.BaseWalletClass<
-    [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate>>],
-    TConfig
-  >;
+  configuration: TConfiguration,
+  preFork: SelfConfiguredUnshieldedVariant<PreForkUnshieldedVariant<TPreForkSyncUpdate>, TPreForkConfig>,
+  postFork: SelfConfiguredUnshieldedVariant<PostForkUnshieldedVariant<TPostForkSyncUpdate>, TPostForkConfig>,
+): ForkingUnshieldedWalletClass<TPreForkSyncUpdate, TPostForkSyncUpdate, TConfiguration> {
+  type Variants = ForkingUnshieldedVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>;
 
-  /** The whole of the protocol timeline: one variant answers for every version this wallet will ever see. */
-  const wholeTimeline = ProtocolVersion.epochOf(
-    ProtocolVersion.MinSupportedVersion,
-    ProtocolVersion.MinSupportedVersion,
-  );
+  // Registered through the shape the builder states rather than through the one this function was handed. The two are
+  // the same builder; what is dropped is the configuration *type*, which the parameter types have already paired with
+  // its builder — and which, left generic, keeps `build`'s "nothing further is owed" argument list unresolvable.
+  const preForkBuilder: VariantBuilder.VariantBuilder<
+    PreForkUnshieldedVariant<TPreForkSyncUpdate>,
+    object
+  > = preFork.builder;
+  const postForkBuilder: VariantBuilder.VariantBuilder<
+    PostForkUnshieldedVariant<TPostForkSyncUpdate>,
+    object
+  > = postFork.builder;
 
-  /** Reads a transaction a caller handed in, which a single-variant wallet accepts at any version. */
-  const carried = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
-    EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, wholeTimeline));
+  const BaseWallet: WalletLike.BaseWalletClass<Variants> = WalletBuilder.init()
+    .withVariant(ProtocolVersion.MinSupportedVersion, preForkBuilder, preFork.configuration)
+    .withVariant(configuration.forkVersion, postForkBuilder, postFork.configuration)
+    .build();
 
-  /** Seals a transaction this wallet built, at the version its one variant answers from. */
-  const seal = (transaction: ledger.UnprovenTransaction): UnprovenTx =>
-    WalletTransaction.adopt('Unproven', transaction, ProtocolVersion.MinSupportedVersion);
+  const variants = BaseWallet.allVariantsRecord();
 
-  const sealUnproven = (result: ledger.UnprovenTransaction | undefined): UnprovenTx | undefined =>
-    result === undefined ? undefined : seal(result);
+  /**
+   * The protocol versions each variant owns, and the version a transaction it builds is stamped with.
+   *
+   * @remarks
+   *   The stamp is the floor of the variant's epoch: every decision it is later read for asks which side of the boundary
+   *   the bytes belong to, and the floor answers that the same way as any other version in the same epoch.
+   */
+  const preForkEpoch = ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, configuration.forkVersion);
+  const postForkEpoch = ProtocolVersion.epochOf(configuration.forkVersion, configuration.forkVersion);
+  const [preForkStamp] = preForkEpoch;
+  const [postForkStamp] = postForkEpoch;
 
-  const sealUnbound = (result: UnboundTransaction | undefined): UnboundTx | undefined =>
-    result === undefined ? undefined : WalletTransaction.adopt('Unbound', result, ProtocolVersion.MinSupportedVersion);
+  /** Reads a transaction built before the boundary, refusing one built after it. */
+  const preForkTx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+    EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, preForkEpoch));
 
-  return class CustomUnshieldedWalletImplementation
-    extends BaseWallet
-    implements CustomizedUnshieldedWallet<TSyncUpdate, TSerialized>
-  {
-    static startWithPublicKey(publicKeys: PublicKey): CustomUnshieldedWalletImplementation {
-      return CustomUnshieldedWalletImplementation.startFirst(
-        CustomUnshieldedWalletImplementation,
-        CoreWallet.init(publicKeys, configuration.networkId),
+  /** Reads a transaction built from the boundary, refusing one built before it. */
+  const postForkTx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+    EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, postForkEpoch));
+
+  /** Seals a balancing result, which is absent when the wallet had nothing of its own to add. */
+  const sealPreFork = (result: v8.UnprovenTransaction | undefined): UnprovenTx | undefined =>
+    result === undefined ? undefined : WalletTransaction.adopt('Unproven', result, preForkStamp);
+
+  const sealPostFork = (result: ledger.UnprovenTransaction | undefined): UnprovenTx | undefined =>
+    result === undefined ? undefined : WalletTransaction.adopt('Unproven', result, postForkStamp);
+
+  /**
+   * Adapts the caller's signer to the pre-fork ledger version's signature shape.
+   *
+   * @remarks
+   *   The SDK's signing callback speaks the current ledger version's signature — a scheme and its bytes — because that is
+   *   the shape an application writes against once. What the pre-fork ledger version reads is the bytes alone, and only
+   *   of the one scheme it has, so a signer that answers with any other is refused by name here rather than at the WASM
+   *   boundary.
+   */
+  const loweredSigner =
+    (signSegment: SignSegment): PreForkSignSegment =>
+    (data: Uint8Array) =>
+      signSegment(data).then((signature) =>
+        Either.getOrThrowWith(PreForkSignatures.lowerSignature(signature), (error) => error),
       );
-    }
 
-    static restore(serializedState: TSerialized): CustomUnshieldedWalletImplementation {
-      const deserialized: CoreWallet = CustomUnshieldedWalletImplementation.allVariantsRecord()
-        [V2Tag].variant.deserializeState(serializedState)
-        .pipe(Either.getOrThrow);
-      return CustomUnshieldedWalletImplementation.startFirst(CustomUnshieldedWalletImplementation, deserialized);
-    }
+  /**
+   * How long a start waits for the chain to say which version it is on.
+   *
+   * @remarks
+   *   Short, because what is being bought is small: the alternative to an answer is the hand-over this wallet has always
+   *   done, which costs one migration and no correctness on a chain that produces messages. It is a ceiling rather than
+   *   a typical cost — an unreachable indexer refuses a connection long before this — and it exists so that a probe
+   *   which neither answers nor fails cannot hold a start open indefinitely.
+   */
+  const probeTimeout = Duration.seconds(5);
 
-    readonly state: rx.Observable<UnshieldedWalletState<TSerialized>>;
+  /** Where a start begins, when the chain answered for it. */
+  type ProbedStart = Readonly<{
+    version: ProtocolVersion.ProtocolVersion;
+    variant: HList.Each<Variants>;
+  }>;
 
-    constructor(
-      runtime: Runtime.Runtime<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate>>]>,
-      scope: Scope.CloseableScope,
-    ) {
-      super(runtime, scope);
-      this.state = this.rawState.pipe(
-        rx.map((emission) =>
-          // One variant, so the pairing is trivial here; the forking wallet narrows on `variantTag` first.
-          UnshieldedWalletState.fromVariant<CoreWallet, TSerialized>(
-            CustomUnshieldedWalletImplementation.allVariantsRecord()[V2Tag].variant,
-            emission,
+  /**
+   * The variant the chain's current version belongs to, or nothing.
+   *
+   * @remarks
+   *   Nothing covers every way the question can fail to produce an answer, and they are deliberately not distinguished:
+   *   no probe configured, a probe that rejected, a probe that outlived the wallet's patience, or a version no
+   *   registered variant claims. Each means the same thing to a caller — start where a wallet with no history starts —
+   *   and none of them is a reason to fail.
+   */
+  const probedStart: Effect.Effect<Option.Option<ProbedStart>> =
+    configuration.chainVersionProbe === undefined
+      ? Effect.succeedNone
+      : pipe(
+          Effect.tryPromise(configuration.chainVersionProbe),
+          Effect.timeout(probeTimeout),
+          Effect.map((version) =>
+            Option.map(BaseWallet.variantFor(version), (variant): ProbedStart => ({ version, variant })),
           ),
-        ),
-        rx.shareReplay({ refCount: true, bufferSize: 1 }),
+          Effect.orElseSucceed(() => Option.none<ProbedStart>()),
+        );
+
+  /**
+   * A fresh state of the variant a probed start begins at, recording the version the chain reported.
+   *
+   * @remarks
+   *   Built exactly as the head-variant boot path builds its own — the identity, in the shape that variant holds it — and
+   *   then annotated with the observed version, which is what keeps a variant from starting outside its own activation
+   *   range and signalling backwards on sight.
+   * @param variant The variant the chain's version resolved to.
+   * @param publicKey The identity in the shape this wallet's API speaks.
+   * @param preForkPublicKey The same identity as the pre-fork ledger version has it, which is only reached when that
+   *   variant is the one chosen — and only a schnorr identity ever gets here at all.
+   */
+  const freshStateAt = (
+    variant: HList.Each<Variants>,
+    publicKey: PublicKey,
+    preForkPublicKey: PreForkPublicKey,
+    version: ProtocolVersion.ProtocolVersion,
+  ): PreForkCoreWallet | CoreWallet =>
+    Variant.getVersionedVariantTag(variant) === V2Tag
+      ? CoreWallet.withProtocolVersion(CoreWallet.init(publicKey, configuration.networkId), version)
+      : PreForkCoreWallet.withProtocolVersion(
+          PreForkCoreWallet.init(preForkPublicKey, configuration.networkId),
+          version,
+        );
+
+  return class ForkingUnshieldedWalletImplementation
+    extends BaseWallet
+    implements ForkingUnshieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>
+  {
+    static readonly configuration: TConfiguration = configuration;
+
+    static startWithPublicKey(publicKey: PublicKey): Promise<ForkingUnshieldedWalletImplementation> {
+      return Option.match(asPreForkPublicKey(publicKey), {
+        // The identity both ledger versions can express, so where it begins is a question about the chain rather than
+        // about the key: at the variant that owns the version the chain reports, or — when the chain was not asked or
+        // did not answer — below the boundary, where a wallet with no history belongs, letting the runtime hand over
+        // when the chain says so.
+        onSome: (preForkPublicKey) =>
+          pipe(
+            probedStart,
+            Effect.map(
+              Option.match({
+                onNone: () =>
+                  ForkingUnshieldedWalletImplementation.startFirst(
+                    ForkingUnshieldedWalletImplementation,
+                    PreForkCoreWallet.init(preForkPublicKey, configuration.networkId),
+                  ),
+                onSome: ({ version, variant }) =>
+                  ForkingUnshieldedWalletImplementation.startAtVariant(
+                    ForkingUnshieldedWalletImplementation,
+                    variant,
+                    freshStateAt(variant, publicKey, preForkPublicKey, version),
+                  ),
+              }),
+            ),
+            Effect.runPromise,
+          ),
+        // An identity only the post-fork ledger version can express, so it starts on that variant and stays there —
+        // and the chain is not asked, because there is nothing its answer could decide. Stamped with the boundary
+        // version rather than left at the minimum: a variant that starts from a state outside its own activation range
+        // reports that on sight, which is how a stranded snapshot heals — and here there is no variant above this one
+        // to hand over to. The state does belong to this variant, so it says so.
+        onNone: () =>
+          Promise.resolve(
+            ForkingUnshieldedWalletImplementation.startAtVariant(
+              ForkingUnshieldedWalletImplementation,
+              variants[V2Tag],
+              CoreWallet.withProtocolVersion(
+                CoreWallet.init(publicKey, configuration.networkId),
+                configuration.forkVersion,
+              ),
+            ),
+          ),
+      });
+    }
+
+    static tryRestore(
+      serializedState: string,
+    ): Either.Either<ForkingUnshieldedWalletImplementation, UnshieldedRestoreError> {
+      const headVariant = HList.head(ForkingUnshieldedWalletImplementation.allVariants());
+      return variantForSnapshot(
+        serializedState,
+        (version) => ForkingUnshieldedWalletImplementation.variantFor(version),
+        headVariant,
+      ).pipe(
+        // Stated with its result type because the resolved variant is either of the two, so its deserializer is
+        // either of theirs: what comes back is a state of whichever one wrote the snapshot, which is what
+        // `startAtVariant` takes.
+        Either.flatMap((variant): Either.Either<ForkingUnshieldedWalletImplementation, UnshieldedRestoreError> => {
+          // Annotated rather than inferred because the resolved variant is either of the two, so its deserializer is
+          // either of theirs: what comes back is a state of whichever one wrote the snapshot, which is what
+          // `startAtVariant` takes.
+          const deserialized: Either.Either<PreForkCoreWallet | CoreWallet, UnshieldedRestoreError> =
+            variant.variant.deserializeState(serializedState);
+          return Either.map(deserialized, (state) =>
+            ForkingUnshieldedWalletImplementation.startAtVariant(ForkingUnshieldedWalletImplementation, variant, state),
+          );
+        }),
       );
     }
+
+    static restore(serializedState: string): ForkingUnshieldedWalletImplementation {
+      return Either.getOrThrow(ForkingUnshieldedWalletImplementation.tryRestore(serializedState));
+    }
+
+    readonly state: rx.Observable<UnshieldedWalletState<string>>;
 
     /**
      * Whether the activation watcher has been registered.
@@ -361,7 +491,7 @@ export function CustomUnshieldedWallet<
      * Whether the wallet is currently started.
      *
      * @remarks
-     *   The unshielded counterpart of the retained start-aux the shielded and dust wallets hold. This wallet is
+     *   The unshielded counterpart of the retained start material the shielded and dust wallets hold. This wallet is
      *   watch-only — sync needs nothing secret, and signing is supplied per call by the caller — so there is no key to
      *   keep and the restart needs no argument. All the watcher has to know is whether a stopped wallet should be left
      *   stopped, which is what this records; `stop` clears it so a stopped wallet cannot be resurrected by a late
@@ -369,6 +499,29 @@ export function CustomUnshieldedWallet<
      */
     readonly #started = Ref.unsafeMake(false);
 
+    constructor(runtime: Runtime.Runtime<Variants>, scope: Scope.CloseableScope) {
+      super(runtime, scope);
+      this.state = this.rawState.pipe(
+        rx.map((emission) =>
+          // The capabilities that understand a state and the state itself are chosen together, in the branch where
+          // the producing variant is known. The two variants' capability types are structurally identical, so a
+          // capability of one would type-check against a state of the other and be wrong at runtime.
+          emission.variantTag === V2Tag
+            ? UnshieldedWalletState.fromVariant(variants[V2Tag].variant, emission)
+            : UnshieldedWalletState.fromVariant(variants[V1Tag].variant, emission),
+        ),
+        rx.shareReplay({ refCount: true, bufferSize: 1 }),
+      );
+    }
+
+    /**
+     * Starts background synchronization on whichever variant is current.
+     *
+     * @remarks
+     *   Takes no argument, on either side of the boundary, and that is the shape of the whole wallet: an unshielded
+     *   wallet watches an address, and an address is public. A migration therefore strands nothing — the new variant is
+     *   simply told to start, exactly as the old one was.
+     */
     start(): Promise<void> {
       return Effect.gen(this, function* () {
         yield* Ref.set(this.#started, true);
@@ -378,42 +531,70 @@ export function CustomUnshieldedWallet<
         const alreadyRegistered = yield* Ref.getAndSet(this.#watcherRegistered, true);
         if (!alreadyRegistered) {
           yield* this.runtime.onVariantActivation({
-            [V2Tag]: (v2: RunningV2Variant<TSerialized, TSyncUpdate>) =>
-              Ref.get(this.#started).pipe(
-                // Stopped, or never started: there is nothing to resume.
-                Effect.flatMap((started) => (started ? v2.startSyncInBackground() : Effect.void)),
-              ),
+            [V1Tag]: (v1) => this.#resumeSyncOn(v1),
+            [V2Tag]: (v2) => this.#resumeSyncOn(v2),
           });
         }
 
-        yield* this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground() });
+        yield* this.runtime.dispatch({
+          [V1Tag]: (v1) => v1.startSyncInBackground(),
+          [V2Tag]: (v2) => v2.startSyncInBackground(),
+        });
       }).pipe(Effect.runPromise);
     }
 
+    /** Starts synchronization on a variant that has just become current, unless the wallet has been stopped. */
+    #resumeSyncOn(running: { startSyncInBackground: () => Effect.Effect<void> }): Effect.Effect<void> {
+      return Ref.get(this.#started).pipe(
+        // Stopped, or never started: there is nothing to resume.
+        Effect.flatMap((started) => (started ? running.startSyncInBackground() : Effect.void)),
+      );
+    }
+
     override async stop(): Promise<void> {
+      // Cleared before the runtime is torn down, so a stopped wallet cannot be resurrected by an in-flight activation.
       Ref.set(this.#started, false).pipe(Effect.runSync);
       await super.stop();
     }
 
     balanceFinalizedTransaction(tx: AnyTx): Promise<UnprovenTx | undefined> {
       return this.runtime
-        .dispatch({
+        .dispatch<UnprovenTx | undefined, TransactingError>({
+          [V1Tag]: (v1) =>
+            preForkTx<v8.FinalizedTransaction>(tx).pipe(
+              Effect.flatMap((unwrapped) => v1.balanceFinalizedTransaction(unwrapped)),
+              Effect.map(sealPreFork),
+            ),
           [V2Tag]: (v2) =>
-            carried<ledger.FinalizedTransaction>(tx).pipe(
+            postForkTx<ledger.FinalizedTransaction>(tx).pipe(
               Effect.flatMap((unwrapped) => v2.balanceFinalizedTransaction(unwrapped)),
-              Effect.map(sealUnproven),
+              Effect.map(sealPostFork),
             ),
         })
         .pipe(Effect.runPromise);
     }
 
+    /**
+     * Balances an unbound transaction, which happens in place rather than by producing a second transaction.
+     *
+     * @returns The transaction with this wallet's inputs added, or nothing when it needed none.
+     */
     balanceUnboundTransaction(tx: AnyTx): Promise<UnboundTx | undefined> {
       return this.runtime
-        .dispatch({
+        .dispatch<UnboundTx | undefined, TransactingError>({
+          [V1Tag]: (v1) =>
+            preForkTx<PreForkUnboundTransaction>(tx).pipe(
+              Effect.flatMap((unwrapped) => v1.balanceUnboundTransaction(unwrapped)),
+              Effect.map((result) =>
+                result === undefined ? undefined : WalletTransaction.adopt('Unbound', result, preForkStamp),
+              ),
+            ),
           [V2Tag]: (v2) =>
-            carried<UnboundTransaction>(tx).pipe(
+            postForkTx<UnboundTransaction>(tx).pipe(
               Effect.flatMap((unwrapped) => v2.balanceUnboundTransaction(unwrapped)),
-              Effect.map(sealUnbound),
+              Effect.map((result) =>
+                result === undefined ? undefined : WalletTransaction.adopt('Unbound', result, postForkStamp),
+              ),
             ),
         })
         .pipe(Effect.runPromise);
@@ -421,11 +602,16 @@ export function CustomUnshieldedWallet<
 
     balanceUnprovenTransaction(tx: AnyTx): Promise<UnprovenTx | undefined> {
       return this.runtime
-        .dispatch({
+        .dispatch<UnprovenTx | undefined, TransactingError>({
+          [V1Tag]: (v1) =>
+            preForkTx<v8.UnprovenTransaction>(tx).pipe(
+              Effect.flatMap((unwrapped) => v1.balanceUnprovenTransaction(unwrapped)),
+              Effect.map(sealPreFork),
+            ),
           [V2Tag]: (v2) =>
-            carried<ledger.UnprovenTransaction>(tx).pipe(
+            postForkTx<ledger.UnprovenTransaction>(tx).pipe(
               Effect.flatMap((unwrapped) => v2.balanceUnprovenTransaction(unwrapped)),
-              Effect.map(sealUnproven),
+              Effect.map(sealPostFork),
             ),
         })
         .pipe(Effect.runPromise);
@@ -433,8 +619,15 @@ export function CustomUnshieldedWallet<
 
     transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch({
-          [V2Tag]: (v2) => v2.transferTransaction(outputs, ttl).pipe(Effect.map(seal)),
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            v1
+              .transferTransaction(outputs, ttl)
+              .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp))),
+          [V2Tag]: (v2) =>
+            v2
+              .transferTransaction(outputs, ttl)
+              .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp))),
         })
         .pipe(Effect.runPromise);
     }
@@ -446,9 +639,16 @@ export function CustomUnshieldedWallet<
       ttl: Date,
     ): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch({
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            EitherOps.toEffect(PreForkSignatures.lowerSignatureVerifyingKey(nightVerifyingKey)).pipe(
+              Effect.flatMap((key) => v1.rotateUtxos(guaranteedUtxos, fallibleUtxos, key, ttl)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+            ),
           [V2Tag]: (v2) =>
-            v2.rotateUtxos(guaranteedUtxos, fallibleUtxos, nightVerifyingKey, ttl).pipe(Effect.map(seal)),
+            v2
+              .rotateUtxos(guaranteedUtxos, fallibleUtxos, nightVerifyingKey, ttl)
+              .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp))),
         })
         .pipe(Effect.runPromise);
     }
@@ -459,17 +659,31 @@ export function CustomUnshieldedWallet<
       ttl: Date,
     ): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch({ [V2Tag]: (v2) => v2.initSwap(desiredInputs, desiredOutputs, ttl).pipe(Effect.map(seal)) })
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            v1
+              .initSwap(desiredInputs, desiredOutputs, ttl)
+              .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp))),
+          [V2Tag]: (v2) =>
+            v2
+              .initSwap(desiredInputs, desiredOutputs, ttl)
+              .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp))),
+        })
         .pipe(Effect.runPromise);
     }
 
     signUnprovenTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch({
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            preForkTx<v8.UnprovenTransaction>(transaction).pipe(
+              Effect.flatMap((unwrapped) => v1.signUnprovenTransaction(unwrapped, loweredSigner(signSegment))),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+            ),
           [V2Tag]: (v2) =>
-            carried<ledger.UnprovenTransaction>(transaction).pipe(
+            postForkTx<ledger.UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((unwrapped) => v2.signUnprovenTransaction(unwrapped, signSegment)),
-              Effect.map(seal),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp)),
             ),
         })
         .pipe(Effect.runPromise);
@@ -477,41 +691,70 @@ export function CustomUnshieldedWallet<
 
     signUnboundTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnboundTx> {
       return this.runtime
-        .dispatch({
+        .dispatch<UnboundTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            preForkTx<PreForkUnboundTransaction>(transaction).pipe(
+              Effect.flatMap((unwrapped) => v1.signUnboundTransaction(unwrapped, loweredSigner(signSegment))),
+              Effect.map((tx) => WalletTransaction.adopt('Unbound', tx, preForkStamp)),
+            ),
           [V2Tag]: (v2) =>
-            carried<UnboundTransaction>(transaction).pipe(
+            postForkTx<UnboundTransaction>(transaction).pipe(
               Effect.flatMap((unwrapped) => v2.signUnboundTransaction(unwrapped, signSegment)),
-              Effect.map((tx) => WalletTransaction.adopt('Unbound', tx, ProtocolVersion.MinSupportedVersion)),
+              Effect.map((tx) => WalletTransaction.adopt('Unbound', tx, postForkStamp)),
             ),
         })
         .pipe(Effect.runPromise);
     }
 
+    /**
+     * Un-books the UTxOs a transaction of this wallet's had reserved, returning them to the available set.
+     *
+     * @remarks
+     *   A transaction built on the other side of the boundary has nothing booked in the running variant to release, so
+     *   this resolves having done nothing. That is a fact about the crossing rather than an assumption made here:
+     *   {@link Migration.makeCrossLedgerMigration} restores every UTxO the pre-fork variant had booked as _available_,
+     *   precisely because a pre-fork transaction can never be included past the boundary — so by the time the post-fork
+     *   variant is running, no pre-fork handle is holding anything. Doing nothing is therefore the whole of the correct
+     *   behaviour, not a release quietly skipped.
+     *
+     *   It is also the one place a version mismatch is not an error: the facade reverts all three wallets together when a
+     *   submission fails, and a refusal here would strand that whole path over a transaction this wallet was never
+     *   holding anything for.
+     * @param transaction The transaction to un-book.
+     */
     revertTransaction(transaction: AnyTx): Promise<void> {
       return this.runtime
-        .dispatch({
+        .dispatch<void, WalletError>({
+          [V1Tag]: (v1) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<v8.Transaction<v8.SignatureEnabled, v8.Proofish, v8.Bindingish>>(
+                transaction,
+                preForkEpoch,
+              ),
+              { onLeft: () => Effect.void, onRight: (unwrapped) => v1.revertTransaction(unwrapped) },
+            ),
           [V2Tag]: (v2) =>
             Either.match(
               WalletTransaction.unwrapWithin<
                 ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>
-              >(transaction, wholeTimeline),
+              >(transaction, postForkEpoch),
               { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertTransaction(unwrapped) },
             ),
         })
         .pipe(Effect.runPromise);
     }
 
-    waitForSyncedState(allowedGap: bigint = 0n): Promise<UnshieldedWalletState<TSerialized>> {
+    waitForSyncedState(allowedGap: bigint = 0n): Promise<UnshieldedWalletState<string>> {
       return rx.firstValueFrom(
         this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
       );
     }
 
     /**
-     * Serializes the most recent state It's preferable to use [[UnshieldedWalletState.serialize]] instead, to know
-     * exactly, which state is serialized
+     * Serializes the most recent state. It's preferable to use [[UnshieldedWalletState.serialize]] instead, to know
+     * exactly which state is serialized.
      */
-    serializeState(): Promise<TSerialized> {
+    serializeState(): Promise<string> {
       return rx.firstValueFrom(this.state).then((state) => state.serialize());
     }
 
@@ -519,4 +762,48 @@ export function CustomUnshieldedWallet<
       return rx.firstValueFrom(this.state).then((state) => state.address);
     }
   };
+}
+
+/** An unshielded wallet built the way this package ships it: one variant either side of the protocol boundary. */
+export type UnshieldedWallet = ForkingUnshieldedWallet<PreForkSyncUpdate, PostForkSyncUpdate>;
+
+/** The class {@link UnshieldedWallet} builds. */
+export type UnshieldedWalletClass = ForkingUnshieldedWalletClass<
+  PreForkSyncUpdate,
+  PostForkSyncUpdate,
+  DefaultUnshieldedConfiguration
+>;
+
+/**
+ * Builds the unshielded wallet this package ships: the default variant either side of `configuration.forkVersion`.
+ *
+ * @remarks
+ *   Both variants read the chain through the indexer's unshielded-transaction subscription and record transaction history
+ *   in the same storage, and both are built from the same application configuration, because what they ask for is
+ *   identical — unshielded sync carries no ledger object in either direction, only public UTXO records as JSON.
+ *
+ *   Transacting, synchronization, balances, coins, addresses, serialization, restore and reverting all work on both
+ *   sides: each variant builds with its own ledger version, and what it produces says which version built it.
+ *
+ *   **The chain is asked where it is before a variant is chosen.** The indexer this wallet already syncs from answers
+ *   which protocol version the chain is on, so a start on a chain past the boundary begins post-fork rather than
+ *   handing over immediately. An application that would rather ask something else — a cache, a value it already holds —
+ *   supplies its own `chainVersionProbe`; one whose chain cannot be reached loses nothing, because the answer is
+ *   best-effort and its absence is the behaviour this wallet had before.
+ * @param configuration What the wallet and both its variants are built from, including where the boundary lies.
+ * @returns The wallet class.
+ */
+export function UnshieldedWallet(configuration: DefaultUnshieldedConfiguration): UnshieldedWalletClass {
+  const withProbe: DefaultUnshieldedConfiguration = {
+    ...configuration,
+    chainVersionProbe: configuration.chainVersionProbe ?? makeIndexerChainVersionProbe(configuration),
+  };
+  return CustomForkingUnshieldedWallet(
+    withProbe,
+    { builder: new V1Builder().withDefaults(), configuration },
+    {
+      builder: new V2Builder().withDefaults().withMigration(() => Migration.makeCrossLedgerMigration()),
+      configuration,
+    },
+  );
 }

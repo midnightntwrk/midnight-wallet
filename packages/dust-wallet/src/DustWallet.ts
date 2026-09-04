@@ -10,491 +10,684 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import {
-  type DustParameters,
-  LedgerParameters,
-  type DustPublicKey,
-  DustSecretKey,
-  type FinalizedTransaction,
-  type Signature,
-  type SignatureVerifyingKey,
-  type UnprovenTransaction,
-} from '@midnightntwrk/ledger-v9';
+
+/**
+ * A dust wallet that registers a variant either side of a protocol boundary and follows the chain across it.
+ *
+ * @remarks
+ *   One wallet, two ledger versions. Before the boundary the pre-fork variant reads the chain with the ledger version
+ *   that produced it; from the boundary the post-fork variant does, having been handed identity and a place in the
+ *   timeline and nothing else — the dust itself is re-discovered from the indexer's replay, which is what
+ *   `test/forkSimulation.test.ts` proves. Which variant is running is the runtime's business, not the application's:
+ *   the wallet's public API speaks the post-fork ledger version throughout, and where the two sides genuinely differ —
+ *   the key material each variant's synchronization needs — the wallet resolves it per variant from what it retained.
+ *
+ *   `DustWallet(configuration)` at the bottom is how this package ships it. `CustomForkingDustWallet` is the same wallet
+ *   over builders the caller chooses, and `SingleVariantDustWallet.ts` is the composition that gives up the crossing to
+ *   run one variant only.
+ */
+import * as v8 from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
-  type ProtocolState,
   ProtocolVersion,
   type ProtocolVersionMismatchError,
-  type SyncProgress,
   type UnprovenTx,
+  WalletSeed,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import {
+  type ChainVersionProbe,
+  makeIndexerChainVersionProbe,
+} from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
+import * as PreForkSignatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import {
   StartMaterial,
-  type Variant,
+  Variant,
   type VariantBuilder,
   type WalletLike,
+  type WalletRuntimeError,
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-capabilities/validation';
-import { type Clock, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { type Duration, Effect, Either, Option, Ref, type Scope } from 'effect';
+import { type Clock, EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
+import { Duration, Effect, Either, Option, Ref, type Scope, pipe } from 'effect';
 import * as rx from 'rxjs';
-import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './v2/CoinsAndBalances.js';
-import { CoreWallet } from './v2/CoreWallet.js';
-import { type KeysCapability } from './v2/Keys.js';
-import { type RunningV2Variant, V2Tag } from './v2/RunningV2Variant.js';
-import { type SerializationCapability } from './v2/Serialization.js';
+import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
+import {
+  claimableFeePayment,
+  type DefaultDustConfiguration,
+  type DustWalletAPI,
+  DustWalletState,
+} from './DustWalletAPI.js';
+import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-capabilities/validation';
+import { CoreWallet as PreForkCoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
+import { type WalletSyncUpdate as PreForkSyncUpdate } from './v1/Sync.js';
+import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
+import { type WalletSyncUpdate as PostForkSyncUpdate } from './v2/SyncSchema.js';
 import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
-import { type DustFullInfo, type UtxoWithMeta } from './v2/types/Dust.js';
+import { type UtxoWithMeta } from './v2/types/Dust.js';
+import { type NetworkId } from './v2/types/index.js';
+import { type AnyTransaction as PreForkAnyTransaction } from './v1/types/ledger.js';
 import { type AnyTransaction } from './v2/types/ledger.js';
-import { type BaseV2Configuration, type V2Variant } from './v2/V2Builder.js';
-import { type DustHistoryStorage } from './v2/TransactionHistory.js';
-import { type CoreWallet as V1CoreWallet } from './v1/CoreWallet.js';
-import { type NetworkId, type TotalCostParameters } from './v2/types/index.js';
-import { type WalletSyncUpdate } from './v2/SyncSchema.js';
-
-export type { BlockData } from './v2/SyncSchema.js';
-
-import { type TransactionHistoryService } from './v2/TransactionHistory.js';
-
-export type DustWalletCapabilities<TSerialized = string> = {
-  serialization: SerializationCapability<CoreWallet, null, TSerialized>;
-  coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
-  keys: KeysCapability<CoreWallet>;
-};
-
-export type DustWalletServices = {
-  transactionHistory: TransactionHistoryService;
-};
-
-/** The core state of whichever dust variant produced an emission. */
-export type DustCoreState = V1CoreWallet | CoreWallet;
+import { type WalletError as PreForkWalletError } from './v1/WalletError.js';
+import { type WalletError } from './v2/WalletError.js';
 
 /**
- * Everything a state emission projects, already bound to the variant that produced it.
+ * What restoring a Dust wallet from a snapshot can fail with.
  *
  * @remarks
- *   Binding is the point. The capabilities that understand a state and the state itself must be chosen together, in the
- *   branch where the producing variant is known; the two variants' capability types are structurally identical, so a
- *   capability of one would type-check against a state of the other and be wrong at runtime. Once bound there is
- *   nothing left to mis-pair, and everything below is version-agnostic plain data — dust amounts and rates are
- *   `bigint`, times are `Date`, keys and nonces are `bigint`/`string`, and the address is the SDK's own type.
+ *   Two failures, and they mean different things. The snapshot may declare a protocol version no registered variant
+ *   reads, which is a fact about this build of the SDK rather than about the snapshot; or the variant that owns it may
+ *   be unable to make sense of the bytes, which is a fact about the snapshot. Either is an ordinary thing to meet when
+ *   restoring something a user supplied, which is why `tryRestore` reports them rather than throwing.
  */
-type DustProjections<TSerialized> = Readonly<{
-  totalCoins: () => readonly DustFullInfo[];
-  availableCoins: () => readonly DustFullInfo[];
-  pendingCoins: () => readonly DustFullInfo[];
-  publicKey: () => DustPublicKey;
-  address: () => DustAddress;
-  balance: (time: Date) => Balance;
-  estimateDustGeneration: (
-    nightUtxos: ReadonlyArray<UtxoWithMeta>,
-    currentTime: Date,
-  ) => ReadonlyArray<UtxoWithFullDustDetails>;
-  splitNightUtxos: (nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>) => {
-    guaranteed: ReadonlyArray<UtxoWithFullDustDetails>;
-    fallible: ReadonlyArray<UtxoWithFullDustDetails>;
-  };
-  serialize: () => TSerialized;
+export type DustRestoreError = UnsupportedSnapshotVersionError | PreForkWalletError | WalletError;
+
+/**
+ * What a transacting call can fail with.
+ *
+ * @remarks
+ *   Three failures beyond the variant's own: the wallet may hold no key material the current variant can use, a
+ *   transaction handed in may have been built on the other side of the boundary, and a signature or verifying key may
+ *   name a signature scheme the pre-fork ledger version does not have.
+ */
+type TransactingError =
+  | WalletError
+  | StartMaterial.MissingStartAuxError
+  | ProtocolVersionMismatchError
+  | PreForkSignatures.UnsupportedSignatureKindError;
+
+/** The pre-fork variant a forking dust wallet registers: the one that reads the chain before the boundary. */
+export type PreForkDustVariant<TSyncUpdate> = V1Variant<string, TSyncUpdate, v8.FinalizedTransaction, v8.DustSecretKey>;
+
+/** The post-fork variant a forking dust wallet registers: the one the pre-fork wallet is migrated into. */
+export type PostForkDustVariant<TSyncUpdate> = V2Variant<
+  string,
+  TSyncUpdate,
+  ledger.FinalizedTransaction,
+  ledger.DustSecretKey,
+  Migration.PreviousLedgerWallet
+>;
+
+/** The two variants a forking dust wallet runs, in registration order. */
+export type ForkingDustVariants<TPreForkSyncUpdate, TPostForkSyncUpdate> = [
+  Variant.VersionedVariant<PreForkDustVariant<TPreForkSyncUpdate>>,
+  Variant.VersionedVariant<PostForkDustVariant<TPostForkSyncUpdate>>,
+];
+
+/**
+ * A variant builder registered together with the configuration it alone is built from.
+ *
+ * @remarks
+ *   Per-variant rather than shared, and for dust the hazard is concrete rather than theoretical: both variants declare an
+ *   optional `dustParameters`, each of its own ledger's `DustParameters`. The two classes are structurally identical,
+ *   so a wallet-wide intersection accepts either and then hands whichever was supplied to _both_ variants — one of
+ *   which would be building a `DustLocalState` out of the other module's WASM object. Splitting the configuration is
+ *   what makes that unrepresentable.
+ */
+export type SelfConfiguredDustVariant<TVariant extends Variant.AnyVariant, TConfiguration extends object> = Readonly<{
+  builder: VariantBuilder.VariantBuilder<TVariant, TConfiguration>;
+  configuration: TConfiguration;
 }>;
 
-/** The capability set a variant exposes for reading and serializing its own state. */
-type DustStateCapabilities<TState, TSerialized> = Readonly<{
-  serialization: SerializationCapability<TState, null, TSerialized>;
-  coinsAndBalances: CoinsAndBalancesCapability<TState>;
-  keys: KeysCapability<TState>;
-}>;
-
-export class DustWalletState<TSerialized = string> {
-  /**
-   * Wraps a state emission with the capabilities of the variant that produced it.
-   *
-   * @remarks
-   *   Call this inside a branch that has narrowed on the emission's `variantTag`, so `variant` and `state` are known to
-   *   belong together. It is generic over the state type precisely so that pairing is checked.
-   */
-  static readonly fromVariant = <TState, TSerialized = string>(
-    variant: DustStateCapabilities<TState, TSerialized>,
-    state: ProtocolState.ProtocolState<TState>,
-  ): DustWalletState<TSerialized> =>
-    new DustWalletState<TSerialized>(state.version, state.state as DustCoreState, {
-      totalCoins: () => variant.coinsAndBalances.getTotalCoins(state.state),
-      availableCoins: () => variant.coinsAndBalances.getAvailableCoins(state.state),
-      pendingCoins: () => variant.coinsAndBalances.getPendingCoins(state.state),
-      publicKey: () => variant.keys.getPublicKey(state.state),
-      address: () => variant.keys.getAddress(state.state),
-      balance: (time) => variant.coinsAndBalances.getWalletBalance(state.state, time),
-      estimateDustGeneration: (nightUtxos, currentTime) =>
-        variant.coinsAndBalances.estimateDustGeneration(state.state, nightUtxos, currentTime),
-      splitNightUtxos: (nightUtxos) => variant.coinsAndBalances.splitNightUtxos(nightUtxos),
-      serialize: () => variant.serialization.serialize(state.state),
-    });
-
-  readonly protocolVersion: ProtocolVersion.ProtocolVersion;
-  readonly state: DustCoreState;
-  readonly #projections: DustProjections<TSerialized>;
-
-  get totalCoins(): readonly DustFullInfo[] {
-    return this.#projections.totalCoins();
-  }
-
-  get availableCoins(): readonly DustFullInfo[] {
-    return this.#projections.availableCoins();
-  }
-
-  get pendingCoins(): readonly DustFullInfo[] {
-    return this.#projections.pendingCoins();
-  }
-
-  get publicKey(): DustPublicKey {
-    return this.#projections.publicKey();
-  }
-
-  get address(): DustAddress {
-    return this.#projections.address();
-  }
-
-  get progress(): SyncProgress.SyncProgress {
-    return this.state.progress;
-  }
-
-  constructor(
-    protocolVersion: ProtocolVersion.ProtocolVersion,
-    state: DustCoreState,
-    projections: DustProjections<TSerialized>,
-  ) {
-    this.protocolVersion = protocolVersion;
-    this.state = state;
-    this.#projections = projections;
-  }
-
-  balance(time: Date): Balance {
-    return this.#projections.balance(time);
-  }
-
-  estimateDustGeneration(
-    nightUtxos: ReadonlyArray<UtxoWithMeta>,
-    currentTime: Date,
-  ): ReadonlyArray<UtxoWithFullDustDetails> {
-    return this.#projections.estimateDustGeneration(nightUtxos, currentTime);
-  }
-
-  /**
-   * Splits Night UTxOs into the ones a registration puts in its guaranteed and fallible sections.
-   *
-   * @remarks
-   *   Projected here rather than reached for through the capability set, so a reader of this state never has to know
-   *   which variant produced it. The split itself is plain arithmetic over plain data — no ledger object crosses it —
-   *   which is why both variants answer it identically.
-   * @param nightUtxos The UTxOs to split, with their dust generation readings.
-   * @returns The guaranteed and fallible halves.
-   */
-  splitNightUtxos(nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>): {
-    guaranteed: ReadonlyArray<UtxoWithFullDustDetails>;
-    fallible: ReadonlyArray<UtxoWithFullDustDetails>;
-  } {
-    return this.#projections.splitNightUtxos(nightUtxos);
-  }
-
-  serialize(): TSerialized {
-    return this.#projections.serialize();
-  }
-}
-
-/**
- * The largest fee payment a registration over `nightUtxos` could claim for itself, right now.
- *
- * @remarks
- *   What {@link DustWalletAPI.waitForGeneratedDust} waits to reach the fee, and the reading behind it. Two things shape
- *   it. Only Night that does not yet generate Dust earns the retroactive Dust a registration may spend on its own fee —
- *   claiming it for Night that already generates is an overspend the node rejects — and whether a UTxO is one of those
- *   is its `registeredForDustGeneration` flag, which the indexer reports as of the chain's current Dust epoch. And the
- *   allowance is capped at the _single_ highest-generation UTxO, because `splitNightUtxos` puts exactly one in the
- *   registration's guaranteed slot; summing across UTxOs would resolve the wait optimistically and the registration
- *   would still fail the fee check on-chain.
- * @param state The dust wallet state to read.
- * @param nightUtxos The Night UTxOs the registration would carry.
- * @param currentTime The time to project generation to.
- * @returns The claimable fee payment, in Specks. `0n` when every UTxO is already registered for Dust generation.
- */
-export const claimableFeePayment = <TSerialized>(
-  state: DustWalletState<TSerialized>,
-  nightUtxos: ReadonlyArray<UtxoWithMeta>,
-  currentTime: Date,
-): bigint =>
-  state
-    .estimateDustGeneration(nightUtxos, currentTime)
-    .filter((estimate) => !estimate.utxo.registeredForDustGeneration)
-    .reduce((max, estimate) => (estimate.dust.generatedNow > max ? estimate.dust.generatedNow : max), 0n);
-
-export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
-  readonly state: rx.Observable<DustWalletState<TSerialized>>;
-
-  start(secretKey: TStartAux): Promise<void>;
-
-  stepSync(secretKey: TStartAux): Promise<void>;
-
-  createDustGenerationTransaction(
-    currentTime: Date | undefined,
-    ttl: Date,
-    nightUtxos: Array<UtxoWithMeta>,
-    nightVerifyingKey: SignatureVerifyingKey,
-    dustReceiverAddress: DustAddress | undefined,
-  ): Promise<UnprovenTx>;
-
-  splitNightUtxosForDustRegistration(
-    currentTime: Date,
-    nightUtxos: ReadonlyArray<UtxoWithMeta>,
-    isRegistration: boolean,
-  ): Promise<NightUtxoSplitForDustRegistration>;
-
-  attachDustRegistration(
-    transaction: UnprovenTx,
-    currentTime: Date,
-    nightVerifyingKey: SignatureVerifyingKey,
-    dustReceiverAddress: DustAddress | undefined,
-    feePayment: bigint,
-  ): Promise<UnprovenTx>;
-
-  addDustGenerationSignature(transaction: UnprovenTx, signature: Signature): Promise<UnprovenTx>;
-
-  /**
-   * Attaches a signature to the DustRegistration in segment 1's `dustActions` only. Unlike
-   * {@link addDustGenerationSignature}, this does NOT touch the unshielded offers — those should be signed separately
-   * via the unshielded-wallet signing path. Use this when the caller orchestrates signing across both packages (e.g.
-   * the facade's `signRecipe`).
-   */
-  addDustRegistrationSignature(transaction: UnprovenTx, signature: Signature): Promise<UnprovenTx>;
-
-  calculateFee(transactions: ReadonlyArray<AnyTx>): Promise<bigint>;
-
-  /**
-   * Estimates what a set of transactions will cost, including the fee of the balancing transaction.
-   *
-   * @remarks
-   *   No key material is passed: the wallet derives what its current variant needs from what it was started with.
-   */
-  estimateFee(transactions: ReadonlyArray<AnyTx>, ttl?: Date, currentTime?: Date): Promise<bigint>;
-
-  /**
-   * Balances a set of transactions by paying their fee in dust.
-   *
-   * @remarks
-   *   The block data returned is the block the fee was priced against, stated in the terms every ledger version reports
-   *   identically — the parameters, the height, and the version they were read at. Each variant's own `BlockData`
-   *   carries dust index and root fields besides, which are the variant's business and not a caller's.
-   */
-  balanceTransactions(
-    transactions: ReadonlyArray<AnyTx>,
-    ttl: Date,
-    currentTime?: Date,
-  ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData }>;
-
-  serializeState(): Promise<TSerialized>;
-
-  waitForSyncedState(allowedGap?: bigint): Promise<DustWalletState<TSerialized>>;
-
-  /**
-   * Resolves when the dust projected to be generated by the single highest-generation unregistered Night UTxO reaches
-   * `requiredAmount`. The projection is re-evaluated every second so the wait advances even when the dust state stream
-   * is quiet. Tracks the same quantity used as `allow_fee_payment` for the registration (the maximum across the UTxOs,
-   * not their sum, since `splitNightUtxos` puts only one UTxO in the guaranteed slot), so pairing with
-   * `WalletFacade.estimateRegistration` to pick `requiredAmount` guarantees the subsequent
-   * `registerNightUtxosForDustGeneration` will pass its fee-coverage guard.
-   *
-   * @param nightUtxos - UTxOs to project generation for; same set passed to `registerNightUtxosForDustGeneration`.
-   *   Already-registered UTxOs are ignored. Must be non-empty.
-   * @param requiredAmount - Threshold to wait for, as a Dust amount. Resolves immediately if `<= 0n`.
-   * @param clock - Source of current time, read on every tick. Required, and a {@link Clock.Clock} rather than a
-   *   snapshot `Date` like the other methods' `currentTime`: the projection only advances because the time is re-read
-   *   each tick, and callers must inject their own clock so simulator-driven tests respect simulator time.
-   * @param opts.timeoutMs - Deadline, in ms from subscription, for `requiredAmount` to be reached; rejects if it is
-   *   not. Default `300_000`.
-   * @returns A promise that resolves once the projected dust reaches `requiredAmount`.
-   * @throws Error if `nightUtxos` is empty.
-   * @throws TimeoutError if `requiredAmount` is not reached within `opts.timeoutMs`.
-   */
-  waitForGeneratedDust(
-    nightUtxos: ReadonlyArray<UtxoWithMeta>,
-    requiredAmount: bigint,
-    clock: Clock.Clock,
-    opts?: { timeoutMs?: number },
-  ): Promise<void>;
-
-  revertTransaction(transaction: AnyTx): Promise<void>;
-
-  getAddress(): Promise<DustAddress>;
-
-  stop(): Promise<void>;
-};
-
-export type CustomizedDustWallet<
-  TStartAux = DustSecretKey,
-  TTransaction = FinalizedTransaction,
-  TSyncUpdate = WalletSyncUpdate,
-  TSerialized = string,
-> = DustWalletAPI<TStartAux, TSerialized> &
-  WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
-
-/**
- * The configuration a default {@link DustWallet} is built from.
- *
- * @remarks
- *   Declared by this package rather than aliased to a variant's configuration. A wallet that spans a protocol boundary is
- *   built from more than one variant, so no single variant's configuration can be the wallet's public contract: the
- *   package states what it asks an application for, and maps it onto whichever variants it registers.
- *
- *   `dustParameters` is the one field here that names a ledger type. It is version-agnostic only because the two ledgers'
- *   `DustParameters` are structurally identical; `configuration.test.ts` asserts that, so a divergence surfaces as a
- *   compile error here instead of as a wallet that cannot be built for one of its variants.
- */
-export type DefaultDustConfiguration = {
+/** What a forking dust wallet needs to know about itself, whatever its variants are built from. */
+export type ForkingDustConfiguration = {
   networkId: NetworkId;
-  costParameters: TotalCostParameters;
-  dustParameters?: DustParameters;
-  txHistoryStorage: DustHistoryStorage;
-  indexerClientConnection: { indexerHttpUrl: string };
-  transactionDetailsRetryWindow?: Duration.DurationInput;
-  /**
-   * The protocol version at which this chain hands over from the pre-fork ledger to the post-fork one.
-   *
-   * @remarks
-   *   Required, and deliberately without a default: the wallet registers one variant either side of it, so a wrong value
-   *   does not degrade — it decides which ledger version reads the chain. Below this version the pre-fork variant is
-   *   active; from it, the post-fork one. The SDK cannot guess it, because it is a property of the chain the
-   *   application points at, not of the SDK.
-   *
-   *   A node reporting a 2.x runtime version reports protocol version `2000000`, which is therefore the value for a
-   *   ledger-v9-native chain — published as `ProtocolVersion.V9NativeForkVersion`. The final mainnet fork constant is
-   *   not yet fixed; it will join that one once it is, and this field keeps working unchanged.
-   */
+  /** The protocol version at which the chain hands over from the pre-fork ledger version to the post-fork one. */
   forkVersion: ProtocolVersion.ProtocolVersion;
   /**
-   * How the wallet asks the chain which protocol version its timeline starts under, before it chooses a variant to
-   * start at.
+   * How the wallet asks the chain which protocol version it is on, before it chooses a variant to start at.
    *
    * @remarks
-   *   Optional, and defaulted rather than absent: left unset, the wallet asks the indexer named by
-   *   {@link indexerClientConnection}, which it is about to synchronize from anyway. Supply one to ask something else —
-   *   a cache, a node RPC, a value the application already holds — and have it answer the same question: the version of
-   *   the chain's **first** block, not its latest. A fresh wallet reads history from the start, so the variant it needs
-   *   is the one that can deserialize the first event it fetches; a probe reporting the tip of a chain that forked over
-   *   its own history starts the wallet on a ledger version that cannot read what it is about to be served.
+   *   Optional, and best-effort where present: a wallet with no probe — or one whose probe does not answer in time —
+   *   starts on the pre-fork variant and learns the version from the first event it sees, which is what a wallet with
+   *   no history has always done. What a probe buys is the two things that guess costs: a hand-over per start on a
+   *   chain entirely past the boundary, and, on a chain that has shown this wallet no events at all, an epoch that
+   *   never gets corrected.
    *
-   *   The answer is best-effort wherever it comes from: a chain that cannot be reached leaves the wallet starting exactly
-   *   where it started before there was a probe.
+   *   Nothing about it can make a start fail. A rejection, a timeout, a version no registered variant covers: each leaves
+   *   the wallet exactly where a wallet that never asked would be.
    */
   chainVersionProbe?: ChainVersionProbe;
 };
 
-export interface CustomizedDustWalletClass<
-  TStartAux = DustSecretKey,
-  TTransaction = FinalizedTransaction,
-  TSyncUpdate = WalletSyncUpdate,
-  TSerialized = string,
-  TConfig extends BaseV2Configuration = DefaultDustConfiguration,
-> extends WalletLike.BaseWalletClass<
-  [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
-> {
-  configuration: TConfig;
-  startWithSeed(
-    seed: Uint8Array,
-    dustParameters?: DustParameters,
-  ): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
-  startWithSecretKey(
-    secretKey: DustSecretKey,
-    dustParameters?: DustParameters,
-  ): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
-  restore(serializedState: TSerialized): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
-}
+/**
+ * One ledger version's dust secret key per side of a protocol boundary.
+ *
+ * @remarks
+ *   Both sides are required. A caller holding key objects rather than a seed has to hold both, because the two belong to
+ *   different ledger runtimes and neither can be derived from the other; a product with one side optional would let a
+ *   wallet be built that cannot read half the chain, which is the shape this replaced.
+ */
+export type DustKeysByEpoch = Readonly<{
+  /** The pre-fork ledger version's dust secret key. */
+  v8: v8.DustSecretKey;
+  /** The post-fork ledger version's dust secret key. */
+  v9: ledger.DustSecretKey;
+}>;
 
-export function CustomDustWallet<
-  TConfig extends BaseV2Configuration = DefaultDustConfiguration,
-  TStartAux extends DustSecretKey = DustSecretKey,
-  TTransaction = FinalizedTransaction,
-  TSyncUpdate = WalletSyncUpdate,
-  TSerialized = string,
->(
-  configuration: TConfig,
-  builder: VariantBuilder.VariantBuilder<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>,
-): CustomizedDustWalletClass<TStartAux, TTransaction, TSyncUpdate, TSerialized, TConfig> {
-  const buildArgs = [configuration] as WalletBuilder.BuildArguments<
-    [
-      VariantBuilder.VersionedVariantBuilder<
-        VariantBuilder.VariantBuilder<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>
-      >,
-    ]
-  >;
-  const BaseWallet = WalletBuilder.init()
-    .withVariant(ProtocolVersion.MinSupportedVersion, builder)
-    .build(...buildArgs) as WalletLike.BaseWalletClass<
-    [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>],
-    TConfig
-  >;
-
-  /** The whole of the protocol timeline: one variant answers for every version this wallet will ever see. */
-  const wholeTimeline = ProtocolVersion.epochOf(
-    ProtocolVersion.MinSupportedVersion,
-    ProtocolVersion.MinSupportedVersion,
-  );
-
-  /** Seals a transaction this wallet built, at the version its one variant answers from. */
-  const seal = (transaction: UnprovenTransaction): UnprovenTx =>
-    WalletTransaction.adopt('Unproven', transaction, ProtocolVersion.MinSupportedVersion);
-
-  /** Reads a transaction a caller handed in, which a single-variant wallet accepts at any version. */
-  const carried = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
-    EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, wholeTimeline));
-
-  return class CustomDustWalletImplementation
-    extends BaseWallet
-    implements CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>
-  {
-    static startWithSeed(
-      seed: Uint8Array,
-      // The ledger's own initial parameters when a caller names none: three rates that do not depend on this wallet,
-      // and asking for them made an application import a ledger version to start one.
-      dustParameters: DustParameters = LedgerParameters.initialParameters().dust,
-    ): CustomDustWalletImplementation {
-      const dustSecretKey = DustSecretKey.fromSeed(seed);
-      return CustomDustWalletImplementation.startFirst(
-        CustomDustWalletImplementation,
-        CoreWallet.initEmpty(dustParameters, dustSecretKey, CustomDustWalletImplementation.configuration.networkId),
-      );
-    }
-
-    static startWithSecretKey(
-      secretKey: DustSecretKey,
-      dustParameters: DustParameters = LedgerParameters.initialParameters().dust,
-    ): CustomDustWalletImplementation {
-      return CustomDustWalletImplementation.startFirst(
-        CustomDustWalletImplementation,
-        CoreWallet.initEmpty(dustParameters, secretKey, CustomDustWalletImplementation.configuration.networkId),
-      );
-    }
-
-    static restore(serializedState: TSerialized): CustomDustWalletImplementation {
-      const deserialized: CoreWallet = CustomDustWalletImplementation.allVariantsRecord()
-        [V2Tag].variant.deserializeState(serializedState)
-        .pipe(Either.getOrThrow);
-      return CustomDustWalletImplementation.startFirst(CustomDustWalletImplementation, deserialized);
-    }
-
-    readonly state: rx.Observable<DustWalletState<TSerialized>>;
-
+/**
+ * A running dust wallet that spans a protocol boundary.
+ *
+ * @remarks
+ *   Its two extra starts are the instance counterparts of the class-level ones, and they are here rather than on
+ *   {@link DustWalletAPI} because only a wallet with a variant either side of a boundary has anything to do with them: a
+ *   single-variant wallet speaks one ledger version, and the key `start` takes is always the right one.
+ */
+export type ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate> = DustWalletAPI<ledger.DustSecretKey, string> &
+  WalletLike.WalletLike<ForkingDustVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>> & {
     /**
-     * The start-aux the wallet was last started with.
+     * Starts this wallet from a seed, which answers for the variant either side of the boundary.
      *
      * @remarks
-     *   Sync needs the dust secret key, and a migration starts a fresh variant whose sync has never been started. The key
-     *   cannot come from the state — it is deliberately absent from anything serialized — and it does not exist yet
-     *   when the wallet is first constructed, so it is held here, in memory, for the lifetime of the wallet. Cleared by
-     *   {@link stop} so a stopped wallet cannot be silently resurrected by a late activation.
+     *   The instance counterpart of {@link ForkingDustWalletClass.startWithSeed}, and what a wallet restored from a
+     *   snapshot written below the boundary is started with. A snapshot carries no key material by design, and the
+     *   variant it restores onto is the pre-fork one, whose synchronization the post-fork key
+     *   {@link DustWalletAPI.start} takes cannot serve. The class-level start answers for both sides too — but it builds
+     *   a _fresh_ wallet, which is the opposite of what a caller who has just restored one wants.
+     *
+     *   No dust parameters are asked for, because a restored wallet needs none: they parameterise an _empty_ state, which
+     *   is what a fresh build has to construct and a restored one already brought back from its snapshot.
+     *
+     *   The seed itself is not kept: both ledger versions' dust keys are derived from it here and retained instead, which
+     *   is the same capability with a shorter-lived secret.
+     * @example
+     *   ```typescript
+     *   const wallet = DustWallet(configuration).restore(snapshot);
+     *   await wallet.startWithSeed(seed);
+     *   ```;
+     *
+     * @param seed The seed to derive both ledger versions' dust keys from.
+     * @returns Nothing; resolves once synchronization has been started on whichever variant is current.
      */
-    readonly #retainedAux = Ref.unsafeMake<Option.Option<TStartAux>>(Option.none());
+    startWithSeed(seed: Uint8Array): Promise<void>;
+    /**
+     * Starts this wallet from dust keys of both ledger versions.
+     *
+     * @remarks
+     *   The instance counterpart of {@link ForkingDustWalletClass.startWithKeys}, for a caller that will not part with a
+     *   seed. Both sides are required for the same reason they are there: a `DustSecretKey` belongs to one ledger
+     *   version's runtime, so a wallet given one side alone could not read the other side of the chain.
+     * @example
+     *   ```typescript
+     *   const wallet = DustWallet(configuration).restore(snapshot);
+     *   await wallet.startWithKeys({ v8: preForkKey, v9: postForkKey });
+     *   ```;
+     *
+     * @param keys One ledger version's dust secret key per side of the boundary.
+     * @returns Nothing; resolves once synchronization has been started on whichever variant is current.
+     */
+    startWithKeys(keys: DustKeysByEpoch): Promise<void>;
+  };
+
+/** The class a forking dust wallet is started from. */
+export interface ForkingDustWalletClass<
+  TPreForkSyncUpdate,
+  TPostForkSyncUpdate,
+  TConfiguration extends ForkingDustConfiguration = ForkingDustConfiguration,
+> extends WalletLike.BaseWalletClass<ForkingDustVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>, TConfiguration> {
+  /**
+   * Builds a wallet from a seed, and remembers the seed.
+   *
+   * @remarks
+   *   The only start that can follow the chain the whole way. The seed is the one piece of key material that crosses a
+   *   protocol boundary — each variant derives its own `DustSecretKey` from it, and the two derive the same dust public
+   *   key — so a wallet built this way can synchronize on either side of the fork.
+   *
+   *   Asynchronous because choosing where to begin can mean asking the chain: with a
+   *   {@link ForkingDustConfiguration.chainVersionProbe} configured, the wallet starts at the variant that owns the
+   *   version the chain reports, which on a chain already past the boundary is the post-fork one from the first moment.
+   *   Without one, or when the question goes unanswered, it begins on the pre-fork variant and is handed over when the
+   *   chain reports a version the post-fork variant owns — on a chain that has already forked, the first batch it
+   *   sees.
+   * @param seed The seed to derive both ledger versions' dust keys from.
+   * @param dustParameters The post-fork ledger version's dust parameters, which an empty post-fork state is valued
+   *   against.
+   * @returns A wallet started at the variant the chain is on, or on the pre-fork variant when the chain was not asked
+   *   or did not say.
+   */
+  startWithSeed(
+    seed: Uint8Array,
+    dustParameters?: DustGenerationRates,
+  ): Promise<ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>>;
+  /**
+   * Builds a wallet from dust keys of both ledger versions.
+   *
+   * @remarks
+   *   The escape hatch for a caller that will not hand over a seed. Both sides are required, and that is the whole point:
+   *   a `DustSecretKey` belongs to one ledger version's runtime — there is nothing to convert, and the dust public keys
+   *   being identical either side does not help, because reading dust needs the secret — so a wallet given one side
+   *   alone could not read the other side of the chain. It costs the caller an import of both ledger packages and the
+   *   same derivation done twice; a seed costs neither.
+   * @param keys One ledger version's dust secret key per side of the boundary.
+   * @param dustParameters The post-fork ledger version's dust parameters.
+   * @returns A wallet started at the variant the chain is on, or on the pre-fork variant — where a wallet with no
+   *   history belongs — when the chain was not asked or did not say.
+   */
+  startWithKeys(
+    keys: DustKeysByEpoch,
+    dustParameters?: DustGenerationRates,
+  ): Promise<ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>>;
+  /**
+   * Restores a wallet from a snapshot, into whichever registered variant wrote it.
+   *
+   * @param serializedState The serialized wallet state.
+   * @returns A wallet started from that state, on the variant that owns its protocol version.
+   * @throws UnsupportedSnapshotVersionError if the snapshot declares a version no registered variant reads.
+   */
+  restore(serializedState: string): ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>;
+  /**
+   * Restores a wallet from a snapshot, reporting what it could not read rather than throwing.
+   *
+   * @remarks
+   *   Additive alongside {@link restore}, which is unchanged and still the right shape for a snapshot the application has
+   *   just written itself. This is the shape for one it has not: a snapshot a user supplied, or one written by a build
+   *   of the SDK that is no longer the one running, where "I cannot read this" is an ordinary answer rather than a bug.
+   *   The two cannot disagree — `restore` is this, with the reason thrown.
+   * @param serializedState The serialized wallet state.
+   * @returns A wallet started from that state, or the reason the snapshot could not be read. See
+   *   {@link DustRestoreError}.
+   */
+  tryRestore(
+    serializedState: string,
+  ): Either.Either<ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>, DustRestoreError>;
+}
+
+/**
+ * The same dust parameters, rebuilt by the pre-fork ledger version.
+ *
+ * @remarks
+ *   Dust's own departure from shielded, and the one place this wallet has to translate anything. `DustLocalState` is
+ *   parameterised, so an empty pre-fork state cannot be built without a pre-fork `DustParameters` — and the application
+ *   hands over a post-fork one, because that is the ledger version this wallet's public API speaks. What crosses is
+ *   therefore the three numbers, not the object: they are plain `bigint`s, and the pre-fork class takes exactly them.
+ * @param parameters The post-fork ledger version's dust parameters.
+ * @returns The same generation and decay rates, as a pre-fork `DustParameters`.
+ */
+/**
+ * The rates dust is generated and decays at, as plain data.
+ *
+ * @remarks
+ *   Structurally what both ledger versions' `DustParameters` are — three scalars and nothing else — which is why the
+ *   ledger classes remain assignable to this and a caller who already holds one can go on passing it. What it removes
+ *   is the reason to obtain one: three numbers do not need a ledger version to express, and asking for a
+ *   `LedgerParameters.initialParameters().dust` made an application import a ledger to start a wallet.
+ */
+export type DustGenerationRates = Readonly<{
+  /** How much dust one Night generates, at the cap. */
+  nightDustRatio: bigint;
+  /** How fast dust decays once its Night is spent. */
+  generationDecayRate: bigint;
+  /** How long dust survives after its Night is spent. */
+  dustGracePeriodSeconds: bigint;
+}>;
+
+export const asPreForkDustParameters = (parameters: DustGenerationRates): v8.DustParameters =>
+  new v8.DustParameters(parameters.nightDustRatio, parameters.generationDecayRate, parameters.dustGracePeriodSeconds);
+
+/**
+ * The same dust rates, as the post-fork ledger version's parameters object.
+ *
+ * @remarks
+ *   The mirror of {@link asPreForkDustParameters}, and needed for the same reason: an empty state of either variant is
+ *   parameterised, and the rates a caller names are plain numbers rather than either ledger's object. Ordinarily the
+ *   post-fork side's empty state is the migration's business; a wallet that starts post-fork because the chain said so
+ *   has no migration to get one from, and builds its own here.
+ * @param parameters The rates to express.
+ * @returns The same generation and decay rates, as a post-fork `DustParameters`.
+ */
+export const asPostForkDustParameters = (parameters: DustGenerationRates): ledger.DustParameters =>
+  new ledger.DustParameters(
+    parameters.nightDustRatio,
+    parameters.generationDecayRate,
+    parameters.dustGracePeriodSeconds,
+  );
+
+/**
+ * Builds a dust wallet class over a variant either side of a protocol boundary.
+ *
+ * @remarks
+ *   The boundary is `configuration.forkVersion` and nothing else: the pre-fork variant is registered from the minimum
+ *   supported version and the post-fork one from the fork version, so the version at which the runtime hands over and
+ *   the version at which each variant stops applying are the same number, taken from one place.
+ *
+ *   Each variant is built from its own configuration, which for dust is load-bearing rather than tidy — see
+ *   {@link SelfConfiguredDustVariant}.
+ * @example
+ *   ```typescript
+ *   const Wallet = CustomForkingDustWallet(
+ *     { forkVersion },
+ *     { builder: new V1Builder().withDefaults(), configuration: preForkConfiguration },
+ *     { builder: new V2Builder().withDefaults().withMigration(...), configuration: postForkConfiguration },
+ *   );
+ *   const wallet = Wallet.startWithSeed(seed, dustParameters);
+ *   ```;
+ *
+ * @param configuration What the wallet layer needs: where the boundary lies.
+ * @param preFork The variant that reads the chain below the boundary, with the configuration it is built from.
+ * @param postFork The variant that reads it from the boundary, with the configuration it is built from.
+ * @returns The wallet class.
+ */
+export function CustomForkingDustWallet<
+  TPreForkSyncUpdate,
+  TPostForkSyncUpdate,
+  TPreForkConfig extends object,
+  TPostForkConfig extends object,
+  TConfiguration extends ForkingDustConfiguration = ForkingDustConfiguration,
+>(
+  configuration: TConfiguration,
+  preFork: SelfConfiguredDustVariant<PreForkDustVariant<TPreForkSyncUpdate>, TPreForkConfig>,
+  postFork: SelfConfiguredDustVariant<PostForkDustVariant<TPostForkSyncUpdate>, TPostForkConfig>,
+): ForkingDustWalletClass<TPreForkSyncUpdate, TPostForkSyncUpdate, TConfiguration> {
+  type Variants = ForkingDustVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>;
+
+  // Registered through the shape the builder states rather than through the one this function was handed. The two are
+  // the same builder; what is dropped is the configuration *type*, which the parameter types have already paired with
+  // its builder — and which, left generic, keeps `build`'s "nothing further is owed" argument list unresolvable.
+  const preForkBuilder: VariantBuilder.VariantBuilder<PreForkDustVariant<TPreForkSyncUpdate>, object> = preFork.builder;
+  const postForkBuilder: VariantBuilder.VariantBuilder<
+    PostForkDustVariant<TPostForkSyncUpdate>,
+    object
+  > = postFork.builder;
+
+  const BaseWallet: WalletLike.BaseWalletClass<Variants> = WalletBuilder.init()
+    .withVariant(ProtocolVersion.MinSupportedVersion, preForkBuilder, preFork.configuration)
+    .withVariant(configuration.forkVersion, postForkBuilder, postFork.configuration)
+    .build();
+
+  const variants = BaseWallet.allVariantsRecord();
+
+  /** What the rates are when a caller names none: the ledger's own initial parameters. */
+  const defaultRates: DustGenerationRates = ledger.LedgerParameters.initialParameters().dust;
+
+  /**
+   * The key material this wallet holds, one entry per side of the protocol boundary.
+   *
+   * @remarks
+   *   The two ledger versions' `DustSecretKey` belong to different runtimes and each declares a private constructor, so
+   *   neither can be made from the other and the type system agrees. "The key this wallet holds" is therefore two
+   *   questions, and the type says so: each side is present or it is not, independently.
+   *
+   *   A seed is not among them. A seed can produce either side, so a wallet given one derives both at once and keeps the
+   *   results — the same capability with a shorter-lived secret, since from that moment the seed is not this wallet's
+   *   to hold.
+   */
+  type RetainedKeys = Readonly<{
+    preFork: Option.Option<v8.DustSecretKey>;
+    postFork: Option.Option<ledger.DustSecretKey>;
+  }>;
+
+  /** Nothing retained: never started, or stopped. */
+  const noKeys: RetainedKeys = { preFork: Option.none(), postFork: Option.none() };
+
+  /** Both sides, derived from one seed. */
+  const keysFromSeed = (seed: WalletSeed.WalletSeed): RetainedKeys => ({
+    preFork: Option.some(variants[V1Tag].variant.startAux.fromSeed(seed)),
+    postFork: Option.some(variants[V2Tag].variant.startAux.fromSeed(seed)),
+  });
+
+  /**
+   * What a variant can be started with, or why it cannot be.
+   *
+   * @remarks
+   *   Two different failures, deliberately distinguished: a wallet that was never started (or has been stopped) holds
+   *   nothing at all, while one started with the other side's key object holds something it must not use here.
+   */
+  const auxFor = <TAux>(
+    retained: RetainedKeys,
+    side: Option.Option<TAux>,
+    variantTag: symbol,
+  ): Either.Either<TAux, StartMaterial.MissingStartAuxError> =>
+    Either.fromOption(
+      side,
+      () =>
+        new StartMaterial.MissingStartAuxError({
+          message:
+            Option.isNone(retained.preFork) && Option.isNone(retained.postFork)
+              ? `This wallet holds no key material: it has not been started, or it has been stopped. Start it before ` +
+                `asking it to synchronize or to pay a fee.`
+              : `This wallet holds key material of the other protocol version only, which the variant ` +
+                `${String(variantTag)} cannot use: a Dust secret key belongs to one ledger version's runtime. Start ` +
+                `this wallet with material that answers for either side — startWithSeed(seed), or ` +
+                `startWithKeys({ v8, v9 }).`,
+          variantTag,
+        }),
+    );
+
+  const preForkAux = (retained: RetainedKeys): Either.Either<v8.DustSecretKey, StartMaterial.MissingStartAuxError> =>
+    auxFor(retained, retained.preFork, V1Tag);
+
+  const postForkAux = (
+    retained: RetainedKeys,
+  ): Either.Either<ledger.DustSecretKey, StartMaterial.MissingStartAuxError> =>
+    auxFor(retained, retained.postFork, V2Tag);
+
+  /**
+   * The protocol versions each variant owns, and the version a transaction it builds is stamped with.
+   *
+   * @remarks
+   *   The stamp is the floor of the variant's epoch: every decision it is later read for asks which side of the boundary
+   *   the bytes belong to, and the floor answers that the same way as any other version in the same epoch.
+   */
+  const preForkEpoch = ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, configuration.forkVersion);
+  const postForkEpoch = ProtocolVersion.epochOf(configuration.forkVersion, configuration.forkVersion);
+  const [preForkStamp] = preForkEpoch;
+  const [postForkStamp] = postForkEpoch;
+
+  /** Reads a transaction built before the boundary, refusing one built after it. */
+  const preForkTx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+    EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, preForkEpoch));
+
+  /** Reads a transaction built from the boundary, refusing one built before it. */
+  const postForkTx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+    EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, postForkEpoch));
+
+  /**
+   * How long a start waits for the chain to say which version it is on.
+   *
+   * @remarks
+   *   Short, because what is being bought is small: the alternative to an answer is the hand-over this wallet has always
+   *   done, which costs one migration and no correctness on a chain that produces events. It is a ceiling rather than a
+   *   typical cost — an unreachable indexer refuses a connection long before this — and it exists so that a probe which
+   *   neither answers nor fails cannot hold a start open indefinitely.
+   */
+  const probeTimeout = Duration.seconds(5);
+
+  /** Where a start begins, when the chain answered for it. */
+  type ProbedStart = Readonly<{
+    version: ProtocolVersion.ProtocolVersion;
+    variant: HList.Each<Variants>;
+  }>;
+
+  /**
+   * The variant the chain's current version belongs to, or nothing.
+   *
+   * @remarks
+   *   Nothing covers every way the question can fail to produce an answer, and they are deliberately not distinguished:
+   *   no probe configured, a probe that rejected, a probe that outlived the wallet's patience, or a version no
+   *   registered variant claims. Each means the same thing to a caller — start where a wallet with no history starts —
+   *   and none of them is a reason to fail.
+   */
+  const probedStart: Effect.Effect<Option.Option<ProbedStart>> =
+    configuration.chainVersionProbe === undefined
+      ? Effect.succeedNone
+      : pipe(
+          Effect.tryPromise(configuration.chainVersionProbe),
+          Effect.timeout(probeTimeout),
+          Effect.map((version) =>
+            Option.map(BaseWallet.variantFor(version), (variant): ProbedStart => ({ version, variant })),
+          ),
+          Effect.orElseSucceed(() => Option.none<ProbedStart>()),
+        );
+
+  /**
+   * A fresh state of the variant a probed start begins at, recording the version the chain reported.
+   *
+   * @remarks
+   *   Built exactly as the head-variant boot path builds its own — an empty state of that variant, valued against that
+   *   ledger version's rebuild of the rates the caller named — and then annotated with the observed version, which is
+   *   what keeps a variant from starting outside its own activation range and signalling backwards on sight.
+   */
+  const freshStateAt = (
+    variant: HList.Each<Variants>,
+    keys: DustKeysByEpoch,
+    rates: DustGenerationRates,
+    version: ProtocolVersion.ProtocolVersion,
+  ): PreForkCoreWallet | CoreWallet =>
+    Variant.getVersionedVariantTag(variant) === V2Tag
+      ? CoreWallet.withProtocolVersion(
+          CoreWallet.initEmpty(asPostForkDustParameters(rates), keys.v9, configuration.networkId),
+          version,
+        )
+      : PreForkCoreWallet.withProtocolVersion(
+          PreForkCoreWallet.initEmpty(asPreForkDustParameters(rates), keys.v8, configuration.networkId),
+          version,
+        );
+
+  return class ForkingDustWalletImplementation
+    extends BaseWallet
+    implements ForkingDustWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>
+  {
+    static readonly configuration: TConfiguration = configuration;
+
+    /**
+     * Starts at the variant the chain says it is on, or at the head variant when it does not say.
+     *
+     * @remarks
+     *   The second branch is the whole of this wallet's previous behaviour, unchanged and reached whenever the chain was
+     *   not asked or did not answer: the pre-fork variant, an empty state valued against the pre-fork rebuild of the
+     *   rates the caller named, and a hand-over on the first batch that reports a version it does not own.
+     * @param keys One ledger version's dust key per side of the boundary, since either side may be the one that runs.
+     * @param rates The rates the caller named, which whichever empty state is built is valued against.
+     * @returns The started wallet.
+     */
+    static #startProbed(keys: DustKeysByEpoch, rates: DustGenerationRates): Promise<ForkingDustWalletImplementation> {
+      return pipe(
+        probedStart,
+        Effect.map(
+          Option.match({
+            onNone: () =>
+              ForkingDustWalletImplementation.startFirst(
+                ForkingDustWalletImplementation,
+                // Valued against the same rates the caller named, rebuilt by the ledger version that owns this state —
+                // see {@link asPreForkDustParameters}.
+                PreForkCoreWallet.initEmpty(asPreForkDustParameters(rates), keys.v8, configuration.networkId),
+              ),
+            onSome: ({ version, variant }) =>
+              ForkingDustWalletImplementation.startAtVariant(
+                ForkingDustWalletImplementation,
+                variant,
+                freshStateAt(variant, keys, rates, version),
+              ),
+          }),
+        ),
+        Effect.runPromise,
+      );
+    }
+
+    static async startWithSeed(
+      seed: Uint8Array,
+      dustParameters: DustGenerationRates = defaultRates,
+    ): Promise<ForkingDustWalletImplementation> {
+      const derived = keysFromSeed(WalletSeed.WalletSeed(seed));
+      const wallet = await ForkingDustWalletImplementation.#startProbed(
+        { v8: Option.getOrThrow(derived.preFork), v9: Option.getOrThrow(derived.postFork) },
+        dustParameters,
+      );
+      // Both sides derived here and now, and the seed reference dropped with this frame: from this point the wallet
+      // holds key objects only, which is strictly less than it held before and does the same work.
+      wallet.#retainKeys(derived);
+      return wallet;
+    }
+
+    static async startWithKeys(
+      keys: DustKeysByEpoch,
+      dustParameters: DustGenerationRates = defaultRates,
+    ): Promise<ForkingDustWalletImplementation> {
+      const wallet = await ForkingDustWalletImplementation.#startProbed(keys, dustParameters);
+      wallet.#retainKeys({ preFork: Option.some(keys.v8), postFork: Option.some(keys.v9) });
+      return wallet;
+    }
+
+    static tryRestore(serializedState: string): Either.Either<ForkingDustWalletImplementation, DustRestoreError> {
+      const headVariant = HList.head(ForkingDustWalletImplementation.allVariants());
+      return variantForSnapshot(
+        serializedState,
+        (version) => ForkingDustWalletImplementation.variantFor(version),
+        headVariant,
+      ).pipe(
+        // Stated with its result type because the resolved variant is either of the two, so its deserializer is
+        // either of theirs: what comes back is a state of whichever one wrote the snapshot, which is what
+        // `startAtVariant` takes.
+        Either.flatMap((variant): Either.Either<ForkingDustWalletImplementation, DustRestoreError> => {
+          // Annotated rather than inferred because the resolved variant is either of the two, so its deserializer is
+          // either of theirs: what comes back is a state of whichever one wrote the snapshot, which is what
+          // `startAtVariant` takes.
+          const deserialized: Either.Either<PreForkCoreWallet | CoreWallet, DustRestoreError> =
+            variant.variant.deserializeState(serializedState);
+          return Either.map(deserialized, (state) =>
+            ForkingDustWalletImplementation.startAtVariant(ForkingDustWalletImplementation, variant, state),
+          );
+        }),
+      );
+    }
+
+    static restore(serializedState: string): ForkingDustWalletImplementation {
+      return Either.getOrThrow(ForkingDustWalletImplementation.tryRestore(serializedState));
+    }
+
+    readonly state: rx.Observable<DustWalletState<string>>;
+
+    /**
+     * What the application started this wallet with, kept so synchronization can be started again.
+     *
+     * @remarks
+     *   A migration starts a fresh variant whose sync has never run, and sync needs key material that is deliberately
+     *   absent from anything the wallet serializes. A retained seed answers for both variants; a retained key object
+     *   answers only for the post-fork one, which is the ledger version this wallet's public API speaks. Cleared by
+     *   {@link stop} so a stopped wallet cannot be resurrected by a late activation.
+     */
+    readonly #retainedKeys = Ref.unsafeMake<RetainedKeys>(noKeys);
+
+    /** Remembers key material for both sides of the boundary. */
+    #retainKeys(keys: RetainedKeys): void {
+      Ref.set(this.#retainedKeys, keys).pipe(Effect.runSync);
+    }
+
+    /**
+     * Starts synchronization on a variant that has just become current, with key material it can use.
+     *
+     * @param running The variant to start.
+     * @param auxFor That variant's own resolution of what it can be started with.
+     */
+    #resumeSyncOn<TStartAux>(
+      running: { startSyncInBackground: (aux: TStartAux) => Effect.Effect<void> },
+      keysFor: (retained: RetainedKeys) => Either.Either<TStartAux, StartMaterial.MissingStartAuxError>,
+    ): Effect.Effect<void, StartMaterial.MissingStartAuxError> {
+      return Ref.get(this.#retainedKeys).pipe(
+        Effect.flatMap((retained) =>
+          // Stopped, or never started: there is nothing to resume and nothing to resume it with.
+          Option.isNone(retained.preFork) && Option.isNone(retained.postFork)
+            ? Effect.void
+            : EitherOps.toEffect(keysFor(retained)).pipe(Effect.flatMap((aux) => running.startSyncInBackground(aux))),
+        ),
+      );
+    }
+
+    /** One synchronization step on a variant, with key material it can use. */
+    #stepSyncOn<TStartAux, TError>(
+      running: { sync: (aux: TStartAux) => Effect.Effect<void, TError> },
+      keysFor: (retained: RetainedKeys) => Either.Either<TStartAux, StartMaterial.MissingStartAuxError>,
+    ): Effect.Effect<void, TError | StartMaterial.MissingStartAuxError> {
+      return Ref.get(this.#retainedKeys).pipe(
+        Effect.flatMap((retained) =>
+          Option.isNone(retained.preFork) && Option.isNone(retained.postFork)
+            ? Effect.void
+            : EitherOps.toEffect(keysFor(retained)).pipe(Effect.flatMap((aux) => running.sync(aux))),
+        ),
+      );
+    }
 
     /**
      * Whether the activation watcher has been registered.
@@ -506,154 +699,241 @@ export function CustomDustWallet<
      */
     readonly #watcherRegistered = Ref.unsafeMake(false);
 
-    constructor(
-      runtime: Runtime.Runtime<
-        [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
-      >,
-      scope: Scope.CloseableScope,
-    ) {
+    constructor(runtime: Runtime.Runtime<Variants>, scope: Scope.CloseableScope) {
       super(runtime, scope);
       this.state = this.rawState.pipe(
         rx.map((emission) =>
-          // One variant, so the pairing is trivial here; the forking wallet narrows on `variantTag` first.
-          DustWalletState.fromVariant<CoreWallet, TSerialized>(
-            CustomDustWalletImplementation.allVariantsRecord()[V2Tag].variant,
-            emission,
-          ),
+          // The capabilities that understand a state and the state itself are chosen together, in the branch where
+          // the producing variant is known. The two variants' capability types are structurally identical, so a
+          // capability of one would type-check against a state of the other and be wrong at runtime.
+          emission.variantTag === V2Tag
+            ? DustWalletState.fromVariant(variants[V2Tag].variant, emission)
+            : DustWalletState.fromVariant(variants[V1Tag].variant, emission),
         ),
         rx.shareReplay({ refCount: true, bufferSize: 1 }),
       );
     }
 
-    start(secretKey: TStartAux): Promise<void> {
+    /**
+     * Everything a start does once the wallet holds its key material: watch for the next variant, synchronize on this
+     * one.
+     *
+     * @remarks
+     *   The same work whichever start was called — what the three differ in is only what they retained a moment earlier —
+     *   so it is stated once. The watcher is registered before the first dispatch and only once per wallet:
+     *   `onVariantActivation` resolves only after its subscription is live, so an activation racing a start is queued
+     *   rather than missed, and watchers accumulate, so registering per call would restart synchronization once per
+     *   historical start.
+     *
+     *   Both branches of the dispatch resolve their key from what was retained rather than from what the caller passed,
+     *   because the variant that is current is not the caller's to know: a wallet restored below the boundary is on the
+     *   pre-fork one whatever the application holds.
+     */
+    #startSynchronizing(): Effect.Effect<void, StartMaterial.MissingStartAuxError | WalletRuntimeError> {
       return Effect.gen(this, function* () {
-        yield* Ref.set(this.#retainedAux, Option.some(secretKey));
-
-        // Registered before the first dispatch, and only once: `onVariantActivation` resolves only after its
-        // subscription is live, so an activation racing this call is queued rather than missed.
         const alreadyRegistered = yield* Ref.getAndSet(this.#watcherRegistered, true);
         if (!alreadyRegistered) {
           yield* this.runtime.onVariantActivation({
-            [V2Tag]: (v2: RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>) =>
-              Ref.get(this.#retainedAux).pipe(
-                Effect.flatMap(
-                  Option.match({
-                    // Stopped, or never started: there is nothing to resume and no key to resume it with.
-                    onNone: () => Effect.void,
-                    onSome: (retained: TStartAux) => v2.startSyncInBackground(retained),
-                  }),
-                ),
-              ),
+            [V1Tag]: (v1) => this.#resumeSyncOn(v1, preForkAux),
+            [V2Tag]: (v2) => this.#resumeSyncOn(v2, postForkAux),
           });
         }
 
-        yield* this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground(secretKey) });
-      }).pipe(Effect.runPromise);
-    }
-
-    override async stop(): Promise<void> {
-      // Released before the runtime is torn down: the key outlives neither the wallet nor an in-flight activation.
-      Ref.set(this.#retainedAux, Option.none()).pipe(Effect.runSync);
-      await super.stop();
-    }
-
-    stepSync(secretKey: TStartAux): Promise<void> {
-      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.sync(secretKey) }).pipe(Effect.runPromise);
+        yield* this.runtime.dispatch({
+          [V1Tag]: (v1) => this.#resumeSyncOn(v1, preForkAux),
+          [V2Tag]: (v2) => this.#resumeSyncOn(v2, postForkAux),
+        });
+      });
     }
 
     /**
-     * The key material this wallet's one variant uses, from what it was started with.
+     * Starts background synchronization on whichever variant is current, and keeps the key for the next one.
      *
      * @remarks
-     *   Fee payment selects dust the wallet owns, so it needs the same secret synchronization does.
+     *   The key is the post-fork ledger version's, so it is retained against that variant alone and answers for it alone.
+     *   A wallet still on the pre-fork variant is started from whatever it holds for _that_ side — which a wallet built
+     *   from a seed, or from both versions' keys, can always answer and one holding only this cannot.
+     *
+     *   That is the position of a wallet restored from a snapshot written below the boundary: a snapshot carries no key
+     *   material, so this key leaves it with nothing the running variant can use, and it says so rather than pretending
+     *   to have started. {@link ForkingDustWallet.startWithSeed} and {@link ForkingDustWallet.startWithKeys} are the same
+     *   wallet started with material that answers for either side.
+     * @param secretKey The post-fork ledger version's dust secret key.
      */
-    #requireAux(): Effect.Effect<TStartAux, StartMaterial.MissingStartAuxError> {
-      return Ref.get(this.#retainedAux).pipe(
-        Effect.flatMap(
-          Option.match({
-            onNone: () =>
-              Effect.fail(
-                new StartMaterial.MissingStartAuxError({
-                  message:
-                    `This wallet holds no key material: it has not been started, or it has been stopped. Start it ` +
-                    `before asking it to pay a fee.`,
-                  variantTag: V2Tag,
-                }),
-              ),
-            onSome: (aux: TStartAux) => Effect.succeed(aux),
-          }),
-        ),
-      );
+    start(secretKey: ledger.DustSecretKey): Promise<void> {
+      return Effect.gen(this, function* () {
+        // The post-fork side only: this key belongs to that ledger version's runtime. Whatever the wallet already
+        // holds for the pre-fork side is left as it is, so a wallet built from a seed keeps the ability to read a
+        // chain that has not forked yet.
+        yield* Ref.update(this.#retainedKeys, (retained) => ({ ...retained, postFork: Option.some(secretKey) }));
+        yield* this.#startSynchronizing();
+      }).pipe(Effect.runPromise);
     }
 
-    async createDustGenerationTransaction(
-      currentTime: Date | undefined,
-      ttl: Date,
-      nightUtxos: Array<UtxoWithMeta>,
-      nightVerifyingKey: SignatureVerifyingKey,
-      dustReceiverAddress: DustAddress | undefined,
-    ): Promise<UnprovenTx> {
+    startWithSeed(seed: Uint8Array): Promise<void> {
+      return Effect.gen(this, function* () {
+        // Replaced rather than merged: a seed answers for every variant, so whatever partial material the wallet held
+        // has nothing left to contribute.
+        yield* Ref.set(this.#retainedKeys, keysFromSeed(WalletSeed.WalletSeed(seed)));
+        yield* this.#startSynchronizing();
+      }).pipe(Effect.runPromise);
+    }
+
+    startWithKeys(keys: DustKeysByEpoch): Promise<void> {
+      return Effect.gen(this, function* () {
+        yield* Ref.set(this.#retainedKeys, { preFork: Option.some(keys.v8), postFork: Option.some(keys.v9) });
+        yield* this.#startSynchronizing();
+      }).pipe(Effect.runPromise);
+    }
+
+    async stop(): Promise<void> {
+      // Released before the runtime is torn down: the key material outlives neither the wallet nor an in-flight
+      // activation.
+      Ref.set(this.#retainedKeys, noKeys).pipe(Effect.runSync);
+      await super.stop();
+    }
+
+    /**
+     * Runs one synchronization step on whichever variant is current.
+     *
+     * @remarks
+     *   Available on both sides of the boundary: the pre-fork variant is stepped with a key derived from what the wallet
+     *   retained, exactly as background synchronization is.
+     * @param secretKey The post-fork ledger version's dust secret key.
+     */
+    stepSync(secretKey: ledger.DustSecretKey): Promise<void> {
       return this.runtime
-        .dispatch({
-          [V2Tag]: (v2) =>
-            v2
-              .createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress)
-              .pipe(Effect.map(seal)),
+        .dispatch<void, WalletError | StartMaterial.MissingStartAuxError>({
+          [V1Tag]: (v1) => this.#stepSyncOn(v1, preForkAux),
+          [V2Tag]: (v2) => v2.sync(secretKey),
         })
         .pipe(Effect.runPromise);
     }
 
-    async splitNightUtxosForDustRegistration(
+    /**
+     * The key material the variant that is current can use, from what this wallet retained.
+     *
+     * @remarks
+     *   Fee payment selects dust the wallet owns, so it needs the same secret synchronization does. A wallet that was
+     *   never started, or one holding a key object of the other ledger version, has none the current variant can use
+     *   and says so by name.
+     */
+    #requireAux<TAux>(
+      keysFor: (retained: RetainedKeys) => Either.Either<TAux, StartMaterial.MissingStartAuxError>,
+    ): Effect.Effect<TAux, StartMaterial.MissingStartAuxError> {
+      return Ref.get(this.#retainedKeys).pipe(Effect.flatMap((retained) => EitherOps.toEffect(keysFor(retained))));
+    }
+
+    createDustGenerationTransaction(
+      currentTime: Date | undefined,
+      ttl: Date,
+      nightUtxos: Array<UtxoWithMeta>,
+      nightVerifyingKey: ledger.SignatureVerifyingKey,
+      dustReceiverAddress: DustAddress | undefined,
+    ): Promise<UnprovenTx> {
+      return this.runtime
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            EitherOps.toEffect(PreForkSignatures.lowerSignatureVerifyingKey(nightVerifyingKey)).pipe(
+              Effect.flatMap((key) =>
+                v1.createDustGenerationTransaction(currentTime, ttl, nightUtxos, key, dustReceiverAddress),
+              ),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+            ),
+          [V2Tag]: (v2) =>
+            v2
+              .createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress)
+              .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp))),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    /**
+     * Splits Night UTxOs into the ones a registration puts in its guaranteed and fallible sections.
+     *
+     * @remarks
+     *   Available on both sides of the boundary, and deliberately not part of the seam above: it takes and returns plain
+     *   data — UTxOs, dust generation readings, a fee amount — and touches no transaction at all, so there is nothing
+     *   here that needs proving and nothing the pre-fork variant cannot answer.
+     */
+    splitNightUtxosForDustRegistration(
       currentTime: Date,
       nightUtxos: ReadonlyArray<UtxoWithMeta>,
       isRegistration: boolean,
     ): Promise<NightUtxoSplitForDustRegistration> {
       return this.runtime
-        .dispatch({
+        .dispatch<NightUtxoSplitForDustRegistration, WalletError>({
+          [V1Tag]: (v1) => v1.splitNightUtxosForDustRegistration(currentTime, nightUtxos, isRegistration),
           [V2Tag]: (v2) => v2.splitNightUtxosForDustRegistration(currentTime, nightUtxos, isRegistration),
         })
         .pipe(Effect.runPromise);
     }
 
-    async attachDustRegistration(
+    attachDustRegistration(
       transaction: UnprovenTx,
       currentTime: Date,
-      nightVerifyingKey: SignatureVerifyingKey,
+      nightVerifyingKey: ledger.SignatureVerifyingKey,
       dustReceiverAddress: DustAddress | undefined,
       feePayment: bigint,
     ): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch({
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            Effect.all([
+              preForkTx<v8.UnprovenTransaction>(transaction),
+              EitherOps.toEffect(PreForkSignatures.lowerSignatureVerifyingKey(nightVerifyingKey)),
+            ]).pipe(
+              Effect.flatMap(([tx, key]) =>
+                v1.attachDustRegistration(tx, currentTime, key, dustReceiverAddress, feePayment),
+              ),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+            ),
           [V2Tag]: (v2) =>
-            carried<UnprovenTransaction>(transaction).pipe(
+            postForkTx<ledger.UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((tx) =>
                 v2.attachDustRegistration(tx, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment),
               ),
-              Effect.map(seal),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp)),
             ),
         })
         .pipe(Effect.runPromise);
     }
 
-    addDustGenerationSignature(transaction: UnprovenTx, signature: Signature): Promise<UnprovenTx> {
+    addDustGenerationSignature(transaction: UnprovenTx, signature: ledger.Signature): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch({
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            Effect.all([
+              preForkTx<v8.UnprovenTransaction>(transaction),
+              EitherOps.toEffect(PreForkSignatures.lowerSignature(signature)),
+            ]).pipe(
+              Effect.flatMap(([tx, lowered]) => v1.addDustGenerationSignature(tx, lowered)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+            ),
           [V2Tag]: (v2) =>
-            carried<UnprovenTransaction>(transaction).pipe(
+            postForkTx<ledger.UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((tx) => v2.addDustGenerationSignature(tx, signature)),
-              Effect.map(seal),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp)),
             ),
         })
         .pipe(Effect.runPromise);
     }
 
-    addDustRegistrationSignature(transaction: UnprovenTx, signature: Signature): Promise<UnprovenTx> {
+    addDustRegistrationSignature(transaction: UnprovenTx, signature: ledger.Signature): Promise<UnprovenTx> {
       return this.runtime
-        .dispatch({
+        .dispatch<UnprovenTx, TransactingError>({
+          [V1Tag]: (v1) =>
+            Effect.all([
+              preForkTx<v8.UnprovenTransaction>(transaction),
+              EitherOps.toEffect(PreForkSignatures.lowerSignature(signature)),
+            ]).pipe(
+              Effect.flatMap(([tx, lowered]) => v1.addDustRegistrationSignature(tx, lowered)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+            ),
           [V2Tag]: (v2) =>
-            carried<UnprovenTransaction>(transaction).pipe(
+            postForkTx<ledger.UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((tx) => v2.addDustRegistrationSignature(tx, signature)),
-              Effect.map(seal),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp)),
             ),
         })
         .pipe(Effect.runPromise);
@@ -661,9 +941,15 @@ export function CustomDustWallet<
 
     calculateFee(transactions: ReadonlyArray<AnyTx>): Promise<bigint> {
       return this.runtime
-        .dispatch({
+        .dispatch<bigint, TransactingError>({
+          [V1Tag]: (v1) =>
+            Effect.forEach(transactions, preForkTx<PreForkAnyTransaction>).pipe(
+              Effect.flatMap((txs) => v1.calculateFee(txs)),
+            ),
           [V2Tag]: (v2) =>
-            Effect.forEach(transactions, carried<AnyTransaction>).pipe(Effect.flatMap((txs) => v2.calculateFee(txs))),
+            Effect.forEach(transactions, postForkTx<AnyTransaction>).pipe(
+              Effect.flatMap((txs) => v2.calculateFee(txs)),
+            ),
         })
         .pipe(Effect.runPromise);
     }
@@ -671,9 +957,14 @@ export function CustomDustWallet<
     estimateFee(transactions: ReadonlyArray<AnyTx>, ttl?: Date, currentTime?: Date): Promise<bigint> {
       const effectiveTtl = ttl ?? new Date(Date.now() + 60 * 60 * 1000);
       return this.runtime
-        .dispatch({
+        .dispatch<bigint, TransactingError>({
+          [V1Tag]: (v1) =>
+            Effect.all([
+              this.#requireAux(preForkAux),
+              Effect.forEach(transactions, preForkTx<PreForkAnyTransaction>),
+            ]).pipe(Effect.flatMap(([key, txs]) => v1.estimateFee(key, txs, effectiveTtl, currentTime))),
           [V2Tag]: (v2) =>
-            Effect.all([this.#requireAux(), Effect.forEach(transactions, carried<AnyTransaction>)]).pipe(
+            Effect.all([this.#requireAux(postForkAux), Effect.forEach(transactions, postForkTx<AnyTransaction>)]).pipe(
               Effect.flatMap(([key, txs]) => v2.estimateFee(key, txs, effectiveTtl, currentTime)),
             ),
         })
@@ -686,21 +977,50 @@ export function CustomDustWallet<
       currentTime?: Date,
     ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData }> {
       return this.runtime
-        .dispatch({
+        .dispatch<{ transaction: UnprovenTx; blockData: PricedBlockData }, TransactingError>({
+          [V1Tag]: (v1) =>
+            Effect.all([
+              this.#requireAux(preForkAux),
+              Effect.forEach(transactions, preForkTx<PreForkAnyTransaction>),
+            ]).pipe(
+              Effect.flatMap(([key, txs]) => v1.balanceTransactions(key, txs, ttl, currentTime)),
+              Effect.map(({ transaction, blockData }) => ({
+                transaction: WalletTransaction.adopt('Unproven', transaction, preForkStamp),
+                blockData,
+              })),
+            ),
           [V2Tag]: (v2) =>
-            Effect.all([this.#requireAux(), Effect.forEach(transactions, carried<AnyTransaction>)]).pipe(
+            Effect.all([this.#requireAux(postForkAux), Effect.forEach(transactions, postForkTx<AnyTransaction>)]).pipe(
               Effect.flatMap(([key, txs]) => v2.balanceTransactions(key, txs, ttl, currentTime)),
-              Effect.map(({ transaction, blockData }) => ({ transaction: seal(transaction), blockData })),
+              Effect.map(({ transaction, blockData }) => ({
+                transaction: WalletTransaction.adopt('Unproven', transaction, postForkStamp),
+                blockData,
+              })),
             ),
         })
         .pipe(Effect.runPromise);
     }
 
+    /**
+     * Un-records a transaction this wallet paid the fee for, releasing the dust it had booked.
+     *
+     * @remarks
+     *   A transaction built on the other side of the boundary cannot have had its fee paid by the current variant, so
+     *   there is no dust of it to release and this resolves having done nothing. That is the one place a version
+     *   mismatch is not an error: the facade reverts all three wallets together when a submission fails, and a refusal
+     *   here would strand that whole path over a transaction this wallet was never holding anything for.
+     * @param transaction The transaction to un-record.
+     */
     revertTransaction(transaction: AnyTx): Promise<void> {
       return this.runtime
-        .dispatch({
+        .dispatch<void, TransactingError>({
+          [V1Tag]: (v1) =>
+            Either.match(WalletTransaction.unwrapWithin<PreForkAnyTransaction>(transaction, preForkEpoch), {
+              onLeft: () => Effect.void,
+              onRight: (tx) => v1.revertTransaction(tx),
+            }),
           [V2Tag]: (v2) =>
-            Either.match(WalletTransaction.unwrapWithin<AnyTransaction>(transaction, wholeTimeline), {
+            Either.match(WalletTransaction.unwrapWithin<AnyTransaction>(transaction, postForkEpoch), {
               onLeft: () => Effect.void,
               onRight: (tx) => v2.revertTransaction(tx),
             }),
@@ -708,7 +1028,7 @@ export function CustomDustWallet<
         .pipe(Effect.runPromise);
     }
 
-    waitForSyncedState(allowedGap: bigint = 0n): Promise<DustWalletState<TSerialized>> {
+    waitForSyncedState(allowedGap: bigint = 0n): Promise<DustWalletState<string>> {
       return rx.firstValueFrom(
         this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
       );
@@ -727,10 +1047,8 @@ export function CustomDustWallet<
         return;
       }
       const timeoutMs = opts?.timeoutMs ?? 300_000;
-      // Combine the dust state stream with a 1 s tick — the dust state only emits when sync
-      // updates apply, but the generation projection depends on a current-time reading, which
-      // advances continuously. Without a periodic tick the filter would never re-run between
-      // state emissions on a quiet wallet, and the wait would hang.
+      // Combine the dust state stream with a 1 s tick — the dust state only emits when sync updates apply, but the
+      // generation projection depends on a current-time reading, which advances continuously.
       await rx.firstValueFrom(
         rx.combineLatest([this.state, rx.timer(0, 1000)]).pipe(
           rx.filter(([dustState]) => claimableFeePayment(dustState, nightUtxos, clock.now()) >= requiredAmount),
@@ -739,7 +1057,7 @@ export function CustomDustWallet<
       );
     }
 
-    serializeState(): Promise<TSerialized> {
+    serializeState(): Promise<string> {
       return rx.firstValueFrom(this.state).then((state) => state.serialize());
     }
 
@@ -747,4 +1065,58 @@ export function CustomDustWallet<
       return rx.firstValueFrom(this.state).then((state) => state.address);
     }
   };
+}
+
+/** A dust wallet built the way this package ships it: one variant either side of the protocol boundary. */
+export type DustWallet = ForkingDustWallet<PreForkSyncUpdate, PostForkSyncUpdate>;
+
+/** The class {@link DustWallet} builds. */
+export type DustWalletClass = ForkingDustWalletClass<PreForkSyncUpdate, PostForkSyncUpdate, DefaultDustConfiguration>;
+
+/**
+ * Builds the dust wallet this package ships: the default variant either side of `configuration.forkVersion`.
+ *
+ * @remarks
+ *   Both variants read the chain through the indexer's dust event subscription and record transaction history in the same
+ *   storage. Each is built from the same application configuration, because what they ask for happens to coincide —
+ *   with one exception the type system cannot police: `dustParameters` names a ledger type, and the two ledgers'
+ *   `DustParameters` are structurally identical, so it is passed only to the variant it belongs to.
+ *
+ *   **The pre-fork variant syncs by event replay only.** The projections fast-sync path is a post-fork capability: it
+ *   needs four `DustLocalState` APIs that no published pre-fork ledger has. That is a permanent property of the
+ *   pre-fork variant, not a gap to be closed.
+ *
+ *   **Fee-paying operations work on either side of the boundary**: the active variant answers with its own ledger's
+ *   objects, and every result travels as a handle stamped with the epoch that built it.
+ *
+ *   **The chain is asked where it is before a variant is chosen.** The indexer this wallet already syncs from answers
+ *   which protocol version the chain is on, so a start on a chain past the boundary begins post-fork rather than
+ *   handing over immediately. An application that would rather ask something else — a cache, a value it already holds —
+ *   supplies its own `chainVersionProbe`; one whose chain cannot be reached loses nothing, because the answer is
+ *   best-effort and its absence is the behaviour this wallet had before.
+ * @param configuration What the wallet and both its variants are built from, including where the boundary lies.
+ * @returns The wallet class.
+ */
+export function DustWallet(configuration: DefaultDustConfiguration): DustWalletClass {
+  const dustParameters = configuration.dustParameters ?? ledger.LedgerParameters.initialParameters().dust;
+  const withProbe: DefaultDustConfiguration = {
+    ...configuration,
+    chainVersionProbe: configuration.chainVersionProbe ?? makeIndexerChainVersionProbe(configuration),
+  };
+
+  return CustomForkingDustWallet(
+    withProbe,
+    {
+      builder: new V1Builder().withDefaults(),
+      // The one field that cannot be shared: `dustParameters` is a WASM object of whichever ledger module produced it,
+      // so the pre-fork variant is handed the pre-fork rebuild of the same rates rather than the object itself.
+      configuration: { ...configuration, dustParameters: asPreForkDustParameters(dustParameters) },
+    },
+    {
+      builder: new V2Builder()
+        .withDefaults()
+        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters })),
+      configuration,
+    },
+  );
 }

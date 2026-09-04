@@ -25,8 +25,8 @@ import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { UnsupportedSnapshotVersionError } from '../Restore.js';
-import { type DefaultShieldedConfiguration } from '../ShieldedWallet.js';
-import { ShieldedWallet } from '../ForkingShieldedWallet.js';
+import { type DefaultShieldedConfiguration } from '../ShieldedWalletAPI.js';
+import { ShieldedWallet } from '../ShieldedWallet.js';
 import { TransactionHistory } from '../v2/index.js';
 
 const configuration: DefaultShieldedConfiguration = {

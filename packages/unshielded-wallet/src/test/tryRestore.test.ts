@@ -18,10 +18,10 @@
 import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { UnshieldedWallet } from '../ForkingUnshieldedWallet.js';
+import { UnshieldedWallet } from '../UnshieldedWallet.js';
 import { createKeystore, PublicKey } from '../KeyStore.js';
 import { UnsupportedSnapshotVersionError } from '../Restore.js';
-import { type DefaultUnshieldedConfiguration } from '../UnshieldedWallet.js';
+import { type DefaultUnshieldedConfiguration } from '../UnshieldedWalletAPI.js';
 import { TransactionHistory } from '../v2/index.js';
 
 const configuration: DefaultUnshieldedConfiguration = {

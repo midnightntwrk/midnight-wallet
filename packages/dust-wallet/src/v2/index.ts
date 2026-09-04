@@ -11,7 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 export * from './CoreWallet.js';
-export * from '../DustWallet.js';
+export * from '../DustWalletAPI.js';
+export * from '../SingleVariantDustWallet.js';
 export * as Keys from './Keys.js';
 export * as Migration from './Migration.js';
 export * as Simulator from '@midnightntwrk/wallet-sdk-capabilities/simulation';

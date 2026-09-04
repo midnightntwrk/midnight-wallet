@@ -36,7 +36,7 @@ import {
   CustomForkingUnshieldedWallet,
   type ForkingUnshieldedWallet,
   type ForkingUnshieldedWalletClass,
-} from '../ForkingUnshieldedWallet.js';
+} from '../UnshieldedWallet.js';
 import { type PublicKey } from '../KeyStore.js';
 import { type CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
 import * as PreForkMigration from '../v1/Migration.js';
