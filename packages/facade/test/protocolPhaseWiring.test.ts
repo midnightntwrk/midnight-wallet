@@ -33,14 +33,7 @@
  */
 
 import * as ledger from '@midnightntwrk/ledger-v9';
-import {
-  InMemoryTransactionHistoryStorage,
-  NetworkId,
-  ProtocolVersion,
-  type FinalizedTx,
-} from '@midnightntwrk/wallet-sdk-abstractions';
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
-import type { PendingTransactionsService } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustWallet, type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet, type ShieldedWalletState } from '@midnightntwrk/wallet-sdk-shielded';
 import {
@@ -52,7 +45,7 @@ import {
 import { Option } from 'effect';
 import * as rx from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
+import { type ResolvedConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
 
 import {
   createV8MockProvingService,
@@ -62,6 +55,7 @@ import {
   getShieldedSeed,
   getUnshieldedSeed,
   shieldedAt,
+  SilentPendingTransactions,
   unshieldedAt,
 } from './utils/index.js';
 
@@ -81,37 +75,6 @@ const v9Version = {
   dust: forkVersion,
 } as const;
 
-/** A pending service that answers and records, so the facade's own orphaning subscription has somewhere to go. */
-class SilentPendingTransactions implements PendingTransactionsService<FinalizedTx> {
-  readonly states = new rx.BehaviorSubject<PendingTransactions.PendingTransactions<FinalizedTx>>(
-    PendingTransactions.empty(),
-  );
-
-  start(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  stop(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  state(): rx.Observable<PendingTransactions.PendingTransactions<FinalizedTx>> {
-    return this.states.asObservable();
-  }
-
-  addPendingTransaction(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  clear(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  orphanBeyond(): Promise<void> {
-    return Promise.resolve();
-  }
-}
-
 describe('three wallets that disagree about which side of the boundary the chain is on', () => {
   let facade: WalletFacade;
   let shieldedStates: rx.BehaviorSubject<ShieldedWalletState>;
@@ -119,7 +82,7 @@ describe('three wallets that disagree about which side of the boundary the chain
   let dustStates: rx.BehaviorSubject<DustWalletState>;
 
   beforeEach(async () => {
-    const configuration: DefaultConfiguration = {
+    const configuration: ResolvedConfiguration = {
       networkId: NetworkId.NetworkId.Undeployed,
       forks: { v9: forkVersion },
       relayURL: new URL('http://localhost:9944'),

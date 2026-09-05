@@ -16,14 +16,13 @@
  * The bundled prover drives a zkir runtime over bytes and never looks at a ledger version, so — unlike a proof server,
  * which is built against one — the same description serves both ledger versions. Naming it under both `v8` and `v9`
  * covers the whole timeline: the SDK drives each side with its own ledger, and where one side ends and the other
- * begins is `forks.v9`, stated once.
+ * begins is `forks.v9`, which the facade presets.
  */
 import {
   WalletSeeds,
   type DefaultConfiguration,
   DustWallet,
   InMemoryTransactionHistoryStorage,
-  ProtocolVersion,
   WalletEntrySchema,
   WalletFacade,
   ShieldedWallet,
@@ -42,9 +41,8 @@ const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
 const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
-  // The protocol version this chain hands over to ledger-v9 at. A 2.x node reports 2000000;
-  // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
-  forks: { v9: ProtocolVersion.V9NativeForkVersion },
+  // `forks` is left out: the facade presets `DefaultForkSchedule` — ledger-v9 from the version a 2.x node reports. A
+  // chain that hands over elsewhere states its own `forks` here, which wins.
   costParameters: {
     feeBlocksMargin: 5,
   },

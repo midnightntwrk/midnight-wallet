@@ -38,9 +38,9 @@ const configuration = {
     indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
   },
   txHistoryStorage: new InMemoryTransactionHistoryStorage(TransactionHistory.ShieldedTransactionHistoryEntrySchema),
-  // The protocol version this chain hands over to ledger-v9 at. A 2.x node reports 2000000;
-  // the final mainnet fork constant is not yet fixed, so it is supplied per environment.
-  forks: { v9: ProtocolVersion.V9NativeForkVersion },
+  // Where this chain hands over to ledger-v9: the schedule of a chain born on ledger-v9, as a 2.x node runs. The
+  // final mainnet fork constant is not yet fixed, so a chain that hands over elsewhere states `{ v9: ... }` here.
+  forks: ProtocolVersion.V9NativeForkSchedule,
 };
 
 // Create secret keys from a shielded seed

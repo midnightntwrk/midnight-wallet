@@ -246,10 +246,9 @@ export class TestContainersFixture {
       relayURL: new URL(this.getNodeUri()),
       networkId: this.getNetworkId(),
       txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
-      // Every environment these suites run against is on the ledger-v9-native node line, which reports
-      // this protocol version, so the wallet reaches its V2 variant. Defined once here rather than
-      // at each construction site; the final mainnet fork constant is still an open question.
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
+      // Every environment these suites run against is on the ledger-v9-native node line, so the wallet reaches its V2
+      // variant; the final mainnet fork constant is still an open question.
+      forks: ProtocolVersion.V9NativeForkSchedule,
     };
   }
 

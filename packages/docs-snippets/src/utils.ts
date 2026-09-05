@@ -12,7 +12,6 @@
 // limitations under the License.
 import type * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
 import {
-  type DefaultConfiguration,
   DustWallet,
   InMemoryTransactionHistoryStorage,
   WalletEntrySchema,
@@ -24,7 +23,6 @@ import {
   type UnshieldedKeystore,
   WalletSeeds,
   mergeWalletEntries,
-  ProtocolVersion,
 } from '@midnightntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
 
@@ -37,11 +35,11 @@ const V8_PROOF_SERVER_PORT = Number.parseInt(process.env['V8_PROOF_SERVER_PORT']
 const INDEXER_HTTP_URL = `http://localhost:${INDEXER_PORT}/api/v4/graphql`;
 const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
-export const configuration: DefaultConfiguration = {
+// Resolved up front rather than left to `WalletFacade.init`, which does the same for the factories it calls: the
+// snippets read `forks` back to choose which ledger version authors a transaction, and `init` takes the resolved
+// configuration as it is.
+export const configuration = WalletFacade.resolveConfiguration({
   networkId: 'undeployed',
-  // The protocol version this chain hands over to ledger-v9 at. A 2.x node reports 2000000;
-  // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
-  forks: { v9: ProtocolVersion.V9NativeForkVersion },
   costParameters: {
     feeBlocksMargin: 5,
   },
@@ -58,7 +56,7 @@ export const configuration: DefaultConfiguration = {
     indexerWsUrl: INDEXER_WS_URL,
   },
   txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
-};
+});
 
 export const initWalletWithSeed = async (
   seed: Buffer,

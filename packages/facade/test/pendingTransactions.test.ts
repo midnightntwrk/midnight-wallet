@@ -25,23 +25,22 @@ import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
-import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
+import { type ResolvedConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
 import { createV8MockProvingService, getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
 import * as rx from 'rxjs';
 
 vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 
 describe('Wallet Facade handling pending transactions', () => {
-  let configuration: DefaultConfiguration;
+  let configuration: ResolvedConfiguration;
 
   let facade: WalletFacade;
   let shielded: ShieldedWallet;
   let unshielded: UnshieldedWallet;
   let dust: DustWallet;
   beforeEach(async () => {
-    configuration = {
+    configuration = WalletFacade.resolveConfiguration({
       networkId: NetworkId.NetworkId.Undeployed,
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
@@ -51,7 +50,7 @@ describe('Wallet Facade handling pending transactions', () => {
         feeBlocksMargin: 0,
       },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
-    };
+    });
     const seed = '0000000000000000000000000000000000000000000000000000000000000001';
     const shieldedSeed = getShieldedSeed(seed);
     const unshieldedSeed = getUnshieldedSeed(seed);

@@ -69,3 +69,14 @@ describe('ForkSchedule', () => {
     expect(v8Scheduled).toBe(false);
   });
 });
+
+describe('V9NativeForkSchedule', () => {
+  it('has ledger-v9 begin at V9NativeForkVersion, and says nothing else', () => {
+    expect(ProtocolVersion.V9NativeForkSchedule).toStrictEqual({ v9: ProtocolVersion.V9NativeForkVersion });
+  });
+
+  it('is a ForkSchedule, so a configuration can name it where it would otherwise write the literal', () => {
+    const schedule: ProtocolVersion.ForkSchedule = ProtocolVersion.V9NativeForkSchedule;
+    expect(schedule.v9).toBe(ProtocolVersion.V9NativeForkVersion);
+  });
+});

@@ -127,7 +127,7 @@ export const createWalletConfig = (
     txHistoryStorage: new InMemoryTransactionHistoryStorage(UnshieldedEntrySchema),
     // The ledger-v9-native node line these suites run against reports this protocol version, so the wallet reaches its
     // V2 variant.
-    forks: { v9: ProtocolVersion.V9NativeForkVersion },
+    forks: ProtocolVersion.V9NativeForkSchedule,
   };
 
   return { ...defaultConfig, ...overrides };

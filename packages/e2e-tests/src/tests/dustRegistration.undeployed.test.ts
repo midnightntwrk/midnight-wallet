@@ -91,7 +91,7 @@ describe('Dust Registration', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
+      forks: ProtocolVersion.V9NativeForkSchedule,
       costParameters: {
         feeBlocksMargin: 5,
       },

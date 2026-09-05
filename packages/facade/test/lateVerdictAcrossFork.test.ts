@@ -37,8 +37,7 @@ import {
   WalletTransaction,
   type FinalizedTx,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
-import type { PendingTransactionsService } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet, type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet, type ShieldedWalletState } from '@midnightntwrk/wallet-sdk-shielded';
@@ -52,7 +51,7 @@ import { DateTime, Option } from 'effect';
 import * as rx from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  type DefaultConfiguration,
+  type ResolvedConfiguration,
   WalletEntrySchema,
   WalletFacade,
   isPendingWalletEntry,
@@ -67,6 +66,7 @@ import {
   getShieldedSeed,
   getUnshieldedSeed,
   shieldedAt,
+  SilentPendingTransactions,
   sleep,
   unshieldedAt,
 } from './utils/index.js';
@@ -81,34 +81,11 @@ const v8Version = ProtocolVersion.ProtocolVersion(3n);
 const v9Version = ProtocolVersion.ProtocolVersion(forkVersion + 1n);
 
 /** A pending service the suite drives: the facade's reaction to a verdict is what is under test, not the polling. */
-class DrivenPendingTransactions implements PendingTransactionsService<FinalizedTx> {
+class DrivenPendingTransactions extends SilentPendingTransactions {
   readonly cleared: FinalizedTx[] = [];
-  readonly states = new rx.BehaviorSubject<PendingTransactions.PendingTransactions<FinalizedTx>>(
-    PendingTransactions.empty(),
-  );
 
-  start(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  stop(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  state(): rx.Observable<PendingTransactions.PendingTransactions<FinalizedTx>> {
-    return this.states.asObservable();
-  }
-
-  addPendingTransaction(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  clear(tx: FinalizedTx): Promise<void> {
+  override clear(tx: FinalizedTx): Promise<void> {
     this.cleared.push(tx);
-    return Promise.resolve();
-  }
-
-  orphanBeyond(): Promise<void> {
     return Promise.resolve();
   }
 }
@@ -129,7 +106,7 @@ const acceptingSubmission: SubmissionService<FinalizedTx> = {
 };
 
 describe('a verdict that arrives after the wallets have crossed the boundary', () => {
-  let configuration: DefaultConfiguration;
+  let configuration: ResolvedConfiguration;
   let facade: WalletFacade;
   let pending: DrivenPendingTransactions;
   let shieldedStates: rx.BehaviorSubject<ShieldedWalletState>;
