@@ -42,7 +42,7 @@ const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
 const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
-  // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
+  // The protocol version this chain hands over to ledger-v9 at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
   forks: { v9: ProtocolVersion.V9NativeForkVersion },
   costParameters: {

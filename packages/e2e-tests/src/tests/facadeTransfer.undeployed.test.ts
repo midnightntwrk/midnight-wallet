@@ -31,7 +31,7 @@ import {
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils.js';
-import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
+import { makeV9WasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { carried, sealed } from './helpers/transactions.js';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
@@ -115,7 +115,7 @@ describe('Wallet Facade Transfer', () => {
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
-      provingService: () => makeWasmProvingService(),
+      provingService: () => makeV9WasmProvingService(),
     });
     receiverFacade = await WalletFacade.init({
       configuration: {
@@ -126,7 +126,7 @@ describe('Wallet Facade Transfer', () => {
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustReceiverSeed, dustParameters),
-      provingService: () => makeWasmProvingService(),
+      provingService: () => makeV9WasmProvingService(),
     });
 
     await Promise.all([

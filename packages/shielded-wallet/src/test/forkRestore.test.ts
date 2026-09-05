@@ -21,7 +21,7 @@
  *   deserialize with _that_ variant's deserializer, and start there.
  *
  *   Both epochs are pinned in one file on purpose. A router that always answered with the head variant would pass the
- *   pre-fork half and fail the post-fork one; a router that always answered with the last registration would do the
+ *   ledger-v8 half and fail the ledger-v9 one; a router that always answered with the last registration would do the
  *   reverse. Only routing on the snapshot's own declared version passes both.
  *
  *   The third case is the awkward one: a snapshot taken _during_ a crossing. A migrated wallet holds its whole tree
@@ -33,8 +33,8 @@
  *   restored is what this package actually produces rather than a fixture that could drift from it.
  */
 
-import * as v8 from '@midnight-ntwrk/ledger-v8';
-import * as v9 from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import {
@@ -48,27 +48,27 @@ import { Deferred, Effect, Option, Stream, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { peekProtocolVersion } from '../Restore.js';
-import { type CoreWallet as PreForkCoreWallet, V1Tag } from '../v1/index.js';
+import { type CoreWallet as V1CoreWallet, V1Tag } from '../v1/index.js';
 import { type CoreWallet, V2Tag } from '../v2/index.js';
 import { type ForkWallet, makeForkWallet } from './forkHarness.js';
 import {
   type MintedCoin,
-  makePayingPostForkChain,
+  makePayingV9Chain,
   mintable,
-  postForkPayment,
-  preForkPayment,
+  v9Payment,
+  v8Payment,
   translationStub,
 } from './translationStub.js';
 import { awaitingCoinHashes, coinIndices, coinValues, totalValue, treeSize } from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
-/** Where the wallet registers its post-fork variant. */
+/** Where the wallet registers its V2 variant. */
 const forkVersion = ProtocolVersion.ProtocolVersion(7n);
 /** A chain that has already forked — past the boundary rather than exactly at it. */
-const afterFork = ProtocolVersion.ProtocolVersion(9n);
-/** A chain that has not — a version the pre-fork variant owns. */
-const beforeFork = ProtocolVersion.ProtocolVersion(5n);
+const v9Version = ProtocolVersion.ProtocolVersion(9n);
+/** A chain that has not — a version the V1 variant owns. */
+const v8Version = ProtocolVersion.ProtocolVersion(5n);
 
 const forkBlock = 4n;
 
@@ -79,17 +79,17 @@ const walletValues = [100n, 200n] as const;
 const walletTotal = walletValues.reduce((sum, value) => sum + value, 0n);
 
 const walletRecipient = () => {
-  const keys = v8.ZswapSecretKeys.fromSeed(seed);
+  const keys = ledgerV8.ZswapSecretKeys.fromSeed(seed);
   return { coinPublicKey: keys.coinPublicKey, encryptionPublicKey: keys.encryptionPublicKey };
 };
 
 const strangerRecipient = () => {
-  const keys = v8.ZswapSecretKeys.fromSeed(otherSeed);
+  const keys = ledgerV8.ZswapSecretKeys.fromSeed(otherSeed);
   return { coinPublicKey: keys.coinPublicKey, encryptionPublicKey: keys.encryptionPublicKey };
 };
 
 const chainCoins = (): readonly MintedCoin[] =>
-  walletValues.map((value) => mintable(v8.shieldedToken().raw, value, walletRecipient()));
+  walletValues.map((value) => mintable(ledgerV8.shieldedToken().raw, value, walletRecipient()));
 
 /**
  * The same coins with a stranger's between them, for the crossing case.
@@ -100,9 +100,9 @@ const chainCoins = (): readonly MintedCoin[] =>
  *   round trip would prove the easy half of itself.
  */
 const crossingCoins = (): readonly MintedCoin[] => [
-  mintable(v8.shieldedToken().raw, walletValues[0], walletRecipient()),
-  mintable(v8.shieldedToken().raw, 50n, strangerRecipient()),
-  mintable(v8.shieldedToken().raw, walletValues[1], walletRecipient()),
+  mintable(ledgerV8.shieldedToken().raw, walletValues[0], walletRecipient()),
+  mintable(ledgerV8.shieldedToken().raw, 50n, strangerRecipient()),
+  mintable(ledgerV8.shieldedToken().raw, walletValues[1], walletRecipient()),
 ];
 const crossingIndices = [0n, 2n];
 const treeSizeAtCrossing = 3n;
@@ -115,14 +115,14 @@ const chainAt = (version: ProtocolVersion.ProtocolVersion, coins: readonly Minte
       protocolVersion: version,
       blockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
     });
-    yield* Effect.forEach(coins, (coin) => chain.submitTransaction(preForkPayment(networkId, coin)), {
+    yield* Effect.forEach(coins, (coin) => chain.submitTransaction(v8Payment(networkId, coin)), {
       discard: true,
     });
     return chain;
   });
 
 /**
- * The post-fork source for a wallet that never crossed: a chain that simply pays it.
+ * The ledger-v9 source for a wallet that never crossed: a chain that simply pays it.
  *
  * @remarks
  *   Both non-crossing cases start on a chain already stamped with the version their probe reports, so nothing about a
@@ -131,9 +131,9 @@ const chainAt = (version: ProtocolVersion.ProtocolVersion, coins: readonly Minte
 const payingChainFor = (coins: readonly MintedCoin[], chain: V8.Simulator) =>
   Effect.gen(function* () {
     const genesisTime = yield* chain.query((state) => state.currentTime);
-    return yield* makePayingPostForkChain({
+    return yield* makePayingV9Chain({
       networkId,
-      protocolVersion: afterFork,
+      protocolVersion: v9Version,
       genesisBlockNumber: forkBlock,
       genesisTime,
       blockProducer: immediateBlockProducer(undefined, genesisStrictness),
@@ -167,7 +167,7 @@ const restoredState = (wallet: ForkWallet['shielded']) => Effect.promise(() => r
  */
 const restoredStates = (
   wallet: ForkWallet['shielded'],
-  predicate: (state: ProtocolState.ProtocolState<PreForkCoreWallet | CoreWallet>) => boolean,
+  predicate: (state: ProtocolState.ProtocolState<V1CoreWallet | CoreWallet>) => boolean,
 ) =>
   pipe(
     wallet.runtime.stateChanges,
@@ -178,19 +178,19 @@ const restoredStates = (
   );
 
 describe('a shielded wallet restoring a snapshot through the class it was started from', () => {
-  it('restores a snapshot written below the boundary onto the pre-fork variant, with what it held', async () =>
+  it('restores a snapshot written below the boundary onto the V1 variant, with what it held', async () =>
     Effect.gen(function* () {
       const coins = chainCoins();
-      const chain = yield* chainAt(beforeFork, coins);
-      const postFork = yield* payingChainFor(coins, chain);
+      const chain = yield* chainAt(v8Version, coins);
+      const v9 = yield* payingChainFor(coins, chain);
 
       const wallet = yield* makeForkWallet({
-        preFork: chain,
-        postFork: Effect.succeed(postFork),
+        v8: chain,
+        v9: Effect.succeed(v9),
         networkId,
         forkVersion,
         seed,
-        chainVersionProbe: chainReporting(beforeFork),
+        chainVersionProbe: chainReporting(v8Version),
       });
       yield* Effect.addFinalizer(() => wallet.stop);
       yield* wallet.start;
@@ -214,19 +214,19 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       expect(state.state.publicKeys).toStrictEqual(synced.state.publicKeys);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('restores a snapshot written at or past the boundary onto the post-fork variant, with what it held', async () =>
+  it('restores a snapshot written at or past the boundary onto the V2 variant, with what it held', async () =>
     Effect.gen(function* () {
       const coins = chainCoins();
-      const chain = yield* chainAt(afterFork, coins);
-      const postFork = yield* payingChainFor(coins, chain);
+      const chain = yield* chainAt(v9Version, coins);
+      const v9 = yield* payingChainFor(coins, chain);
 
       const wallet = yield* makeForkWallet({
-        preFork: chain,
-        postFork: Effect.succeed(postFork),
+        v8: chain,
+        v9: Effect.succeed(v9),
         networkId,
         forkVersion,
         seed,
-        chainVersionProbe: chainReporting(afterFork),
+        chainVersionProbe: chainReporting(v9Version),
       });
       yield* Effect.addFinalizer(() => wallet.stop);
       yield* wallet.start;
@@ -256,18 +256,18 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
         networkId,
         forkBlock,
         forkVersion,
-        preForkBlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-        postForkBlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
+        v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
         translator: translationStub({ networkId, coins }),
       });
-      // Withholding the post-fork source is what holds the wallet in the mid-crossing window: the hand-over happens,
+      // Withholding the ledger-v9 source is what holds the wallet in the mid-crossing window: the hand-over happens,
       // and the first sync update that would complete it cannot arrive, because nothing is answering yet. That is the
       // second a snapshot may land in.
       const answering = yield* Deferred.make<Simulator>();
 
       const wallet = yield* makeForkWallet({
-        preFork: fork.preFork,
-        postFork: Deferred.await(answering),
+        v8: fork.v8,
+        v9: Deferred.await(answering),
         networkId,
         forkVersion,
         seed,
@@ -275,17 +275,17 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       yield* Effect.addFinalizer(() => wallet.stop);
       yield* wallet.start;
 
-      yield* Effect.forEach(coins, (coin) => fork.preFork.submitTransaction(preForkPayment(networkId, coin)), {
+      yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
         discard: true,
       });
       yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
-      const postFork = yield* fork.advanceToFork();
+      const v9 = yield* fork.advanceToFork();
 
       const migration = yield* wallet.awaitMigration;
       expect(migration.to.coinCount).toBe(walletValues.length);
       expect(migration.to.firstFree).toBe(treeSizeAtCrossing);
 
-      // Mid-crossing: on the post-fork variant, holding its whole tree, with no hashes over it yet.
+      // Mid-crossing: on the V2 variant, holding its whole tree, with no hashes over it yet.
       const crossing = yield* wallet.awaitState((state) => awaitingCoinHashes(state.state));
       expect(yield* wallet.activeTag).toBe(V2Tag);
       expect(coinValues(crossing.state)).toEqual([...walletValues]);
@@ -307,8 +307,8 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       expect(awaitingCoinHashes(asRestored.state)).toBe(true);
 
       // The chain answers, and the resumed wallet finishes what the snapshot interrupted.
-      yield* Deferred.succeed(answering, postFork);
-      yield* Effect.promise(() => restored.start(v9.ZswapSecretKeys.fromSeed(seed)));
+      yield* Deferred.succeed(answering, v9);
+      yield* Effect.promise(() => restored.start(ledgerV9.ZswapSecretKeys.fromSeed(seed)));
 
       const resumed = yield* restoredStates(restored, (state) => !awaitingCoinHashes(state.state));
       expect(coinValues(resumed.state)).toEqual([...walletValues]);
@@ -317,8 +317,8 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       expect(totalValue(resumed.state)).toBe(walletTotal);
 
       // And it goes on: the next commitment the chain produces lands on top of the tree it just rebuilt.
-      const block = yield* postFork.submitTransaction(
-        postForkPayment(networkId, mintable(v9.shieldedToken().raw, 500n, walletRecipient())),
+      const block = yield* v9.submitTransaction(
+        v9Payment(networkId, mintable(ledgerV9.shieldedToken().raw, 500n, walletRecipient())),
       );
       const advanced = yield* restoredStates(restored, (state) => totalValue(state.state) === walletTotal + 500n);
       expect(coinIndices(advanced.state)).toEqual([...crossingIndices, treeSizeAtCrossing]);

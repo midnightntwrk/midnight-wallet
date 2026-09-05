@@ -10,6 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+// The V1 variant: this wallet on `@midnight-ntwrk/ledger-v8`, run below `forks.v9`. Its twin is `../v2`.
 export * from './V1Builder.js';
 export * as Sync from './Sync.js';
 export * as Transacting from './Transacting.js';
@@ -19,7 +21,7 @@ export * as Migration from './Migration.js';
 export * as CoinsAndBalances from './CoinsAndBalances.js';
 export * as Keys from './Keys.js';
 export * from './RunningV1Variant.js';
-// The pre-fork variant re-exports the ledger-v8 simulator twin, not the whole simulation index — the unqualified
+// The V1 variant re-exports the ledger-v8 simulator twin, not the whole simulation index — the unqualified
 // names there are the ledger-v9 twin's.
 export { V8 as Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 export * as WalletError from './WalletError.js';

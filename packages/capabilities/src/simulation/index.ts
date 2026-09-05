@@ -18,23 +18,22 @@
  * ledger, so a chain on either side of the hard fork is driven with the same API. Their shared, ledger-agnostic
  * internals live in `core/`.
  *
- * - **{@link V9}** — the post-fork line, and the current one. Also re-exported unqualified below, so `Simulator` and
- *   friends mean the v9 simulator; this is what existing code gets.
- * - **{@link V8}** — the pre-fork line. Used to drive a chain before the fork, standalone or via {@link ForkSimulator}.
+ * - **{@link V9}** — the ledger-v9 line. Also re-exported unqualified below, so `Simulator` and friends mean the v9
+ *   simulator; this is what existing code gets.
+ * - **{@link V8}** — the ledger-v8 line. Used to drive a chain before the v9 fork, standalone or via {@link ForkSimulator}.
  * - **{@link ForkSimulator}** — the two composed into a single chain that crosses the fork.
  *
  * Both namespaces are needed at once only when working across the boundary; the qualified form is what keeps the two
  * apart, since the twins export identical names over structurally distinct ledger types.
  */
 
-// The post-fork (ledger-v9) simulator, unqualified: the current line, and the default for code that does not care
-// about the fork.
+// The ledger-v9 simulator, unqualified: the default for code that does not span a fork.
 export * from './v9/index.js';
 
-/** The post-fork (ledger-v9) simulator. Same as the unqualified exports above, named for symmetry with {@link V8}. */
+/** The ledger-v9 simulator. Same as the unqualified exports above, named for symmetry with {@link V8}. */
 export * as V9 from './v9/index.js';
 
-/** The pre-fork (ledger-v8) simulator. */
+/** The ledger-v8 simulator. */
 export * as V8 from './v8/index.js';
 
 // A chain that crosses the fork, built from both twins.

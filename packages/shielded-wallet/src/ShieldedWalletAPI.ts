@@ -35,7 +35,7 @@ import {
   type ShieldedEncryptionPublicKey,
 } from '@midnightntwrk/wallet-sdk-address-format';
 import type { ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import type { UnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import type { V9UnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { type Duration } from 'effect';
 import type * as rx from 'rxjs';
 import { type CoreWallet as V1CoreWallet } from './v1/CoreWallet.js';
@@ -64,7 +64,7 @@ export type ShieldedWalletServices = {
  *   Owned by the proving capability, which is what produces one, and re-exported here so the name stays where callers
  *   already reach for it. The shielded wallet neither builds nor consumes one itself.
  */
-export type { UnboundTransaction };
+export type { V9UnboundTransaction };
 
 /** The core state of whichever shielded variant produced an emission. */
 export type ShieldedCoreState = V1CoreWallet | CoreWallet;
@@ -251,8 +251,8 @@ export type DefaultShieldedConfiguration = {
    *
    * @remarks
    *   Required, and deliberately without a default: the wallet registers one variant either side of the boundary, so a
-   *   wrong value does not degrade — it decides which ledger version reads the chain. Below `forks.v9` the pre-fork
-   *   variant is active; from it, the post-fork one. The SDK cannot guess it, because it is a property of the chain the
+   *   wrong value does not degrade — it decides which ledger version reads the chain. Below `forks.v9` the ledger-v8
+   *   variant is active; from it, the ledger-v9 one. The SDK cannot guess it, because it is a property of the chain the
    *   application points at, not of the SDK.
    *
    *   A map keyed by ledger version rather than a single number, so the next hard fork adds a key instead of changing the

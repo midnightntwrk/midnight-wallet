@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { LedgerParameters as PreForkLedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { LedgerParameters as V8LedgerParameters } from '@midnight-ntwrk/ledger-v8';
 import { LedgerParameters } from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Buffer } from 'buffer';
@@ -31,7 +31,7 @@ const blockAt = (protocolVersion: number, ledgerParameters: string) => ({
 
 describe('Reading a block the indexer served', () => {
   const hex = Buffer.from(LedgerParameters.initialParameters().serialize()).toString('hex');
-  const preForkHex = Buffer.from(PreForkLedgerParameters.initialParameters().serialize()).toString('hex');
+  const v8Hex = Buffer.from(V8LedgerParameters.initialParameters().serialize()).toString('hex');
   const codecs = defaultLedgerParametersCodecs(V9_NATIVE);
 
   it('reads the parameters with the codec registered for the version the block reports', () => {
@@ -44,31 +44,31 @@ describe('Reading a block the indexer served', () => {
     expect(blockData.timestamp).toEqual(new Date(1752487200000));
   });
 
-  it('reads a block from before the fork with the pre-fork ledger version, and says so by its class', () => {
+  it('reads a block from before the v9 fork with the ledger-v8, and says so by its class', () => {
     // The two ledger versions' `LedgerParameters` are structurally identical, so nothing in the type says which one
     // came back — the class does, and it is the class the ledger's own `wellFormed` insists on.
-    const result = blockDataFrom(codecs, blockAt(1, preForkHex));
+    const result = blockDataFrom(codecs, blockAt(1, v8Hex));
 
     expect(Either.isRight(result)).toBe(true);
     const blockData = Option.getOrThrow(Either.getRight(result));
-    expect(blockData.ledgerParameters).toBeInstanceOf(PreForkLedgerParameters);
+    expect(blockData.ledgerParameters).toBeInstanceOf(V8LedgerParameters);
     expect(blockData.ledgerParameters).not.toBeInstanceOf(LedgerParameters);
   });
 
-  it('splits at the fork version exactly, so the boundary block is already post-fork', () => {
+  it('splits at the fork version exactly, so the boundary block is already ledger-v9', () => {
     const atBoundary = Option.getOrThrow(Either.getRight(blockDataFrom(codecs, blockAt(2_000_000, hex))));
-    const belowBoundary = Option.getOrThrow(Either.getRight(blockDataFrom(codecs, blockAt(1_999_999, preForkHex))));
+    const belowBoundary = Option.getOrThrow(Either.getRight(blockDataFrom(codecs, blockAt(1_999_999, v8Hex))));
 
     expect(atBoundary.ledgerParameters).toBeInstanceOf(LedgerParameters);
-    expect(belowBoundary.ledgerParameters).toBeInstanceOf(PreForkLedgerParameters);
+    expect(belowBoundary.ledgerParameters).toBeInstanceOf(V8LedgerParameters);
   });
 
-  it('reads every block with the current ledger version when the chain has no boundary below it', () => {
-    // A chain whose fork version is the minimum supported one has no pre-fork epoch at all, so registering a codec
+  it('reads every block with ledger-v9 when the chain has no boundary below it', () => {
+    // A chain whose fork version is the minimum supported one has no ledger-v8 epoch at all, so registering a codec
     // for one would claim a range that cannot occur.
-    const noPreFork = defaultLedgerParametersCodecs(ProtocolVersion.MinSupportedVersion);
+    const noV8 = defaultLedgerParametersCodecs(ProtocolVersion.MinSupportedVersion);
 
-    const blockData = Option.getOrThrow(Either.getRight(blockDataFrom(noPreFork, blockAt(0, hex))));
+    const blockData = Option.getOrThrow(Either.getRight(blockDataFrom(noV8, blockAt(0, hex))));
 
     expect(blockData.ledgerParameters).toBeInstanceOf(LedgerParameters);
   });
@@ -93,7 +93,7 @@ describe('Reading a block the indexer served', () => {
     // A block reported from after the boundary, carrying bytes from before it: the version says which codec to use,
     // and that codec cannot read them. Nothing else can tell the two apart, which is why this is a decode failure and
     // not a mis-read.
-    const error = Option.getOrThrow(Either.getLeft(blockDataFrom(codecs, blockAt(2_000_000, preForkHex))));
+    const error = Option.getOrThrow(Either.getLeft(blockDataFrom(codecs, blockAt(2_000_000, v8Hex))));
 
     expect(error).toBeInstanceOf(LedgerParametersCodec.LedgerParametersDecodeError);
   });

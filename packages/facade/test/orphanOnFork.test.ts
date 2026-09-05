@@ -13,8 +13,8 @@
  * limitations under the License.
  */
 
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   InMemoryTransactionHistoryStorage,
   NetworkId,
@@ -33,13 +33,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
 import { finalizedTransactionTraits } from '../src/transaction.js';
 
-import {
-  createPreForkMockProvingService,
-  getDustSeed,
-  getShieldedSeed,
-  getUnshieldedSeed,
-  sleep,
-} from './utils/index.js';
+import { createV8MockProvingService, getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
 
 vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 
@@ -115,7 +109,7 @@ describe('A pending transaction the fork left behind', () => {
     const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: unshieldedSeed }, configuration.networkId);
     shielded = await ShieldedWallet(configuration).startWithSeed(shieldedSeed);
     unshielded = await UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
-    dust = await DustWallet(configuration).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust);
+    dust = await DustWallet(configuration).startWithSeed(dustSeed, ledgerV9.LedgerParameters.initialParameters().dust);
     pending = new RecordingPendingTransactions();
 
     facade = await WalletFacade.init({
@@ -123,7 +117,7 @@ describe('A pending transaction the fork left behind', () => {
       shielded: () => shielded,
       unshielded: () => unshielded,
       dust: () => dust,
-      provingService: () => createPreForkMockProvingService(),
+      provingService: () => createV8MockProvingService(),
       pendingTransactionsService: () => pending,
     });
     // The wallets are not started: these tests observe the state the facade already has, and starting them
@@ -137,13 +131,13 @@ describe('A pending transaction the fork left behind', () => {
   const anyTransaction = () =>
     WalletTransaction.adopt(
       'Unproven',
-      // The wallets here have never synced, so the facade is on the pre-fork side of the boundary and the ledger
+      // The wallets here have never synced, so the facade is on the ledger-v8 side of the boundary and the ledger
       // version that owns that epoch is the one that has to have built this.
-      preForkLedger.Transaction.fromParts(
+      ledgerV8.Transaction.fromParts(
         configuration.networkId,
         undefined,
         undefined,
-        preForkLedger.Intent.new(new Date(Date.now() + 60_000)),
+        ledgerV8.Intent.new(new Date(Date.now() + 60_000)),
       ),
       ProtocolVersion.MinSupportedVersion,
     );

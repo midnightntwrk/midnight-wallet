@@ -11,8 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type Effect, Context } from 'effect';
-import type * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import type * as ledger from '@midnightntwrk/ledger-v9';
+import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
 
@@ -43,16 +43,16 @@ export declare namespace ProverClient {
      * @returns An `Effect` that yields with a serialized transaction representing the proven version of `transaction`;
      *   or fails with a client or server side error.
      */
-    proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
-      tx: ledger.Transaction<S, ledger.PreProof, B>,
-      costModel?: ledger.CostModel,
-    ): Effect.Effect<ledger.Transaction<S, ledger.Proof, B>, ClientError | ServerError>;
+    proveTransaction<S extends ledgerV9.Signaturish, B extends ledgerV9.Bindingish>(
+      tx: ledgerV9.Transaction<S, ledgerV9.PreProof, B>,
+      costModel?: ledgerV9.CostModel,
+    ): Effect.Effect<ledgerV9.Transaction<S, ledgerV9.Proof, B>, ClientError | ServerError>;
 
     /** A proving provider that frames its requests with ledger-v9. */
-    asProvingProvider(): ledger.ProvingProvider;
+    asProvingProvider(): ledgerV9.ProvingProvider;
 
     /** The same provider as {@link asProvingProvider}, named for the ledger version it frames with. */
-    asV9ProvingProvider(): ledger.ProvingProvider;
+    asV9ProvingProvider(): ledgerV9.ProvingProvider;
 
     /**
      * A proving provider that frames its requests with ledger-v8.
@@ -63,6 +63,6 @@ export declare namespace ProverClient {
      *   other. An in-process prover has nothing to distinguish: it works on bytes, and offers the same provider for
      *   both.
      */
-    asV8ProvingProvider(): preForkLedger.ProvingProvider;
+    asV8ProvingProvider(): ledgerV8.ProvingProvider;
   }
 }

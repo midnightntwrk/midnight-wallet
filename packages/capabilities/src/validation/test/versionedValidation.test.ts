@@ -16,11 +16,11 @@
  *
  * @remarks
  *   Observed through real ledgers rather than labels, because the fact under test is that the two cannot read each other:
- *   a pre-fork transaction handed to the current ledger's `wellFormed` fails, and vice versa. A pass therefore proves
- *   the routing as surely as a failure does — nothing but the right validator can produce one.
+ *   a ledger-v8 transaction handed to ledger-v9's `wellFormed` fails, and vice versa. A pass therefore proves the
+ *   routing as surely as a failure does — nothing but the right validator can produce one.
  */
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Cause, Effect, Either, Exit, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
@@ -32,7 +32,7 @@ const NETWORK_ID = NetworkId.NetworkId.Undeployed;
 const NOW = new Date(1_752_487_200_000);
 
 const FORK = ProtocolVersion.ProtocolVersion(2_000_000n);
-const BEFORE_FORK = ProtocolVersion.ProtocolVersion(1n);
+const V8_VERSION = ProtocolVersion.ProtocolVersion(1n);
 
 const NO_STRICTNESS = { enforceBalancing: false, verifySignatures: false, enforceLimits: false } as const;
 
@@ -45,8 +45,8 @@ const blockAt = (protocolVersion: bigint, hex: string) => ({
   timestamp: NOW.getTime(),
 });
 
-const preForkHex = () => Buffer.from(preForkLedger.LedgerParameters.initialParameters().serialize()).toString('hex');
-const postForkHex = () => Buffer.from(ledger.LedgerParameters.initialParameters().serialize()).toString('hex');
+const v8Hex = () => Buffer.from(ledgerV8.LedgerParameters.initialParameters().serialize()).toString('hex');
+const v9Hex = () => Buffer.from(ledgerV9.LedgerParameters.initialParameters().serialize()).toString('hex');
 
 /** Reads a block the way the SDK's own fetcher does: with the codecs split at the same fork version. */
 const blockDataAt = (protocolVersion: bigint, hex: string): BlockData =>
@@ -69,52 +69,52 @@ const failureOf = async <A, E>(effect: Effect.Effect<A, E>): Promise<E> => {
 };
 
 describe('Validating at the version a transaction was authored for, either side of the fork', () => {
-  it('checks a transaction authored before the fork with the pre-fork ledger version', async () => {
-    const routed = validator(blockDataAt(1n, preForkHex()));
+  it('checks a transaction authored before the v9 fork with the ledger-v8', async () => {
+    const routed = validator(blockDataAt(1n, v8Hex()));
 
     await expect(
       Effect.runPromise(
-        routed.validateTx(preForkLedger.Transaction.fromParts(NETWORK_ID), BEFORE_FORK, { flags: NO_STRICTNESS }),
+        routed.validateTx(ledgerV8.Transaction.fromParts(NETWORK_ID), V8_VERSION, { flags: NO_STRICTNESS }),
       ),
     ).resolves.toBeUndefined();
   });
 
-  it('checks a transaction authored from the fork with the current ledger version', async () => {
-    const routed = validator(blockDataAt(FORK, postForkHex()));
+  it('checks a transaction authored from the fork with the ledger-v9', async () => {
+    const routed = validator(blockDataAt(FORK, v9Hex()));
 
     await expect(
-      Effect.runPromise(routed.validateTx(ledger.Transaction.fromParts(NETWORK_ID), FORK, { flags: NO_STRICTNESS })),
+      Effect.runPromise(routed.validateTx(ledgerV9.Transaction.fromParts(NETWORK_ID), FORK, { flags: NO_STRICTNESS })),
     ).resolves.toBeUndefined();
   });
 
-  it('refuses a pre-fork transaction offered at a post-fork version, rather than checking it with the wrong ledger', async () => {
+  it('refuses a ledger-v8 transaction offered at a ledger-v9 version, rather than checking it with the wrong ledger', async () => {
     // The routing is on the transaction's own stamp, so this is a caller claiming the wrong epoch for its bytes. The
-    // current ledger's `wellFormed` cannot read them, and says so.
-    const routed = validator(blockDataAt(FORK, postForkHex()));
+    // ledger-v9's `wellFormed` cannot read them, and says so.
+    const routed = validator(blockDataAt(FORK, v9Hex()));
 
     const error = await failureOf(
-      routed.validateTx(preForkLedger.Transaction.fromParts(NETWORK_ID), FORK, { flags: NO_STRICTNESS }),
+      routed.validateTx(ledgerV8.Transaction.fromParts(NETWORK_ID), FORK, { flags: NO_STRICTNESS }),
     );
 
     expect(error).toBeInstanceOf(WellFormedError);
   });
 
-  it('refuses a post-fork transaction offered at a pre-fork version, symmetrically', async () => {
-    const routed = validator(blockDataAt(1n, preForkHex()));
+  it('refuses a ledger-v9 transaction offered at a ledger-v8 version, symmetrically', async () => {
+    const routed = validator(blockDataAt(1n, v8Hex()));
 
     const error = await failureOf(
-      routed.validateTx(ledger.Transaction.fromParts(NETWORK_ID), BEFORE_FORK, { flags: NO_STRICTNESS }),
+      routed.validateTx(ledgerV9.Transaction.fromParts(NETWORK_ID), V8_VERSION, { flags: NO_STRICTNESS }),
     );
 
     expect(error).toBeInstanceOf(WellFormedError);
   });
 
-  it('registers only the current ledger version when the chain has no epoch below the boundary', async () => {
-    // With the boundary at the minimum supported version there is no pre-fork range at all, so a pre-fork stamp is a
+  it('registers only ledger-v9 when the chain has no epoch below the boundary', async () => {
+    // With the boundary at the minimum supported version there is no ledger-v8 range at all, so a ledger-v8 stamp is a
     // version the registry genuinely does not cover — which is a different answer from "checked and malformed".
     const routed = makeDefaultVersionedValidationServiceEffect(
       {
-        fetchBlockData: () => Promise.resolve(blockDataAt(FORK, postForkHex())),
+        fetchBlockData: () => Promise.resolve(blockDataAt(FORK, v9Hex())),
         networkId: NETWORK_ID,
         clock: { now: () => NOW },
       },
@@ -122,14 +122,14 @@ describe('Validating at the version a transaction was authored for, either side 
     );
 
     await expect(
-      Effect.runPromise(routed.validateTx(ledger.Transaction.fromParts(NETWORK_ID), FORK, { flags: NO_STRICTNESS })),
+      Effect.runPromise(routed.validateTx(ledgerV9.Transaction.fromParts(NETWORK_ID), FORK, { flags: NO_STRICTNESS })),
     ).resolves.toBeUndefined();
   });
 
   it('names the version when nothing is registered for it at all', async () => {
     const routed = makeDefaultVersionedValidationServiceEffect(
       {
-        fetchBlockData: () => Promise.resolve(blockDataAt(FORK, postForkHex())),
+        fetchBlockData: () => Promise.resolve(blockDataAt(FORK, v9Hex())),
         networkId: NETWORK_ID,
         clock: { now: () => NOW },
       },
@@ -138,7 +138,7 @@ describe('Validating at the version a transaction was authored for, either side 
 
     const belowMinimum = ProtocolVersion.ProtocolVersion(-1n);
     const error = await failureOf(
-      routed.validateTx(ledger.Transaction.fromParts(NETWORK_ID), belowMinimum, { flags: NO_STRICTNESS }),
+      routed.validateTx(ledgerV9.Transaction.fromParts(NETWORK_ID), belowMinimum, { flags: NO_STRICTNESS }),
     );
 
     expect(error).toBeInstanceOf(UnsupportedValidationVersionError);

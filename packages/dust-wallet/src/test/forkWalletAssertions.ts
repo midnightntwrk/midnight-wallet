@@ -22,15 +22,15 @@
  *
  *   Restricted on purpose to the members ledger-v8 and ledger-v9 both declare. `DustLocalState` gained
  *   `commitmentTreeFirstFree`, `generatingTreeFirstFree` and `nullifiers` in v9, so a fork proof cannot compare tree
- *   _sizes_ across the boundary the way the shielded proof compares `firstFree` — the pre-fork side has no such reading
- *   to offer. The tree roots are declared by both, and they are the stronger statement anyway.
+ *   _sizes_ across the boundary the way the shielded proof compares `firstFree` — the ledger-v8 side has no such
+ *   reading to offer. The tree roots are declared by both, and they are the stronger statement anyway.
  */
 
-import { type CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
-import { type CoreWallet as PostForkWallet } from '../v2/CoreWallet.js';
+import { type CoreWallet as V1CoreWallet } from '../v1/CoreWallet.js';
+import { type CoreWallet as V2CoreWallet } from '../v2/CoreWallet.js';
 
 /** A dust wallet on either side of the boundary. */
-export type EitherWallet = PreForkWallet | PostForkWallet;
+export type EitherWallet = V1CoreWallet | V2CoreWallet;
 
 /** Ascending order for bigints, which `Array.prototype.sort`'s default (string) comparison gets wrong. */
 const ascending = (left: bigint, right: bigint): number => (left < right ? -1 : left > right ? 1 : 0);

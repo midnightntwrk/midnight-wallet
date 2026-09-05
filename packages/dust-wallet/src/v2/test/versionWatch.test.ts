@@ -23,9 +23,9 @@
  *
  *   The gate is the load-bearing half. Recording a version past the boundary is what triggers the hand-over, and the
  *   hand-over parks the sync cursor where it stands: any event still unread below the tip would then be re-fetched by
- *   the post-fork variant as bytes of the version that preceded it, which its ledger cannot deserialize. So the signal
- *   may be adopted only when the wallet is provably caught up on the source's **event ids**, which is why it carries
- *   the highest dust event id the source holds and not merely a version.
+ *   the V2 variant as bytes of the version that preceded it, which its ledger cannot deserialize. So the signal may be
+ *   adopted only when the wallet is provably caught up on the source's **event ids**, which is why it carries the
+ *   highest dust event id the source holds and not merely a version.
  */
 
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
@@ -56,10 +56,10 @@ const activeRange = ProtocolVersion.makeRange(
   ProtocolVersion.ProtocolVersion(0n),
   ProtocolVersion.ProtocolVersion(2_000_000n),
 );
-const preForkVersion = 1_000_000;
-const postForkVersion = 2_001_000;
+const v8Version = 1_000_000;
+const v9Version = 2_001_000;
 
-/** A wallet that has read the dust timeline up to `appliedIndex` and recorded the pre-fork version doing so. */
+/** A wallet that has read the dust timeline up to `appliedIndex` and recorded the ledger-v8 version doing so. */
 const syncedWallet = (appliedIndex: bigint): CoreWallet =>
   CoreWallet.withProtocolVersion(
     CoreWallet.updateProgress(freshWallet(), {
@@ -67,7 +67,7 @@ const syncedWallet = (appliedIndex: bigint): CoreWallet =>
       highestRelevantWalletIndex: appliedIndex,
       isConnected: true,
     }),
-    ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)),
+    ProtocolVersion.ProtocolVersion(BigInt(v8Version)),
   );
 
 // =============================================================================
@@ -82,12 +82,12 @@ describe('folding a version signal into the wallet state', () => {
 
     const [state, result] = capability.applyUpdate(
       caughtUp,
-      VersionSignalSyncUpdate.create(postForkVersion, 41),
+      VersionSignalSyncUpdate.create(v9Version, 41),
       activeRange,
     );
 
     // The version is the whole of it: recording one outside the activation range is what makes the runtime hand over.
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
     // A signal is an observation about the chain, not a piece of it. Nothing that describes what the wallet holds or
     // where its reading has got to may move.
     expect(state.progress.appliedIndex).toBe(caughtUp.progress.appliedIndex);
@@ -96,22 +96,18 @@ describe('folding a version signal into the wallet state', () => {
     expect(state.state).toBe(caughtUp.state);
     expect(state.pendingDust).toBe(caughtUp.pendingDust);
     expect(result.changes).toEqual([]);
-    expect(result.protocolVersion).toBe(preForkVersion);
+    expect(result.protocolVersion).toBe(v8Version);
   });
 
   it('ignores a signal while events below the source tip are still unread', () => {
     // The gate. Handing over here would park the cursor at 41 and leave events 42..97 to be re-fetched by the
-    // post-fork variant as bytes of the version that preceded it, which its ledger cannot read.
+    // V2 variant as bytes of the version that preceded it, which its ledger cannot read.
     const behind = syncedWallet(41n);
 
-    const [state, result] = capability.applyUpdate(
-      behind,
-      VersionSignalSyncUpdate.create(postForkVersion, 97),
-      activeRange,
-    );
+    const [state, result] = capability.applyUpdate(behind, VersionSignalSyncUpdate.create(v9Version, 97), activeRange);
 
     expect(state).toBe(behind);
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v8Version)));
     expect(result.changes).toEqual([]);
   });
 
@@ -122,7 +118,7 @@ describe('folding a version signal into the wallet state', () => {
     const [state] = capability.applyUpdate(caughtUp, VersionSignalSyncUpdate.create(7, 41), activeRange);
 
     expect(state).toBe(caughtUp);
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v8Version)));
   });
 });
 
@@ -222,7 +218,7 @@ describe('watching the chain for a version the dust events never mention', () =>
         Stream.filter(isVersionSignal),
         Stream.take(2),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(postForkVersion), tipAsked)),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version), tipAsked)),
         Effect.provideService(DustLedgerEventTip.tag, servingEventTip(41, eventTipAsked)),
         Effect.provideService(DustLedgerEvents.tag, quietChain),
         Effect.scoped,
@@ -230,8 +226,8 @@ describe('watching the chain for a version the dust events never mention', () =>
       );
 
     expect(Chunk.toArray(collected)).toEqual([
-      VersionSignalSyncUpdate.create(postForkVersion, 41),
-      VersionSignalSyncUpdate.create(postForkVersion, 41),
+      VersionSignalSyncUpdate.create(v9Version, 41),
+      VersionSignalSyncUpdate.create(v9Version, 41),
     ]);
     // The tip is what the chain is on now, so the question is asked without an offset.
     expect(Effect.runSync(Ref.get(tipAsked))).toEqual([{ offset: null }, { offset: null }]);
@@ -241,7 +237,7 @@ describe('watching the chain for a version the dust events never mention', () =>
 
     // Folded, this is the hand-over: a caught-up wallet records the version the chain moved to.
     const [state] = makeDefaultSyncCapability().applyUpdate(caughtUp, Chunk.toArray(collected)[0], activeRange);
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
   });
 
   it('says nothing on a chain whose dust timeline has never held an event', async () => {
@@ -258,7 +254,7 @@ describe('watching the chain for a version the dust events never mention', () =>
         Stream.filter(isVersionSignal),
         Stream.interruptAfter('300 millis'),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(postForkVersion), recorder())),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version), recorder())),
         Effect.provideService(DustLedgerEventTip.tag, silentEventTip(eventTipAsked)),
         Effect.provideService(DustLedgerEvents.tag, quietChain),
         Effect.scoped,
@@ -280,7 +276,7 @@ describe('watching the chain for a version the dust events never mention', () =>
         Effect.flatMap((all) =>
           all.length === 1
             ? Effect.fail(new ServerError({ message: 'the indexer is down' }))
-            : Effect.succeed(tipBlock(postForkVersion)),
+            : Effect.succeed(tipBlock(v9Version)),
         ),
       );
 
@@ -297,7 +293,7 @@ describe('watching the chain for a version the dust events never mention', () =>
         Effect.runPromise,
       );
 
-    expect(Chunk.toArray(collected)).toEqual([VersionSignalSyncUpdate.create(postForkVersion, 41)]);
+    expect(Chunk.toArray(collected)).toEqual([VersionSignalSyncUpdate.create(v9Version, 41)]);
     expect(Effect.runSync(Ref.get(attempts))).toHaveLength(2);
   });
 
@@ -313,7 +309,7 @@ describe('watching the chain for a version the dust events never mention', () =>
         Stream.filter(isVersionSignal),
         Stream.interruptAfter('150 millis'),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(preForkVersion), recorder())),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v8Version), recorder())),
         Effect.provideService(DustLedgerEventTip.tag, servingEventTip(41, eventTipAsked)),
         Effect.provideService(DustLedgerEvents.tag, quietChain),
         Effect.scoped,
@@ -333,7 +329,7 @@ describe('watching the chain for a version the dust events never mention', () =>
       .pipe(
         Stream.interruptAfter('100 millis'),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(postForkVersion), tipAsked)),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version), tipAsked)),
         Effect.provideService(DustLedgerEventTip.tag, servingEventTip(41, recorder())),
         Effect.provideService(DustLedgerEvents.tag, quietChain),
         Effect.scoped,

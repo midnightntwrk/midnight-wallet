@@ -51,17 +51,17 @@ const failureOf = async <A, E>(effect: Effect.Effect<A, E>): Promise<E> => {
 describe('Routing a transaction to the validator for the version it was authored for', () => {
   const router = makeVersionedValidationServiceEffect(
     registryOf(
-      { sinceVersion: ProtocolVersion.MinSupportedVersion, value: labelled('pre-fork') },
-      { sinceVersion: FORK, value: labelled('post-fork') },
+      { sinceVersion: ProtocolVersion.MinSupportedVersion, value: labelled('v8') },
+      { sinceVersion: FORK, value: labelled('v9') },
     ),
   );
 
   it('validates with the validator registered for the version the transaction was authored for', async () => {
-    const preFork = await failureOf(router.validateTx('tx', version(17n), { flags: NO_STRICTNESS }));
-    const postFork = await failureOf(router.validateTx('tx', FORK, { flags: NO_STRICTNESS }));
+    const v8Failure = await failureOf(router.validateTx('tx', version(17n), { flags: NO_STRICTNESS }));
+    const v9Failure = await failureOf(router.validateTx('tx', FORK, { flags: NO_STRICTNESS }));
 
-    expect((preFork as WellFormedError).cause).toBe('pre-fork:tx');
-    expect((postFork as WellFormedError).cause).toBe('post-fork:tx');
+    expect((v8Failure as WellFormedError).cause).toBe('v8:tx');
+    expect((v9Failure as WellFormedError).cause).toBe('v9:tx');
   });
 
   it('routes on the stamp the author gave, not on where the chain has since got to', async () => {
@@ -69,15 +69,13 @@ describe('Routing a transaction to the validator for the version it was authored
     // would accept them, so a fork landing between authoring and validation cannot change which validator answers.
     const error = await failureOf(router.validateTx('authored-before', version(1n), { flags: NO_STRICTNESS }));
 
-    expect((error as WellFormedError).cause).toBe('pre-fork:authored-before');
+    expect((error as WellFormedError).cause).toBe('v8:authored-before');
   });
 
   it('refuses a version no validator is registered for, naming that version', async () => {
-    const postForkOnly = makeVersionedValidationServiceEffect(
-      registryOf({ sinceVersion: FORK, value: labelled('post-fork') }),
-    );
+    const v9Only = makeVersionedValidationServiceEffect(registryOf({ sinceVersion: FORK, value: labelled('v9') }));
 
-    const error = await failureOf(postForkOnly.validateTx('tx', version(1n), { flags: NO_STRICTNESS }));
+    const error = await failureOf(v9Only.validateTx('tx', version(1n), { flags: NO_STRICTNESS }));
 
     expect(error).toBeInstanceOf(UnsupportedValidationVersionError);
     expect((error as UnsupportedValidationVersionError).protocolVersion).toStrictEqual(version(1n));
@@ -95,7 +93,7 @@ describe('Routing a transaction to the validator for the version it was authored
 
   it('rejects the promise with the typed error itself, not a wrapper around it', async () => {
     const promising = wrapVersionedValidationService(
-      makeVersionedValidationServiceEffect(registryOf({ sinceVersion: FORK, value: labelled('post-fork') })),
+      makeVersionedValidationServiceEffect(registryOf({ sinceVersion: FORK, value: labelled('v9') })),
     );
 
     await expect(promising.validateTx('tx', version(1n), { flags: NO_STRICTNESS })).rejects.toBeInstanceOf(

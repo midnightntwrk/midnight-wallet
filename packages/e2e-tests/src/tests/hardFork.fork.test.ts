@@ -12,8 +12,8 @@
 // limitations under the License.
 //
 // The hard-fork crossing, as a test. One facade wallet syncs a chain whose genesis carries the
-// pre-fork (ledger 8) runtime, the fork is enacted through governance while it watches, and the
-// wallet has to cross to its post-fork variants with the same money it had before.
+// ledger-v8 (ledger 8) runtime, the fork is enacted through governance while it watches, and the
+// wallet has to cross to its V2 variants with the same money it had before.
 //
 // It is the automated form of the scenario first run by hand: the wallet half, plus the chain-level
 // checks that run's `hardfork.sh verify` step made. It is its own vitest project (`fork`) rather than
@@ -24,10 +24,10 @@ import { Buffer } from 'node:buffer';
 import { inspect } from 'node:util';
 import { Cause, Either, Option, Runtime } from 'effect';
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
-// Both ledgers, because this file is the one that authors on both sides of the boundary: the spend before the fork is
+// Both ledgers, because this file is the one that authors on both sides of the boundary: the spend before the v9 fork is
 // ledger-v8's transaction and everything from `re-registers its NIGHT` onwards is ledger-v9's.
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type WalletSeeds as WalletSeedsType, WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
@@ -38,7 +38,7 @@ import {
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import {
-  asPreForkDustParameters,
+  asV8DustParameters,
   CustomForkingDustWallet,
   type DefaultDustConfiguration,
   DustWallet,
@@ -62,10 +62,10 @@ import { logger } from './logger.js';
 /** The dev preset's funded account. */
 const FUNDED_SEED = '0000000000000000000000000000000000000000000000000000000000000001';
 
-/** An account with nothing on it, which is what makes the post-fork spends' arrival assertions exact. */
+/** An account with nothing on it, which is what makes the ledger-v9 spends' arrival assertions exact. */
 const RECEIVER_SEED = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
 
-/** A second empty account, for the spend made before the boundary: the post-fork receiver must still start at zero. */
+/** A second empty account, for the spend made before the boundary: the ledger-v9 receiver must still start at zero. */
 const V8_RECEIVER_SEED = '4c1d1e0e9a2a4a3f8b5c6d7e8f90112233445566778899aabbccddeeff001122';
 
 /**
@@ -75,22 +75,22 @@ const V8_RECEIVER_SEED = '4c1d1e0e9a2a4a3f8b5c6d7e8f90112233445566778899aabbccdd
 const NIGHT = '0000000000000000000000000000000000000000000000000000000000000000';
 
 /** The spec version the `1.0.1` runtime reports, and therefore what genesis must be carrying. */
-const PRE_FORK_SPEC_VERSION = 1_000_000;
+const V8_SPEC_VERSION = 1_000_000;
 
 /** How long the wallet is given to notice the fork, migrate all three sub-wallets, and re-sync. */
 const CROSSING_TIMEOUT_MS = 8 * 60 * 1000;
 
-/** How long the re-registration is given to settle and the first post-fork dust to appear. */
+/** How long the re-registration is given to settle and the first ledger-v9 dust to appear. */
 const DUST_TIMEOUT_MS = 4 * 60 * 1000;
 
 /** How long to leave between attempts at a transaction the wallet could not yet pay for. */
 const DUST_POLL_MS = 5 * 1000;
 
-/** How long a post-fork spend is given to be proven, included, and observed by both sides. */
+/** How long a ledger-v9 spend is given to be proven, included, and observed by both sides. */
 const SPEND_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
- * What each post-fork spend moves. Deliberately tiny: the question these tests ask is whether money that crossed the
+ * What each ledger-v9 spend moves. Deliberately tiny: the question these tests ask is whether money that crossed the
  * boundary can be spent at all, not how much of it.
  */
 const TRANSFER_AMOUNT = 1_000n;
@@ -130,7 +130,7 @@ const utxoKey = (utxo: Readonly<{ intentHash: string; outputNo: number }>): stri
   `${utxo.intentHash}#${utxo.outputNo}`;
 
 /** Every unshielded input a finalized transaction spends, across all its intents and both offers. */
-const unshieldedInputsOf = (transaction: ledger.FinalizedTransaction): readonly ledger.UtxoSpend[] =>
+const unshieldedInputsOf = (transaction: ledgerV9.FinalizedTransaction): readonly ledgerV9.UtxoSpend[] =>
   Array.from(transaction.intents?.values() ?? []).flatMap((intent) => [
     ...(intent.guaranteedUnshieldedOffer?.inputs ?? []),
     ...(intent.fallibleUnshieldedOffer?.inputs ?? []),
@@ -186,7 +186,7 @@ const onceEnoughDustHasBeenGenerated = <T>(build: () => Promise<T>): Promise<T> 
         delay: (error: unknown) =>
           isDustShortfall(error) ? rx.timer(DUST_POLL_MS) : rx.throwError(() => error as Error),
       }),
-      failingAfter('enough dust to have been generated for a pre-fork transfer', DUST_TIMEOUT_MS),
+      failingAfter('enough dust to have been generated for a ledger-v8 transfer', DUST_TIMEOUT_MS),
     ),
   );
 
@@ -222,30 +222,30 @@ const trackPhases = (facade: WalletFacade): rx.Observable<Tracked> =>
   );
 
 /**
- * The dust wallet the projections twin runs: the shipped two-variant composition, with the post-fork variant's
- * synchronization swapped for the projections fast sync.
+ * The dust wallet the projections twin runs: the shipped two-variant composition, with the V2 variant's synchronization
+ * swapped for the projections fast sync.
  *
  * @remarks
  *   The one composition no other suite reaches. `projectionsBasedSync.undeployed.test.ts` exercises projections on a
- *   chain that is post-fork from its first block, so it can use a single-variant wallet and never crosses anything; the
- *   shipped `DustWallet` crosses but syncs by events on both sides. This one does both: the pre-fork variant reads the
+ *   chain that is on ledger-v9 from its first block, so it can use a single-variant wallet and never crosses anything;
+ *   the shipped `DustWallet` crosses but syncs by events on both sides. This one does both: the V1 variant reads the
  *   chain by event replay, hands its state to {@link Migration.makeCrossLedgerMigration}, and everything after the
- *   boundary is read by `makeEventLessSyncService` — which means a synced post-fork state _is_ the proof that the
+ *   boundary is read by `makeEventLessSyncService` — which means a synced ledger-v9 state _is_ the proof that the
  *   projections path ran on a migrated state.
  *
- *   No `chainVersionProbe` is configured, deliberately: this chain's genesis carries the pre-fork runtime, so the probe
- *   the shipped wallet defaults to would answer "pre-fork" and choose exactly the variant a wallet with no probe starts
- *   on. Leaving it out keeps the crossing this test is about the only thing being tested.
+ *   No `chainVersionProbe` is configured, deliberately: this chain's genesis carries the ledger-v8 runtime, so the probe
+ *   the shipped wallet defaults to would answer "ledger-v8" and choose exactly the variant a wallet with no probe
+ *   starts on. Leaving it out keeps the crossing this test is about the only thing being tested.
  */
 const projectionsTwinDustWallet = (configuration: DefaultDustConfiguration) => {
-  const dustParameters = configuration.dustParameters ?? ledger.LedgerParameters.initialParameters().dust;
+  const dustParameters = configuration.dustParameters ?? ledgerV9.LedgerParameters.initialParameters().dust;
   return CustomForkingDustWallet(
     configuration,
     {
       builder: new V1Builder().withDefaults(),
       // The one field that cannot be shared, exactly as the shipped composition handles it: `dustParameters` is a WASM
-      // object of whichever ledger module produced it, so the pre-fork variant gets the pre-fork rebuild of the rates.
-      configuration: { ...configuration, dustParameters: asPreForkDustParameters(dustParameters) },
+      // object of whichever ledger module produced it, so the V1 variant gets the ledger-v8 rebuild of the rates.
+      configuration: { ...configuration, dustParameters: asV8DustParameters(dustParameters) },
     },
     {
       builder: new V2Builder()
@@ -276,11 +276,11 @@ describe.sequential('Hard fork crossing @fork', () => {
   let unshieldedKeystore: UnshieldedKeystore;
   let tracked: rx.Observable<Tracked>;
   let subscription: rx.Subscription;
-  let preFork: FacadeState;
+  let v8State: FacadeState;
   let enactment: Awaited<ReturnType<ForkFixture['enactFork']>>;
-  let postFork: FacadeState;
+  let v9State: FacadeState;
   let receiver: utils.WalletInit | undefined;
-  let preForkReceiver: utils.WalletInit | undefined;
+  let v8Receiver: utils.WalletInit | undefined;
   let twin: utils.WalletInit;
   let twinTracked: rx.Observable<Tracked>;
   let twinSubscription: rx.Subscription;
@@ -291,8 +291,8 @@ describe.sequential('Hard fork crossing @fork', () => {
    * @remarks
    *   `progress.highestIndex` is logged with them because it is the cursor the projections sync resumes from, read as a
    *   block height. Only the projections path ever writes it, so the value the twin carries while it is still on the
-   *   event path — the one at the pre-fork comparison — is exactly what the migration parks and hands to the first
-   *   post-fork pass.
+   *   event path — the one at the ledger-v8 comparison — is exactly what the migration parks and hands to the first
+   *   ledger-v9 pass.
    */
   const logDustCounts = (label: string, eventsState: FacadeState, twinState: FacadeState): void => {
     logger.info(
@@ -305,7 +305,7 @@ describe.sequential('Hard fork crossing @fork', () => {
     );
   };
 
-  /** The twin, re-synced by hand: its post-fork sync hands over one snapshot and ends, rather than following the chain. */
+  /** The twin, re-synced by hand: its ledger-v9 sync hands over one snapshot and ends, rather than following the chain. */
   const resyncTwin = async (): Promise<FacadeState> => {
     await twin.wallet.doSync(twin.seeds);
     return await twin.wallet.waitForSyncedState();
@@ -344,8 +344,8 @@ describe.sequential('Hard fork crossing @fork', () => {
       )
       .subscribe((line) => logger.info(`STATE ${line}`));
 
-    // Registered before the fork, on the same funded seed, so that it genuinely crosses: a twin attached afterwards
-    // would start on the post-fork variant and prove nothing about the hand-over. It only reads — every transaction in
+    // Registered before the v9 fork, on the same funded seed, so that it genuinely crosses: a twin attached afterwards
+    // would start on the V2 variant and prove nothing about the hand-over. It only reads — every transaction in
     // this file is built by the wallet above.
     twin = await utils.initWalletWithSeed(FUNDED_SEED, fixture, 'schnorr', {
       dustWallet: projectionsTwinDustWallet,
@@ -365,36 +365,36 @@ describe.sequential('Hard fork crossing @fork', () => {
     await wallet?.stop();
     await twin?.wallet.stop();
     await receiver?.wallet.stop();
-    await preForkReceiver?.wallet.stop();
+    await v8Receiver?.wallet.stop();
   }, 60_000);
 
-  test('syncs to the pre-fork tip on the old ledger', async () => {
-    preFork = await wallet.waitForSyncedState();
-    logger.info(`PRE-FORK SYNCED ${summarize(preFork)}`);
+  test('syncs to the ledger-v8 tip on ledger-v8', async () => {
+    v8State = await wallet.waitForSyncedState();
+    logger.info(`V8 SYNCED ${summarize(v8State)}`);
 
-    expect(preFork.protocol._tag).toBe('Settled');
-    expect(preFork.activeProtocolVersion).toBeLessThan(ProtocolVersion.V9NativeForkVersion);
+    expect(v8State.protocol._tag).toBe('Settled');
+    expect(v8State.activeProtocolVersion).toBeLessThan(ProtocolVersion.V9NativeForkVersion);
 
     const specVersion = await fixture.specVersionAtHead();
-    expect(specVersion).toBe(PRE_FORK_SPEC_VERSION);
+    expect(specVersion).toBe(V8_SPEC_VERSION);
 
-    expect(preFork.unshielded.balances[NIGHT]).toBeGreaterThan(0n);
-    expect(Object.keys(preFork.shielded.balances).length).toBeGreaterThan(0);
+    expect(v8State.unshielded.balances[NIGHT]).toBeGreaterThan(0n);
+    expect(Object.keys(v8State.shielded.balances).length).toBeGreaterThan(0);
   });
 
   test(
-    'the projections twin holds the same dust on the pre-fork chain',
+    'the projections twin holds the same dust on the ledger-v8 chain',
     async () => {
-      // Both wallets read the chain by event replay here — the twin's projections sync belongs to its post-fork
+      // Both wallets read the chain by event replay here — the twin's projections sync belongs to its ledger-v9
       // variant, which no chain below the boundary activates. This is the baseline the later comparisons move from:
-      // whatever the two disagree about after the fork cannot be blamed on them having started out apart.
+      // whatever the two disagree about after the v9 fork cannot be blamed on them having started out apart.
       const twinState = await within(
-        'the projections twin to sync to the pre-fork tip',
+        'the projections twin to sync to the ledger-v8 tip',
         CROSSING_TIMEOUT_MS,
         twin.wallet.waitForSyncedState(),
       );
       const eventsState = await wallet.waitForSyncedState();
-      logDustCounts('A pre-fork', eventsState, twinState);
+      logDustCounts('A ledger-v8', eventsState, twinState);
       logger.info(
         'A the cursor the twin will carry across the fork, and the one its first projections pass will resume from:' +
           ` ${twinState.dust.state.progress.highestIndex}`,
@@ -408,17 +408,17 @@ describe.sequential('Hard fork crossing @fork', () => {
   );
 
   test(
-    'spends before the fork, proving at the ledger-v8 proof server',
+    'spends before the v9 fork, proving at the ledger-v8 proof server',
     async () => {
       // The half of proving no other lane can reach. Below the boundary the wallet builds ledger-v8 bytes, and only the
       // ledger-v8 can frame a proving request for them and only a ledger-v8 proof server can answer it — so what
       // this proves is that the backends keyed by ledger version were honoured, not merely accepted by configuration.
-      // The same wallet proves at the other server after the fork, which is the acceptance criterion for the pair.
-      preForkReceiver = await utils.initWalletWithSeed(V8_RECEIVER_SEED, fixture);
+      // The same wallet proves at the other server after the v9 fork, which is the acceptance criterion for the pair.
+      v8Receiver = await utils.initWalletWithSeed(V8_RECEIVER_SEED, fixture);
       const receiverBefore = await within(
-        'the pre-fork receiver to sync',
+        'the ledger-v8 receiver to sync',
         CROSSING_TIMEOUT_MS,
-        preForkReceiver.wallet.waitForSyncedState(),
+        v8Receiver.wallet.waitForSyncedState(),
       );
       expect(receiverBefore.unshielded.balances[NIGHT] ?? 0n).toBe(0n);
 
@@ -431,7 +431,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       // before there is a transfer to price, so "enough has accrued" is expressed as the build succeeding, retried
       // until it does. That the wallet leaves the inputs of a build it could not pay for booked is why the first
       // attempts cost it coins it does not get back — enough of them remain for the one that succeeds.
-      const receiverAddress = await preForkReceiver.wallet.unshielded.getAddress();
+      const receiverAddress = await v8Receiver.wallet.unshielded.getAddress();
       const recipe = await onceEnoughDustHasBeenGenerated(() =>
         wallet.transferTransaction(
           [{ type: 'unshielded', outputs: [{ type: NIGHT, amount: TRANSFER_AMOUNT, receiverAddress }] }],
@@ -443,22 +443,22 @@ describe.sequential('Hard fork crossing @fork', () => {
 
       // The proof came back as ledger-v8's transaction, which is only true if the ledger-v8 backend produced
       // it: ledger-v9's classes are a different type and would have been unwrapped as one.
-      expect(carried<preForkLedger.FinalizedTransaction>(finalizedTx)).toBeInstanceOf(preForkLedger.Transaction);
+      expect(carried<ledgerV8.FinalizedTransaction>(finalizedTx)).toBeInstanceOf(ledgerV8.Transaction);
 
       const txId = await wallet.submitTransaction(finalizedTx);
-      logger.info(`pre-fork unshielded transfer submitted: ${txId}`);
+      logger.info(`ledger-v8 unshielded transfer submitted: ${txId}`);
 
       // The receiver's arrival, not the sender's bookkeeping, is what says the chain took the transaction: the sender
       // books a spend the moment it submits one, and the coins the earlier attempts booked make its own balances a
       // poor witness. An empty account seeing exactly what was sent to it is decided by inclusion and nothing else.
       const receiverAfter = await stateWhere(
-        'the pre-fork receiver to see the transferred Night',
-        preForkReceiver.wallet,
+        'the ledger-v8 receiver to see the transferred Night',
+        v8Receiver.wallet,
         (state) => state.isSynced && (state.unshielded.balances[NIGHT] ?? 0n) > 0n,
       );
-      logger.info(`AFTER PRE-FORK SPEND ${summarize(receiverAfter)}`);
+      logger.info(`AFTER V8 SPEND ${summarize(receiverAfter)}`);
       expect(receiverAfter.unshielded.balances[NIGHT]).toBe(TRANSFER_AMOUNT);
-      expect(nightBefore).toBe(preFork.unshielded.balances[NIGHT]);
+      expect(nightBefore).toBe(v8State.unshielded.balances[NIGHT]);
     },
     SPEND_TIMEOUT_MS + 5 * 60 * 1000,
   );
@@ -471,7 +471,7 @@ describe.sequential('Hard fork crossing @fork', () => {
     expect(enactment.appliedAt).toBeGreaterThan(1);
   });
 
-  test('crosses the boundary and settles on the post-fork variants', async () => {
+  test('crosses the boundary and settles on the V2 variants', async () => {
     const observed = await rx.firstValueFrom(
       tracked.pipe(
         rx.filter(({ state }) => hasCrossed(state)),
@@ -479,20 +479,20 @@ describe.sequential('Hard fork crossing @fork', () => {
         rx.timeout({ first: CROSSING_TIMEOUT_MS }),
       ),
     );
-    postFork = observed.state!;
-    logger.info(`POST-FORK SETTLED ${summarize(postFork)}`);
+    v9State = observed.state!;
+    logger.info(`V9 SETTLED ${summarize(v9State)}`);
     logger.info(`phase transitions observed: ${observed.phases.join('  ->  ')}`);
 
-    expect(postFork.protocol._tag).toBe('Settled');
-    expect(postFork.activeProtocolVersion).toBeGreaterThanOrEqual(ProtocolVersion.V9NativeForkVersion);
-    expect(postFork.isSynced).toBe(true);
+    expect(v9State.protocol._tag).toBe('Settled');
+    expect(v9State.activeProtocolVersion).toBeGreaterThanOrEqual(ProtocolVersion.V9NativeForkVersion);
+    expect(v9State.isSynced).toBe(true);
 
     // The wallets do not cross together: each learns of the change when its own synchronization
     // reaches it, so the facade must report at least one window in which they disagreed.
     const firstCrossing = observed.phases.findIndex((phase) => phase.startsWith('Crossing'));
     expect(firstCrossing).toBeGreaterThanOrEqual(0);
     expect(firstCrossing).toBeLessThan(observed.phases.length - 1);
-    expect(observed.phases.at(-1)).toBe(phaseOf(postFork));
+    expect(observed.phases.at(-1)).toBe(phaseOf(v9State));
   });
 
   test(
@@ -507,14 +507,14 @@ describe.sequential('Hard fork crossing @fork', () => {
       );
       const twinState = observed.state!;
       const eventsState = await wallet.waitForSyncedState();
-      logger.info(`TWIN POST-FORK SETTLED ${summarize(twinState)}`);
+      logger.info(`TWIN V9 SETTLED ${summarize(twinState)}`);
       logger.info(`twin phase transitions observed: ${observed.phases.join('  ->  ')}`);
-      logDustCounts('B post-fork', eventsState, twinState);
+      logDustCounts('B ledger-v9', eventsState, twinState);
 
       expect(twinState.protocol._tag).toBe('Settled');
       expect(twinState.activeProtocolVersion).toBeGreaterThanOrEqual(ProtocolVersion.V9NativeForkVersion);
       expect(twinState.isSynced).toBe(true);
-      // The twin's post-fork variant has exactly one synchronization — the projections one — so a settled post-fork
+      // The twin's V2 variant has exactly one synchronization — the projections one — so a settled ledger-v9
       // state is itself the proof that the projections path ran, and ran on a state produced by the migration.
       expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
     },
@@ -523,22 +523,22 @@ describe.sequential('Hard fork crossing @fork', () => {
 
   test('carries its balances across the boundary', () => {
     logger.info(
-      `INFO dust: pre coins=${preFork.dust.totalCoins.length} balance=${preFork.dust.balance(new Date())};` +
-        ` post coins=${postFork.dust.totalCoins.length} balance=${postFork.dust.balance(new Date())}`,
+      `INFO dust: pre coins=${v8State.dust.totalCoins.length} balance=${v8State.dust.balance(new Date())};` +
+        ` post coins=${v9State.dust.totalCoins.length} balance=${v9State.dust.balance(new Date())}`,
     );
 
-    // Everything the wallet had at the pre-fork tip, less the one transfer it made below the boundary — which is the
+    // Everything the wallet had at the ledger-v8 tip, less the one transfer it made below the boundary — which is the
     // only Night that legitimately left it there, and is stated rather than read back from the wallet so that what
     // crossed is compared against what the chain was asked for.
-    expect(postFork.unshielded.balances).toEqual({
-      ...preFork.unshielded.balances,
-      [NIGHT]: preFork.unshielded.balances[NIGHT] - TRANSFER_AMOUNT,
+    expect(v9State.unshielded.balances).toEqual({
+      ...v8State.unshielded.balances,
+      [NIGHT]: v8State.unshielded.balances[NIGHT] - TRANSFER_AMOUNT,
     });
-    expect(postFork.shielded.balances).toEqual(preFork.shielded.balances);
-    expect(postFork.pending.length).toBe(0);
+    expect(v9State.shielded.balances).toEqual(v8State.shielded.balances);
+    expect(v9State.pending.length).toBe(0);
   });
 
-  test('restores a post-fork snapshot on the version it declares', async () => {
+  test('restores a V2 snapshot on the version it declares', async () => {
     const snapshot = await wallet.shielded.serializeState();
     const restored = ShieldedWallet(fixture.getWalletConfig()).tryRestore(snapshot);
 
@@ -549,15 +549,15 @@ describe.sequential('Hard fork crossing @fork', () => {
   });
 
   test(
-    're-registers its NIGHT for dust generation after the fork',
+    're-registers its NIGHT for dust generation after the v9 fork',
     async () => {
       const before = await wallet.waitForSyncedState();
       logger.info(
-        `POST-FORK DUST before re-registration: available=${before.dust.availableCoins.length}` +
+        `V9 DUST before re-registration: available=${before.dust.availableCoins.length}` +
           ` total=${before.dust.totalCoins.length} balance=${before.dust.balance(new Date())}`,
       );
       logger.info(
-        `POST-FORK unshielded coins: ${asJson(
+        `V9 unshielded coins: ${asJson(
           before.unshielded.availableCoins.map(({ utxo, meta }) => ({
             utxo: utxoKey(utxo),
             value: utxo.value,
@@ -568,7 +568,9 @@ describe.sequential('Hard fork crossing @fork', () => {
         )}`,
       );
 
-      const nightUtxos = before.unshielded.availableCoins.filter((coin) => coin.utxo.type === ledger.nativeToken().raw);
+      const nightUtxos = before.unshielded.availableCoins.filter(
+        (coin) => coin.utxo.type === ledgerV9.nativeToken().raw,
+      );
       expect(nightUtxos.length).toBeGreaterThan(0);
 
       const { fee } = await wallet.estimateRegistration(nightUtxos);
@@ -581,7 +583,7 @@ describe.sequential('Hard fork crossing @fork', () => {
         await wallet.waitForGeneratedDust(nightUtxos, fee, { timeoutMs: DUST_TIMEOUT_MS });
       } else {
         logger.info(
-          'every Night UTxO still reports registeredForDustGeneration=true after the fork, so the registration' +
+          'every Night UTxO still reports registeredForDustGeneration=true after the v9 fork, so the registration' +
             ' has no generation allowance to draw its own fee from; submitting it as a re-registration',
         );
       }
@@ -601,7 +603,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       logger.info(`registration transaction submitted: ${txId}`);
       expect(txId).toBeTypeOf('string');
 
-      const registrationHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
+      const registrationHash = carried<ledgerV9.FinalizedTransaction>(finalizedTx).transactionHash();
       await within(
         'the re-registration to be finalized',
         DUST_TIMEOUT_MS,
@@ -620,16 +622,16 @@ describe.sequential('Hard fork crossing @fork', () => {
       );
 
       expect(registered.dust.balance(new Date())).toBeGreaterThan(0n);
-      expect(registered.unshielded.balances[NIGHT]).toBe(postFork.unshielded.balances[NIGHT]);
+      expect(registered.unshielded.balances[NIGHT]).toBe(v9State.unshielded.balances[NIGHT]);
     },
     15 * 60 * 1000,
   );
 
   test(
-    'the projections twin sees the post-fork re-registration',
+    'the projections twin sees the re-registration on ledger-v9',
     async () => {
-      // The first projections pass on a migrated state that has something to find. The registration is post-fork, so
-      // nothing the pre-fork variant ever applied accounts for this dust — the twin can only be holding it because the
+      // The first projections pass on a migrated state that has something to find. The registration is on ledger-v9, so
+      // nothing the V1 variant ever applied accounts for this dust — the twin can only be holding it because the
       // projections path fetched it, resuming from whatever cursor the migration parked.
       const eventsState = await wallet.waitForSyncedState();
       const twinState = await within('the projections twin to re-sync', DUST_TIMEOUT_MS, resyncTwin());
@@ -649,7 +651,7 @@ describe.sequential('Hard fork crossing @fork', () => {
   );
 
   test(
-    'spends a carried unshielded coin after the fork',
+    'spends a carried unshielded coin after the v9 fork',
     async () => {
       receiver = await utils.initWalletWithSeed(RECEIVER_SEED, fixture);
       const receiverBefore = await within(
@@ -662,7 +664,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       const before = await wallet.waitForSyncedState();
       const nightBefore = before.unshielded.balances[NIGHT];
       const dustBefore = before.dust.balance(new Date());
-      const carriedUtxos = new Set(preFork.unshielded.availableCoins.map(({ utxo }) => utxoKey(utxo)));
+      const carriedUtxos = new Set(v8State.unshielded.availableCoins.map(({ utxo }) => utxoKey(utxo)));
 
       const recipe = await wallet.transferTransaction(
         [
@@ -670,7 +672,7 @@ describe.sequential('Hard fork crossing @fork', () => {
             type: 'unshielded',
             outputs: [
               {
-                type: ledger.nativeToken().raw,
+                type: ledgerV9.nativeToken().raw,
                 amount: TRANSFER_AMOUNT,
                 receiverAddress: await receiver.wallet.unshielded.getAddress(),
               },
@@ -682,7 +684,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       const signed = await wallet.signRecipe(recipe, unshieldedKeystore.signDataAsync);
       const finalizedTx = await wallet.finalizeRecipe(signed);
 
-      const inputs = unshieldedInputsOf(carried<ledger.FinalizedTransaction>(finalizedTx));
+      const inputs = unshieldedInputsOf(carried<ledgerV9.FinalizedTransaction>(finalizedTx));
       logger.info(
         `UNSHIELDED SPEND inputs: ${asJson(
           inputs.map((input) => ({
@@ -698,7 +700,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       logger.info(`unshielded transfer submitted: ${txId}`);
       expect(txId).toBeTypeOf('string');
 
-      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
+      const txHash = carried<ledgerV9.FinalizedTransaction>(finalizedTx).transactionHash();
       const senderEntry = await within(
         'the unshielded spend to be finalized for the sender',
         SPEND_TIMEOUT_MS,
@@ -734,13 +736,13 @@ describe.sequential('Hard fork crossing @fork', () => {
   );
 
   test(
-    'spends a carried shielded coin after the fork',
+    'spends a carried shielded coin after the v9 fork',
     async () => {
-      const shieldedToken = ledger.shieldedToken().raw;
+      const shieldedToken = ledgerV9.shieldedToken().raw;
       const before = await wallet.waitForSyncedState();
       const shieldedBefore = before.shielded.balances[shieldedToken];
       const dustBefore = before.dust.balance(new Date());
-      const carriedNonces = new Set(preFork.shielded.availableCoins.map(({ coin }) => coin.nonce));
+      const carriedNonces = new Set(v8State.shielded.availableCoins.map(({ coin }) => coin.nonce));
       expect(shieldedBefore).toBeGreaterThan(TRANSFER_AMOUNT);
 
       const receiverWallet = receiver!.wallet;
@@ -769,7 +771,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       logger.info(`shielded transfer submitted: ${txId}`);
       expect(txId).toBeTypeOf('string');
 
-      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
+      const txHash = carried<ledgerV9.FinalizedTransaction>(finalizedTx).transactionHash();
       const senderEntry = await within(
         'the shielded spend to be finalized for the sender',
         SPEND_TIMEOUT_MS,
@@ -815,7 +817,7 @@ describe.sequential('Hard fork crossing @fork', () => {
   );
 
   test(
-    'the projections twin sees the dust the post-fork spends paid with',
+    'the projections twin sees the dust the ledger-v9 spends paid with',
     async () => {
       // Both spends paid their fee in dust, so each consumed a dust UTxO and left its successor behind. A projections
       // pass reads that as a snapshot rather than as a spend event, and has to arrive at the same holdings.

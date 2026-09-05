@@ -43,11 +43,11 @@ const forkVersion = ProtocolVersion.ProtocolVersion(7n);
  * A wallet of the previous ledger version, as plain data.
  *
  * @remarks
- *   Deliberately wider than {@link PreviousLedgerWallet}: it also carries the coins a real pre-fork wallet would be
- *   holding, so that "those do not cross" is something this file can actually observe rather than merely fail to
- *   mention. Its cursor is non-zero for the opposite reason — what does cross has to be seen crossing. Structural
- *   because the real thing is built on the other ledger's WASM module, and a projection that reads no ledger object out
- *   of it has no reason to load one.
+ *   Deliberately wider than {@link PreviousLedgerWallet}: it also carries the coins a real V1 wallet would be holding, so
+ *   that "those do not cross" is something this file can actually observe rather than merely fail to mention. Its
+ *   cursor is non-zero for the opposite reason — what does cross has to be seen crossing. Structural because the real
+ *   thing is built on the other ledger's WASM module, and a projection that reads no ledger object out of it has no
+ *   reason to load one.
  */
 type PreviousWalletStandIn = PreviousLedgerWallet & {
   readonly state: {

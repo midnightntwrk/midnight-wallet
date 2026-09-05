@@ -21,14 +21,14 @@
  *   declares, deserialize with _that_ variant's deserializer, and start there.
  *
  *   Both epochs are pinned in one file on purpose. A router that always answered with the head variant would pass the
- *   pre-fork half and fail the post-fork one; a router that always answered with the last registration would do the
+ *   ledger-v8 half and fail the ledger-v9 one; a router that always answered with the last registration would do the
  *   reverse. Only routing on the snapshot's own declared version passes both.
  *
  *   The snapshots are the suite's own: each is written by a running wallet through `serializeState()`, so what is
  *   restored is what this package actually produces rather than a fixture that could drift from it.
  */
 
-import { LedgerParameters as PreForkLedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { LedgerParameters as V8LedgerParameters } from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { Deferred, Effect, Option, Queue, type Scope, Stream, pipe } from 'effect';
@@ -38,7 +38,7 @@ import { peekProtocolVersion } from '../Restore.js';
 import { V1Tag } from '../v1/RunningV1Variant.js';
 import { DUST_EVENT_COUNT, type DustChain, buildDustChain, dustSeed } from '../v1/test/dustEvents.js';
 import { V2Tag } from '../v2/RunningV2Variant.js';
-import { dustParameters as postForkDustParameters } from '../v2/test/dustEvents.js';
+import { dustParameters as v9DustParameters } from '../v2/test/dustEvents.js';
 import { type ForkWallet, makeForkWallet } from './forkHarness.js';
 import { type TimelineEvent, numberedFrom } from './forkReplay.js';
 import { balanceAt, dustCount } from './forkWalletAssertions.js';
@@ -48,16 +48,16 @@ vi.setConfig({ testTimeout: 60_000 });
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
-/** Where the wallet registers its post-fork variant. */
+/** Where the wallet registers its V2 variant. */
 const forkVersion = ProtocolVersion.ProtocolVersion(7n);
 /** A chain that has already forked — past the boundary rather than exactly at it. */
-const afterFork = ProtocolVersion.ProtocolVersion(9n);
-/** A chain that has not — a version the pre-fork variant owns. */
-const beforeFork = ProtocolVersion.ProtocolVersion(5n);
+const v9Version = ProtocolVersion.ProtocolVersion(9n);
+/** A chain that has not — a version the V1 variant owns. */
+const v8Version = ProtocolVersion.ProtocolVersion(5n);
 
 const dustParameters = {
-  preFork: PreForkLedgerParameters.initialParameters().dust,
-  postFork: postForkDustParameters(),
+  v8: V8LedgerParameters.initialParameters().dust,
+  v9: v9DustParameters(),
 };
 
 /** A wallet pointed at a timeline every event of which is reported at `version`. */
@@ -72,7 +72,7 @@ const walletOnChainAt = (
     const replayed = yield* Deferred.make<readonly TimelineEvent[]>();
 
     const wallet = yield* makeForkWallet({
-      preFork: Stream.fromQueue(wire),
+      v8: Stream.fromQueue(wire),
       replayed: Deferred.await(replayed),
       networkId,
       forkVersion,
@@ -107,10 +107,10 @@ const runningTag = (wallet: ForkWallet['dust']): Effect.Effect<string | symbol> 
 const restoredState = (wallet: ForkWallet['dust']) => Effect.promise(() => rx.firstValueFrom(wallet.state));
 
 describe('a dust wallet restoring a snapshot through the class it was started from', () => {
-  it('restores a snapshot written below the boundary onto the pre-fork variant, with what it held', async () =>
+  it('restores a snapshot written below the boundary onto the V1 variant, with what it held', async () =>
     Effect.gen(function* () {
       const chain = yield* Effect.promise(() => buildDustChain());
-      const wallet = yield* walletOnChainAt(chain, beforeFork, chainReporting(beforeFork));
+      const wallet = yield* walletOnChainAt(chain, v8Version, chainReporting(v8Version));
 
       const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
       expect(yield* wallet.activeTag).toBe(V1Tag);
@@ -132,10 +132,10 @@ describe('a dust wallet restoring a snapshot through the class it was started fr
       expect(state.state.publicKey.publicKey).toBe(synced.state.publicKey.publicKey);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('restores a snapshot written at or past the boundary onto the post-fork variant, with what it held', async () =>
+  it('restores a snapshot written at or past the boundary onto the V2 variant, with what it held', async () =>
     Effect.gen(function* () {
       const chain = yield* Effect.promise(() => buildDustChain());
-      const wallet = yield* walletOnChainAt(chain, afterFork, chainReporting(afterFork));
+      const wallet = yield* walletOnChainAt(chain, v9Version, chainReporting(v9Version));
 
       const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
       expect(yield* wallet.activeTag).toBe(V2Tag);

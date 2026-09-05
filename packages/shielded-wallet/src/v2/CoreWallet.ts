@@ -222,7 +222,7 @@ export const CoreWallet = {
    *   rather than immediately signalling backwards), and the cursor the previous variant stopped at.
    *
    *   **Sync progress is parked at the fork, not rewound**: the previous wallet's cursor crosses unchanged. The indexer
-   *   numbers post-fork events onwards from whatever id it had reached when the fork happened, never from zero, so
+   *   numbers ledger-v9 events onwards from whatever id it had reached when the fork happened, never from zero, so
    *   resuming from the inherited cursor is what puts this wallet in front of them. Rewinding to zero would park it on
    *   a stretch of history that this ledger version's events do not occupy. What does not cross is `isConnected`: no
    *   sync is running behind this state yet.

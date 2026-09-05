@@ -24,24 +24,24 @@
  * `@midnightntwrk/wallet-sdk-capabilities`.
  */
 
-import * as v8 from '@midnight-ntwrk/ledger-v8';
-import * as v9 from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { describe, expect, it } from 'vitest';
 
 import { StateTranslationFailedError, translateLedgerState } from '../index.js';
 
 const networkId = 'undeployed';
 
-/** A real serialized pre-fork ledger state — the only input the translation accepts. */
-const preForkLedger = (): Uint8Array => v8.LedgerState.blank(networkId).serialize();
+/** A real serialized ledger-v8 state — the only input the translation accepts. */
+const v8State = (): Uint8Array => ledgerV8.LedgerState.blank(networkId).serialize();
 
 describe('translateLedgerState', () => {
-  it('translates serialized pre-fork state into state the post-fork ledger accepts', async () => {
-    const translated = await translateLedgerState(preForkLedger());
+  it('translates serialized ledger-v8 state into state ledger-v9 accepts', async () => {
+    const translated = await translateLedgerState(v8State());
 
     expect(translated).toBeInstanceOf(Uint8Array);
     // Deserializing is the assertion: it is what says these bytes are a v9 ledger state rather than merely bytes.
-    expect(v9.LedgerState.deserialize(translated)).toBeInstanceOf(v9.LedgerState);
+    expect(ledgerV9.LedgerState.deserialize(translated)).toBeInstanceOf(ledgerV9.LedgerState);
   });
 
   it('reports a refused translation as a failure, keeping its cause', async () => {
@@ -58,7 +58,7 @@ describe('translateLedgerState', () => {
   });
 
   it('does not touch its input', async () => {
-    const original = preForkLedger();
+    const original = v8State();
     const copy = Uint8Array.from(original);
 
     await translateLedgerState(original);

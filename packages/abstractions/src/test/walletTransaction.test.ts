@@ -21,10 +21,10 @@ const range = (start: bigint, end: bigint): ProtocolVersion.ProtocolVersion.Rang
   ProtocolVersion.makeRange(version(start), version(end));
 
 /** Where the two ledger versions hand over, in the numbers a v9-native chain actually reports. */
-const preFork = version(1_000_000n);
-const postFork = version(2_000_000n);
-const preForkEra = range(0n, 2_000_000n);
-const postForkEra = range(2_000_000n, 3_000_000n);
+const v8Version = version(1_000_000n);
+const v9Version = version(2_000_000n);
+const v8Epoch = range(0n, 2_000_000n);
+const v9Epoch = range(2_000_000n, 3_000_000n);
 
 /**
  * A stand-in for what either ledger version's transaction objects have in common: they serialize themselves, and
@@ -43,15 +43,15 @@ const someTransaction = (): LedgerLikeTransaction => ledgerLikeTransaction('v9-f
 describe('WalletTransaction', () => {
   describe('adopt', () => {
     it('seals a transaction with the stage and the protocol version it was built at', () => {
-      const handle = WalletTransaction.adopt('Finalized', someTransaction(), postFork);
+      const handle = WalletTransaction.adopt('Finalized', someTransaction(), v9Version);
 
       expect(handle.stage).toBe('Finalized');
-      expect(handle.protocolVersion).toBe(postFork);
+      expect(handle.protocolVersion).toBe(v9Version);
     });
 
     it('does not expose the transaction it carries', () => {
       const transaction = someTransaction();
-      const handle = WalletTransaction.adopt('Finalized', transaction, postFork);
+      const handle = WalletTransaction.adopt('Finalized', transaction, v9Version);
 
       expect(Object.keys(handle)).toStrictEqual(['protocolVersion', 'stage']);
       expect(Object.values(handle)).not.toContain(transaction);
@@ -60,7 +60,7 @@ describe('WalletTransaction', () => {
     });
 
     it('serializes as the transaction it carries does', () => {
-      const handle = WalletTransaction.adopt('Unproven', someTransaction(), preFork);
+      const handle = WalletTransaction.adopt('Unproven', someTransaction(), v8Version);
 
       expect(handle.serialize()).toStrictEqual(Uint8Array.from(someBytes));
     });
@@ -69,45 +69,45 @@ describe('WalletTransaction', () => {
   describe('unwrapWithin', () => {
     it('hands the transaction over when the stamp lies in the range the caller acts at', () => {
       const transaction = someTransaction();
-      const handle = WalletTransaction.adopt('Finalized', transaction, postFork);
+      const handle = WalletTransaction.adopt('Finalized', transaction, v9Version);
 
-      expect(WalletTransaction.unwrapWithin<LedgerLikeTransaction>(handle, postForkEra)).toStrictEqual(
+      expect(WalletTransaction.unwrapWithin<LedgerLikeTransaction>(handle, v9Epoch)).toStrictEqual(
         Either.right(transaction),
       );
     });
 
-    it('refuses a pre-fork transaction handed to a post-fork caller, naming both', () => {
-      const handle = WalletTransaction.adopt('Finalized', someTransaction(), preFork);
+    it('refuses a ledger-v8 transaction handed to a ledger-v9 caller, naming both', () => {
+      const handle = WalletTransaction.adopt('Finalized', someTransaction(), v8Version);
 
-      const error = WalletTransaction.unwrapWithin(handle, postForkEra).pipe(Either.flip, Either.getOrThrow);
+      const error = WalletTransaction.unwrapWithin(handle, v9Epoch).pipe(Either.flip, Either.getOrThrow);
 
       expect(error).toBeInstanceOf(ProtocolVersionMismatchError);
       expect(error._tag).toBe('@midnightntwrk/wallet-sdk-abstractions/WalletTransaction/ProtocolVersionMismatchError');
-      expect(error.authoredFor).toBe(preFork);
-      expect(error.accepted).toStrictEqual(postForkEra);
+      expect(error.authoredFor).toBe(v8Version);
+      expect(error.accepted).toStrictEqual(v9Epoch);
       expect(error.stage).toBe('Finalized');
     });
 
-    it('refuses a post-fork transaction handed to a pre-fork caller, naming both', () => {
-      const handle = WalletTransaction.adopt('Unproven', someTransaction(), postFork);
+    it('refuses a ledger-v9 transaction handed to a ledger-v8 caller, naming both', () => {
+      const handle = WalletTransaction.adopt('Unproven', someTransaction(), v9Version);
 
-      const error = WalletTransaction.unwrapWithin(handle, preForkEra).pipe(Either.flip, Either.getOrThrow);
+      const error = WalletTransaction.unwrapWithin(handle, v8Epoch).pipe(Either.flip, Either.getOrThrow);
 
-      expect(error.authoredFor).toBe(postFork);
-      expect(error.accepted).toStrictEqual(preForkEra);
+      expect(error.authoredFor).toBe(v9Version);
+      expect(error.accepted).toStrictEqual(v8Epoch);
       expect(error.stage).toBe('Unproven');
     });
   });
 
   describe('atStage', () => {
     it('narrows a handle to the stage it is at', () => {
-      const handle = WalletTransaction.adopt('Unbound', someTransaction(), postFork);
+      const handle = WalletTransaction.adopt('Unbound', someTransaction(), v9Version);
 
       expect(WalletTransaction.atStage(handle, 'Unbound')).toStrictEqual(Option.some(handle));
     });
 
     it('answers nothing for a stage the handle is not at', () => {
-      const handle = WalletTransaction.adopt('Unbound', someTransaction(), postFork);
+      const handle = WalletTransaction.adopt('Unbound', someTransaction(), v9Version);
 
       expect(WalletTransaction.atStage(handle, 'Finalized')).toStrictEqual(Option.none());
     });
@@ -115,11 +115,11 @@ describe('WalletTransaction', () => {
 
   describe('is', () => {
     it('recognises a handle', () => {
-      expect(WalletTransaction.is(WalletTransaction.adopt('Finalized', someTransaction(), postFork))).toBe(true);
+      expect(WalletTransaction.is(WalletTransaction.adopt('Finalized', someTransaction(), v9Version))).toBe(true);
     });
 
     it('rejects an object that merely looks like one', () => {
-      const lookalike = { protocolVersion: postFork, stage: 'Finalized', serialize: () => Uint8Array.from(someBytes) };
+      const lookalike = { protocolVersion: v9Version, stage: 'Finalized', serialize: () => Uint8Array.from(someBytes) };
 
       expect(WalletTransaction.is(lookalike)).toBe(false);
     });
@@ -132,7 +132,7 @@ describe('WalletTransaction', () => {
 
   describe('toWire', () => {
     it('writes an envelope naming its own format, the protocol version, the stage and the bytes', () => {
-      const handle = WalletTransaction.adopt('Finalized', someTransaction(), postFork);
+      const handle = WalletTransaction.adopt('Finalized', someTransaction(), v9Version);
 
       expect(WalletTransaction.toWire(handle)).toStrictEqual({
         wireFormat: 1,
@@ -152,21 +152,19 @@ describe('WalletTransaction', () => {
     ): LedgerLikeTransaction => ledgerLikeTransaction(`${stage}@${protocolVersion}`, Array.from(bytes));
 
     it('reads the envelope back into a handle, decoding at the version the envelope names', () => {
-      const wire = WalletTransaction.toWire(WalletTransaction.adopt('Finalized', someTransaction(), postFork));
+      const wire = WalletTransaction.toWire(WalletTransaction.adopt('Finalized', someTransaction(), v9Version));
 
       const handle = WalletTransaction.fromWire(wire, decodeEchoing).pipe(Either.getOrThrow);
 
-      expect(handle.protocolVersion).toBe(postFork);
+      expect(handle.protocolVersion).toBe(v9Version);
       expect(handle.stage).toBe('Finalized');
-      const decoded = WalletTransaction.unwrapWithin<LedgerLikeTransaction>(handle, postForkEra).pipe(
-        Either.getOrThrow,
-      );
+      const decoded = WalletTransaction.unwrapWithin<LedgerLikeTransaction>(handle, v9Epoch).pipe(Either.getOrThrow);
       expect(decoded.kind).toBe('Finalized@2000000');
       expect(decoded.serialize()).toStrictEqual(Uint8Array.from(someBytes));
     });
 
     it('round-trips the bytes the handle carried', () => {
-      const wire = WalletTransaction.toWire(WalletTransaction.adopt('Unproven', someTransaction(), preFork));
+      const wire = WalletTransaction.toWire(WalletTransaction.adopt('Unproven', someTransaction(), v8Version));
 
       const handle = WalletTransaction.fromWire(wire, decodeEchoing).pipe(Either.getOrThrow);
 
@@ -174,7 +172,7 @@ describe('WalletTransaction', () => {
     });
 
     it('refuses an envelope of a wire format it does not know', () => {
-      const wire = { ...WalletTransaction.toWire(WalletTransaction.adopt('Unproven', someTransaction(), preFork)) };
+      const wire = { ...WalletTransaction.toWire(WalletTransaction.adopt('Unproven', someTransaction(), v8Version)) };
 
       const error = WalletTransaction.fromWire({ ...wire, wireFormat: 2 }, decodeEchoing).pipe(
         Either.flip,
@@ -208,7 +206,7 @@ describe('WalletTransaction', () => {
     });
 
     it('carries out a decoder that throws as a wire failure rather than letting it escape', () => {
-      const wire = WalletTransaction.toWire(WalletTransaction.adopt('Finalized', someTransaction(), postFork));
+      const wire = WalletTransaction.toWire(WalletTransaction.adopt('Finalized', someTransaction(), v9Version));
       const cause = new Error('these bytes are not of this ledger version');
 
       const error = WalletTransaction.fromWire(wire, () => {

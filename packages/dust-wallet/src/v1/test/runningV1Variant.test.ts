@@ -308,7 +308,7 @@ describe('RunningV1Variant sync serialization', () => {
   });
 
   it('runs a further pass after a background drain whose stream ended', async () => {
-    // The twin of the post-fork variant's pin. This variant never runs the projections source — no published pre-fork
+    // The twin of the V2 variant's pin. This variant never runs the projections source — no published ledger-v8
     // ledger has the state APIs it needs — but the runner is shared by both sync styles, so the rule it depends on is
     // asserted here too rather than left to hold by accident.
     const result = await Effect.gen(function* () {

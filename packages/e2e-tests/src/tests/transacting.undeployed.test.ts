@@ -45,11 +45,11 @@ import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntw
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
 import {
-  makeServerProvingServiceEffect,
+  makeV9ServerProvingServiceEffect,
   singleVersionProvingServiceEffect,
   type DefaultProvingConfiguration,
   type VersionedProvingServiceEffect,
-  type UnboundTransaction,
+  type V9UnboundTransaction,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -77,8 +77,8 @@ const shieldedTokenType = ledger.shieldedToken().raw;
 describe.skip('Wallet transacting', () => {
   let startedEnvironment: StartedDockerComposeEnvironment;
   let configuration: DefaultV2Configuration & Submission.DefaultSubmissionConfiguration & DefaultProvingConfiguration;
-  // Named separately from the configuration it also goes into: this suite builds a single current-ledger wallet, so it
-  // wants one current-ledger backend for every version rather than a boundary-aware registry.
+  // Named separately from the configuration it also goes into: this suite builds a single ledger-v9 wallet, so it
+  // wants one ledger-v9 backend for every version rather than a boundary-aware registry.
   let provingServerUrl: URL;
 
   beforeEach(async () => {
@@ -127,7 +127,7 @@ describe.skip('Wallet transacting', () => {
   let coinsAndBalances: CoinsAndBalances.CoinsAndBalancesCapability<CoreWallet>;
   let keys: Keys.KeysCapability<CoreWallet>;
   let submissionService: Submission.SubmissionServiceEffect<ledger.FinalizedTransaction>;
-  let provingService: VersionedProvingServiceEffect<UnboundTransaction>;
+  let provingService: VersionedProvingServiceEffect<V9UnboundTransaction>;
 
   const getShieldedAddress = (state: CoreWallet | ledger.ZswapSecretKeys): ShieldedAddress => {
     return state instanceof ledger.ZswapSecretKeys
@@ -167,7 +167,7 @@ describe.skip('Wallet transacting', () => {
 
   beforeEach(async () => {
     submissionService = Submission.makeDefaultSubmissionServiceEffect<ledger.FinalizedTransaction>(configuration);
-    provingService = singleVersionProvingServiceEffect(makeServerProvingServiceEffect({ provingServerUrl }));
+    provingService = singleVersionProvingServiceEffect(makeV9ServerProvingServiceEffect({ provingServerUrl }));
     Wallet = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V2Builder().withDefaults())
       .build(configuration);

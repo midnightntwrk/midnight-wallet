@@ -1,11 +1,11 @@
 # Hard-fork e2e — the only lane in which a wallet crosses a real protocol boundary.
 #
 # Every other live-infra lane (PR smoke in ci.yml, the nightly undeployed run in e2e-tests-local.yml, the integration
-# matrix) boots the current node on its own genesis, so the chain is post-fork from block 1 and no wallet ever crosses
-# anything. This lane instead builds a genesis from the OLD node's spec (ledger 8), runs it on the NEW binary with an
-# indexer and a proof server, syncs a facade wallet pre-fork, enacts the ledger 8 -> 9 upgrade through the node
+# matrix) boots the current node on its own genesis, so the chain is on ledger-v9 from block 1 and no wallet ever crosses
+# anything. This lane instead builds a genesis from the ledger-v8 node's spec, runs it on the ledger-v9 node binary with an
+# indexer and a proof server, syncs a facade wallet on ledger-v8, enacts the ledger 8 -> 9 upgrade through the node
 # toolkit's governance `runtime-upgrade`, and asserts the wallet crosses, settles, keeps its balances and restores from
-# its post-fork snapshot. Three bugs found by running this scenario by hand (#699, #701, #702) were invisible to every fork test in
+# its V2 snapshot. Three bugs found by running this scenario by hand (#699, #701, #702) were invisible to every fork test in
 # CI; this is what makes them visible.
 #
 # Why it is NOT part of the required `Tests` gate in ci.yml:
@@ -28,12 +28,12 @@ on:
     inputs:
       fork_from_node_tag:
         type: string
-        description: Node image whose spec the chain starts from (the pre-fork runtime, ledger 8)
+        description: Node image whose spec the chain starts from (the ledger-v8 runtime)
         required: false
         default: '1.0.1'
       node_tag:
         type: string
-        description: Node image the chain actually runs on, and whose runtime is upgraded into (ledger 9)
+        description: Node image the chain actually runs on, and whose runtime is upgraded into (ledger-v9)
         required: false
         default: '2.1.0-beta.1'
       toolkit_tag:
@@ -48,12 +48,12 @@ on:
         default: '4.4.0-rc.5'
       proof_server_tag:
         type: string
-        description: proof-server image (post-fork, ledger 9)
+        description: proof-server image (ledger-v9)
         required: false
         default: '9.0.0-rc.7'
       proof_server_v8_tag:
         type: string
-        description: proof-server image the pre-fork half proves at (ledger 8)
+        description: proof-server image the ledger-v8 half proves at
         required: false
         default: '8.1.0'
   pull_request:
@@ -87,7 +87,7 @@ jobs:
   hard-fork:
     name: Hard fork
     runs-on: ubuntu-latest-8-core-x64
-    # The run is ~6-10 min end to end (spec build + boot ~1 min, indexer ready ~1 min, pre-fork sync ~1 min,
+    # The run is ~6-10 min end to end (spec build + boot ~1 min, indexer ready ~1 min, ledger-v8 sync ~1 min,
     # governance + finality ~2 min, crossing ~1-2 min). 30 leaves room for a cold image pull without letting a hung
     # Docker stack sit on a runner for the default six hours.
     timeout-minutes: 30

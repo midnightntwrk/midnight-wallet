@@ -47,7 +47,7 @@ describe('DefaultDustConfiguration', () => {
     // that it can still build both: a variant asking for something this type does not carry would be a wallet that
     // cannot be built for one of its own variants.
     type _1 = Expect<CanAssign<DefaultDustConfiguration, DefaultV2Configuration>>;
-    // The pre-fork variant types `dustParameters` with ledger-v8's class rather than ledger-v9's. The two are
+    // The V1 variant types `dustParameters` with ledger-v8's class rather than ledger-v9's. The two are
     // structurally identical, which is the only reason one configuration can serve both — asserted here so a
     // divergence shows up as a compile error rather than as a wallet that cannot be built for one of its variants.
     // (The wallet still rebuilds the object per variant rather than sharing it: structural identity makes the *type*

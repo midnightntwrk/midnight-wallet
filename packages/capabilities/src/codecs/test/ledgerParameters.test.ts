@@ -96,20 +96,20 @@ describe('Ledger parameters codec registry', () => {
     );
 
     it('decodes each ledger version through a registry that only claims that version', () => {
-      const preFork = codecOver(ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, FORK), v8Codec);
-      const postFork = codecsOf({ sinceVersion: FORK, codec: v9Codec });
+      const v8Codecs = codecOver(ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, FORK), v8Codec);
+      const v9Codecs = codecsOf({ sinceVersion: FORK, codec: v9Codec });
 
-      expect(Either.isRight(LedgerParametersCodec.decode(preFork, version(1n), v8Hex))).toBe(true);
-      expect(Either.isRight(LedgerParametersCodec.decode(postFork, FORK, v9Hex))).toBe(true);
+      expect(Either.isRight(LedgerParametersCodec.decode(v8Codecs, version(1n), v8Hex))).toBe(true);
+      expect(Either.isRight(LedgerParametersCodec.decode(v9Codecs, FORK, v9Hex))).toBe(true);
     });
 
     it('keeps a variant away from the other ledger version bytes entirely, rather than deserializing them', () => {
-      // This is the whole point of routing the decode: a pre-fork variant that meets a post-fork block is told "not
+      // This is the whole point of routing the decode: a V1 variant that meets a ledger-v9 block is told "not
       // mine" by selection, so the other ledger version's bytes never reach a deserializer that would reject them —
       // the same failure mode the shielded event path had to stop producing.
-      const preFork = codecOver(ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, FORK), v8Codec);
+      const v8Codecs = codecOver(ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, FORK), v8Codec);
 
-      const error = failureOf(LedgerParametersCodec.decode(preFork, FORK, v9Hex));
+      const error = failureOf(LedgerParametersCodec.decode(v8Codecs, FORK, v9Hex));
 
       expect(error).toBeInstanceOf(LedgerParametersCodec.UnsupportedProtocolVersionError);
     });

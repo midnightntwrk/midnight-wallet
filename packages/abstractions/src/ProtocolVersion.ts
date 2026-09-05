@@ -76,8 +76,8 @@ export const MaxSupportedVersion = ProtocolVersion(BigInt(Number.MAX_SAFE_INTEGE
  * @remarks
  *   Measured, not assumed: a `midnight-node` 2.x reports protocol version `2000000` on its ledger events — the runtime
  *   version, scaled, rather than a small ordinal or the ledger major. A chain of the previous node line reports a
- *   1.x-encoded value, which is below this, so a wallet configured with it stays on the pre-fork variant there and
- *   reaches the post-fork variant on any v9-native chain.
+ *   1.x-encoded value, which is below this, so a wallet configured with it stays on the V1 variant there and reaches
+ *   the V2 variant on any v9-native chain.
  *
  *   Offered as a named value so applications and test suites pointed at a v9-native chain do not each invent a magic
  *   number. It is **not** a default: every wallet's `forks.v9` stays required, because the right value is a property of
@@ -92,9 +92,9 @@ export const V9NativeForkVersion: ProtocolVersion = ProtocolVersion(2_000_000n);
  * @remarks
  *   One key per ledger version the SDK can run, minus the first: ledger-v8 begins at {@link MinSupportedVersion} and needs
  *   no entry. `v9` is the protocol version from which ledger-v9 reads the chain — {@link V9NativeForkVersion} on a chain
- *   born on ledger-v9, and whatever version the hand-over is enacted at on a chain with pre-fork history. The next hard
- *   fork adds a key (`v10`) rather than changing this shape, which is what lets an application's configuration outlive
- *   the fork.
+ *   born on ledger-v9, and whatever version the hand-over is enacted at on a chain with ledger-v8 history. The next
+ *   hard fork adds a key (`v10`) rather than changing this shape, which is what lets an application's configuration
+ *   outlive the fork.
  *
  *   Every entry is required and none is defaulted, for the same reason a single fork version was: where a chain forks is
  *   a fact about the chain rather than the SDK, and a wrong guess does not degrade — it decides which ledger version

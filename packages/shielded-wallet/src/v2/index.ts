@@ -10,6 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+// The V2 variant: this wallet on `@midnightntwrk/ledger-v9`, run from `forks.v9`. Its twin is `../v1`.
 export * from './V2Builder.js';
 export * as Sync from './Sync.js';
 export * as Transacting from './Transacting.js';

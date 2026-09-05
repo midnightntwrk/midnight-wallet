@@ -13,15 +13,15 @@
 import {
   type ProvingServiceEffect,
   makeV8ServerProvingServiceEffect,
-  makeWasmProvingServiceEffect,
-  fromProvingProvider,
-  makeServerProvingServiceEffect,
+  makeV9WasmProvingServiceEffect,
+  fromV9ProvingProvider,
+  makeV9ServerProvingServiceEffect,
   ProvingError,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { HttpProverClient, WasmProver } from '@midnightntwrk/wallet-sdk-prover-client/effect';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { Effect, Either, Schedule, Duration, type Scope, pipe } from 'effect';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
@@ -29,21 +29,21 @@ import { getNonDustImbalance } from './utils.js';
 
 const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:9.0.0-rc.7';
 /** The proof server of the epoch before the boundary: no image serves both sides, so the ledger-v8 case needs its own. */
-const PRE_FORK_PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:8.1.0';
+const V8_PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:8.1.0';
 const PROOF_SERVER_PORT: number = 6300;
 
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
-const shieldedTokenType = ledger.shieldedToken().raw;
+const shieldedTokenType = ledgerV9.shieldedToken().raw;
 
 const makeTransaction = () => {
   const seed = Buffer.alloc(32, 0);
-  const recipient = ledger.ZswapSecretKeys.fromSeed(seed);
+  const recipient = ledgerV9.ZswapSecretKeys.fromSeed(seed);
   const amount = 42n;
-  const coin = ledger.createShieldedCoinInfo(shieldedTokenType, amount);
-  const output = ledger.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
-  const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenType, amount);
-  return ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
+  const coin = ledgerV9.createShieldedCoinInfo(shieldedTokenType, amount);
+  const output = ledgerV9.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
+  const offer = ledgerV9.ZswapOffer.fromOutput(output, shieldedTokenType, amount);
+  return ledgerV9.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
 };
 
 const proofServerContainerResource = Effect.acquireRelease(
@@ -68,7 +68,7 @@ const proofServerContainerResource = Effect.acquireRelease(
 );
 
 function runInterfaceTests<
-  T extends ProvingServiceEffect<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>,
+  T extends ProvingServiceEffect<ledgerV9.Transaction<ledgerV9.SignatureEnabled, ledgerV9.Proof, ledgerV9.PreBinding>>,
 >(implName: string, makeService: () => Effect.Effect<T, unknown, Scope.Scope>) {
   describe(`${implName} implementation of ProvingServiceEffect`, () => {
     const testUnprovenTx = makeTransaction();
@@ -80,19 +80,19 @@ function runInterfaceTests<
         return provenTx.bind();
       }).pipe(Effect.scoped, Effect.runPromise);
 
-      expect(finalTx).toBeInstanceOf(ledger.Transaction);
+      expect(finalTx).toBeInstanceOf(ledgerV9.Transaction);
       expect(getNonDustImbalance(finalTx.imbalances(0), shieldedTokenType)).toEqual(-42n);
     });
   });
 }
 
-runInterfaceTests('Wasm Proving', () => Effect.succeed(makeWasmProvingServiceEffect()));
+runInterfaceTests('Wasm Proving', () => Effect.succeed(makeV9WasmProvingServiceEffect()));
 
 runInterfaceTests('Custom Wasm Prover', () =>
   pipe(
     WasmProver.create({ keyMaterialProvider: WasmProver.makeDefaultKeyMaterialProvider() }),
     Effect.map((service) => service.asProvingProvider()),
-    Effect.map((provider) => fromProvingProvider(provider)),
+    Effect.map((provider) => fromV9ProvingProvider(provider)),
   ),
 );
 
@@ -100,7 +100,7 @@ runInterfaceTests('Server Proving', () =>
   pipe(
     proofServerContainerResource,
     Effect.map((provingServerUrl) =>
-      makeServerProvingServiceEffect({
+      makeV9ServerProvingServiceEffect({
         provingServerUrl,
       }),
     ),
@@ -116,7 +116,7 @@ runInterfaceTests('Custom Server Prover', () =>
       }),
     ),
     Effect.map((client) => client.asProvingProvider()),
-    Effect.map((provider) => fromProvingProvider(provider)),
+    Effect.map((provider) => fromV9ProvingProvider(provider)),
   ),
 );
 
@@ -125,7 +125,7 @@ describe('Server Proving Service', () => {
 
   it('does fail with proving error instance when proving fails (e.g. due to misconfiguration)', async () => {
     const result = await Effect.gen(function* () {
-      const misconfiguredService = makeServerProvingServiceEffect({
+      const misconfiguredService = makeV9ServerProvingServiceEffect({
         provingServerUrl: new URL('http://localhost:12345'), // Invalid URL to simulate misconfiguration
       });
       return yield* misconfiguredService.prove(testUnprovenTx);
@@ -144,7 +144,7 @@ describe('Server Proving Service', () => {
   it('does fail with proving error instance when proving fails (e.g. due to connection error)', async () => {
     const result = await Effect.gen(function* () {
       const provingServerUrl = yield* proofServerContainerResource.pipe(Effect.scoped); //This makes the container stop immediately
-      const misconfiguredService = makeServerProvingServiceEffect({
+      const misconfiguredService = makeV9ServerProvingServiceEffect({
         provingServerUrl,
       });
       return yield* misconfiguredService.prove(testUnprovenTx);
@@ -174,7 +174,7 @@ describe('Ledger-v8 Server Proving', () => {
   const v8ProofServer = Effect.acquireRelease(
     Effect.tryPromise({
       try: () =>
-        new GenericContainer(PRE_FORK_PROOF_SERVER_IMAGE)
+        new GenericContainer(V8_PROOF_SERVER_IMAGE)
           .withExposedPorts(PROOF_SERVER_PORT)
           .withWaitStrategy(Wait.forListeningPorts())
           .withStartupTimeout(120_000)
@@ -188,13 +188,13 @@ describe('Ledger-v8 Server Proving', () => {
     Effect.retry(Schedule.spaced(Duration.millis(10))),
   );
 
-  const aV8Transaction = (): preForkLedger.UnprovenTransaction => {
-    const recipient = preForkLedger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
-    const v8ShieldedTokenType = preForkLedger.shieldedToken().raw;
-    const coin = preForkLedger.createShieldedCoinInfo(v8ShieldedTokenType, 42n);
-    const output = preForkLedger.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
-    const offer = preForkLedger.ZswapOffer.fromOutput(output, v8ShieldedTokenType, 42n);
-    return preForkLedger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
+  const aV8Transaction = (): ledgerV8.UnprovenTransaction => {
+    const recipient = ledgerV8.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+    const v8ShieldedTokenType = ledgerV8.shieldedToken().raw;
+    const coin = ledgerV8.createShieldedCoinInfo(v8ShieldedTokenType, 42n);
+    const output = ledgerV8.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
+    const offer = ledgerV8.ZswapOffer.fromOutput(output, v8ShieldedTokenType, 42n);
+    return ledgerV8.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
   };
 
   it('proves a ledger-v8 transaction at a ledger-v8 proof server, and ledger-v8 verifies the proof', async () => {
@@ -203,16 +203,16 @@ describe('Ledger-v8 Server Proving', () => {
       return yield* makeV8ServerProvingServiceEffect({ provingServerUrl }).prove(aV8Transaction());
     }).pipe(Effect.scoped, Effect.runPromise);
 
-    expect(proven).toBeInstanceOf(preForkLedger.Transaction);
+    expect(proven).toBeInstanceOf(ledgerV8.Transaction);
 
-    const strictness = new preForkLedger.WellFormedStrictness();
+    const strictness = new ledgerV8.WellFormedStrictness();
     strictness.enforceBalancing = false;
     strictness.verifyNativeProofs = true;
     strictness.verifyContractProofs = false;
     strictness.enforceLimits = false;
     strictness.verifySignatures = false;
     expect(() =>
-      proven.wellFormed(preForkLedger.LedgerState.blank(NetworkId.NetworkId.Undeployed), strictness, new Date(0)),
+      proven.wellFormed(ledgerV8.LedgerState.blank(NetworkId.NetworkId.Undeployed), strictness, new Date(0)),
     ).not.toThrow();
   });
 });

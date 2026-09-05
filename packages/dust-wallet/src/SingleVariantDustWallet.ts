@@ -16,10 +16,10 @@
  *
  * @remarks
  *   The building block for a composition the package's default does not ship: a variant builder of the caller's own — a
- *   simulator sync in tests, or the projections-based fast sync, which exists on the post-fork ledger only and would
- *   defeat its own purpose behind a pre-fork variant. Its one variant is registered from the minimum supported version,
- *   so it stamps every transaction at that floor and accepts one of any version; the price is that it cannot cross a
- *   protocol boundary. The wallet that can is `DustWallet`, in `DustWallet.ts`.
+ *   simulator sync in tests, or the projections-based fast sync, which exists on ledger-v9 only and would defeat its
+ *   own purpose behind a V1 variant. Its one variant is registered from the minimum supported version, so it stamps
+ *   every transaction at that floor and accepts one of any version; the price is that it cannot cross a protocol
+ *   boundary. The wallet that can is `DustWallet`, in `DustWallet.ts`.
  */
 import {
   type DustParameters,

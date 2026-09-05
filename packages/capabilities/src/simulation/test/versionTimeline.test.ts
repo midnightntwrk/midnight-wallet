@@ -18,16 +18,16 @@
  * and a fork can be scheduled to activate a new version at a given block height. This is what lets a wallet under test
  * observe the version change that drives variant migration.
  *
- * The pre-fork (ledger-v8) and post-fork (ledger-v9) simulators are import-swap twins, so the timeline contract must
- * hold for both. Each fixture wraps its own simulator and exposes only the version-relevant surface, keeping the shared
- * assertions free of ledger-specific types.
+ * The ledger-v8 and ledger-v9 simulators are import-swap twins, so the timeline contract must hold for both. Each
+ * fixture wraps its own simulator and exposes only the version-relevant surface, keeping the shared assertions free of
+ * ledger-specific types.
  *
  * Every version used here is arbitrary and supplied by the test — the real fork version is not final, so nothing about
  * it may be hardcoded in the simulators.
  */
 
-import * as v8 from '@midnight-ntwrk/ledger-v8';
-import * as v9 from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, type Scope } from 'effect';
@@ -69,11 +69,11 @@ type TimelineFixture = Readonly<{
 const seed = (fill: number): Buffer => Buffer.alloc(32, fill);
 
 const v9Fixture: TimelineFixture = {
-  name: 'post-fork (ledger-v9)',
+  name: 'ledger-v9',
   init: (config) =>
     Effect.gen(function* () {
-      const keys = v9.ZswapSecretKeys.fromSeed(seed(1));
-      const tokenType = v9.shieldedToken().raw;
+      const keys = ledgerV9.ZswapSecretKeys.fromSeed(seed(1));
+      const tokenType = ledgerV9.shieldedToken().raw;
       const simulator = yield* Simulator.init({
         ...(config.protocolVersion !== undefined ? { protocolVersion: config.protocolVersion } : {}),
         networkId,
@@ -81,10 +81,10 @@ const v9Fixture: TimelineFixture = {
         blockProducer: immediateBlockProducer(undefined, genesisStrictness),
       });
       const makeTransfer = () => {
-        const coin = v9.createShieldedCoinInfo(tokenType, 100n);
-        const output = v9.ZswapOutput.new(coin, 0, keys.coinPublicKey, keys.encryptionPublicKey);
-        const offer = v9.ZswapOffer.fromOutput<v9.PreProof>(output, tokenType, 100n);
-        return v9.Transaction.fromParts(networkId, offer).eraseProofs();
+        const coin = ledgerV9.createShieldedCoinInfo(tokenType, 100n);
+        const output = ledgerV9.ZswapOutput.new(coin, 0, keys.coinPublicKey, keys.encryptionPublicKey);
+        const offer = ledgerV9.ZswapOffer.fromOutput<ledgerV9.PreProof>(output, tokenType, 100n);
+        return ledgerV9.Transaction.fromParts(networkId, offer).eraseProofs();
       };
       return {
         getLatestState: () =>
@@ -101,11 +101,11 @@ const v9Fixture: TimelineFixture = {
 };
 
 const v8Fixture: TimelineFixture = {
-  name: 'pre-fork (ledger-v8)',
+  name: 'ledger-v8',
   init: (config) =>
     Effect.gen(function* () {
-      const keys = v8.ZswapSecretKeys.fromSeed(seed(1));
-      const tokenType = v8.shieldedToken().raw;
+      const keys = ledgerV8.ZswapSecretKeys.fromSeed(seed(1));
+      const tokenType = ledgerV8.shieldedToken().raw;
       const simulator = yield* V8.Simulator.init({
         ...(config.protocolVersion !== undefined ? { protocolVersion: config.protocolVersion } : {}),
         networkId,
@@ -113,10 +113,10 @@ const v8Fixture: TimelineFixture = {
         blockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
       });
       const makeTransfer = () => {
-        const coin = v8.createShieldedCoinInfo(tokenType, 100n);
-        const output = v8.ZswapOutput.new(coin, 0, keys.coinPublicKey, keys.encryptionPublicKey);
-        const offer = v8.ZswapOffer.fromOutput<v8.PreProof>(output, tokenType, 100n);
-        return v8.Transaction.fromParts(networkId, offer).eraseProofs();
+        const coin = ledgerV8.createShieldedCoinInfo(tokenType, 100n);
+        const output = ledgerV8.ZswapOutput.new(coin, 0, keys.coinPublicKey, keys.encryptionPublicKey);
+        const offer = ledgerV8.ZswapOffer.fromOutput<ledgerV8.PreProof>(output, tokenType, 100n);
+        return ledgerV8.Transaction.fromParts(networkId, offer).eraseProofs();
       };
       return {
         getLatestState: () =>
@@ -188,9 +188,9 @@ describe.each([v8Fixture, v9Fixture])('$name simulator version timeline', (fixtu
 
   it('activates a scheduled fork exactly at the scheduled block', async () =>
     Effect.gen(function* () {
-      const preFork = ProtocolVersion.ProtocolVersion(3n);
+      const v8Version = ProtocolVersion.ProtocolVersion(3n);
       const forkVersion = ProtocolVersion.ProtocolVersion(4242n);
-      const simulator = yield* fixture.init({ protocolVersion: preFork });
+      const simulator = yield* fixture.init({ protocolVersion: v8Version });
 
       yield* simulator.scheduleFork(3n, forkVersion);
       const first = yield* simulator.produceEmptyBlock();
@@ -199,38 +199,38 @@ describe.each([v8Fixture, v9Fixture])('$name simulator version timeline', (fixtu
       const fourth = yield* simulator.produceEmptyBlock();
 
       expect([first.number, second.number, third.number, fourth.number]).toEqual([1n, 2n, 3n, 4n]);
-      expect([first.protocolVersion, second.protocolVersion]).toEqual([preFork, preFork]);
+      expect([first.protocolVersion, second.protocolVersion]).toEqual([v8Version, v8Version]);
       expect([third.protocolVersion, fourth.protocolVersion]).toEqual([forkVersion, forkVersion]);
 
       const state = yield* simulator.getLatestState();
       expect(state.blocks.map((block) => block.protocolVersion)).toEqual([
-        preFork,
-        preFork,
-        preFork,
+        v8Version,
+        v8Version,
+        v8Version,
         forkVersion,
         forkVersion,
       ]);
       expect(state.protocolVersion).toBe(forkVersion);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('leaves the chain on the pre-fork version until the fork block is reached', async () =>
+  it('leaves the chain on the ledger-v8 version until the fork block is reached', async () =>
     Effect.gen(function* () {
-      const preFork = ProtocolVersion.ProtocolVersion(3n);
+      const v8Version = ProtocolVersion.ProtocolVersion(3n);
       const forkVersion = ProtocolVersion.ProtocolVersion(4242n);
-      const simulator = yield* fixture.init({ protocolVersion: preFork });
+      const simulator = yield* fixture.init({ protocolVersion: v8Version });
 
       yield* simulator.scheduleFork(5n, forkVersion);
       const block = yield* simulator.produceEmptyBlock();
 
-      expect(block.protocolVersion).toBe(preFork);
-      expect((yield* simulator.getLatestState()).protocolVersion).toBe(preFork);
+      expect(block.protocolVersion).toBe(v8Version);
+      expect((yield* simulator.getLatestState()).protocolVersion).toBe(v8Version);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('applies a fork scheduled at an already-produced block to the next block only', async () =>
     Effect.gen(function* () {
-      const preFork = ProtocolVersion.ProtocolVersion(3n);
+      const v8Version = ProtocolVersion.ProtocolVersion(3n);
       const forkVersion = ProtocolVersion.ProtocolVersion(4242n);
-      const simulator = yield* fixture.init({ protocolVersion: preFork });
+      const simulator = yield* fixture.init({ protocolVersion: v8Version });
 
       yield* simulator.produceEmptyBlock();
       yield* simulator.produceEmptyBlock();
@@ -240,7 +240,12 @@ describe.each([v8Fixture, v9Fixture])('$name simulator version timeline', (fixtu
       expect(next.number).toBe(3n);
       expect(next.protocolVersion).toBe(forkVersion);
       const state = yield* simulator.getLatestState();
-      expect(state.blocks.map((block) => block.protocolVersion)).toEqual([preFork, preFork, preFork, forkVersion]);
+      expect(state.blocks.map((block) => block.protocolVersion)).toEqual([
+        v8Version,
+        v8Version,
+        v8Version,
+        forkVersion,
+      ]);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it.each([
@@ -249,15 +254,15 @@ describe.each([v8Fixture, v9Fixture])('$name simulator version timeline', (fixtu
     [0n, 1_234_567n],
   ])('carries arbitrary versions %s -> %s across the fork — nothing is hardcoded', async (before, after) =>
     Effect.gen(function* () {
-      const preFork = ProtocolVersion.ProtocolVersion(before);
+      const v8Version = ProtocolVersion.ProtocolVersion(before);
       const forkVersion = ProtocolVersion.ProtocolVersion(after);
-      const simulator = yield* fixture.init({ protocolVersion: preFork });
+      const simulator = yield* fixture.init({ protocolVersion: v8Version });
 
       yield* simulator.scheduleFork(2n, forkVersion);
       const first = yield* simulator.produceEmptyBlock();
       const second = yield* simulator.produceEmptyBlock();
 
-      expect(first.protocolVersion).toBe(preFork);
+      expect(first.protocolVersion).toBe(v8Version);
       expect(second.protocolVersion).toBe(forkVersion);
     }).pipe(Effect.scoped, Effect.runPromise),
   );

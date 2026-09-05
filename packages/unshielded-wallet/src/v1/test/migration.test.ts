@@ -154,7 +154,7 @@ describe('unshielded state migration', () => {
     it('carries every UTXO as generating no dust, whatever the previous version reported', async () => {
       // The fork wipes the ledger's dust generation state outright. Its chain-side replay restores generation for
       // cNIGHT-backed Night only, so a wallet holding native NIGHT arrives on the other side generating nothing —
-      // and the indexer, which reports this flag as a creation-time value it never revises, has no post-fork event
+      // and the indexer, which reports this flag as a creation-time value it never revises, has no ledger-v9 event
       // with which to say so. Carrying the previous version's `true` would be carrying a statement about a ledger
       // that no longer exists. The node's own fork test says the same in the other direction: "the fork wipes dust
       // state ... the registration funds itself from the retroactive DUST" (`util/toolkit/tests/hardfork_e2e.rs`,

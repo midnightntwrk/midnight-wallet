@@ -75,7 +75,7 @@ const userReceivedNight = await rx.firstValueFrom(
 console.log('User received night for main transaction', userReceivedNight.unshielded.balances[Token.night]);
 
 // Authoring is choosing a ledger version, and the wallet says which: the version the wallets are acting at decides
-// whether the bytes follow the pre-fork ledger's rules or the post-fork one's. It is read when the transaction is
+// whether the bytes follow ledger-v8's rules or ledger-v9's. It is read when the transaction is
 // built, not once at start — a wallet that follows the chain across the fork moves from one ledger to the other, and
 // the code that authors for it has to move with it. The two bodies below are the same call for call; only the module
 // differs. The handle is sealed with that version, which is how the wallet knows which of its variants may read it.
@@ -84,7 +84,7 @@ const prepareTransactionToBalance = async (state: FacadeState): Promise<UnboundT
   const output = { value: nightAmountToSend, owner: sponsor.unshieldedKeystore.getAddress(), type: Token.night };
   const authoredFor = state.activeProtocolVersion;
   // Fake proving will work here as no proofs are involved. This is a major difference compared to real flow
-  const authorPreFork = () => {
+  const authorV8 = () => {
     const intent = v8.Intent.new(ttl);
     intent.fallibleUnshieldedOffer = v8.UnshieldedOffer.new([], [output], []);
     return v8.Transaction.fromParts(configuration.networkId, undefined, undefined, intent).prove(
@@ -92,7 +92,7 @@ const prepareTransactionToBalance = async (state: FacadeState): Promise<UnboundT
       v8.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
     );
   };
-  const authorPostFork = () => {
+  const authorV9 = () => {
     const intent = v9.Intent.new(ttl);
     intent.fallibleUnshieldedOffer = v9.UnshieldedOffer.new([], [output], []);
     return v9.Transaction.fromParts(configuration.networkId, undefined, undefined, intent).prove(
@@ -100,7 +100,7 @@ const prepareTransactionToBalance = async (state: FacadeState): Promise<UnboundT
       v9.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
     );
   };
-  const proven = await (authoredFor < configuration.forks.v9 ? authorPreFork() : authorPostFork());
+  const proven = await (authoredFor < configuration.forks.v9 ? authorV8() : authorV9());
   // A transaction an application built for itself is handed to the wallet as a handle, saying which ledger version
   // made it.
   return WalletTransaction.adopt('Unbound', proven, authoredFor);

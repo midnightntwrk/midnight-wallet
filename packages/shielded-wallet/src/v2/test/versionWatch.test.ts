@@ -17,15 +17,14 @@
  * @remarks
  *   A shielded wallet learns which version the chain is on from the events it is served, and the zswap event subscription
  *   carries no progress arm — it says nothing at all when there is nothing to say. On a chain that forks and then
- *   produces no shielded traffic, that wallet never hears about the fork: it stays on the pre-fork variant, and
- *   everything the facade builds through it stays routed to the pre-fork ledger. That is what the version watcher
- *   removes, by asking the chain its version on a timer and feeding the answer into the same state-recording path the
- *   events use.
+ *   produces no shielded traffic, that wallet never hears about the fork: it stays on the V1 variant, and everything
+ *   the facade builds through it stays routed to ledger-v8. That is what the version watcher removes, by asking the
+ *   chain its version on a timer and feeding the answer into the same state-recording path the events use.
  *
  *   The gate is the load-bearing half. Recording a version past the boundary is what triggers the hand-over, and the
  *   hand-over parks the sync cursor where it stands: any event still unread below the tip would then be re-fetched by
- *   the post-fork variant as bytes of the version that preceded it, which its ledger cannot deserialize — and, worse,
- *   an unread pre-fork event may be carrying a coin that would never enter the carried state. So the signal may be
+ *   the V2 variant as bytes of the version that preceded it, which its ledger cannot deserialize — and, worse, an
+ *   unread ledger-v8 event may be carrying a coin that would never enter the carried state. So the signal may be
  *   adopted only when the wallet is provably caught up on the source's **event ids**, which is why the signal carries
  *   the highest event id the source holds and not merely a version.
  */
@@ -57,8 +56,8 @@ const activeRange = ProtocolVersion.makeRange(
   ProtocolVersion.ProtocolVersion(0n),
   ProtocolVersion.ProtocolVersion(2_000_000n),
 );
-const preForkVersion = 1_000_000;
-const postForkVersion = 2_001_000;
+const v8Version = 1_000_000;
+const v9Version = 2_001_000;
 
 const keys = (): ledger.ZswapSecretKeys => ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 9));
 
@@ -70,13 +69,13 @@ const progressAt = (appliedIndex: bigint): SyncProgress.SyncProgressData => ({
   isConnected: true,
 });
 
-/** A wallet that has read the timeline up to `appliedIndex` and recorded the pre-fork version doing so. */
+/** A wallet that has read the timeline up to `appliedIndex` and recorded the ledger-v8 version doing so. */
 const syncedWallet = (appliedIndex: bigint): CoreWallet =>
   CoreWallet.restore(
     new ledger.ZswapLocalState(),
     keys(),
     progressAt(appliedIndex),
-    ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)),
+    ProtocolVersion.ProtocolVersion(BigInt(v8Version)),
     networkId,
   );
 
@@ -92,45 +91,41 @@ describe('folding a version signal into the wallet state', () => {
 
     const [state, result] = capability.applyUpdate(
       caughtUp,
-      VersionSignalSyncUpdate.create(postForkVersion, 41),
+      VersionSignalSyncUpdate.create(v9Version, 41),
       activeRange,
     );
 
     // The version is the whole of it: recording one outside the activation range is what makes the runtime hand over.
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
     // A signal is an observation about the chain, not a piece of it. Nothing that describes what the wallet holds or
     // where its reading has got to may move.
     expect(state.progress).toEqual(caughtUp.progress);
     expect([...state.state.coins]).toEqual([]);
     expect(state.state.firstFree).toBe(caughtUp.state.firstFree);
     expect(result.changes).toEqual([]);
-    expect(result.protocolVersion).toBe(preForkVersion);
+    expect(result.protocolVersion).toBe(v8Version);
   });
 
   it('ignores a signal while events below the source tip are still unread', () => {
     // The gate. Handing over here would park the cursor at 41 and leave events 42..97 to be re-fetched by the
-    // post-fork variant as bytes of the version that preceded it — unreadable, and possibly carrying coins.
+    // V2 variant as bytes of the version that preceded it — unreadable, and possibly carrying coins.
     const behind = syncedWallet(41n);
 
-    const [state, result] = capability.applyUpdate(
-      behind,
-      VersionSignalSyncUpdate.create(postForkVersion, 97),
-      activeRange,
-    );
+    const [state, result] = capability.applyUpdate(behind, VersionSignalSyncUpdate.create(v9Version, 97), activeRange);
 
     expect(state).toBe(behind);
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v8Version)));
     expect(result.changes).toEqual([]);
   });
 
   it('adopts a signal from a chain that holds no zswap events at all', () => {
     // Nothing has ever been indexed, so nothing can be unread: a fresh wallet on a forked chain that has never seen
-    // shielded traffic is exactly the wallet that would otherwise sit pre-fork forever.
+    // shielded traffic is exactly the wallet that would otherwise sit on ledger-v8 forever.
     const fresh = CoreWallet.initEmpty(keys(), networkId);
 
-    const [state] = capability.applyUpdate(fresh, VersionSignalSyncUpdate.create(postForkVersion, null), activeRange);
+    const [state] = capability.applyUpdate(fresh, VersionSignalSyncUpdate.create(v9Version, null), activeRange);
 
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
   });
 
   it('adopts a signal on a wallet still awaiting its coin hashes, and leaves the marker standing', () => {
@@ -140,11 +135,11 @@ describe('folding a version signal into the wallet state', () => {
 
     const [state, result] = capability.applyUpdate(
       crossing,
-      VersionSignalSyncUpdate.create(postForkVersion, 41),
+      VersionSignalSyncUpdate.create(v9Version, 41),
       activeRange,
     );
 
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
     expect(state.coinHashesPending).toBe(true);
     expect(result.changes).toEqual([]);
   });
@@ -156,7 +151,7 @@ describe('folding a version signal into the wallet state', () => {
     const [state] = capability.applyUpdate(caughtUp, VersionSignalSyncUpdate.create(7, 41), activeRange);
 
     expect(state).toBe(caughtUp);
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v8Version)));
   });
 });
 
@@ -238,7 +233,7 @@ describe('watching the chain for a version the events never mention', () => {
         Stream.filter((update): update is VersionSignalSyncUpdate => update._tag === 'VersionSignal'),
         Stream.take(2),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(postForkVersion, 42), tipAsked)),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version, 42), tipAsked)),
         Effect.provideService(ZswapEventTip.tag, servingEventTip(41, eventTipAsked)),
         Effect.provideService(ZswapEvents.tag, quietChain),
         Effect.scoped,
@@ -246,8 +241,8 @@ describe('watching the chain for a version the events never mention', () => {
       );
 
     expect(Chunk.toArray(collected)).toEqual([
-      VersionSignalSyncUpdate.create(postForkVersion, 41),
-      VersionSignalSyncUpdate.create(postForkVersion, 41),
+      VersionSignalSyncUpdate.create(v9Version, 41),
+      VersionSignalSyncUpdate.create(v9Version, 41),
     ]);
     // The tip is what the chain is on now, so the question is asked without an offset.
     expect(Effect.runSync(Ref.get(tipAsked))).toEqual([{ offset: null }, { offset: null }]);
@@ -257,7 +252,7 @@ describe('watching the chain for a version the events never mention', () => {
 
     // Folded, this is the hand-over: a caught-up wallet records the version the chain moved to.
     const [state] = makeEventsSyncCapability().applyUpdate(caughtUp, Chunk.toArray(collected)[0], activeRange);
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
   });
 
   it('reports no event id, without asking for one, when the chain has produced no zswap commitment', async () => {
@@ -272,14 +267,14 @@ describe('watching the chain for a version the events never mention', () => {
         Stream.filter((update): update is VersionSignalSyncUpdate => update._tag === 'VersionSignal'),
         Stream.take(1),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(postForkVersion, 0), recorder())),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version, 0), recorder())),
         Effect.provideService(ZswapEventTip.tag, servingEventTip(0, eventTipAsked)),
         Effect.provideService(ZswapEvents.tag, quietChain),
         Effect.scoped,
         Effect.runPromise,
       );
 
-    expect(Chunk.toArray(collected)).toEqual([VersionSignalSyncUpdate.create(postForkVersion, null)]);
+    expect(Chunk.toArray(collected)).toEqual([VersionSignalSyncUpdate.create(v9Version, null)]);
     expect(Effect.runSync(Ref.get(eventTipAsked))).toEqual([]);
   });
 
@@ -293,7 +288,7 @@ describe('watching the chain for a version the events never mention', () => {
         Effect.flatMap((all) =>
           all.length === 1
             ? Effect.fail(new ServerError({ message: 'the indexer is down' }))
-            : Effect.succeed(tipBlock(postForkVersion, 42)),
+            : Effect.succeed(tipBlock(v9Version, 42)),
         ),
       );
 
@@ -310,7 +305,7 @@ describe('watching the chain for a version the events never mention', () => {
         Effect.runPromise,
       );
 
-    expect(Chunk.toArray(collected)).toEqual([VersionSignalSyncUpdate.create(postForkVersion, 41)]);
+    expect(Chunk.toArray(collected)).toEqual([VersionSignalSyncUpdate.create(v9Version, 41)]);
     expect(Effect.runSync(Ref.get(attempts))).toHaveLength(2);
   });
 
@@ -326,7 +321,7 @@ describe('watching the chain for a version the events never mention', () => {
         Stream.filter((update) => update._tag === 'VersionSignal'),
         Stream.interruptAfter('150 millis'),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(preForkVersion, 42), recorder())),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v8Version, 42), recorder())),
         Effect.provideService(ZswapEventTip.tag, servingEventTip(41, eventTipAsked)),
         Effect.provideService(ZswapEvents.tag, quietChain),
         Effect.scoped,
@@ -346,7 +341,7 @@ describe('watching the chain for a version the events never mention', () => {
       .pipe(
         Stream.interruptAfter('100 millis'),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(postForkVersion, 42), tipAsked)),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version, 42), tipAsked)),
         Effect.provideService(ZswapEventTip.tag, servingEventTip(41, recorder())),
         Effect.provideService(ZswapEvents.tag, quietChain),
         Effect.scoped,

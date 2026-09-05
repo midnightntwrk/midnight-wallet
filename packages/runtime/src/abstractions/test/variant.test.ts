@@ -179,27 +179,27 @@ describe('Variant', () => {
   });
 
   describe('selecting by protocol version', () => {
-    const preFork: VersionedVariant<NumericRange> = {
+    const v1: VersionedVariant<NumericRange> = {
       sinceVersion: ProtocolVersion.ProtocolVersion(10n),
       variant: new NumericRange({ min: 0, max: 1 }, 1, false),
     };
-    const postFork: VersionedVariant<NumericRangeMultiplier> = {
+    const v2: VersionedVariant<NumericRangeMultiplier> = {
       sinceVersion: ProtocolVersion.ProtocolVersion(100n),
       variant: new NumericRangeMultiplier({ min: 0, max: 1, multiplier: 2 }),
     };
-    const variants = [preFork, postFork] as [typeof preFork, typeof postFork];
+    const variants = [v1, v2] as [typeof v1, typeof v2];
 
     it('selects the variant registered for the version', () => {
-      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(10n))).toStrictEqual(Option.some(preFork));
-      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(99n))).toStrictEqual(Option.some(preFork));
+      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(10n))).toStrictEqual(Option.some(v1));
+      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(99n))).toStrictEqual(Option.some(v1));
     });
 
     it('hands a version over to the next variant exactly at its registration version', () => {
-      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(100n))).toStrictEqual(Option.some(postFork));
+      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(100n))).toStrictEqual(Option.some(v2));
     });
 
     it('leaves the last registered variant answering for every version above it', () => {
-      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(1_000_000n))).toStrictEqual(Option.some(postFork));
+      expect(selectByRange(variants, ProtocolVersion.ProtocolVersion(1_000_000n))).toStrictEqual(Option.some(v2));
     });
 
     it('selects nothing below the first registration', () => {

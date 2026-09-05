@@ -20,8 +20,8 @@ import {
   mainnet,
   type NetworkId,
 } from '@midnightntwrk/wallet-sdk';
-// Addresses are a property of the seed, not of the ledger version: the pre-fork ledger derives the same keys from the
-// same seeds, so an address stays valid across a protocol boundary. The post-fork ledger is imported here to derive them.
+// Addresses are a property of the seed, not of the ledger version: ledger-v8 derives the same keys from the
+// same seeds, so an address stays valid across a protocol boundary. Ledger-v9 is imported here to derive them.
 import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
 
 const networkId: NetworkId.NetworkId = 'undeployed';

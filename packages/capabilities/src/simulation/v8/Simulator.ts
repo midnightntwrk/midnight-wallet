@@ -180,7 +180,7 @@ export type SimulatorConfig = Readonly<{
   /**
    * Height of the genesis block. Defaults to 0.
    *
-   * Set this to continue an existing chain's numbering, as a post-fork chain does from the fork height.
+   * Set this to continue an existing chain's numbering, as a ledger-v9 chain does from the fork height.
    */
   genesisBlockNumber?: bigint;
   /**
@@ -450,7 +450,7 @@ export class Simulator {
    * Create a Simulator from an initial state with proper stream setup.
    *
    * The low-level constructor behind {@link Simulator.init}. Use it when the initial state cannot be expressed as a
-   * config — most importantly a post-fork chain, whose ledger is handed over from the chain before it.
+   * config — most importantly a ledger-v9 chain, whose ledger is handed over from the chain before it.
    *
    * @param initialState - State the simulator starts from
    * @param blockProducer - Custom block producer (defaults to immediateBlockProducer())

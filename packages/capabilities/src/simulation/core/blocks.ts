@@ -61,7 +61,7 @@ export const blockHash = async (blockNumber: bigint): Promise<string> => {
  * @param previousBlock - The previous block (or undefined for genesis)
  * @param blockTime - The timestamp for the new block
  * @param blockNumber - Height of the new block, overriding the height derived from `previousBlock`. Needed for a
- *   genesis block that continues an existing chain's numbering, as a post-fork chain's does.
+ *   genesis block that continues an existing chain's numbering, as a ledger-v9 chain's does.
  * @returns A BlockContext suitable for transaction processing
  */
 export const nextBlockContextFromBlock = async (

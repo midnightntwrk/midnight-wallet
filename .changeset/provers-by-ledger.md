@@ -24,7 +24,7 @@ in between with one ledger and sent them to a server built for the other, which 
 { forks: { v9 }, provers: { v8: { kind: 'server', url: v8ProofServer }, v9: { kind: 'wasm' } } }
 ```
 
-`v9` is required, because every new transaction is proved with it. `v8` may be left out on a chain whose pre-fork history
+`v9` is required, because every new transaction is proved with it. `v8` may be left out on a chain whose ledger-v8 history
 the wallet never authors for; a transaction stamped there then fails with `UnsupportedProvingVersionError`. The next hard
 fork adds a key (`v10`) rather than changing the shape. `provingServerUrl` remains the shorthand for one proof server under
 every key; `provingServers` is gone, since it carried the same `sinceVersion`.

@@ -44,26 +44,26 @@ const failureOf = async <A, E>(effect: Effect.Effect<A, E>): Promise<E> => {
 describe('Routing a transaction to the prover for the version it was built for', () => {
   const router = makeVersionedProvingServiceEffect(
     registryOf(
-      { sinceVersion: ProtocolVersion.MinSupportedVersion, value: labelled('pre-fork') },
-      { sinceVersion: FORK, value: labelled('post-fork') },
+      { sinceVersion: ProtocolVersion.MinSupportedVersion, value: labelled('ledger-v8') },
+      { sinceVersion: FORK, value: labelled('ledger-v9') },
     ),
   );
 
   it('proves with the backend registered for the version the transaction was built for', async () => {
-    await expect(Effect.runPromise(router.prove('tx', version(17n)))).resolves.toBe('pre-fork:tx');
-    await expect(Effect.runPromise(router.prove('tx', FORK))).resolves.toBe('post-fork:tx');
+    await expect(Effect.runPromise(router.prove('tx', version(17n)))).resolves.toBe('ledger-v8:tx');
+    await expect(Effect.runPromise(router.prove('tx', FORK))).resolves.toBe('ledger-v9:tx');
   });
 
   it('routes on the stamp, not on where the chain has since got to', async () => {
     // The fork can land between balancing and proving. The transaction's own bytes are what the prover has to be able
     // to read, and those were fixed when it was built — so the stamp decides, and nothing else is consulted.
-    await expect(Effect.runPromise(router.prove('built-before', version(1n)))).resolves.toBe('pre-fork:built-before');
+    await expect(Effect.runPromise(router.prove('built-before', version(1n)))).resolves.toBe('ledger-v8:built-before');
   });
 
   it('refuses a version no prover is registered for, naming that version', async () => {
-    const postForkOnly = makeVersionedProvingServiceEffect(registryOf({ sinceVersion: FORK, value: labelled('wasm') }));
+    const v9Only = makeVersionedProvingServiceEffect(registryOf({ sinceVersion: FORK, value: labelled('wasm') }));
 
-    const error = await failureOf(postForkOnly.prove('tx', version(1n)));
+    const error = await failureOf(v9Only.prove('tx', version(1n)));
 
     expect(error).toBeInstanceOf(UnsupportedProvingVersionError);
     expect((error as UnsupportedProvingVersionError).protocolVersion).toStrictEqual(version(1n));

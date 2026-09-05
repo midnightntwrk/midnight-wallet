@@ -12,7 +12,7 @@
 // limitations under the License.
 
 /**
- * Translating a pre-fork ledger state into a post-fork one.
+ * Translating a ledger-v8 state into a ledger-v9 one.
  *
  * The translation itself is a ledger-side tool reached across a WASM boundary, so this module only describes the seam,
  * never the mechanism: serialized bytes in, serialized bytes out, as an `Effect`. Bytes because that is the only thing
@@ -23,19 +23,19 @@
 
 import { Data, Effect } from 'effect';
 
-/** Thrown when a pre-fork ledger state cannot be translated into a post-fork one. */
+/** Thrown when a ledger-v8 state cannot be translated into a ledger-v9 one. */
 export class LedgerTranslationError extends Data.TaggedError('LedgerTranslationError')<{
   message: string;
   cause?: unknown;
 }> {}
 
 /**
- * Translates a serialized pre-fork (ledger-v8) ledger state into a serialized post-fork (ledger-v9) one.
+ * Translates a serialized ledger-v8 state into a serialized ledger-v9 one.
  *
  * Implementations own loading whatever performs the translation and running it to completion. Deserializing the result
- * is the caller's, so bytes that are not valid post-fork state are reported as a translation failure.
+ * is the caller's, so bytes that are not valid ledger-v9 state are reported as a translation failure.
  */
-export type LedgerStateTranslator = (preForkLedger: Uint8Array) => Effect.Effect<Uint8Array, LedgerTranslationError>;
+export type LedgerStateTranslator = (v8State: Uint8Array) => Effect.Effect<Uint8Array, LedgerTranslationError>;
 
 /**
  * Build a translator from an async function, turning anything it throws or rejects with into a
@@ -52,14 +52,14 @@ export type LedgerStateTranslator = (preForkLedger: Uint8Array) => Effect.Effect
  *   });
  *   ```;
  *
- * @param translate - Async translation of serialized pre-fork state into serialized post-fork state
+ * @param translate - Async translation of serialized ledger-v8 state into serialized ledger-v9 state
  * @returns A translator over that function
  */
 export const translatorFromAsync =
-  (translate: (preForkLedger: Uint8Array) => Promise<Uint8Array>): LedgerStateTranslator =>
-  (preForkLedger) =>
+  (translate: (v8State: Uint8Array) => Promise<Uint8Array>): LedgerStateTranslator =>
+  (v8State) =>
     Effect.tryPromise({
-      try: () => translate(preForkLedger),
+      try: () => translate(v8State),
       catch: (cause) => new LedgerTranslationError({ message: 'Ledger state translation failed', cause }),
     });
 

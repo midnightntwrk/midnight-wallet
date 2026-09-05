@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { Cause, Effect, Either, Exit, Option } from 'effect';
@@ -31,7 +31,7 @@ import { makeDefaultProvingServices, makeDefaultVersionedProvingServiceEffect } 
 const version = (value: bigint): ProtocolVersion.ProtocolVersion => ProtocolVersion.ProtocolVersion(value);
 const FORK = version(2_000_000n);
 const FORKS: ProtocolVersion.ForkSchedule = { v9: FORK };
-const BEFORE_FORK = version(5n);
+const V8_VERSION = version(5n);
 
 /**
  * A proving provider that answers with nothing.
@@ -40,23 +40,28 @@ const BEFORE_FORK = version(5n);
  *   Enough for every transaction in this file: none of them contains anything that has to be proved, so the ledger never
  *   asks. What is under test is which ledger version drives the proving loop, not the proofs it would produce.
  */
-const aFakeProvingProvider: preForkLedger.ProvingProvider = {
+const aFakeProvingProvider: ledgerV8.ProvingProvider = {
   check: () => Promise.resolve([]),
   prove: () => Promise.resolve(new Uint8Array(0)),
 };
 
 /** A ledger-v8 transaction with nothing in it that needs a proof. */
-const aV8Transaction = (): preForkLedger.UnprovenTransaction =>
-  preForkLedger.Transaction.fromParts(
+const aV8Transaction = (): ledgerV8.UnprovenTransaction =>
+  ledgerV8.Transaction.fromParts(
     'undeployed',
     undefined,
     undefined,
-    preForkLedger.Intent.new(new Date(Date.now() + 3_600_000)),
+    ledgerV8.Intent.new(new Date(Date.now() + 3_600_000)),
   );
 
-/** A current-ledger transaction with nothing in it that needs a proof. */
-const aCurrentLedgerTransaction = (): ledger.UnprovenTransaction =>
-  ledger.Transaction.fromParts('undeployed', undefined, undefined, ledger.Intent.new(new Date(Date.now() + 3_600_000)));
+/** A ledger-v9 transaction with nothing in it that needs a proof. */
+const aV9Transaction = (): ledgerV9.UnprovenTransaction =>
+  ledgerV9.Transaction.fromParts(
+    'undeployed',
+    undefined,
+    undefined,
+    ledgerV9.Intent.new(new Date(Date.now() + 3_600_000)),
+  );
 
 const failureOf = async <A, E>(effect: Effect.Effect<A, E>): Promise<E> => {
   const exit = await Effect.runPromiseExit(effect);
@@ -73,35 +78,35 @@ describe('Proving with ledger-v8', () => {
 
     const proven = await Effect.runPromise(service.prove(aV8Transaction()));
 
-    expect(proven).toBeInstanceOf(preForkLedger.Transaction);
-    expect(proven).not.toBeInstanceOf(ledger.Transaction);
+    expect(proven).toBeInstanceOf(ledgerV8.Transaction);
+    expect(proven).not.toBeInstanceOf(ledgerV9.Transaction);
   });
 });
 
 describe('Composing proving backends either side of the protocol boundary', () => {
   const bothSides = {
     provers: {
-      v8: { kind: 'server', url: unusedServer('pre-fork') },
-      v9: { kind: 'server', url: unusedServer('post-fork') },
+      v8: { kind: 'server', url: unusedServer('ledger-v8') },
+      v9: { kind: 'server', url: unusedServer('ledger-v9') },
     },
   } as const;
 
   it('proves a transaction stamped below the fork with ledger-v8', async () => {
     const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORKS));
 
-    const proven = await Effect.runPromise(router.prove(aV8Transaction(), BEFORE_FORK));
+    const proven = await Effect.runPromise(router.prove(aV8Transaction(), V8_VERSION));
 
-    expect(proven).toBeInstanceOf(preForkLedger.Transaction);
-    expect(proven).not.toBeInstanceOf(ledger.Transaction);
+    expect(proven).toBeInstanceOf(ledgerV8.Transaction);
+    expect(proven).not.toBeInstanceOf(ledgerV9.Transaction);
   });
 
   it('proves a transaction stamped at the fork with ledger-v9', async () => {
     const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORKS));
 
-    const proven = await Effect.runPromise(router.prove(aCurrentLedgerTransaction(), FORK));
+    const proven = await Effect.runPromise(router.prove(aV9Transaction(), FORK));
 
-    expect(proven).toBeInstanceOf(ledger.Transaction);
-    expect(proven).not.toBeInstanceOf(preForkLedger.Transaction);
+    expect(proven).toBeInstanceOf(ledgerV9.Transaction);
+    expect(proven).not.toBeInstanceOf(ledgerV8.Transaction);
   });
 
   it('takes the range each backend serves from the fork schedule, and from nowhere else', () => {
@@ -133,24 +138,22 @@ describe('Composing proving backends either side of the protocol boundary', () =
     const router = Either.getOrThrow(
       makeDefaultVersionedProvingServiceEffect({ provingServerUrl: unusedServer('only') }, FORKS),
     );
-    expect(await Effect.runPromise(router.prove(aV8Transaction(), BEFORE_FORK))).toBeInstanceOf(
-      preForkLedger.Transaction,
-    );
-    expect(await Effect.runPromise(router.prove(aCurrentLedgerTransaction(), FORK))).toBeInstanceOf(ledger.Transaction);
+    expect(await Effect.runPromise(router.prove(aV8Transaction(), V8_VERSION))).toBeInstanceOf(ledgerV8.Transaction);
+    expect(await Effect.runPromise(router.prove(aV9Transaction(), FORK))).toBeInstanceOf(ledgerV9.Transaction);
   });
 
   it('registers nothing below the fork when no ledger-v8 backend is named, and says so for a transaction stamped there', async () => {
-    const postForkOnly = { provers: { v9: { kind: 'server', url: unusedServer('post-fork') } } } as const;
+    const v9Only = { provers: { v9: { kind: 'server', url: unusedServer('ledger-v9') } } } as const;
 
-    const services = Either.getOrThrow(makeDefaultProvingServices(postForkOnly, FORKS));
+    const services = Either.getOrThrow(makeDefaultProvingServices(v9Only, FORKS));
     expect(services.entries.map((entry) => entry.range)).toStrictEqual([
       ProtocolVersion.makeRange(FORK, ProtocolVersion.MaxSupportedVersion),
     ]);
 
-    const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(postForkOnly, FORKS));
-    const error = await failureOf(router.prove(aV8Transaction(), BEFORE_FORK));
+    const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(v9Only, FORKS));
+    const error = await failureOf(router.prove(aV8Transaction(), V8_VERSION));
     expect(error).toBeInstanceOf(UnsupportedProvingVersionError);
-    expect((error as UnsupportedProvingVersionError).protocolVersion).toStrictEqual(BEFORE_FORK);
+    expect((error as UnsupportedProvingVersionError).protocolVersion).toStrictEqual(V8_VERSION);
   });
 
   it('registers a single ledger-v9 epoch for a chain whose boundary is at or below the minimum supported version', async () => {
@@ -171,15 +174,13 @@ describe('Composing proving backends either side of the protocol boundary', () =
     ).toStrictEqual(wholeTimeline);
 
     const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, bornOnV9));
-    expect(await Effect.runPromise(router.prove(aCurrentLedgerTransaction(), BEFORE_FORK))).toBeInstanceOf(
-      ledger.Transaction,
-    );
+    expect(await Effect.runPromise(router.prove(aV9Transaction(), V8_VERSION))).toBeInstanceOf(ledgerV9.Transaction);
   });
 
   it('refuses a transaction from the other side of the boundary, naming the epoch the backend serves', async () => {
     const router = Either.getOrThrow(makeDefaultVersionedProvingServiceEffect(bothSides, FORKS));
 
-    const error = await failureOf(router.prove(aCurrentLedgerTransaction(), BEFORE_FORK));
+    const error = await failureOf(router.prove(aV9Transaction(), V8_VERSION));
 
     expect(error).toBeInstanceOf(ProvingEpochMismatchError);
     expect((error as ProvingEpochMismatchError).epoch).toStrictEqual(

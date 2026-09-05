@@ -58,12 +58,12 @@ describe('Wallet Builder', () => {
       .build({ min: 0, max: 4, multiplier: 2 });
 
     it('resolves the variant registered for a version', () => {
-      const [preFork, postFork] = Wallet.allVariants();
+      const [v1, v2] = Wallet.allVariants();
 
-      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(10n))).toStrictEqual(Option.some(preFork));
-      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(99n))).toStrictEqual(Option.some(preFork));
-      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(100n))).toStrictEqual(Option.some(postFork));
-      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(4_000n))).toStrictEqual(Option.some(postFork));
+      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(10n))).toStrictEqual(Option.some(v1));
+      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(99n))).toStrictEqual(Option.some(v1));
+      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(100n))).toStrictEqual(Option.some(v2));
+      expect(Wallet.variantFor(ProtocolVersion.ProtocolVersion(4_000n))).toStrictEqual(Option.some(v2));
     });
 
     it('reports a miss rather than throwing for a version nothing is registered for', () => {
@@ -380,12 +380,10 @@ describe('Wallet Builder', () => {
     // The tag travels with the emission, so a reader can pick the right capabilities for a state
     // without inferring the producing variant from the version.
     expect(receivedStates.filter(({ version }) => version === ProtocolVersion.MinSupportedVersion)).toSatisfy(
-      (preFork: typeof receivedStates) =>
-        preFork.length > 0 && preFork.every(({ variantTag }) => variantTag === Numeric),
+      (v1: typeof receivedStates) => v1.length > 0 && v1.every(({ variantTag }) => variantTag === Numeric),
     );
     expect(receivedStates.filter(({ version }) => version === ProtocolVersion.ProtocolVersion(100n))).toSatisfy(
-      (postFork: typeof receivedStates) =>
-        postFork.length > 0 && postFork.every(({ variantTag }) => variantTag === NumericMultiplier),
+      (v2: typeof receivedStates) => v2.length > 0 && v2.every(({ variantTag }) => variantTag === NumericMultiplier),
     );
     expect(receivedStates.at(-1)).toEqual({
       version: ProtocolVersion.ProtocolVersion(100n),

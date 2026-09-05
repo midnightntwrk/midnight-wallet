@@ -20,8 +20,8 @@ import {
   ServerError,
 } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { BlobOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 
 const PROVE_TX_PATH = '/prove';
 const CHECK_TX_PATH = '/check';
@@ -41,15 +41,15 @@ type PayloadFraming = Readonly<{
 }>;
 
 const v9Framing: PayloadFraming = {
-  createProvingPayload: (preimage, binding) => ledger.createProvingPayload(preimage, binding),
-  createCheckPayload: (preimage) => ledger.createCheckPayload(preimage),
-  parseCheckResult: (result) => ledger.parseCheckResult(result),
+  createProvingPayload: (preimage, binding) => ledgerV9.createProvingPayload(preimage, binding),
+  createCheckPayload: (preimage) => ledgerV9.createCheckPayload(preimage),
+  parseCheckResult: (result) => ledgerV9.parseCheckResult(result),
 };
 
 const v8Framing: PayloadFraming = {
-  createProvingPayload: (preimage, binding) => preForkLedger.createProvingPayload(preimage, binding),
-  createCheckPayload: (preimage) => preForkLedger.createCheckPayload(preimage),
-  parseCheckResult: (result) => preForkLedger.parseCheckResult(result),
+  createProvingPayload: (preimage, binding) => ledgerV8.createProvingPayload(preimage, binding),
+  createCheckPayload: (preimage) => ledgerV8.createCheckPayload(preimage),
+  parseCheckResult: (result) => ledgerV8.parseCheckResult(result),
 };
 
 /**
@@ -153,7 +153,7 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     );
   }
 
-  private serverProverProvider = (framing: PayloadFraming): ledger.ProvingProvider => ({
+  private serverProverProvider = (framing: PayloadFraming): ledgerV9.ProvingProvider => ({
     check: async (serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> =>
       pipe(
         Effect.succeed(framing.createCheckPayload(serializedPreimage)),
@@ -173,13 +173,13 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
       ),
     // The proof server holds its own key material and resolves circuits from the
     // preimage's key location, so there is never local key material to provide.
-    lookupKey: (_keyLocation: string): Promise<ledger.ProvingKeyMaterial | undefined> => Promise.resolve(undefined),
+    lookupKey: (_keyLocation: string): Promise<ledgerV9.ProvingKeyMaterial | undefined> => Promise.resolve(undefined),
   });
 
-  proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
-    transaction: ledger.Transaction<S, ledger.PreProof, B>,
-    costModel: ledger.CostModel,
-  ): Effect.Effect<ledger.Transaction<S, ledger.Proof, B>, ClientError | ServerError> {
+  proveTransaction<S extends ledgerV9.Signaturish, B extends ledgerV9.Bindingish>(
+    transaction: ledgerV9.Transaction<S, ledgerV9.PreProof, B>,
+    costModel: ledgerV9.CostModel,
+  ): Effect.Effect<ledgerV9.Transaction<S, ledgerV9.Proof, B>, ClientError | ServerError> {
     return pipe(
       Effect.succeed(this.serverProverProvider(v9Framing)),
       Effect.flatMap((provider) =>
@@ -194,15 +194,15 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     );
   }
 
-  asProvingProvider(): ledger.ProvingProvider {
+  asProvingProvider(): ledgerV9.ProvingProvider {
     return this.serverProverProvider(v9Framing);
   }
 
-  asV9ProvingProvider(): ledger.ProvingProvider {
+  asV9ProvingProvider(): ledgerV9.ProvingProvider {
     return this.asProvingProvider();
   }
 
-  asV8ProvingProvider(): preForkLedger.ProvingProvider {
+  asV8ProvingProvider(): ledgerV8.ProvingProvider {
     return this.serverProverProvider(v8Framing);
   }
 }

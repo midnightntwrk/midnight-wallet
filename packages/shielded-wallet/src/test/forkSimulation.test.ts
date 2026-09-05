@@ -16,17 +16,17 @@
  *
  * @remarks
  *   Every other test of this machinery specifies one seam. This drives all of them at once: a ledger-v8 chain pays the
- *   wallet, the pre-fork variant syncs it, the chain reaches the boundary height and its ledger is translated into the
- *   post-fork one, the wallet hands over to the ledger-v9 variant — and comes out the other side still holding what it
+ *   wallet, the V1 variant syncs it, the chain reaches the boundary height and its ledger is translated into the
+ *   ledger-v9 one, the wallet hands over to the ledger-v9 variant — and comes out the other side still holding what it
  *   held, then goes on transacting.
  *
  *   **A fork re-announces nothing.** The chain's state translation carries every commitment across in place: the
- *   post-fork chain opens holding the pre-fork tree, continues inserting at the index that tree reached, and the
- *   indexer numbers its events onwards from where it had got to. Nothing about the pre-fork timeline is served again.
+ *   ledger-v9 chain opens holding the ledger-v8 tree, continues inserting at the index that tree reached, and the
+ *   indexer numbers its events onwards from where it had got to. Nothing about the ledger-v8 timeline is served again.
  *   So the wallet's own state has to travel with it — which it does, as bytes: the two ledger majors either side of
  *   this boundary share the `zswap-local-state` codec, so the migration hands the previous version's serialization to
  *   this version's deserializer and the tree arrives whole (`src/v2/test/byteCrossing.test.ts` pins that codec). These
- *   tests are about what that buys, and the post-fork chain here announces nothing precisely so that no assertion below
+ *   tests are about what that buys, and the ledger-v9 chain here announces nothing precisely so that no assertion below
  *   can be satisfied by re-discovery.
  *
  *   The last test in the file is the failure mode of a migration that does not carry the state, kept deliberately: an
@@ -34,12 +34,12 @@
  *   forever.
  *
  *   **Unit tier, and complete.** The one thing this tier cannot supply is the real v8-to-v9 translation, which is a WASM
- *   artifact; `translationStub.ts` reconstructs the post-fork ledger instead, and `forkSimulation.integration.test.ts`
- *   makes the same claims against the ledger team's own translation.
+ *   artifact; `translationStub.ts` reconstructs ledger-v9 instead, and `forkSimulation.integration.test.ts` makes the
+ *   same claims against the ledger team's own translation.
  */
 
-import * as v8 from '@midnight-ntwrk/ledger-v8';
-import * as v9 from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion, type SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   ShieldedAddress,
@@ -62,8 +62,8 @@ import { type CapturedMigration, type ForkWallet, makeForkWallet } from './forkH
 import {
   type MintedCoin,
   mintable,
-  postForkPayment,
-  preForkPayment,
+  v9Payment,
+  v8Payment,
   simulatedChainRoot,
   translationStub,
 } from './translationStub.js';
@@ -85,32 +85,32 @@ const networkId = NetworkId.NetworkId.Undeployed;
 /**
  * The boundary, stated once.
  *
- * `forkVersion` is where the post-fork variant is registered _and_ what the chain activates at `forkBlock` — the same
- * number reaching the runtime through registration and through the timeline, which is the whole point of D5. It is
+ * `forkVersion` is where the V2 variant is registered _and_ what the chain activates at `forkBlock` — the same number
+ * reaching the runtime through registration and through the timeline, which is the whole point of D5. It is
  * deliberately an arbitrary number: the real fork's protocol version is not final, and nothing here may depend on it.
  */
 const forkVersion = ProtocolVersion.ProtocolVersion(7n);
 const forkBlock = 8n;
 
-/** A version bump the pre-fork variant owns: inside `[MinSupportedVersion, forkVersion)`, so it must not migrate. */
+/** A version bump the V1 variant owns: inside `[MinSupportedVersion, forkVersion)`, so it must not migrate. */
 const withinRangeVersion = ProtocolVersion.ProtocolVersion(5n);
 
-/** The half-open range the post-fork variant is registered over, as the runtime hands it to that variant. */
-const postForkRange = ProtocolVersion.makeRange(forkVersion, ProtocolVersion.MaxSupportedVersion);
+/** The half-open range the V2 variant is registered over, as the runtime hands it to that variant. */
+const v9Range = ProtocolVersion.makeRange(forkVersion, ProtocolVersion.MaxSupportedVersion);
 
 const seed = Buffer.alloc(32, 42);
 const otherSeed = Buffer.alloc(32, 43);
 
-const preForkProducer = () => V8.immediateBlockProducer(undefined, V8.genesisStrictness);
-const postForkProducer = () => immediateBlockProducer(undefined, genesisStrictness);
+const v8Producer = () => V8.immediateBlockProducer(undefined, V8.genesisStrictness);
+const v9Producer = () => immediateBlockProducer(undefined, genesisStrictness);
 
 const walletRecipient = () => {
-  const keys = v9.ZswapSecretKeys.fromSeed(seed);
+  const keys = ledgerV9.ZswapSecretKeys.fromSeed(seed);
   return { coinPublicKey: keys.coinPublicKey, encryptionPublicKey: keys.encryptionPublicKey };
 };
 
 const strangerRecipient = () => {
-  const keys = v9.ZswapSecretKeys.fromSeed(otherSeed);
+  const keys = ledgerV9.ZswapSecretKeys.fromSeed(otherSeed);
   return { coinPublicKey: keys.coinPublicKey, encryptionPublicKey: keys.encryptionPublicKey };
 };
 
@@ -144,9 +144,9 @@ const walletTotal = walletValues.reduce((sum, value) => sum + value, 0n);
 const walletIndices = [0n, 1n, 2n, 4n];
 const treeSizeAtFork = 6n;
 
-/** The pre-fork commitment sequence, sampled once per chain: three to us, a stranger's, ours, a stranger's again. */
+/** The ledger-v8 commitment sequence, sampled once per chain: three to us, a stranger's, ours, a stranger's again. */
 const chainCoins = (): readonly MintedCoin[] => {
-  const tokenType = v8.shieldedToken().raw;
+  const tokenType = ledgerV8.shieldedToken().raw;
   const us = walletRecipient();
   const them = strangerRecipient();
   return [
@@ -159,7 +159,7 @@ const chainCoins = (): readonly MintedCoin[] => {
   ];
 };
 
-/** A chain that forks at `forkBlock`, its post-fork side starting from the translation of what the pre-fork side held. */
+/** A chain that forks at `forkBlock`, its ledger-v9 side starting from the translation of what the ledger-v8 side held. */
 const forkingChain = (coins: readonly MintedCoin[]): Effect.Effect<ForkSimulator, never, Scope.Scope> =>
   ForkSimulator.init({
     networkId,
@@ -167,8 +167,8 @@ const forkingChain = (coins: readonly MintedCoin[]): Effect.Effect<ForkSimulator
     forkVersion,
     // Genesis strictness throughout: these payments mint from nothing and the transfer below pays no fees, both of
     // which a fee-enforcing chain would reject for reasons that have nothing to do with the fork.
-    preForkBlockProducer: preForkProducer(),
-    postForkBlockProducer: postForkProducer(),
+    v8BlockProducer: v8Producer(),
+    v9BlockProducer: v9Producer(),
     translator: translationStub({ networkId, coins }),
   });
 
@@ -198,41 +198,41 @@ const settled = (wallet: ForkWallet) =>
       state.state.progress.appliedIndex > forkBlock,
   );
 
-/** A wallet that has synced the pre-fork chain, crossed the boundary, and the chain it now reads. */
+/** A wallet that has synced the ledger-v8 chain, crossed the boundary, and the chain it now reads. */
 type Crossing = Readonly<{
-  postFork: Simulator;
+  v9: Simulator;
   wallet: ForkWallet;
   migration: CapturedMigration;
   /**
-   * The root of the tree the wallet held on the pre-fork side — what the crossing has to reproduce exactly.
+   * The root of the tree the wallet held on the ledger-v8 side — what the crossing has to reproduce exactly.
    *
-   * A number rather than the state it came from: the pre-fork state is built on the other ledger's wasm objects, whose
+   * A number rather than the state it came from: the ledger-v8 state is built on the other ledger's wasm objects, whose
    * lifetime ends with the variant scope the migration closes.
    */
-  preForkRoot: bigint | undefined;
-  /** The outputs the wallet was still expecting on the pre-fork side — see {@link expectedCoins}. */
-  preForkExpected: readonly ExpectedCoin[];
+  v8Root: bigint | undefined;
+  /** The outputs the wallet was still expecting on the ledger-v8 side — see {@link expectedCoins}. */
+  v8Expected: readonly ExpectedCoin[];
 }>;
 
 /**
- * Runs the whole crossing: pay the wallet before the fork, sync it, fork the chain, hand over.
+ * Runs the whole crossing: pay the wallet before the v9 fork, sync it, fork the chain, hand over.
  *
  * @remarks
- *   Stops short of asserting anything about the post-fork side, which is what the individual tests differ on. The
- *   pre-fork state is awaited _before_ the chain is driven to the boundary, so the premise each test builds on — that
+ *   Stops short of asserting anything about the ledger-v9 side, which is what the individual tests differ on. The
+ *   ledger-v8 state is awaited _before_ the chain is driven to the boundary, so the premise each test builds on — that
  *   the wallet genuinely held these coins on the other side — is established rather than inferred from the end state.
  */
 const crossTheFork = (
   coins: readonly MintedCoin[],
-  /** Anything the wallet is made to do on the pre-fork side after it has synced and before the boundary arrives. */
+  /** Anything the wallet is made to do on the ledger-v8 side after it has synced and before the boundary arrives. */
   beforeTheBoundary: (wallet: ForkWallet) => Effect.Effect<void, unknown> = () => Effect.void,
 ): Effect.Effect<Crossing, unknown, Scope.Scope> =>
   Effect.gen(function* () {
     const fork = yield* forkingChain(coins);
 
     const wallet = yield* makeForkWallet({
-      preFork: fork.preFork,
-      postFork: fork.awaitPostFork(),
+      v8: fork.v8,
+      v9: fork.awaitV9(),
       networkId,
       forkVersion,
       seed,
@@ -240,8 +240,8 @@ const crossTheFork = (
     yield* Effect.addFinalizer(() => wallet.stop);
     yield* wallet.start;
 
-    // --- pre-fork: the ledger-v8 variant syncs the ledger-v8 chain ----------------------------------------------
-    yield* Effect.forEach(coins, (coin) => fork.preFork.submitTransaction(preForkPayment(networkId, coin)), {
+    // --- ledger-v8: the ledger-v8 variant syncs the ledger-v8 chain ----------------------------------------------
+    yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
       discard: true,
     });
     const synced = yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
@@ -251,30 +251,30 @@ const crossTheFork = (
     expect(treeSize(synced.state)).toBe(treeSizeAtFork);
 
     yield* beforeTheBoundary(wallet);
-    const preForkState = yield* wallet.currentState;
+    const v8State = yield* wallet.currentState;
 
     // --- the chain reaches the boundary and its ledger is translated ---------------------------------------------
-    const postFork = yield* fork.advanceToFork();
+    const v9 = yield* fork.advanceToFork();
     const migration = yield* wallet.awaitMigration;
 
     return {
-      postFork,
+      v9,
       wallet,
       migration,
-      preForkRoot: merkleRoot(preForkState.state),
-      preForkExpected: expectedCoins(preForkState.state),
+      v8Root: merkleRoot(v8State.state),
+      v8Expected: expectedCoins(v8State.state),
     };
   });
 
 describe('a shielded wallet crossing a hard fork', () => {
   it('arrives holding the tree it held, against a chain that announces nothing', async () =>
     Effect.gen(function* () {
-      const { postFork, wallet, migration, preForkRoot } = yield* crossTheFork(chainCoins());
+      const { v9, wallet, migration, v8Root } = yield* crossTheFork(chainCoins());
       expect(yield* wallet.activeTag).toBe(V2Tag);
 
-      // What the pre-fork variant handed over: its identity, the version that triggered the hand-over, and a cursor
+      // What the V1 variant handed over: its identity, the version that triggered the hand-over, and a cursor
       // parked on the boundary height — observed and annotated, deliberately not applied.
-      expect(migration.from.coinPublicKey).toBe(v8.ZswapSecretKeys.fromSeed(seed).coinPublicKey);
+      expect(migration.from.coinPublicKey).toBe(ledgerV8.ZswapSecretKeys.fromSeed(seed).coinPublicKey);
       expect(migration.from.protocolVersion).toBe(forkVersion);
       expect(migration.from.appliedIndex).toBe(forkBlock);
 
@@ -287,18 +287,18 @@ describe('a shielded wallet crossing a hard fork', () => {
       // hold, so they are declared pending for the first sync update to fill in.
       expect(migration.to.coinHashCount).toBe(0);
       expect(migration.to.coinHashesPending).toBe(true);
-      // **Parked, not rewound.** The post-fork timeline continues the indexer's event ids from where the fork found
+      // **Parked, not rewound.** The ledger-v9 timeline continues the indexer's event ids from where the fork found
       // them, so this wallet resumes on the cursor its predecessor stopped at.
       expect(migration.to.appliedIndex).toBe(migration.from.appliedIndex);
       expect(migration.to.appliedIndex).toBe(forkBlock);
       // Identity crosses too: without these keys the crossed coins cannot be recognised as this wallet's at all.
-      expect(migration.to.coinPublicKey).toBe(v9.ZswapSecretKeys.fromSeed(seed).coinPublicKey);
-      expect(migration.to.encryptionPublicKey).toBe(v9.ZswapSecretKeys.fromSeed(seed).encryptionPublicKey);
+      expect(migration.to.coinPublicKey).toBe(ledgerV9.ZswapSecretKeys.fromSeed(seed).coinPublicKey);
+      expect(migration.to.encryptionPublicKey).toBe(ledgerV9.ZswapSecretKeys.fromSeed(seed).encryptionPublicKey);
       expect(migration.to.networkId).toBe(networkId);
       // Kept so the restarted variant sits inside its own activation range instead of signalling backwards at once.
       expect(migration.to.protocolVersion).toBe(forkVersion);
 
-      // --- post-fork: the same coins, without anything having been served ------------------------------------
+      // --- ledger-v9: the same coins, without anything having been served ------------------------------------
       const crossed = yield* settled(wallet);
       expect(coinValues(crossed.state)).toEqual([...walletValues]);
       expect(coinIndices(crossed.state)).toEqual(walletIndices);
@@ -308,34 +308,34 @@ describe('a shielded wallet crossing a hard fork', () => {
       // And the hashes were computed on arrival — one per coin — so the wallet can name what it holds.
       expect(awaitingCoinHashes(crossed.state)).toBe(false);
       // And the tree is the tree it had before the boundary, down to its root — which is also the chain's.
-      expect(preForkRoot).toBeDefined();
-      expect(merkleRoot(crossed.state)).toBe(preForkRoot);
-      expect(yield* postFork.query(simulatedChainRoot)).toBe(preForkRoot);
+      expect(v8Root).toBeDefined();
+      expect(merkleRoot(crossed.state)).toBe(v8Root);
+      expect(yield* v9.query(simulatedChainRoot)).toBe(v8Root);
 
-      // **Carried, not re-discovered.** The post-fork chain has produced exactly one block — its genesis, holding the
+      // **Carried, not re-discovered.** The ledger-v9 chain has produced exactly one block — its genesis, holding the
       // translated ledger — and it contains no transactions at all. There was nothing here for the wallet to learn
       // its coins from, so it did not learn them: it arrived with them.
-      expect(yield* postFork.query((state) => state.blocks.flatMap((block) => block.transactions))).toEqual([]);
+      expect(yield* v9.query((state) => state.blocks.flatMap((block) => block.transactions))).toEqual([]);
       // That empty boundary block is what the wallet did read, and all it read: the version bump, applied.
       expect(crossed.state.progress.appliedIndex).toBe(forkBlock + 1n);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('applies a post-fork payment landing where the pre-fork tree ended', async () =>
+  it('applies a ledger-v9 payment landing where the ledger-v8 tree ended', async () =>
     Effect.gen(function* () {
       // The regression the 2026-08-28 drill found on real infrastructure. The chain goes on inserting at the index the
-      // pre-fork tree reached, so the first commitment a crossed wallet meets is at `treeSize` — an index an empty
+      // ledger-v8 tree reached, so the first commitment a crossed wallet meets is at `treeSize` — an index an empty
       // local state rejects as a non-linear insertion, and goes on rejecting. Against the tree that crossed with the
       // wallet it is simply the next leaf.
       //
-      // Paid without waiting for the wallet to settle first, deliberately: the drill's wallet met a post-fork event
+      // Paid without waiting for the wallet to settle first, deliberately: the drill's wallet met a ledger-v9 event
       // while it had done nothing about the fork yet, and that ordering is half the regression. It survives it because
       // the migration is what completes the crossing, not something sync has still to do afterwards.
-      const { postFork, wallet } = yield* crossTheFork(chainCoins());
+      const { v9, wallet } = yield* crossTheFork(chainCoins());
 
-      const late = mintable(v9.shieldedToken().raw, 900n, walletRecipient());
-      const block = yield* postFork.submitTransaction(postForkPayment(networkId, late));
+      const late = mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient());
+      const block = yield* v9.submitTransaction(v9Payment(networkId, late));
       expect(block.transactions[0].result.type).toBe('success');
-      expect(yield* postFork.query((state) => state.ledger.zswap.firstFree)).toBe(treeSizeAtFork + 1n);
+      expect(yield* v9.query((state) => state.ledger.zswap.firstFree)).toBe(treeSizeAtFork + 1n);
 
       const advanced = yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal + 900n);
       // The new coin sits beside the carried ones rather than replacing them, at the index the chain gave it.
@@ -352,38 +352,38 @@ describe('a shielded wallet crossing a hard fork', () => {
       // chain — and the transfer is deliberately never submitted, so the expectation is still outstanding when the
       // boundary arrives. A crossing that reconstructs the wallet from its spendable coins alone drops it, and the
       // change of every in-flight transfer with it.
-      const { wallet, preForkExpected } = yield* crossTheFork(chainCoins(), (running) =>
+      const { wallet, v8Expected } = yield* crossTheFork(chainCoins(), (running) =>
         Effect.promise(() =>
           running.shielded.transferTransaction([
-            { amount: 150n, type: v8.shieldedToken().raw, receiverAddress: ownAddress() },
+            { amount: 150n, type: ledgerV8.shieldedToken().raw, receiverAddress: ownAddress() },
           ]),
         ).pipe(Effect.asVoid),
       );
 
-      // The premise: the pre-fork wallet really was expecting something. Without this the comparison below could be
+      // The premise: the V1 wallet really was expecting something. Without this the comparison below could be
       // satisfied by two empty lists.
-      expect(preForkExpected.length).toBeGreaterThan(0);
+      expect(v8Expected.length).toBeGreaterThan(0);
 
       const crossed = yield* settled(wallet);
       // Commitment for commitment, not merely count: a commitment is a function of the coin and its owner, so equal
       // commitments on either side of the boundary say these are the same expected coins and not new ones.
-      expect(expectedCoins(crossed.state)).toEqual(preForkExpected);
+      expect(expectedCoins(crossed.state)).toEqual(v8Expected);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('spends a carried coin against the post-fork chain', async () =>
+  it('spends a carried coin against the ledger-v9 chain', async () =>
     Effect.gen(function* () {
-      const { postFork, wallet } = yield* crossTheFork(chainCoins());
+      const { v9, wallet } = yield* crossTheFork(chainCoins());
       yield* settled(wallet);
 
       const transferred = 150n;
       const transfer = yield* Effect.promise(() =>
         wallet.shielded.transferTransaction([
-          { amount: transferred, type: v9.shieldedToken().raw, receiverAddress: recipientAddress() },
+          { amount: transferred, type: ledgerV9.shieldedToken().raw, receiverAddress: recipientAddress() },
         ]),
       );
 
-      const block = yield* postFork.submitTransaction(
-        carried<v9.UnprovenTransaction>(transfer, forkVersion).eraseProofs(),
+      const block = yield* v9.submitTransaction(
+        carried<ledgerV9.UnprovenTransaction>(transfer, forkVersion).eraseProofs(),
       );
       // The chain accepting this is the claim, and it is the only one that cannot be faked: a spend carries a Merkle
       // path built from the wallet's own tree, and the ledger recognises it only if that path resolves to a root the
@@ -396,19 +396,19 @@ describe('a shielded wallet crossing a hard fork', () => {
 
   it('does not migrate on a version bump that stays inside the running variant range', async () =>
     Effect.gen(function* () {
-      // Same registration, one number different: the timeline activates a version the pre-fork variant still owns.
-      // The version is written into state either way — what must not happen is a hand-over. There is no post-fork
+      // Same registration, one number different: the timeline activates a version the V1 variant still owns.
+      // The version is written into state either way — what must not happen is a hand-over. There is no ledger-v9
       // chain here at all, and asking for one would hang, which is exactly the claim.
       const coins = chainCoins();
-      const chain = yield* V8.Simulator.init({ networkId, blockProducer: preForkProducer() });
+      const chain = yield* V8.Simulator.init({ networkId, blockProducer: v8Producer() });
       yield* chain.scheduleFork(forkBlock, withinRangeVersion);
-      yield* Effect.forEach(coins, (coin) => chain.submitTransaction(preForkPayment(networkId, coin)), {
+      yield* Effect.forEach(coins, (coin) => chain.submitTransaction(v8Payment(networkId, coin)), {
         discard: true,
       });
 
       const wallet = yield* makeForkWallet({
-        preFork: chain,
-        postFork: Effect.never,
+        v8: chain,
+        v9: Effect.never,
         networkId,
         forkVersion,
         seed,
@@ -432,18 +432,18 @@ describe('a shielded wallet crossing a hard fork', () => {
 
   it('migrates a wallet whose first sync already contains the fork', async () =>
     Effect.gen(function* () {
-      // Scenario 2: a wallet started from seed after the fork has happened. Its pre-fork variant meets the whole
-      // pre-fork history in a single batch, so the boundary is split *within* one update rather than across two.
+      // Scenario 2: a wallet started from seed after the v9 fork has happened. Its V1 variant meets the whole
+      // ledger-v8 history in a single batch, so the boundary is split *within* one update rather than across two.
       const coins = chainCoins();
       const fork = yield* forkingChain(coins);
-      yield* Effect.forEach(coins, (coin) => fork.preFork.submitTransaction(preForkPayment(networkId, coin)), {
+      yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
         discard: true,
       });
-      const postFork = yield* fork.advanceToFork();
+      const v9 = yield* fork.advanceToFork();
 
       const wallet = yield* makeForkWallet({
-        preFork: fork.preFork,
-        postFork: Effect.succeed(postFork),
+        v8: fork.v8,
+        v9: Effect.succeed(v9),
         networkId,
         forkVersion,
         seed,
@@ -496,7 +496,7 @@ describe('a migration that leaves the wallet’s state behind', () => {
   const syncUntilItFails = (
     chain: Simulator,
     wallet: CoreWallet,
-    secretKeys: v9.ZswapSecretKeys,
+    secretKeys: ledgerV9.ZswapSecretKeys,
   ): Effect.Effect<void, WalletError.WalletError, Scope.Scope> =>
     Effect.gen(function* () {
       const stateRef = yield* SubscriptionRef.make(wallet);
@@ -509,7 +509,7 @@ describe('a migration that leaves the wallet’s state behind', () => {
             SubscriptionRef.modifyEffect(stateRef, (state) =>
               Effect.try({
                 try: () => {
-                  const [next, result] = capability.applyUpdate(state, update, postForkRange);
+                  const [next, result] = capability.applyUpdate(state, update, v9Range);
                   return [result, next] as const;
                 },
                 catch: (cause) =>
@@ -521,39 +521,39 @@ describe('a migration that leaves the wallet’s state behind', () => {
         );
     });
 
-  it('wedges on the first post-fork event it meets', async () =>
+  it('wedges on the first ledger-v9 event it meets', async () =>
     Effect.gen(function* () {
       // Kept as a permanent negative: this is what the shipped wallet did before its state crossed the boundary, and
       // what the 2026-08-28 hard-fork drill hit on real infrastructure. It passes only because the empty state
-      // genuinely wedges — if a later change made a wallet that arrived empty survive a post-fork event, this test
+      // genuinely wedges — if a later change made a wallet that arrived empty survive a ledger-v9 event, this test
       // would fail and carrying the state could be reconsidered on the evidence.
       const coins = chainCoins();
       const fork = yield* forkingChain(coins);
-      yield* Effect.forEach(coins, (coin) => fork.preFork.submitTransaction(preForkPayment(networkId, coin)), {
+      yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
         discard: true,
       });
-      const postFork = yield* fork.advanceToFork();
+      const v9 = yield* fork.advanceToFork();
 
       // A wallet arriving with identity, a parked cursor, and an empty tree. Hand-built rather than obtained by
       // disabling the crossing, which stays exactly as it ships.
       const coinless = CoreWallet.fromPreviousVersion({
-        state: new v9.ZswapLocalState(),
-        publicKeys: PublicKeys.fromSecretKeys(v9.ZswapSecretKeys.fromSeed(seed)),
+        state: new ledgerV9.ZswapLocalState(),
+        publicKeys: PublicKeys.fromSecretKeys(ledgerV9.ZswapSecretKeys.fromSeed(seed)),
         networkId,
         protocolVersion: forkVersion,
         progress: parkedAtFork,
       });
       expect(coinless.state.firstFree).toBe(0n);
 
-      // Somebody pays this wallet after the fork. The commitment lands at the index the pre-fork tree ended on, which
+      // Somebody pays this wallet after the v9 fork. The commitment lands at the index the ledger-v8 tree ended on, which
       // is the whole difficulty: the chain never restarted its numbering, and this wallet's tree never left zero.
-      yield* postFork.submitTransaction(
-        postForkPayment(networkId, mintable(v9.shieldedToken().raw, 900n, walletRecipient())),
+      yield* v9.submitTransaction(
+        v9Payment(networkId, mintable(ledgerV9.shieldedToken().raw, 900n, walletRecipient())),
       );
-      expect(yield* postFork.query((state) => state.ledger.zswap.firstFree)).toBe(treeSizeAtFork + 1n);
+      expect(yield* v9.query((state) => state.ledger.zswap.firstFree)).toBe(treeSizeAtFork + 1n);
 
       const failure = yield* pipe(
-        syncUntilItFails(postFork, coinless, v9.ZswapSecretKeys.fromSeed(seed)),
+        syncUntilItFails(v9, coinless, ledgerV9.ZswapSecretKeys.fromSeed(seed)),
         // A guard, not a mechanism: without the wedge this stream never ends, and a hang says far less than a failed
         // assertion does.
         Effect.timeout(Duration.seconds(10)),

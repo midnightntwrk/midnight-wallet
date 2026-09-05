@@ -17,9 +17,9 @@
 // orchestration that invokes it lives here — in the Effect (imperative-shell) layer — while the pure transformations
 // (which segments to sign, signature attachment) stay in `TransactionOps`.
 //
-// This is the pre-fork (ledger-v8) twin of the ledger-v9 variant's signing service. The split itself is not a v9
+// This is the ledger-v8 twin of the ledger-v9 variant's signing service. The split itself is not a v9
 // feature — it is the architecture the shared wallet layer now requires of every variant — so the v8 variant adopts it
-// rather than keeping the synchronous `Either`-returning signing it shipped with before the fork work. What stays out
+// rather than keeping the synchronous `Either`-returning signing it shipped with before the v9 fork work. What stays out
 // is everything genuinely v9: this ledger version has a single signature scheme, so there is no scheme validation and
 // no `SchemeMismatchError` on this path.
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';

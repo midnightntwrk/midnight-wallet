@@ -27,11 +27,11 @@ import { describe, expect, it } from 'vitest';
 import * as sdk from '../index.js';
 
 describe('the Night token type the SDK names', () => {
-  it('is what the pre-fork ledger version calls the native token', () => {
+  it('is what the ledger-v8 calls the native token', () => {
     expect(sdk.Token.night).toBe(ledgerV8.nativeToken().raw);
   });
 
-  it('is what the post-fork ledger version calls the native token', () => {
+  it('is what the ledger-v9 calls the native token', () => {
     expect(sdk.Token.night).toBe(ledgerV9.nativeToken().raw);
   });
 

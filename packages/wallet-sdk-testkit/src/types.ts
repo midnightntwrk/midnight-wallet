@@ -38,7 +38,7 @@ export interface ResolvedEndpoints {
 }
 
 /** Shielded + submission + proving configuration consumed by `ShieldedWallet`/`WalletFacade`. */
-// The shielded wallet's own configuration rather than its post-fork variant's: it carries `forks`,
+// The shielded wallet's own configuration rather than its V2 variant's: it carries `forks`,
 // which says where this chain hands over from one ledger version to the other, and neither variant knows
 // there is another one.
 export type WalletConfiguration = DefaultShieldedConfiguration &
@@ -46,7 +46,7 @@ export type WalletConfiguration = DefaultShieldedConfiguration &
   DefaultProvingConfiguration;
 
 /** Dust wallet configuration consumed by `DustWallet`. */
-// The dust wallet's own configuration rather than its post-fork variant's: it carries `forks`, which says
+// The dust wallet's own configuration rather than its V2 variant's: it carries `forks`, which says
 // where this chain hands over from one ledger version to the other, and neither variant knows there is another one.
 export type DustWalletConfiguration = DefaultDustConfiguration;
 

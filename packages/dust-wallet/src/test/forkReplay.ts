@@ -12,20 +12,20 @@
 // limitations under the License.
 
 /**
- * The indexer's post-fork replay of a dust timeline — test scaffolding only.
+ * The indexer's ledger-v9 replay of a dust timeline — test scaffolding only.
  *
  * @remarks
  *   After the hard fork the indexer replays the timeline: the history a wallet already synced is served again, this time
- *   as events of the new ledger version, numbered onwards from whatever event id it had reached. That is why a migrated
- *   dust wallet starts with no dust and simply syncs — it re-discovers its own dust from the replay rather than
- *   carrying it across.
+ *   as events of ledger-v9, numbered onwards from whatever event id it had reached. That is why a migrated dust wallet
+ *   starts with no dust and simply syncs — it re-discovers its own dust from the replay rather than carrying it
+ *   across.
  *
  *   **What the replay is here.** A ledger `Event` cannot cross a version boundary as-is: ledger-v8 frames its events
  *   `midnight:event[v9]:` and ledger-v9 frames them `midnight:event[v14]:`, and each refuses the other's header
  *   outright (`expected header tag 'midnight:event[v14]:', got 'midnight:event[v9]:'`). What ledger-v8 and ledger-v9
  *   _do_ agree on is everything after that header: the payload of a `dustInitialUtxo` event is byte-identical between
- *   them. So the replay is modelled by re-framing each pre-fork event under the post-fork header — the same event,
- *   re-emitted by the new ledger version, which is precisely what an indexer replay is.
+ *   them. So the replay is modelled by re-framing each ledger-v8 event under the ledger-v9 header — the same event,
+ *   re-emitted by ledger-v9, which is precisely what an indexer replay is.
  *
  *   That agreement is not assumed. `forkSimulation.test.ts` opens by asserting it directly: a re-framed event applied by
  *   ledger-v9 produces the same dust — same nonces, same backing Night, same values, same Merkle indices, same tree
@@ -34,29 +34,29 @@
  *
  *   This is where dust does better than the shielded proof: shielded re-mints equivalent coins to reproduce equivalent
  *   commitments, and needs the real v8-to-v9 state translation to close the fidelity gap. Dust replays the same event
- *   bytes, so the pre-fork and post-fork wallets are directly comparable without any translation at all.
+ *   bytes, so the ledger-v8 and V2 wallets are directly comparable without any translation at all.
  *
  *   **Two modelling choices are load-bearing and deliberate.**
  *
- *   - **The replay continues the pre-fork event numbering.** The indexer numbers its replay onwards from the id it had
+ *   - **The replay continues the ledger-v8 event numbering.** The indexer numbers its replay onwards from the id it had
  *       reached when the fork happened, never from zero, so the replay opens just past the boundary and a migrated
  *       wallet parks its cursor there and meets it head-on. Numbering the replay from one instead, while the migration
  *       parks, would put most of it behind the cursor and the wallet would come back holding only the tail of its own
  *       history. (The mirror image is not symmetric — a cursor behind the replay reads all of it anyway — so what
  *       separates parking from resetting is the migrated cursor itself, asserted where the migration produced it.)
- *   - **Every replayed event carries the post-fork protocol version.** Tagging the whole replay inside the new variant's
+ *   - **Every replayed event carries the ledger-v9 protocol version.** Tagging the whole replay inside the new variant's
  *       activation range is what keeps any of it from being deferred straight back to a variant that has already handed
  *       over.
  */
 
-import { type WalletSyncSubscription as PreForkItem } from '../v1/Sync.js';
-import { type WalletSyncSubscription as PostForkItem } from '../v2/SyncSchema.js';
+import { type WalletSyncSubscription as V1Item } from '../v1/Sync.js';
+import { type WalletSyncSubscription as V2Item } from '../v2/SyncSchema.js';
 
 /** The serialization header ledger-v8 frames an `Event` with. */
-const preForkHeader = 'midnight:event[v9]:';
+const v8Header = 'midnight:event[v9]:';
 
 /** The serialization header ledger-v9 frames an `Event` with. */
-const postForkHeader = 'midnight:event[v14]:';
+const v9Header = 'midnight:event[v14]:';
 
 const headerBytes = (header: string): readonly number[] => [...header].map((character) => character.charCodeAt(0));
 
@@ -64,7 +64,7 @@ const hasHeader = (bytes: Uint8Array, header: readonly number[]): boolean =>
   header.every((byte, index) => bytes[index] === byte);
 
 /**
- * Re-frames a pre-fork event's bytes under the post-fork ledger's header.
+ * Re-frames a ledger-v8 event's bytes under ledger-v9's header.
  *
  * @remarks
  *   The whole of the modelling. Only the header is rewritten; the payload is passed through untouched, which is what
@@ -74,12 +74,12 @@ const hasHeader = (bytes: Uint8Array, header: readonly number[]): boolean =>
  * @throws Error if `bytes` is not a ledger-v8 event — a harness that re-framed the wrong thing must not look like a
  *   fork that went wrong.
  */
-export const reframeAsPostFork = (bytes: Uint8Array): Uint8Array => {
-  const from = headerBytes(preForkHeader);
+export const reframeAsV9 = (bytes: Uint8Array): Uint8Array => {
+  const from = headerBytes(v8Header);
   if (!hasHeader(bytes, from)) {
-    throw new Error(`Not a ledger-v8 event: expected the header ${preForkHeader}`);
+    throw new Error(`Not a ledger-v8 event: expected the header ${v8Header}`);
   }
-  return Uint8Array.from([...headerBytes(postForkHeader), ...bytes.subarray(from.length)]);
+  return Uint8Array.from([...headerBytes(v9Header), ...bytes.subarray(from.length)]);
 };
 
 /**
@@ -87,12 +87,12 @@ export const reframeAsPostFork = (bytes: Uint8Array): Uint8Array => {
  *
  * @remarks
  *   Bytes rather than an `Event` instance, because `replayEventsWithChanges` takes ownership of the events it is handed
- *   (wasm-bindgen moves them) — so every delivery deserializes its own instance. Held in the pre-fork encoding
- *   throughout: whether an item is read as a pre-fork or a post-fork event is decided by which variant is being fed,
+ *   (wasm-bindgen moves them) — so every delivery deserializes its own instance. Held in the ledger-v8 encoding
+ *   throughout: whether an item is read as a ledger-v8 or a ledger-v9 event is decided by which variant is being fed,
  *   which is the fork itself expressed as a type.
  */
 export type TimelineEvent = Readonly<{
-  /** The indexer's event id. One id space, shared by the pre-fork timeline and the replay that continues it. */
+  /** The indexer's event id. One id space, shared by the ledger-v8 timeline and the replay that continues it. */
   id: number;
   /** The event as ledger-v8 serialized it. */
   bytes: Uint8Array;
@@ -103,8 +103,9 @@ export type TimelineEvent = Readonly<{
 /**
  * Numbers a run of events from `firstId`, all reported at `protocolVersion`.
  *
- * @param eventBytes Serialized pre-fork events, in chain order.
- * @param firstId The id of the first event — 1 for the pre-fork timeline, the boundary id for the replay continuing it.
+ * @param eventBytes Serialized ledger-v8 events, in chain order.
+ * @param firstId The id of the first event — 1 for the ledger-v8 timeline, the boundary id for the replay continuing
+ *   it.
  * @param protocolVersion The version every one of these events is reported under.
  * @returns The numbered run, in the order given.
  */
@@ -119,7 +120,7 @@ export const numberedFrom = (
  *
  * @remarks
  *   The indexer reports its own highest id alongside each event, and every batch this harness delivers runs to the tip
- *   the source has reached — the pre-fork timeline up to the boundary event, the replay up to its last event — so the
+ *   the source has reached — the ledger-v8 timeline up to the boundary event, the replay up to its last event — so the
  *   batch's own last id _is_ that tip.
  */
 const tipOf = (batch: readonly TimelineEvent[]): number => batch.at(-1)?.id ?? 0;
@@ -127,13 +128,13 @@ const tipOf = (batch: readonly TimelineEvent[]): number => batch.at(-1)?.id ?? 0
 const hexOf = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
 
 /**
- * The batch as the pre-fork variant's subscription sees it: the events as ledger-v8 framed them.
+ * The batch as the V1 variant's subscription sees it: the events as ledger-v8 framed them.
  *
  * @remarks
  *   Hex rather than an `Event` instance, because that is what the indexer serves and what the subscription now carries:
  *   whether this ledger version can read a given item is decided by the capability that applies it, not here.
  */
-export const asPreForkItems = (batch: readonly TimelineEvent[]): PreForkItem[] => {
+export const asV1Items = (batch: readonly TimelineEvent[]): V1Item[] => {
   const maxId = tipOf(batch);
   return batch.map((event) => ({
     id: event.id,
@@ -143,13 +144,13 @@ export const asPreForkItems = (batch: readonly TimelineEvent[]): PreForkItem[] =
   }));
 };
 
-/** The batch as the post-fork variant's subscription sees it: the same events, re-framed for ledger-v9. */
-export const asPostForkItems = (batch: readonly TimelineEvent[]): PostForkItem[] => {
+/** The batch as the V2 variant's subscription sees it: the same events, re-framed for ledger-v9. */
+export const asV2Items = (batch: readonly TimelineEvent[]): V2Item[] => {
   const maxId = tipOf(batch);
   return batch.map((event) => ({
     id: event.id,
     maxId,
     protocolVersion: event.protocolVersion,
-    raw: hexOf(reframeAsPostFork(event.bytes)),
+    raw: hexOf(reframeAsV9(event.bytes)),
   }));
 };

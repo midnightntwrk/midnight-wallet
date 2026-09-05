@@ -117,7 +117,7 @@ export type CrossLedgerMigrationConfiguration = {
  * The migration across a ledger-version boundary: a dustless state of this version, carrying identity and position.
  *
  * @remarks
- *   The indexer replays the timeline after the hard fork, re-emitting the wallet's history as events of the new ledger
+ *   The indexer replays the timeline after the hard fork, re-emitting the wallet's history as events of ledger-v9
  *   version. A migrated wallet therefore does not need — and must not attempt — to carry its dust: exactly the same
  *   dust is generated again by ordinary sync, from the replayed registration events, and valued against this version's
  *   parameters. Carrying it across as well would double-count what the replay is about to deliver, on top of requiring

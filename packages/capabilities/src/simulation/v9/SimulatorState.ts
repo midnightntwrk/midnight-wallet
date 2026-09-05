@@ -356,7 +356,7 @@ export const allMempoolTransactions = (
  * @param networkId - Network identifier
  * @param options - Optional genesis parameters
  * @param options.protocolVersion - Version the chain starts on (defaults to the minimum supported version)
- * @param options.genesisBlockNumber - Height of the genesis block (defaults to 0; a post-fork chain continues numbering
+ * @param options.genesisBlockNumber - Height of the genesis block (defaults to 0; a ledger-v9 chain continues numbering
  *   from the fork height instead)
  * @param options.genesisTime - Timestamp of the genesis block (defaults to the epoch)
  */
@@ -499,10 +499,10 @@ export type TransactionProcessingResult = Readonly<{
 }>;
 
 /**
- * Process a single pending transaction against the current ledger. Returns Either with the processing result or an
+ * Process a single pending transaction against the latest ledger state. Returns Either with the processing result or an
  * error.
  *
- * @param ledger - Current ledger state
+ * @param ledger - The ledger state to process against
  * @param readyTx - Transaction to process
  * @param blockTime - Block timestamp
  * @param blockContext - Block context

@@ -241,6 +241,9 @@ jobs:
       - name: Check barrel exports
         run: yarn check-barrel-exports
 
+      - name: Check fork vocabulary
+        run: yarn check-fork-vocabulary
+
       - name: Save turbo cache
         if: always()
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

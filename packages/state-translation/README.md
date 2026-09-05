@@ -1,18 +1,19 @@
 # @midnightntwrk/wallet-sdk-state-translation
 
-Wallet-side access to the ledger's **v8-to-v9 ledger state translation**: serialized pre-fork ledger state in,
-serialized post-fork ledger state out.
+Wallet-side access to the ledger's **v8-to-v9 ledger state translation**: serialized ledger-v8 state in, serialized
+ledger-v9 state out.
 
 ```typescript
 import { translateLedgerState } from '@midnightntwrk/wallet-sdk-state-translation';
-import * as v9 from '@midnightntwrk/ledger-v9';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 
-const postFork = v9.LedgerState.deserialize(await translateLedgerState(preForkLedger.serialize()));
+// `v8State` is a ledger-v8 `LedgerState`
+const v9State = ledgerV9.LedgerState.deserialize(await translateLedgerState(v8State.serialize()));
 ```
 
-**This package is private and test-only.** No wallet runtime path translates ledger state — a resync with the post-fork
-ledger is the wallet's migration mechanism. What this exists for is testing a fork faithfully: a `ForkSimulator` in
-`@midnightntwrk/wallet-sdk-capabilities` can carry the pre-fork chain's own state across the boundary instead of
+**This package is private and test-only.** No wallet runtime path translates ledger state — a resync with ledger-v9 is
+the wallet's migration mechanism. What this exists for is testing a fork faithfully: a `ForkSimulator` in
+`@midnightntwrk/wallet-sdk-capabilities` can carry the ledger-v8 chain's own state across the boundary instead of
 approximating it.
 
 ## Layout
@@ -80,5 +81,5 @@ artifact is a broken build rather than a state worth modelling. Tests that exerc
 | ----------------------------- | ------------------------------------------------------------------------------------ |
 | `StateTranslationFailedError` | The translation ran and did not produce bytes. Its own error is kept as the `cause`. |
 
-Whether the returned bytes are a _valid_ post-fork state is decided by whoever deserializes them — in the fork harness,
+Whether the returned bytes are a _valid_ ledger-v9 state is decided by whoever deserializes them — in the fork harness,
 that surfaces as a `LedgerTranslationError`.

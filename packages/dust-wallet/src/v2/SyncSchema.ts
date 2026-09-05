@@ -356,7 +356,7 @@ export type DustSpendProcessedEvent = {
  * @remarks
  *   `protocolVersion` says which ledger version wrote those parameters, and is therefore what chooses the codec that
  *   reads them — see {@link readNullifierBlockParameters}. Reading them on arrival would mean picking a ledger version
- *   before consulting the one field that says which to pick, which is how a pre-fork block takes down the whole
+ *   before consulting the one field that says which to pick, which is how a ledger-v8 block takes down the whole
  *   lookup.
  */
 const NullifierBlockInfoSchema = Schema.Struct({

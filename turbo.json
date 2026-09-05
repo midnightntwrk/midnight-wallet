@@ -79,7 +79,8 @@
         "NODE_TAG",
         "TOOLKIT_TAG",
         "INDEXER_TAG",
-        "PROOF_SERVER_TAG"
+        "PROOF_SERVER_TAG",
+        "PROOF_SERVER_V8_TAG"
       ]
     },
     "test-remote": {
@@ -185,6 +186,10 @@
       "outputs": [],
       "outputLogs": "new-only"
     },
+    "//#check-fork-vocabulary": {
+      "cache": false,
+      "outputLogs": "new-only"
+    },
     "//#format:check:root": {
       "cache": false,
       "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore.root"],
@@ -204,7 +209,7 @@
       "dependsOn": ["//#format:check:root"]
     },
     "verify:check": {
-      "dependsOn": ["typecheck", "format:check", "lint", "//#check-barrel-exports"]
+      "dependsOn": ["typecheck", "format:check", "lint", "//#check-barrel-exports", "//#check-fork-vocabulary"]
     },
     "verify:test": {
       "dependsOn": ["test:unit"]

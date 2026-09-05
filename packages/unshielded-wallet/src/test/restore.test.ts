@@ -39,14 +39,14 @@ const legacyEnvelope = JSON.stringify({
   networkId: 'undeployed',
 });
 
-const preFork = { name: 'pre-fork variant' };
-const postFork = { name: 'post-fork variant' };
+const v1 = { name: 'V1 variant' };
+const v2 = { name: 'V2 variant' };
 
-/** Stands in for `BaseWalletClass.variantFor`: pre-fork below 100, post-fork from 100, nothing above 1000. */
-const registered = (version: ProtocolVersion.ProtocolVersion): Option.Option<typeof preFork> =>
-  version >= 1000n ? Option.none() : Option.some(version >= 100n ? postFork : preFork);
+/** Stands in for `BaseWalletClass.variantFor`: ledger-v8 below 100, ledger-v9 from 100, nothing above 1000. */
+const registered = (version: ProtocolVersion.ProtocolVersion): Option.Option<typeof v1> =>
+  version >= 1000n ? Option.none() : Option.some(version >= 100n ? v2 : v1);
 
-const neverResolves = (): Option.Option<typeof preFork> => {
+const neverResolves = (): Option.Option<typeof v1> => {
   throw new Error('A snapshot that declares no version must not be routed by version');
 };
 
@@ -80,20 +80,20 @@ describe('peekProtocolVersion', () => {
 
 describe('variantForSnapshot', () => {
   it('routes a snapshot to the variant that owns the version it declares', () => {
-    expect(variantForSnapshot(envelope('100'), registered, preFork)).toStrictEqual(Either.right(postFork));
-    expect(variantForSnapshot(envelope('99'), registered, preFork)).toStrictEqual(Either.right(preFork));
+    expect(variantForSnapshot(envelope('100'), registered, v1)).toStrictEqual(Either.right(v2));
+    expect(variantForSnapshot(envelope('99'), registered, v1)).toStrictEqual(Either.right(v1));
   });
 
   it('falls back to the head variant for a snapshot that declares no version', () => {
-    expect(variantForSnapshot(legacyEnvelope, neverResolves, preFork)).toStrictEqual(Either.right(preFork));
+    expect(variantForSnapshot(legacyEnvelope, neverResolves, v1)).toStrictEqual(Either.right(v1));
   });
 
   it('falls back to the head variant for an envelope it cannot read, leaving the real error to deserialization', () => {
-    expect(variantForSnapshot('not json at all', neverResolves, preFork)).toStrictEqual(Either.right(preFork));
+    expect(variantForSnapshot('not json at all', neverResolves, v1)).toStrictEqual(Either.right(v1));
   });
 
   it('reports a version no registered variant owns, naming it', () => {
-    const routed = variantForSnapshot(envelope('4000'), registered, preFork);
+    const routed = variantForSnapshot(envelope('4000'), registered, v1);
 
     const error = routed.pipe(Either.flip, Either.getOrThrow);
     expect(error).toBeInstanceOf(UnsupportedSnapshotVersionError);

@@ -15,10 +15,10 @@
  * What this variant does with bytes belonging to the ledger version on the other side of the boundary.
  *
  * @remarks
- *   A post-fork variant meets them constantly. It resumes on the cursor it inherited, so the inclusive event cursor
- *   re-delivers the last event the previous variant applied — an event of the previous ledger version. And its
- *   nullifier lookup runs from block zero, so every pre-fork block it matches carries that version's ledger parameters
- *   and that version's raw events.
+ *   A V2 variant meets them constantly. It resumes on the cursor it inherited, so the inclusive event cursor re-delivers
+ *   the last event the previous variant applied — an event of the previous ledger version. And its nullifier lookup
+ *   runs from block zero, so every ledger-v8 block it matches carries that version's ledger parameters and that
+ *   version's raw events.
  *
  *   None of that is an error; it is what crossing a boundary looks like. But a schema that deserializes on arrival turns
  *   each of them into one, and into the worst kind: the whole batch fails, the stream retries, fetches the same batch,
@@ -27,9 +27,9 @@
  */
 
 import {
-  DustSecretKey as PreForkSecretKey,
-  Event as PreForkEvent,
-  LedgerParameters as PreForkLedgerParameters,
+  DustSecretKey as V8SecretKey,
+  Event as V8Event,
+  LedgerParameters as V8LedgerParameters,
 } from '@midnight-ntwrk/ledger-v8';
 import { LedgerParameters } from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
@@ -38,10 +38,10 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   DUST_EVENT_COUNT,
   type DustChain,
-  buildDustChain as buildPreForkChain,
+  buildDustChain as buildV8Chain,
   dustSeed,
 } from '../../v1/test/dustEvents.js';
-import { reframeAsPostFork } from '../../test/forkReplay.js';
+import { reframeAsV9 } from '../../test/forkReplay.js';
 import { type CoreWallet } from '../CoreWallet.js';
 import { makeDefaultSyncCapability, matchedDustSpends } from '../Sync.js';
 import {
@@ -64,32 +64,32 @@ const forkVersion = ProtocolVersion.ProtocolVersion(7n);
 
 const activeRange = ProtocolVersion.makeRange(forkVersion, ProtocolVersion.MaxSupportedVersion);
 
-/** What the indexer reports the pre-fork history under. */
-const preForkVersion = 1;
+/** What the indexer reports the ledger-v8 history under. */
+const v8Version = 1;
 
-let preForkChain: DustChain;
+let v8Chain: DustChain;
 
 beforeAll(async () => {
-  preForkChain = await buildPreForkChain();
-  expect(preForkChain.eventBytes.length).toBe(DUST_EVENT_COUNT);
+  v8Chain = await buildV8Chain();
+  expect(v8Chain.eventBytes.length).toBe(DUST_EVENT_COUNT);
 });
 
 const hexOf = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
 
 /**
- * An event of the ledger version this variant took over from — real bytes off a real pre-fork chain.
+ * An event of the ledger version this variant took over from — real bytes off a real ledger-v8 chain.
  *
  * @remarks
  *   `forkSimulation.test.ts` asserts directly that this ledger version refuses them: the serialization header names the
  *   previous version. They reach this variant anyway, because the cursor it inherits is inclusive.
  */
-const previousVersionEvent = (index: number): string => hexOf(preForkChain.eventBytes[index]);
+const previousVersionEvent = (index: number): string => hexOf(v8Chain.eventBytes[index]);
 
-/** The same event re-framed for this ledger version, which is what the indexer's post-fork replay serves. */
-const ownEvent = (index: number): string => hexOf(reframeAsPostFork(preForkChain.eventBytes[index]));
+/** The same event re-framed for this ledger version, which is what the indexer's ledger-v9 replay serves. */
+const ownEvent = (index: number): string => hexOf(reframeAsV9(v8Chain.eventBytes[index]));
 
 /** The previous ledger version's serialized ledger parameters, which this version equally refuses. */
-const previousVersionParameters = (): string => hexOf(PreForkLedgerParameters.initialParameters().serialize());
+const previousVersionParameters = (): string => hexOf(V8LedgerParameters.initialParameters().serialize());
 
 /** One item as the indexer's event subscription delivers it, before any of it has been read. */
 const wireItem = (id: number, protocolVersion: number, raw: string): unknown => ({
@@ -107,14 +107,14 @@ describe('a dust sync update carrying an event of the previous ledger version', 
   it('crosses the schema boundary without being decoded', () => {
     const raw = previousVersionEvent(0);
 
-    const decoded = Schema.decodeUnknownEither(SyncEventsUpdateSchema)(wireItem(1, preForkVersion, raw));
+    const decoded = Schema.decodeUnknownEither(SyncEventsUpdateSchema)(wireItem(1, v8Version, raw));
 
     expect(Either.isRight(decoded)).toBe(true);
-    expect(Either.getOrThrow(decoded)).toMatchObject({ id: 1, protocolVersion: preForkVersion, raw });
+    expect(Either.getOrThrow(decoded)).toMatchObject({ id: 1, protocolVersion: v8Version, raw });
   });
 
   it('is refused only when this variant is actually asked to read it', () => {
-    const item = decodeItem(wireItem(1, preForkVersion, previousVersionEvent(0)));
+    const item = decodeItem(wireItem(1, v8Version, previousVersionEvent(0)));
 
     expect(() => readEvent(item)).toThrowError();
   });
@@ -133,12 +133,12 @@ describe('a dust batch resuming on the cursor a previous variant parked', () => 
     const restored = { ...freshWallet(), progress: { ...freshWallet().progress, appliedIndex: 4n } };
     const update = WalletSyncUpdate.create(
       [
-        decodeItem(wireItem(4, preForkVersion, previousVersionEvent(3))),
+        decodeItem(wireItem(4, v8Version, previousVersionEvent(3))),
         decodeItem(wireItem(5, Number(forkVersion), ownEvent(0))),
         decodeItem(wireItem(6, Number(forkVersion), ownEvent(1))),
       ],
       fixtureSecretKey(),
-      preForkChain.syncTime,
+      v8Chain.syncTime,
     );
 
     const [state, result] = makeDefaultSyncCapability().applyUpdate(restored, update, activeRange);
@@ -153,7 +153,7 @@ describe('a dust batch resuming on the cursor a previous variant parked', () => 
 
 describe('a nullifier lookup reaching back past the boundary', () => {
   /** A matched transaction in a block of the previous ledger version — parameters, events and all. */
-  const preForkMatch = (): unknown => ({
+  const v8Match = (): unknown => ({
     nullifierLeBytes: '00'.repeat(32),
     commitmentLeBytes: '00'.repeat(32),
     transactionId: 1,
@@ -162,18 +162,16 @@ describe('a nullifier lookup reaching back past the boundary', () => {
     blockHash: 'cd'.repeat(32),
     transaction: {
       __typename: 'RegularTransaction',
-      block: { protocolVersion: preForkVersion, ledgerParameters: previousVersionParameters() },
+      block: { protocolVersion: v8Version, ledgerParameters: previousVersionParameters() },
       id: 1,
       hash: 'ab'.repeat(32),
-      dustLedgerEvents: [
-        { id: 1, raw: previousVersionEvent(0), maxId: DUST_EVENT_COUNT, protocolVersion: preForkVersion },
-      ],
+      dustLedgerEvents: [{ id: 1, raw: previousVersionEvent(0), maxId: DUST_EVENT_COUNT, protocolVersion: v8Version }],
       zswapLedgerEvents: [],
     },
   });
 
-  it('reads a pre-fork block without asking this ledger version to deserialize any of it', () => {
-    const decoded = Schema.decodeUnknownEither(DustNullifierTransactionSubscriptionSchema)(preForkMatch());
+  it('reads a ledger-v8 block without asking this ledger version to deserialize any of it', () => {
+    const decoded = Schema.decodeUnknownEither(DustNullifierTransactionSubscriptionSchema)(v8Match());
 
     // The subscription runs from block zero, so it necessarily matches transactions of the previous version. Failing
     // on them would take down the whole nullifier lookup — and with it every dust spend this wallet ever made.
@@ -182,7 +180,7 @@ describe('a nullifier lookup reaching back past the boundary', () => {
 
   it('skips a matched event it cannot read instead of failing the lookup', () => {
     const matched = Either.getOrThrow(
-      Schema.decodeUnknownEither(DustNullifierTransactionSubscriptionSchema)(preForkMatch()),
+      Schema.decodeUnknownEither(DustNullifierTransactionSubscriptionSchema)(v8Match()),
     );
 
     // The lookup over-delivers by design — a nullifier _prefix_ match, from block zero. An event this ledger version
@@ -192,7 +190,7 @@ describe('a nullifier lookup reaching back past the boundary', () => {
 
   it('still reads a block of its own version', () => {
     const decoded = Schema.decodeUnknownEither(DustNullifierTransactionSubscriptionSchema)({
-      ...(preForkMatch() as Record<string, unknown>),
+      ...(v8Match() as Record<string, unknown>),
       transaction: {
         __typename: 'RegularTransaction',
         block: {
@@ -222,7 +220,7 @@ describe('the projections subscriptions', () => {
         startIndex: 0,
         endIndex: 3,
         update: unreadableBytes(),
-        protocolVersion: preForkVersion,
+        protocolVersion: v8Version,
       },
     });
 
@@ -261,7 +259,7 @@ describe('the fixture the other side of the boundary is built from', () => {
   it('is a real chain of the previous ledger version, which this one refuses outright', () => {
     // Guards the whole file: if the two ledger versions ever stopped refusing each other's events, every assertion
     // above would pass for the wrong reason.
-    expect(() => PreForkEvent.deserialize(preForkChain.eventBytes[0])).not.toThrow();
-    expect(PreForkSecretKey.fromSeed(dustSeed()).publicKey).toBeDefined();
+    expect(() => V8Event.deserialize(v8Chain.eventBytes[0])).not.toThrow();
+    expect(V8SecretKey.fromSeed(dustSeed()).publicKey).toBeDefined();
   });
 });

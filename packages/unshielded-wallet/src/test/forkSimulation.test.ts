@@ -39,8 +39,8 @@ import { V1Tag } from '../v1/index.js';
 import { V2Tag } from '../v2/index.js';
 import {
   forkSeed,
-  postForkIdentity,
-  preForkIdentity,
+  v2Identity,
+  v1Identity,
   timelineTokenType,
   timelineTransaction,
   type TimelineItem,
@@ -55,35 +55,35 @@ import {
 } from './forkHarness.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
-/** The pre-fork variant owns everything below this; the post-fork variant takes over at it. */
+/** The V1 variant owns everything below this; the V2 variant takes over at it. */
 const forkVersion = ProtocolVersion.ProtocolVersion(7n);
-const preForkVersion = 1;
+const v8Version = 1;
 
-const preFork = preForkIdentity(networkId);
-const postFork = postForkIdentity(networkId);
+const v1Owner = v1Identity(networkId);
+const v2Owner = v2Identity(networkId);
 
 /**
- * Three pre-fork transactions, the boundary transaction, and two beyond it.
+ * Three ledger-v8 transactions, the boundary transaction, and two beyond it.
  *
  * @remarks
- *   Ids run continuously across the boundary, which is the confirmed indexer semantics: the post-fork timeline continues
+ *   Ids run continuously across the boundary, which is the confirmed indexer semantics: the ledger-v9 timeline continues
  *   the numbering rather than restarting it.
  */
 const timeline = [
-  timelineTransaction({ id: 1, protocolVersion: preForkVersion, owner: preFork.addressHex, value: 100n }),
-  timelineTransaction({ id: 2, protocolVersion: preForkVersion, owner: preFork.addressHex, value: 200n }),
-  timelineTransaction({ id: 3, protocolVersion: preForkVersion, owner: preFork.addressHex, value: 300n }),
-  // The boundary transaction: reported at the fork version, so the pre-fork variant must not apply it.
-  timelineTransaction({ id: 4, protocolVersion: Number(forkVersion), owner: preFork.addressHex, value: 444n }),
-  timelineTransaction({ id: 5, protocolVersion: Number(forkVersion), owner: preFork.addressHex, value: 500n }),
-  timelineTransaction({ id: 6, protocolVersion: Number(forkVersion), owner: preFork.addressHex, value: 600n }),
+  timelineTransaction({ id: 1, protocolVersion: v8Version, owner: v1Owner.addressHex, value: 100n }),
+  timelineTransaction({ id: 2, protocolVersion: v8Version, owner: v1Owner.addressHex, value: 200n }),
+  timelineTransaction({ id: 3, protocolVersion: v8Version, owner: v1Owner.addressHex, value: 300n }),
+  // The boundary transaction: reported at the fork version, so the V1 variant must not apply it.
+  timelineTransaction({ id: 4, protocolVersion: Number(forkVersion), owner: v1Owner.addressHex, value: 444n }),
+  timelineTransaction({ id: 5, protocolVersion: Number(forkVersion), owner: v1Owner.addressHex, value: 500n }),
+  timelineTransaction({ id: 6, protocolVersion: Number(forkVersion), owner: v1Owner.addressHex, value: 600n }),
 ];
 
 const valuesOf = (utxos: readonly CarriedUtxo[]): readonly bigint[] => utxos.map((u) => u.value);
 
 describe('unshielded hard-fork crossing', () => {
   it('carries every UTXO across and applies the boundary transaction exactly once, in the new variant', async () => {
-    const wallet = await Effect.runPromise(makeForkWallet({ timeline, forkVersion, publicKey: postFork }));
+    const wallet = await Effect.runPromise(makeForkWallet({ timeline, forkVersion, publicKey: v2Owner }));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -112,7 +112,7 @@ describe('unshielded hard-fork crossing', () => {
     // This is the assertion that distinguishes unshielded from shielded and dust: everything crosses.
     expect(result.migration.to.utxos).toEqual(result.migration.from.utxos);
     // Identity and network cross too, with the key widened to the tagged form.
-    expect(result.migration.to.address).toBe(preFork.address);
+    expect(result.migration.to.address).toBe(v1Owner.address);
     expect(result.migration.to.networkId).toBe(networkId);
     expect(result.migration.to.protocolVersion).toBe(7n);
     // The cursor is PARKED. Asserted on the state the migration produced, before any sync has touched it, which is the
@@ -128,13 +128,13 @@ describe('unshielded hard-fork crossing', () => {
     // --- the boundary transaction was applied EXACTLY once ---
     const finalUtxos = utxosOf(result.final);
     expect(valuesOf(finalUtxos).filter((v) => v === 444n)).toEqual([444n]);
-    // ...and the wallet holds the pre-fork three plus the three from the boundary onwards. Six, not nine: nothing was
+    // ...and the wallet holds the ledger-v8 three plus the three from the boundary onwards. Six, not nine: nothing was
     // applied twice, and nothing was dropped.
     expect(valuesOf(finalUtxos)).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
   });
 
-  it('carries the pre-fork UTXOs field for field, not merely by count', async () => {
-    const wallet = await Effect.runPromise(makeForkWallet({ timeline, forkVersion, publicKey: postFork }));
+  it('carries the ledger-v8 UTXOs field for field, not merely by count', async () => {
+    const wallet = await Effect.runPromise(makeForkWallet({ timeline, forkVersion, publicKey: v2Owner }));
 
     const { before, after } = await Effect.runPromise(
       Effect.gen(function* () {
@@ -156,21 +156,21 @@ describe('unshielded hard-fork crossing', () => {
     // The lemma the structural carry rests on: the two ledger versions disagree about the SHAPE of a verifying key,
     // but not about the address it derives to. If they ever diverge here, carrying the address across is a fiction and
     // this test retires the model loudly.
-    expect(postFork.addressHex).toBe(preFork.addressHex);
-    expect(postFork.address).toBe(preFork.address);
+    expect(v2Owner.addressHex).toBe(v1Owner.addressHex);
+    expect(v2Owner.address).toBe(v1Owner.address);
     // The keys themselves are shaped differently, which is exactly what the migration widens.
-    expect(typeof preFork.publicKey).toBe('string');
-    expect(postFork.publicKey).toEqual({ tag: 'schnorr', value: preFork.publicKey });
+    expect(typeof v1Owner.publicKey).toBe('string');
+    expect(v2Owner.publicKey).toEqual({ tag: 'schnorr', value: v1Owner.publicKey });
     expect(forkSeed()).toHaveLength(32);
   });
 
   it('does not migrate on a version bump that stays inside the running variant range', async () => {
     const withinRange = [
-      timelineTransaction({ id: 1, protocolVersion: 1, owner: preFork.addressHex, value: 100n }),
+      timelineTransaction({ id: 1, protocolVersion: 1, owner: v1Owner.addressHex, value: 100n }),
       // 5 is still below the boundary of 7, so this must be applied, not deferred.
-      timelineTransaction({ id: 2, protocolVersion: 5, owner: preFork.addressHex, value: 200n }),
+      timelineTransaction({ id: 2, protocolVersion: 5, owner: v1Owner.addressHex, value: 200n }),
     ];
-    const wallet = await Effect.runPromise(makeForkWallet({ timeline: withinRange, forkVersion, publicKey: postFork }));
+    const wallet = await Effect.runPromise(makeForkWallet({ timeline: withinRange, forkVersion, publicKey: v2Owner }));
 
     const result = await Effect.runPromise(
       Effect.gen(function* () {
@@ -193,9 +193,9 @@ describe('unshielded hard-fork crossing', () => {
   });
 
   it('reaches the same end state from a wallet whose first sync already contains the fork', async () => {
-    // Scenario 2: a fresh wallet syncing a timeline that already straddles the boundary. It still syncs the pre-fork
+    // Scenario 2: a fresh wallet syncing a timeline that already straddles the boundary. It still syncs the ledger-v8
     // prefix with the old variant, hands over, and consumes the rest — double work by design, correct by construction.
-    const wallet = await Effect.runPromise(makeForkWallet({ timeline, forkVersion, publicKey: postFork }));
+    const wallet = await Effect.runPromise(makeForkWallet({ timeline, forkVersion, publicKey: v2Owner }));
 
     const final = await Effect.runPromise(
       Effect.gen(function* () {
@@ -218,11 +218,11 @@ describe('unshielded hard-fork crossing', () => {
 // =============================================================================
 
 /**
- * The pre-fork prefix of the timeline, with nothing at or past the boundary.
+ * The ledger-v8 prefix of the timeline, with nothing at or past the boundary.
  *
  * @remarks
- *   A wallet reading only this settles on the pre-fork variant and stays there, which is what makes "build a transfer
- *   while the old ledger version is still the current one" a fact rather than a race against the hand-over.
+ *   A wallet reading only this settles on the V1 variant and stays there, which is what makes "build a transfer while
+ *   ledger-v8 is still the current one" a fact rather than a race against the hand-over.
  */
 const beforeTheFork = timeline.filter((item) => item.protocolVersion < Number(forkVersion));
 
@@ -233,7 +233,7 @@ const stranger = new UnshieldedAddress(Buffer.alloc(32, 7));
 const ttl = new Date(2_000_000_000_000);
 
 /**
- * More than any two of the wallet's three pre-fork UTXOs cover, so all three are booked whatever order coin selection
+ * More than any two of the wallet's three ledger-v8 UTXOs cover, so all three are booked whatever order coin selection
  * considers them in — and less than all three, so the transfer also produces change.
  */
 const transferAmount = 550n;
@@ -270,7 +270,7 @@ const totalOf = (coins: readonly { readonly utxo: { readonly value: bigint } }[]
   ArrayOps.sumBigInt(coins.map((coin) => coin.utxo.value));
 
 /**
- * A pre-fork wallet that has built a transfer and never gets to submit it.
+ * A V1 wallet that has built a transfer and never gets to submit it.
  *
  * @remarks
  *   The wallet is the shipped one and the transfer is built through its public API, so the booking is the real one: the
@@ -288,7 +288,7 @@ const walletWithATransferInFlight: Effect.Effect<
   never,
   Scope.Scope
 > = Effect.gen(function* () {
-  const wallet = yield* makeForkWallet({ timeline: beforeTheFork, forkVersion, publicKey: postFork });
+  const wallet = yield* makeForkWallet({ timeline: beforeTheFork, forkVersion, publicKey: v2Owner });
   yield* Effect.addFinalizer(() => wallet.stop);
 
   const settled = yield* Effect.fork(wallet.awaitState((state) => state.state.progress.appliedId === 3n));
@@ -315,7 +315,7 @@ const crossTheFork = (params: {
   Effect.gen(function* () {
     // Restoring is a class-level entry point, so the class has to come from somewhere: this host wallet is built only
     // to supply it — and its capturing migration, which is what lets the crossing be awaited rather than guessed at.
-    const host = yield* makeForkWallet({ timeline: params.timeline, forkVersion, publicKey: postFork });
+    const host = yield* makeForkWallet({ timeline: params.timeline, forkVersion, publicKey: v2Owner });
     yield* Effect.addFinalizer(() => host.stop);
 
     const crossed = host.walletClass.restore(params.snapshot);
@@ -344,7 +344,7 @@ describe('an unshielded wallet crossing the boundary with a transfer still in fl
       const { crossed } = yield* crossTheFork({ snapshot: inFlight.snapshot, timeline, settleAt: 6n });
       const state = yield* publicState(crossed);
 
-      // That transfer was built for the pre-fork ledger version and can never be included past the boundary, so the
+      // That transfer was built for the ledger-v8 and can never be included past the boundary, so the
       // UTXOs it reserved are the wallet's to spend again — and nobody had to call anything for that to happen.
       expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);
       expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
@@ -352,7 +352,7 @@ describe('an unshielded wallet crossing the boundary with a transfer still in fl
       expect(state.balances[timelineTokenType]).toBe(totalOf(state.totalCoins));
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('has nothing left to do when the pre-fork transaction is reverted after the crossing', async () =>
+  it('has nothing left to do when the ledger-v8 transaction is reverted after the crossing', async () =>
     Effect.gen(function* () {
       const inFlight = yield* walletWithATransferInFlight;
       const { crossed } = yield* crossTheFork({ snapshot: inFlight.snapshot, timeline, settleAt: 6n });
@@ -389,18 +389,18 @@ describe('an unshielded wallet crossing the boundary with a transfer still in fl
     Effect.gen(function* () {
       const inFlight = yield* walletWithATransferInFlight;
 
-      // The other order of events, and the one the release has to be safe against: the transfer lands in a pre-fork
+      // The other order of events, and the one the release has to be safe against: the transfer lands in a ledger-v8
       // block after all. The indexer reports it as the UTXOs it consumed alongside the change it produced.
       const confirmedBeforeTheFork: readonly TimelineItem[] = [
         ...beforeTheFork,
         timelineTransaction({
           id: 4,
-          protocolVersion: preForkVersion,
-          owner: preFork.addressHex,
+          protocolVersion: v8Version,
+          owner: v1Owner.addressHex,
           value: changeAmount,
           spentUtxos: inFlight.state.pendingCoins,
         }),
-        timelineTransaction({ id: 5, protocolVersion: Number(forkVersion), owner: preFork.addressHex, value: 444n }),
+        timelineTransaction({ id: 5, protocolVersion: Number(forkVersion), owner: v1Owner.addressHex, value: 444n }),
       ];
 
       const { crossed } = yield* crossTheFork({
@@ -410,7 +410,7 @@ describe('an unshielded wallet crossing the boundary with a transfer still in fl
       });
       const state = yield* publicState(crossed);
 
-      // Spent is spent. The pre-fork variant applies the confirmation before it ever sees the boundary — the cursor
+      // Spent is spent. The V1 variant applies the confirmation before it ever sees the boundary — the cursor
       // gates the hand-over — and applying it removes those UTXOs from BOTH maps, so the crossing has nothing left to
       // release and cannot hand back a coin the chain has already consumed.
       expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);

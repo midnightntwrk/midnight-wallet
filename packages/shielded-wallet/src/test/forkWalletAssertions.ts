@@ -22,11 +22,11 @@
 
 import { ProtocolVersion, WalletTransaction, type AnyTx } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
-import { type CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
-import { type CoreWallet as PostForkWallet } from '../v2/CoreWallet.js';
+import { type CoreWallet as V1CoreWallet } from '../v1/CoreWallet.js';
+import { type CoreWallet as V2CoreWallet } from '../v2/CoreWallet.js';
 
 /** A wallet on either side of the boundary. */
-export type EitherWallet = PreForkWallet | PostForkWallet;
+export type EitherWallet = V1CoreWallet | V2CoreWallet;
 
 /**
  * The transaction a handle carries, read at the epoch its own stamp names.
@@ -90,10 +90,10 @@ export const merkleRoot = (wallet: EitherWallet): bigint | undefined => wallet.s
  * Whether the wallet's coin hashes are still waiting to be computed.
  *
  * @remarks
- *   Only a wallet of the post-fork ledger version can be waiting — the pre-fork variant is never on the receiving end of
- *   a crossing — so this reads the union by asking, which narrows to the side that has the field. Set by the
- *   cross-ledger migration, which holds no secret keys, and cleared by the first sync update, which carries them; its
- *   absence on a wallet holding coins is how a proof states that the crossing finished rather than merely started.
+ *   Only a wallet of ledger-v9 can be waiting — the V1 variant is never on the receiving end of a crossing — so this
+ *   reads the union by asking, which narrows to the side that has the field. Set by the cross-ledger migration, which
+ *   holds no secret keys, and cleared by the first sync update, which carries them; its absence on a wallet holding
+ *   coins is how a proof states that the crossing finished rather than merely started.
  */
 export const awaitingCoinHashes = (wallet: EitherWallet): boolean =>
   'coinHashesPending' in wallet && wallet.coinHashesPending === true;

@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import type * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { HDWallet, Roles, type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import { WalletFacade, type Clock } from '../../src/index.js';
 import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
@@ -49,7 +49,7 @@ import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import {
   makeSimulatorProvingServiceEffect,
   type ProvingService,
-  type UnboundTransaction,
+  type V9UnboundTransaction,
   type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { type Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
@@ -144,13 +144,13 @@ export type SimulatorConfig = {
 
 /**
  * Creates a Promise-based wrapper around the Effect-based simulator proving service. Note: Uses type assertion because
- * simulator proving returns ProofErasedTransaction but facade expects UnboundTransaction - they are compatible at
+ * simulator proving returns ProofErasedTransaction but facade expects V9UnboundTransaction - they are compatible at
  * runtime.
  */
-export const createSimulatorProvingService = (): ProvingService<UnboundTransaction> => {
+export const createSimulatorProvingService = (): ProvingService<V9UnboundTransaction> => {
   const effectService = makeSimulatorProvingServiceEffect();
   return {
-    prove: (tx: ledger.UnprovenTransaction) =>
+    prove: (tx: ledgerV9.UnprovenTransaction) =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return
       effectService.prove(tx).pipe(Effect.runPromise) as any,
   };
@@ -161,7 +161,7 @@ export const createSimulatorProvingService = (): ProvingService<UnboundTransacti
  * because simulator uses different transaction types internally.
  */
 export const createSimulatorSubmissionService = (simulator: Simulator): SubmissionService<FinalizedTx> => {
-  const effectService = Submission.makeSimulatorSubmissionService<ledger.FinalizedTransaction>('InBlock')({
+  const effectService = Submission.makeSimulatorSubmissionService<ledgerV9.FinalizedTransaction>('InBlock')({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     simulator: simulator as any,
   });
@@ -177,7 +177,7 @@ export const createSimulatorSubmissionService = (simulator: Simulator): Submissi
     submitTransaction: ((tx: FinalizedTx, waitFor?: 'Submitted' | 'InBlock' | 'Finalized') =>
       effectService
         .submitTransaction(
-          Either.getOrThrow(WalletTransaction.unwrapWithin<ledger.FinalizedTransaction>(tx, wholeTimeline)),
+          Either.getOrThrow(WalletTransaction.unwrapWithin<ledgerV9.FinalizedTransaction>(tx, wholeTimeline)),
           waitFor ?? 'InBlock',
         )
         .pipe(Effect.runPromise)) as SubmissionService<FinalizedTx>['submitTransaction'],
@@ -187,8 +187,8 @@ export const createSimulatorSubmissionService = (simulator: Simulator): Submissi
 
 /** Wallet factory type for simulation mode. */
 export type SimulatorWalletFactories = {
-  createShieldedWallet: (keys: ledger.ZswapSecretKeys) => ShieldedWalletAPI;
-  createDustWallet: (key: ledger.DustSecretKey, params: ledger.DustParameters) => DustWalletAPI;
+  createShieldedWallet: (keys: ledgerV9.ZswapSecretKeys) => ShieldedWalletAPI;
+  createDustWallet: (key: ledgerV9.DustSecretKey, params: ledgerV9.DustParameters) => DustWalletAPI;
   createUnshieldedWallet: (keystore: ReturnType<typeof createKeystore>) => UnshieldedWalletAPI;
 };
 
@@ -261,20 +261,20 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
 
 /** Keys derived from a seed for wallet initialization. */
 export type WalletKeys = {
-  shieldedKeys: ledger.ZswapSecretKeys;
-  dustKey: ledger.DustSecretKey;
+  shieldedKeys: ledgerV9.ZswapSecretKeys;
+  dustKey: ledgerV9.DustSecretKey;
   /** The per-wallet seeds the keys above were derived from, which is what the facade is started with. */
   seeds: WalletSeeds;
   unshieldedKeystore: ReturnType<typeof createKeystore>;
-  signatureVerifyingKey: ledger.SignatureVerifyingKey;
-  userAddress: ledger.UserAddress;
+  signatureVerifyingKey: ledgerV9.SignatureVerifyingKey;
+  userAddress: ledgerV9.UserAddress;
 };
 
 /** Derives all wallet keys from a hex seed. */
 export const deriveWalletKeys = (
   hexSeed: string,
   networkId: NetworkId.NetworkId,
-  signatureKind: ledger.SignatureKind = 'schnorr',
+  signatureKind: ledgerV9.SignatureKind = 'schnorr',
 ): WalletKeys => {
   const unshieldedRole: UnshieldedSeedRole = signatureKind === 'ecdsa' ? Roles.EcdsaUnshielded : Roles.NightExternal;
 
@@ -283,16 +283,16 @@ export const deriveWalletKeys = (
   const unshieldedSeed = getUnshieldedSeed(hexSeed, unshieldedRole);
 
   const unshieldedSecretKey: UnshieldedSecretKey = { kind: signatureKind, secret: unshieldedSeed };
-  const ledgerSigningKey: ledger.SigningKey = {
+  const ledgerSigningKey: ledgerV9.SigningKey = {
     tag: unshieldedSecretKey.kind,
     value: Buffer.from(unshieldedSecretKey.secret).toString('hex'),
   };
 
-  const shieldedKeys = ledger.ZswapSecretKeys.fromSeed(shieldedSeed);
-  const dustKey = ledger.DustSecretKey.fromSeed(dustSeed);
+  const shieldedKeys = ledgerV9.ZswapSecretKeys.fromSeed(shieldedSeed);
+  const dustKey = ledgerV9.DustSecretKey.fromSeed(dustSeed);
   const unshieldedKeystore = createKeystore(unshieldedSecretKey, networkId);
-  const signatureVerifyingKey = ledger.signatureVerifyingKey(ledgerSigningKey);
-  const userAddress = ledger.addressFromKey(signatureVerifyingKey);
+  const signatureVerifyingKey = ledgerV9.signatureVerifyingKey(ledgerSigningKey);
+  const userAddress = ledgerV9.addressFromKey(signatureVerifyingKey);
 
   return {
     shieldedKeys,
@@ -315,7 +315,7 @@ export const makeSimulatorFacade = (
   keys: WalletKeys,
   factories: SimulatorWalletFactories,
 ): Effect.Effect<WalletFacade, never, Scope.Scope> => {
-  const dustParameters = ledger.LedgerParameters.initialParameters().dust;
+  const dustParameters = ledgerV9.LedgerParameters.initialParameters().dust;
   const provingService = createSimulatorProvingService();
   const submissionService = createSimulatorSubmissionService(config.simulator);
 
@@ -324,8 +324,8 @@ export const makeSimulatorFacade = (
       const facade = await WalletFacade.init({
         configuration: {
           ...config,
-          // A simulator that runs only the current ledger version has never had two epochs, whatever protocol version
-          // its blocks report — so the boundary is at the bottom and everything it produces is post-fork.
+          // A simulator that runs only ledger-v9 has never had two epochs, whatever protocol version
+          // its blocks report — so the boundary is at the bottom and everything it produces is on ledger-v9.
           forks: { v9: ProtocolVersion.MinSupportedVersion },
           // Dummy values - not used in simulation mode
           indexerClientConnection: { indexerHttpUrl: 'http://unused' },
@@ -373,21 +373,21 @@ export const waitForUnshieldedBalance = (
   );
 
 /**
- * A prover for the epoch a wallet with no history is in: the pre-fork one.
+ * A prover for the epoch a wallet with no history is in: the ledger-v8 one.
  *
  * @remarks
- *   The SDK ships no pre-fork proving path — that is the one thing waiting on a proof server for the previous ledger
+ *   The SDK ships no ledger-v8 proving path — that is the one thing waiting on a proof server for the previous ledger
  *   version — so a suite whose subject is what the facade does _around_ proving supplies its own. It mock-proves with
- *   the pre-fork ledger version's own primitives, which is what makes it a fake of the right shape rather than a stand
- *   in for the wrong one, and hands back something the facade can bind: the proving contract is
- *   proved-but-not-yet-bound, and `mockProve` binds as it proves.
+ *   ledger-v8's own primitives, which is what makes it a fake of the right shape rather than a stand in for the wrong
+ *   one, and hands back something the facade can bind: the proving contract is proved-but-not-yet-bound, and
+ *   `mockProve` binds as it proves.
  */
-export const createPreForkMockProvingService = (): VersionedProvingService<UnboundTransaction> => ({
+export const createV8MockProvingService = (): VersionedProvingService<V9UnboundTransaction> => ({
   prove: (tx: unknown) => {
-    const proven = (tx as preForkLedger.UnprovenTransaction).mockProve();
+    const proven = (tx as ledgerV8.UnprovenTransaction).mockProve();
     return Promise.resolve({
       bind: () => proven,
       serialize: () => proven.serialize(),
-    } as unknown as UnboundTransaction);
+    } as unknown as V9UnboundTransaction);
   },
 });

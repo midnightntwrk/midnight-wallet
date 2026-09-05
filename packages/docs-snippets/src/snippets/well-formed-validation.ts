@@ -26,7 +26,7 @@ const initialSenderState = await rx.firstValueFrom(sender.wallet.state().pipe(rx
 const initialBalance = initialSenderState.unshielded.balances[Token.night] ?? 0n;
 
 // Authoring is choosing a ledger version, and the wallet says which: the version the wallets are acting at decides
-// whether the bytes follow the pre-fork ledger's rules or the post-fork one's. It is read when the transaction is
+// whether the bytes follow ledger-v8's rules or ledger-v9's. It is read when the transaction is
 // built, not once at start — a wallet that follows the chain across the fork moves from one ledger to the other, and
 // the code that authors for it has to move with it. The two bodies below are the same call for call; only the module
 // differs. The handle is sealed with that version, which is how the wallet knows which of its variants may read it.
@@ -34,12 +34,12 @@ const buildUnprovenTransaction = (state: FacadeState) => {
   const ttl = new Date(Date.now() + 30 * 60 * 1000);
   const output = { value: initialBalance, owner: receiver.unshieldedKeystore.getAddress(), type: Token.night };
   const authoredFor = state.activeProtocolVersion;
-  const authorPreFork = () => {
+  const authorV8 = () => {
     const intent = v8.Intent.new(ttl);
     intent.fallibleUnshieldedOffer = v8.UnshieldedOffer.new([], [output], []);
     return v8.Transaction.fromParts(configuration.networkId, undefined, undefined, intent);
   };
-  const authorPostFork = () => {
+  const authorV9 = () => {
     const intent = v9.Intent.new(ttl);
     intent.fallibleUnshieldedOffer = v9.UnshieldedOffer.new([], [output], []);
     return v9.Transaction.fromParts(configuration.networkId, undefined, undefined, intent);
@@ -47,7 +47,7 @@ const buildUnprovenTransaction = (state: FacadeState) => {
   // The version also picks which prover and validator answer for these bytes further down.
   return WalletTransaction.adopt(
     'Unproven',
-    authoredFor < configuration.forks.v9 ? authorPreFork() : authorPostFork(),
+    authoredFor < configuration.forks.v9 ? authorV8() : authorV9(),
     authoredFor,
   );
 };

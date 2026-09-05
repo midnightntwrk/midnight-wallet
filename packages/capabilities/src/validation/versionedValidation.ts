@@ -22,16 +22,13 @@
  */
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
+import { makeV8ValidationServiceEffect, type AnyV8ValidatableTransaction } from './v8ValidationService.js';
 import {
-  makePreForkValidationServiceEffect,
-  type AnyPreForkValidatableTransaction,
-} from './preForkValidationService.js';
-import {
-  makeDefaultValidationServiceEffect,
+  makeV9ValidationServiceEffect,
   makeVersionedValidationServiceEffect,
   wrapVersionedValidationService,
   type AnyLedgerParameters,
-  type AnyValidatableTransaction,
+  type AnyV9ValidatableTransaction,
   type ValidationServiceDependencies,
   type ValidationServiceEffect,
   type ValidationServices,
@@ -46,7 +43,7 @@ import {
  *   A genuine union, unlike {@link AnyLedgerParameters}: the two ledger versions' transaction types are nominally
  *   distinct, so a caller holding one of them is holding something the other version's validator provably cannot read.
  */
-export type AnyVersionValidatableTransaction = AnyValidatableTransaction | AnyPreForkValidatableTransaction;
+export type AnyVersionValidatableTransaction = AnyV9ValidatableTransaction | AnyV8ValidatableTransaction;
 
 /** A validator registered in a two-version registry, whichever ledger version it was written against. */
 export type VersionValidationServiceEffect = ValidationServiceEffect<
@@ -64,7 +61,7 @@ export type VersionValidationServiceEffect = ValidationServiceEffect<
  *   transaction authored on the other side of the boundary from the chain's current block is the case neither can
  *   serve, and it fails at the ledger rather than silently checking against the wrong parameters.
  * @param deps The network, clock, and the block-data fetcher shared by both validators.
- * @param forkVersion The protocol version at which the chain hands over to the current ledger version.
+ * @param forkVersion The protocol version at which the chain hands over to the ledger-v9.
  * @returns The validators and the version ranges they serve.
  */
 export const makeDefaultValidationServices = (
@@ -75,11 +72,11 @@ export const makeDefaultValidationServices = (
     ProtocolVersion.makeRegistryFromActivations<VersionValidationServiceEffect>(
       forkVersion > ProtocolVersion.MinSupportedVersion
         ? [
-            { sinceVersion: ProtocolVersion.MinSupportedVersion, value: makePreForkValidationServiceEffect(deps) },
-            { sinceVersion: forkVersion, value: makeDefaultValidationServiceEffect(deps) },
+            { sinceVersion: ProtocolVersion.MinSupportedVersion, value: makeV8ValidationServiceEffect(deps) },
+            { sinceVersion: forkVersion, value: makeV9ValidationServiceEffect(deps) },
           ]
-        : // A chain whose boundary is at or below the minimum supported version has no pre-fork epoch to register for.
-          [{ sinceVersion: ProtocolVersion.MinSupportedVersion, value: makeDefaultValidationServiceEffect(deps) }],
+        : // A chain whose boundary is at or below the minimum supported version has no ledger-v8 epoch to register for.
+          [{ sinceVersion: ProtocolVersion.MinSupportedVersion, value: makeV9ValidationServiceEffect(deps) }],
     ),
   );
 
@@ -87,7 +84,7 @@ export const makeDefaultValidationServices = (
  * Builds the version-routed validator an SDK spanning a protocol boundary checks with.
  *
  * @param deps The network, clock, and the block-data fetcher shared by both validators.
- * @param forkVersion The protocol version at which the chain hands over to the current ledger version.
+ * @param forkVersion The protocol version at which the chain hands over to the ledger-v9.
  * @returns A validator that routes on the version a transaction was authored for.
  */
 export const makeDefaultVersionedValidationServiceEffect = (

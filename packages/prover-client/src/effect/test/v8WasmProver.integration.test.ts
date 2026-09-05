@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /**
- * Whether the bundled in-process prover can prove a _pre-fork_ transaction, and with which key material.
+ * Whether the bundled in-process prover can prove a _ledger-v8_ transaction, and with which key material.
  *
  * @remarks
  *   The zkir runtime the worker drives is shared by both ledger lines, so nothing about the proving loop itself is
