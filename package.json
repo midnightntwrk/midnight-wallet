@@ -76,6 +76,7 @@
     "verify:integration": "turbo run verify:integration",
     "publint": "turbo run publint",
     "check-barrel-exports": "node scripts/check-barrel-exports.mjs",
+    "check-fork-vocabulary": "node scripts/check-fork-vocabulary.mjs",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "test": "turbo run test",
