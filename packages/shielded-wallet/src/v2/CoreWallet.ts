@@ -12,6 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
+import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
 import { InvalidCoinHashesError, type WalletError } from './WalletError.js';
 
@@ -81,15 +82,49 @@ export type CoreWallet = Readonly<{
    *
    * @remarks
    *   Set by the cross-ledger migration and cleared by the first sync update, which is the first moment secret keys are
-   *   at hand — see {@link CoreWallet.fromPreviousVersion} and {@link CoreWallet.resolveCoinHashes}. Stated as a field
-   *   rather than inferred from "empty map beside a non-empty state" because an empty map is a perfectly good value for
-   *   a wallet holding nothing, and overloading it would make one shape mean two things. Being a field, it is also what
-   *   lets a snapshot taken mid-crossing declare itself: {@link CoreWallet.restoreWithCoinHashes} goes on rejecting a
-   *   snapshot whose hashes do not cover its coins, because only a wallet carrying this marker is permitted the gap.
-   *   `true` is the only inhabitant, so "pending" and "absent" are the only two states.
+   *   at hand — see {@link CoreWallet.fromPreviousVersion} and {@link CoreWallet.completeCrossing}. It is also what marks
+   *   the wallet as freshly crossed, which is how that step knows the reservations in its local state are ones no
+   *   inclusion can ever clear and releases them exactly once. Stated as a field rather than inferred from "empty map
+   *   beside a non-empty state" because an empty map is a perfectly good value for a wallet holding nothing, and
+   *   overloading it would make one shape mean two things. Being a field, it is also what lets a snapshot taken
+   *   mid-crossing declare itself: {@link CoreWallet.restoreWithCoinHashes} goes on rejecting a snapshot whose hashes do
+   *   not cover its coins, because only a wallet carrying this marker is permitted the gap. `true` is the only
+   *   inhabitant, so "pending" and "absent" are the only two states.
    */
   coinHashesPending?: true;
 }>;
+
+/**
+ * Releases every coin reservation a wallet carried across the ledger-version boundary.
+ *
+ * @remarks
+ *   `pendingSpends` crosses with the rest of the local state, and on the far side its entries name transactions of a
+ *   ledger version the chain has left behind: none of them can be included, so no inclusion will ever clear them, and a
+ *   coin held for one would sit outside the available set for the rest of the wallet's life. Re-deriving each spend and
+ *   reporting it failed is the ledger's own way of un-booking one: the reservation goes, and the coin stays at the
+ *   Merkle index the chain gave it, in a tree of unchanged height and root.
+ * @param state The local state as it crossed.
+ * @param secretKeys The keys the first sync update arrived with.
+ * @returns The same state with nothing reserved.
+ */
+const releaseStrandedSpends = (
+  state: ledger.ZswapLocalState,
+  secretKeys: ledger.ZswapSecretKeys,
+): ledger.ZswapLocalState =>
+  pipe(
+    [...state.pendingSpends.values()],
+    Arr.reduce(state, (released, [coin]) =>
+      pipe(
+        LedgerOps.ledgerTry(() => {
+          const [reserved, input] = released.spend(secretKeys, coin, 0);
+          return reserved.applyFailed(ledger.ZswapOffer.fromInput(input, coin.type, coin.value));
+        }),
+        // A reservation the ledger declines to re-derive is left exactly where it already was: one stranded coin is
+        // not worth failing the update every other coin in this wallet is waiting on.
+        Either.getOrElse(() => released),
+      ),
+    ),
+  );
 
 export const CoreWallet = {
   init(localState: ledger.ZswapLocalState, secretKeys: ledger.ZswapSecretKeys, networkId: string): CoreWallet {
@@ -229,8 +264,10 @@ export const CoreWallet = {
    *
    *   The one thing the bytes cannot supply is the coin hashes: commitments and nullifiers are computed from the secret
    *   keys, which a migration by design does not hold. They are therefore left empty and marked
-   *   {@link CoreWallet.coinHashesPending}, for {@link CoreWallet.resolveCoinHashes} to fill in at the first sync update
-   *   — the first place in this variant where keys and state meet.
+   *   {@link CoreWallet.coinHashesPending}, for {@link CoreWallet.completeCrossing} to fill in at the first sync update —
+   *   the first place in this variant where keys and state meet. The same step releases the spends the state crossed
+   *   with: those transactions belong to the ledger version the chain has left behind and can never be included, so
+   *   nothing else would ever free the coins they reserved.
    * @param previous The identity and position read off the previous ledger version's wallet, and its decoded state.
    * @returns A wallet of this ledger version holding what its predecessor held, positioned at the fork.
    */
@@ -253,17 +290,40 @@ export const CoreWallet = {
   },
 
   /**
-   * Computes the coin hashes a wallet crossed the ledger-version boundary without.
+   * Finishes a crossing at the first sync update: the reservations released, then the coin hashes computed.
    *
    * @remarks
    *   The other half of {@link CoreWallet.fromPreviousVersion}. A migrated wallet arrives holding its whole local state
-   *   but no commitments or nullifiers for it, because deriving those needs the secret keys — so the first sync update,
-   *   which carries them, is where the gap closes. Applied at the head of both sync capabilities, before anything else
-   *   they do, so a batch that turns out to be empty still resolves them: a wallet that crossed into a quiet timeline
-   *   must not be left unable to name its own coins.
+   *   but nothing it needs the secret keys for — no commitments or nullifiers, and no way to un-book the spends it
+   *   carried — because a migration is by design handed no key material. The first sync update carries it, so this is
+   *   where both gaps close: {@link releaseStrandedSpends} first, since a released coin is one more coin the hashes have
+   *   to name, and {@link CoreWallet.resolveCoinHashes} over the state that comes back. Applied at the head of both sync
+   *   capabilities, before anything else they do, so a batch that turns out to be empty still runs it: a wallet that
+   *   crossed into a quiet timeline must not be left unable to name or to spend the coins it crossed with.
    *
    *   Idempotent and self-clearing: without the marker this is the identity, so it costs a field read on every update
-   *   thereafter and nothing else.
+   *   thereafter and nothing else. That is also what keeps it away from a reservation made on this side of the
+   *   boundary, whose transaction is live and whose coins are genuinely spoken for.
+   * @param wallet The wallet to complete.
+   * @param secretKeys The keys the update arrived with.
+   * @returns `wallet` unchanged if it never crossed, otherwise a copy whose coins are nameable and spendable again.
+   */
+  completeCrossing(wallet: CoreWallet, secretKeys: ledger.ZswapSecretKeys): CoreWallet {
+    return wallet.coinHashesPending === undefined
+      ? wallet
+      : CoreWallet.resolveCoinHashes({ ...wallet, state: releaseStrandedSpends(wallet.state, secretKeys) }, secretKeys);
+  },
+
+  /**
+   * Computes the coin hashes a wallet crossed the ledger-version boundary without.
+   *
+   * @remarks
+   *   The hash half of {@link CoreWallet.completeCrossing}, which is what the sync capabilities call: a crossing has a
+   *   second gap to close beside this one, so a caller finishing one should go through the combined step rather than
+   *   here. A migrated wallet arrives holding its whole local state but no commitments or nullifiers for it, because
+   *   deriving those needs the secret keys, and the first sync update is what carries them.
+   *
+   *   Idempotent and self-clearing: without the marker this is the identity.
    * @param wallet The wallet to complete.
    * @param secretKeys The keys the update arrived with.
    * @returns `wallet` unchanged if its hashes were never pending, otherwise a copy holding them.

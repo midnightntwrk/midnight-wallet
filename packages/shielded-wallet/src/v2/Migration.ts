@@ -113,6 +113,16 @@ export type PreviousLedgerWallet = Readonly<{
  *   could have recovered. `src/v2/test/byteCrossing.test.ts` pins that codec against both real ledgers, and states what
  *   to do if it ever goes red.
  *
+ *   **The coins booked for transactions still in flight cross too, and are released at the first sync update.** Those
+ *   transactions belong to the ledger version the chain has left behind, so none of them can ever be included and no
+ *   inclusion will ever clear the reservations they left in `pendingSpends` — the coins would simply stop being
+ *   spendable. The release cannot happen here, because un-booking a spend needs the secret keys a migration is by
+ *   design handed none of; it happens at the first sync update instead, which is where keys and carried state meet
+ *   (`CoreWallet.completeCrossing`). The change outputs those same transactions would have paid back are left as they
+ *   are, and nothing ever removes them: these entries carry no TTL and `ZswapLocalState.clearPending` does nothing in
+ *   either ledger, so they sit in `pendingOutputs` for the life of the wallet. A known limitation, and a mild one —
+ *   they overstate the pending balance, but they reserve no coin and block no spending.
+ *
  *   Read through `LedgerOps.ledgerTry`, so a codec that has moved is a `WalletError` at the boundary and never a throw:
  *   the failure mode of a future major moving `zswap-local-state` is loud, and lands here, where the
  *   {@link StateMigration} seam can be given the ledger team's own translation instead.

@@ -77,7 +77,8 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
   // local state before it holds the hashes for it — computing a commitment or nullifier needs the secret keys the
   // migration deliberately does not have — so a coin without its hash entry is not yet nameable and is left out of
   // the view, rather than assumed present and dereferenced. The window closes on the first sync update, which
-  // carries the keys and resolves the map (see CoreWallet.resolveCoinHashes).
+  // carries the keys and both resolves the map and releases the spends the state crossed with, so a coin booked for a
+  // transaction the boundary stranded is available again by the time it can be named (see CoreWallet.completeCrossing).
   const getAvailableCoins = (state: CoreWallet): AvailableCoin[] => {
     const pendingSpends = new Set([...state.state.pendingSpends.values()].map(([coin]) => coin.nonce));
     return pipe(
