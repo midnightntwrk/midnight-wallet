@@ -122,6 +122,24 @@ export type RejectedTransactionHistoryCommon = TransactionHistoryEntryCommon & {
 export type SerializedTransactionHistory = string;
 
 /**
+ * Whether `entry` records the transaction `key` names: the same hash, or every one of `key`'s identifiers. Identifiers
+ * are per-build commitments, so an entry carrying all of them is the same transaction included under an aggregated
+ * hash. An empty identifier set names no transaction and therefore neither covers nor is covered.
+ *
+ * @param entry - The recorded entry.
+ * @param key - The hash and identifiers of the transaction being asked about.
+ * @returns Whether `entry` is a record of that transaction.
+ */
+export const coversTransaction = (
+  entry: Pick<TransactionHistoryEntryCommon, 'hash' | 'identifiers'>,
+  key: Pick<TransactionHistoryEntryCommon, 'hash' | 'identifiers'>,
+): boolean => {
+  if (entry.hash === key.hash) return true;
+  const recorded = new Set(entry.identifiers);
+  return key.identifiers.length > 0 && key.identifiers.every((id) => recorded.has(id));
+};
+
+/**
  * An entry with common fields plus any additional properties (wallet sections). Used by wallet packages for
  * projection/filtering when the exact type is not known.
  */
@@ -177,6 +195,11 @@ export interface TransactionHistoryReader<T extends { hash: TransactionHash } = 
  * keys (in particular: clearing a prior `pending` entry keyed by an identifier when its `finalized` or `rejected`
  * counterpart arrives keyed by the tx hash).
  *
+ * Recorded inclusion takes precedence over a later rejection. Sync records inclusion independently of the
+ * pending-status poller, so a verdict may arrive after a `finalized` entry {@link coversTransaction covers} the
+ * transaction, and that verdict must neither overwrite the entry nor leave a rejected duplicate under the submission's
+ * own hash. Implementations check this atomically with the write.
+ *
  * `T` appears only in input position, so this interface is **contravariant** in T: a `TransactionHistoryWriter<Wider>`
  * is assignable to `TransactionHistoryWriter<Narrower>`.
  */
@@ -184,13 +207,14 @@ export interface TransactionHistoryWriter<T extends TransactionHistoryEntryCommo
   /** Record that a tx has been submitted and is awaiting confirmation. */
   gotPending(entry: PendingEntryInput<T>): Promise<void>;
   /**
-   * Record that a tx has been confirmed on-chain. Inserts/merges the entry under its tx hash and clears any earlier
-   * `pending` entry whose identifiers are contained in this entry's identifier set.
+   * Record that a tx has been confirmed on-chain. Inserts/merges the entry under its tx hash and clears every earlier
+   * `pending` or `rejected` entry this entry {@link coversTransaction covers} under another hash.
    */
   gotFinalized(entry: FinalizedEntryInput<T>): Promise<void>;
   /**
    * Record that a tx will not land — failed, partial-success, TTL-expired, or otherwise reverted. Keyed the same way as
-   * `gotPending` so the lifecycle transition is in-place.
+   * `gotPending` so the lifecycle transition is in-place. Writes nothing when a `finalized` entry already covers the
+   * tx.
    */
   gotRejected(entry: RejectedEntryInput<T>): Promise<void>;
 }
