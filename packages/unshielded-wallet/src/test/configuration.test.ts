@@ -14,7 +14,7 @@ import { type NetworkId, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type CanAssign, type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { describe, it } from 'vitest';
-import { type DefaultUnshieldedConfiguration } from '../UnshieldedWallet.js';
+import { type DefaultUnshieldedConfiguration } from '../UnshieldedWalletAPI.js';
 import { type DefaultV1Configuration } from '../v1/index.js';
 import {
   type DefaultV2Configuration,

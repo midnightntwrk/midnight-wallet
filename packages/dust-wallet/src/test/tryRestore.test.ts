@@ -19,8 +19,8 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { type DefaultDustConfiguration } from '../DustWallet.js';
-import { DustWallet } from '../ForkingDustWallet.js';
+import { type DefaultDustConfiguration } from '../DustWalletAPI.js';
+import { DustWallet } from '../DustWallet.js';
 import { UnsupportedSnapshotVersionError } from '../Restore.js';
 import { TransactionHistory } from '../v2/index.js';
 

@@ -41,7 +41,7 @@ import {
   CustomForkingShieldedWallet,
   type ForkingShieldedWallet,
   type ForkingShieldedWalletClass,
-} from '../ForkingShieldedWallet.js';
+} from '../ShieldedWallet.js';
 import * as V1 from '../v1/index.js';
 import * as V2 from '../v2/index.js';
 

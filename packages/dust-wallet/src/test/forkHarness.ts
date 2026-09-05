@@ -49,7 +49,7 @@ import { type NetworkId, type ProtocolState, type ProtocolVersion } from '@midni
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, Option, Stream, pipe } from 'effect';
-import { CustomForkingDustWallet, type ForkingDustWallet, type ForkingDustWalletClass } from '../ForkingDustWallet.js';
+import { CustomForkingDustWallet, type ForkingDustWallet, type ForkingDustWalletClass } from '../DustWallet.js';
 import { type CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
 import * as PreForkSync from '../v1/Sync.js';
 import { V1Builder } from '../v1/V1Builder.js';

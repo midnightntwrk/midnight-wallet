@@ -15,7 +15,7 @@ import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/c
 import { type CanAssign, type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { type Duration } from 'effect';
 import { describe, it } from 'vitest';
-import { type DefaultShieldedConfiguration } from '../ShieldedWallet.js';
+import { type DefaultShieldedConfiguration } from '../ShieldedWalletAPI.js';
 import { type DefaultV1Configuration } from '../v1/index.js';
 import {
   type DefaultV2Configuration,

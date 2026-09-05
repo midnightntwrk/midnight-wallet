@@ -25,7 +25,7 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { describe, expect, it } from 'vitest';
-import { DustWalletState, claimableFeePayment } from '../src/DustWallet.js';
+import { DustWalletState, claimableFeePayment } from '../src/DustWalletAPI.js';
 import { makeDefaultCoinsAndBalancesCapability } from '../src/v2/CoinsAndBalances.js';
 import { CoreWallet } from '../src/v2/CoreWallet.js';
 import { makeDefaultKeysCapability } from '../src/v2/Keys.js';

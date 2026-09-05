@@ -14,12 +14,8 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Scope, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
-import {
-  CustomShieldedWallet,
-  type CustomizedShieldedWallet,
-  type DefaultShieldedConfiguration,
-  V9_NATIVE_FORK_VERSION,
-} from '../ShieldedWallet.js';
+import { type DefaultShieldedConfiguration, V9_NATIVE_FORK_VERSION } from '../ShieldedWalletAPI.js';
+import { CustomShieldedWallet, type CustomizedShieldedWallet } from '../SingleVariantShieldedWallet.js';
 import { TransactionHistory, V2Builder, V2Tag } from '../v2/index.js';
 
 const configuration: DefaultShieldedConfiguration = {

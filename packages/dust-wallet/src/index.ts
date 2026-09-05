@@ -10,8 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+export * from './DustWalletAPI.js';
+export * from './SingleVariantDustWallet.js';
 export * from './DustWallet.js';
-export * from './ForkingDustWallet.js';
 export { UnsupportedSnapshotVersionError, peekProtocolVersion } from './Restore.js';
 export * from './v2/Sync.js';
 export { type DustTransactionHistoryEntry, DustSectionSchema, mergeDustSections } from './v2/TransactionHistory.js';

@@ -16,7 +16,7 @@ import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/c
 import { type CanAssign, type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { type Duration } from 'effect';
 import { describe, it } from 'vitest';
-import { type DefaultDustConfiguration } from '../DustWallet.js';
+import { type DefaultDustConfiguration } from '../DustWalletAPI.js';
 import { type DefaultV1Configuration } from '../v1/V1Builder.js';
 import { type TransactionHistory as V2TransactionHistory } from '../v2/index.js';
 import { type NetworkId, type TotalCostParameters } from '../v2/types/index.js';

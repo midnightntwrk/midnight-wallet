@@ -34,7 +34,7 @@ import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, identity, Option, pipe, type Scope, Stream } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
-import { type UnshieldedWalletState } from '../UnshieldedWallet.js';
+import { type UnshieldedWalletState } from '../UnshieldedWalletAPI.js';
 import { V1Tag } from '../v1/index.js';
 import { V2Tag } from '../v2/index.js';
 import {
