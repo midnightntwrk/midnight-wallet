@@ -1,5 +1,5 @@
-# The hard-fork e2e stack: a chain whose genesis carries the pre-fork (ledger 8) runtime, running
-# on the post-fork binary, with the indexer and proof server the smoke lane uses, plus the node
+# The hard-fork e2e stack: a chain whose genesis carries the ledger-v8 runtime, running
+# on the ledger-v9 binary, with the indexer and proof server the smoke lane uses, plus the node
 # toolkit on hand to enact the fork through governance.
 #
 # Driven by `packages/e2e-tests/src/tests/fork-fixture.ts` (vitest project `fork`). Every image tag is
@@ -132,7 +132,7 @@ services:
 
   # The proof server of the epoch before the boundary. A second service rather than a second tag on the
   # first: no image serves both sides, and this lane is the one place a wallet has to prove on each in
-  # turn. It runs from the start, because the pre-fork transfer happens before the fork is enacted.
+  # turn. It runs from the start, because the ledger-v8 transfer happens before the v9 fork is enacted.
   proof-server-v8:
     image: 'ghcr.io/midnight-ntwrk/proof-server:${PROOF_SERVER_V8_TAG:-8.1.0}'
     container_name: proof-server-v8_$TESTCONTAINERS_UID

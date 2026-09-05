@@ -31,14 +31,14 @@ const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
 const NODE_PORT = Number.parseInt(process.env['NODE_PORT'] ?? '9944', 10);
 const PROOF_SERVER_PORT = Number.parseInt(process.env['PROOF_SERVER_PORT'] ?? '6300', 10);
 // The proof server built against ledger-v8, for the chain's history below `forks.v9`. Never contacted on a chain
-// that has been post-fork since genesis, like the one this runs against.
+// that has been on ledger-v9 since genesis, like the one this runs against.
 const V8_PROOF_SERVER_PORT = Number.parseInt(process.env['V8_PROOF_SERVER_PORT'] ?? '6301', 10);
 const INDEXER_HTTP_URL = `http://localhost:${INDEXER_PORT}/api/v4/graphql`;
 const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
 const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
-  // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
+  // The protocol version this chain hands over to ledger-v9 at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
   forks: { v9: ProtocolVersion.V9NativeForkVersion },
   costParameters: {

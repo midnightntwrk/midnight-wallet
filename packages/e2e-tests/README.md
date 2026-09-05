@@ -50,17 +50,17 @@ yarn test-e2e src/tests/emptyWallet.universal.test.ts
 
 The hard-fork e2e is a further sub-project, `fork` (`src/tests/*.fork.test.ts`), and the only lane in which a wallet
 crosses a real protocol boundary. The `undeployed` and `remote` stacks boot the current node on its own genesis, so
-their chain is post-fork from block 1. This lane instead builds a genesis from the _old_ node's spec (ledger 8), runs it
-on the _new_ node binary alongside an indexer and a proof server, syncs a facade wallet pre-fork, enacts the ledger 8 →
-9 upgrade through the node toolkit's governance `runtime-upgrade`, and then asserts that the wallet crosses, settles on
-the new protocol version with its balances intact, and restores from its post-fork snapshot. Its compose file is
+their chain is on ledger-v9 from block 1. This lane instead builds a genesis from the ledger-v8 node's spec, runs it on
+the ledger-v9 node binary alongside an indexer and a proof server, syncs a facade wallet on ledger-v8, enacts the ledger
+8 → 9 upgrade through the node toolkit's governance `runtime-upgrade`, and then asserts that the wallet crosses, settles
+on the new protocol version with its balances intact, and restores from its V2 snapshot. Its compose file is
 `infra/compose/docker-compose-fork-dynamic.yml`.
 
 It then spends what it carried. The chain-side dust replay covers cNIGHT holders only, so a wallet holding native NIGHT
 arrives on the far side with no dust and has to re-register its Night for dust generation before it can pay a fee at
 all; the test does that, then sends both an unshielded and a shielded transfer to a second wallet started on the same
 forked chain. The shielded one is the sharp end: those coins crossed the boundary as bytes in a translated local state,
-and the spend only succeeds if their Merkle paths still resolve against the post-fork tree.
+and the spend only succeeds if their Merkle paths still resolve against the ledger-v9 tree.
 
 To run it locally (from the repository root):
 
@@ -69,7 +69,7 @@ yarn dist
 NETWORK=undeployed yarn turbo test-fork
 ```
 
-Expect roughly eight minutes of wall-clock: spec build and node boot, indexer catch-up, the pre-fork sync, governance
+Expect roughly eight minutes of wall-clock: spec build and node boot, indexer catch-up, the ledger-v8 sync, governance
 plus finality, and the crossing itself. Note that the node toolkit image is pulled from Docker Hub
 (`midnightntwrk/midnight-node-toolkit`) rather than ghcr, which has no matching tag — an anonymous pull, so it is
 subject to Docker Hub's rate limits. The node, indexer and proof server images come from ghcr as usual.
@@ -79,7 +79,7 @@ editing the compose file:
 
 | Variable             | Default        | Image                                                |
 | -------------------- | -------------- | ---------------------------------------------------- |
-| `FORK_FROM_NODE_TAG` | `1.0.1`        | node whose spec the chain starts from (pre-fork)     |
+| `FORK_FROM_NODE_TAG` | `1.0.1`        | node whose spec the chain starts from (ledger-v8)    |
 | `NODE_TAG`           | `2.1.0-beta.1` | node binary the chain runs on, and upgrades into     |
 | `TOOLKIT_TAG`        | `2.1.0-beta.1` | `midnight-node-toolkit`, submits the runtime upgrade |
 | `INDEXER_TAG`        | `4.4.0-rc.5`   | `indexer-standalone`                                 |

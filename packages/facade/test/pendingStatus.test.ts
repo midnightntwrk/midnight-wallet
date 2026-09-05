@@ -28,7 +28,7 @@ import {
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import { DateTime, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { pendingTransactionsOf } from '../src/index.js';
@@ -38,11 +38,7 @@ const chainNow = ProtocolVersion.ProtocolVersion(2_000_000n);
 const submittedAt = DateTime.unsafeMake(1_700_000_000_000);
 
 const aTransaction = (): FinalizedTx =>
-  WalletTransaction.adopt(
-    'Finalized',
-    preForkLedger.Transaction.fromParts(NetworkId.NetworkId.Undeployed),
-    authoredFor,
-  );
+  WalletTransaction.adopt('Finalized', ledgerV8.Transaction.fromParts(NetworkId.NetworkId.Undeployed), authoredFor);
 
 const held = (
   tx: FinalizedTx,

@@ -12,7 +12,7 @@
 // limitations under the License.
 //
 // Comparing one wallet's dust against another's. Two suites need it — the projections-vs-events comparison on a
-// post-fork chain, and the hard-fork lane's crossing from event sync into projections sync — and a wallet that
+// ledger-v9 chain, and the hard-fork lane's crossing from event sync into projections sync — and a wallet that
 // disagreed with its twin in only one of them would be a finding either suite could miss, so the comparison lives in
 // one place rather than in each.
 import { Array as Arr } from 'effect';

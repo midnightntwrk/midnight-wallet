@@ -13,8 +13,8 @@
  * limitations under the License.
  */
 
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   InMemoryTransactionHistoryStorage,
   NetworkId,
@@ -26,7 +26,7 @@ import {
   ProvingEpochMismatchError,
   UnsupportedProvingVersionError,
   type ProvingBackends,
-  type UnboundTransaction,
+  type V9UnboundTransaction,
   type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
@@ -47,21 +47,21 @@ import { getDustSeed, getShieldedSeed, getUnshieldedSeed } from './utils/index.j
 
 vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 
-const PRE_FORK = ProtocolVersion.ProtocolVersion(1_000n);
+const V8_VERSION = ProtocolVersion.ProtocolVersion(1_000n);
 
 /** Records the version each transaction is routed to a prover with; erases proofs so the facade can carry on. */
-class RecordingProver implements VersionedProvingService<UnboundTransaction> {
+class RecordingProver implements VersionedProvingService<V9UnboundTransaction> {
   readonly askedFor: ProtocolVersion.ProtocolVersion[] = [];
 
   prove(
-    transaction: ledger.UnprovenTransaction,
+    transaction: ledgerV9.UnprovenTransaction,
     protocolVersion: ProtocolVersion.ProtocolVersion,
-  ): Promise<UnboundTransaction> {
+  ): Promise<V9UnboundTransaction> {
     this.askedFor.push(protocolVersion);
     // The unproven transaction is already unbound and carries no real proofs in these tests, so it stands in for the
     // proven result. Type cast required because: the simulator's proof-erased transaction is not `Proof`-typed, and
     // this stand-in only has to travel back through the facade untouched.
-    return Promise.resolve(transaction as unknown as UnboundTransaction);
+    return Promise.resolve(transaction as unknown as V9UnboundTransaction);
   }
 }
 
@@ -91,7 +91,7 @@ describe('Proving a transaction at the version it was built for', () => {
       configuration,
       shielded: () => ShieldedWallet(configuration).startWithSeed(shieldedSeed),
       unshielded: () => UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
-      dust: () => DustWallet(configuration).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust),
+      dust: () => DustWallet(configuration).startWithSeed(dustSeed, ledgerV9.LedgerParameters.initialParameters().dust),
       provingService: () => prover,
     });
     // The wallets are not started: these tests observe the state the facade already has, and starting them
@@ -105,11 +105,11 @@ describe('Proving a transaction at the version it was built for', () => {
   const anyTransaction = (stamp: ProtocolVersion.ProtocolVersion = ProtocolVersion.MinSupportedVersion) =>
     WalletTransaction.adopt(
       'Unproven',
-      ledger.Transaction.fromParts(
+      ledgerV9.Transaction.fromParts(
         configuration.networkId,
         undefined,
         undefined,
-        ledger.Intent.new(new Date(Date.now() + 60_000)),
+        ledgerV9.Intent.new(new Date(Date.now() + 60_000)),
       ),
       stamp,
     );
@@ -126,25 +126,25 @@ describe('Proving a transaction at the version it was built for', () => {
     // The fork can land between balancing and proving. The recipe's bytes were fixed when it was built, so its own
     // stamp is what decides which prover can read them.
     const observed = await rx.firstValueFrom(facade.state());
-    expect(observed.activeProtocolVersion).not.toStrictEqual(PRE_FORK);
+    expect(observed.activeProtocolVersion).not.toStrictEqual(V8_VERSION);
 
     const recipe: BalancingRecipe = {
       type: 'UNPROVEN_TRANSACTION',
-      transaction: anyTransaction(PRE_FORK),
-      protocolVersion: PRE_FORK,
+      transaction: anyTransaction(V8_VERSION),
+      protocolVersion: V8_VERSION,
     };
 
     await facade.finalizeRecipe(recipe);
 
-    expect(prover.askedFor).toStrictEqual([PRE_FORK]);
+    expect(prover.askedFor).toStrictEqual([V8_VERSION]);
   });
 
   it('proves at the version the transaction itself was built at, which is the only one it can be proved at', async () => {
     // There is no way to name a version separately from the transaction any more, and that is the point: the stamp
     // travels with the bytes it describes, so the two cannot disagree.
-    await facade.finalizeTransaction(anyTransaction(PRE_FORK));
+    await facade.finalizeTransaction(anyTransaction(V8_VERSION));
 
-    expect(prover.askedFor).toStrictEqual([PRE_FORK]);
+    expect(prover.askedFor).toStrictEqual([V8_VERSION]);
   });
 
   it('refuses a transaction built on the other side of the boundary, without asking any prover', async () => {
@@ -187,7 +187,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
       shielded: () => ShieldedWallet(configuration).startWithSeed(getShieldedSeed(seed)),
       unshielded: () => UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
       dust: () =>
-        DustWallet(configuration).startWithSeed(getDustSeed(seed), ledger.LedgerParameters.initialParameters().dust),
+        DustWallet(configuration).startWithSeed(getDustSeed(seed), ledgerV9.LedgerParameters.initialParameters().dust),
     });
     facades.push(facade);
     return facade;
@@ -205,26 +205,26 @@ describe('Proving with the backend configured for the epoch a transaction belong
   const aV8Transaction = () =>
     WalletTransaction.adopt(
       'Unproven',
-      preForkLedger.Transaction.fromParts(
+      ledgerV8.Transaction.fromParts(
         NetworkId.NetworkId.Undeployed,
         undefined,
         undefined,
-        preForkLedger.Intent.new(new Date(Date.now() + 60_000)),
+        ledgerV8.Intent.new(new Date(Date.now() + 60_000)),
       ),
-      PRE_FORK,
+      V8_VERSION,
     );
 
-  /** A ledger-v9 transaction wearing a pre-fork stamp: the stamp the facade reads, the bytes it does not. */
-  const aMisstampedCurrentLedgerTransaction = () =>
+  /** A ledger-v9 transaction wearing a ledger-v8 stamp: the stamp the facade reads, the bytes it does not. */
+  const aMisstampedV9Transaction = () =>
     WalletTransaction.adopt(
       'Unproven',
-      ledger.Transaction.fromParts(
+      ledgerV9.Transaction.fromParts(
         NetworkId.NetworkId.Undeployed,
         undefined,
         undefined,
-        ledger.Intent.new(new Date(Date.now() + 60_000)),
+        ledgerV9.Intent.new(new Date(Date.now() + 60_000)),
       ),
-      PRE_FORK,
+      V8_VERSION,
     );
 
   /**
@@ -244,12 +244,12 @@ describe('Proving with the backend configured for the epoch a transaction belong
     Either.getOrThrow(
       WalletTransaction.unwrapWithin<unknown>(
         finalized,
-        ProtocolVersion.epochOf(PRE_FORK, ProtocolVersion.V9NativeForkVersion),
+        ProtocolVersion.epochOf(V8_VERSION, ProtocolVersion.V9NativeForkVersion),
       ),
     );
 
   const v8ServerAndV9Wasm: Partial<DefaultConfiguration> = {
-    provers: { v8: { kind: 'server', url: new URL('http://pre-fork-prover:6300') }, v9: { kind: 'wasm' } },
+    provers: { v8: { kind: 'server', url: new URL('http://v8-prover:6300') }, v9: { kind: 'wasm' } },
   };
 
   it('proves a transaction built below the fork with ledger-v8', async () => {
@@ -257,7 +257,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
 
     const finalized = await facade.finalizeTransaction(aV8Transaction());
 
-    expect(provenBy(finalized)).toBeInstanceOf(preForkLedger.Transaction);
+    expect(provenBy(finalized)).toBeInstanceOf(ledgerV8.Transaction);
   });
 
   it('drives the single-server configuration with ledger-v8 below the fork the wallet was configured with', async () => {
@@ -267,13 +267,13 @@ describe('Proving with the backend configured for the epoch a transaction belong
 
     const finalized = await facade.finalizeTransaction(aV8Transaction());
 
-    expect(provenBy(finalized)).toBeInstanceOf(preForkLedger.Transaction);
+    expect(provenBy(finalized)).toBeInstanceOf(ledgerV8.Transaction);
   });
 
-  it('refuses a ledger-v9 transaction wearing a pre-fork stamp, rather than handing it to a ledger that cannot read it', async () => {
+  it('refuses a ledger-v9 transaction wearing a ledger-v8 stamp, rather than handing it to a ledger that cannot read it', async () => {
     const facade = await started(v8ServerAndV9Wasm);
 
-    const failure = await facade.finalizeTransaction(aMisstampedCurrentLedgerTransaction()).then(
+    const failure = await facade.finalizeTransaction(aMisstampedV9Transaction()).then(
       () => undefined,
       (error: unknown) => error,
     );
@@ -283,7 +283,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
 
   it('refuses a transaction from a version no backend was configured for, naming that version', async () => {
     const facade = await started({
-      provers: { v9: { kind: 'server', url: new URL('http://post-fork-prover:6300') } },
+      provers: { v9: { kind: 'server', url: new URL('http://v9-prover:6300') } },
     });
 
     const failure = await facade.finalizeTransaction(aV8Transaction()).then(
@@ -292,7 +292,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
     );
 
     expect(reported(failure)).toBeInstanceOf(UnsupportedProvingVersionError);
-    expect((reported(failure) as UnsupportedProvingVersionError).protocolVersion).toStrictEqual(PRE_FORK);
+    expect((reported(failure) as UnsupportedProvingVersionError).protocolVersion).toStrictEqual(V8_VERSION);
   });
 });
 

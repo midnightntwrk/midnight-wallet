@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   type DefaultSubmissionConfiguration,
   makeDefaultSubmissionService,
@@ -61,9 +61,9 @@ import {
   type UnprovenTx,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import { type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
-import * as PreForkSignatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
+import * as Signatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import {
   BehaviorSubject,
   combineLatest,
@@ -263,27 +263,26 @@ const revertTxHistoryKey = (
  * @remarks
  *   One place only: estimating what a dust registration will cost needs a signature over a transaction nobody will
  *   submit, and a signature comes from a ledger version's own primitives. Everything the facade hands back is in the
- *   current ledger version's shape — a scheme and its bytes — so the pre-fork entry lifts what its ledger version
- *   writes as bare hex.
+ *   ledger-v9's shape — a scheme and its bytes — so the ledger-v8 entry lifts what its ledger version writes as bare
+ *   hex.
  */
 type EpochAuthoring = Readonly<{
   sampleSigningKey: () => unknown;
-  signatureVerifyingKey: (signingKey: never) => ledger.SignatureVerifyingKey;
-  signData: (signingKey: never, data: Uint8Array) => ledger.Signature;
+  signatureVerifyingKey: (signingKey: never) => ledgerV9.SignatureVerifyingKey;
+  signData: (signingKey: never, data: Uint8Array) => ledgerV9.Signature;
 }>;
 
-const currentLedgerAuthoring: EpochAuthoring = {
-  sampleSigningKey: () => ledger.sampleSigningKey(),
-  signatureVerifyingKey: (signingKey: never) => ledger.signatureVerifyingKey(signingKey),
-  signData: (signingKey: never, data: Uint8Array) => ledger.signData(signingKey, data),
+const v9Authoring: EpochAuthoring = {
+  sampleSigningKey: () => ledgerV9.sampleSigningKey(),
+  signatureVerifyingKey: (signingKey: never) => ledgerV9.signatureVerifyingKey(signingKey),
+  signData: (signingKey: never, data: Uint8Array) => ledgerV9.signData(signingKey, data),
 };
 
-const preForkAuthoring: EpochAuthoring = {
-  sampleSigningKey: () => preForkLedger.sampleSigningKey(),
+const v8Authoring: EpochAuthoring = {
+  sampleSigningKey: () => ledgerV8.sampleSigningKey(),
   signatureVerifyingKey: (signingKey: never) =>
-    PreForkSignatures.liftSignatureVerifyingKey(preForkLedger.signatureVerifyingKey(signingKey)),
-  signData: (signingKey: never, data: Uint8Array) =>
-    PreForkSignatures.liftSignature(preForkLedger.signData(signingKey, data)),
+    Signatures.liftSignatureVerifyingKey(ledgerV8.signatureVerifyingKey(signingKey)),
+  signData: (signingKey: never, data: Uint8Array) => Signatures.liftSignature(ledgerV8.signData(signingKey, data)),
 };
 
 type TokenKind = 'dust' | 'shielded' | 'unshielded';
@@ -362,7 +361,7 @@ export const BalancingRecipe = {
 };
 
 export interface TokenTransfer<AddressType extends ShieldedAddress | UnshieldedAddress> {
-  type: ledger.RawTokenType;
+  type: ledgerV9.RawTokenType;
   receiverAddress: AddressType;
   amount: bigint;
 }
@@ -380,8 +379,8 @@ export type UnshieldedTokenTransfer = {
 export type CombinedTokenTransfer = ShieldedTokenTransfer | UnshieldedTokenTransfer;
 
 export type CombinedSwapInputs = {
-  shielded?: Record<ledger.RawTokenType, bigint>;
-  unshielded?: Record<ledger.RawTokenType, bigint>;
+  shielded?: Record<ledgerV9.RawTokenType, bigint>;
+  unshielded?: Record<ledgerV9.RawTokenType, bigint>;
 };
 
 export type CombinedSwapOutputs = CombinedTokenTransfer;
@@ -389,7 +388,7 @@ export type CombinedSwapOutputs = CombinedTokenTransfer;
 export type TransactionIdentifier = string;
 
 export type UtxoWithMeta = {
-  utxo: ledger.Utxo;
+  utxo: ledgerV9.Utxo;
   meta: {
     ctime: Date;
     registeredForDustGeneration: boolean;
@@ -428,10 +427,10 @@ export const lowestProtocolVersion = (versions: WalletProtocolVersions): Protoco
  *   optional would reintroduce it.
  */
 export type FacadeKeysByEpoch = Readonly<{
-  /** The pre-fork ledger version's key objects. */
-  v8: Readonly<{ shielded: preForkLedger.ZswapSecretKeys; dust: preForkLedger.DustSecretKey }>;
-  /** The post-fork ledger version's key objects. */
-  v9: Readonly<{ shielded: ledger.ZswapSecretKeys; dust: ledger.DustSecretKey }>;
+  /** The ledger-v8's key objects. */
+  v8: Readonly<{ shielded: ledgerV8.ZswapSecretKeys; dust: ledgerV8.DustSecretKey }>;
+  /** The ledger-v9's key objects. */
+  v9: Readonly<{ shielded: ledgerV9.ZswapSecretKeys; dust: ledgerV9.DustSecretKey }>;
 }>;
 
 /** What the facade will start its wallets from: seeds, or both ledger versions' key objects. */
@@ -449,20 +448,20 @@ export type FacadeStartOptions = Readonly<{
 }>;
 
 /**
- * The post-fork key objects the wallets' own `start` takes, from whichever material the caller supplied.
+ * The ledger-v9 key objects the wallets' own `start` takes, from whichever material the caller supplied.
  *
  * @remarks
- *   Only the post-fork side is needed here: a wallet built from seeds or from both versions' keys already holds what its
- *   pre-fork variant needs, retained when it was built. What `start` supplies is the side the wallet's own API speaks.
+ *   Only the ledger-v9 side is needed here: a wallet built from seeds or from both versions' keys already holds what its
+ *   V1 variant needs, retained when it was built. What `start` supplies is the side the wallet's own API speaks.
  */
-const postForkKeysOf = (
+const v9KeysOf = (
   material: FacadeStartMaterial,
-): Readonly<{ shielded: ledger.ZswapSecretKeys; dust: ledger.DustSecretKey }> =>
+): Readonly<{ shielded: ledgerV9.ZswapSecretKeys; dust: ledgerV9.DustSecretKey }> =>
   'v9' in material
     ? material.v9
     : {
-        shielded: ledger.ZswapSecretKeys.fromSeed(material.shielded),
-        dust: ledger.DustSecretKey.fromSeed(material.dust),
+        shielded: ledgerV9.ZswapSecretKeys.fromSeed(material.shielded),
+        dust: ledgerV9.DustSecretKey.fromSeed(material.dust),
       };
 
 /** Which of the three wallets a reading is about. */
@@ -837,10 +836,11 @@ export class WalletFacade {
    *   {@link DustWalletAPI} There are some optional services/abstractions to provide, too. If not provided - default
    *   implementations will be used, each of them is initialized by a function taking the configuration and returning
    *   proper implementation (wrapped in a {@link Promise} or not).
-   * - `submissionService` - needs to implement {@link SubmissionService} for a {@link ledger.FinalizedTransaction} to
+   * - `submissionService` - needs to implement {@link SubmissionService} for a {@link ledgerV9.FinalizedTransaction} to
    *   submit transactions to the network, default uses Node RPC connection
    * - `pendingTransactionsService` - needs to implement {@link PendingTransactionsService} for a
-   *   {@link ledger.FinalizedTransaction} to keep track of pending transactions, default uses in-memory implementation
+   *   {@link ledgerV9.FinalizedTransaction} to keep track of pending transactions, default uses in-memory
+   *   implementation
    * - `provingService` - needs to implement {@link VersionedProvingService} to prove it, default uses proving server
    * - `clock` - needs to implement {@link Clock.Clock} for getting current time, default uses system clock
    */
@@ -1002,7 +1002,7 @@ export class WalletFacade {
    *   The enforcement point for everything that enters the facade — a transaction the wallets built, or one an
    *   application authored and sealed with `WalletTransaction.adopt`. Only the current epoch is accepted, because a
    *   transaction of the other one cannot be merged, proved or submitted alongside anything the facade would build for
-   *   it. Both a stranded pre-fork transaction after the crossing and a post-fork transaction offered before it are
+   *   it. Both a stranded ledger-v8 transaction after the crossing and a ledger-v9 transaction offered before it are
    *   refused here, by name, with the versions written down.
    * @param handle The handle to read.
    * @returns The carried transaction.
@@ -1025,7 +1025,7 @@ export class WalletFacade {
 
   /** The ledger primitives the facade signs with on its current side of the boundary. */
   private authoring(): EpochAuthoring {
-    return this.currentVersion() < this.#forkVersion ? preForkAuthoring : currentLedgerAuthoring;
+    return this.currentVersion() < this.#forkVersion ? v8Authoring : v9Authoring;
   }
 
   private defaultTtl(): Date {
@@ -1109,7 +1109,7 @@ export class WalletFacade {
   private async createDustActionTransaction(
     action: { type: 'registration'; dustReceiverAddress: DustAddress } | { type: 'deregistration' },
     nightUtxos: readonly UtxoWithMeta[],
-    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    nightVerifyingKey: ledgerV9.SignatureVerifyingKey,
     signDustRegistration: SignSegment,
   ): Promise<UnprovenTx> {
     const ttl = this.defaultTtl();
@@ -1180,7 +1180,7 @@ export class WalletFacade {
     // `registeredForDustGeneration` is the indexer's answer as of the chain's current dust epoch, so it is the one
     // authority on which of the two a registration is. Night carried across the v8 -> v9 fork arrives with it set to
     // `false` — the fork wipes dust generation state and the unshielded crossing carries the flag accordingly — so a
-    // post-fork re-registration is correctly treated as first-time.
+    // re-registration on ledger-v9 is correctly treated as first-time.
     const hasUnregisteredGuaranteed = split.guaranteedUtxos.some((u) => !u.utxo.registeredForDustGeneration);
     if (isRegistration && hasUnregisteredGuaranteed) {
       const fee = await this.dust.calculateFee([txWithDustActions]);
@@ -1543,7 +1543,7 @@ export class WalletFacade {
       // Named as the prover's input rather than its output: the router hands the transaction to the prover registered
       // for the version it was authored at, and what comes back is that ledger version's unbound transaction.
       const unboundTx = await this.provingService.prove(
-        this.accept<ledger.UnprovenTransaction>(tx),
+        this.accept<ledgerV9.UnprovenTransaction>(tx),
         tx.protocolVersion,
       );
       const finalizedTx = this.seal('Finalized', (unboundTx as unknown as CarriedUnbound).bind());
@@ -1742,7 +1742,7 @@ export class WalletFacade {
 
   async registerNightUtxosForDustGeneration(
     nightUtxos: readonly UtxoWithMeta[],
-    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    nightVerifyingKey: ledgerV9.SignatureVerifyingKey,
     signDustRegistration: SignSegment,
     dustReceiverAddress?: DustAddress,
   ): Promise<UnprovenTransactionRecipe> {
@@ -1795,7 +1795,7 @@ export class WalletFacade {
 
   async deregisterFromDustGeneration(
     nightUtxos: UtxoWithMeta[],
-    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    nightVerifyingKey: ledgerV9.SignatureVerifyingKey,
     signDustRegistration: SignSegment,
   ): Promise<UnprovenTransactionRecipe> {
     const dustDeregistrationTx = await this.createDustActionTransaction(
@@ -1874,7 +1874,7 @@ export class WalletFacade {
    *   `makeEventLessSyncService`).
    */
   async start(material: FacadeStartMaterial, options: FacadeStartOptions = {}): Promise<void> {
-    const keys = postForkKeysOf(material);
+    const keys = v9KeysOf(material);
     await Promise.all([
       this.shielded.start(keys.shielded),
       this.unshielded.start(),
@@ -1890,7 +1890,7 @@ export class WalletFacade {
    * @param material The same material {@link start} was given.
    */
   async doSync(material: FacadeStartMaterial): Promise<void> {
-    await this.dust.stepSync(postForkKeysOf(material).dust);
+    await this.dust.stepSync(v9KeysOf(material).dust);
   }
 
   async stop(): Promise<void> {

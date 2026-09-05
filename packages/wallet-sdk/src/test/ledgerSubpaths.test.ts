@@ -18,7 +18,7 @@ import {
   ProtocolVersionMismatchError,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import * as PreForkSignatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
+import * as Signatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import { Either, Schema } from 'effect';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -49,12 +49,12 @@ const ledgerOnlyNames = [
 ] as const;
 
 describe('the ledger subpaths an author builds transactions with', () => {
-  it('offers the pre-fork ledger version at ./ledger/v8', () => {
+  it('offers the ledger-v8 at ./ledger/v8', () => {
     expect(v8.Transaction).toBe(ledgerV8.Transaction);
     expect(v8.Intent).toBe(ledgerV8.Intent);
   });
 
-  it('offers the post-fork ledger version at ./ledger/v9', () => {
+  it('offers the ledger-v9 at ./ledger/v9', () => {
     expect(v9.Transaction).toBe(ledgerV9.Transaction);
     expect(v9.Intent).toBe(ledgerV9.Intent);
   });
@@ -98,12 +98,12 @@ describe('the ledger subpaths an author builds transactions with', () => {
   });
 
   it('promotes the signing error rather than restating it, so a caught error is the one the SDK threw', () => {
-    expect(sdk.UnsupportedSignatureKindError).toBe(PreForkSignatures.UnsupportedSignatureKindError);
+    expect(sdk.UnsupportedSignatureKindError).toBe(Signatures.UnsupportedSignatureKindError);
   });
 });
 
 describe('the signature shape the SDK speaks', () => {
-  it('is the current ledger version shape, so a signer already written against it compiles unchanged', () => {
+  it('is the ledger-v9 shape, so a signer already written against it compiles unchanged', () => {
     const signature: ledgerV9.Signature = { tag: 'schnorr', value: 'aa' };
     const asSdk: sdk.Signing.Signature = signature;
     const backAgain: ledgerV9.Signature = { ...asSdk };
@@ -111,17 +111,17 @@ describe('the signature shape the SDK speaks', () => {
     expect(backAgain).toStrictEqual(signature);
   });
 
-  it('lifts what the pre-fork ledger version writes as bare hexadecimal', () => {
-    // The pre-fork ledger has exactly one scheme, so naming it is never a guess — which is why lifting is total and
+  it('lifts what ledger-v8 writes as bare hexadecimal', () => {
+    // Ledger-v8 has exactly one scheme, so naming it is never a guess — which is why lifting is total and
     // lowering is not.
-    const lifted: sdk.Signing.Signature = PreForkSignatures.liftSignature('aa');
+    const lifted: sdk.Signing.Signature = Signatures.liftSignature('aa');
 
     expect(lifted).toStrictEqual({ tag: 'schnorr', value: 'aa' });
-    expect(Either.getOrThrow(PreForkSignatures.lowerSignature(lifted))).toBe('aa');
+    expect(Either.getOrThrow(Signatures.lowerSignature(lifted))).toBe('aa');
   });
 
-  it('refuses to lower a scheme the pre-fork ledger version has never heard of', () => {
-    const error = PreForkSignatures.lowerSignature({ tag: 'ecdsa', value: 'aa' }).pipe(Either.flip, Either.getOrThrow);
+  it('refuses to lower a scheme ledger-v8 has never heard of', () => {
+    const error = Signatures.lowerSignature({ tag: 'ecdsa', value: 'aa' }).pipe(Either.flip, Either.getOrThrow);
 
     expect(error).toBeInstanceOf(sdk.UnsupportedSignatureKindError);
     expect(error.kind).toBe('ecdsa');
@@ -132,21 +132,21 @@ describe('a transaction an author built for itself', () => {
   const version = ProtocolVersion.ProtocolVersion(2_000_000n);
 
   it('can be sealed into a handle, whichever ledger version built it', () => {
-    const preFork = v8.Transaction.fromParts(NetworkId.NetworkId.Undeployed);
-    const postFork = v9.Transaction.fromParts(NetworkId.NetworkId.Undeployed);
+    const authoredV8 = v8.Transaction.fromParts(NetworkId.NetworkId.Undeployed);
+    const authoredV9 = v9.Transaction.fromParts(NetworkId.NetworkId.Undeployed);
 
-    expect(WalletTransaction.adopt('Unproven', preFork, ProtocolVersion.MinSupportedVersion).serialize()).toStrictEqual(
-      preFork.serialize(),
-    );
-    expect(WalletTransaction.adopt('Unproven', postFork, version).serialize()).toStrictEqual(postFork.serialize());
+    expect(
+      WalletTransaction.adopt('Unproven', authoredV8, ProtocolVersion.MinSupportedVersion).serialize(),
+    ).toStrictEqual(authoredV8.serialize());
+    expect(WalletTransaction.adopt('Unproven', authoredV9, version).serialize()).toStrictEqual(authoredV9.serialize());
   });
 
   it('is refused by a caller acting on the other side of the boundary', () => {
-    const postFork = v9.Transaction.fromParts(NetworkId.NetworkId.Undeployed);
-    const handle = WalletTransaction.adopt('Unproven', postFork, version);
-    const preForkEra = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, version);
+    const authoredV9 = v9.Transaction.fromParts(NetworkId.NetworkId.Undeployed);
+    const handle = WalletTransaction.adopt('Unproven', authoredV9, version);
+    const v8Epoch = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, version);
 
-    const error = WalletTransaction.unwrapWithin(handle, preForkEra).pipe(Either.flip, Either.getOrThrow);
+    const error = WalletTransaction.unwrapWithin(handle, v8Epoch).pipe(Either.flip, Either.getOrThrow);
 
     expect(error).toBeInstanceOf(ProtocolVersionMismatchError);
     expect(error.authoredFor).toBe(version);

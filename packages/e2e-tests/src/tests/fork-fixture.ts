@@ -12,7 +12,7 @@
 // limitations under the License.
 //
 // The fixture behind the hard-fork e2e (`hardFork.fork.test.ts`): a chain whose genesis carries
-// the pre-fork runtime, running on the post-fork binary, and the means to enact the fork on it.
+// the ledger-v8 runtime, running on the ledger-v9 binary, and the means to enact the fork on it.
 //
 // It is deliberately a sibling of `useTestContainersFixture` rather than a mode of it: the stack is
 // a different compose file with one-shot services, and the lane is always `undeployed`, so the
@@ -56,10 +56,10 @@ const LOGGED_SERVICES = ['node', 'indexer', 'proof-server', 'proof-server-v8'] a
 
 /**
  * `twox128("CNightObservation") ++ twox128(<item>)`. The cNIGHT dust replay is node-team territory: these are read and
- * logged after the fork, never asserted on.
+ * logged after the v9 fork, never asserted on.
  */
 const CNIGHT_STORAGE_VERSION_KEY = '0xbbf4abef611bc3c9ca8cee3af9d8f7d14e7b9012096b41c4eb3aaf947f6ea429';
-const CNIGHT_PRE_FORK_STATE_KEY = '0xbbf4abef611bc3c9ca8cee3af9d8f7d16eb91a45b805d9b33a9e2f6bb77968ee';
+const CNIGHT_V8_STATE_KEY = '0xbbf4abef611bc3c9ca8cee3af9d8f7d16eb91a45b805d9b33a9e2f6bb77968ee';
 
 /** What the fork turned out to be, once it had been enacted and the chain had finalized past it. */
 export type ForkEnactment = Readonly<{
@@ -324,7 +324,7 @@ export class ForkFixture extends TestContainersFixture {
     logger.info(`new code applied at #${appliedAt} (was spec ${oldSpecVersion}, now ${newSpecVersion})`);
 
     await waitForFinalized(url, appliedAt + 1, Date.now() + 300_000);
-    await assertLedgerStateReadable(url, appliedAt - 1, 'pre-fork');
+    await assertLedgerStateReadable(url, appliedAt - 1, 'ledger-v8');
     await assertLedgerStateReadable(url, appliedAt, 'code-applied block');
     await assertLedgerStateReadable(url, appliedAt + 1, 'post-migration');
 
@@ -401,19 +401,19 @@ export class ForkFixture extends TestContainersFixture {
 
   /**
    * Reports the cNIGHT dust-generation replay (`pallet-cnight-observation` v1 to v2) without gating on it: storage
-   * version `0x0200` with `PreForkStateKey` cleared is the wound-up state, but whether the replay restored anything is
-   * the node team's question, not the wallet's.
+   * version `0x0200` with `V8StateKey` cleared is the wound-up state, but whether the replay restored anything is the
+   * node team's question, not the wallet's.
    */
   async #logCNightReplay(url: string, height: number): Promise<void> {
     await waitForFinalized(url, height, Date.now() + 300_000);
     const hash = await blockHashAt(url, height);
-    const [storageVersion, preForkStateKey] = await Promise.all([
+    const [storageVersion, v8StateKey] = await Promise.all([
       rpc<string | null>(url, 'state_getStorage', [CNIGHT_STORAGE_VERSION_KEY, hash]),
-      rpc<string | null>(url, 'state_getStorage', [CNIGHT_PRE_FORK_STATE_KEY, hash]),
+      rpc<string | null>(url, 'state_getStorage', [CNIGHT_V8_STATE_KEY, hash]),
     ]);
     logger.info(
       `INFO cnight-observation at #${height}: storageVersion=${String(storageVersion)} (expected 0x0200),` +
-        ` PreForkStateKey=${String(preForkStateKey)} (expected null)`,
+        ` V8StateKey=${String(v8StateKey)} (expected null)`,
     );
   }
 }

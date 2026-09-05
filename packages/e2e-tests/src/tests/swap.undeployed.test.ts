@@ -31,7 +31,7 @@ import {
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils.js';
-import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
+import { makeV9WasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { carried, sealed } from './helpers/transactions.js';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
@@ -147,7 +147,7 @@ describe('Swaps', () => {
   });
 
   it('can perform a shielded swap', async () => {
-    const provingService = makeWasmProvingService();
+    const provingService = makeV9WasmProvingService();
 
     const facadeAState = await walletAFacade.waitForSyncedState();
     const facadeBState = await walletBFacade.waitForSyncedState();

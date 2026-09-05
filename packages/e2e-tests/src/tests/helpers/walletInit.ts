@@ -266,8 +266,8 @@ export type CustomWallets = {
    * @remarks
    *   Typed by what a start actually owes the facade rather than by `DustWalletClass`, so a **single-variant**
    *   composition is still acceptable here — which is the shortest way to exercise the projections fast-sync path on a
-   *   chain that is post-fork from its first block. That path is a post-fork capability (it needs `DustLocalState` APIs
-   *   no pre-fork ledger has), so a two-variant wallet boots on the pre-fork variant, replays every event, and reaches
+   *   chain that is on ledger-v9 from its first block. That path is a ledger-v9 capability (it needs `DustLocalState`
+   *   APIs no ledger-v8 has), so a two-variant wallet boots on the V1 variant, replays every event, and reaches
    *   projections only after migrating — which on a chain that actually forks is the thing worth testing, and is why a
    *   start that resolves asynchronously is accepted too: a wallet spanning a boundary may ask the chain where it is
    *   before it chooses a variant to start at.

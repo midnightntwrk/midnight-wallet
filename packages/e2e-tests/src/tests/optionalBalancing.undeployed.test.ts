@@ -27,7 +27,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-facade';
 import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
+import { makeV9WasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { pipe } from 'effect';
 import { carried, sealed } from './helpers/transactions.js';
 
@@ -119,7 +119,7 @@ describe('Optional Balancing', () => {
       shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedSeed),
       unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust),
-      provingService: () => makeWasmProvingService(),
+      provingService: () => makeV9WasmProvingService(),
     });
 
     await facade.start({ shielded: shieldedSeed, unshielded: shieldedSeed, dust: dustSeed });
@@ -264,7 +264,7 @@ describe('Optional Balancing', () => {
 
   describe('balanceUnboundTransaction', () => {
     it('only balances shielded when tokenKindsToBalance is ["shielded"]', async () => {
-      const provingService = makeWasmProvingService();
+      const provingService = makeV9WasmProvingService();
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
@@ -323,7 +323,7 @@ describe('Optional Balancing', () => {
     });
 
     it('only balances unshielded when tokenKindsToBalance is ["unshielded"]', async () => {
-      const provingService = makeWasmProvingService();
+      const provingService = makeV9WasmProvingService();
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
@@ -344,7 +344,7 @@ describe('Optional Balancing', () => {
     });
 
     it('only adds dust fees when tokenKindsToBalance is ["dust"]', async () => {
-      const provingService = makeWasmProvingService();
+      const provingService = makeV9WasmProvingService();
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
@@ -376,7 +376,7 @@ describe('Optional Balancing', () => {
     });
 
     it('balances all when tokenKindsToBalance is "all" (default)', async () => {
-      const provingService = makeWasmProvingService();
+      const provingService = makeV9WasmProvingService();
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
@@ -409,7 +409,7 @@ describe('Optional Balancing', () => {
     let finalizedTx: ledger.FinalizedTransaction;
 
     beforeAll(async () => {
-      const provingService = makeWasmProvingService();
+      const provingService = makeV9WasmProvingService();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
       const unboundTx = await provingService.prove(arbitraryTx);

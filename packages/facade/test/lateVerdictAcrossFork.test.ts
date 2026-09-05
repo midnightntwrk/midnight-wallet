@@ -28,8 +28,8 @@
  *   transaction that will never be included. Leaving it at `pending` forever is the failure this pins.
  */
 
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   InMemoryTransactionHistoryStorage,
   NetworkId,
@@ -60,7 +60,7 @@ import {
 } from '../src/index.js';
 
 import {
-  createPreForkMockProvingService,
+  createV8MockProvingService,
   drivenBy,
   dustAt,
   getDustSeed,
@@ -75,10 +75,10 @@ import {
 const forkVersion = ProtocolVersion.V9NativeForkVersion;
 
 /** Where the three wallets are before it: one epoch, ordinary drift within it. */
-const beforeFork = ProtocolVersion.ProtocolVersion(3n);
+const v8Version = ProtocolVersion.ProtocolVersion(3n);
 
 /** Where they are after: past the boundary, which is where a wallet that has crossed reports from. */
-const afterFork = ProtocolVersion.ProtocolVersion(forkVersion + 1n);
+const v9Version = ProtocolVersion.ProtocolVersion(forkVersion + 1n);
 
 /** A pending service the suite drives: the facade's reaction to a verdict is what is under test, not the polling. */
 class DrivenPendingTransactions implements PendingTransactionsService<FinalizedTx> {
@@ -155,12 +155,12 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
     const unshielded = await UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(keystore));
     const dust = await DustWallet(configuration).startWithSeed(
       getDustSeed(seed),
-      ledger.LedgerParameters.initialParameters().dust,
+      ledgerV9.LedgerParameters.initialParameters().dust,
     );
 
-    shieldedStates = new rx.BehaviorSubject(shieldedAt(await rx.firstValueFrom(shielded.state), beforeFork));
-    unshieldedStates = new rx.BehaviorSubject(unshieldedAt(await rx.firstValueFrom(unshielded.state), beforeFork));
-    dustStates = new rx.BehaviorSubject(dustAt(await rx.firstValueFrom(dust.state), beforeFork));
+    shieldedStates = new rx.BehaviorSubject(shieldedAt(await rx.firstValueFrom(shielded.state), v8Version));
+    unshieldedStates = new rx.BehaviorSubject(unshieldedAt(await rx.firstValueFrom(unshielded.state), v8Version));
+    dustStates = new rx.BehaviorSubject(dustAt(await rx.firstValueFrom(dust.state), v8Version));
 
     drivenBy(shielded, shieldedStates);
     drivenBy(unshielded, unshieldedStates);
@@ -173,7 +173,7 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
       shielded: () => shielded,
       unshielded: () => unshielded,
       dust: () => dust,
-      provingService: () => createPreForkMockProvingService(),
+      provingService: () => createV8MockProvingService(),
       submissionService: () => acceptingSubmission,
       pendingTransactionsService: () => pending,
     });
@@ -184,26 +184,26 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
   });
 
   /** A transaction of the epoch the wallets are in while they are still below the boundary. */
-  const preForkTransaction = () =>
+  const v8Transaction = () =>
     WalletTransaction.adopt(
       'Unproven',
-      preForkLedger.Transaction.fromParts(
+      ledgerV8.Transaction.fromParts(
         configuration.networkId,
         undefined,
         undefined,
-        preForkLedger.Intent.new(new Date(Date.now() + 60_000)),
+        ledgerV8.Intent.new(new Date(Date.now() + 60_000)),
       ),
       ProtocolVersion.MinSupportedVersion,
     );
 
   /** Submits a transaction below the boundary, then moves all three wallets past it. */
   const submitThenCross = async (): Promise<FinalizedTx> => {
-    const finalized = await facade.finalizeTransaction(preForkTransaction());
+    const finalized = await facade.finalizeTransaction(v8Transaction());
     await facade.submitTransaction(finalized);
 
-    shieldedStates.next(shieldedAt(shieldedStates.value, afterFork));
-    unshieldedStates.next(unshieldedAt(unshieldedStates.value, afterFork));
-    dustStates.next(dustAt(dustStates.value, afterFork));
+    shieldedStates.next(shieldedAt(shieldedStates.value, v9Version));
+    unshieldedStates.next(unshieldedAt(unshieldedStates.value, v9Version));
+    dustStates.next(dustAt(dustStates.value, v9Version));
     await sleep(0.2);
 
     return finalized;
@@ -229,7 +229,7 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
 
     const observed = await rx.firstValueFrom(facade.state());
 
-    expect(observed.activeProtocolVersion).toBe(afterFork);
+    expect(observed.activeProtocolVersion).toBe(v9Version);
     expect(finalized.protocolVersion).toBeLessThan(forkVersion);
   });
 
@@ -250,7 +250,7 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
     await verdictArrives(finalized, {
       status: 'ORPHANED_BY_FORK',
       authoredFor: ProtocolVersion.MinSupportedVersion,
-      chainNow: afterFork,
+      chainNow: v9Version,
     });
 
     const entries = await facade.getAllFromTxHistory();

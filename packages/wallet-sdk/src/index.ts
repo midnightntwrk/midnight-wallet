@@ -25,7 +25,7 @@ export * from '@midnightntwrk/wallet-sdk-utilities';
  * The one thing an application signs with, and the one error it can get back.
  *
  * @remarks
- *   Promoted from the internal adapter rather than restated: `Signing` is the vocabulary the pre-fork lowering is stated
+ *   Promoted from the internal adapter rather than restated: `Signing` is the vocabulary the ledger-v8 lowering is stated
  *   in, and `UnsupportedSignatureKindError` is the same class that lowering raises, so an application catching it here
  *   catches exactly what the SDK threw. The module names both ledger versions in `import type` only, so nothing of
  *   either is loaded to reach it.

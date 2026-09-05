@@ -55,7 +55,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
 
 import {
-  createPreForkMockProvingService,
+  createV8MockProvingService,
   drivenBy,
   dustAt,
   getDustSeed,
@@ -69,14 +69,14 @@ import {
 const forkVersion = ProtocolVersion.V9NativeForkVersion;
 
 /** Three versions below the boundary, all different: ordinary drift within one epoch. */
-const beforeFork = {
+const v8Version = {
   shielded: ProtocolVersion.ProtocolVersion(3n),
   unshielded: ProtocolVersion.ProtocolVersion(1n),
   dust: ProtocolVersion.ProtocolVersion(2n),
 } as const;
 
 /** Two versions at or past it, different again: a wallet that has crossed need not be at the boundary exactly. */
-const afterFork = {
+const v9Version = {
   shielded: ProtocolVersion.ProtocolVersion(forkVersion + 5n),
   dust: forkVersion,
 } as const;
@@ -140,11 +140,11 @@ describe('three wallets that disagree about which side of the boundary the chain
       ledger.LedgerParameters.initialParameters().dust,
     );
 
-    shieldedStates = new rx.BehaviorSubject(shieldedAt(await rx.firstValueFrom(shielded.state), beforeFork.shielded));
+    shieldedStates = new rx.BehaviorSubject(shieldedAt(await rx.firstValueFrom(shielded.state), v8Version.shielded));
     unshieldedStates = new rx.BehaviorSubject(
-      unshieldedAt(await rx.firstValueFrom(unshielded.state), beforeFork.unshielded),
+      unshieldedAt(await rx.firstValueFrom(unshielded.state), v8Version.unshielded),
     );
-    dustStates = new rx.BehaviorSubject(dustAt(await rx.firstValueFrom(dust.state), beforeFork.dust));
+    dustStates = new rx.BehaviorSubject(dustAt(await rx.firstValueFrom(dust.state), v8Version.dust));
 
     drivenBy(shielded, shieldedStates);
     drivenBy(unshielded, unshieldedStates);
@@ -155,7 +155,7 @@ describe('three wallets that disagree about which side of the boundary the chain
       shielded: () => shielded,
       unshielded: () => unshielded,
       dust: () => dust,
-      provingService: () => createPreForkMockProvingService(),
+      provingService: () => createV8MockProvingService(),
       pendingTransactionsService: () => new SilentPendingTransactions(),
     });
   });
@@ -168,44 +168,44 @@ describe('three wallets that disagree about which side of the boundary the chain
     const observed = await rx.firstValueFrom(facade.state());
 
     // Three different versions, so a wiring that read one wallet three times cannot pass this.
-    expect(observed.protocolVersion).toStrictEqual(beforeFork);
-    expect(observed.activeProtocolVersion).toBe(beforeFork.unshielded);
+    expect(observed.protocolVersion).toStrictEqual(v8Version);
+    expect(observed.activeProtocolVersion).toBe(v8Version.unshielded);
     // Differing versions within one epoch are ordinary synchronization, not a crossing.
-    expect(observed.protocol).toStrictEqual({ _tag: 'Settled', version: beforeFork.unshielded });
+    expect(observed.protocol).toStrictEqual({ _tag: 'Settled', version: v8Version.unshielded });
   });
 
   it('calls the chain crossing while one wallet is still on the near side, and names it', async () => {
-    shieldedStates.next(shieldedAt(shieldedStates.value, afterFork.shielded));
-    dustStates.next(dustAt(dustStates.value, afterFork.dust));
+    shieldedStates.next(shieldedAt(shieldedStates.value, v9Version.shielded));
+    dustStates.next(dustAt(dustStates.value, v9Version.dust));
 
     const observed = await rx.firstValueFrom(facade.state());
 
     expect(observed.protocol).toStrictEqual({
       _tag: 'Crossing',
-      from: beforeFork.unshielded,
-      to: afterFork.shielded,
+      from: v8Version.unshielded,
+      to: v9Version.shielded,
       behind: ['unshielded'],
     });
     // What the facade stays bound to meanwhile is what it acts at: the wallet still behind bounds all three.
-    expect(observed.activeProtocolVersion).toBe(beforeFork.unshielded);
+    expect(observed.activeProtocolVersion).toBe(v8Version.unshielded);
   });
 
   it('names every wallet still on the near side, in a fixed order', async () => {
-    shieldedStates.next(shieldedAt(shieldedStates.value, afterFork.shielded));
+    shieldedStates.next(shieldedAt(shieldedStates.value, v9Version.shielded));
 
     const observed = await rx.firstValueFrom(facade.state());
 
     expect(observed.protocol).toStrictEqual({
       _tag: 'Crossing',
-      from: beforeFork.unshielded,
-      to: afterFork.shielded,
+      from: v8Version.unshielded,
+      to: v9Version.shielded,
       behind: ['unshielded', 'dust'],
     });
   });
 
   it('settles again once the last wallet has crossed, at the version they all now report', async () => {
-    shieldedStates.next(shieldedAt(shieldedStates.value, afterFork.shielded));
-    dustStates.next(dustAt(dustStates.value, afterFork.dust));
+    shieldedStates.next(shieldedAt(shieldedStates.value, v9Version.shielded));
+    dustStates.next(dustAt(dustStates.value, v9Version.dust));
     expect((await rx.firstValueFrom(facade.state())).protocol._tag).toBe('Crossing');
 
     unshieldedStates.next(unshieldedAt(unshieldedStates.value, forkVersion));
@@ -218,8 +218,8 @@ describe('three wallets that disagree about which side of the boundary the chain
   });
 
   it('keeps the phase readable while a pending transaction is stamped at the version it acts at', async () => {
-    shieldedStates.next(shieldedAt(shieldedStates.value, afterFork.shielded));
-    dustStates.next(dustAt(dustStates.value, afterFork.dust));
+    shieldedStates.next(shieldedAt(shieldedStates.value, v9Version.shielded));
+    dustStates.next(dustAt(dustStates.value, v9Version.dust));
 
     const observed = await rx.firstValueFrom(facade.state());
 

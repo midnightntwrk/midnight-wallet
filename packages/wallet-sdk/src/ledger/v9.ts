@@ -12,7 +12,7 @@
 // limitations under the License.
 
 /**
- * The post-fork ledger version, for an application that builds its own transactions.
+ * Ledger-v9, for an application that builds its own transactions.
  *
  * @remarks
  *   Most applications never need this. They ask the wallet for a transfer or a swap, carry what comes back as a
@@ -25,10 +25,10 @@
  *   already depends on. Seal the result with `WalletTransaction.adopt('Unproven', tx, version)` to hand it back.
  *
  *   **Which one to import is a property of the chain, not of this release.** Both are shipped, side by side, because both
- *   are real: a chain is pre-fork until it forks, and mainnet is pre-fork until then. An authoring path that only ever
- *   imports `./ledger/v9` type-checks perfectly and fails at run time, with a `ProtocolVersionMismatchError`, on every
- *   chain that has not yet crossed — the wallet refuses a transaction built for a version it is not acting at. An
- *   application that must work either side of the boundary reads the protocol version from the wallet's state and
+ *   are real: a chain is on ledger-v8 until it forks, and mainnet is on ledger-v8 until then. An authoring path that
+ *   only ever imports `./ledger/v9` type-checks perfectly and fails at run time, with a `ProtocolVersionMismatchError`,
+ *   on every chain that has not yet crossed — the wallet refuses a transaction built for a version it is not acting at.
+ *   An application that must work either side of the boundary reads the protocol version from the wallet's state and
  *   authors accordingly.
  *
  *   Deliberately not part of the root barrel: this is WebAssembly, and an application that only carries transactions

@@ -86,7 +86,7 @@ export const makeEnvironment = (
       networkId: endpoints.networkId,
       txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
       // Every environment this testkit drives runs the ledger-v9-native node line, which reports this
-      // protocol version, so the wallet reaches its post-fork variant. Defined once here rather than at
+      // protocol version, so the wallet reaches its V2 variant. Defined once here rather than at
       // each construction site; the final mainnet fork constant is still an open question.
       forks: { v9: ProtocolVersion.V9NativeForkVersion },
     };
@@ -102,7 +102,7 @@ export const makeEnvironment = (
         indexerHttpUrl: endpoints.indexerHttpUrl,
       },
       // The same boundary the shielded configuration names, for the same reason: this testkit's environments all run
-      // the ledger-v9-native node line, so the dust wallet reaches its post-fork variant too.
+      // the ledger-v9-native node line, so the dust wallet reaches its V2 variant too.
       forks: { v9: ProtocolVersion.V9NativeForkVersion },
     };
   },

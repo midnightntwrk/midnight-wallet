@@ -12,7 +12,7 @@
 // limitations under the License.
 
 /**
- * The pre-fork ledger version, for an application that builds its own transactions.
+ * Ledger-v8, for an application that builds its own transactions.
  *
  * @remarks
  *   The version every chain is on until it crosses the protocol boundary — mainnet included, until the fork happens. An
@@ -20,9 +20,9 @@
  *   with `WalletTransaction.adopt('Unproven', tx, version)` at a version below the fork.
  *
  *   Named for the ledger version rather than for a variant ordinal, so the import line says which rules the bytes follow.
- *   See {@link ../ledger/v9} for the post-fork version and for what authoring costs an application in general; the
- *   choice between the two is a property of the chain, and an application that spans the boundary reads the protocol
- *   version from the wallet's state and authors accordingly.
+ *   See {@link ../ledger/v9} for ledger-v9 and for what authoring costs an application in general; the choice between
+ *   the two is a property of the chain, and an application that spans the boundary reads the protocol version from the
+ *   wallet's state and authors accordingly.
  *
  *   Deliberately not part of the root barrel: this is WebAssembly, and an application that only carries transactions
  *   should not pay for a ledger it never names.

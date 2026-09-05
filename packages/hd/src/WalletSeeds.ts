@@ -52,7 +52,7 @@ export type WalletSeedsOptions = Readonly<{
    * @remarks
    *   The unshielded wallet can sign with either of two schemes, and they are different keys at different places in the
    *   tree. Defaults to {@link Roles.NightExternal}, which is the scheme that works on both sides of the protocol
-   *   boundary; {@link Roles.EcdsaUnshielded} is only available from the post-fork ledger version onwards.
+   *   boundary; {@link Roles.EcdsaUnshielded} is only available from ledger-v9 onwards.
    */
   unshieldedRole?: Role;
 }>;

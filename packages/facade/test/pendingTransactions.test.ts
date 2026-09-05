@@ -23,16 +23,10 @@ import {
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
-import {
-  createPreForkMockProvingService,
-  getDustSeed,
-  getShieldedSeed,
-  getUnshieldedSeed,
-  sleep,
-} from './utils/index.js';
+import { createV8MockProvingService, getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
 import * as rx from 'rxjs';
 
 vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
@@ -65,14 +59,14 @@ describe('Wallet Facade handling pending transactions', () => {
     const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: unshieldedSeed }, configuration.networkId);
     shielded = await ShieldedWallet(configuration).startWithSeed(shieldedSeed);
     unshielded = await UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
-    dust = await DustWallet(configuration).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust);
+    dust = await DustWallet(configuration).startWithSeed(dustSeed, ledgerV9.LedgerParameters.initialParameters().dust);
 
     facade = await WalletFacade.init({
       configuration,
       shielded: () => shielded,
       unshielded: () => unshielded,
       dust: () => dust,
-      provingService: () => createPreForkMockProvingService(),
+      provingService: () => createV8MockProvingService(),
     });
     await facade?.start({ shielded: shieldedSeed, unshielded: unshieldedSeed, dust: dustSeed });
   });
@@ -88,8 +82,8 @@ describe('Wallet Facade handling pending transactions', () => {
     const ttl = new Date(Date.now() + 10);
     const transaction = WalletTransaction.adopt(
       'Unproven',
-      // The wallets here have never synced, so the facade is on the pre-fork side of the boundary.
-      preForkLedger.Transaction.fromParts(configuration.networkId, undefined, undefined, preForkLedger.Intent.new(ttl)),
+      // The wallets here have never synced, so the facade is on the ledger-v8 side of the boundary.
+      ledgerV8.Transaction.fromParts(configuration.networkId, undefined, undefined, ledgerV8.Intent.new(ttl)),
       ProtocolVersion.MinSupportedVersion,
     );
 

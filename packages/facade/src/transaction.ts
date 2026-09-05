@@ -21,8 +21,8 @@ import {
   type AnyTx,
   type FinalizedTx,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 
 /**
  * The key under which a transaction's history entry is stored.
@@ -48,20 +48,20 @@ export const txHistoryHash = (tx: { transactionHash: () => unknown; serialize: (
   }
 };
 
-const currentLedgerFinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledger.FinalizedTransaction> = {
-  areAllTxIdsIncluded(tx: ledger.FinalizedTransaction, txIds: readonly string[]): boolean {
+const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV9.FinalizedTransaction> = {
+  areAllTxIdsIncluded(tx: ledgerV9.FinalizedTransaction, txIds: readonly string[]): boolean {
     const txIdsSet = HashSet.fromIterable(tx.identifiers());
     const expectedIdSet = HashSet.fromIterable(txIds);
     return HashSet.isSubset(txIdsSet, expectedIdSet);
   },
-  deserialize(serialized: Uint8Array): ledger.FinalizedTransaction {
-    return ledger.Transaction.deserialize('signature', 'proof', 'binding', serialized);
+  deserialize(serialized: Uint8Array): ledgerV9.FinalizedTransaction {
+    return ledgerV9.Transaction.deserialize('signature', 'proof', 'binding', serialized);
   },
-  firstId(tx: ledger.FinalizedTransaction): string {
+  firstId(tx: ledgerV9.FinalizedTransaction): string {
     return tx.identifiers()[0];
   },
-  hasTTLExpired(tx: ledger.FinalizedTransaction, creationTime: DateTime.Utc, now: DateTime.Utc): boolean {
-    const defaultShieldedGracePeriod = ledger.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds;
+  hasTTLExpired(tx: ledgerV9.FinalizedTransaction, creationTime: DateTime.Utc, now: DateTime.Utc): boolean {
+    const defaultShieldedGracePeriod = ledgerV9.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds;
     const intentTTLs = pipe(
       tx.intents?.values().toArray() ?? [],
       Arr.map((i) => i.ttl),
@@ -91,44 +91,44 @@ const currentLedgerFinalizedTransactionTrait: PendingTransactions.TransactionTra
       }),
     );
   },
-  ids(tx: ledger.FinalizedTransaction): readonly string[] {
+  ids(tx: ledgerV9.FinalizedTransaction): readonly string[] {
     return tx.identifiers();
   },
-  isOneIncludedInOther(tx: ledger.FinalizedTransaction, otherTx: ledger.FinalizedTransaction): boolean {
+  isOneIncludedInOther(tx: ledgerV9.FinalizedTransaction, otherTx: ledgerV9.FinalizedTransaction): boolean {
     const txIds = HashSet.fromIterable(tx.identifiers());
     const otherTxIds = HashSet.fromIterable(otherTx.identifiers());
     const smallerSize = Order.min(Order.number)(HashSet.size(txIds), HashSet.size(otherTxIds));
     const intersection = HashSet.intersection(txIds, otherTxIds);
     return HashSet.size(intersection) == smallerSize;
   },
-  isTx(tx: unknown): tx is ledger.FinalizedTransaction {
-    return tx instanceof ledger.Transaction;
+  isTx(tx: unknown): tx is ledgerV9.FinalizedTransaction {
+    return tx instanceof ledgerV9.Transaction;
   },
-  serialize(tx: ledger.FinalizedTransaction): Uint8Array {
+  serialize(tx: ledgerV9.FinalizedTransaction): Uint8Array {
     return tx.serialize();
   },
 };
 
 /**
- * The pre-fork ledger version's reading of a pending transaction.
+ * The ledger-v8's reading of a pending transaction.
  *
  * @remarks
- *   Structurally the same as the current ledger version's — identifiers, a TTL, bytes — against a different ledger
- *   version's classes. It is the classes that make this a separate trait: `instanceof` distinguishes them, each
- *   deserializer refuses the other's bytes, and a grace period is read off that version's own initial parameters.
+ *   Structurally the same as ledger-v9's — identifiers, a TTL, bytes — against a different ledger version's classes. It
+ *   is the classes that make this a separate trait: `instanceof` distinguishes them, each deserializer refuses the
+ *   other's bytes, and a grace period is read off that version's own initial parameters.
  */
-const preForkFinalizedTransactionTrait: PendingTransactions.TransactionTrait<preForkLedger.FinalizedTransaction> = {
+const v8FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV8.FinalizedTransaction> = {
   areAllTxIdsIncluded(tx, txIds) {
     return HashSet.isSubset(HashSet.fromIterable(tx.identifiers()), HashSet.fromIterable(txIds));
   },
   deserialize(serialized) {
-    return preForkLedger.Transaction.deserialize('signature', 'proof', 'binding', serialized);
+    return ledgerV8.Transaction.deserialize('signature', 'proof', 'binding', serialized);
   },
   firstId(tx) {
     return tx.identifiers()[0];
   },
   hasTTLExpired(tx, creationTime, now) {
-    const defaultShieldedGracePeriod = preForkLedger.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds;
+    const defaultShieldedGracePeriod = ledgerV8.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds;
     const intentTTLs = pipe(
       tx.intents?.values().toArray() ?? [],
       Arr.map((i) => i.ttl),
@@ -167,8 +167,8 @@ const preForkFinalizedTransactionTrait: PendingTransactions.TransactionTrait<pre
     const smallerSize = Order.min(Order.number)(HashSet.size(txIds), HashSet.size(otherTxIds));
     return HashSet.size(HashSet.intersection(txIds, otherTxIds)) == smallerSize;
   },
-  isTx(tx: unknown): tx is preForkLedger.FinalizedTransaction {
-    return tx instanceof preForkLedger.Transaction;
+  isTx(tx: unknown): tx is ledgerV8.FinalizedTransaction {
+    return tx instanceof ledgerV8.Transaction;
   },
   serialize(tx) {
     return tx.serialize();
@@ -215,8 +215,8 @@ const overHandles = <T extends { serialize: () => Uint8Array }>(
  *
  * @remarks
  *   One trait per ledger version, each reading the handle it is registered for and refusing the other's. That is what
- *   lets a transaction authored before the fork be recognised as stranded once the wallets cross — its bytes can never
- *   be included afterwards — instead of waiting out a TTL for an inclusion that can never happen.
+ *   lets a transaction authored before the v9 fork be recognised as stranded once the wallets cross — its bytes can
+ *   never be included afterwards — instead of waiting out a TTL for an inclusion that can never happen.
  * @param forkVersion The protocol version this chain forks at.
  * @returns The registry the pending transaction service reads with.
  */
@@ -230,23 +230,20 @@ export const finalizedTransactionTraits = (
             {
               sinceVersion: ProtocolVersion.MinSupportedVersion,
               value: overHandles(
-                preForkFinalizedTransactionTrait,
+                v8FinalizedTransactionTrait,
                 ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, forkVersion),
               ),
             },
             {
               sinceVersion: forkVersion,
-              value: overHandles(
-                currentLedgerFinalizedTransactionTrait,
-                ProtocolVersion.epochOf(forkVersion, forkVersion),
-              ),
+              value: overHandles(v9FinalizedTransactionTrait, ProtocolVersion.epochOf(forkVersion, forkVersion)),
             },
           ]
         : [
             {
               sinceVersion: ProtocolVersion.MinSupportedVersion,
               value: overHandles(
-                currentLedgerFinalizedTransactionTrait,
+                v9FinalizedTransactionTrait,
                 ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MinSupportedVersion),
               ),
             },

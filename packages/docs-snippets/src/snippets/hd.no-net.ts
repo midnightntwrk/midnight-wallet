@@ -13,7 +13,7 @@
 // Key objects belong to one ledger version; the seeds they are derived from do not. Every ledger version derives the
 // same identity from the same seed, which is why a wallet that has to follow the chain across a protocol boundary is
 // started from seeds — `WalletSeeds.fromMasterSeed` does the derivation below — and not from the key objects. The
-// post-fork ledger is imported here only to show what those seeds become.
+// ledger-v9 is imported here only to show what those seeds become.
 import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
 import { type Role, type AccountKey, HDWallet, Roles } from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';

@@ -27,8 +27,8 @@
  * 4. finding transactions the fork orphaned (`PendingStatus.Orphaned`)
  * 5. persisting and restoring (`serializeState` / `tryRestore`)
  *
- * The same configuration does the right thing on any chain: on one still below the boundary it runs on the pre-fork
- * ledger, on one already past it (like the chain this runs against) it starts directly on the post-fork ledger, and
+ * The same configuration does the right thing on any chain: on one still below the boundary it runs on ledger-v8, on one
+ * already past it (like the chain this runs against) it starts directly on ledger-v9, and
  * across a fork it hands over by itself. The crossing involves no application code and so cannot appear here — the
  * executable proof of it lives in each wallet package's `src/test/forkSimulation.test.ts` and
  * `src/test/forkStart.test.ts`.
@@ -54,7 +54,7 @@ const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
 const NODE_PORT = Number.parseInt(process.env['NODE_PORT'] ?? '9944', 10);
 const PROOF_SERVER_PORT = Number.parseInt(process.env['PROOF_SERVER_PORT'] ?? '6300', 10);
 // The proof server built against ledger-v8. A separate deployment from the one above — see the `provers`
-// comment below — and never contacted on a chain that has been post-fork since genesis.
+// comment below — and never contacted on a chain that has been on ledger-v9 since genesis.
 const V8_PROOF_SERVER_PORT = Number.parseInt(process.env['V8_PROOF_SERVER_PORT'] ?? '6301', 10);
 const INDEXER_HTTP_URL = `http://localhost:${INDEXER_PORT}/api/v4/graphql`;
 const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
@@ -65,7 +65,7 @@ const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
 const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
-  // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
+  // The protocol version this chain hands over to ledger-v9 at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
   forks: { v9: ProtocolVersion.V9NativeForkVersion },
   costParameters: {
@@ -79,8 +79,8 @@ const configuration: DefaultConfiguration = {
   // proving request.
   //
   // Two entries, because a proof server is built against one ledger version and no published image serves both: the
-  // pre-fork half of a chain that has history below `forks.v9` needs its own deployment. On a chain that has been
-  // post-fork since genesis — like the one this runs against — the `v8` entry is simply never reached.
+  // ledger-v8 half of a chain that has history below `forks.v9` needs its own deployment. On a chain that has been
+  // on ledger-v9 since genesis — like the one this runs against — the `v8` entry is simply never reached.
   //
   // `provingServerUrl: url` is the shortest form and means one server under every key; the SDK drives it with each
   // ledger version on its own side of `forks.v9`, which makes it correct but rarely what an operator wants, since the
@@ -110,10 +110,10 @@ const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshi
 
 // The starts are asynchronous because choosing where to begin means asking the chain: each wallet probes the indexer
 // for the protocol version the chain's timeline *starts* under and begins at the variant that owns it — where its
-// unread history begins, which is what decides which ledger version can read it. A chain that has been post-fork since
-// its genesis therefore starts these wallets post-fork directly; one that forked over existing history starts them
-// pre-fork, and they cross with what they read there. Without an answer a wallet begins pre-fork — where a wallet with
-// no history belongs — and is handed over on the first batch that reports a post-fork version. Nothing about the probe
+// unread history begins, which is what decides which ledger version can read it. A chain that has been on ledger-v9 since
+// its genesis therefore starts these wallets on V2 directly; one that forked over existing history starts them
+// on V1, and they cross with what they read there. Without an answer a wallet begins on V1 — where a wallet with
+// no history belongs — and is handed over on the first batch that reports a ledger-v9 version. Nothing about the probe
 // can make a start fail.
 const wallet: WalletFacade = await WalletFacade.init({
   configuration,
@@ -177,7 +177,7 @@ if (Either.isRight(restored)) {
   // A restored wallet holds no key material — a snapshot deliberately carries none — so it synchronizes nothing until
   // it is started again. Which start depends on where the snapshot was written: `startWithSeed` (and its sibling
   // `startWithKeys({ v8, v9 })`) answers for the variant either side of the boundary, so it works whichever side the
-  // snapshot came from; `start(secretKeys)` takes the post-fork ledger version's key alone and so serves only a
+  // snapshot came from; `start(secretKeys)` takes ledger-v9's key alone and so serves only a
   // snapshot written at or past the boundary. Neither is the class-level start of the same name: those build a fresh
   // wallet, which would discard the state just restored.
   await restored.right.startWithSeed(seeds.shielded);
