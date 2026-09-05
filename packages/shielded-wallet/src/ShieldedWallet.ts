@@ -15,18 +15,18 @@
  * A shielded wallet that registers a variant either side of a protocol boundary and follows the chain across it.
  *
  * @remarks
- *   One wallet, two ledger versions. Before the boundary the pre-fork variant reads the chain with the ledger version
- *   that produced it; from the boundary the post-fork variant does, having been handed identity and a place in the
- *   timeline and nothing else. Which one is running is the runtime's business, not the application's: the wallet's
- *   public API speaks the post-fork ledger version throughout, and where the two sides genuinely differ — the key
- *   material each variant's synchronization needs — the wallet resolves it per variant from what it retained.
+ *   One wallet, two ledger versions. Before the boundary the V1 variant reads the chain with the ledger version that
+ *   produced it; from the boundary the V2 variant does, having been handed identity and a place in the timeline and
+ *   nothing else. Which one is running is the runtime's business, not the application's: the wallet's public API speaks
+ *   ledger-v9 throughout, and where the two sides genuinely differ — the key material each variant's synchronization
+ *   needs — the wallet resolves it per variant from what it retained.
  *
  *   `ShieldedWallet(configuration)` at the bottom is how this package ships it. `CustomForkingShieldedWallet` is the same
  *   wallet over builders the caller chooses, and `SingleVariantShieldedWallet.ts` is the composition that gives up the
  *   crossing to run one variant only.
  */
-import type * as v8 from '@midnight-ntwrk/ledger-v8';
-import type * as ledger from '@midnightntwrk/ledger-v9';
+import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
   type NetworkId,
@@ -59,12 +59,12 @@ import {
   ShieldedWalletState,
   type ShieldedWalletAPI,
 } from './ShieldedWalletAPI.js';
-import { CoreWallet as PreForkCoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
-import { type WalletSyncUpdate as PreForkSyncUpdate } from './v1/Sync.js';
+import { CoreWallet as V1CoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
+import { type WalletSyncUpdate as V1SyncUpdate } from './v1/Sync.js';
 import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
-import { type WalletSyncUpdate as PostForkSyncUpdate } from './v2/Sync.js';
+import { type WalletSyncUpdate as V2SyncUpdate } from './v2/Sync.js';
 import { type TokenTransfer } from './v2/Transacting.js';
-import { type WalletError as PreForkWalletError } from './v1/WalletError.js';
+import { type WalletError as V1WalletError } from './v1/WalletError.js';
 import { type WalletError } from './v2/WalletError.js';
 
 /**
@@ -76,39 +76,39 @@ import { type WalletError } from './v2/WalletError.js';
  *   be unable to make sense of the bytes, which is a fact about the snapshot. Either is an ordinary thing to meet when
  *   restoring something a user supplied, which is why `tryRestore` reports them rather than throwing.
  */
-export type ShieldedRestoreError = UnsupportedSnapshotVersionError | PreForkWalletError | WalletError;
+export type ShieldedRestoreError = UnsupportedSnapshotVersionError | V1WalletError | WalletError;
 
 /**
  * What a transacting call can fail with.
  *
  * @remarks
  *   Two failures beyond the variant's own: the wallet may hold no key material the current variant can use — which is
- *   what a wallet started from post-fork key objects has to say while it is still pre-fork — and a transaction handed
- *   in may have been built on the other side of the boundary, which no variant here can read.
+ *   what a wallet started from ledger-v9 key objects has to say while it is still on ledger-v8 — and a transaction
+ *   handed in may have been built on the other side of the boundary, which no variant here can read.
  */
 type TransactingError = WalletError | StartMaterial.MissingStartAuxError | ProtocolVersionMismatchError;
 
-/** The pre-fork variant a forking shielded wallet registers: the one that reads the chain before the boundary. */
-export type PreForkShieldedVariant<TSyncUpdate> = V1Variant<
+/** The V1 variant a forking shielded wallet registers: the one that reads the chain before the boundary. */
+export type V1ShieldedVariant<TSyncUpdate> = V1Variant<
   string,
   TSyncUpdate,
-  v8.FinalizedTransaction,
-  v8.ZswapSecretKeys
+  ledgerV8.FinalizedTransaction,
+  ledgerV8.ZswapSecretKeys
 >;
 
-/** The post-fork variant a forking shielded wallet registers: the one the pre-fork wallet is migrated into. */
-export type PostForkShieldedVariant<TSyncUpdate> = V2Variant<
+/** The V2 variant a forking shielded wallet registers: the one the V1 wallet is migrated into. */
+export type V2ShieldedVariant<TSyncUpdate> = V2Variant<
   string,
   TSyncUpdate,
-  ledger.FinalizedTransaction,
-  ledger.ZswapSecretKeys,
+  ledgerV9.FinalizedTransaction,
+  ledgerV9.ZswapSecretKeys,
   Migration.PreviousLedgerWallet
 >;
 
 /** The two variants a forking shielded wallet runs, in registration order. */
-export type ForkingShieldedVariants<TPreForkSyncUpdate, TPostForkSyncUpdate> = [
-  Variant.VersionedVariant<PreForkShieldedVariant<TPreForkSyncUpdate>>,
-  Variant.VersionedVariant<PostForkShieldedVariant<TPostForkSyncUpdate>>,
+export type ForkingShieldedVariants<TV1SyncUpdate, TV2SyncUpdate> = [
+  Variant.VersionedVariant<V1ShieldedVariant<TV1SyncUpdate>>,
+  Variant.VersionedVariant<V2ShieldedVariant<TV2SyncUpdate>>,
 ];
 
 /**
@@ -138,10 +138,10 @@ export type ForkingShieldedConfiguration = {
    *
    * @remarks
    *   Optional, and best-effort where present: a wallet with no probe — or one whose probe does not answer in time —
-   *   starts on the pre-fork variant and learns the version from the first event it sees, which is what a wallet with
-   *   no history has always done. What a probe buys is the two things that guess costs: a hand-over per start on a
-   *   chain entirely past the boundary, and, on a chain that has shown this wallet no events at all, an epoch that
-   *   never gets corrected.
+   *   starts on the V1 variant and learns the version from the first event it sees, which is what a wallet with no
+   *   history has always done. What a probe buys is the two things that guess costs: a hand-over per start on a chain
+   *   entirely past the boundary, and, on a chain that has shown this wallet no events at all, an epoch that never gets
+   *   corrected.
    *
    *   Nothing about it can make a start fail. A rejection, a timeout, a version no registered variant covers: each leaves
    *   the wallet exactly where a wallet that never asked would be.
@@ -158,10 +158,10 @@ export type ForkingShieldedConfiguration = {
  *   wallet be built that cannot read half the chain, which is the shape this replaced.
  */
 export type ShieldedKeysByEpoch = Readonly<{
-  /** The pre-fork ledger version's Zswap secret keys. */
-  v8: v8.ZswapSecretKeys;
-  /** The post-fork ledger version's Zswap secret keys. */
-  v9: ledger.ZswapSecretKeys;
+  /** The ledger-v8's Zswap secret keys. */
+  v8: ledgerV8.ZswapSecretKeys;
+  /** The ledger-v9's Zswap secret keys. */
+  v9: ledgerV9.ZswapSecretKeys;
 }>;
 
 /**
@@ -173,19 +173,19 @@ export type ShieldedKeysByEpoch = Readonly<{
  *   them: a single-variant wallet speaks one ledger version, and the key material `start` takes is always the right
  *   one.
  */
-export type ForkingShieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate> = ShieldedWalletAPI<
-  ledger.ZswapSecretKeys,
-  ledger.FinalizedTransaction,
+export type ForkingShieldedWallet<TV1SyncUpdate, TV2SyncUpdate> = ShieldedWalletAPI<
+  ledgerV9.ZswapSecretKeys,
+  ledgerV9.FinalizedTransaction,
   string
 > &
-  WalletLike.WalletLike<ForkingShieldedVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>> & {
+  WalletLike.WalletLike<ForkingShieldedVariants<TV1SyncUpdate, TV2SyncUpdate>> & {
     /**
      * Starts this wallet from a seed, which answers for the variant either side of the boundary.
      *
      * @remarks
      *   The instance counterpart of {@link ForkingShieldedWalletClass.startWithSeed}, and what a wallet restored from a
      *   snapshot written below the boundary is started with. A snapshot carries no key material by design, and the
-     *   variant it restores onto is the pre-fork one, whose synchronization the post-fork keys
+     *   variant it restores onto is the ledger-v8 one, whose synchronization the ledger-v9 keys
      *   {@link ShieldedWalletAPI.start} takes cannot serve. The class-level start answers for both sides too — but it
      *   builds a _fresh_ wallet, which is the opposite of what a caller who has just restored one wants.
      *
@@ -211,7 +211,7 @@ export type ForkingShieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate> = Shi
      * @example
      *   ```typescript
      *   const wallet = ShieldedWallet(configuration).restore(snapshot);
-     *   await wallet.startWithKeys({ v8: preForkKeys, v9: postForkKeys });
+     *   await wallet.startWithKeys({ v8: v8Keys, v9: v9Keys });
      *   ```;
      *
      * @param keys One ledger version's Zswap secret keys per side of the boundary.
@@ -222,10 +222,10 @@ export type ForkingShieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate> = Shi
 
 /** The class a forking shielded wallet is started from. */
 export interface ForkingShieldedWalletClass<
-  TPreForkSyncUpdate,
-  TPostForkSyncUpdate,
+  TV1SyncUpdate,
+  TV2SyncUpdate,
   TConfiguration extends ForkingShieldedConfiguration = ForkingShieldedConfiguration,
-> extends WalletLike.BaseWalletClass<ForkingShieldedVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>, TConfiguration> {
+> extends WalletLike.BaseWalletClass<ForkingShieldedVariants<TV1SyncUpdate, TV2SyncUpdate>, TConfiguration> {
   /**
    * Builds a wallet from a seed, and remembers the seed.
    *
@@ -236,15 +236,14 @@ export interface ForkingShieldedWalletClass<
    *
    *   Asynchronous because choosing where to begin can mean asking the chain: with a
    *   {@link ForkingShieldedConfiguration.chainVersionProbe} configured, the wallet starts at the variant that owns the
-   *   version the chain reports, which on a chain already past the boundary is the post-fork one from the first moment.
-   *   Without one, or when the question goes unanswered, it begins on the pre-fork variant and is handed over when the
-   *   chain reports a version the post-fork variant owns — on a chain that has already forked, the first batch it
-   *   sees.
+   *   version the chain reports, which on a chain already past the boundary is the ledger-v9 one from the first moment.
+   *   Without one, or when the question goes unanswered, it begins on the V1 variant and is handed over when the chain
+   *   reports a version the V2 variant owns — on a chain that has already forked, the first batch it sees.
    * @param seed The seed to derive both ledger versions' keys from.
-   * @returns A wallet started at the variant the chain is on, or on the pre-fork variant when the chain was not asked
-   *   or did not say.
+   * @returns A wallet started at the variant the chain is on, or on the V1 variant when the chain was not asked or did
+   *   not say.
    */
-  startWithSeed(seed: Uint8Array): Promise<ForkingShieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>>;
+  startWithSeed(seed: Uint8Array): Promise<ForkingShieldedWallet<TV1SyncUpdate, TV2SyncUpdate>>;
   /**
    * Builds a wallet from key objects of both ledger versions.
    *
@@ -254,10 +253,10 @@ export interface ForkingShieldedWalletClass<
    *   side of the chain — and a partial product here would be exactly the foot-gun the single-key start was. It costs
    *   the caller an import of both ledger packages and the same derivation done twice; a seed costs neither.
    * @param keys One ledger version's Zswap secret keys per side of the boundary.
-   * @returns A wallet started at the variant the chain is on, or on the pre-fork variant — where a wallet with no
-   *   history belongs — when the chain was not asked or did not say.
+   * @returns A wallet started at the variant the chain is on, or on the V1 variant — where a wallet with no history
+   *   belongs — when the chain was not asked or did not say.
    */
-  startWithKeys(keys: ShieldedKeysByEpoch): Promise<ForkingShieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>>;
+  startWithKeys(keys: ShieldedKeysByEpoch): Promise<ForkingShieldedWallet<TV1SyncUpdate, TV2SyncUpdate>>;
   /**
    * Restores a wallet from a snapshot, into whichever registered variant wrote it.
    *
@@ -265,7 +264,7 @@ export interface ForkingShieldedWalletClass<
    * @returns A wallet started from that state, on the variant that owns its protocol version.
    * @throws UnsupportedSnapshotVersionError if the snapshot declares a version no registered variant reads.
    */
-  restore(serializedState: string): ForkingShieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>;
+  restore(serializedState: string): ForkingShieldedWallet<TV1SyncUpdate, TV2SyncUpdate>;
   /**
    * Restores a wallet from a snapshot, reporting what it could not read rather than throwing.
    *
@@ -280,16 +279,16 @@ export interface ForkingShieldedWalletClass<
    */
   tryRestore(
     serializedState: string,
-  ): Either.Either<ForkingShieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>, ShieldedRestoreError>;
+  ): Either.Either<ForkingShieldedWallet<TV1SyncUpdate, TV2SyncUpdate>, ShieldedRestoreError>;
 }
 
 /**
  * Builds a shielded wallet class over a variant either side of a protocol boundary.
  *
  * @remarks
- *   The boundary is `configuration.forks.v9` and nothing else: the pre-fork variant is registered from the minimum
- *   supported version and the post-fork one from the fork version, so the version at which the runtime hands over and
- *   the version at which each variant stops applying are the same number, taken from one place.
+ *   The boundary is `configuration.forks.v9` and nothing else: the V1 variant is registered from the minimum supported
+ *   version and the ledger-v9 one from the fork version, so the version at which the runtime hands over and the version
+ *   at which each variant stops applying are the same number, taken from one place.
  *
  *   Each variant is built from its own configuration. What the wallet layer needs — the network it is on and where the
  *   boundary lies — it takes separately, because neither variant knows there is another one.
@@ -297,45 +296,39 @@ export interface ForkingShieldedWalletClass<
  *   ```typescript
  *   const Wallet = CustomForkingShieldedWallet(
  *     { networkId, forks },
- *     { builder: new V1Builder().withDefaults(), configuration: preForkConfiguration },
- *     { builder: new V2Builder().withDefaults().withMigration(makeCrossLedgerMigration), configuration: postForkConfiguration },
+ *     { builder: new V1Builder().withDefaults(), configuration: v1Configuration },
+ *     { builder: new V2Builder().withDefaults().withMigration(makeCrossLedgerMigration), configuration: v2Configuration },
  *   );
  *   const wallet = Wallet.startWithSeed(seed);
  *   ```;
  *
  * @param configuration What the wallet layer needs: the network, and where the boundary lies.
- * @param preFork The variant that reads the chain below the boundary, with the configuration it is built from.
- * @param postFork The variant that reads it from the boundary, with the configuration it is built from.
+ * @param v1 The variant that reads the chain below the boundary, with the configuration it is built from.
+ * @param v2 The variant that reads it from the boundary, with the configuration it is built from.
  * @returns The wallet class.
  */
 export function CustomForkingShieldedWallet<
-  TPreForkSyncUpdate,
-  TPostForkSyncUpdate,
-  TPreForkConfig extends object,
-  TPostForkConfig extends object,
+  TV1SyncUpdate,
+  TV2SyncUpdate,
+  TV1Config extends object,
+  TV2Config extends object,
   TConfiguration extends ForkingShieldedConfiguration = ForkingShieldedConfiguration,
 >(
   configuration: TConfiguration,
-  preFork: SelfConfiguredShieldedVariant<PreForkShieldedVariant<TPreForkSyncUpdate>, TPreForkConfig>,
-  postFork: SelfConfiguredShieldedVariant<PostForkShieldedVariant<TPostForkSyncUpdate>, TPostForkConfig>,
-): ForkingShieldedWalletClass<TPreForkSyncUpdate, TPostForkSyncUpdate, TConfiguration> {
-  type Variants = ForkingShieldedVariants<TPreForkSyncUpdate, TPostForkSyncUpdate>;
+  v1: SelfConfiguredShieldedVariant<V1ShieldedVariant<TV1SyncUpdate>, TV1Config>,
+  v2: SelfConfiguredShieldedVariant<V2ShieldedVariant<TV2SyncUpdate>, TV2Config>,
+): ForkingShieldedWalletClass<TV1SyncUpdate, TV2SyncUpdate, TConfiguration> {
+  type Variants = ForkingShieldedVariants<TV1SyncUpdate, TV2SyncUpdate>;
 
   // Registered through the shape the builder states rather than through the one this function was handed. The two are
   // the same builder; what is dropped is the configuration *type*, which the parameter types have already paired with
   // its builder — and which, left generic, keeps `build`'s "nothing further is owed" argument list unresolvable.
-  const preForkBuilder: VariantBuilder.VariantBuilder<
-    PreForkShieldedVariant<TPreForkSyncUpdate>,
-    object
-  > = preFork.builder;
-  const postForkBuilder: VariantBuilder.VariantBuilder<
-    PostForkShieldedVariant<TPostForkSyncUpdate>,
-    object
-  > = postFork.builder;
+  const v1Builder: VariantBuilder.VariantBuilder<V1ShieldedVariant<TV1SyncUpdate>, object> = v1.builder;
+  const v2Builder: VariantBuilder.VariantBuilder<V2ShieldedVariant<TV2SyncUpdate>, object> = v2.builder;
 
   const BaseWallet: WalletLike.BaseWalletClass<Variants> = WalletBuilder.init()
-    .withVariant(ProtocolVersion.MinSupportedVersion, preForkBuilder, preFork.configuration)
-    .withVariant(configuration.forks.v9, postForkBuilder, postFork.configuration)
+    .withVariant(ProtocolVersion.MinSupportedVersion, v1Builder, v1.configuration)
+    .withVariant(configuration.forks.v9, v2Builder, v2.configuration)
     .build();
 
   const variants = BaseWallet.allVariantsRecord();
@@ -346,7 +339,7 @@ export function CustomForkingShieldedWallet<
    * @remarks
    *   Key objects belong to one ledger version's runtime and cannot be converted, so "the keys this wallet holds" is two
    *   questions, not one, and the type says so: each side is present or it is not, independently. A wallet that holds
-   *   only the post-fork side cannot read a chain that is still pre-fork, and finds that out here rather than by
+   *   only the ledger-v9 side cannot read a chain that is still on ledger-v8, and finds that out here rather than by
    *   handing over keys the other runtime would misread.
    *
    *   A seed is not among them. A seed can produce either side, so a wallet given one derives both at once and keeps the
@@ -354,17 +347,17 @@ export function CustomForkingShieldedWallet<
    *   wallet's to hold.
    */
   type RetainedKeys = Readonly<{
-    preFork: Option.Option<v8.ZswapSecretKeys>;
-    postFork: Option.Option<ledger.ZswapSecretKeys>;
+    v8: Option.Option<ledgerV8.ZswapSecretKeys>;
+    v9: Option.Option<ledgerV9.ZswapSecretKeys>;
   }>;
 
   /** Nothing retained: never started, or stopped. */
-  const noKeys: RetainedKeys = { preFork: Option.none(), postFork: Option.none() };
+  const noKeys: RetainedKeys = { v8: Option.none(), v9: Option.none() };
 
   /** Both sides, derived from one seed. */
   const keysFromSeed = (seed: WalletSeed.WalletSeed): RetainedKeys => ({
-    preFork: Option.some(variants[V1Tag].variant.startAux.fromSeed(seed)),
-    postFork: Option.some(variants[V2Tag].variant.startAux.fromSeed(seed)),
+    v8: Option.some(variants[V1Tag].variant.startAux.fromSeed(seed)),
+    v9: Option.some(variants[V2Tag].variant.startAux.fromSeed(seed)),
   });
 
   /**
@@ -384,7 +377,7 @@ export function CustomForkingShieldedWallet<
       () =>
         new StartMaterial.MissingStartAuxError({
           message:
-            Option.isNone(retained.preFork) && Option.isNone(retained.postFork)
+            Option.isNone(retained.v8) && Option.isNone(retained.v9)
               ? `This wallet holds no key material: it has not been started, or it has been stopped. Start it ` +
                 `before asking it to synchronize or to build a transaction.`
               : `This wallet holds key material of the other protocol version only, which the variant ` +
@@ -395,13 +388,11 @@ export function CustomForkingShieldedWallet<
         }),
     );
 
-  const preForkAux = (retained: RetainedKeys): Either.Either<v8.ZswapSecretKeys, StartMaterial.MissingStartAuxError> =>
-    auxFor(retained, retained.preFork, V1Tag);
+  const v8Aux = (retained: RetainedKeys): Either.Either<ledgerV8.ZswapSecretKeys, StartMaterial.MissingStartAuxError> =>
+    auxFor(retained, retained.v8, V1Tag);
 
-  const postForkAux = (
-    retained: RetainedKeys,
-  ): Either.Either<ledger.ZswapSecretKeys, StartMaterial.MissingStartAuxError> =>
-    auxFor(retained, retained.postFork, V2Tag);
+  const v9Aux = (retained: RetainedKeys): Either.Either<ledgerV9.ZswapSecretKeys, StartMaterial.MissingStartAuxError> =>
+    auxFor(retained, retained.v9, V2Tag);
 
   /**
    * The protocol versions each variant owns, and the version a transaction it builds is stamped with.
@@ -413,17 +404,17 @@ export function CustomForkingShieldedWallet<
    *   may unwrap them. The epoch floor is the one value guaranteed to answer that the same way as any other version in
    *   the same epoch, and it is derived here from the same `forks.v9` the variants are registered at.
    */
-  const preForkEpoch = ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, configuration.forks.v9);
-  const postForkEpoch = ProtocolVersion.epochOf(configuration.forks.v9, configuration.forks.v9);
-  const [preForkStamp] = preForkEpoch;
-  const [postForkStamp] = postForkEpoch;
+  const v8Epoch = ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, configuration.forks.v9);
+  const v9Epoch = ProtocolVersion.epochOf(configuration.forks.v9, configuration.forks.v9);
+  const [v8Stamp] = v8Epoch;
+  const [v9Stamp] = v9Epoch;
 
   /** Seals a balancing result, which is absent when the wallet had nothing of its own to add. */
-  const sealPreFork = (result: v8.UnprovenTransaction | undefined): ShieldedBalancingResult =>
-    result === undefined ? undefined : WalletTransaction.adopt('Unproven', result, preForkStamp);
+  const sealV8 = (result: ledgerV8.UnprovenTransaction | undefined): ShieldedBalancingResult =>
+    result === undefined ? undefined : WalletTransaction.adopt('Unproven', result, v8Stamp);
 
-  const sealPostFork = (result: ledger.UnprovenTransaction | undefined): ShieldedBalancingResult =>
-    result === undefined ? undefined : WalletTransaction.adopt('Unproven', result, postForkStamp);
+  const sealV9 = (result: ledgerV9.UnprovenTransaction | undefined): ShieldedBalancingResult =>
+    result === undefined ? undefined : WalletTransaction.adopt('Unproven', result, v9Stamp);
 
   /**
    * How long a start waits for the chain to say which version it is on.
@@ -475,14 +466,14 @@ export function CustomForkingShieldedWallet<
     variant: HList.Each<Variants>,
     keys: ShieldedKeysByEpoch,
     version: ProtocolVersion.ProtocolVersion,
-  ): PreForkCoreWallet | CoreWallet =>
+  ): V1CoreWallet | CoreWallet =>
     Variant.getVersionedVariantTag(variant) === V2Tag
       ? CoreWallet.withProtocolVersion(CoreWallet.initEmpty(keys.v9, configuration.networkId), version)
-      : PreForkCoreWallet.withProtocolVersion(PreForkCoreWallet.initEmpty(keys.v8, configuration.networkId), version);
+      : V1CoreWallet.withProtocolVersion(V1CoreWallet.initEmpty(keys.v8, configuration.networkId), version);
 
   return class ForkingShieldedWalletImplementation
     extends BaseWallet
-    implements ForkingShieldedWallet<TPreForkSyncUpdate, TPostForkSyncUpdate>
+    implements ForkingShieldedWallet<TV1SyncUpdate, TV2SyncUpdate>
   {
     static readonly configuration: TConfiguration = configuration;
 
@@ -491,8 +482,8 @@ export function CustomForkingShieldedWallet<
      *
      * @remarks
      *   The second branch is the whole of this wallet's previous behaviour, unchanged and reached whenever the chain was
-     *   not asked or did not answer: the pre-fork variant, an empty state, and a hand-over on the first batch that
-     *   reports a version it does not own.
+     *   not asked or did not answer: the V1 variant, an empty state, and a hand-over on the first batch that reports a
+     *   version it does not own.
      * @param keys One ledger version's keys per side of the boundary, since either side may be the one that runs.
      * @returns The started wallet.
      */
@@ -504,7 +495,7 @@ export function CustomForkingShieldedWallet<
             onNone: () =>
               ForkingShieldedWalletImplementation.startFirst(
                 ForkingShieldedWalletImplementation,
-                PreForkCoreWallet.initEmpty(keys.v8, configuration.networkId),
+                V1CoreWallet.initEmpty(keys.v8, configuration.networkId),
               ),
             onSome: ({ version, variant }) =>
               ForkingShieldedWalletImplementation.startAtVariant(
@@ -521,8 +512,8 @@ export function CustomForkingShieldedWallet<
     static async startWithSeed(seed: Uint8Array): Promise<ForkingShieldedWalletImplementation> {
       const derived = keysFromSeed(WalletSeed.WalletSeed(seed));
       const wallet = await ForkingShieldedWalletImplementation.#startProbed({
-        v8: Option.getOrThrow(derived.preFork),
-        v9: Option.getOrThrow(derived.postFork),
+        v8: Option.getOrThrow(derived.v8),
+        v9: Option.getOrThrow(derived.v9),
       });
       // Both sides derived here and now, and the seed reference dropped with this frame: from this point the wallet
       // holds key objects only, which is strictly less than it held before and does the same work.
@@ -532,7 +523,7 @@ export function CustomForkingShieldedWallet<
 
     static async startWithKeys(keys: ShieldedKeysByEpoch): Promise<ForkingShieldedWalletImplementation> {
       const wallet = await ForkingShieldedWalletImplementation.#startProbed(keys);
-      wallet.#retainKeys({ preFork: Option.some(keys.v8), postFork: Option.some(keys.v9) });
+      wallet.#retainKeys({ v8: Option.some(keys.v8), v9: Option.some(keys.v9) });
       return wallet;
     }
 
@@ -552,7 +543,7 @@ export function CustomForkingShieldedWallet<
           // Annotated rather than inferred because the resolved variant is either of the two, so its deserializer is
           // either of theirs: what comes back is a state of whichever one wrote the snapshot, which is what
           // `startAtVariant` takes.
-          const deserialized: Either.Either<PreForkCoreWallet | CoreWallet, ShieldedRestoreError> =
+          const deserialized: Either.Either<V1CoreWallet | CoreWallet, ShieldedRestoreError> =
             variant.variant.deserializeState(serializedState);
           return Either.map(deserialized, (state) =>
             ForkingShieldedWalletImplementation.startAtVariant(ForkingShieldedWalletImplementation, variant, state),
@@ -573,7 +564,7 @@ export function CustomForkingShieldedWallet<
      * @remarks
      *   A migration starts a fresh variant whose sync has never run, and sync needs key material that is deliberately
      *   absent from anything the wallet serializes. A retained seed answers for both variants; retained key objects
-     *   answer only for the post-fork one, which is the ledger version this wallet's public API speaks. Cleared by
+     *   answer only for the ledger-v9 one, which is the ledger version this wallet's public API speaks. Cleared by
      *   {@link stop} so a stopped wallet cannot be resurrected by a late activation.
      */
     readonly #retainedKeys = Ref.unsafeMake<RetainedKeys>(noKeys);
@@ -596,7 +587,7 @@ export function CustomForkingShieldedWallet<
       return Ref.get(this.#retainedKeys).pipe(
         Effect.flatMap((retained) =>
           // Stopped, or never started: there is nothing to resume and nothing to resume it with.
-          Option.isNone(retained.preFork) && Option.isNone(retained.postFork)
+          Option.isNone(retained.v8) && Option.isNone(retained.v9)
             ? Effect.void
             : EitherOps.toEffect(keysFor(retained)).pipe(Effect.flatMap((aux) => running.startSyncInBackground(aux))),
         ),
@@ -641,21 +632,21 @@ export function CustomForkingShieldedWallet<
      *
      *   Both branches of the dispatch resolve their keys from what was retained rather than from what the caller passed,
      *   because the variant that is current is not the caller's to know: a wallet restored below the boundary is on the
-     *   pre-fork one whatever the application holds.
+     *   ledger-v8 one whatever the application holds.
      */
     #startSynchronizing(): Effect.Effect<void, StartMaterial.MissingStartAuxError | WalletRuntimeError> {
       return Effect.gen(this, function* () {
         const alreadyRegistered = yield* Ref.getAndSet(this.#watcherRegistered, true);
         if (!alreadyRegistered) {
           yield* this.runtime.onVariantActivation({
-            [V1Tag]: (v1) => this.#resumeSyncOn(v1, preForkAux),
-            [V2Tag]: (v2) => this.#resumeSyncOn(v2, postForkAux),
+            [V1Tag]: (v1) => this.#resumeSyncOn(v1, v8Aux),
+            [V2Tag]: (v2) => this.#resumeSyncOn(v2, v9Aux),
           });
         }
 
         yield* this.runtime.dispatch({
-          [V1Tag]: (v1) => this.#resumeSyncOn(v1, preForkAux),
-          [V2Tag]: (v2) => this.#resumeSyncOn(v2, postForkAux),
+          [V1Tag]: (v1) => this.#resumeSyncOn(v1, v8Aux),
+          [V2Tag]: (v2) => this.#resumeSyncOn(v2, v9Aux),
         });
       });
     }
@@ -664,23 +655,23 @@ export function CustomForkingShieldedWallet<
      * Starts background synchronization on whichever variant is current, and keeps the keys for the next one.
      *
      * @remarks
-     *   The keys are the post-fork ledger version's, so they are retained against that variant alone and answer for it
-     *   alone. A wallet still on the pre-fork variant is started from whatever it holds for _that_ side — which a
-     *   wallet built from a seed, or from both versions' keys, can always answer and one holding only these cannot.
+     *   The keys are ledger-v9's, so they are retained against that variant alone and answer for it alone. A wallet still
+     *   on the V1 variant is started from whatever it holds for _that_ side — which a wallet built from a seed, or from
+     *   both versions' keys, can always answer and one holding only these cannot.
      *
      *   That is the position of a wallet restored from a snapshot written below the boundary: a snapshot carries no key
      *   material, so these keys leave it with nothing the running variant can use, and it says so rather than
      *   pretending to have started. {@link ForkingShieldedWallet.startWithSeed} and
      *   {@link ForkingShieldedWallet.startWithKeys} are the same wallet started with material that answers for either
      *   side.
-     * @param secretKeys The post-fork ledger version's Zswap secret keys.
+     * @param secretKeys The ledger-v9's Zswap secret keys.
      */
-    start(secretKeys: ledger.ZswapSecretKeys): Promise<void> {
+    start(secretKeys: ledgerV9.ZswapSecretKeys): Promise<void> {
       return Effect.gen(this, function* () {
-        // The post-fork side only: these keys belong to that ledger version's runtime. Whatever the wallet already
-        // holds for the pre-fork side is left as it is, so a wallet built from a seed keeps the ability to read a
+        // The ledger-v9 side only: these keys belong to that ledger version's runtime. Whatever the wallet already
+        // holds for the ledger-v8 side is left as it is, so a wallet built from a seed keeps the ability to read a
         // chain that has not forked yet.
-        yield* Ref.update(this.#retainedKeys, (retained) => ({ ...retained, postFork: Option.some(secretKeys) }));
+        yield* Ref.update(this.#retainedKeys, (retained) => ({ ...retained, v9: Option.some(secretKeys) }));
         yield* this.#startSynchronizing();
       }).pipe(Effect.runPromise);
     }
@@ -696,7 +687,7 @@ export function CustomForkingShieldedWallet<
 
     startWithKeys(keys: ShieldedKeysByEpoch): Promise<void> {
       return Effect.gen(this, function* () {
-        yield* Ref.set(this.#retainedKeys, { preFork: Option.some(keys.v8), postFork: Option.some(keys.v9) });
+        yield* Ref.set(this.#retainedKeys, { v8: Option.some(keys.v8), v9: Option.some(keys.v9) });
         yield* this.#startSynchronizing();
       }).pipe(Effect.runPromise);
     }
@@ -733,28 +724,27 @@ export function CustomForkingShieldedWallet<
         .dispatch<ShieldedBalancingResult, TransactingError>({
           [V1Tag]: (v1) =>
             Effect.all([
-              this.#requireAux(preForkAux),
+              this.#requireAux(v8Aux),
               EitherOps.toEffect(
-                WalletTransaction.unwrapWithin<v8.Transaction<v8.Signaturish, v8.Proofish, v8.Bindingish>>(
-                  tx,
-                  preForkEpoch,
-                ),
+                WalletTransaction.unwrapWithin<
+                  ledgerV8.Transaction<ledgerV8.Signaturish, ledgerV8.Proofish, ledgerV8.Bindingish>
+                >(tx, v8Epoch),
               ),
             ]).pipe(
               Effect.flatMap(([keys, unwrapped]) => v1.balanceTransaction(keys, unwrapped)),
-              Effect.map(sealPreFork),
+              Effect.map(sealV8),
             ),
           [V2Tag]: (v2) =>
             Effect.all([
-              this.#requireAux(postForkAux),
+              this.#requireAux(v9Aux),
               EitherOps.toEffect(
                 WalletTransaction.unwrapWithin<
-                  ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>
-                >(tx, postForkEpoch),
+                  ledgerV9.Transaction<ledgerV9.Signaturish, ledgerV9.Proofish, ledgerV9.Bindingish>
+                >(tx, v9Epoch),
               ),
             ]).pipe(
               Effect.flatMap(([keys, unwrapped]) => v2.balanceTransaction(keys, unwrapped)),
-              Effect.map(sealPostFork),
+              Effect.map(sealV9),
             ),
         })
         .pipe(Effect.runPromise);
@@ -764,34 +754,34 @@ export function CustomForkingShieldedWallet<
       return this.runtime
         .dispatch<UnprovenTx, TransactingError>({
           [V1Tag]: (v1) =>
-            this.#requireAux(preForkAux).pipe(
+            this.#requireAux(v8Aux).pipe(
               Effect.flatMap((keys) => v1.transferTransaction(keys, outputs)),
-              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v8Stamp)),
             ),
           [V2Tag]: (v2) =>
-            this.#requireAux(postForkAux).pipe(
+            this.#requireAux(v9Aux).pipe(
               Effect.flatMap((keys) => v2.transferTransaction(keys, outputs)),
-              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp)),
             ),
         })
         .pipe(Effect.runPromise);
     }
 
     initSwap(
-      desiredInputs: Record<ledger.RawTokenType, bigint>,
+      desiredInputs: Record<ledgerV9.RawTokenType, bigint>,
       desiredOutputs: readonly TokenTransfer[],
     ): Promise<UnprovenTx> {
       return this.runtime
         .dispatch<UnprovenTx, TransactingError>({
           [V1Tag]: (v1) =>
-            this.#requireAux(preForkAux).pipe(
+            this.#requireAux(v8Aux).pipe(
               Effect.flatMap((keys) => v1.initSwap(keys, desiredInputs, desiredOutputs)),
-              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, preForkStamp)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v8Stamp)),
             ),
           [V2Tag]: (v2) =>
-            this.#requireAux(postForkAux).pipe(
+            this.#requireAux(v9Aux).pipe(
               Effect.flatMap((keys) => v2.initSwap(keys, desiredInputs, desiredOutputs)),
-              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, postForkStamp)),
+              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp)),
             ),
         })
         .pipe(Effect.runPromise);
@@ -812,17 +802,16 @@ export function CustomForkingShieldedWallet<
         .dispatch<void, TransactingError>({
           [V1Tag]: (v1) =>
             Either.match(
-              WalletTransaction.unwrapWithin<v8.Transaction<v8.Signaturish, v8.Proofish, v8.Bindingish>>(
-                transaction,
-                preForkEpoch,
-              ),
+              WalletTransaction.unwrapWithin<
+                ledgerV8.Transaction<ledgerV8.Signaturish, ledgerV8.Proofish, ledgerV8.Bindingish>
+              >(transaction, v8Epoch),
               { onLeft: () => Effect.void, onRight: (unwrapped) => v1.revertTransaction(unwrapped) },
             ),
           [V2Tag]: (v2) =>
             Either.match(
               WalletTransaction.unwrapWithin<
-                ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>
-              >(transaction, postForkEpoch),
+                ledgerV9.Transaction<ledgerV9.Signaturish, ledgerV9.Proofish, ledgerV9.Bindingish>
+              >(transaction, v9Epoch),
               { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertTransaction(unwrapped) },
             ),
         })
@@ -850,31 +839,27 @@ export function CustomForkingShieldedWallet<
 }
 
 /** A shielded wallet built the way this package ships it: one variant either side of the protocol boundary. */
-export type ShieldedWallet = ForkingShieldedWallet<PreForkSyncUpdate, PostForkSyncUpdate>;
+export type ShieldedWallet = ForkingShieldedWallet<V1SyncUpdate, V2SyncUpdate>;
 
 /** The class {@link ShieldedWallet} builds. */
-export type ShieldedWalletClass = ForkingShieldedWalletClass<
-  PreForkSyncUpdate,
-  PostForkSyncUpdate,
-  DefaultShieldedConfiguration
->;
+export type ShieldedWalletClass = ForkingShieldedWalletClass<V1SyncUpdate, V2SyncUpdate, DefaultShieldedConfiguration>;
 
 /**
  * Builds the shielded wallet this package ships: the default variant either side of `configuration.forks.v9`.
  *
  * @remarks
  *   Both variants read the chain through the indexer and record transaction history in the same storage; each is built
- *   from the same application configuration, because what they ask for happens to coincide. The post-fork variant is
+ *   from the same application configuration, because what they ask for happens to coincide. The V2 variant is
  *   registered with the cross-ledger migration, which is what makes the hand-over carry identity and a cursor onto a
  *   fresh state rather than start a wallet from nothing.
  *
  *   **Transacting works on either side of the boundary**: the active variant builds with its own ledger and its own
- *   derived keys, and every result travels as a handle stamped with the epoch that built it. Proving a pre-fork
+ *   derived keys, and every result travels as a handle stamped with the epoch that built it. Proving a ledger-v8
  *   transaction still requires a proving server registered below the boundary.
  *
  *   **The chain is asked where it is before a variant is chosen.** The indexer this wallet already syncs from answers
- *   which protocol version the chain is on, so a start on a chain past the boundary begins post-fork rather than
- *   handing over immediately. An application that would rather ask something else — a cache, a value it already holds —
+ *   which protocol version the chain is on, so a start on a chain past the boundary begins on V2 rather than handing
+ *   over immediately. An application that would rather ask something else — a cache, a value it already holds —
  *   supplies its own `chainVersionProbe`; one whose chain cannot be reached loses nothing, because the answer is
  *   best-effort and its absence is the behaviour this wallet had before.
  * @param configuration What the wallet and both its variants are built from, including where the boundary lies.

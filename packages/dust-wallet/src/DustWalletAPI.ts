@@ -348,8 +348,8 @@ export type DefaultDustConfiguration = {
    *
    * @remarks
    *   Required, and deliberately without a default: the wallet registers one variant either side of the boundary, so a
-   *   wrong value does not degrade — it decides which ledger version reads the chain. Below `forks.v9` the pre-fork
-   *   variant is active; from it, the post-fork one. The SDK cannot guess it, because it is a property of the chain the
+   *   wrong value does not degrade — it decides which ledger version reads the chain. Below `forks.v9` the ledger-v8
+   *   variant is active; from it, the ledger-v9 one. The SDK cannot guess it, because it is a property of the chain the
    *   application points at, not of the SDK.
    *
    *   A map keyed by ledger version rather than a single number, so the next hard fork adds a key instead of changing the

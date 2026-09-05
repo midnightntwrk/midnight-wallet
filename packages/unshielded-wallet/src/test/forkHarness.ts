@@ -18,15 +18,15 @@
  *   Everything here is observation and simulated infrastructure. The wallet itself is the one the package ships —
  *   {@link CustomForkingUnshieldedWallet}, the same composition `UnshieldedWallet(configuration)` uses — with each
  *   variant's sync _service_ replaced by a numbered, version-tagged timeline instead of a WebSocket to an indexer, and
- *   the post-fork variant's migration wrapped so both ends of the hand-over can be recorded as plain data. The
- *   capability that folds a message into the wallet, boundary rule and all, is the real one.
+ *   the V2 variant's migration wrapped so both ends of the hand-over can be recorded as plain data. The capability that
+ *   folds a message into the wallet, boundary rule and all, is the real one.
  *
  *   This harness is markedly simpler than the shielded and dust equivalents, and the reason is the point of the whole
  *   unshielded increment: there is no key to retain. Unshielded synchronization is watch-only — the address is public
  *   and signing is supplied per call by the caller — so `startSyncInBackground` takes no argument on either variant,
  *   the activation watcher re-dispatches with nothing, and none of the start-aux machinery those wallets need applies
  *   here. What the wallet is started with is an identity, and the harness hands it the one an application holds: the
- *   post-fork ledger version's {@link PublicKey}.
+ *   ledger-v9's {@link PublicKey}.
  */
 import { NetworkId, type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
@@ -38,17 +38,17 @@ import {
   type ForkingUnshieldedWalletClass,
 } from '../UnshieldedWallet.js';
 import { type PublicKey } from '../KeyStore.js';
-import { type CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
-import * as PreForkMigration from '../v1/Migration.js';
-import * as PreForkSync from '../v1/Sync.js';
-import { type WalletSyncUpdate as PreForkUpdate } from '../v1/SyncSchema.js';
-import { type TransactionHistoryService as PreForkHistory } from '../v1/TransactionHistory.js';
+import { type CoreWallet as V1CoreWallet } from '../v1/CoreWallet.js';
+import * as V1Migration from '../v1/Migration.js';
+import * as V1Sync from '../v1/Sync.js';
+import { type WalletSyncUpdate as V1Update } from '../v1/SyncSchema.js';
+import { type TransactionHistoryService as V1History } from '../v1/TransactionHistory.js';
 import { V1Builder } from '../v1/V1Builder.js';
-import { type CoreWallet as PostForkWallet } from '../v2/CoreWallet.js';
-import * as PostForkMigration from '../v2/Migration.js';
-import * as PostForkSync from '../v2/Sync.js';
-import { type WalletSyncUpdate as PostForkUpdate } from '../v2/SyncSchema.js';
-import { type TransactionHistoryService as PostForkHistory } from '../v2/TransactionHistory.js';
+import { type CoreWallet as V2CoreWallet } from '../v2/CoreWallet.js';
+import * as V2Migration from '../v2/Migration.js';
+import * as V2Sync from '../v2/Sync.js';
+import { type WalletSyncUpdate as V2Update } from '../v2/SyncSchema.js';
+import { type TransactionHistoryService as V2History } from '../v2/TransactionHistory.js';
 import { V2Builder } from '../v2/V2Builder.js';
 import { type TimelineItem } from './forkTimeline.js';
 
@@ -60,8 +60,8 @@ import { type TimelineItem } from './forkTimeline.js';
  * A migration captured as plain data.
  *
  * @remarks
- *   Captured rather than inspected live so assertions can be made after the crossing, when the pre-fork variant's scope
- *   has closed.
+ *   Captured rather than inspected live so assertions can be made after the crossing, when the V1 variant's scope has
+ *   closed.
  */
 export type CapturedMigration = {
   readonly from: MigrationSide;
@@ -87,7 +87,7 @@ export type CarriedUtxo = {
   readonly ctime: number;
 };
 
-const sideOf = (wallet: PreForkWallet | PostForkWallet): MigrationSide => ({
+const sideOf = (wallet: V1CoreWallet | V2CoreWallet): MigrationSide => ({
   utxos: utxosOf(wallet),
   appliedId: wallet.progress.appliedId,
   protocolVersion: wallet.protocolVersion,
@@ -118,7 +118,7 @@ const sortedCarried = (utxos: readonly CarriedUtxo[]): readonly CarriedUtxo[] =>
   [...utxos].sort((a, b) => (a.value === b.value ? a.outputNo - b.outputNo : Number(a.value - b.value)));
 
 /** Every available UTXO, as plain data, in a stable order so two sides can be compared directly. */
-export const utxosOf = (wallet: PreForkWallet | PostForkWallet): readonly CarriedUtxo[] =>
+export const utxosOf = (wallet: V1CoreWallet | V2CoreWallet): readonly CarriedUtxo[] =>
   sortedCarried(Array.from(HashMap.values(wallet.state.availableUtxos), plainUtxo));
 
 /**
@@ -129,14 +129,14 @@ export const utxosOf = (wallet: PreForkWallet | PostForkWallet): readonly Carrie
  *   spent is still held by the wallet and would pass any assertion made only about totals. Only reading the booked map
  *   separately distinguishes "returned to the available set" from "still reserved for a transaction that cannot land".
  */
-export const bookedUtxosOf = (wallet: PreForkWallet | PostForkWallet): readonly CarriedUtxo[] =>
+export const bookedUtxosOf = (wallet: V1CoreWallet | V2CoreWallet): readonly CarriedUtxo[] =>
   sortedCarried(Array.from(HashMap.values(wallet.state.pendingUtxos), plainUtxo));
 
 /** Wraps the real cross-ledger migration so the test can see exactly what crossed. */
 const capturingCrossLedgerMigration = (
   captured: Deferred.Deferred<CapturedMigration>,
-): PostForkMigration.StateMigration<PostForkMigration.PreviousLedgerWallet> => {
-  const inner = PostForkMigration.makeCrossLedgerMigration();
+): V2Migration.StateMigration<V2Migration.PreviousLedgerWallet> => {
+  const inner = V2Migration.makeCrossLedgerMigration();
   return {
     migrate: (previousState) =>
       pipe(
@@ -169,8 +169,8 @@ const capturingCrossLedgerMigration = (
  *   fork. Written out once per variant because the two `TransactionHistoryService` types name their own ledger
  *   version's update.
  */
-const noOpPreForkHistory: PreForkHistory = { put: () => Effect.void };
-const noOpPostForkHistory: PostForkHistory = { put: () => Effect.void };
+const noOpV1History: V1History = { put: () => Effect.void };
+const noOpV2History: V2History = { put: () => Effect.void };
 
 /** What each variant is configured with, on top of what its builder already asks for. */
 type SourceConfiguration = Readonly<{
@@ -185,14 +185,14 @@ type SourceConfiguration = Readonly<{
  * @remarks
  *   This is the whole fidelity of the model, and it is deliberately the one thing not stubbed away: the source is asked
  *   for everything _after_ the cursor the wallet presents, exactly as the indexer subscription is
- *   (`subscription(transactionId: appliedId)`). A post-fork variant that resumes from a parked cursor therefore really
- *   does re-fetch the boundary transaction, and one that resumed from a bumped cursor really would miss it.
+ *   (`subscription(transactionId: appliedId)`). A V2 variant that resumes from a parked cursor therefore really does
+ *   re-fetch the boundary transaction, and one that resumed from a bumped cursor really would miss it.
  */
 const timelineSyncService = <TUpdate>(
   timeline: readonly TimelineItem[],
   toUpdate: (item: TimelineItem) => TUpdate,
 ) => ({
-  updates: (state: PreForkWallet | PostForkWallet) =>
+  updates: (state: V1CoreWallet | V2CoreWallet) =>
     Stream.fromIterable(timeline.filter((item) => BigInt(item.id) > state.progress.appliedId).map(toUpdate)),
 });
 
@@ -205,14 +205,13 @@ export type ForkWalletConfig = {
   /** The single timeline both variants read, each decoding it as its own ledger version's update. */
   readonly timeline: readonly TimelineItem[];
   /**
-   * The version at which the post-fork variant is registered.
+   * The version at which the V2 variant is registered.
    *
-   * The single source of truth for the boundary: the pre-fork variant's activation range ends here, and so does the
-   * point at which its sync stops applying. Deliberately not a production constant — the real fork version is not
-   * final.
+   * The single source of truth for the boundary: the V1 variant's activation range ends here, and so does the point at
+   * which its sync stops applying. Deliberately not a production constant — the real fork version is not final.
    */
   readonly forkVersion: ProtocolVersion.ProtocolVersion;
-  /** The identity the wallet is started with, in the shape an application holds it: the post-fork ledger version's. */
+  /** The identity the wallet is started with, in the shape an application holds it: ledger-v9's. */
   readonly publicKey: PublicKey;
   readonly networkId?: NetworkId.NetworkId;
   /**
@@ -225,12 +224,12 @@ export type ForkWalletConfig = {
 };
 
 /** A state emission, whichever variant produced it. */
-export type ForkedState = ProtocolState.ProtocolState<PreForkWallet | PostForkWallet>;
+export type ForkedState = ProtocolState.ProtocolState<V1CoreWallet | V2CoreWallet>;
 
 /** A running forking unshielded wallet, plus the channels a fork proof needs to observe it. */
 export type ForkWallet = {
   /** The wallet itself, exactly as an application would hold it. */
-  readonly unshielded: ForkingUnshieldedWallet<PreForkUpdate, PostForkUpdate>;
+  readonly unshielded: ForkingUnshieldedWallet<V1Update, V2Update>;
   /**
    * The class the wallet was started from, so a snapshot can be restored through the same registration that wrote it.
    *
@@ -238,7 +237,7 @@ export type ForkWallet = {
    *   Restoring is a class-level entry point, not an instance one — it is how an application gets a wallet in the first
    *   place — so a proof about restoring needs the class and not merely the running wallet.
    */
-  readonly walletClass: ForkingUnshieldedWalletClass<PreForkUpdate, PostForkUpdate>;
+  readonly walletClass: ForkingUnshieldedWalletClass<V1Update, V2Update>;
   /** Starts background synchronization through the wallet's own API. */
   readonly start: Effect.Effect<void>;
   /** Resolves when the hand-over happens, with both ends of it. */
@@ -275,13 +274,13 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
   const captured = Deferred.unsafeMake<CapturedMigration>(FiberId.none);
   const variantConfiguration: SourceConfiguration = { networkId, timeline: config.timeline };
 
-  const preForkBuilder = new V1Builder()
+  const v1Builder = new V1Builder()
     .withSync(
       (configuration: SourceConfiguration) =>
-        timelineSyncService<PreForkUpdate>(configuration.timeline, (item) => item.update as PreForkUpdate),
+        timelineSyncService<V1Update>(configuration.timeline, (item) => item.update as V1Update),
       // The REAL capability, boundary rule and all — only the service that would open a WebSocket is substituted.
-      (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: PreForkHistory }) =>
-        PreForkSync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
+      (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: V1History }) =>
+        V1Sync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
           getContext(),
         ),
     )
@@ -289,19 +288,19 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     .withTransactingDefaults()
     .withSigningDefaults()
     .withCoinsAndBalancesDefaults()
-    .withTransactionHistory(() => noOpPreForkHistory)
+    .withTransactionHistory(() => noOpV1History)
     .withKeysDefaults()
     .withCoinSelectionDefaults()
     .withMigration((configuration: SourceConfiguration) =>
-      PreForkMigration.makeEmptyWalletMigration({ networkId: configuration.networkId }),
+      V1Migration.makeEmptyWalletMigration({ networkId: configuration.networkId }),
     );
 
-  const postForkBuilder = new V2Builder()
+  const v2Builder = new V2Builder()
     .withSync(
       (configuration: SourceConfiguration) =>
-        timelineSyncService<PostForkUpdate>(configuration.timeline, (item) => item.update as PostForkUpdate),
-      (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: PostForkHistory }) =>
-        PostForkSync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
+        timelineSyncService<V2Update>(configuration.timeline, (item) => item.update as V2Update),
+      (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: V2History }) =>
+        V2Sync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
           getContext(),
         ),
     )
@@ -309,7 +308,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     .withTransactingDefaults()
     .withSigningDefaults()
     .withCoinsAndBalancesDefaults()
-    .withTransactionHistory(() => noOpPostForkHistory)
+    .withTransactionHistory(() => noOpV2History)
     .withKeysDefaults()
     .withCoinSelectionDefaults()
     .withMigration(() => capturingCrossLedgerMigration(captured));
@@ -320,8 +319,8 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
       forks: { v9: config.forkVersion },
       ...(config.chainVersionProbe !== undefined ? { chainVersionProbe: config.chainVersionProbe } : {}),
     },
-    { builder: preForkBuilder, configuration: variantConfiguration },
-    { builder: postForkBuilder, configuration: variantConfiguration },
+    { builder: v1Builder, configuration: variantConfiguration },
+    { builder: v2Builder, configuration: variantConfiguration },
   );
 
   return Effect.promise(() => WalletClass.startWithPublicKey(config.publicKey)).pipe(

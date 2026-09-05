@@ -42,7 +42,7 @@ export type EmptyWalletMigrationConfiguration = {
  * @remarks
  *   It backs `WalletLike.startEmpty`, which builds a wallet before any key material exists. The resulting state has no
  *   coins and public keys derived from a fixed placeholder seed; it is a scaffold to be replaced by a real start, not a
- *   wallet anybody can transact with. Preserved verbatim from the pre-fork implementation so that `startEmpty` behaves
+ *   wallet anybody can transact with. Preserved verbatim from the ledger-v8 implementation so that `startEmpty` behaves
  *   exactly as it did.
  * @example
  *   ```typescript
@@ -85,7 +85,7 @@ export const makeCarryOverMigration = (): StateMigration<CoreWallet> => ({
  *   `ZswapLocalState` satisfies that as it is, and describing it that narrowly is what keeps this type version-agnostic
  *   — the bytes are the interface, not the object (see {@link makeCrossLedgerMigration}).
  *
- *   `progress` is where the migrated wallet resumes from: the post-fork timeline continues the indexer's event ids rather
+ *   `progress` is where the migrated wallet resumes from: the ledger-v9 timeline continues the indexer's event ids rather
  *   than restarting them, so the previous variant's cursor is the position the next one has to start at (see
  *   {@link makeCrossLedgerMigration}).
  */
@@ -101,8 +101,8 @@ export type PreviousLedgerWallet = Readonly<{
  * The migration across a ledger-version boundary: the local state crosses as bytes, identity and position beside it.
  *
  * @remarks
- *   The chain's state translation carries every commitment across the fork in place — the post-fork tree continues at the
- *   index the pre-fork tree reached, and the indexer does **not** replay the pre-fork timeline as new-version events.
+ *   The chain's state translation carries every commitment across the fork in place — the ledger-v9 tree continues at the
+ *   index the ledger-v8 tree reached, and the indexer does **not** replay the ledger-v8 timeline as new-version events.
  *   So the wallet's own state must cross with it, or the coins are gone.
  *
  *   It crosses as bytes. The two ledger majors either side of this boundary serialize `ZswapLocalState` under the same
@@ -117,7 +117,7 @@ export type PreviousLedgerWallet = Readonly<{
  *   the failure mode of a future major moving `zswap-local-state` is loud, and lands here, where the
  *   {@link StateMigration} seam can be given the ledger team's own translation instead.
  *
- *   Sync progress is **parked at the fork** rather than rewound: the indexer numbers post-fork events onwards from
+ *   Sync progress is **parked at the fork** rather than rewound: the indexer numbers ledger-v9 events onwards from
  *   whatever id it had reached when the fork happened, never from zero, so the inherited cursor is exactly where this
  *   wallet's reading resumes. A wallet that rewound to zero would wait on a stretch of the timeline this ledger
  *   version's events do not occupy.

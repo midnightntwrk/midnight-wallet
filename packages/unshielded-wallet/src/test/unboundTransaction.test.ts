@@ -10,36 +10,36 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as postForkLedger from '@midnightntwrk/ledger-v9';
-import type { UnboundTransaction as OwnedUnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
+import type { V9UnboundTransaction as OwnedUnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { describe, expect, it } from 'vitest';
-import type { UnboundTransaction as PreForkUnboundTransaction } from '../v1/TransactionOps.js';
-import type { UnboundTransaction as PostForkUnboundTransaction } from '../v2/TransactionOps.js';
+import type { UnboundTransaction as V1UnboundTransaction } from '../v1/TransactionOps.js';
+import type { UnboundTransaction as V2UnboundTransaction } from '../v2/TransactionOps.js';
 
 /** Compiles only when `A` is assignable to `B`. */
 type AssertAssignable<A extends B, B> = [A, B];
 
-// The post-fork wallet's unbound transaction and the one the proving capability owns are one type, in both directions.
+// The V2 wallet's unbound transaction and the one the proving capability owns are one type, in both directions.
 // This is what makes the wallet's declaration a re-export rather than a second opinion.
-export type PostForkIsOwned = AssertAssignable<PostForkUnboundTransaction, OwnedUnboundTransaction>;
-export type OwnedIsPostFork = AssertAssignable<OwnedUnboundTransaction, PostForkUnboundTransaction>;
+export type V2IsOwned = AssertAssignable<V2UnboundTransaction, OwnedUnboundTransaction>;
+export type OwnedIsV2 = AssertAssignable<OwnedUnboundTransaction, V2UnboundTransaction>;
 
-// The pre-fork one is NOT the same type, and must never be collapsed into it: it names the other ledger version's
+// The ledger-v8 one is NOT the same type, and must never be collapsed into it: it names the other ledger version's
 // classes. Were this assignment to start compiling, the two ledgers would have become interchangeable in the type
 // system while staying incompatible at runtime — which is the whole failure the fork work exists to prevent.
-// @ts-expect-error - a pre-fork unbound transaction is not a post-fork one.
-export type PreForkIsNotOwned = AssertAssignable<PreForkUnboundTransaction, OwnedUnboundTransaction>;
+// @ts-expect-error - a ledger-v8 unbound transaction is not a ledger-v9 one.
+export type V1IsNotOwned = AssertAssignable<V1UnboundTransaction, OwnedUnboundTransaction>;
 
 describe('The unbound transaction each side of the fork names', () => {
   it('is a different class on each side, so no single declaration can stand for both', () => {
     // The type-level assertions above are erased at build time; this is the same fact standing at runtime. Two distinct
     // WASM modules are loaded, and a transaction built by one is not an instance of the other's class.
-    expect(preForkLedger.Transaction).not.toBe(postForkLedger.Transaction);
+    expect(ledgerV8.Transaction).not.toBe(ledgerV9.Transaction);
 
-    const postForkTransaction = postForkLedger.Transaction.fromParts('undeployed');
+    const v9Transaction = ledgerV9.Transaction.fromParts('undeployed');
 
-    expect(postForkTransaction).toBeInstanceOf(postForkLedger.Transaction);
-    expect(postForkTransaction).not.toBeInstanceOf(preForkLedger.Transaction);
+    expect(v9Transaction).toBeInstanceOf(ledgerV9.Transaction);
+    expect(v9Transaction).not.toBeInstanceOf(ledgerV8.Transaction);
   });
 });

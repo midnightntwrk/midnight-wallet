@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Either, type Option, pipe, Array as Arr, Iterable as IterableOps } from 'effect';
 import { Imbalances } from '@midnightntwrk/wallet-sdk-capabilities';
-import type { UnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import type { V9UnboundTransaction as UnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 import { addressFromKey, SignatureEnabled } from '@midnightntwrk/ledger-v9';
 import { assertSignatureMatchesKey } from '../SchemeConsistency.js';
@@ -23,8 +23,8 @@ import { TransactingError, type WalletError } from './WalletError.js';
  *
  * @remarks
  *   Owned by the proving capability, which is what produces one, and re-exported here so the name stays where callers
- *   already reach for it. The pre-fork twin in `../v1/TransactionOps.ts` keeps its own declaration on purpose: it names
- *   the other ledger version's classes and is a genuinely different type.
+ *   already reach for it. The ledger-v8 twin in `../v1/TransactionOps.ts` keeps its own declaration on purpose: it
+ *   names the other ledger version's classes and is a genuinely different type.
  */
 export type { UnboundTransaction };
 

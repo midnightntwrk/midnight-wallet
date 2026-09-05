@@ -170,8 +170,8 @@ export const CoreWallet = {
    *   is shape parity with the twin at `src/v2`, which is the variant a real crossing lands in. That twin adopts the
    *   previous wallet's local state whole, by deserializing its bytes — the two ledger majors share the
    *   `zswap-local-state` codec — because the chain's state translation continues the commitment tree across the fork
-   *   and the indexer re-emits none of the pre-fork timeline (see `src/v2/Migration.ts`). Mirroring that into a seam no
-   *   chain can reach would buy nothing, so this side stays as it is.
+   *   and the indexer re-emits none of the ledger-v8 timeline (see `src/v2/Migration.ts`). Mirroring that into a seam
+   *   no chain can reach would buy nothing, so this side stays as it is.
    *
    *   What crosses is therefore identity and position: the public keys — which decide whose coins the far side can
    *   decrypt — the network, the protocol version that triggered the hand-over, kept so the new variant starts inside

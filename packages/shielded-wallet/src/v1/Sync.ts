@@ -167,7 +167,7 @@ export type BatchUpdatesConfig = {
  *   running, and everything built through it stays routed to that variant's ledger. Asking on a timer is what closes
  *   that, and the cost of asking is one small query per interval on a chain that has not moved.
  *
- *   This variant is the pre-fork one, so it is the one that actually crosses: a wallet stranded here is a wallet still
+ *   This variant is the ledger-v8 one, so it is the one that actually crosses: a wallet stranded here is a wallet still
  *   building transactions for a ledger version the chain has left behind.
  */
 export type VersionWatchConfig = {

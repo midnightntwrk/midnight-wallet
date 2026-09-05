@@ -19,22 +19,21 @@
  *   holds no key material at all — snapshots deliberately contain none — so it synchronizes nothing until it is started
  *   again, and what it can be started _with_ is decided by the variant the snapshot put it on.
  *
- *   A snapshot written below the boundary restores onto the pre-fork variant, whose synchronization needs the pre-fork
- *   ledger version's `DustSecretKey`. The post-fork key `start` takes is the one this wallet's public API speaks, and
- *   it is the wrong runtime's for that variant — so the two starts that answer for _both_ sides are the instance's
+ *   A snapshot written below the boundary restores onto the V1 variant, whose synchronization needs the ledger-v8 ledger
+ *   version's `DustSecretKey`. The ledger-v9 key `start` takes is the one this wallet's public API speaks, and it is
+ *   the wrong runtime's for that variant — so the two starts that answer for _both_ sides are the instance's
  *   `startWithSeed` and `startWithKeys`, and they are what a wallet restored below the boundary is started with. Doing
- *   so is the whole of the fix: the wallet finishes the pre-fork stretch of the timeline it had not read, crosses the
+ *   so is the whole of the fix: the wallet finishes the ledger-v8 stretch of the timeline it had not read, crosses the
  *   fork, and re-discovers its dust from the replay.
  *
- *   The refusal is kept as a permanent negative beside them. A single post-fork key cannot serve a pre-fork variant and
- *   must not appear to: the wallet says so by name, and names the two instance starts that would have worked.
+ *   The refusal is kept as a permanent negative beside them. A single ledger-v9 key cannot serve a V1 variant and must
+ *   not appear to: the wallet says so by name, and names the two instance starts that would have worked.
  *
  *   The last case is the one that already worked and must go on working: a snapshot written at or past the boundary
- *   restores onto the post-fork variant, whose ledger version is the one `start` speaks, so a single key is all it
- *   needs.
+ *   restores onto the V2 variant, whose ledger version is the one `start` speaks, so a single key is all it needs.
  */
 
-import { LedgerParameters as PreForkLedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { LedgerParameters as V8LedgerParameters } from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { StartMaterial } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
@@ -44,7 +43,7 @@ import { peekProtocolVersion } from '../Restore.js';
 import { V1Tag } from '../v1/RunningV1Variant.js';
 import { DUST_EVENT_COUNT, type DustChain, buildDustChain, dustSeed } from '../v1/test/dustEvents.js';
 import { V2Tag } from '../v2/RunningV2Variant.js';
-import { dustParameters as postForkDustParameters } from '../v2/test/dustEvents.js';
+import { dustParameters as v9DustParameters } from '../v2/test/dustEvents.js';
 import { type ForkWallet, type ForkedState, makeForkWallet } from './forkHarness.js';
 import { type TimelineEvent, numberedFrom } from './forkReplay.js';
 import {
@@ -60,20 +59,20 @@ vi.setConfig({ testTimeout: 60_000 });
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
-/** Where the wallet registers its post-fork variant. */
+/** Where the wallet registers its V2 variant. */
 const forkVersion = ProtocolVersion.ProtocolVersion(7n);
 /** A chain that has already forked — past the boundary rather than exactly at it. */
-const afterFork = ProtocolVersion.ProtocolVersion(9n);
-/** A chain that has not — a version the pre-fork variant owns. */
-const beforeFork = ProtocolVersion.ProtocolVersion(5n);
+const v9Version = ProtocolVersion.ProtocolVersion(9n);
+/** A chain that has not — a version the V1 variant owns. */
+const v8Version = ProtocolVersion.ProtocolVersion(5n);
 
 const dustParameters = {
-  preFork: PreForkLedgerParameters.initialParameters().dust,
-  postFork: postForkDustParameters(),
+  v8: V8LedgerParameters.initialParameters().dust,
+  v9: v9DustParameters(),
 };
 
 /**
- * How much of the pre-fork timeline the snapshot was written over.
+ * How much of the ledger-v8 timeline the snapshot was written over.
  *
  * @remarks
  *   Deliberately short of the whole of it: what the restored wallet is asked to do below is finish reading a stretch of
@@ -84,8 +83,8 @@ const snapshotStretch = 2;
 /**
  * The event id the replay opens at.
  *
- * One past the pre-fork history, because there is only one id space: the indexer numbers its replay onwards from the id
- * it had reached when the fork happened.
+ * One past the ledger-v8 history, because there is only one id space: the indexer numbers its replay onwards from the
+ * id it had reached when the fork happened.
  */
 const boundaryId = DUST_EVENT_COUNT + 1;
 
@@ -138,30 +137,30 @@ const failureOf = (call: Promise<unknown>): Effect.Effect<Option.Option<unknown>
     ),
   );
 
-/** A wallet that read the opening stretch of a pre-fork timeline, and the snapshot it wrote there. */
+/** A wallet that read the opening stretch of a ledger-v8 timeline, and the snapshot it wrote there. */
 type SnapshotBelow = Readonly<{
   chain: DustChain;
   wallet: ForkWallet;
   snapshot: string;
-  /** The pre-fork wire, still open: what the restored wallet reads the rest of the timeline from. */
+  /** The ledger-v8 wire, still open: what the restored wallet reads the rest of the timeline from. */
   wire: Queue.Queue<readonly TimelineEvent[]>;
-  /** The replay, still unfulfilled: what the post-fork variant reads once the fork has happened. */
+  /** The replay, still unfulfilled: what the V2 variant reads once the fork has happened. */
   replayed: Deferred.Deferred<readonly TimelineEvent[]>;
-  /** The whole pre-fork history, of which the snapshot covers only {@link snapshotStretch} events. */
+  /** The whole ledger-v8 history, of which the snapshot covers only {@link snapshotStretch} events. */
   history: readonly TimelineEvent[];
-  /** The same events again, renumbered from the boundary and reported at the post-fork version. */
+  /** The same events again, renumbered from the boundary and reported at the ledger-v9 version. */
   replay: readonly TimelineEvent[];
 }>;
 
 const snapshotBelowTheBoundary: Effect.Effect<SnapshotBelow, unknown, Scope.Scope> = Effect.gen(function* () {
   const chain = yield* Effect.promise(() => buildDustChain());
-  const history = numberedFrom(chain.eventBytes, 1, Number(beforeFork));
+  const history = numberedFrom(chain.eventBytes, 1, Number(v8Version));
   const replay = numberedFrom(chain.eventBytes, boundaryId, Number(forkVersion));
   const wire = yield* Queue.unbounded<readonly TimelineEvent[]>();
   const replayed = yield* Deferred.make<readonly TimelineEvent[]>();
 
   const wallet = yield* makeForkWallet({
-    preFork: Stream.fromQueue(wire),
+    v8: Stream.fromQueue(wire),
     replayed: Deferred.await(replayed),
     networkId,
     forkVersion,
@@ -192,11 +191,11 @@ const snapshotBelowTheBoundary: Effect.Effect<SnapshotBelow, unknown, Scope.Scop
  * Everything a wallet restored below the boundary and started with material for both sides has to do.
  *
  * @remarks
- *   Both halves matter and neither implies the other. First it finishes the pre-fork stretch — proving it was started at
+ *   Both halves matter and neither implies the other. First it finishes the ledger-v8 stretch — proving it was started at
  *   all, on a variant whose ledger version the wallet's own API does not speak. Then it crosses and re-discovers, from
  *   the replay, exactly the dust it was holding on the other side.
  */
-const finishesThePreForkStretchAndCrosses = (restored: ForkWallet['dust'], below: SnapshotBelow) =>
+const finishesTheV8StretchAndCrosses = (restored: ForkWallet['dust'], below: SnapshotBelow) =>
   Effect.gen(function* () {
     expect(yield* runningTag(restored)).toBe(V1Tag);
 
@@ -209,13 +208,13 @@ const finishesThePreForkStretchAndCrosses = (restored: ForkWallet['dust'], below
     expect(yield* runningTag(restored)).toBe(V1Tag);
 
     // Everything it knows, recorded before the hand-over destroys the ledger-v8 objects holding it.
-    const preForkDust = dustIdentities(caughtUp.state);
-    const preForkCommitmentRoot = commitmentTreeRoot(caughtUp.state);
-    const preForkGenerationRoot = generationTreeRoot(caughtUp.state);
-    const preForkBalance = balanceAt(caughtUp.state, below.chain.syncTime);
-    expect(preForkBalance).toBeGreaterThan(0n);
+    const v8Dust = dustIdentities(caughtUp.state);
+    const v8CommitmentRoot = commitmentTreeRoot(caughtUp.state);
+    const v8GenerationRoot = generationTreeRoot(caughtUp.state);
+    const v8Balance = balanceAt(caughtUp.state, below.chain.syncTime);
+    expect(v8Balance).toBeGreaterThan(0n);
 
-    // And across: the boundary event reaches the still-open pre-fork subscription, and the replay answers.
+    // And across: the boundary event reaches the still-open ledger-v8 subscription, and the replay answers.
     yield* Queue.offer(below.wire, [below.replay[0]]);
     yield* Deferred.succeed(below.replayed, below.replay);
 
@@ -225,15 +224,15 @@ const finishesThePreForkStretchAndCrosses = (restored: ForkWallet['dust'], below
     );
     expect(yield* runningTag(restored)).toBe(V2Tag);
     // The same dust, not merely the same amount of it — half of it read before the snapshot and half after it.
-    expect(dustIdentities(crossed.state)).toEqual(preForkDust);
-    expect(commitmentTreeRoot(crossed.state)).toBe(preForkCommitmentRoot);
-    expect(generationTreeRoot(crossed.state)).toBe(preForkGenerationRoot);
-    expect(balanceAt(crossed.state, below.chain.syncTime)).toBe(preForkBalance);
+    expect(dustIdentities(crossed.state)).toEqual(v8Dust);
+    expect(commitmentTreeRoot(crossed.state)).toBe(v8CommitmentRoot);
+    expect(generationTreeRoot(crossed.state)).toBe(v8GenerationRoot);
+    expect(balanceAt(crossed.state, below.chain.syncTime)).toBe(v8Balance);
     expect(crossed.state.progress.appliedIndex).toBe(BigInt(replayEndId));
   });
 
 describe('a dust wallet restored from a snapshot written below the boundary', () => {
-  it('finishes its pre-fork timeline and crosses the fork when started with both versions’ keys', async () =>
+  it('finishes its ledger-v8 timeline and crosses the fork when started with both versions’ keys', async () =>
     Effect.gen(function* () {
       const below = yield* snapshotBelowTheBoundary;
 
@@ -244,14 +243,12 @@ describe('a dust wallet restored from a snapshot written below the boundary', ()
       const asRestored = yield* restoredStates(restored, () => true);
       expect(dustCount(asRestored.state)).toBe(snapshotStretch);
 
-      yield* Effect.promise(() =>
-        restored.startWithKeys({ v8: below.wallet.keys.preFork, v9: below.wallet.keys.postFork }),
-      );
+      yield* Effect.promise(() => restored.startWithKeys({ v8: below.wallet.keys.v8, v9: below.wallet.keys.v9 }));
 
-      yield* finishesThePreForkStretchAndCrosses(restored, below);
+      yield* finishesTheV8StretchAndCrosses(restored, below);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('finishes its pre-fork timeline and crosses the fork when started from the seed', async () =>
+  it('finishes its ledger-v8 timeline and crosses the fork when started from the seed', async () =>
     Effect.gen(function* () {
       const below = yield* snapshotBelowTheBoundary;
 
@@ -260,10 +257,10 @@ describe('a dust wallet restored from a snapshot written below the boundary', ()
 
       yield* Effect.promise(() => restored.startWithSeed(dustSeed()));
 
-      yield* finishesThePreForkStretchAndCrosses(restored, below);
+      yield* finishesTheV8StretchAndCrosses(restored, below);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('refuses a single post-fork key, naming the instance starts that would have worked', async () =>
+  it('refuses a single ledger-v9 key, naming the instance starts that would have worked', async () =>
     Effect.gen(function* () {
       const below = yield* snapshotBelowTheBoundary;
 
@@ -275,7 +272,7 @@ describe('a dust wallet restored from a snapshot written below the boundary', ()
       // so this fails both when the call resolves and when it rejects with anything else.
       const failure = Option.getOrThrow(
         Option.filter(
-          yield* failureOf(restored.start(below.wallet.keys.postFork)),
+          yield* failureOf(restored.start(below.wallet.keys.v9)),
           (thrown): thrown is StartMaterial.MissingStartAuxError =>
             thrown instanceof StartMaterial.MissingStartAuxError,
         ),
@@ -289,30 +286,30 @@ describe('a dust wallet restored from a snapshot written below the boundary', ()
 });
 
 describe('a dust wallet restored from a snapshot written at or past the boundary', () => {
-  it('synchronizes from the single post-fork key its own API speaks', async () =>
+  it('synchronizes from the single ledger-v9 key its own API speaks', async () =>
     Effect.gen(function* () {
-      // Unchanged by any of the above, and the reason `start` keeps its shape: on the post-fork variant the key a
+      // Unchanged by any of the above, and the reason `start` keeps its shape: on the V2 variant the key a
       // caller holds is the key the running variant needs, so one is enough.
       const chain = yield* Effect.promise(() => buildDustChain());
-      const history = numberedFrom(chain.eventBytes, 1, Number(afterFork));
+      const history = numberedFrom(chain.eventBytes, 1, Number(v9Version));
       const wire = yield* Queue.unbounded<readonly TimelineEvent[]>();
       const replayed = yield* Deferred.make<readonly TimelineEvent[]>();
 
       const wallet = yield* makeForkWallet({
-        preFork: Stream.fromQueue(wire),
+        v8: Stream.fromQueue(wire),
         replayed: Deferred.await(replayed),
         networkId,
         forkVersion,
         seed: dustSeed(),
         dustParameters,
         syncTime: chain.syncTime,
-        chainVersionProbe: chainReporting(afterFork),
+        chainVersionProbe: chainReporting(v9Version),
       });
       yield* Effect.addFinalizer(() => wallet.stop);
       yield* wallet.start;
 
-      // Asked and answered: the wallet is on the post-fork variant before a single event exists, so the snapshot it
-      // writes declares a post-fork version even though it has read nothing.
+      // Asked and answered: the wallet is on the V2 variant before a single event exists, so the snapshot it
+      // writes declares a ledger-v9 version even though it has read nothing.
       expect(yield* wallet.activeTag).toBe(V2Tag);
       const snapshot = yield* Effect.promise(() => wallet.dust.serializeState());
       expect(Option.getOrThrow(peekProtocolVersion(snapshot))).toBeGreaterThanOrEqual(forkVersion);
@@ -322,7 +319,7 @@ describe('a dust wallet restored from a snapshot written at or past the boundary
       yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
       expect(yield* runningTag(restored)).toBe(V2Tag);
 
-      yield* Effect.promise(() => restored.start(wallet.keys.postFork));
+      yield* Effect.promise(() => restored.start(wallet.keys.v9));
 
       // Started, and demonstrably synchronizing: the timeline arrives after the restore, and the restored wallet is
       // what reads it.

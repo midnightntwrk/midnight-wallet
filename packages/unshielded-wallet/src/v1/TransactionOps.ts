@@ -20,9 +20,9 @@ import { TransactingError, type WalletError } from './WalletError.js';
  * Unbound transaction type. This is a transaction that has no signatures and is not bound yet.
  *
  * @remarks
- *   Declared here rather than re-exported from the proving capability, unlike its post-fork twin: this one names the
- *   pre-fork ledger's classes, so it is a different type and not a duplicate of one. Collapsing the two would make the
- *   two ledgers interchangeable in the type system while they stay incompatible at runtime.
+ *   Declared here rather than re-exported from the proving capability, unlike its ledger-v9 twin: this one names the
+ *   ledger-v8's classes, so it is a different type and not a duplicate of one. Collapsing the two would make the two
+ *   ledgers interchangeable in the type system while they stay incompatible at runtime.
  */
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 

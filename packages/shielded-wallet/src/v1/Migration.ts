@@ -41,7 +41,7 @@ export type EmptyWalletMigrationConfiguration = {
  * @remarks
  *   It backs `WalletLike.startEmpty`, which builds a wallet before any key material exists. The resulting state has no
  *   coins and public keys derived from a fixed placeholder seed; it is a scaffold to be replaced by a real start, not a
- *   wallet anybody can transact with. Preserved verbatim from the pre-fork implementation so that `startEmpty` behaves
+ *   wallet anybody can transact with. Preserved verbatim from the ledger-v8 implementation so that `startEmpty` behaves
  *   exactly as it did.
  * @example
  *   ```typescript
@@ -103,8 +103,8 @@ export type PreviousLedgerWallet = Readonly<{
  *   cross-ledger migration would be a different type on each side of the fork.
  *
  *   The twin at `src/v2` is where a crossing actually happens, and it does something this one deliberately does not
- *   mirror. The chain's state translation carries every commitment across the fork in place — the post-fork tree
- *   continues at the index the pre-fork tree reached, and the indexer re-emits none of the pre-fork timeline — so a
+ *   mirror. The chain's state translation carries every commitment across the fork in place — the ledger-v9 tree
+ *   continues at the index the ledger-v8 tree reached, and the indexer re-emits none of the ledger-v8 timeline — so a
  *   wallet that started coinless there would simply lose its coins. That migration therefore reads the previous
  *   wallet's local state across whole, by handing its serialization to this ledger version's deserializer: the two
  *   majors either side of that boundary share the `zswap-local-state` codec (see `src/v2/Migration.ts` and

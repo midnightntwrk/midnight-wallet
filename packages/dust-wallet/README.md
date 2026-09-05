@@ -90,8 +90,8 @@ const signedTx = await dustWallet.addDustGenerationSignature(dustGenerationTx, s
 - `SyncService` - Synchronization service
 - `Transacting` - Transaction utilities
 - `CoinsAndBalances` - Coin and balance management
-- Current (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-dust-wallet/v2`
-- Pre-fork (ledger-v8) variant internals via `@midnightntwrk/wallet-sdk-dust-wallet/v1`
+- V2 (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-dust-wallet/v2`
+- V1 (ledger-v8) variant internals via `@midnightntwrk/wallet-sdk-dust-wallet/v1`
 
 ## V2 Builder
 
@@ -103,7 +103,7 @@ import { V2Builder, RunningV2Variant } from '@midnightntwrk/wallet-sdk-dust-wall
 // Build a V2 dust wallet variant
 ```
 
-## Sync: the pre-fork variant replays events, permanently
+## Sync: the V1 variant replays events, permanently
 
 The two variants do not offer the same synchronisation options, and this is not a temporary gap.
 
@@ -123,7 +123,7 @@ exist only in ledger-v9, and no published ledger-v8 (checked through 8.1.1, the 
 | `nullifiers`                       | resolving which dust UTxOs a projection has already spent    |
 
 There is no v8-compatible implementation of them anywhere, so the path cannot be back-ported. **Decided 2026-08-19: the
-pre-fork variant keeps event-replay sync permanently; no ledger change is being requested to close this.**
+V1 variant keeps event-replay sync permanently; no ledger change is being requested to close this.**
 
 Everything else in `./v1` does track the current variant with the ledger swapped — including the sync lock, the one-shot
 `sync` entry point, and typed (non-defect) `blockData` failures.

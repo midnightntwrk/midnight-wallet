@@ -27,7 +27,7 @@
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, Schema } from 'effect';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { reframeAsPostFork } from '../../test/forkReplay.js';
+import { reframeAsV9 } from '../../test/forkReplay.js';
 import { type CoreWallet } from '../CoreWallet.js';
 import { SyncEventsUpdateSchema, WalletSyncUpdate, makeDefaultSyncCapability, readEvent } from '../Sync.js';
 import { DUST_EVENT_COUNT, type DustChain, buildDustChain, fixtureSecretKey, freshWallet } from './dustEvents.js';
@@ -59,11 +59,11 @@ const ownEvent = (index: number): string => hexOf(chain.eventBytes[index]);
  * The same event re-framed for the ledger version that follows this one.
  *
  * @remarks
- *   Real bytes of the other version, not a corruption: `reframeAsPostFork` rewrites only the serialization header, and
- *   `forkSimulation.test.ts` asserts that what comes out is an event the post-fork ledger reads and reconstructs the
- *   very same dust from. This variant cannot read it, which is the entire point.
+ *   Real bytes of the other version, not a corruption: `reframeAsV9` rewrites only the serialization header, and
+ *   `forkSimulation.test.ts` asserts that what comes out is an event ledger-v9 reads and reconstructs the very same
+ *   dust from. This variant cannot read it, which is the entire point.
  */
-const nextVersionEvent = (index: number): string => hexOf(reframeAsPostFork(chain.eventBytes[index]));
+const nextVersionEvent = (index: number): string => hexOf(reframeAsV9(chain.eventBytes[index]));
 
 /** One item as the indexer's subscription delivers it, before any of it has been read. */
 const wireItem = (id: number, protocolVersion: number, raw: string): unknown => ({

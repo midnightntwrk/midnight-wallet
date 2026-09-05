@@ -21,7 +21,7 @@
  *   deserialize with _that_ variant's deserializer, and start there.
  *
  *   Both epochs are pinned in one file on purpose. A router that always answered with the head variant would pass the
- *   pre-fork half and fail the post-fork one; a router that always answered with the last registration would do the
+ *   ledger-v8 half and fail the ledger-v9 one; a router that always answered with the last registration would do the
  *   reverse. Only routing on the snapshot's own declared version passes both.
  *
  *   The snapshots are the suite's own: each is written by a running wallet through `serializeState()`, so what is
@@ -37,23 +37,23 @@ import { peekProtocolVersion } from '../Restore.js';
 import { V1Tag } from '../v1/RunningV1Variant.js';
 import { V2Tag } from '../v2/RunningV2Variant.js';
 import { type CarriedUtxo, type ForkWallet, makeForkWallet, utxosOf } from './forkHarness.js';
-import { postForkIdentity, timelineTransaction } from './forkTimeline.js';
+import { v2Identity, timelineTransaction } from './forkTimeline.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
-/** Where the wallet registers its post-fork variant. */
+/** Where the wallet registers its V2 variant. */
 const forkVersion = ProtocolVersion.ProtocolVersion(7n);
 /** A chain that has already forked — past the boundary rather than exactly at it. */
-const afterFork = 9;
-/** A chain that has not — a version the pre-fork variant owns. */
-const beforeFork = 5;
+const v9Version = 9;
+/** A chain that has not — a version the V1 variant owns. */
+const v8Version = 5;
 
-const postFork = postForkIdentity(networkId);
+const v2Owner = v2Identity(networkId);
 
 /** The whole history of a chain sitting on one side of the boundary: every message reported at the same version. */
 const chainAt = (protocolVersion: number) => [
-  timelineTransaction({ id: 1, protocolVersion, owner: postFork.addressHex, value: 100n }),
-  timelineTransaction({ id: 2, protocolVersion, owner: postFork.addressHex, value: 200n }),
+  timelineTransaction({ id: 1, protocolVersion, owner: v2Owner.addressHex, value: 100n }),
+  timelineTransaction({ id: 2, protocolVersion, owner: v2Owner.addressHex, value: 200n }),
 ];
 
 const valuesOf = (utxos: readonly CarriedUtxo[]): readonly bigint[] => utxos.map((u) => u.value);
@@ -70,7 +70,7 @@ const syncedWalletOnChainAt = (protocolVersion: number): Effect.Effect<ForkWalle
     const wallet = yield* makeForkWallet({
       timeline: chainAt(protocolVersion),
       forkVersion,
-      publicKey: postFork,
+      publicKey: v2Owner,
       chainVersionProbe: chainReporting(protocolVersion),
     });
     yield* Effect.addFinalizer(() => wallet.stop);
@@ -90,16 +90,16 @@ const runningTag = (wallet: ForkWallet['unshielded']): Effect.Effect<string | sy
 const restoredState = (wallet: ForkWallet['unshielded']) => Effect.promise(() => rx.firstValueFrom(wallet.state));
 
 describe('an unshielded wallet restoring a snapshot through the class it was started from', () => {
-  it('restores a snapshot written below the boundary onto the pre-fork variant, with what it held', async () =>
+  it('restores a snapshot written below the boundary onto the V1 variant, with what it held', async () =>
     Effect.gen(function* () {
-      const wallet = yield* syncedWalletOnChainAt(beforeFork);
+      const wallet = yield* syncedWalletOnChainAt(v8Version);
       expect(yield* wallet.activeTag).toBe(V1Tag);
       const synced = yield* wallet.currentState;
 
       const snapshot = yield* Effect.promise(() => wallet.unshielded.serializeState());
       // The snapshot names the epoch that wrote it, which is the only thing the restore has to go on.
       expect(peekProtocolVersion(snapshot)).toStrictEqual(
-        Option.some(ProtocolVersion.ProtocolVersion(BigInt(beforeFork))),
+        Option.some(ProtocolVersion.ProtocolVersion(BigInt(v8Version))),
       );
 
       const restored = wallet.walletClass.restore(snapshot);
@@ -113,15 +113,15 @@ describe('an unshielded wallet restoring a snapshot through the class it was sta
       expect(state.state.publicKey.address).toBe(synced.state.publicKey.address);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('restores a snapshot written at or past the boundary onto the post-fork variant, with what it held', async () =>
+  it('restores a snapshot written at or past the boundary onto the V2 variant, with what it held', async () =>
     Effect.gen(function* () {
-      const wallet = yield* syncedWalletOnChainAt(afterFork);
+      const wallet = yield* syncedWalletOnChainAt(v9Version);
       expect(yield* wallet.activeTag).toBe(V2Tag);
       const synced = yield* wallet.currentState;
 
       const snapshot = yield* Effect.promise(() => wallet.unshielded.serializeState());
       expect(peekProtocolVersion(snapshot)).toStrictEqual(
-        Option.some(ProtocolVersion.ProtocolVersion(BigInt(afterFork))),
+        Option.some(ProtocolVersion.ProtocolVersion(BigInt(v9Version))),
       );
 
       const restored = wallet.walletClass.restore(snapshot);

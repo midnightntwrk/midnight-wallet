@@ -38,7 +38,7 @@ const configuration = {
     indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
   },
   txHistoryStorage: new InMemoryTransactionHistoryStorage(TransactionHistory.ShieldedTransactionHistoryEntrySchema),
-  // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
+  // The protocol version this chain hands over to ledger-v9 at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so it is supplied per environment.
   forks: { v9: ProtocolVersion.V9NativeForkVersion },
 };
@@ -121,8 +121,8 @@ While still proving:
 
 - `ShieldedWallet` - Main wallet class
 - `ShieldedWalletState` - Wallet state type
-- Current (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-shielded/v2`
-- Pre-fork (ledger-v8) variant internals via `@midnightntwrk/wallet-sdk-shielded/v1`
+- V2 (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-shielded/v2`
+- V1 (ledger-v8) variant internals via `@midnightntwrk/wallet-sdk-shielded/v1`
 
 ## License
 

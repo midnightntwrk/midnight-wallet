@@ -43,7 +43,7 @@ export type EmptyWalletMigrationConfiguration = {
  * @remarks
  *   It backs `WalletLike.startEmpty`, which builds a wallet before any key material exists. The resulting state has no
  *   UTXOs and a public key derived from a fixed placeholder seed; it is a scaffold to be replaced by a real start, not
- *   a wallet anybody can transact with. Preserved verbatim from the pre-fork implementation so that `startEmpty`
+ *   a wallet anybody can transact with. Preserved verbatim from the ledger-v8 implementation so that `startEmpty`
  *   behaves exactly as it did.
  * @example
  *   ```typescript
@@ -129,7 +129,7 @@ export type UtxoLike = {
  *
  * @remarks
  *   This is where unshielded parts company with shielded and dust. Those two start the new variant on a **fresh, empty**
- *   state and let the indexer's post-fork replay hand their coins back, because their coins are shielded: re-deriving
+ *   state and let the indexer's ledger-v9 replay hand their coins back, because their coins are shielded: re-deriving
  *   them means decrypting events with secret keys that migration, by design, never receives. Unshielded has no such
  *   problem. Its UTXOs are public ledger data that the wallet holds as plain records, so they can simply be rebuilt on
  *   the other side — no replay to wait for, no keys required, and no window in which the wallet reports a zero balance
@@ -139,19 +139,19 @@ export type UtxoLike = {
  *   the hand-over. **Bookings do not.** A UTXO the previous variant had reserved for a transaction still in flight is
  *   restored as _available_, and the new state crosses with nothing pending, because the transaction that reserved it
  *   cannot exist on this side: the transaction codec moved at the boundary, so a transaction built by the previous
- *   ledger version can never be included in a post-fork block. A booking exists only to stop a UTXO being spent twice
+ *   ledger version can never be included in a ledger-v9 block. A booking exists only to stop a UTXO being spent twice
  *   while its transaction might still land, and past the boundary it never can — its reason expires at the boundary
  *   itself. Carrying one over would lock those funds for the wallet's lifetime instead: nothing on this side can
  *   un-book them, because the transaction that would identify them is unreadable to this ledger version, and the
  *   booking outlives serialization.
  *
  *   Releasing is **exact** here rather than merely eventually consistent. The hand-over fires only once the previous
- *   variant has applied the complete pre-fork timeline: a transaction the source reports at or beyond the boundary is
+ *   variant has applied the complete ledger-v8 timeline: a transaction the source reports at or beyond the boundary is
  *   left entirely unapplied and only annotates the version, so everything before it is already folded in, and the
  *   version signal a quiet chain hands over on is recorded only when the wallet is caught up on its own transaction
- *   ids. A pre-fork transaction that did land has therefore already confirmed by the time this runs — clearing its own
+ *   ids. A ledger-v8 transaction that did land has therefore already confirmed by the time this runs — clearing its own
  *   bookings as it was applied — and whatever is still booked belongs to a transaction that never will land. Even if an
- *   unapplied pre-fork event were somehow to reach the new variant afterwards, the release stays safe rather than
+ *   unapplied ledger-v8 event were somehow to reach the new variant afterwards, the release stays safe rather than
  *   merely lucky: {@link UnshieldedState.applyUpdate} removes a confirmed spend from **both** maps, so a
  *   released-then-confirmed UTXO leaves the available set exactly as if it had never been released.
  *
@@ -204,9 +204,9 @@ export const makeCrossLedgerMigration = (): StateMigration<PreviousLedgerWallet>
  *   (`util/toolkit/tests/hardfork_e2e.rs`, step 5c).
  *
  *   The crossing is the only place the wallet's copy of the flag can be brought in line. The indexer reports it as of the
- *   current Dust epoch at read time, so a fresh sync after the fork reads `false` — but it never re-emits a UTxO the
- *   wallet already synced pre-fork with `true`, and there is no post-fork event that would revise it. Flipping it here
- *   is what makes a carried UTxO say what the indexer would say of it today.
+ *   current Dust epoch at read time, so a fresh sync after the v9 fork reads `false` — but it never re-emits a UTxO the
+ *   wallet already synced on ledger-v8 with `true`, and there is no ledger-v9 event that would revise it. Flipping it
+ *   here is what makes a carried UTxO say what the indexer would say of it today.
  *
  *   Known limitation: cNIGHT-backed Night _is_ restored chain-side, and reads `false` here until a later sync-time update
  *   says otherwise. It fails closed — a registration built over it claims a fee allowance the ledger does not grant and

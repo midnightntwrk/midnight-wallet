@@ -44,11 +44,11 @@ const forkVersion = ProtocolVersion.ProtocolVersion(7n);
  * A wallet of the previous ledger version, as plain data.
  *
  * @remarks
- *   Deliberately wider than {@link PreviousLedgerWallet}: it also carries the dust a real pre-fork wallet would be
- *   holding, so that "that does not cross" is something this file can actually observe rather than merely fail to
- *   mention. Its cursor is non-zero for the opposite reason — what does cross has to be seen crossing. Structural
- *   because the real thing is built on the other ledger's WASM module, and a projection that reads no ledger object out
- *   of it has no reason to load one.
+ *   Deliberately wider than {@link PreviousLedgerWallet}: it also carries the dust a real V1 wallet would be holding, so
+ *   that "that does not cross" is something this file can actually observe rather than merely fail to mention. Its
+ *   cursor is non-zero for the opposite reason — what does cross has to be seen crossing. Structural because the real
+ *   thing is built on the other ledger's WASM module, and a projection that reads no ledger object out of it has no
+ *   reason to load one.
  */
 type PreviousWalletStandIn = PreviousLedgerWallet & {
   readonly utxos: readonly Readonly<{ nonce: string; initialValue: bigint }>[];
@@ -114,7 +114,7 @@ describe('the cross-ledger migration', () => {
   });
 
   it('starts from an empty local state rather than carrying the previous version dust', async () => {
-    // The indexer replays the timeline after the fork, so this dust is generated again by events of this ledger
+    // The indexer replays the timeline after the v9 fork, so this dust is generated again by events of this ledger
     // version. Carrying it as well would double-count it, and it is backed by a Merkle tree of the other ledger's
     // making that this ledger cannot read.
     const previous = previousWallet();

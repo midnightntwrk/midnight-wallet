@@ -15,7 +15,7 @@
  * Noticing a protocol version the event timeline never mentions — on the variant that has to notice this fork.
  *
  * @remarks
- *   This is the pre-fork side, and therefore the side the drill caught out. A wallet running here learns the chain's
+ *   This is the ledger-v8 side, and therefore the side the drill caught out. A wallet running here learns the chain's
  *   version only from the events it is served; the zswap event subscription has no progress arm, so on a chain that
  *   forks and then produces no shielded traffic it is told nothing, ever. Observed live: the wallet stayed on this
  *   variant with the facade reporting the crossing as still pending, and only crossed when somebody finally made a
@@ -65,8 +65,8 @@ const activationRange = ProtocolVersion.makeRange(
   ProtocolVersion.ProtocolVersion(0n),
   ProtocolVersion.ProtocolVersion(2_000_000n),
 );
-const preForkVersion = 1_000_000;
-const postForkVersion = 2_001_000;
+const v8Version = 1_000_000;
+const v9Version = 2_001_000;
 
 const keys = (): ledger.ZswapSecretKeys => ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 9));
 
@@ -78,13 +78,13 @@ const progressAt = (appliedIndex: bigint): SyncProgress.SyncProgressData => ({
   isConnected: true,
 });
 
-/** A wallet that has read the timeline up to `appliedIndex` and recorded the pre-fork version doing so. */
+/** A wallet that has read the timeline up to `appliedIndex` and recorded the ledger-v8 version doing so. */
 const syncedWallet = (appliedIndex: bigint): CoreWallet =>
   CoreWallet.restore(
     new ledger.ZswapLocalState(),
     keys(),
     progressAt(appliedIndex),
-    ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)),
+    ProtocolVersion.ProtocolVersion(BigInt(v8Version)),
     networkId,
   );
 
@@ -100,47 +100,43 @@ describe('folding a version signal into the wallet state', () => {
 
     const [state, result] = capability.applyUpdate(
       caughtUp,
-      VersionSignalSyncUpdate.create(postForkVersion, 41),
+      VersionSignalSyncUpdate.create(v9Version, 41),
       activationRange,
     );
 
     // The version is the whole of it: recording one outside the activation range is what makes the runtime hand over.
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
     // A signal is an observation about the chain, not a piece of it. Nothing that describes what the wallet holds or
     // where its reading has got to may move.
     expect(state.progress).toEqual(caughtUp.progress);
     expect([...state.state.coins]).toEqual([]);
     expect(state.state.firstFree).toBe(caughtUp.state.firstFree);
     expect(result.changes).toEqual([]);
-    expect(result.protocolVersion).toBe(preForkVersion);
+    expect(result.protocolVersion).toBe(v8Version);
   });
 
   it('ignores a signal while events below the source tip are still unread', () => {
     // The gate. Handing over here would park the cursor at 41 and leave events 42..97 to be re-fetched by the
-    // post-fork variant as bytes of the version that preceded it — unreadable, and possibly carrying coins.
+    // V2 variant as bytes of the version that preceded it — unreadable, and possibly carrying coins.
     const behind = syncedWallet(41n);
 
     const [state, result] = capability.applyUpdate(
       behind,
-      VersionSignalSyncUpdate.create(postForkVersion, 97),
+      VersionSignalSyncUpdate.create(v9Version, 97),
       activationRange,
     );
 
     expect(state).toBe(behind);
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v8Version)));
     expect(result.changes).toEqual([]);
   });
 
   it('adopts a signal from a chain that holds no zswap events at all', () => {
     const fresh = CoreWallet.initEmpty(keys(), networkId);
 
-    const [state] = capability.applyUpdate(
-      fresh,
-      VersionSignalSyncUpdate.create(postForkVersion, null),
-      activationRange,
-    );
+    const [state] = capability.applyUpdate(fresh, VersionSignalSyncUpdate.create(v9Version, null), activationRange);
 
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
   });
 
   it('leaves the state alone when the chain reports a version it has already passed', () => {
@@ -149,7 +145,7 @@ describe('folding a version signal into the wallet state', () => {
     const [state] = capability.applyUpdate(caughtUp, VersionSignalSyncUpdate.create(7, 41), activationRange);
 
     expect(state).toBe(caughtUp);
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v8Version)));
   });
 });
 
@@ -231,7 +227,7 @@ describe('watching the chain for a version the events never mention', () => {
         Stream.filter((update): update is VersionSignalSyncUpdate => update._tag === 'VersionSignal'),
         Stream.take(2),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(postForkVersion, 42), tipAsked)),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version, 42), tipAsked)),
         Effect.provideService(ZswapEventTip.tag, servingEventTip(41, eventTipAsked)),
         Effect.provideService(ZswapEvents.tag, quietChain),
         Effect.scoped,
@@ -239,8 +235,8 @@ describe('watching the chain for a version the events never mention', () => {
       );
 
     expect(Chunk.toArray(collected)).toEqual([
-      VersionSignalSyncUpdate.create(postForkVersion, 41),
-      VersionSignalSyncUpdate.create(postForkVersion, 41),
+      VersionSignalSyncUpdate.create(v9Version, 41),
+      VersionSignalSyncUpdate.create(v9Version, 41),
     ]);
     // The tip is what the chain is on now, so the question is asked without an offset.
     expect(Effect.runSync(Ref.get(tipAsked))).toEqual([{ offset: null }, { offset: null }]);
@@ -259,14 +255,14 @@ describe('watching the chain for a version the events never mention', () => {
         Stream.filter((update): update is VersionSignalSyncUpdate => update._tag === 'VersionSignal'),
         Stream.take(1),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(postForkVersion, 0), recorder())),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version, 0), recorder())),
         Effect.provideService(ZswapEventTip.tag, servingEventTip(0, eventTipAsked)),
         Effect.provideService(ZswapEvents.tag, quietChain),
         Effect.scoped,
         Effect.runPromise,
       );
 
-    expect(Chunk.toArray(collected)).toEqual([VersionSignalSyncUpdate.create(postForkVersion, null)]);
+    expect(Chunk.toArray(collected)).toEqual([VersionSignalSyncUpdate.create(v9Version, null)]);
     expect(Effect.runSync(Ref.get(eventTipAsked))).toEqual([]);
   });
 
@@ -278,7 +274,7 @@ describe('watching the chain for a version the events never mention', () => {
         Effect.flatMap((all) =>
           all.length === 1
             ? Effect.fail(new ServerError({ message: 'the indexer is down' }))
-            : Effect.succeed(tipBlock(postForkVersion, 42)),
+            : Effect.succeed(tipBlock(v9Version, 42)),
         ),
       );
 
@@ -295,7 +291,7 @@ describe('watching the chain for a version the events never mention', () => {
         Effect.runPromise,
       );
 
-    expect(Chunk.toArray(collected)).toEqual([VersionSignalSyncUpdate.create(postForkVersion, 41)]);
+    expect(Chunk.toArray(collected)).toEqual([VersionSignalSyncUpdate.create(v9Version, 41)]);
     expect(Effect.runSync(Ref.get(attempts))).toHaveLength(2);
   });
 
@@ -309,7 +305,7 @@ describe('watching the chain for a version the events never mention', () => {
         Stream.filter((update) => update._tag === 'VersionSignal'),
         Stream.interruptAfter('150 millis'),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(preForkVersion, 42), recorder())),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v8Version, 42), recorder())),
         Effect.provideService(ZswapEventTip.tag, servingEventTip(41, eventTipAsked)),
         Effect.provideService(ZswapEvents.tag, quietChain),
         Effect.scoped,
@@ -329,7 +325,7 @@ describe('watching the chain for a version the events never mention', () => {
       .pipe(
         Stream.interruptAfter('100 millis'),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(postForkVersion, 42), tipAsked)),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version, 42), tipAsked)),
         Effect.provideService(ZswapEventTip.tag, servingEventTip(41, recorder())),
         Effect.provideService(ZswapEvents.tag, quietChain),
         Effect.scoped,
@@ -424,7 +420,7 @@ describe('a wallet on the quiet side of a fork', () => {
 
       return { version, state };
     }).pipe(
-      Effect.provideService(BlockHash.tag, servingTip(tipBlock(postForkVersion, 42), recorder())),
+      Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version, 42), recorder())),
       Effect.provideService(ZswapEventTip.tag, servingEventTip(41, recorder())),
       Effect.provideService(ZswapEvents.tag, quietChain),
       Effect.scoped,
@@ -432,9 +428,9 @@ describe('a wallet on the quiet side of a fork', () => {
     );
 
     // The signal the runtime acts on: this variant no longer owns the wallet.
-    expect(observed.version).toBe(BigInt(postForkVersion));
+    expect(observed.version).toBe(BigInt(v9Version));
     // And the state carries it, which is what the runtime reads when it decides which variant does.
-    expect(observed.state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(observed.state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
     // Nothing of the chain was consumed to get there.
     expect(observed.state.progress.appliedIndex).toBe(41n);
   });

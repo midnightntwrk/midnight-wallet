@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { LedgerParameters as PreForkLedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { LedgerParameters as V8LedgerParameters } from '@midnight-ntwrk/ledger-v8';
 import { LedgerParameters } from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { LedgerParametersCodec } from '@midnightntwrk/wallet-sdk-capabilities/codecs';
@@ -68,7 +68,7 @@ describe('BlockDataSchema', () => {
     });
 
     it('refuses a block reported at a version this variant does not serve, instead of decoding it anyway', () => {
-      // A variant bounded below the fork must disown a post-fork block rather than hand its bytes to a deserializer
+      // A variant bounded below the fork must disown a ledger-v9 block rather than hand its bytes to a deserializer
       // that cannot read them — the whole batch fails today on exactly this.
       const untilFork = Either.getOrThrow(
         ProtocolVersion.makeRegistry([
@@ -86,11 +86,11 @@ describe('BlockDataSchema', () => {
     });
 
     it('reports the other ledger version parameters as a decode failure rather than a raw WASM throw', () => {
-      const preForkHex = Buffer.from(PreForkLedgerParameters.initialParameters().serialize()).toString('hex');
+      const v8Hex = Buffer.from(V8LedgerParameters.initialParameters().serialize()).toString('hex');
 
       const result = Schema.decodeUnknownEither(BlockDataSchema)({
         ...wireBlock,
-        ledgerParameters: preForkHex,
+        ledgerParameters: v8Hex,
       });
 
       expect(Either.isLeft(result)).toBe(true);

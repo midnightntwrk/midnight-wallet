@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { DustSecretKey, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
-import { LedgerParameters as PostForkLedgerParameters } from '@midnightntwrk/ledger-v9';
+import { LedgerParameters as V9LedgerParameters } from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { LedgerParametersCodec } from '@midnightntwrk/wallet-sdk-capabilities/codecs';
 import { BlockHash, DustLedgerEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
@@ -194,7 +194,7 @@ describe('V1 dust wallet blockData', () => {
     });
 
     it('refuses a block reported at a version this variant does not serve, instead of decoding it anyway', async () => {
-      // A variant bounded below the fork must disown a post-fork block rather than hand its bytes to a deserializer
+      // A variant bounded below the fork must disown a ledger-v9 block rather than hand its bytes to a deserializer
       // that cannot read them.
       const hex = Buffer.from(LedgerParameters.initialParameters().serialize()).toString('hex');
       const untilFork = Either.getOrThrow(
@@ -218,9 +218,9 @@ describe('V1 dust wallet blockData', () => {
     });
 
     it('reports the other ledger version parameters as a typed failure rather than a defect', async () => {
-      const postForkHex = Buffer.from(PostForkLedgerParameters.initialParameters().serialize()).toString('hex');
+      const v9Hex = Buffer.from(V9LedgerParameters.initialParameters().serialize()).toString('hex');
 
-      const exit = await blockDataFor(blockAt(0, postForkHex));
+      const exit = await blockDataFor(blockAt(0, v9Hex));
 
       expect(Exit.isFailure(exit)).toBe(true);
       if (Exit.isFailure(exit)) {

@@ -27,10 +27,10 @@
  *
  *   The gate is the load-bearing half. Recording a version past the boundary is what triggers the hand-over, and the
  *   hand-over parks the sync cursor where it stands: a transaction still unapplied below the address's tip would then
- *   be re-fetched by the post-fork variant, and everything it created or spent would be applied by a variant that never
- *   saw the history leading to it. So the signal may be adopted only when the wallet is provably caught up on the
- *   source's **transaction ids**, which is why it carries the highest transaction id the source holds for this address
- *   and not merely a version. One frame states both, so the two can no longer disagree with each other.
+ *   be re-fetched by the V2 variant, and everything it created or spent would be applied by a variant that never saw
+ *   the history leading to it. So the signal may be adopted only when the wallet is provably caught up on the source's
+ *   **transaction ids**, which is why it carries the highest transaction id the source holds for this address and not
+ *   merely a version. One frame states both, so the two can no longer disagree with each other.
  *
  *   The last suite is that scenario end to end, through a real running variant: the shipped indexer-backed source and the
  *   shipped capability, over a chain that has forked and gone silent. What it asserts is the hand-over signal itself,
@@ -69,16 +69,16 @@ const activeRange = ProtocolVersion.makeRange(
   ProtocolVersion.ProtocolVersion(0n),
   ProtocolVersion.ProtocolVersion(2_000_000n),
 );
-const preForkVersion = 1_000_000;
-const postForkVersion = 2_001_000;
+const v8Version = 1_000_000;
+const v9Version = 2_001_000;
 
-/** A wallet that has applied the address's timeline up to `appliedId` and recorded the pre-fork version doing so. */
+/** A wallet that has applied the address's timeline up to `appliedId` and recorded the ledger-v8 version doing so. */
 const syncedWallet = (appliedId: bigint): CoreWallet =>
   CoreWallet.restore(
     UnshieldedState.empty(),
     owner,
     { appliedId, highestTransactionId: appliedId },
-    ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)),
+    ProtocolVersion.ProtocolVersion(BigInt(v8Version)),
     networkId,
   );
 
@@ -103,11 +103,11 @@ describe('folding a version signal into the wallet state', () => {
     const caughtUp = syncedWallet(41n);
 
     const state = capability
-      .applyUpdate(caughtUp, VersionSignalSyncUpdate.create(postForkVersion, 41), activeRange)
+      .applyUpdate(caughtUp, VersionSignalSyncUpdate.create(v9Version, 41), activeRange)
       .pipe(EitherOps.getOrThrowLeft);
 
     // The version is the whole of it: recording one outside the activation range is what makes the runtime hand over.
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
     // A signal is an observation about the chain, not a piece of it. Nothing that describes what the wallet holds or
     // where its reading has got to may move.
     expect(state.progress.appliedId).toBe(caughtUp.progress.appliedId);
@@ -118,28 +118,28 @@ describe('folding a version signal into the wallet state', () => {
 
   it('ignores a signal while transactions below the address tip are still unapplied', () => {
     // The gate. Handing over here would park the cursor at 41 and leave transactions 42..97 to be applied by the
-    // post-fork variant, which never saw the history leading to them.
+    // V2 variant, which never saw the history leading to them.
     const behind = syncedWallet(41n);
 
     const state = capability
-      .applyUpdate(behind, VersionSignalSyncUpdate.create(postForkVersion, 97), activeRange)
+      .applyUpdate(behind, VersionSignalSyncUpdate.create(v9Version, 97), activeRange)
       .pipe(EitherOps.getOrThrowLeft);
 
     expect(state).toBe(behind);
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v8Version)));
   });
 
   it('adopts a signal from a chain that has never mentioned this address', () => {
     // The indexer reports the highest transaction id *for the subscribed address*, and zero when it holds none. A
-    // fresh wallet on a forked chain that has never paid it is exactly the wallet that would otherwise sit pre-fork
+    // fresh wallet on a forked chain that has never paid it is exactly the wallet that would otherwise sit on ledger-v8
     // forever, and nothing can be unapplied for it.
     const fresh = CoreWallet.init(owner, networkId);
 
     const state = capability
-      .applyUpdate(fresh, VersionSignalSyncUpdate.create(postForkVersion, 0), activeRange)
+      .applyUpdate(fresh, VersionSignalSyncUpdate.create(v9Version, 0), activeRange)
       .pipe(EitherOps.getOrThrowLeft);
 
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
   });
 
   it('leaves the state alone when the chain reports a version it has already passed', () => {
@@ -150,7 +150,7 @@ describe('folding a version signal into the wallet state', () => {
       .applyUpdate(caughtUp, VersionSignalSyncUpdate.create(7, 41), activeRange)
       .pipe(EitherOps.getOrThrowLeft);
 
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v8Version)));
   });
 
   it('still splits the timeline on a transaction that carries the version itself', () => {
@@ -160,10 +160,10 @@ describe('folding a version signal into the wallet state', () => {
     const caughtUp = syncedWallet(41n);
 
     const state = capability
-      .applyUpdate(caughtUp, fixtureTransaction({ id: 42, protocolVersion: postForkVersion }), activeRange)
+      .applyUpdate(caughtUp, fixtureTransaction({ id: 42, protocolVersion: v9Version }), activeRange)
       .pipe(EitherOps.getOrThrowLeft);
 
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
     expect(state.progress.appliedId).toBe(41n);
     expect(state.state).toBe(caughtUp.state);
   });
@@ -226,27 +226,27 @@ const collect = (wallet: CoreWallet, chain: ChainSource): Promise<readonly Walle
 describe('reading the chain version off the progress frames', () => {
   it('signals the tip version alongside the progress it already reported', async () => {
     // The headline. Nothing on this address's timeline says anything, and the wallet still learns the chain moved.
-    const collected = await collect(syncedWallet(41n), chainServing(progressFrame(41, postForkVersion)));
+    const collected = await collect(syncedWallet(41n), chainServing(progressFrame(41, v9Version)));
 
     expect(collected).toEqual([
-      { type: 'UnshieldedTransactionsProgress', highestTransactionId: 41, protocolVersion: postForkVersion },
-      VersionSignalSyncUpdate.create(postForkVersion, 41),
+      { type: 'UnshieldedTransactionsProgress', highestTransactionId: 41, protocolVersion: v9Version },
+      VersionSignalSyncUpdate.create(v9Version, 41),
     ]);
 
     // Folded, this is the hand-over: a caught-up wallet records the version the chain moved to.
     const state = capabilityOf()
       .applyUpdate(syncedWallet(41n), collected[1], activeRange)
       .pipe(EitherOps.getOrThrowLeft);
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
   });
 
   it('says nothing when the chain is still on the version the wallet started from', async () => {
     // A signal here could only ever be a no-op — the recorded version never goes backwards — so it is not made, and a
     // settled wallet's progress frames stay pure bookkeeping however often they arrive.
-    const collected = await collect(syncedWallet(41n), chainServing(progressFrame(41, preForkVersion)));
+    const collected = await collect(syncedWallet(41n), chainServing(progressFrame(41, v8Version)));
 
     expect(collected).toEqual([
-      { type: 'UnshieldedTransactionsProgress', highestTransactionId: 41, protocolVersion: preForkVersion },
+      { type: 'UnshieldedTransactionsProgress', highestTransactionId: 41, protocolVersion: v8Version },
     ]);
   });
 
@@ -255,12 +255,12 @@ describe('reading the chain version off the progress frames', () => {
     // about the chain that nobody made.
     const fresh = CoreWallet.init(owner, networkId);
 
-    const collected = await collect(fresh, chainServing(progressFrame(0, 0), progressFrame(0, postForkVersion)));
+    const collected = await collect(fresh, chainServing(progressFrame(0, 0), progressFrame(0, v9Version)));
 
     expect(collected).toEqual([
       { type: 'UnshieldedTransactionsProgress', highestTransactionId: 0, protocolVersion: 0 },
-      { type: 'UnshieldedTransactionsProgress', highestTransactionId: 0, protocolVersion: postForkVersion },
-      VersionSignalSyncUpdate.create(postForkVersion, 0),
+      { type: 'UnshieldedTransactionsProgress', highestTransactionId: 0, protocolVersion: v9Version },
+      VersionSignalSyncUpdate.create(v9Version, 0),
     ]);
   });
 
@@ -269,11 +269,11 @@ describe('reading the chain version off the progress frames', () => {
     // capability's job, and it refuses because 97 transactions exist and 41 have been applied.
     const behind = syncedWallet(41n);
 
-    const collected = await collect(behind, chainServing(progressFrame(97, postForkVersion)));
+    const collected = await collect(behind, chainServing(progressFrame(97, v9Version)));
 
     expect(collected).toEqual([
-      { type: 'UnshieldedTransactionsProgress', highestTransactionId: 97, protocolVersion: postForkVersion },
-      VersionSignalSyncUpdate.create(postForkVersion, 97),
+      { type: 'UnshieldedTransactionsProgress', highestTransactionId: 97, protocolVersion: v9Version },
+      VersionSignalSyncUpdate.create(v9Version, 97),
     ]);
 
     const state = collected.reduce(
@@ -282,7 +282,7 @@ describe('reading the chain version off the progress frames', () => {
     );
     // The progress bookkeeping landed; the version did not.
     expect(state.progress.highestTransactionId).toBe(97n);
-    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(preForkVersion)));
+    expect(state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v8Version)));
   });
 });
 
@@ -355,15 +355,15 @@ describe('an unshielded wallet on the quiet side of a fork', () => {
 
       return { version, state };
     }).pipe(
-      Effect.provideService(UnshieldedTransactions.tag, chainPushing(progressFrame(41, postForkVersion))),
+      Effect.provideService(UnshieldedTransactions.tag, chainPushing(progressFrame(41, v9Version))),
       Effect.scoped,
       Effect.runPromise,
     );
 
     // The signal the runtime acts on: this variant no longer owns the wallet.
-    expect(observed.version).toBe(BigInt(postForkVersion));
+    expect(observed.version).toBe(BigInt(v9Version));
     // And the state carries it, which is what the runtime reads when it decides which variant does.
-    expect(observed.state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(postForkVersion)));
+    expect(observed.state.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
     // Nothing of the chain was consumed to get there.
     expect(observed.state.progress.appliedId).toBe(41n);
   });

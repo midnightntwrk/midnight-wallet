@@ -17,17 +17,17 @@
  * @remarks
  *   Everything here is observation and simulated infrastructure. The wallet itself is the one the package ships —
  *   {@link CustomForkingShieldedWallet}, the same composition `ShieldedWallet(configuration)` uses — with each variant
- *   pointed at a simulated chain instead of an indexer, and the post-fork variant's migration wrapped so both ends of
- *   the hand-over can be recorded as plain data.
+ *   pointed at a simulated chain instead of an indexer, and the V2 variant's migration wrapped so both ends of the
+ *   hand-over can be recorded as plain data.
  *
- *   The two sides read different sources, which is the shape the real thing has: before the fork the pre-fork chain,
+ *   The two sides read different sources, which is the shape the real thing has: before the v9 fork the ledger-v8 chain,
  *   after it the chain the fork left behind — the one holding the translated state, which re-announces nothing (see
- *   `translationStub.ts`). The post-fork source does not exist when the wallet is built — the fork has not happened yet
+ *   `translationStub.ts`). The ledger-v9 source does not exist when the wallet is built — the fork has not happened yet
  *   — so it reaches its variant as an effect awaited at the first sync, carried in that variant's own configuration.
  */
 
-import * as v8 from '@midnight-ntwrk/ledger-v8';
-import * as v9 from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { type NetworkId, type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import {
@@ -53,7 +53,7 @@ import * as V2 from '../v2/index.js';
  * Both ends of a migration, as plain data, taken at the moment it happened.
  *
  * @remarks
- *   Recorded as plain data rather than by keeping the wallets themselves: the pre-fork state is built on the other
+ *   Recorded as plain data rather than by keeping the wallets themselves: the ledger-v8 state is built on the other
  *   ledger's wasm objects, whose lifetime ends with the variant scope the migration closes.
  *
  *   The `from` side is what the migration was allowed to see; the `to` side is what it produced. The interesting claim is
@@ -64,7 +64,7 @@ import * as V2 from '../v2/index.js';
  *   by design does not hold.
  *
  *   `appliedIndex` is captured on both sides because comparing them is where the parked cursor is directly observable:
- *   the post-fork timeline continues the indexer's event ids rather than restarting them, so a migration that rewound
+ *   the ledger-v9 timeline continues the indexer's event ids rather than restarting them, so a migration that rewound
  *   to zero would leave the wallet waiting on a stretch of history this ledger version's events do not occupy.
  */
 export type CapturedMigration = Readonly<{
@@ -147,37 +147,37 @@ const transactionDetails = (hash: string) => ({
  *   fork. Written out once per variant because the two `TransactionHistoryService` types name their own ledger's
  *   `ZswapStateChanges`.
  */
-const noOpPreForkHistory: V1.TransactionHistory.TransactionHistoryService = {
+const noOpV1History: V1.TransactionHistory.TransactionHistoryService = {
   put: () => Effect.void,
   getTransactionDetails: (hash) => Effect.succeed(transactionDetails(hash)),
 };
 
-const noOpPostForkHistory: V2.TransactionHistory.TransactionHistoryService = {
+const noOpV2History: V2.TransactionHistory.TransactionHistoryService = {
   put: () => Effect.void,
   getTransactionDetails: (hash) => Effect.succeed(transactionDetails(hash)),
 };
 
-/** What the post-fork variant is configured with: a source that does not exist yet. */
+/** What the V2 variant is configured with: a source that does not exist yet. */
 type DeferredSourceConfiguration = Readonly<{
   networkId: NetworkId.NetworkId;
-  postFork: Effect.Effect<Simulator, LedgerTranslationError>;
+  v9: Effect.Effect<Simulator, LedgerTranslationError>;
 }>;
 
 /**
- * The post-fork sync source, deferred until the fork produces it.
+ * The ledger-v9 sync source, deferred until the fork produces it.
  *
  * @remarks
  *   A source that never arrives — or a translation that failed — is a broken harness rather than a wallet error; there is
  *   no `WalletError` that means "the simulated fork did not happen". So failures are raised as defects instead of being
  *   folded into the sync error channel, where the variant's retry would quietly absorb them.
  */
-const postForkSyncService = (
+const v2SyncService = (
   configuration: DeferredSourceConfiguration,
-): V2.Sync.SyncService<V2.CoreWallet, v9.ZswapSecretKeys, V2.Sync.SimulatorSyncUpdate> => ({
+): V2.Sync.SyncService<V2.CoreWallet, ledgerV9.ZswapSecretKeys, V2.Sync.SimulatorSyncUpdate> => ({
   updates: (state, secretKeys) =>
     Stream.unwrap(
       pipe(
-        configuration.postFork,
+        configuration.v9,
         Effect.orDie,
         Effect.map((chain) => V2.Sync.makeSimulatorSyncService({ simulator: chain }).updates(state, secretKeys)),
       ),
@@ -190,21 +190,21 @@ const postForkSyncService = (
 
 /** Everything needed to point a forking shielded wallet at a chain that forks. */
 export type ForkWalletConfig = Readonly<{
-  /** The pre-fork chain, available immediately. */
-  preFork: V8.Simulator;
+  /** The ledger-v8 chain, available immediately. */
+  v8: V8.Simulator;
   /**
-   * The post-fork source — the chain carrying the translated state — which only exists once the fork has happened.
+   * The ledger-v9 source — the chain carrying the translated state — which only exists once the fork has happened.
    *
    * It re-announces nothing: everything the wallet owned before the boundary is already in the tree its genesis block
    * holds, which is why a crossing wallet has to arrive holding its own state.
    */
-  postFork: Effect.Effect<Simulator, LedgerTranslationError>;
+  v9: Effect.Effect<Simulator, LedgerTranslationError>;
   networkId: NetworkId.NetworkId;
   /**
-   * The version at which the post-fork variant is registered.
+   * The version at which the V2 variant is registered.
    *
-   * The single source of truth for the boundary (D5): the pre-fork variant's activation range ends here, and so does
-   * the point at which its sync stops applying. Deliberately not a production constant — the real fork version is not
+   * The single source of truth for the boundary (D5): the V1 variant's activation range ends here, and so does the
+   * point at which its sync stops applying. Deliberately not a production constant — the real fork version is not
    * final.
    */
   forkVersion: ProtocolVersion.ProtocolVersion;
@@ -243,7 +243,7 @@ export type ForkWallet = Readonly<{
    */
   walletClass: ForkingShieldedWalletClass<V1.Sync.SimulatorSyncUpdate, V2.Sync.SimulatorSyncUpdate>;
   /** Keys of each ledger version, derived from the same seed. */
-  keys: Readonly<{ preFork: v8.ZswapSecretKeys; postFork: v9.ZswapSecretKeys }>;
+  keys: Readonly<{ v8: ledgerV8.ZswapSecretKeys; v9: ledgerV9.ZswapSecretKeys }>;
   /** Starts background sync through the wallet's own API, which resolves the key material each variant can use. */
   start: Effect.Effect<void>;
   /** Resolves when the hand-over happens, with both ends of it. */
@@ -276,31 +276,31 @@ export type ForkWallet = Readonly<{
  * @returns The running wallet and its observation channels.
  */
 export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWallet> => {
-  const { preFork, postFork, networkId, forkVersion, seed, startFrom, chainVersionProbe } = config;
+  const { v8, v9, networkId, forkVersion, seed, startFrom, chainVersionProbe } = config;
 
-  const preForkKeys = v8.ZswapSecretKeys.fromSeed(seed);
-  const postForkKeys = v9.ZswapSecretKeys.fromSeed(seed);
+  const v8Keys = ledgerV8.ZswapSecretKeys.fromSeed(seed);
+  const v9Keys = ledgerV9.ZswapSecretKeys.fromSeed(seed);
 
   const captured = Deferred.unsafeMake<CapturedMigration>(FiberId.none);
 
-  const preForkBuilder = new V1.V1Builder()
+  const v1Builder = new V1.V1Builder()
     .withDefaultTransactionType()
     .withSync(V1.Sync.makeSimulatorSyncService, V1.Sync.makeSimulatorSyncCapability)
     .withSerializationDefaults()
     .withTransactingDefaults()
     .withCoinsAndBalancesDefaults()
-    .withTransactionHistory(() => noOpPreForkHistory)
+    .withTransactionHistory(() => noOpV1History)
     .withKeysDefaults()
     .withStartAuxDefaults()
     .withCoinSelectionDefaults();
 
-  const postForkBuilder = new V2.V2Builder()
+  const v2Builder = new V2.V2Builder()
     .withDefaultTransactionType()
-    .withSync(postForkSyncService, V2.Sync.makeSimulatorSyncCapability)
+    .withSync(v2SyncService, V2.Sync.makeSimulatorSyncCapability)
     .withSerializationDefaults()
     .withTransactingDefaults()
     .withCoinsAndBalancesDefaults()
-    .withTransactionHistory(() => noOpPostForkHistory)
+    .withTransactionHistory(() => noOpV2History)
     .withKeysDefaults()
     .withStartAuxDefaults()
     .withCoinSelectionDefaults()
@@ -308,14 +308,12 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
 
   const WalletClass = CustomForkingShieldedWallet(
     { networkId, forks: { v9: forkVersion }, ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}) },
-    { builder: preForkBuilder, configuration: { networkId, simulator: preFork } },
-    { builder: postForkBuilder, configuration: { networkId, postFork } },
+    { builder: v1Builder, configuration: { networkId, simulator: v8 } },
+    { builder: v2Builder, configuration: { networkId, v9 } },
   );
 
   return Effect.promise(() =>
-    startFrom === 'keys'
-      ? WalletClass.startWithKeys({ v8: preForkKeys, v9: postForkKeys })
-      : WalletClass.startWithSeed(seed),
+    startFrom === 'keys' ? WalletClass.startWithKeys({ v8: v8Keys, v9: v9Keys }) : WalletClass.startWithSeed(seed),
   ).pipe(
     Effect.map((wallet) => {
       const runtime = wallet.runtime;
@@ -327,12 +325,12 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
 
         walletClass: WalletClass,
 
-        keys: { preFork: preForkKeys, postFork: postForkKeys },
+        keys: { v8: v8Keys, v9: v9Keys },
 
-        // The keys handed over are the post-fork ledger version's, which is what the wallet's API speaks. The pre-fork
+        // The keys handed over are ledger-v9's, which is what the wallet's API speaks. The ledger-v8
         // variant running underneath is started from the seed the wallet retained instead — the seam a wallet crossing
         // a boundary rests on.
-        start: Effect.promise(() => wallet.start(postForkKeys)),
+        start: Effect.promise(() => wallet.start(v9Keys)),
 
         awaitMigration: Deferred.await(captured),
 

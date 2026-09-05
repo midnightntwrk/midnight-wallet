@@ -32,7 +32,7 @@ import {
 import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import type * as rx from 'rxjs';
-import { type CoreWallet as PreForkCoreWallet } from './v1/CoreWallet.js';
+import { type CoreWallet as V1CoreWallet } from './v1/CoreWallet.js';
 import { type CoinsAndBalancesCapability } from './v2/CoinsAndBalances.js';
 import { type CoreWallet } from './v2/index.js';
 import { type KeysCapability } from './v2/Keys.js';
@@ -45,7 +45,7 @@ import { type UnshieldedHistoryStorage } from './v2/TransactionHistory.js';
 import { type UtxoWithMeta } from './v2/UnshieldedState.js';
 
 /** The core state of whichever unshielded variant produced an emission. */
-export type UnshieldedCoreState = PreForkCoreWallet | CoreWallet;
+export type UnshieldedCoreState = V1CoreWallet | CoreWallet;
 
 /**
  * Everything a state emission projects, already bound to the variant that produced it.
@@ -73,10 +73,10 @@ type UnshieldedProjections<TSerialized> = Readonly<{
  *
  * @remarks
  *   Narrowed to the projected methods rather than naming the three capability types whole, because one of their members
- *   is the version break itself: `KeysCapability.getPublicKey` answers with a bare hex string on the pre-fork ledger
- *   version and a `{tag, value}` record on the post-fork one, so a type demanding it could only ever be satisfied by
- *   one of the two variants. Asking for what is projected keeps a wallet spanning the boundary buildable and keeps the
- *   unprojectable reading out of reach, in one stroke.
+ *   is the version break itself: `KeysCapability.getPublicKey` answers with a bare hex string on ledger-v8 version and
+ *   a `{tag, value}` record on the ledger-v9 one, so a type demanding it could only ever be satisfied by one of the two
+ *   variants. Asking for what is projected keeps a wallet spanning the boundary buildable and keeps the unprojectable
+ *   reading out of reach, in one stroke.
  */
 type UnshieldedStateCapabilities<TState, TSerialized> = Readonly<{
   serialization: Pick<SerializationCapability<TState, TSerialized>, 'serialize'>;
@@ -173,8 +173,8 @@ export type DefaultUnshieldedConfiguration = {
    *
    * @remarks
    *   Required, and deliberately without a default: the wallet registers one variant either side of the boundary, so a
-   *   wrong value does not degrade — it decides which ledger version reads the chain. Below `forks.v9` the pre-fork
-   *   variant is active; from it, the post-fork one. The SDK cannot guess it, because it is a property of the chain the
+   *   wrong value does not degrade — it decides which ledger version reads the chain. Below `forks.v9` the ledger-v8
+   *   variant is active; from it, the ledger-v9 one. The SDK cannot guess it, because it is a property of the chain the
    *   application points at, not of the SDK.
    *
    *   A map keyed by ledger version rather than a single number, so the next hard fork adds a key instead of changing the

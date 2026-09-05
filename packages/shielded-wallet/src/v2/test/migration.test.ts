@@ -19,13 +19,13 @@
  *   what these pin down: everything (same ledger version), nothing (no previous wallet at all), and, across a ledger
  *   version boundary, everything again, because the local state crosses as bytes.
  *
- *   The previous wallet here is a real `@midnight-ntwrk/ledger-v8` one, grown against a real pre-fork chain. Nothing
+ *   The previous wallet here is a real `@midnight-ntwrk/ledger-v8` one, grown against a real ledger-v8 chain. Nothing
  *   about the crossing can be checked against a hand-written stand-in: what is under test is whether one ledger
  *   version's serialization is something the other can read, and only the two modules themselves can answer that.
  *   `byteCrossing.test.ts` is where that codec is characterized; this file is about what the migration does with it.
  */
 
-import * as v8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion, type SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -42,8 +42,8 @@ import {
 const networkId = NetworkId.NetworkId.Undeployed;
 const seed = Buffer.alloc(32, 7);
 const keys = (): ledger.ZswapSecretKeys => ledger.ZswapSecretKeys.fromSeed(seed);
-const v8Keys = (): v8.ZswapSecretKeys => v8.ZswapSecretKeys.fromSeed(seed);
-const strangerV8Keys = (): v8.ZswapSecretKeys => v8.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 8));
+const v8Keys = (): ledgerV8.ZswapSecretKeys => ledgerV8.ZswapSecretKeys.fromSeed(seed);
+const strangerV8Keys = (): ledgerV8.ZswapSecretKeys => ledgerV8.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 8));
 
 /** The version that triggered the hand-over: the first one the previous variant saw outside its own range. */
 const forkVersion = ProtocolVersion.ProtocolVersion(7n);
@@ -58,35 +58,35 @@ const parkedProgress: SyncProgress.SyncProgressData = {
 
 /** Pays a fresh coin of `value` to `recipient`: one output, therefore one commitment, therefore one Merkle index. */
 const v8Payment = (
-  recipient: v8.ZswapSecretKeys,
+  recipient: ledgerV8.ZswapSecretKeys,
   value: bigint,
-): Readonly<{ coin: v8.ShieldedCoinInfo; offer: v8.ZswapOffer<v8.PreProof> }> => {
-  const coin = v8.createShieldedCoinInfo(v8.shieldedToken().raw, value);
-  const output = v8.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
-  return { coin, offer: v8.ZswapOffer.fromOutput<v8.PreProof>(output, coin.type, coin.value) };
+): Readonly<{ coin: ledgerV8.ShieldedCoinInfo; offer: ledgerV8.ZswapOffer<ledgerV8.PreProof> }> => {
+  const coin = ledgerV8.createShieldedCoinInfo(ledgerV8.shieldedToken().raw, value);
+  const output = ledgerV8.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
+  return { coin, offer: ledgerV8.ZswapOffer.fromOutput<ledgerV8.PreProof>(output, coin.type, coin.value) };
 };
 
 /**
- * A real pre-fork wallet state: two of this wallet's coins around a stranger's, and one output still expected.
+ * A real V1 wallet state: two of this wallet's coins around a stranger's, and one output still expected.
  *
  * @remarks
  *   The stranger's coin is what makes the tree taller than the coins in it, so a crossing that kept only what the wallet
  *   owns would land the second coin at the wrong Merkle index. The watched coin is content for `pendingOutputs`: a
  *   commitment the wallet knows and a leaf that is not on chain, which nothing on the far side of a fork announces.
  */
-const preForkState = (): v8.ZswapLocalState => {
+const v8State = (): ledgerV8.ZswapLocalState => {
   const mine = v8Keys();
   // One offer applied at a time, rather than one merged offer: merging leaves the within-offer ordering to the ledger,
   // and the Merkle indices are half of what this file is about.
   return pipe(
     [v8Payment(mine, 100n), v8Payment(strangerV8Keys(), 999n), v8Payment(mine, 200n)],
-    EArray.reduce(new v8.ZswapLocalState(), (state, payment) => state.apply(mine, payment.offer)),
-    (state) => state.watchFor(mine.coinPublicKey, v8.createShieldedCoinInfo(v8.shieldedToken().raw, 777n)),
+    EArray.reduce(new ledgerV8.ZswapLocalState(), (state, payment) => state.apply(mine, payment.offer)),
+    (state) => state.watchFor(mine.coinPublicKey, ledgerV8.createShieldedCoinInfo(ledgerV8.shieldedToken().raw, 777n)),
   );
 };
 
 /** A wallet of the previous ledger version, as the runtime hands one over. */
-const previousWallet = (state: PreviousLedgerWallet['state'] = preForkState()): PreviousLedgerWallet => {
+const previousWallet = (state: PreviousLedgerWallet['state'] = v8State()): PreviousLedgerWallet => {
   const secretKeys = v8Keys();
   return {
     publicKeys: {
@@ -158,10 +158,10 @@ describe('the cross-ledger migration', () => {
   });
 
   it('brings the whole local state across: coins at their indices, and the height the tree had reached', async () => {
-    const source = preForkState();
+    const source = v8State();
     const wallet = await crossed(previousWallet(source));
 
-    // The premise, read off the pre-fork state itself rather than assumed: two coins, at indices 0 and 2 because a
+    // The premise, read off the ledger-v8 state itself rather than assumed: two coins, at indices 0 and 2 because a
     // stranger's commitment sits between them, in a tree three leaves tall.
     expect(flatten(source.coins).map((coin) => coin.mtIndex)).toEqual([0n, 2n]);
     expect(source.firstFree).toBe(3n);
@@ -174,7 +174,7 @@ describe('the cross-ledger migration', () => {
   });
 
   it('brings the outputs the wallet was still expecting, which no chain announces twice', async () => {
-    const source = preForkState();
+    const source = v8State();
     const wallet = await crossed(previousWallet(source));
 
     expect(expectedOutputs(source).length).toBe(1);

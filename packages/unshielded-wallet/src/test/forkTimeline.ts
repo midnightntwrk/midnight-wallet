@@ -17,15 +17,15 @@
 // must re-frame or re-mint real ledger `Event` bytes across the boundary, because their state is shielded and only the
 // ledger can say whether the tree they rebuild is the tree the fork produced. Unshielded has no such indirection: what
 // the indexer serves is public UTXO data as JSON, and what the wallet stores is that same data. So the timeline here IS
-// the wire format — one shape, read by both variants, exactly as the indexer would serve it before and after the fork.
+// the wire format — one shape, read by both variants, exactly as the indexer would serve it before and after the v9 fork.
 // Nothing is being modelled away; there is no ledger encoding in this path to be unfaithful to.
 //
 // What the timeline does model is the CURSOR, and that is the load-bearing part: items are served to whichever variant
 // asks, filtered by the cursor that variant presents. The boundary item is therefore genuinely re-fetched by the second
 // variant rather than handed to it.
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { createKeystore as createPostForkKeystore, PublicKey as PostForkPublicKey } from '../KeyStore.js';
-import { createKeystore as createPreForkKeystore, PublicKey as PreForkPublicKey } from '../v1/KeyStore.js';
+import { createKeystore as createV2Keystore, PublicKey as V2PublicKey } from '../KeyStore.js';
+import { createKeystore as createV1Keystore, PublicKey as V1PublicKey } from '../v1/KeyStore.js';
 
 /** One indexer message, with the protocol version the indexer reported it under. */
 export type TimelineItem = {
@@ -38,24 +38,24 @@ export type TimelineItem = {
 /** A fixed 32-byte secret, so both variants derive the same identity from it. */
 export const forkSeed = (): Uint8Array => Uint8Array.from({ length: 32 }, (_, i) => (i * 13 + 5) % 256);
 
-/** The pre-fork (ledger-v8) identity: a bare hex verifying key. */
-export const preForkIdentity = (networkId: NetworkId.NetworkId = NetworkId.NetworkId.Undeployed): PreForkPublicKey =>
-  PreForkPublicKey.fromKeyStore(createPreForkKeystore(forkSeed(), networkId));
+/** The ledger-v8 identity: a bare hex verifying key. */
+export const v1Identity = (networkId: NetworkId.NetworkId = NetworkId.NetworkId.Undeployed): V1PublicKey =>
+  V1PublicKey.fromKeyStore(createV1Keystore(forkSeed(), networkId));
 
-/** The post-fork (ledger-v9) identity derived from the same secret: a `{tag, value}` verifying key. */
-export const postForkIdentity = (networkId: NetworkId.NetworkId = NetworkId.NetworkId.Undeployed): PostForkPublicKey =>
-  PostForkPublicKey.fromKeyStore(createPostForkKeystore({ kind: 'schnorr', secret: forkSeed() }, networkId));
+/** The ledger-v9 identity derived from the same secret: a `{tag, value}` verifying key. */
+export const v2Identity = (networkId: NetworkId.NetworkId = NetworkId.NetworkId.Undeployed): V2PublicKey =>
+  V2PublicKey.fromKeyStore(createV2Keystore({ kind: 'schnorr', secret: forkSeed() }, networkId));
 
 /**
- * The same secret read under the other signature scheme, which only the post-fork ledger version has.
+ * The same secret read under the other signature scheme, which only ledger-v9 has.
  *
  * @remarks
  *   Ledger-v8 has exactly one scheme, and its keys are bare hex with no room to name one — so an ecdsa identity is not
- *   merely inconvenient to represent pre-fork, it is unrepresentable. It derives a different address, too, which is why
- *   nothing about it can be narrowed to the pre-fork shape and back.
+ *   merely inconvenient to represent ledger-v8, it is unrepresentable. It derives a different address, too, which is
+ *   why nothing about it can be narrowed to the ledger-v8 shape and back.
  */
-export const ecdsaIdentity = (networkId: NetworkId.NetworkId = NetworkId.NetworkId.Undeployed): PostForkPublicKey =>
-  PostForkPublicKey.fromKeyStore(createPostForkKeystore({ kind: 'ecdsa', secret: forkSeed() }, networkId));
+export const ecdsaIdentity = (networkId: NetworkId.NetworkId = NetworkId.NetworkId.Undeployed): V2PublicKey =>
+  V2PublicKey.fromKeyStore(createV2Keystore({ kind: 'ecdsa', secret: forkSeed() }, networkId));
 
 /** The token every UTXO on this timeline carries. Deliberately not Night, which the wallet balances differently. */
 export const timelineTokenType = '0100000000000000000000000000000000000000000000000000000000000000';

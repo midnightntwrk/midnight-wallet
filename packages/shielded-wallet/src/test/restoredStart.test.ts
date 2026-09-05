@@ -19,23 +19,22 @@
  *   holds no key material at all — snapshots deliberately contain none — so it synchronizes nothing until it is started
  *   again, and what it can be started _with_ is decided by the variant the snapshot put it on.
  *
- *   A snapshot written below the boundary restores onto the pre-fork variant, whose synchronization needs the pre-fork
- *   ledger version's keys. The post-fork key objects `start` takes are the ones this wallet's public API speaks, and
- *   they are the wrong runtime's for that variant — so the two starts that answer for _both_ sides are the instance's
+ *   A snapshot written below the boundary restores onto the V1 variant, whose synchronization needs the ledger-v8 ledger
+ *   version's keys. The ledger-v9 key objects `start` takes are the ones this wallet's public API speaks, and they are
+ *   the wrong runtime's for that variant — so the two starts that answer for _both_ sides are the instance's
  *   `startWithSeed` and `startWithKeys`, and they are what a wallet restored below the boundary is started with. Doing
- *   so is the whole of the fix: the wallet finishes the pre-fork stretch it had not read and crosses the fork on its
+ *   so is the whole of the fix: the wallet finishes the ledger-v8 stretch it had not read and crosses the fork on its
  *   own, carrying the state the caller restored it for.
  *
- *   The refusal is kept as a permanent negative beside them. A single post-fork key cannot serve a pre-fork variant and
- *   must not appear to: the wallet says so by name, and names the two instance starts that would have worked.
+ *   The refusal is kept as a permanent negative beside them. A single ledger-v9 key cannot serve a V1 variant and must
+ *   not appear to: the wallet says so by name, and names the two instance starts that would have worked.
  *
  *   The last case is the one that already worked and must go on working: a snapshot written at or past the boundary
- *   restores onto the post-fork variant, whose ledger version is the one `start` speaks, so a single key is all it
- *   needs.
+ *   restores onto the V2 variant, whose ledger version is the one `start` speaks, so a single key is all it needs.
  */
 
-import * as v8 from '@midnight-ntwrk/ledger-v8';
-import * as v9 from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import {
@@ -53,22 +52,22 @@ import { V2Tag } from '../v2/index.js';
 import { type ForkWallet, type ForkedState, makeForkWallet } from './forkHarness.js';
 import {
   type MintedCoin,
-  makePayingPostForkChain,
+  makePayingV9Chain,
   mintable,
-  postForkPayment,
-  preForkPayment,
+  v9Payment,
+  v8Payment,
   translationStub,
 } from './translationStub.js';
 import { awaitingCoinHashes, coinIndices, coinValues, totalValue, treeSize } from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
-/** Where the wallet registers its post-fork variant. */
+/** Where the wallet registers its V2 variant. */
 const forkVersion = ProtocolVersion.ProtocolVersion(7n);
 /** A chain that has already forked — past the boundary rather than exactly at it. */
-const afterFork = ProtocolVersion.ProtocolVersion(9n);
-/** A chain that has not — a version the pre-fork variant owns. */
-const beforeFork = ProtocolVersion.ProtocolVersion(5n);
+const v9Version = ProtocolVersion.ProtocolVersion(9n);
+/** A chain that has not — a version the V1 variant owns. */
+const v8Version = ProtocolVersion.ProtocolVersion(5n);
 
 const forkBlock = 4n;
 
@@ -79,17 +78,17 @@ const walletValues = [100n, 200n] as const;
 const walletTotal = walletValues.reduce((sum, value) => sum + value, 0n);
 
 const walletRecipient = () => {
-  const keys = v8.ZswapSecretKeys.fromSeed(seed);
+  const keys = ledgerV8.ZswapSecretKeys.fromSeed(seed);
   return { coinPublicKey: keys.coinPublicKey, encryptionPublicKey: keys.encryptionPublicKey };
 };
 
 const strangerRecipient = () => {
-  const keys = v8.ZswapSecretKeys.fromSeed(otherSeed);
+  const keys = ledgerV8.ZswapSecretKeys.fromSeed(otherSeed);
   return { coinPublicKey: keys.coinPublicKey, encryptionPublicKey: keys.encryptionPublicKey };
 };
 
 /**
- * The pre-fork commitment sequence: ours, a stranger's, ours.
+ * The ledger-v8 commitment sequence: ours, a stranger's, ours.
  *
  * @remarks
  *   Interleaved so the wallet's own coins are not packed at the bottom of the tree. A crossing that dropped everything it
@@ -97,16 +96,16 @@ const strangerRecipient = () => {
  *   half of itself.
  */
 const crossingCoins = (): readonly MintedCoin[] => [
-  mintable(v8.shieldedToken().raw, walletValues[0], walletRecipient()),
-  mintable(v8.shieldedToken().raw, 50n, strangerRecipient()),
-  mintable(v8.shieldedToken().raw, walletValues[1], walletRecipient()),
+  mintable(ledgerV8.shieldedToken().raw, walletValues[0], walletRecipient()),
+  mintable(ledgerV8.shieldedToken().raw, 50n, strangerRecipient()),
+  mintable(ledgerV8.shieldedToken().raw, walletValues[1], walletRecipient()),
 ];
 const crossingIndices = [0n, 2n];
 const treeSizeAtCrossing = 3n;
 
 /** The coins a wallet that never crosses is paid, all of them its own. */
 const chainCoins = (): readonly MintedCoin[] =>
-  walletValues.map((value) => mintable(v8.shieldedToken().raw, value, walletRecipient()));
+  walletValues.map((value) => mintable(ledgerV8.shieldedToken().raw, value, walletRecipient()));
 
 /** A probe answering as a chain on `version` would. */
 const chainReporting =
@@ -168,9 +167,9 @@ type SnapshotBelow = Readonly<{
  * A chain that will fork, a wallet that has read the first payment on it, and the snapshot it wrote.
  *
  * @remarks
- *   Deliberately short of the whole pre-fork history: what the restored wallet is asked to do below is finish reading a
+ *   Deliberately short of the whole ledger-v8 history: what the restored wallet is asked to do below is finish reading a
  *   stretch of chain the snapshot never saw, which is the ordinary reason an application restores at all. The chain has
- *   not reached the boundary yet, so what the snapshot declares is a pre-fork version.
+ *   not reached the boundary yet, so what the snapshot declares is a ledger-v8 version.
  */
 const snapshotBelowTheBoundary = (coins: readonly MintedCoin[]): Effect.Effect<SnapshotBelow, unknown, Scope.Scope> =>
   Effect.gen(function* () {
@@ -178,15 +177,15 @@ const snapshotBelowTheBoundary = (coins: readonly MintedCoin[]): Effect.Effect<S
       networkId,
       forkBlock,
       forkVersion,
-      preForkVersion: beforeFork,
-      preForkBlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-      postForkBlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+      v8Version: v8Version,
+      v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
+      v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
       translator: translationStub({ networkId, coins }),
     });
 
     const wallet = yield* makeForkWallet({
-      preFork: fork.preFork,
-      postFork: fork.awaitPostFork(),
+      v8: fork.v8,
+      v9: fork.awaitV9(),
       networkId,
       forkVersion,
       seed,
@@ -194,7 +193,7 @@ const snapshotBelowTheBoundary = (coins: readonly MintedCoin[]): Effect.Effect<S
     yield* Effect.addFinalizer(() => wallet.stop);
     yield* wallet.start;
 
-    yield* fork.preFork.submitTransaction(preForkPayment(networkId, coins[0]));
+    yield* fork.v8.submitTransaction(v8Payment(networkId, coins[0]));
     const synced = yield* wallet.awaitState((state) => totalValue(state.state) === walletValues[0]);
     expect(yield* wallet.activeTag).toBe(V1Tag);
     expect(synced.state.protocolVersion).toBeLessThan(forkVersion);
@@ -209,11 +208,11 @@ const snapshotBelowTheBoundary = (coins: readonly MintedCoin[]): Effect.Effect<S
  * Everything a wallet restored below the boundary and started with material for both sides has to do.
  *
  * @remarks
- *   Both halves matter and neither implies the other. First it finishes the pre-fork stretch — proving it was started at
+ *   Both halves matter and neither implies the other. First it finishes the ledger-v8 stretch — proving it was started at
  *   all, on a variant whose ledger version the wallet's own API does not speak. Then it crosses, carrying what the
  *   snapshot held plus what it has just read, onto a chain that re-announces none of it.
  */
-const finishesThePreForkStretchAndCrosses = (
+const finishesTheV8StretchAndCrosses = (
   restored: ForkWallet['shielded'],
   fork: ForkSimulator,
   coins: readonly MintedCoin[],
@@ -222,7 +221,7 @@ const finishesThePreForkStretchAndCrosses = (
     expect(yield* runningTag(restored)).toBe(V1Tag);
 
     // The stretch the snapshot never saw: a stranger's commitment and then the wallet's second coin.
-    yield* Effect.forEach(coins.slice(1), (coin) => fork.preFork.submitTransaction(preForkPayment(networkId, coin)), {
+    yield* Effect.forEach(coins.slice(1), (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
       discard: true,
     });
     const caughtUp = yield* restoredStates(restored, (state) => totalValue(state.state) === walletTotal);
@@ -230,9 +229,9 @@ const finishesThePreForkStretchAndCrosses = (
     expect(caughtUp.state.protocolVersion).toBeLessThan(forkVersion);
     expect(yield* runningTag(restored)).toBe(V1Tag);
 
-    // And across. The post-fork chain contains no transaction at all, so everything the wallet has on the far side it
+    // And across. The ledger-v9 chain contains no transaction at all, so everything the wallet has on the far side it
     // brought with it — half of that read before the snapshot, half after it.
-    const postFork = yield* fork.advanceToFork();
+    const v9 = yield* fork.advanceToFork();
     const crossed = yield* restoredStates(
       restored,
       (state) =>
@@ -242,11 +241,11 @@ const finishesThePreForkStretchAndCrosses = (
     expect(coinValues(crossed.state)).toEqual([...walletValues]);
     expect(coinIndices(crossed.state)).toEqual(crossingIndices);
     expect(treeSize(crossed.state)).toBe(treeSizeAtCrossing);
-    expect(yield* postFork.query((state) => state.blocks.flatMap((block) => block.transactions))).toEqual([]);
+    expect(yield* v9.query((state) => state.blocks.flatMap((block) => block.transactions))).toEqual([]);
   });
 
 describe('a shielded wallet restored from a snapshot written below the boundary', () => {
-  it('finishes its pre-fork history and crosses the fork when started with both versions’ keys', async () =>
+  it('finishes its ledger-v8 history and crosses the fork when started with both versions’ keys', async () =>
     Effect.gen(function* () {
       const coins = crossingCoins();
       const { fork, wallet, snapshot } = yield* snapshotBelowTheBoundary(coins);
@@ -258,12 +257,12 @@ describe('a shielded wallet restored from a snapshot written below the boundary'
       const asRestored = yield* restoredStates(restored, () => true);
       expect(totalValue(asRestored.state)).toBe(walletValues[0]);
 
-      yield* Effect.promise(() => restored.startWithKeys({ v8: wallet.keys.preFork, v9: wallet.keys.postFork }));
+      yield* Effect.promise(() => restored.startWithKeys({ v8: wallet.keys.v8, v9: wallet.keys.v9 }));
 
-      yield* finishesThePreForkStretchAndCrosses(restored, fork, coins);
+      yield* finishesTheV8StretchAndCrosses(restored, fork, coins);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('finishes its pre-fork history and crosses the fork when started from the seed', async () =>
+  it('finishes its ledger-v8 history and crosses the fork when started from the seed', async () =>
     Effect.gen(function* () {
       const coins = crossingCoins();
       const { fork, wallet, snapshot } = yield* snapshotBelowTheBoundary(coins);
@@ -273,10 +272,10 @@ describe('a shielded wallet restored from a snapshot written below the boundary'
 
       yield* Effect.promise(() => restored.startWithSeed(seed));
 
-      yield* finishesThePreForkStretchAndCrosses(restored, fork, coins);
+      yield* finishesTheV8StretchAndCrosses(restored, fork, coins);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('refuses a single post-fork key, naming the instance starts that would have worked', async () =>
+  it('refuses a single ledger-v9 key, naming the instance starts that would have worked', async () =>
     Effect.gen(function* () {
       const coins = crossingCoins();
       const { wallet, snapshot } = yield* snapshotBelowTheBoundary(coins);
@@ -289,7 +288,7 @@ describe('a shielded wallet restored from a snapshot written below the boundary'
       // so this fails both when the call resolves and when it rejects with anything else.
       const failure = Option.getOrThrow(
         Option.filter(
-          yield* failureOf(restored.start(wallet.keys.postFork)),
+          yield* failureOf(restored.start(wallet.keys.v9)),
           (thrown): thrown is StartMaterial.MissingStartAuxError =>
             thrown instanceof StartMaterial.MissingStartAuxError,
         ),
@@ -303,20 +302,20 @@ describe('a shielded wallet restored from a snapshot written below the boundary'
 });
 
 describe('a shielded wallet restored from a snapshot written at or past the boundary', () => {
-  it('synchronizes from the single post-fork key its own API speaks', async () =>
+  it('synchronizes from the single ledger-v9 key its own API speaks', async () =>
     Effect.gen(function* () {
-      // Unchanged by any of the above, and the reason `start` keeps its shape: on the post-fork variant the key a
+      // Unchanged by any of the above, and the reason `start` keeps its shape: on the V2 variant the key a
       // caller holds is the key the running variant needs, so one is enough.
       const coins = chainCoins();
       const chain = yield* V8.Simulator.init({
         networkId,
-        protocolVersion: afterFork,
+        protocolVersion: v9Version,
         blockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
       });
       const genesisTime = yield* chain.query((state) => state.currentTime);
-      const postFork = yield* makePayingPostForkChain({
+      const v9 = yield* makePayingV9Chain({
         networkId,
-        protocolVersion: afterFork,
+        protocolVersion: v9Version,
         genesisBlockNumber: forkBlock,
         genesisTime,
         blockProducer: immediateBlockProducer(undefined, genesisStrictness),
@@ -324,12 +323,12 @@ describe('a shielded wallet restored from a snapshot written at or past the boun
       });
 
       const wallet = yield* makeForkWallet({
-        preFork: chain,
-        postFork: Effect.succeed(postFork),
+        v8: chain,
+        v9: Effect.succeed(v9),
         networkId,
         forkVersion,
         seed,
-        chainVersionProbe: chainReporting(afterFork),
+        chainVersionProbe: chainReporting(v9Version),
       });
       yield* Effect.addFinalizer(() => wallet.stop);
       yield* wallet.start;
@@ -345,12 +344,12 @@ describe('a shielded wallet restored from a snapshot written at or past the boun
       yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
       expect(yield* runningTag(restored)).toBe(V2Tag);
 
-      yield* Effect.promise(() => restored.start(wallet.keys.postFork));
+      yield* Effect.promise(() => restored.start(wallet.keys.v9));
 
       // Started, and demonstrably synchronizing: a payment made after the restore lands on the tree the snapshot
       // carried.
-      yield* postFork.submitTransaction(
-        postForkPayment(networkId, mintable(v9.shieldedToken().raw, 500n, walletRecipient())),
+      yield* v9.submitTransaction(
+        v9Payment(networkId, mintable(ledgerV9.shieldedToken().raw, 500n, walletRecipient())),
       );
       const advanced = yield* restoredStates(restored, (state) => totalValue(state.state) === walletTotal + 500n);
       expect(coinValues(advanced.state)).toEqual([...walletValues, 500n]);
