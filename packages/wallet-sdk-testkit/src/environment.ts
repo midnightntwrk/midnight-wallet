@@ -88,7 +88,7 @@ export const makeEnvironment = (
       // Every environment this testkit drives runs the ledger-v9-native node line, which reports this
       // protocol version, so the wallet reaches its post-fork variant. Defined once here rather than at
       // each construction site; the final mainnet fork constant is still an open question.
-      forkVersion: ProtocolVersion.V9NativeForkVersion,
+      forks: { v9: ProtocolVersion.V9NativeForkVersion },
     };
   },
   getDustWalletConfig(): DustWalletConfiguration {
@@ -103,7 +103,7 @@ export const makeEnvironment = (
       },
       // The same boundary the shielded configuration names, for the same reason: this testkit's environments all run
       // the ledger-v9-native node line, so the dust wallet reaches its post-fork variant too.
-      forkVersion: ProtocolVersion.V9NativeForkVersion,
+      forks: { v9: ProtocolVersion.V9NativeForkVersion },
     };
   },
   down: options.down ?? (async () => {}),

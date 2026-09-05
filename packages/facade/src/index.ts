@@ -767,11 +767,11 @@ export class WalletFacade {
   }
 
   private static makeDefaultPendingTransactionsService<
-    TConfig extends DefaultPendingTransactionsServiceConfiguration & { forkVersion: ProtocolVersion.ProtocolVersion },
+    TConfig extends DefaultPendingTransactionsServiceConfiguration & { forks: ProtocolVersion.ForkSchedule },
   >(config: TConfig): Promise<PendingTransactionsServiceImpl<FinalizedTx>> {
     return PendingTransactionsServiceImpl.init<FinalizedTx>({
       configuration: config,
-      txTraits: finalizedTransactionTraits(config.forkVersion),
+      txTraits: finalizedTransactionTraits(config.forks.v9),
     });
   }
 
@@ -786,7 +786,7 @@ export class WalletFacade {
     config: TConfig,
   ): VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction> {
     return Either.getOrThrowWith(
-      makeDefaultVersionedProvingService(config, config.forkVersion),
+      makeDefaultVersionedProvingService(config, config.forks.v9),
       (error) => new Error(error.message),
     );
   }
@@ -880,7 +880,7 @@ export class WalletFacade {
               networkId: initParams.configuration.networkId,
               clock,
             },
-            initParams.configuration.forkVersion,
+            initParams.configuration.forks.v9,
           ),
     );
     return new WalletFacade(
@@ -892,7 +892,7 @@ export class WalletFacade {
       provingService,
       validationService,
       initParams.configuration.txHistoryStorage,
-      initParams.configuration.forkVersion,
+      initParams.configuration.forks.v9,
       clock,
     );
   }

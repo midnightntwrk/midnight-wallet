@@ -38,7 +38,7 @@ import { pick } from 'lodash-es';
 const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
 const NODE_PORT = Number.parseInt(process.env['NODE_PORT'] ?? '9944', 10);
 const PROOF_SERVER_PORT = Number.parseInt(process.env['PROOF_SERVER_PORT'] ?? '6300', 10);
-// The proof server built against ledger-v8, for the chain's history below `forkVersion`. Never contacted on a chain
+// The proof server built against ledger-v8, for the chain's history below `forks.v9`. Never contacted on a chain
 // that has been post-fork since genesis, like the one this runs against.
 const V8_PROOF_SERVER_PORT = Number.parseInt(process.env['V8_PROOF_SERVER_PORT'] ?? '6301', 10);
 const INDEXER_HTTP_URL = `http://localhost:${INDEXER_PORT}/api/v4/graphql`;
@@ -48,12 +48,12 @@ const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
   // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
-  forkVersion: ProtocolVersion.V9NativeForkVersion,
+  forks: { v9: ProtocolVersion.V9NativeForkVersion },
   costParameters: {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
-  // One proof server per ledger version: the one built against ledger-v8 answers below `forkVersion`, the one built
+  // One proof server per ledger version: the one built against ledger-v8 answers below `forks.v9`, the one built
   // against ledger-v9 from it. A transaction is proved by the entry for the version its bytes were authored at, so the
   // wallet proves on either side of the fork and across it. `hard-fork-support.ts` explains the shape in full.
   provers: [
@@ -82,7 +82,7 @@ const configuration: DefaultConfiguration = {
 // so the wallet hides among roughly 2^anonymityLevel candidate nullifiers (default 7). Raising
 // it improves privacy but downloads more non-matching candidates to filter out locally.
 //
-// Note the composition. `DustWallet(config)` registers the event-replay variant either side of `forkVersion`, and
+// Note the composition. `DustWallet(config)` registers the event-replay variant either side of `forks.v9`, and
 // only the ledger-v9 side has a projections path — it rests on `DustLocalState` APIs no ledger-v8 has, permanently. So
 // the fast-syncing wallet is put together from its two halves by hand, the way the shipped one is: the ledger-v8
 // replay variant below the boundary, exactly as shipped, and from the boundary a ledger-v9 variant whose sync is the

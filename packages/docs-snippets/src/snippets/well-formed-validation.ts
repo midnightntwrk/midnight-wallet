@@ -47,7 +47,7 @@ const buildUnprovenTransaction = (state: FacadeState) => {
   // The version also picks which prover and validator answer for these bytes further down.
   return WalletTransaction.adopt(
     'Unproven',
-    authoredFor < configuration.forkVersion ? authorPreFork() : authorPostFork(),
+    authoredFor < configuration.forks.v9 ? authorPreFork() : authorPostFork(),
     authoredFor,
   );
 };

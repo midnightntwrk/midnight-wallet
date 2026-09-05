@@ -139,7 +139,7 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
   beforeEach(async () => {
     configuration = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forkVersion,
+      forks: { v9: forkVersion },
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       provingServerUrl: new URL('http://localhost:6300'),

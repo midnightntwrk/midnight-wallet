@@ -49,7 +49,7 @@ version the chain has since reached. Backends are named ascending by the version
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 
 const configuration = {
-  // ... the rest of the wallet configuration, including `forkVersion`
+  // ... the rest of the wallet configuration, including `forks`
   provers: [
     // Below the boundary: a proof server built against ledger-v8.
     {
@@ -57,7 +57,7 @@ const configuration = {
       backend: { kind: 'server', url: new URL('http://localhost:6301') },
     },
     // From the boundary: proving in this process, with the published circuits.
-    { sinceVersion: forkVersion, backend: { kind: 'wasm' } },
+    { sinceVersion: forks.v9, backend: { kind: 'wasm' } },
   ],
 };
 ```
@@ -65,10 +65,10 @@ const configuration = {
 Two shorthands remain: `provingServers: [{ sinceVersion, url }]` is the same list with every entry a server, and
 `provingServerUrl: url` is one server for every version. Both are read only when `provers` is absent.
 
-A backend whose range spans `configuration.forkVersion` — which `provingServerUrl` always does — is split at the
-boundary and driven by each ledger version in turn, so the same description means the right thing on both sides. A proof
-server, though, is built against one ledger version: no published image serves both, so a chain with history below the
-boundary wants an entry per side. The in-process prover works on bytes and does serve both.
+A backend whose range spans `configuration.forks.v9` — which `provingServerUrl` always does — is split at the boundary
+and driven by each ledger version in turn, so the same description means the right thing on both sides. A proof server,
+though, is built against one ledger version: no published image serves both, so a chain with history below the boundary
+wants an entry per side. The in-process prover works on bytes and does serve both.
 
 A version no backend covers fails with `UnsupportedProvingVersionError`, naming the version.
 

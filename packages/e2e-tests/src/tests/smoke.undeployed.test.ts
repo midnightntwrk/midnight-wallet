@@ -252,7 +252,7 @@ describe('Smoke tests', () => {
         },
         txHistoryStorage: unshieldedTxHistoryStorage,
         // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
-        forkVersion: fixture.getWalletConfig().forkVersion,
+        forks: fixture.getWalletConfig().forks,
       }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
       await initialWallet.start();
       logger.info(`Waiting to sync...`);
@@ -278,7 +278,7 @@ describe('Smoke tests', () => {
         },
         txHistoryStorage: restoredTxHistoryStorage,
         // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
-        forkVersion: fixture.getWalletConfig().forkVersion,
+        forks: fixture.getWalletConfig().forks,
       }).restore(serializedState);
 
       await restoredWallet.start();

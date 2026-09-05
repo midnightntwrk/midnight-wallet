@@ -134,8 +134,8 @@ export type SelfConfiguredDustVariant<TVariant extends Variant.AnyVariant, TConf
 /** What a forking dust wallet needs to know about itself, whatever its variants are built from. */
 export type ForkingDustConfiguration = {
   networkId: NetworkId;
-  /** The protocol version at which the chain hands over from the pre-fork ledger version to the post-fork one. */
-  forkVersion: ProtocolVersion.ProtocolVersion;
+  /** Where each ledger version begins on this chain — see {@link ProtocolVersion.ForkSchedule}. */
+  forks: ProtocolVersion.ForkSchedule;
   /**
    * How the wallet asks the chain which protocol version it is on, before it chooses a variant to start at.
    *
@@ -348,7 +348,7 @@ export const asPostForkDustParameters = (parameters: DustGenerationRates): ledge
  * Builds a dust wallet class over a variant either side of a protocol boundary.
  *
  * @remarks
- *   The boundary is `configuration.forkVersion` and nothing else: the pre-fork variant is registered from the minimum
+ *   The boundary is `configuration.forks.v9` and nothing else: the pre-fork variant is registered from the minimum
  *   supported version and the post-fork one from the fork version, so the version at which the runtime hands over and
  *   the version at which each variant stops applying are the same number, taken from one place.
  *
@@ -357,7 +357,7 @@ export const asPostForkDustParameters = (parameters: DustGenerationRates): ledge
  * @example
  *   ```typescript
  *   const Wallet = CustomForkingDustWallet(
- *     { forkVersion },
+ *     { forks },
  *     { builder: new V1Builder().withDefaults(), configuration: preForkConfiguration },
  *     { builder: new V2Builder().withDefaults().withMigration(...), configuration: postForkConfiguration },
  *   );
@@ -393,7 +393,7 @@ export function CustomForkingDustWallet<
 
   const BaseWallet: WalletLike.BaseWalletClass<Variants> = WalletBuilder.init()
     .withVariant(ProtocolVersion.MinSupportedVersion, preForkBuilder, preFork.configuration)
-    .withVariant(configuration.forkVersion, postForkBuilder, postFork.configuration)
+    .withVariant(configuration.forks.v9, postForkBuilder, postFork.configuration)
     .build();
 
   const variants = BaseWallet.allVariantsRecord();
@@ -470,8 +470,8 @@ export function CustomForkingDustWallet<
    *   The stamp is the floor of the variant's epoch: every decision it is later read for asks which side of the boundary
    *   the bytes belong to, and the floor answers that the same way as any other version in the same epoch.
    */
-  const preForkEpoch = ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, configuration.forkVersion);
-  const postForkEpoch = ProtocolVersion.epochOf(configuration.forkVersion, configuration.forkVersion);
+  const preForkEpoch = ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, configuration.forks.v9);
+  const postForkEpoch = ProtocolVersion.epochOf(configuration.forks.v9, configuration.forks.v9);
   const [preForkStamp] = preForkEpoch;
   const [postForkStamp] = postForkEpoch;
 
@@ -1074,7 +1074,7 @@ export type DustWallet = ForkingDustWallet<PreForkSyncUpdate, PostForkSyncUpdate
 export type DustWalletClass = ForkingDustWalletClass<PreForkSyncUpdate, PostForkSyncUpdate, DefaultDustConfiguration>;
 
 /**
- * Builds the dust wallet this package ships: the default variant either side of `configuration.forkVersion`.
+ * Builds the dust wallet this package ships: the default variant either side of `configuration.forks.v9`.
  *
  * @remarks
  *   Both variants read the chain through the indexer's dust event subscription and record transaction history in the same

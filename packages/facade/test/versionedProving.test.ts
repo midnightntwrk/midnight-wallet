@@ -71,7 +71,7 @@ describe('Proving a transaction at the version it was built for', () => {
   beforeEach(async () => {
     configuration = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forkVersion: ProtocolVersion.V9NativeForkVersion,
+      forks: { v9: ProtocolVersion.V9NativeForkVersion },
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       provingServers: [{ sinceVersion: ProtocolVersion.MinSupportedVersion, url: new URL('http://localhost:6300') }],
@@ -167,7 +167,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
   const started = async (proving: Partial<DefaultConfiguration>): Promise<WalletFacade> => {
     const configuration: DefaultConfiguration = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forkVersion: ProtocolVersion.V9NativeForkVersion,
+      forks: { v9: ProtocolVersion.V9NativeForkVersion },
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       costParameters: { feeBlocksMargin: 0 },

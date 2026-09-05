@@ -70,8 +70,8 @@ export type DefaultBlockDataFetcherConfiguration = {
   indexerClientConnection: {
     indexerHttpUrl: string;
   };
-  /** The protocol version at which this chain hands over to the current ledger version. */
-  forkVersion: ProtocolVersion.ProtocolVersion;
+  /** Where each ledger version begins on this chain — see {@link ProtocolVersion.ForkSchedule}. */
+  forks: ProtocolVersion.ForkSchedule;
   /** The ledger parameters codecs blocks are read with; defaults to {@link defaultLedgerParametersCodecs}. */
   ledgerParametersCodecs?: LedgerParametersCodec.LedgerParametersCodecs<AnyLedgerParameters>;
 };
@@ -119,7 +119,7 @@ export const blockDataFrom = (
  */
 export const makeDefaultBlockDataFetcher = (config: DefaultBlockDataFetcherConfiguration): BlockDataFetcher => {
   const url = config.indexerClientConnection.indexerHttpUrl;
-  const codecs = config.ledgerParametersCodecs ?? defaultLedgerParametersCodecs(config.forkVersion);
+  const codecs = config.ledgerParametersCodecs ?? defaultLedgerParametersCodecs(config.forks.v9);
   return () =>
     Effect.runPromise(
       Effect.gen(function* () {

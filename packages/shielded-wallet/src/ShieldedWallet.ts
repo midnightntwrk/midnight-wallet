@@ -131,8 +131,8 @@ export type SelfConfiguredShieldedVariant<
 /** What a forking shielded wallet needs to know about itself, whatever its variants are built from. */
 export type ForkingShieldedConfiguration = {
   networkId: NetworkId.NetworkId;
-  /** The protocol version at which the chain hands over from the pre-fork ledger version to the post-fork one. */
-  forkVersion: ProtocolVersion.ProtocolVersion;
+  /** Where each ledger version begins on this chain — see {@link ProtocolVersion.ForkSchedule}. */
+  forks: ProtocolVersion.ForkSchedule;
   /**
    * How the wallet asks the chain which protocol version it is on, before it chooses a variant to start at.
    *
@@ -287,7 +287,7 @@ export interface ForkingShieldedWalletClass<
  * Builds a shielded wallet class over a variant either side of a protocol boundary.
  *
  * @remarks
- *   The boundary is `configuration.forkVersion` and nothing else: the pre-fork variant is registered from the minimum
+ *   The boundary is `configuration.forks.v9` and nothing else: the pre-fork variant is registered from the minimum
  *   supported version and the post-fork one from the fork version, so the version at which the runtime hands over and
  *   the version at which each variant stops applying are the same number, taken from one place.
  *
@@ -296,7 +296,7 @@ export interface ForkingShieldedWalletClass<
  * @example
  *   ```typescript
  *   const Wallet = CustomForkingShieldedWallet(
- *     { networkId, forkVersion },
+ *     { networkId, forks },
  *     { builder: new V1Builder().withDefaults(), configuration: preForkConfiguration },
  *     { builder: new V2Builder().withDefaults().withMigration(makeCrossLedgerMigration), configuration: postForkConfiguration },
  *   );
@@ -335,7 +335,7 @@ export function CustomForkingShieldedWallet<
 
   const BaseWallet: WalletLike.BaseWalletClass<Variants> = WalletBuilder.init()
     .withVariant(ProtocolVersion.MinSupportedVersion, preForkBuilder, preFork.configuration)
-    .withVariant(configuration.forkVersion, postForkBuilder, postFork.configuration)
+    .withVariant(configuration.forks.v9, postForkBuilder, postFork.configuration)
     .build();
 
   const variants = BaseWallet.allVariantsRecord();
@@ -411,10 +411,10 @@ export function CustomForkingShieldedWallet<
    *   rather than the block height the chain happened to be at. Every decision the stamp is later read for asks which
    *   side of the boundary the bytes belong to: which prover proves them, which validator checks them, which variant
    *   may unwrap them. The epoch floor is the one value guaranteed to answer that the same way as any other version in
-   *   the same epoch, and it is derived here from the same `forkVersion` the variants are registered at.
+   *   the same epoch, and it is derived here from the same `forks.v9` the variants are registered at.
    */
-  const preForkEpoch = ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, configuration.forkVersion);
-  const postForkEpoch = ProtocolVersion.epochOf(configuration.forkVersion, configuration.forkVersion);
+  const preForkEpoch = ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, configuration.forks.v9);
+  const postForkEpoch = ProtocolVersion.epochOf(configuration.forks.v9, configuration.forks.v9);
   const [preForkStamp] = preForkEpoch;
   const [postForkStamp] = postForkEpoch;
 
@@ -860,7 +860,7 @@ export type ShieldedWalletClass = ForkingShieldedWalletClass<
 >;
 
 /**
- * Builds the shielded wallet this package ships: the default variant either side of `configuration.forkVersion`.
+ * Builds the shielded wallet this package ships: the default variant either side of `configuration.forks.v9`.
  *
  * @remarks
  *   Both variants read the chain through the indexer and record transaction history in the same storage; each is built

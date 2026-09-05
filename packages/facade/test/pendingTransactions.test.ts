@@ -47,7 +47,7 @@ describe('Wallet Facade handling pending transactions', () => {
   beforeEach(async () => {
     configuration = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forkVersion: ProtocolVersion.V9NativeForkVersion,
+      forks: { v9: ProtocolVersion.V9NativeForkVersion },
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',

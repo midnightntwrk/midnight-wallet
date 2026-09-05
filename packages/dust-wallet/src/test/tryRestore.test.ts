@@ -29,7 +29,7 @@ const configuration: DefaultDustConfiguration = {
   indexerClientConnection: { indexerHttpUrl: 'http://localhost:8088/api/v4/graphql' },
   txHistoryStorage: new InMemoryTransactionHistoryStorage(TransactionHistory.DustTransactionHistoryEntrySchema),
   costParameters: { feeBlocksMargin: 0 },
-  forkVersion: ProtocolVersion.ProtocolVersion(2_000_000n),
+  forks: { v9: ProtocolVersion.ProtocolVersion(2_000_000n) },
 };
 
 /** A snapshot declaring a protocol version far beyond anything this build registers a variant for. */

@@ -38,7 +38,7 @@ const configuration = {
   txHistoryStorage: new InMemoryTransactionHistoryStorage(),
   // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so it is supplied per environment.
-  forkVersion: ProtocolVersion.V9NativeForkVersion,
+  forks: { v9: ProtocolVersion.V9NativeForkVersion },
 };
 
 // Create a keystore from a random unshielded seed
@@ -126,10 +126,10 @@ Variant internals are published under two subpaths, one per ledger version:
 - Current (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-unshielded-wallet/v2`
 - Pre-fork (ledger-v8) variant internals via `@midnightntwrk/wallet-sdk-unshielded-wallet/v1`
 
-The production wallet registers both variants and hands over at `forkVersion`; `./v1` is the pre-fork half on its own,
-for code that needs the ledger that produced pre-fork history. The two are not interchangeable — `./v1` has no ECDSA
-support (ledger-v8 has a single signature scheme) and carries its own ledger-v8 `createKeystore`, whose secret is a
-plain `Uint8Array` rather than the root export's `{kind, secret}`.
+The production wallet registers both variants and hands over at `forks.v9`; `./v1` is the pre-fork half on its own, for
+code that needs the ledger that produced pre-fork history. The two are not interchangeable — `./v1` has no ECDSA support
+(ledger-v8 has a single signature scheme) and carries its own ledger-v8 `createKeystore`, whose secret is a plain
+`Uint8Array` rather than the root export's `{kind, secret}`.
 
 ```typescript
 import { V2Builder, RunningV2Variant } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';

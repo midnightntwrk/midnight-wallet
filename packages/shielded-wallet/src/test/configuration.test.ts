@@ -34,7 +34,7 @@ describe('DefaultShieldedConfiguration', () => {
           batchUpdates?: V2Sync.BatchUpdatesConfig;
           txHistoryStorage: V2TransactionHistory.ShieldedHistoryStorage;
           transactionDetailsRetryWindow?: Duration.DurationInput;
-          forkVersion: ProtocolVersion.ProtocolVersion;
+          forks: ProtocolVersion.ForkSchedule;
           chainVersionProbe?: ChainVersionProbe;
         }
       >
@@ -49,9 +49,9 @@ describe('DefaultShieldedConfiguration', () => {
     type _1 = Expect<CanAssign<DefaultShieldedConfiguration, DefaultV2Configuration>>;
     type _2 = Expect<CanAssign<DefaultShieldedConfiguration, DefaultV1Configuration>>;
 
-    // `forkVersion` is the wallet layer's alone: neither variant knows there is another one.
-    type _3 = Expect<Equal<'forkVersion' extends keyof DefaultV1Configuration ? true : false, false>>;
-    type _4 = Expect<Equal<'forkVersion' extends keyof DefaultV2Configuration ? true : false, false>>;
+    // `forks` is the wallet layer's alone: neither variant knows there is another one.
+    type _3 = Expect<Equal<'forks' extends keyof DefaultV1Configuration ? true : false, false>>;
+    type _4 = Expect<Equal<'forks' extends keyof DefaultV2Configuration ? true : false, false>>;
 
     // And so is the question of where to start, for the same reason: a variant that does not know there is another
     // one has no use for the answer.

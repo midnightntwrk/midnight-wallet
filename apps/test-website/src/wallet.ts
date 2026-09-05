@@ -55,7 +55,7 @@ export const configurationFor = (network: KnownNetwork): Configuration => ({
   networkId: network,
   // The protocol version this chain hands over to the post-fork ledger at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
-  forkVersion: V9_NATIVE_FORK_VERSION,
+  forks: { v9: V9_NATIVE_FORK_VERSION },
   costParameters: {
     feeBlocksMargin: 5,
   },

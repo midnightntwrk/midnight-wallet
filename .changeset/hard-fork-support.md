@@ -23,7 +23,7 @@ no longer import a ledger package.
 
 ### Breaking: configuration and starting
 
-- `forkVersion` is required in the shielded, dust, unshielded and facade configurations: the protocol version at which
+- `forks.v9` is required in the shielded, dust, unshielded and facade configurations: the protocol version at which
   the chain switches ledgers. There is no default. `ProtocolVersion.V9NativeForkVersion`, from the abstractions package, is
   the value a 2.x chain reports (2000000); the final mainnet constant is not fixed yet, so supply it per environment.
 - `chainVersionProbe` is a new optional setting on all three wallets. By default a wallet asks the indexer, on every
