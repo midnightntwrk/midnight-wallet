@@ -113,6 +113,42 @@ describe('InMemoryTransactionHistoryStorage gotFinalized respects the merge func
 });
 
 describe('InMemoryTransactionHistoryStorage gotPending / gotRejected', () => {
+  it('removes superseded rejection entries when inclusion arrives after orphaning', async () => {
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema);
+    await storage.gotRejected(rejectedInput('submission-a', ['id-a'], new Date()));
+    await storage.gotRejected(rejectedInput('submission-b', ['id-b'], new Date()));
+    await storage.gotFinalized(finalizedInput('chain-hash', { identifiers: ['id-a', 'id-b'] }));
+    expect((await storage.getAll()).map((entry) => entry.hash)).toEqual(['chain-hash']);
+  });
+  it.each(['chain-hash', 'submission-hash'])('preserves inclusion over rejection keyed by %s', async (hash) => {
+    // Even a caller-provided merge that blindly takes incoming fields cannot downgrade inclusion.
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
+    await Promise.all([
+      storage.gotFinalized(finalizedInput('chain-hash', { identifiers: ['id-a', 'id-b'] })),
+      storage.gotRejected(rejectedInput(hash, ['id-a'], new Date(), 'orphaned-by-protocol-upgrade')),
+    ]);
+    expect(await storage.getAll()).toHaveLength(1);
+    expect((await storage.get('chain-hash'))?.lifecycle.status).toBe('finalized');
+  });
+
+  it('writes nothing for a rejection under the submission hash once inclusion is recorded under the chain hash', async () => {
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
+    await storage.gotFinalized(finalizedInput('chain-hash', { identifiers: ['id-a', 'id-b'] }));
+
+    await storage.gotRejected(rejectedInput('submission-hash', ['id-a'], new Date()));
+
+    const entries = await storage.getAll();
+    expect(entries.map((entry) => [entry.hash, entry.lifecycle.status])).toEqual([['chain-hash', 'finalized']]);
+  });
+
+  it('does not treat partial identifier overlap or empty identifiers as inclusion', async () => {
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema);
+    await storage.gotFinalized(finalizedInput('chain-hash', { identifiers: ['id-a'] }));
+    await storage.gotRejected(rejectedInput('overlapping', ['id-a', 'id-b'], new Date()));
+    await storage.gotRejected(rejectedInput('empty', [], new Date()));
+    expect((await storage.get('overlapping'))?.lifecycle.status).toBe('rejected');
+    expect((await storage.get('empty'))?.lifecycle.status).toBe('rejected');
+  });
   it('should store a pending entry under its hash with a pending lifecycle', async () => {
     const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
 
@@ -200,13 +236,13 @@ describe('InMemoryTransactionHistoryStorage clears pending entries precisely', (
     expect(await storage.get('p-empty')).toBeDefined();
   });
 
-  it('only clears pending entries, leaving a finalized sibling with overlapping identifiers intact', async () => {
+  it('leaves a finalized sibling with overlapping identifiers intact', async () => {
     const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
 
     await storage.gotFinalized(finalizedInput('k1', { identifiers: ['id-a'] }));
     await storage.gotFinalized(finalizedInput('k2', { identifiers: ['id-a'] }));
 
-    // k1 must not be deleted by k2's finalize — clearing targets pending entries only.
+    // k1 must not be deleted by k2's finalize — both record known inclusion.
     expect(await storage.get('k1')).toBeDefined();
     expect(await storage.get('k2')).toBeDefined();
   });
