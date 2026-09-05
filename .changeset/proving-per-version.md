@@ -8,7 +8,7 @@
 Prove on either side of a protocol boundary. Routing a transaction to a prover by the version stamped on it already
 worked; every backend, however, was bound to ledger-v9 — it drove `Transaction.prove` with ledger-v9's cost
 model, framed its proof-server requests with ledger-v9's payload helpers, and resolved key material at a fixed circuit
-line. A pre-fork entry in `provingServers` was therefore accepted by configuration and could not be honoured: handing a
+line. A ledger-v8 entry in `provingServers` was therefore accepted by configuration and could not be honoured: handing a
 ledger-v8 transaction ledger-v9's cost model fails at the wasm-bindgen boundary with `expected instance of
 CostModel`. There is now a backend per ledger version, and the registration that says which serves which range of
 protocol versions.

@@ -304,14 +304,14 @@ Capabilities operate on state synchronously; services provide data that capabili
 Each of the three wallet packages holds **two variants of the same wallet**, one per ledger version, in sibling
 directories under `src/`:
 
-- **`src/v1`** - the **pre-fork** variant, on `@midnight-ntwrk/ledger-v8`. Active below the chain's `forks.v9`.
-- **`src/v2`** - the **current** variant, on `@midnightntwrk/ledger-v9`. Active from `forks.v9` upwards.
+- **`src/v1`** - the **V1** variant, on `@midnight-ntwrk/ledger-v8`. Active below the chain's `forks.v9`.
+- **`src/v2`** - the **V2** variant, on `@midnightntwrk/ledger-v9`. Active from `forks.v9` upwards.
 
 The two trees are near-identical modulo the ledger import: same file names, same exports with `V1`/`V2` in their names.
 
 **Working rule: edit `v2`, then mirror the change into `v1` with the ledger swapped.** `v2` is where a change belongs
-first, because it is what the chain will be running. A change that lands in only one twin is a bug that shows up as a
-wallet that misbehaves on one side of the fork.
+first, because it is what the chain runs from `forks.v9`. A change that lands in only one twin is a bug that shows up as
+a wallet that misbehaves on one side of the fork.
 
 **Justified `v9`-only exclusions.** A few things are deliberately absent from `v1` because no published ledger-v8 has
 the API they need — the largest is dust's projections-based fast sync (`makeEventLessSyncService`), which rests on
@@ -322,6 +322,35 @@ them.
 **The wallet layer above the twins is single.** `ShieldedWallet` / `DustWallet` / `UnshieldedWallet` each register both
 variants and hand over at `configuration.forks.v9`; the package's own `Default*Configuration` is declared by the
 package, not aliased to either variant's. `Custom*Wallet(configuration, builder)` is the single-variant composition.
+
+### Naming the two sides of a fork
+
+Names say **which version**, never **which side of the fork**. Two axes, decided by what a thing is:
+
+- **Wallet code is `V1`/`V2`.** Anything under a twin tree, and any variant, builder, tag, sync update, core wallet or
+  wallet error, carries the variant ordinal: `V1Builder`, `V1ShieldedVariant`, `TV1SyncUpdate`, `v1Builder`. V1 runs on
+  ledger-v8 below `forks.v9`; V2 runs on ledger-v9 from it. The ordinal is not the ledger major, because a variant is a
+  wallet implementation and more than one could serve a ledger version.
+- **Ledger code is `V8`/`V9`.** Anything typed by a ledger package or standing for one ledger's runtime - transactions,
+  keys, parameters, signatures, proving backends, validators, simulators, and the protocol-version epochs and stamps
+  that say which ledger made some bytes - carries the ledger version: `V8UnprovenTransaction`, `makeV9Backend`,
+  `v8Authoring`, `forks.v9`, `provers.v8`, `v8ProvingService.ts`, and `ledger-v8`/`ledger-v9` in prose.
+- **An intermediary is named for what it is.** A variant type over ledger-v8 material is `V1ShieldedVariant`; a
+  conversion returning a ledger object is `asV8DustParameters`; one returning the v1 tree's own type is `asV1PublicKey`.
+- **Pairs are symmetric.** Where a v8-named thing has a twin, the twin is v9-named, never bare or "current". A file that
+  imports both ledgers aliases them `ledgerV8` and `ledgerV9`; bare `ledger` belongs only in a file that imports one,
+  which is what the twin trees do.
+- **Relative words are fine when relative to a parameter, not to the fork**: `PreviousLedgerWallet` and
+  `migrateState(previousState)` are relative to the variant at hand, `currentVariant` and `nextProtocolVersion` in the
+  runtime to runtime state. Fork-neutral words stay too: `forks`, `ForkSchedule`, `forkVersion` for the boundary itself,
+  `epochOf`, `*KeysByEpoch`, `Settled`/`Crossing`, `ForkSimulator`, `advanceToFork`, "hands over", "boundary".
+- **Prose** writes `ledger-v8`/`ledger-v9` or "the V1/V2 variant", says "below `forks.v9`" / "from `forks.v9`" for the
+  ranges, and names a fork by the version it introduces ("the v9 fork") wherever "the fork" could mean more than one.
+
+Never name a side by its position relative to the fork, or by recency. `scripts/check-fork-vocabulary.mjs` holds the
+retired words and fails `verify:check` and CI on any of them, in identifiers and prose alike; a line carrying
+`fork-vocabulary: allow`, or a region between `fork-vocabulary: allow-start` and `fork-vocabulary: allow-end`, is exempt
+for the few places that must quote one, such as a changeset's before/after table.
 
 ### State Management
 
@@ -342,10 +371,10 @@ Uses Effect library with `SubscriptionRef` for BLoC-like state management:
     is configured in tsconfig.base.json as a TypeScript plugin.
 - **RxJS** (`rxjs`) - Observable streams for reactive state
   - Only in APIs exposed to the users of the SDK
-- **Two ledgers, side by side** - the SDK runs the pre-fork ledger below the protocol boundary and the current one from
-  it, so both are installed and both are real:
-  - **`@midnight-ntwrk/ledger-v8`** - the pre-fork ledger (`v1` variants)
-  - **`@midnightntwrk/ledger-v9`** - the current ledger (`v2` variants)
+- **Two ledgers, side by side** - the SDK runs ledger-v8 below the protocol boundary and ledger-v9 from it, so both are
+  installed and both are real:
+  - **`@midnight-ntwrk/ledger-v8`** - ledger-v8, run by the `v1` variants below `forks.v9`
+  - **`@midnightntwrk/ledger-v9`** - ledger-v9, run by the `v2` variants from `forks.v9`
   - **Watch the scope.** `@midnight-ntwrk` (hyphenated) and `@midnightntwrk` (not) are **two different npm orgs**, and
     the two ledgers are published under different ones. One character decides which package you import; getting it wrong
     yields a module-not-found for a package that plainly exists. Copy the specifier, do not type it.
@@ -393,11 +422,12 @@ subset on PRs, full suite nightly) — not in the integration matrix. The docs-s
 that lane while staying in its own package.
 
 `e2e-tests` also holds a fourth e2e sub-project, `fork` (`*.fork.test.ts`, `yarn turbo test-fork`): the hard-fork
-crossing, which boots a chain from the pre-fork node's spec, runs it on the current binary, and enacts the real ledger 8
-→ 9 runtime upgrade so a wallet crosses an actual protocol boundary — something no other lane does, since every other
-stack is post-fork from block 1. It is in neither the PR smoke lane nor the nightly undeployed run; it has its own
-nightly/dispatch workflow, `.github/workflows/e2e-hard-fork.yml`, and is documented in `packages/e2e-tests/README.md`.
-New fork-crossing behaviour that needs live infra to exercise belongs there, not in `*.undeployed.test.ts`.
+crossing, which boots a chain from the ledger-v8 node's spec, runs it on the ledger-v9 binary, and enacts the real
+ledger 8 → 9 runtime upgrade so a wallet crosses an actual protocol boundary — something no other lane does, since every
+other stack is on ledger-v9 from block 1. It is in neither the PR smoke lane nor the nightly undeployed run; it has its
+own nightly/dispatch workflow, `.github/workflows/e2e-hard-fork.yml`, and is documented in
+`packages/e2e-tests/README.md`. New fork-crossing behaviour that needs live infra to exercise belongs there, not in
+`*.undeployed.test.ts`.
 
 ### Test-Driven Development (MANDATORY)
 
@@ -1121,8 +1151,8 @@ outside the range rather than handing bytes to a ledger that would misread them.
 **Ledger TypeScript Types:**
 
 - `node_modules/@midnightntwrk/ledger-v9/ledger-v9.d.ts` - Full type definitions for Transaction, Intent, ZswapOffer,
-  DustActions, etc. (current ledger)
-- `node_modules/@midnight-ntwrk/ledger-v8/ledger-v8.d.ts` - The same, for the pre-fork ledger
+  DustActions, etc. (ledger-v9)
+- `node_modules/@midnight-ntwrk/ledger-v8/ledger-v8.d.ts` - The same, for ledger-v8
 
 **Ledger Specification (midnight-ledger repo):**
 
@@ -1133,7 +1163,7 @@ outside the range rather than handing bytes to a ledger that would misread them.
 
 **Wallet SDK Examples:**
 
-- `packages/unshielded-wallet/src/v2/Transacting.ts` - Transaction building patterns (`v1` is its pre-fork twin)
+- `packages/unshielded-wallet/src/v2/Transacting.ts` - Transaction building patterns (`v1` is its ledger-v8 twin)
 - `packages/unshielded-wallet/src/v2/test/transacting.test.ts` - Transaction test examples
 - `packages/docs-snippets/src/snippets/` - API usage examples for transfers, swaps, balancing
 

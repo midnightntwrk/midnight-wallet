@@ -16,9 +16,9 @@
 '@midnightntwrk/wallet-sdk': major
 ---
 
-Hard-fork support. A wallet runs the pre-fork ledger (`@midnight-ntwrk/ledger-v8`) below the chain's fork version and
-the current ledger (`@midnightntwrk/ledger-v9`) from it, and follows a live chain across the boundary: balances, coins
-and transaction history survive the crossing, and a wallet restored from a pre-fork snapshot crosses too. Applications
+Hard-fork support. A wallet runs ledger-v8 (`@midnight-ntwrk/ledger-v8`) below the chain's fork version and
+ledger-v9 (`@midnightntwrk/ledger-v9`) from it, and follows a live chain across the boundary: balances, coins
+and transaction history survive the crossing, and a wallet restored from a V1 snapshot crosses too. Applications
 no longer import a ledger package.
 
 ### Breaking: configuration and starting
@@ -28,7 +28,7 @@ no longer import a ledger package.
   the value a 2.x chain reports (2000000); the final mainnet constant is not fixed yet, so supply it per environment.
 - `chainVersionProbe` is a new optional setting on all three wallets. By default a wallet asks the indexer, on every
   start, which protocol version the chain's first block was produced under, with a 5-second timeout, and starts on the
-  matching side. A failed probe never fails a start: the wallet starts pre-fork and crosses on its first synced update.
+  matching side. A failed probe never fails a start: the wallet starts on V1 and crosses on its first synced update.
   A custom probe must answer the same question.
 - Wallets start from seeds. On `ShieldedWallet(...)` and `DustWallet(...)`, `startWithSecretKeys` and
   `startWithSecretKey` are removed; `startWithSeed(seed)` and `startWithKeys({ v8, v9 })` replace them and return a
@@ -68,19 +68,19 @@ no longer import a ledger package.
 
 - `ShieldedWalletState`, `DustWalletState` and `UnshieldedWalletState` lose their `capabilities` and `services` fields
   and the static `mapState`; `fromVariant` replaces it and the constructor is `(protocolVersion, state, projections)`.
-  Their `state` is a union of the pre-fork and current core state. The unshielded `UnshieldedWalletCapabilities` and
+  Their `state` is a union of the V1 and V2 core states. The unshielded `UnshieldedWalletCapabilities` and
   `UnshieldedWalletServices` types are deleted. Shielded `BalancingResult` is renamed `ShieldedBalancingResult`.
 - `DefaultShieldedConfiguration`, `DefaultDustConfiguration` and `DefaultUnshieldedConfiguration` are declared by each
   package rather than aliased to a variant's; the testkit's configuration types follow.
 - The `./v1` subpath of each wallet package, and `shielded/v1`, `dust/v1`, `unshielded/v1` in `@midnightntwrk/wallet-sdk`,
-  now export the pre-fork ledger-v8 wallet. The ledger-v9 wallet moved to `./v2` with `V1`-named exports renamed to
+  now export the ledger-v8 wallet. The ledger-v9 wallet moved to `./v2` with `V1`-named exports renamed to
   `V2`. `./v1` is not a plain copy: the dust `./v1` has no projections-based fast sync (it rests on ledger-v9 APIs);
   the unshielded `./v1` has its own `createKeystore` whose secret is a plain `Uint8Array`, no ECDSA, and no
   `SchemeMismatchError`; `Simulator` on `./v1` is the ledger-v8 simulator only. Both subpaths gain a `Migration`
   namespace, and their builders gain `withStartAux`, `withStartAuxDefaults`, `withMigration` and
   `withMigrationDefaults`.
 - Root entry points keep their names and gain the forking wallet types, `ProtocolVersion.V9NativeForkVersion`, `DustGenerationRates`
-  with `asPreForkDustParameters` and `asPostForkDustParameters`, and snapshot inspection: `Restore` (shielded) and
+  with `asV8DustParameters` and `asV9DustParameters`, and snapshot inspection: `Restore` (shielded) and
   `UnshieldedRestore` namespaces, and the dust `peekProtocolVersion` and `UnsupportedSnapshotVersionError`.
 - Existing snapshots restore; `restore` and the new `tryRestore` route on the protocol version a snapshot declares, and
   `tryRestore` returns the reason a snapshot cannot be read instead of throwing. Shielded snapshots written mid-crossing
@@ -142,13 +142,13 @@ For code that composes wallets or test fixtures by hand.
   frames and adopts it once caught up to the frame's highest transaction id. Shielded and dust re-ask the chain's tip on a
   timer (`DefaultSyncConfiguration.versionWatch.intervalMs`, default 30 s, zero or less disables), and record it only
   once level with the far end of their own event timeline, so a hand-over never outruns unread history.
-- Carried Night UTxOs cross with `registeredForDustGeneration: false`, matching what the indexer reports after the fork,
-  so re-registering for dust generation post-fork funds its own fee. `claimableFeePayment(dustState, nightUtxos, now)` is
+- Carried Night UTxOs cross with `registeredForDustGeneration: false`, matching what the indexer reports after the v9 fork,
+  so re-registering for dust generation on ledger-v9 funds its own fee. `claimableFeePayment(dustState, nightUtxos, now)` is
   exported for callers that want the amount `waitForGeneratedDust` waits on.
 - Known limitations: shielded spends pending at the fork stay locked afterwards until the ledger offers a way to clear
   them; the dust projections-based fast sync does not hand over at a fork on its own (only relevant at a future fork) and
   now logs its resume cursors at debug level; a fresh dust wallet on a chain that forked over history replays the
-  pre-fork dust events before crossing.
+  ledger-v8 dust events before crossing.
 
 ### Dependencies
 
