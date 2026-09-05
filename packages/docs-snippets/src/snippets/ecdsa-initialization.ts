@@ -38,8 +38,8 @@ const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
 const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
-  // `forks` is left out: the facade presets `DefaultForkSchedule` — ledger-v9 from the version a 2.x node reports. A
-  // chain that hands over elsewhere states its own `forks` here, which wins.
+  // The facade presets `DefaultForkSchedule` — ledger-v9 from the version a 2.x node reports. A chain that hands over
+  // elsewhere states its own `forks` here, which wins.
   costParameters: {
     feeBlocksMargin: 5,
   },
