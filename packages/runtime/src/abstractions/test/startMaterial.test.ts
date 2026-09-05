@@ -21,8 +21,8 @@ type Keys = Readonly<{ derivedFrom: string; ledger: string }>;
 const seed = WalletSeed.fromString('00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff');
 const otherSeed = WalletSeed.fromString('ffeeddccbbaa99887766554433221100ffeeddccbbaa99887766554433221100');
 
-const preForkTag = Symbol('pre-fork');
-const postForkTag = Symbol('post-fork');
+const v1Tag = Symbol('ledger-v8');
+const v2Tag = Symbol('ledger-v9');
 
 /** Each variant derives its own ledger's key type from whatever seed it is given. */
 const derivedBy =
@@ -38,10 +38,10 @@ describe('StartMaterial', () => {
     it('derives key material for whichever variant asks, using that variant s own derivation', () => {
       const retained = StartMaterial.fromSeed<Keys>(seed);
 
-      expect(StartMaterial.auxFor(retained, preForkTag, derivedBy('v8'))).toStrictEqual(
+      expect(StartMaterial.auxFor(retained, v1Tag, derivedBy('v8'))).toStrictEqual(
         Option.some({ derivedFrom: Buffer.from(seed).toString('hex'), ledger: 'v8' }),
       );
-      expect(StartMaterial.auxFor(retained, postForkTag, derivedBy('v9'))).toStrictEqual(
+      expect(StartMaterial.auxFor(retained, v2Tag, derivedBy('v9'))).toStrictEqual(
         Option.some({ derivedFrom: Buffer.from(seed).toString('hex'), ledger: 'v9' }),
       );
     });
@@ -49,7 +49,7 @@ describe('StartMaterial', () => {
     it('hands over the seed it retained, not some other one', () => {
       const retained = StartMaterial.fromSeed<Keys>(otherSeed);
 
-      expect(StartMaterial.auxFor(retained, postForkTag, derivedBy('v9'))).toStrictEqual(
+      expect(StartMaterial.auxFor(retained, v2Tag, derivedBy('v9'))).toStrictEqual(
         Option.some({ derivedFrom: Buffer.from(otherSeed).toString('hex'), ledger: 'v9' }),
       );
     });
@@ -65,48 +65,48 @@ describe('StartMaterial', () => {
 
   describe('retained as key objects', () => {
     it('returns the key material registered for the variant that asks', () => {
-      const preForkKeys: Keys = { derivedFrom: 'elsewhere', ledger: 'v8' };
-      const postForkKeys: Keys = { derivedFrom: 'elsewhere', ledger: 'v9' };
+      const v8Keys: Keys = { derivedFrom: 'elsewhere', ledger: 'v8' };
+      const v9Keys: Keys = { derivedFrom: 'elsewhere', ledger: 'v9' };
       const retained = StartMaterial.forVariants<Keys>([
-        [preForkTag, preForkKeys],
-        [postForkTag, postForkKeys],
+        [v1Tag, v8Keys],
+        [v2Tag, v9Keys],
       ]);
 
-      expect(StartMaterial.auxFor(retained, preForkTag, neverDerives)).toStrictEqual(Option.some(preForkKeys));
-      expect(StartMaterial.auxFor(retained, postForkTag, neverDerives)).toStrictEqual(Option.some(postForkKeys));
+      expect(StartMaterial.auxFor(retained, v1Tag, neverDerives)).toStrictEqual(Option.some(v8Keys));
+      expect(StartMaterial.auxFor(retained, v2Tag, neverDerives)).toStrictEqual(Option.some(v9Keys));
     });
 
     it('reports a miss for a variant it holds no key material for, rather than handing over another variant s', () => {
-      const retained = StartMaterial.forVariant<Keys>(preForkTag, { derivedFrom: 'elsewhere', ledger: 'v8' });
+      const retained = StartMaterial.forVariant<Keys>(v1Tag, { derivedFrom: 'elsewhere', ledger: 'v8' });
 
-      expect(StartMaterial.auxFor(retained, postForkTag, neverDerives)).toStrictEqual(Option.none());
+      expect(StartMaterial.auxFor(retained, v2Tag, neverDerives)).toStrictEqual(Option.none());
     });
 
     it('treats a single variant s key material as the one-entry case', () => {
       const keys: Keys = { derivedFrom: 'elsewhere', ledger: 'v9' };
 
-      expect(StartMaterial.forVariant<Keys>(postForkTag, keys)).toStrictEqual(
-        StartMaterial.forVariants<Keys>([[postForkTag, keys]]),
+      expect(StartMaterial.forVariant<Keys>(v2Tag, keys)).toStrictEqual(
+        StartMaterial.forVariants<Keys>([[v2Tag, keys]]),
       );
     });
   });
 
   describe('requiring key material a variant can use', () => {
     it('produces the key material when the wallet holds some for that variant', () => {
-      expect(
-        StartMaterial.requireAuxFor(StartMaterial.fromSeed<Keys>(seed), postForkTag, derivedBy('v9')),
-      ).toStrictEqual(Either.right({ derivedFrom: Buffer.from(seed).toString('hex'), ledger: 'v9' }));
+      expect(StartMaterial.requireAuxFor(StartMaterial.fromSeed<Keys>(seed), v2Tag, derivedBy('v9'))).toStrictEqual(
+        Either.right({ derivedFrom: Buffer.from(seed).toString('hex'), ledger: 'v9' }),
+      );
     });
 
     it('fails typed, naming the variant, when the wallet holds none that variant can use', () => {
-      const retained = StartMaterial.forVariant<Keys>(preForkTag, { derivedFrom: 'elsewhere', ledger: 'v8' });
+      const retained = StartMaterial.forVariant<Keys>(v1Tag, { derivedFrom: 'elsewhere', ledger: 'v8' });
 
-      const resolved = StartMaterial.requireAuxFor(retained, postForkTag, neverDerives);
+      const resolved = StartMaterial.requireAuxFor(retained, v2Tag, neverDerives);
 
       const error = resolved.pipe(Either.flip, Either.getOrThrow);
       expect(error).toBeInstanceOf(StartMaterial.MissingStartAuxError);
       expect(error._tag).toBe('@midnightntwrk/wallet-sdk-runtime/abstractions/StartMaterial/MissingStartAuxError');
-      expect(error.variantTag).toBe(postForkTag);
+      expect(error.variantTag).toBe(v2Tag);
     });
   });
 
@@ -114,11 +114,7 @@ describe('StartMaterial', () => {
     it('derives from a retained seed, whatever the asking variant s key type is', () => {
       const otherLedgerKeys = (given: WalletSeed.WalletSeed): string => `v8:${Buffer.from(given).toString('hex')}`;
 
-      const derived = StartMaterial.requireDerivedAuxFor(
-        StartMaterial.fromSeed<Keys>(seed),
-        preForkTag,
-        otherLedgerKeys,
-      );
+      const derived = StartMaterial.requireDerivedAuxFor(StartMaterial.fromSeed<Keys>(seed), v1Tag, otherLedgerKeys);
 
       expect(derived).toStrictEqual(Either.right(`v8:${Buffer.from(seed).toString('hex')}`));
     });
@@ -126,15 +122,15 @@ describe('StartMaterial', () => {
     it('fails typed when the wallet retained key objects rather than a seed', () => {
       // Key objects belong to one ledger version's runtime. There is nothing to convert, so a variant
       // speaking another one can only be served by re-deriving from a seed the wallet does not hold.
-      const retained = StartMaterial.forVariant<Keys>(postForkTag, { derivedFrom: 'elsewhere', ledger: 'v9' });
+      const retained = StartMaterial.forVariant<Keys>(v2Tag, { derivedFrom: 'elsewhere', ledger: 'v9' });
 
-      const derived = StartMaterial.requireDerivedAuxFor(retained, preForkTag, (): string => {
+      const derived = StartMaterial.requireDerivedAuxFor(retained, v1Tag, (): string => {
         throw new Error('must not derive: nothing was retained to derive from');
       });
 
       const error = derived.pipe(Either.flip, Either.getOrThrow);
       expect(error).toBeInstanceOf(StartMaterial.MissingStartAuxError);
-      expect(error.variantTag).toBe(preForkTag);
+      expect(error.variantTag).toBe(v1Tag);
     });
   });
 });

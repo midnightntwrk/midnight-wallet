@@ -15,21 +15,21 @@
  * How the SDK writes a signature, whichever ledger version is underneath.
  *
  * @remarks
- *   The one scalar that genuinely changed shape at the protocol boundary. The pre-fork ledger version has a single
- *   signature scheme and writes a signature as bare hexadecimal; the current one has more than one and names the scheme
- *   alongside the bytes. Everything else an application reads — token types, addresses, nullifiers, transaction
- *   identifiers — is byte-identical across the two.
+ *   The one scalar that genuinely changed shape at the protocol boundary. Ledger-v8 has a single signature scheme and
+ *   writes a signature as bare hexadecimal; ledger-v9 has more than one and names the scheme alongside the bytes.
+ *   Everything else an application reads — token types, addresses, nullifiers, transaction identifiers — is
+ *   byte-identical across the two.
  *
- *   The SDK speaks the current shape everywhere and lowers it for the pre-fork variant, rather than the reverse. Lifting
- *   is total — the pre-fork ledger has exactly one scheme, so naming it is never a guess — while lowering is partial,
- *   and a scheme the pre-fork ledger has never heard of is refused rather than handed over as bytes it would misread.
- *   Speaking the older shape would have made the common case lossy instead.
+ *   The SDK speaks the ledger-v9 shape everywhere and lowers it for the V1 variant, rather than the reverse. Lifting is
+ *   total — ledger-v8 has exactly one scheme, so naming it is never a guess — while lowering is partial, and a scheme
+ *   ledger-v8 has never heard of is refused rather than handed over as bytes it would misread. Speaking the ledger-v8
+ *   shape would have made the common case lossy instead.
  *
  *   Kept beside that lifting and lowering rather than among the abstractions a variant implements, because this is the
  *   vocabulary those two functions are stated in and nothing else in the SDK is defined against it. It names no ledger
  *   version itself, so an application can annotate a signer without importing one, and nothing on the way to it loads
- *   either ledger's WebAssembly. These are structurally the current ledger version's own types: a signer already
- *   written against them compiles unchanged.
+ *   either ledger's WebAssembly. These are structurally ledger-v9's own types: a signer already written against them
+ *   compiles unchanged.
  */
 
 /** The signature schemes the chain knows. Only `schnorr` exists before the protocol boundary. */

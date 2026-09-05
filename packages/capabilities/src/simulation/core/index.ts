@@ -14,10 +14,10 @@
 /**
  * Simulator internals that are the same whichever ledger a simulated chain runs.
  *
- * The pre-fork (ledger-v8) and post-fork (ledger-v9) simulators are otherwise twins, so anything here is written once
- * instead of once per version. The rule for what belongs: it must not name a ledger type. Everything that constructs or
- * applies ledger objects — the ledger state, transactions, strictness objects, genesis minting — stays in the
- * per-version simulators, because that is what genuinely differs between them.
+ * The ledger-v8 and ledger-v9 simulators are otherwise twins, so anything here is written once instead of once per
+ * version. The rule for what belongs: it must not name a ledger type. Everything that constructs or applies ledger
+ * objects — the ledger state, transactions, strictness objects, genesis minting — stays in the per-version simulators,
+ * because that is what genuinely differs between them.
  *
  * Not a published entry point; re-exported through each version's barrel.
  */

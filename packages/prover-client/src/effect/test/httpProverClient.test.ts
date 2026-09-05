@@ -22,8 +22,8 @@
  *   The requests are observed by standing in for `fetch`, because the client runs each request on its own runtime with
  *   its own HTTP layer, so there is no context a test could provide one through.
  */
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as HttpProverClient from '../HttpProverClient.js';
@@ -73,30 +73,35 @@ const firstPreimageOf = async (
 };
 
 const aV8Preimage = (): Promise<Uint8Array> => {
-  const shielded = preForkLedger.shieldedToken();
-  const coin = preForkLedger.createShieldedCoinInfo(shielded.raw, 1_000n);
-  const output = preForkLedger.ZswapOutput.new(
+  const shielded = ledgerV8.shieldedToken();
+  const coin = ledgerV8.createShieldedCoinInfo(shielded.raw, 1_000n);
+  const output = ledgerV8.ZswapOutput.new(
     coin,
     0,
-    preForkLedger.sampleCoinPublicKey(),
-    preForkLedger.sampleEncryptionPublicKey(),
+    ledgerV8.sampleCoinPublicKey(),
+    ledgerV8.sampleEncryptionPublicKey(),
   );
-  const transaction = preForkLedger.Transaction.fromParts(
+  const transaction = ledgerV8.Transaction.fromParts(
     'undeployed',
-    preForkLedger.ZswapOffer.fromOutput(output, shielded.raw, 1_000n),
+    ledgerV8.ZswapOffer.fromOutput(output, shielded.raw, 1_000n),
   );
-  return firstPreimageOf((provider) => transaction.prove(provider, preForkLedger.CostModel.initialCostModel()));
+  return firstPreimageOf((provider) => transaction.prove(provider, ledgerV8.CostModel.initialCostModel()));
 };
 
-const aCurrentLedgerPreimage = (): Promise<Uint8Array> => {
-  const shielded = ledger.shieldedToken();
-  const coin = ledger.createShieldedCoinInfo(shielded.raw, 1_000n);
-  const output = ledger.ZswapOutput.new(coin, 0, ledger.sampleCoinPublicKey(), ledger.sampleEncryptionPublicKey());
-  const transaction = ledger.Transaction.fromParts(
-    'undeployed',
-    ledger.ZswapOffer.fromOutput(output, shielded.raw, 1_000n),
+const aV9Preimage = (): Promise<Uint8Array> => {
+  const shielded = ledgerV9.shieldedToken();
+  const coin = ledgerV9.createShieldedCoinInfo(shielded.raw, 1_000n);
+  const output = ledgerV9.ZswapOutput.new(
+    coin,
+    0,
+    ledgerV9.sampleCoinPublicKey(),
+    ledgerV9.sampleEncryptionPublicKey(),
   );
-  return firstPreimageOf((provider) => transaction.prove(provider, ledger.CostModel.initialCostModel()));
+  const transaction = ledgerV9.Transaction.fromParts(
+    'undeployed',
+    ledgerV9.ZswapOffer.fromOutput(output, shielded.raw, 1_000n),
+  );
+  return firstPreimageOf((provider) => transaction.prove(provider, ledgerV9.CostModel.initialCostModel()));
 };
 
 describe('What the HTTP prover client sends to a proof server', () => {
@@ -131,7 +136,7 @@ describe('What the HTTP prover client sends to a proof server', () => {
     expect(observed).toHaveLength(1);
     expect(observed[0].url).toBe('http://prover.test:6300/prove');
     expect(observed[0].method).toBe('POST');
-    expect(observed[0].body).toStrictEqual(preForkLedger.createProvingPayload(preimage, 7n));
+    expect(observed[0].body).toStrictEqual(ledgerV8.createProvingPayload(preimage, 7n));
     expect(proof).toStrictEqual(aCheckResponseBody);
   });
 
@@ -142,28 +147,28 @@ describe('What the HTTP prover client sends to a proof server', () => {
 
     expect(observed).toHaveLength(1);
     expect(observed[0].url).toBe('http://prover.test:6300/check');
-    expect(observed[0].body).toStrictEqual(preForkLedger.createCheckPayload(preimage));
-    expect(result).toStrictEqual(preForkLedger.parseCheckResult(aCheckResponseBody));
+    expect(observed[0].body).toStrictEqual(ledgerV8.createCheckPayload(preimage));
+    expect(result).toStrictEqual(ledgerV8.parseCheckResult(aCheckResponseBody));
   });
 
-  it('frames a current-ledger proving request with ledger-v9, unchanged', async () => {
-    const preimage = await aCurrentLedgerPreimage();
+  it('frames a ledger-v9 proving request with ledger-v9, unchanged', async () => {
+    const preimage = await aV9Preimage();
 
     await client().asProvingProvider().prove(preimage, 'midnight/zswap/output', 7n);
 
     expect(observed).toHaveLength(1);
     expect(observed[0].url).toBe('http://prover.test:6300/prove');
-    expect(observed[0].body).toStrictEqual(ledger.createProvingPayload(preimage, 7n));
+    expect(observed[0].body).toStrictEqual(ledgerV9.createProvingPayload(preimage, 7n));
   });
 
-  it('frames a current-ledger check request with ledger-v9, unchanged', async () => {
-    const preimage = await aCurrentLedgerPreimage();
+  it('frames a ledger-v9 check request with ledger-v9, unchanged', async () => {
+    const preimage = await aV9Preimage();
 
     const result = await client().asProvingProvider().check(preimage, 'midnight/zswap/output');
 
     expect(observed).toHaveLength(1);
     expect(observed[0].url).toBe('http://prover.test:6300/check');
-    expect(observed[0].body).toStrictEqual(ledger.createCheckPayload(preimage));
-    expect(result).toStrictEqual(ledger.parseCheckResult(aCheckResponseBody));
+    expect(observed[0].body).toStrictEqual(ledgerV9.createCheckPayload(preimage));
+    expect(result).toStrictEqual(ledgerV9.parseCheckResult(aCheckResponseBody));
   });
 });

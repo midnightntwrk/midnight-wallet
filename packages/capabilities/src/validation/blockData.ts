@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { LedgerParameters as PreForkLedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { LedgerParameters as V8LedgerParameters } from '@midnight-ntwrk/ledger-v8';
 import { LedgerParameters } from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
@@ -27,15 +27,14 @@ export type BlockDataFetcher = () => Promise<BlockData<AnyLedgerParameters>>;
  *
  * @remarks
  *   A block's parameters are bytes of whichever ledger version produced the block, and the version the indexer reports
- *   the block under is what says which. Below the fork version they are read with the pre-fork ledger version's
- *   deserializer and from it with the current one, so that the object handed to a validator is always one its own
- *   `LedgerState` accepts.
+ *   the block under is what says which. Below the fork version they are read with ledger-v8's deserializer and from it
+ *   with the current one, so that the object handed to a validator is always one its own `LedgerState` accepts.
  *
  *   Nothing in the resulting type distinguishes the two: the ledger versions' `LedgerParameters` are structurally
  *   identical, so {@link AnyLedgerParameters} is a statement of intent rather than something the compiler enforces. The
  *   distinction is nominal at run time — the classes differ, and each ledger's WASM boundary rejects the other's —
  *   which is why the routing has to be right rather than merely well-typed.
- * @param forkVersion The protocol version at which the chain hands over to the current ledger version.
+ * @param forkVersion The protocol version at which the chain hands over to the ledger-v9.
  * @returns The registry blocks are read with.
  */
 export const defaultLedgerParametersCodecs = (
@@ -48,7 +47,7 @@ export const defaultLedgerParametersCodecs = (
             {
               sinceVersion: ProtocolVersion.MinSupportedVersion,
               codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) =>
-                PreForkLedgerParameters.deserialize(bytes),
+                V8LedgerParameters.deserialize(bytes),
               ),
             },
             {
@@ -56,7 +55,7 @@ export const defaultLedgerParametersCodecs = (
               codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) => LedgerParameters.deserialize(bytes)),
             },
           ]
-        : // A chain whose boundary is at or below the minimum supported version has no pre-fork epoch to register for.
+        : // A chain whose boundary is at or below the minimum supported version has no ledger-v8 epoch to register for.
           [
             {
               sinceVersion: ProtocolVersion.MinSupportedVersion,

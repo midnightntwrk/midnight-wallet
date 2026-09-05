@@ -22,21 +22,12 @@ import {
 } from './validationService.js';
 
 /**
- * A ledger-v8 transaction that has been proven but not yet bound.
- *
- * @remarks
- *   Taken from proving rather than restated, exactly as ledger-v9's `UnboundTransaction` is: it is the ledger-v8 prover
- *   that produces this shape, and validation is one of the things that can be asked about it.
- */
-export type PreForkUnboundTransaction = V8UnboundTransaction;
-
-/**
- * Every pre-fork transaction shape well-formedness can be asked about — the pre-fork counterpart of
- * `AnyValidatableTransaction`, and a genuinely different type from it: these are the other ledger version's classes,
+ * Every ledger-v8 transaction shape well-formedness can be asked about — the ledger-v8 counterpart of
+ * `AnyV9ValidatableTransaction`, and a genuinely different type from it: these are the other ledger version's classes,
  * and neither ledger can read the other's.
  */
-export type AnyPreForkValidatableTransaction =
-  ledger.FinalizedTransaction | PreForkUnboundTransaction | ledger.UnprovenTransaction;
+export type AnyV8ValidatableTransaction =
+  ledger.FinalizedTransaction | V8UnboundTransaction | ledger.UnprovenTransaction;
 
 const buildStrictness = (flags: WellFormedStrictnessFlags): ledger.WellFormedStrictness => {
   const strictness = new ledger.WellFormedStrictness();
@@ -53,14 +44,14 @@ const buildBlankLedgerState = (networkId: string, parameters: ledger.LedgerParam
 };
 
 /**
- * The pre-fork ledger version's well-formedness check.
+ * The ledger-v8's well-formedness check.
  *
  * @remarks
- *   Structurally the same three steps as the current ledger's, against a different ledger version's classes. It is the
- *   classes, not the steps, that make this a separate check: a pre-fork transaction cannot be handed to the current
- *   ledger's `wellFormed`, nor current-ledger parameters to this one.
+ *   Structurally the same three steps as ledger-v9's, against a different ledger version's classes. It is the classes,
+ *   not the steps, that make this a separate check: a ledger-v8 transaction cannot be handed to ledger-v9's
+ *   `wellFormed`, nor ledger-v9 parameters to this one.
  */
-export const preForkWellFormedCheck: WellFormedCheck<AnyPreForkValidatableTransaction, AnyLedgerParameters> = (
+export const v8WellFormedCheck: WellFormedCheck<AnyV8ValidatableTransaction, AnyLedgerParameters> = (
   tx,
   { networkId, ledgerParameters, flags, now },
 ) => {
@@ -68,16 +59,16 @@ export const preForkWellFormedCheck: WellFormedCheck<AnyPreForkValidatableTransa
 };
 
 /**
- * Builds the validator for pre-fork transactions.
+ * Builds the validator for ledger-v8 transactions.
  *
  * @remarks
  *   Registered below the fork version by `makeDefaultValidationServices`, against a block-data fetcher whose codec
  *   registry is split at the same version — so a block reported from before the boundary reaches this validator as
- *   pre-fork parameters, which is the only kind its ledger version can build a state from.
+ *   ledger-v8 parameters, which is the only kind its ledger version can build a state from.
  * @param deps The network, clock, and the block-data fetcher, which decodes each block at the version it reports.
- * @returns A validator to register in a `ValidationServices` registry for the version range before the fork.
+ * @returns A validator to register in a `ValidationServices` registry for the version range before the v9 fork.
  */
-export const makePreForkValidationServiceEffect = (
+export const makeV8ValidationServiceEffect = (
   deps: ValidationServiceDependencies<AnyLedgerParameters>,
-): ValidationServiceEffect<AnyPreForkValidatableTransaction, AnyLedgerParameters> =>
-  makeValidationServiceEffect(preForkWellFormedCheck, deps);
+): ValidationServiceEffect<AnyV8ValidatableTransaction, AnyLedgerParameters> =>
+  makeValidationServiceEffect(v8WellFormedCheck, deps);

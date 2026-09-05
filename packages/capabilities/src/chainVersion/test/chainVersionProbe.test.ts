@@ -21,8 +21,8 @@
  *
  *   Which block is asked about is half the specification, and the half a version arithmetic test cannot see. A fresh
  *   wallet reads a timeline from its start, so the variant it must begin on is the one that can deserialize the _first_
- *   event it will fetch — not the one the chain's tip is on. On a chain with pre-fork history those differ, and asking
- *   about the tip hands the pre-fork timeline to a ledger version that cannot read a byte of it.
+ *   event it will fetch — not the one the chain's tip is on. On a chain with ledger-v8 history those differ, and asking
+ *   about the tip hands the ledger-v8 timeline to a ledger version that cannot read a byte of it.
  */
 
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';

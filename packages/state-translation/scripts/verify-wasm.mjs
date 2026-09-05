@@ -7,8 +7,8 @@
 //
 // Run from the repository root, after scripts/build-wasm.sh.
 
-import * as v8 from '@midnight-ntwrk/ledger-v8';
-import * as v9 from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 
 import { translateLedgerState } from '../dist/index.js';
 
@@ -17,9 +17,9 @@ const fail = (message) => {
   process.exit(1);
 };
 
-const preFork = v8.LedgerState.blank('undeployed').serialize();
+const v8State = ledgerV8.LedgerState.blank('undeployed').serialize();
 
-const translated = await translateLedgerState(preFork).catch((error) => {
+const translated = await translateLedgerState(v8State).catch((error) => {
   const cause = error?.cause;
   if (cause?.name === 'RuntimeError') {
     fail(
@@ -32,7 +32,7 @@ const translated = await translateLedgerState(preFork).catch((error) => {
 });
 
 // Deserializing is the real assertion: it is what says these bytes are a v9 ledger state and not merely some bytes.
-const postFork = v9.LedgerState.deserialize(translated);
-if (!(postFork instanceof v9.LedgerState)) fail('translation returned bytes that are not a v9 LedgerState');
+const v9State = ledgerV9.LedgerState.deserialize(translated);
+if (!(v9State instanceof ledgerV9.LedgerState)) fail('translation returned bytes that are not a v9 LedgerState');
 
-console.log(`verify-wasm: ok — ${preFork.length} v8 bytes translated to ${translated.length} v9 bytes`);
+console.log(`verify-wasm: ok — ${v8State.length} v8 bytes translated to ${translated.length} v9 bytes`);

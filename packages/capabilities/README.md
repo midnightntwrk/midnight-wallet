@@ -118,7 +118,7 @@ const service = makeDefaultVersionedProvingService(
   operational fact about that server, not something the SDK enforces.
 - Each registered backend refuses the other ledger version's transaction with `ProvingEpochMismatchError` rather than
   handing it to a ledger that cannot read it.
-- `makeServerProvingServiceEffect` / `makeWasmProvingServiceEffect` build a single current-ledger backend;
+- `makeV9ServerProvingServiceEffect` / `makeV9WasmProvingServiceEffect` build a single ledger-v9 backend;
   `makeV8ServerProvingServiceEffect` / `makeV8WasmProvingServiceEffect` are their ledger-v8 twins.
 
 ## Exports

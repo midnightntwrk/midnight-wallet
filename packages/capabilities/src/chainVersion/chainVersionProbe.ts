@@ -17,7 +17,7 @@
  * @remarks
  *   A wallet that registers a variant either side of a protocol boundary learns the chain's version from the events it
  *   observes, which is too late for one decision: which variant to start on. Until an event arrives its only guess is
- *   the bottom of the timeline, so it starts pre-fork — and on a chain that is entirely past the boundary that costs a
+ *   the bottom of the timeline, so it starts on V1 — and on a chain that is entirely past the boundary that costs a
  *   hand-over per start, or, on a chain that has produced no event this wallet can see, is simply wrong for as long as
  *   the wallet runs.
  *
@@ -26,8 +26,8 @@
  *   deserialize the first event it will fetch — a fact about the bottom of the timeline. On a chain that forked with
  *   history behind it the tip's version answers a different question and answers this one wrongly: it starts the wallet
  *   on a ledger version that cannot read a byte of the history it is about to be served. A chain whose genesis is
- *   already past the boundary has no such history, so it still starts a fresh wallet post-fork directly; a chain that
- *   forked over its own past routes it pre-fork, where its coins are readable, and the hand-over carries them across.
+ *   already past the boundary has no such history, so it still starts a fresh wallet on V2 directly; a chain that
+ *   forked over its own past routes it to V1, where its coins are readable, and the hand-over carries them across.
  *
  *   The answer is read from the same block query validation already reads, so nothing new is asked of the indexer, and it
  *   is best-effort by design: a chain that will not answer leaves the wallet exactly where it was.
@@ -111,7 +111,7 @@ export type DefaultChainVersionProbeConfiguration = {
  *   with one applies its own bound.
  *
  *   A chain that reports no block at all is not an answer: the failure below is what every caller reads as "the chain did
- *   not say", and leaves the wallet starting pre-fork exactly as a wallet with no probe does.
+ *   not say", and leaves the wallet starting ledger-v8 exactly as a wallet with no probe does.
  * @param config Where to ask.
  * @returns The probe.
  */

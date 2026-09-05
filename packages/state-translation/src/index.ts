@@ -14,9 +14,9 @@
 /**
  * The ledger-side v8-to-v9 ledger state translation, as seen from the wallet.
  *
- * One function, {@link translateLedgerState}: serialized pre-fork ledger state in, serialized post-fork ledger state
- * out. Everything that makes that possible — a WASM module linking both ledgers at once — is built from this package's
- * own `wasm/` crate, which wraps the ledger's translation crate.
+ * One function, {@link translateLedgerState}: serialized ledger-v8 state in, serialized ledger-v9 state out. Everything
+ * that makes that possible — a WASM module linking both ledgers at once — is built from this package's own `wasm/`
+ * crate, which wraps the ledger's translation crate.
  *
  * This exists for testing and migration work, not for the wallet's runtime: no wallet code path translates ledger
  * state. See the package README for how to build it.

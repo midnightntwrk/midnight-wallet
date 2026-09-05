@@ -15,8 +15,8 @@
  * Running the v8-to-v9 ledger state translation.
  *
  * The translation is Rust, compiled to WASM from this package's own `wasm/` crate, and it is the only thing that can
- * convert a pre-fork ledger state into a post-fork one: it links both ledgers at once, which nothing on the JavaScript
- * side can do. This module is the whole of the wallet side — hand it bytes, hand bytes back.
+ * convert a ledger-v8 state into a ledger-v9 one: it links both ledgers at once, which nothing on the JavaScript side
+ * can do. This module is the whole of the wallet side — hand it bytes, hand bytes back.
  *
  * Two deliberate shapes:
  *
@@ -36,9 +36,9 @@
 import { translate_ledger_state } from '../wasm/pkg/v8_to_v9_state_translation_wasm.js';
 
 /**
- * The translation ran and did not produce a post-fork ledger state.
+ * The translation ran and did not produce a ledger-v9 state.
  *
- * Whether the bytes it did return are a _valid_ post-fork state is not decided here — that belongs to whoever
+ * Whether the bytes it did return are a _valid_ ledger-v9 state is not decided here — that belongs to whoever
  * deserializes them.
  */
 export class StateTranslationFailedError extends Error {
@@ -50,7 +50,7 @@ export class StateTranslationFailedError extends Error {
 }
 
 /**
- * Translate a serialized pre-fork (ledger-v8) ledger state into a serialized post-fork (ledger-v9) one.
+ * Translate a serialized ledger-v8 state into a serialized ledger-v9 one.
  *
  * Shaped for `translatorFromAsync` from `@midnightntwrk/wallet-sdk-capabilities`, which is how it reaches a
  * `ForkSimulator`.
@@ -60,16 +60,16 @@ export class StateTranslationFailedError extends Error {
  *   const fork = yield* ForkSimulator.init({ ...config, translator: translatorFromAsync(translateLedgerState) });
  *   ```;
  *
- * @param preForkLedger - A ledger-v8 `LedgerState.serialize()`
+ * @param v8State - A ledger-v8 `LedgerState.serialize()`
  * @returns Bytes a ledger-v9 `LedgerState.deserialize` accepts
  * @throws StateTranslationFailedError if the translation fails
  */
-export const translateLedgerState = (preForkLedger: Uint8Array): Promise<Uint8Array> => {
+export const translateLedgerState = (v8State: Uint8Array): Promise<Uint8Array> => {
   try {
     // Not `async`: the WASM export is synchronous, so there is nothing to await. The result is still a `Promise`, and a
     // refusal still a rejection rather than a synchronous throw, because that is the contract `translatorFromAsync`
     // consumes — a caller writing `.catch(...)` must catch either way.
-    return Promise.resolve(translate_ledger_state(preForkLedger));
+    return Promise.resolve(translate_ledger_state(v8State));
   } catch (cause) {
     // The WASM module's own error says why, so it has to survive as the cause: a refused translation arrives as a
     // `JsError` from Rust, and a panic as a bare `RuntimeError`.

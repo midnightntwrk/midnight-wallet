@@ -21,8 +21,8 @@
  *   fork schedule the wallets are built with. Written the same way validation's `versionedValidation.ts` is, because it
  *   is the same problem.
  */
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Either, Option } from 'effect';
 import {
@@ -32,9 +32,9 @@ import {
   type V8UnprovenTransaction,
 } from './v8ProvingService.js';
 import {
-  makeServerProvingServiceEffect,
+  makeV9ServerProvingServiceEffect,
   makeVersionedProvingServiceEffect,
-  makeWasmProvingServiceEffect,
+  makeV9WasmProvingServiceEffect,
   ProvingEpochMismatchError,
   resolveProvingBackends,
   wrapVersionedEffectService,
@@ -43,7 +43,7 @@ import {
   type ProvingConfigurationError,
   type ProvingServiceEffect,
   type ProvingServices,
-  type UnboundTransaction,
+  type V9UnboundTransaction,
   type VersionedProvingService,
   type VersionedProvingServiceEffect,
   type WasmProvingConfiguration,
@@ -57,10 +57,7 @@ import {
  *   is holding something the other version's backend provably cannot read.
  */
 /** Ledger-v9's unproven transaction, named for symmetry with {@link V8UnprovenTransaction}. */
-export type V9UnprovenTransaction = ledger.UnprovenTransaction;
-
-/** Ledger-v9's proven-but-unbound transaction, named for symmetry with {@link V8UnboundTransaction}. */
-export type V9UnboundTransaction = UnboundTransaction;
+export type V9UnprovenTransaction = ledgerV9.UnprovenTransaction;
 
 export type AnyVersionUnprovenTransaction = V9UnprovenTransaction | V8UnprovenTransaction;
 
@@ -103,10 +100,10 @@ const onlyFrom = <TUnproven extends AnyVersionUnprovenTransaction, TUnbound exte
 });
 
 const isV8Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is V8UnprovenTransaction =>
-  transaction instanceof preForkLedger.Transaction;
+  transaction instanceof ledgerV8.Transaction;
 
-const isV9Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is ledger.UnprovenTransaction =>
-  transaction instanceof ledger.Transaction;
+const isV9Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is ledgerV9.UnprovenTransaction =>
+  transaction instanceof ledgerV9.Transaction;
 
 /** The in-process backend's configuration, with a key material override only when one was named. */
 const wasmConfigurationOf = (backend: Extract<ProvingBackend, { kind: 'wasm' }>): WasmProvingConfiguration =>
@@ -132,8 +129,8 @@ const makeV9Backend = (
 ): VersionProvingServiceEffect =>
   onlyFrom(
     backend.kind === 'server'
-      ? makeServerProvingServiceEffect({ provingServerUrl: backend.url })
-      : makeWasmProvingServiceEffect(wasmConfigurationOf(backend)),
+      ? makeV9ServerProvingServiceEffect({ provingServerUrl: backend.url })
+      : makeV9WasmProvingServiceEffect(wasmConfigurationOf(backend)),
     isV9Transaction,
     epoch,
   );
@@ -143,7 +140,7 @@ const makeV9Backend = (
  *
  * @remarks
  *   A chain whose boundary is at or below the minimum supported version has no history ledger-v8 authored, so there is no
- *   pre-fork epoch on it and a ledger-v8 backend has nothing to serve.
+ *   ledger-v8 epoch on it and a ledger-v8 backend has nothing to serve.
  */
 const epochsOf = (forks: ProtocolVersion.ForkSchedule) => ({
   v8:
@@ -174,11 +171,11 @@ export const makeDefaultProvingServices = (
   resolveProvingBackends(configuration).pipe(
     Either.map((backends) => {
       const epochs = epochsOf(forks);
-      const preFork = Option.all([Option.fromNullable(backends.v8), epochs.v8]).pipe(
+      const v8Entry = Option.all([Option.fromNullable(backends.v8), epochs.v8]).pipe(
         Option.map(([backend, range]) => ({ range, value: makeV8Backend(backend, range) })),
       );
       return {
-        entries: [...Option.toArray(preFork), { range: epochs.v9, value: makeV9Backend(backends.v9, epochs.v9) }],
+        entries: [...Option.toArray(v8Entry), { range: epochs.v9, value: makeV9Backend(backends.v9, epochs.v9) }],
       };
     }),
   );

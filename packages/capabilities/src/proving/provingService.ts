@@ -51,8 +51,8 @@ export type ProvingFailure = ProvingError | ProvingEpochMismatchError;
  * Turns an unproven transaction into a proven one.
  *
  * @typeParam TProven The proven transaction this backend produces.
- * @typeParam TUnproven The unproven transaction it accepts. Defaults to the current ledger's, because a proving backend
- *   is only ever written against one ledger version — which is exactly why choosing between backends is
+ * @typeParam TUnproven The unproven transaction it accepts. Defaults to ledger-v9's, because a proving backend is only
+ *   ever written against one ledger version — which is exactly why choosing between backends is
  *   {@link VersionedProvingServiceEffect}'s job and not this interface's.
  */
 export interface ProvingServiceEffect<TProven, TUnproven = ledger.UnprovenTransaction> {
@@ -134,7 +134,7 @@ export const singleVersionProvingServiceEffect = <TProven, TUnproven>(
   prove: (transaction) => service.prove(transaction),
 });
 
-export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
+export type V9UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
 const wrapEffectService = <TProven, TUnproven>(
   effectService: ProvingServiceEffect<TProven, TUnproven>,
@@ -149,11 +149,11 @@ export const wrapVersionedEffectService = <TProven, TUnproven>(
   prove: (transaction, protocolVersion) => Effect.runPromise(effectService.prove(transaction, protocolVersion)),
 });
 
-export const fromProvingProviderEffect = (
+export const fromV9ProvingProviderEffect = (
   provider: Effect.Effect<ledger.ProvingProvider, InvalidProtocolSchemeError>,
-): ProvingServiceEffect<UnboundTransaction> => {
+): ProvingServiceEffect<V9UnboundTransaction> => {
   return {
-    prove(transaction: ledger.UnprovenTransaction): Effect.Effect<UnboundTransaction, ProvingFailure> {
+    prove(transaction: ledger.UnprovenTransaction): Effect.Effect<V9UnboundTransaction, ProvingFailure> {
       return pipe(
         provider,
         Effect.flatMap((provider) =>
@@ -178,8 +178,8 @@ export const fromProvingProviderEffect = (
   };
 };
 
-export const fromProvingProvider = (provider: ledger.ProvingProvider): ProvingServiceEffect<UnboundTransaction> => {
-  return fromProvingProviderEffect(Effect.succeed(provider));
+export const fromV9ProvingProvider = (provider: ledger.ProvingProvider): ProvingServiceEffect<V9UnboundTransaction> => {
+  return fromV9ProvingProviderEffect(Effect.succeed(provider));
 };
 
 export type ServerProvingConfiguration = {
@@ -291,36 +291,36 @@ export const resolveProvingBackends = (
 export const makeWasmProvingServices = (
   sinceVersion: ProtocolVersion.ProtocolVersion,
   configuration?: WasmProvingConfiguration,
-): ProvingServices<UnboundTransaction> => ({
+): ProvingServices<V9UnboundTransaction> => ({
   entries: [
     {
       range: ProtocolVersion.makeRange(sinceVersion, ProtocolVersion.MaxSupportedVersion),
-      value: makeWasmProvingServiceEffect(configuration),
+      value: makeV9WasmProvingServiceEffect(configuration),
     },
   ],
 });
 
-export const makeServerProvingServiceEffect = (
+export const makeV9ServerProvingServiceEffect = (
   configuration: ServerProvingConfiguration,
-): ProvingServiceEffect<UnboundTransaction> => {
+): ProvingServiceEffect<V9UnboundTransaction> => {
   return pipe(
     HttpProverClient.create({
       url: configuration.provingServerUrl,
     }),
     Effect.map((client) => client.asProvingProvider()),
-    fromProvingProviderEffect,
+    fromV9ProvingProviderEffect,
   );
 };
 
-export const makeWasmProvingServiceEffect = (
+export const makeV9WasmProvingServiceEffect = (
   configuration?: WasmProvingConfiguration,
-): ProvingServiceEffect<UnboundTransaction> => {
+): ProvingServiceEffect<V9UnboundTransaction> => {
   return pipe(
     WasmProver.create({
       keyMaterialProvider: configuration?.keyMaterialProvider ?? WasmProver.makeDefaultKeyMaterialProvider(),
     }),
     Effect.map((prover) => prover.asProvingProvider()),
-    fromProvingProviderEffect,
+    fromV9ProvingProviderEffect,
   );
 };
 
@@ -334,18 +334,19 @@ export const makeSimulatorProvingServiceEffect = (): ProvingServiceEffect<ledger
 
 export const makeDefaultProvingServiceEffect = (
   configuration: ServerProvingConfiguration,
-): ProvingServiceEffect<UnboundTransaction> => makeServerProvingServiceEffect(configuration);
+): ProvingServiceEffect<V9UnboundTransaction> => makeV9ServerProvingServiceEffect(configuration);
 
 export const makeDefaultProvingService = (
   configuration: ServerProvingConfiguration,
-): ProvingService<UnboundTransaction> => wrapEffectService(makeDefaultProvingServiceEffect(configuration));
+): ProvingService<V9UnboundTransaction> => wrapEffectService(makeDefaultProvingServiceEffect(configuration));
 
-export const makeServerProvingService = (
+export const makeV9ServerProvingService = (
   configuration: ServerProvingConfiguration,
-): ProvingService<UnboundTransaction> => wrapEffectService(makeServerProvingServiceEffect(configuration));
+): ProvingService<V9UnboundTransaction> => wrapEffectService(makeV9ServerProvingServiceEffect(configuration));
 
-export const makeWasmProvingService = (configuration?: WasmProvingConfiguration): ProvingService<UnboundTransaction> =>
-  wrapEffectService(makeWasmProvingServiceEffect(configuration));
+export const makeV9WasmProvingService = (
+  configuration?: WasmProvingConfiguration,
+): ProvingService<V9UnboundTransaction> => wrapEffectService(makeV9WasmProvingServiceEffect(configuration));
 
 export const makeSimulatorProvingService = (): ProvingService<ledger.ProofErasedTransaction> =>
   wrapEffectService(makeSimulatorProvingServiceEffect());

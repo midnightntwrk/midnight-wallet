@@ -15,9 +15,9 @@ import { describe, expect, it } from 'vitest';
 import * as ProtocolState from '../ProtocolState.js';
 import * as ProtocolVersion from '../ProtocolVersion.js';
 
-const preFork: ProtocolState.ProtocolState<number, 'pre' | 'post'> = {
+const v1: ProtocolState.ProtocolState<number, 'v1' | 'v2'> = {
   version: ProtocolVersion.ProtocolVersion(8n),
-  variantTag: 'pre',
+  variantTag: 'v1',
   state: 42,
 };
 
@@ -25,25 +25,25 @@ const equals = ProtocolState.getEquivalence(Equivalence.number);
 
 describe('ProtocolState', () => {
   it('projects the state out', () => {
-    expect(ProtocolState.state(preFork)).toBe(42);
+    expect(ProtocolState.state(v1)).toBe(42);
   });
 
   describe('getEquivalence', () => {
     it('holds for identical version, producing variant and state', () => {
-      expect(equals(preFork, { ...preFork })).toBe(true);
+      expect(equals(v1, { ...v1 })).toBe(true);
     });
 
     it('distinguishes states produced by different variants', () => {
-      expect(equals(preFork, { ...preFork, variantTag: 'post' })).toBe(false);
+      expect(equals(v1, { ...v1, variantTag: 'v2' })).toBe(false);
     });
 
     it('distinguishes different protocol versions', () => {
-      expect(equals(preFork, { ...preFork, version: ProtocolVersion.ProtocolVersion(9n) })).toBe(false);
+      expect(equals(v1, { ...v1, version: ProtocolVersion.ProtocolVersion(9n) })).toBe(false);
     });
 
     it('defers to the supplied state equivalence', () => {
-      expect(equals(preFork, { ...preFork, state: 43 })).toBe(false);
-      expect(ProtocolState.getEquivalence<number>(() => true)(preFork, { ...preFork, state: 43 })).toBe(true);
+      expect(equals(v1, { ...v1, state: 43 })).toBe(false);
+      expect(ProtocolState.getEquivalence<number>(() => true)(v1, { ...v1, state: 43 })).toBe(true);
     });
   });
 });

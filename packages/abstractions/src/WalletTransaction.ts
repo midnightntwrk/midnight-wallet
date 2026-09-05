@@ -170,8 +170,8 @@ export class WalletTransaction<out TStage extends TransactionStage = Transaction
    *   `@midnightntwrk/wallet-sdk/ledger/v8` or `/v9` — hands one to the wallet. The version passed here is a claim
    *   about which ledger version produced the transaction, and the SDK holds the caller to it: a handle stamped for one
    *   side of a protocol boundary is refused by a wallet acting on the other side, with a
-   *   {@link ProtocolVersionMismatchError}. Until the fork, that means a transaction built with the post-fork ledger
-   *   version is refused at run time, however well it type-checks.
+   *   {@link ProtocolVersionMismatchError}. Until the fork, that means a transaction built with ledger-v9 is refused at
+   *   run time, however well it type-checks.
    * @param stage How far along the building of the transaction is.
    * @param transaction The transaction, of whichever ledger version built it.
    * @param protocolVersion The protocol version that ledger version serves.
