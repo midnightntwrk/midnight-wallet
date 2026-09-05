@@ -16,8 +16,9 @@
  *
  * The SDK runs one ledger version below the chain's `forks.v9` and another from it, and each of the three wallets
  * registers a variant either side. Nothing here is a migration an application performs: a wallet started from a seed
- * follows the chain across the boundary on its own. What an application does have to do is say where the boundary is,
- * read which side of it the wallets are on, and — if it authors its own transactions — author for the right side.
+ * follows the chain across the boundary on its own. What an application does have to do is read which side of the
+ * boundary the wallets are on and — if it authors its own transactions — author for the right side. Where the boundary
+ * is, the facade presets; only a chain that hands over elsewhere has to say so.
  *
  * This file is the copy-paste shape, in the order the code runs:
  *
@@ -35,8 +36,6 @@
  */
 import {
   createKeystore,
-  type DefaultConfiguration,
-  ProtocolVersion,
   DustWallet,
   InMemoryTransactionHistoryStorage,
   mergeWalletEntries,
@@ -63,11 +62,12 @@ const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 // 1. A proving backend per ledger version
 // ---------------------------------------------------------------------------------------------------------------------
 
-const configuration: DefaultConfiguration = {
+// Resolved up front, which fills in what the facade presets: `forks`, as `DefaultForkSchedule` — ledger-v9 from the
+// version a 2.x node reports. `WalletFacade.init` does the same for the factories it calls; it is done here as well
+// because step 5 uses a wallet package on its own, which has no preset and requires `forks`. A chain that hands over
+// elsewhere states its own `forks: { v9: ... }` in this object, which wins.
+const configuration = WalletFacade.resolveConfiguration({
   networkId: 'undeployed',
-  // The protocol version this chain hands over to ledger-v9 at. A 2.x node reports 2000000;
-  // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
-  forks: { v9: ProtocolVersion.V9NativeForkVersion },
   costParameters: {
     feeBlocksMargin: 5,
   },
@@ -94,7 +94,7 @@ const configuration: DefaultConfiguration = {
     indexerWsUrl: INDEXER_WS_URL,
   },
   txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
-};
+});
 
 // ---------------------------------------------------------------------------------------------------------------------
 // 2. The seed-first start

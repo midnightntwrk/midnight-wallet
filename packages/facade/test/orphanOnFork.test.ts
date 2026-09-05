@@ -22,18 +22,23 @@ import {
   WalletTransaction,
   type FinalizedTx,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
-import type { PendingTransactionsService } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { DateTime, Option } from 'effect';
 import * as rx from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
+import { type ResolvedConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
 import { finalizedTransactionTraits } from '../src/transaction.js';
 
-import { createV8MockProvingService, getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
+import {
+  createV8MockProvingService,
+  getDustSeed,
+  getShieldedSeed,
+  getUnshieldedSeed,
+  SilentPendingTransactions,
+  sleep,
+} from './utils/index.js';
 
 vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 
@@ -47,25 +52,10 @@ type Recorded = Readonly<{
  * A pending-transactions service the test drives directly: it records what the facade asks of it, and lets the test
  * push a pending state so the facade's reaction to an orphaned entry is observable without a real fork.
  */
-class RecordingPendingTransactions implements PendingTransactionsService<FinalizedTx> {
+class RecordingPendingTransactions extends SilentPendingTransactions {
   readonly recorded: Recorded = { added: [], cleared: [], orphanedBeyond: [] };
-  readonly states = new rx.BehaviorSubject<PendingTransactions.PendingTransactions<FinalizedTx>>(
-    PendingTransactions.empty(),
-  );
 
-  start(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  stop(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  state(): rx.Observable<PendingTransactions.PendingTransactions<FinalizedTx>> {
-    return this.states.asObservable();
-  }
-
-  addPendingTransaction(
+  override addPendingTransaction(
     tx: FinalizedTx,
     protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
   ): Promise<void> {
@@ -73,19 +63,19 @@ class RecordingPendingTransactions implements PendingTransactionsService<Finaliz
     return Promise.resolve();
   }
 
-  clear(tx: FinalizedTx): Promise<void> {
+  override clear(tx: FinalizedTx): Promise<void> {
     this.recorded.cleared.push(tx);
     return Promise.resolve();
   }
 
-  orphanBeyond(chainNow: ProtocolVersion.ProtocolVersion): Promise<void> {
+  override orphanBeyond(chainNow: ProtocolVersion.ProtocolVersion): Promise<void> {
     this.recorded.orphanedBeyond.push(chainNow);
     return Promise.resolve();
   }
 }
 
 describe('A pending transaction the fork left behind', () => {
-  let configuration: DefaultConfiguration;
+  let configuration: ResolvedConfiguration;
   let facade: WalletFacade;
   let shielded: ShieldedWallet;
   let unshielded: UnshieldedWallet;
@@ -93,15 +83,14 @@ describe('A pending transaction the fork left behind', () => {
   let pending: RecordingPendingTransactions;
 
   beforeEach(async () => {
-    configuration = {
+    configuration = WalletFacade.resolveConfiguration({
       networkId: NetworkId.NetworkId.Undeployed,
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       provingServerUrl: new URL('http://localhost:6300'),
       costParameters: { feeBlocksMargin: 0 },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
-    };
+    });
     const seed = '0000000000000000000000000000000000000000000000000000000000000001';
     const shieldedSeed = getShieldedSeed(seed);
     const unshieldedSeed = getUnshieldedSeed(seed);

@@ -321,7 +321,11 @@ them.
 
 **The wallet layer above the twins is single.** `ShieldedWallet` / `DustWallet` / `UnshieldedWallet` each register both
 variants and hand over at `configuration.forks.v9`; the package's own `Default*Configuration` is declared by the
-package, not aliased to either variant's. `Custom*Wallet(configuration, builder)` is the single-variant composition.
+package, not aliased to either variant's. `Custom*Wallet(configuration, builder)` is the single-variant composition. The
+wallet packages require `forks`; only the facade presets it (`DefaultForkSchedule`), handing every factory in
+`InitParams` a `ResolvedConfiguration` with it filled in, and `WalletFacade.resolveConfiguration` gives code outside a
+factory the same one. Do not push the preset down into the wallets or remove it from the facade — the facade README says
+why it sits exactly there.
 
 ### Naming the two sides of a fork
 

@@ -80,9 +80,8 @@ export const MaxSupportedVersion = ProtocolVersion(BigInt(Number.MAX_SAFE_INTEGE
  *   the V2 variant on any v9-native chain.
  *
  *   Offered as a named value so applications and test suites pointed at a v9-native chain do not each invent a magic
- *   number. It is **not** a default: every wallet's `forks.v9` stays required, because the right value is a property of
- *   the chain an application points at. The final mainnet fork constant is still an open question; when it is fixed it
- *   will join this one here.
+ *   number; {@link V9NativeForkSchedule} is the schedule built from it. The final mainnet fork constant is still an open
+ *   question; when it is fixed it will join this one here.
  */
 export const V9NativeForkVersion: ProtocolVersion = ProtocolVersion(2_000_000n);
 
@@ -96,14 +95,26 @@ export const V9NativeForkVersion: ProtocolVersion = ProtocolVersion(2_000_000n);
  *   hard fork adds a key (`v10`) rather than changing this shape, which is what lets an application's configuration
  *   outlive the fork.
  *
- *   Every entry is required and none is defaulted, for the same reason a single fork version was: where a chain forks is
+ *   Every entry is required in the wallet packages, for the same reason a single fork version was: where a chain forks is
  *   a fact about the chain rather than the SDK, and a wrong guess does not degrade — it decides which ledger version
- *   reads the chain.
+ *   reads the chain. {@link V9NativeForkSchedule} names the schedule of a chain born on ledger-v9; only the facade
+ *   presets one, `DefaultForkSchedule`, and says there why.
  */
 export type ForkSchedule = Readonly<{
   /** The protocol version from which ledger-v9 reads the chain. */
   v9: ProtocolVersion;
 }>;
+
+/**
+ * The fork schedule of a chain born on ledger-v9: ledger-v9 from {@link V9NativeForkVersion}, and nothing else.
+ *
+ * @remarks
+ *   Offered as a named value for the same reason {@link V9NativeForkVersion} is: so applications and test suites pointed
+ *   at a v9-native chain do not each write the schedule out by hand. A named value and not a default — the wallet
+ *   packages still require `forks`. The facade's `DefaultForkSchedule` is this value, under the name of what the facade
+ *   presets.
+ */
+export const V9NativeForkSchedule: ForkSchedule = { v9: V9NativeForkVersion };
 
 /**
  * The range of protocol versions on the same side of a protocol boundary as a given version.

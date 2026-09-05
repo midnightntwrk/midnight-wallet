@@ -26,7 +26,6 @@ import {
   PublicKey,
   UnshieldedWallet,
   mergeWalletEntries,
-  ProtocolVersion,
 } from '@midnightntwrk/wallet-sdk';
 import { makeIndexerChainVersionProbe } from '@midnightntwrk/wallet-sdk/capabilities';
 import { V1Builder } from '@midnightntwrk/wallet-sdk/dust/v1';
@@ -46,9 +45,6 @@ const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
 const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
-  // The protocol version this chain hands over to ledger-v9 at. A 2.x node reports 2000000;
-  // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
-  forks: { v9: ProtocolVersion.V9NativeForkVersion },
   costParameters: {
     feeBlocksMargin: 5,
   },

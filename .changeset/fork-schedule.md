@@ -16,8 +16,9 @@ ledger-v9 reads the chain — in place of the single `forkVersion`. The value an
 is. A single number could name one boundary and no more, so the next hard fork would have changed the shape of every
 application's configuration. A map keyed by ledger version adds a key (`v10`) instead, which is why the change is made
 now, while 2.0 is still in beta. The type is `ProtocolVersion.ForkSchedule` in the abstractions package; ledger-v8 begins
-at `MinSupportedVersion` and has no entry, and every entry stays required with no default, for the same reason as before:
-where a chain forks is a fact about the chain, not the SDK.
+at `MinSupportedVersion` and has no entry, and every entry stays required in the wallet packages, for the same reason as
+before: where a chain forks is a fact about the chain, not the SDK. The facade presets `DefaultForkSchedule` when `forks`
+is left out — see its own changeset.
 
 BREAKING CHANGE — replace the field in every configuration you build:
 

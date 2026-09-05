@@ -64,7 +64,7 @@ describe('Facade submission', () => {
     })();
     const configuration: DefaultConfiguration = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
+      forks: ProtocolVersion.V9NativeForkSchedule,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
@@ -111,7 +111,7 @@ describe('Facade submission', () => {
     const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
     const config = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
+      forks: ProtocolVersion.V9NativeForkSchedule,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
@@ -192,7 +192,7 @@ describe('Facade submission', () => {
     const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
     const config = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
+      forks: ProtocolVersion.V9NativeForkSchedule,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
@@ -260,7 +260,7 @@ describe('Facade transaction history reads return entries regardless of lifecycl
     const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
     const config = {
       networkId: NetworkId.NetworkId.Undeployed,
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
+      forks: ProtocolVersion.V9NativeForkSchedule,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       provingServerUrl: new URL('http://localhost:6300'),

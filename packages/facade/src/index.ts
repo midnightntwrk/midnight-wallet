@@ -705,12 +705,54 @@ export type FetchTermsAndConditionsConfiguration = {
   };
 };
 
-export type DefaultConfiguration = DefaultUnshieldedConfiguration &
+/**
+ * The fork schedule the facade presets when a configuration names none: {@link ProtocolVersion.V9NativeForkSchedule},
+ * ledger-v9 from the version a 2.x node reports.
+ *
+ * @remarks
+ *   Where a chain forks is a fact about the chain, which is why each wallet package requires `forks` and presets nothing.
+ *   The facade is the one place a preset decides nothing the SDK has not already decided: every chain the 2.x node line
+ *   runs hands over at this version, so an application copying the constant into its configuration only restates it. A
+ *   chain that hands over elsewhere states its own `forks`, which wins.
+ */
+export const DefaultForkSchedule: ProtocolVersion.ForkSchedule = ProtocolVersion.V9NativeForkSchedule;
+
+/** What the three wallets and the default services are built from, as the wallet packages take it. */
+type WalletsConfiguration = DefaultUnshieldedConfiguration &
   DefaultShieldedConfiguration &
   DefaultDustConfiguration &
   DefaultSubmissionConfiguration &
   DefaultPendingTransactionsServiceConfiguration &
   DefaultProvingConfiguration;
+
+/**
+ * The configuration {@link WalletFacade.init} takes: what the three wallets and the default services are built from.
+ *
+ * @remarks
+ *   The one difference from the wallets' own configurations is that `forks` may be left out — see
+ *   {@link DefaultForkSchedule} for what is then preset, and {@link ResolvedConfiguration} for what a factory is handed.
+ */
+export type DefaultConfiguration = Omit<WalletsConfiguration, 'forks'> & {
+  /**
+   * Where each ledger version begins on this chain — see {@link ProtocolVersion.ForkSchedule}. Left out, the facade
+   * presets {@link DefaultForkSchedule}.
+   */
+  forks?: ProtocolVersion.ForkSchedule;
+};
+
+/**
+ * A {@link DefaultConfiguration} with what the facade presets filled in: `forks` is always present, the schedule the
+ * configuration named or {@link DefaultForkSchedule}.
+ *
+ * @remarks
+ *   What every factory in {@link InitParams} is handed, so that a wallet can be built from it directly: the wallet
+ *   packages require `forks`, and this is what lets `shielded: (config) => ShieldedWallet(config)` compile. Code
+ *   outside a factory gets the same from {@link WalletFacade.resolveConfiguration}.
+ * @typeParam TConfig The configuration as given, which may extend {@link DefaultConfiguration} with settings of its own.
+ */
+export type ResolvedConfiguration<TConfig extends DefaultConfiguration = DefaultConfiguration> = TConfig & {
+  forks: ProtocolVersion.ForkSchedule;
+};
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -718,30 +760,32 @@ type MaybePromise<T> = T | Promise<T>;
  * Parameters object for {@link WalletFacade.init}. It features configuration and bunch of initializers for the wallets
  * and services, all of them are in a form of a function that takes the configuration and returns proper implementation,
  * either synchronously or wrapped in a Promise. Services are optional to provide ({@link WalletFacade.init} will provide
- * default implementations), but all 3 wallets: shielded, unshielded and Dust one need to be present
+ * default implementations), but all 3 wallets: shielded, unshielded and Dust one need to be present.
  */
 export type InitParams<TConfig extends DefaultConfiguration> = {
   configuration: TConfig;
   /** Optional factory for the clock abstraction. Defaults to system clock (`() => new Date()`). */
-  clock?: (config: TConfig) => MaybePromise<Clock.Clock>;
-  submissionService?: (config: TConfig) => MaybePromise<SubmissionService<FinalizedTx>>;
-  pendingTransactionsService?: (config: TConfig) => MaybePromise<PendingTransactionsService<FinalizedTx>>;
+  clock?: (config: ResolvedConfiguration<TConfig>) => MaybePromise<Clock.Clock>;
+  submissionService?: (config: ResolvedConfiguration<TConfig>) => MaybePromise<SubmissionService<FinalizedTx>>;
+  pendingTransactionsService?: (
+    config: ResolvedConfiguration<TConfig>,
+  ) => MaybePromise<PendingTransactionsService<FinalizedTx>>;
   provingService?: (
-    config: TConfig,
+    config: ResolvedConfiguration<TConfig>,
   ) => MaybePromise<VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>>;
   /**
    * Optional factory for the block-data fetcher used by validation. Defaults to an HTTP indexer-backed fetcher built
    * from `configuration.indexerClientConnection`. Override for simulator-based tests with
    * `makeSimulatorBlockDataFetcher(simulator)` from `@midnightntwrk/wallet-sdk-capabilities/validation`.
    */
-  fetchBlockData?: (config: TConfig) => MaybePromise<BlockDataFetcher>;
+  fetchBlockData?: (config: ResolvedConfiguration<TConfig>) => MaybePromise<BlockDataFetcher>;
   validationService?: (
-    config: TConfig,
+    config: ResolvedConfiguration<TConfig>,
     deps: { fetchBlockData: BlockDataFetcher; clock: Clock.Clock },
   ) => MaybePromise<VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>>;
-  shielded: (config: TConfig) => MaybePromise<ShieldedWalletAPI>;
-  unshielded: (config: TConfig) => MaybePromise<UnshieldedWalletAPI>;
-  dust: (config: TConfig) => MaybePromise<DustWalletAPI>;
+  shielded: (config: ResolvedConfiguration<TConfig>) => MaybePromise<ShieldedWalletAPI>;
+  unshielded: (config: ResolvedConfiguration<TConfig>) => MaybePromise<UnshieldedWalletAPI>;
+  dust: (config: ResolvedConfiguration<TConfig>) => MaybePromise<DustWalletAPI>;
 };
 
 // `BlockData` is not re-exported from the facade to avoid a name collision with the
@@ -782,12 +826,38 @@ export class WalletFacade {
    *   transaction belongs to and the two ends of that question must not be able to compute the boundary differently.
    */
   private static makeDefaultProvingService<TConfig extends DefaultConfiguration>(
-    config: TConfig,
+    config: ResolvedConfiguration<TConfig>,
   ): VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction> {
     return Either.getOrThrowWith(
       makeDefaultVersionedProvingService(config, config.forks),
       (error) => new Error(error.message),
     );
+  }
+
+  /**
+   * Fills in what the facade presets — `forks`, as {@link DefaultForkSchedule} — so that the result is a configuration a
+   * wallet package can be built from.
+   *
+   * @remarks
+   *   {@link WalletFacade.init} does this itself, once and before anything is built, so the wallets, the default services
+   *   and the facade's own boundary cannot be given different schedules, and no factory needs to call it. It is public
+   *   for code outside a factory that needs the configuration the facade will use: an application building a wallet
+   *   package directly, or reading `forks` back to author a transaction for the right ledger version. Resolving twice
+   *   is the same as resolving once, so `init` may be handed the result.
+   * @example
+   *   ```typescript
+   *   const configuration = WalletFacade.resolveConfiguration({ networkId: 'undeployed', ... });
+   *   const facade = await WalletFacade.init({ configuration, shielded: (config) => ShieldedWallet(config), ... });
+   *   const authoredForV9 = protocolVersion >= configuration.forks.v9;
+   *   ```;
+   *
+   * @param configuration The configuration as given, with or without `forks`.
+   * @returns The same configuration with `forks` present: the schedule it named, or {@link DefaultForkSchedule}.
+   */
+  static resolveConfiguration<TConfig extends DefaultConfiguration>(
+    configuration: TConfig,
+  ): ResolvedConfiguration<TConfig> {
+    return { ...configuration, forks: configuration.forks ?? DefaultForkSchedule };
   }
 
   /**
@@ -827,7 +897,9 @@ export class WalletFacade {
    * and initialization of necessary components. Specifically - it requires following fields:
    *
    * - `configuration` - holding a configuration, which needs to extend {@link DefaultConfiguration} - this way allows to
-   *   convey use-case-specific settings in the same way, as the SDK works by default
+   *   convey use-case-specific settings in the same way, as the SDK works by default. `forks` may be left out; every
+   *   factory below is handed a {@link ResolvedConfiguration}, which always has it — what
+   *   {@link WalletFacade.resolveConfiguration} returns
    * - `shielded` - a function taking the configuration and returning shielded wallet (or a promise with such)
    *   implementing {@link ShieldedWalletAPI}
    * - `unshielded` - a function taking the configuration and returning unshielded wallet (or a promise with such)
@@ -845,42 +917,39 @@ export class WalletFacade {
    * - `clock` - needs to implement {@link Clock.Clock} for getting current time, default uses system clock
    */
   static async init<TConfig extends DefaultConfiguration>(initParams: InitParams<TConfig>): Promise<WalletFacade> {
+    const configuration = WalletFacade.resolveConfiguration(initParams.configuration);
     const submissionService = await Promise.resolve(
       initParams.submissionService
-        ? initParams.submissionService(initParams.configuration)
-        : WalletFacade.makeDefaultSubmissionService(initParams.configuration),
+        ? initParams.submissionService(configuration)
+        : WalletFacade.makeDefaultSubmissionService(configuration),
     );
     const pendingTransactionsService = await Promise.resolve(
       initParams.pendingTransactionsService
-        ? initParams.pendingTransactionsService(initParams.configuration)
-        : WalletFacade.makeDefaultPendingTransactionsService(initParams.configuration),
+        ? initParams.pendingTransactionsService(configuration)
+        : WalletFacade.makeDefaultPendingTransactionsService(configuration),
     );
     const provingService = await Promise.resolve(
       initParams.provingService
-        ? initParams.provingService(initParams.configuration)
-        : WalletFacade.makeDefaultProvingService(initParams.configuration),
+        ? initParams.provingService(configuration)
+        : WalletFacade.makeDefaultProvingService(configuration),
     );
-    const shielded = await Promise.resolve(initParams.shielded(initParams.configuration));
-    const unshielded = await Promise.resolve(initParams.unshielded(initParams.configuration));
-    const dust = await Promise.resolve(initParams.dust(initParams.configuration));
-    const clock = await Promise.resolve(
-      initParams.clock ? initParams.clock(initParams.configuration) : Clock.systemClock,
-    );
+    const shielded = await Promise.resolve(initParams.shielded(configuration));
+    const unshielded = await Promise.resolve(initParams.unshielded(configuration));
+    const dust = await Promise.resolve(initParams.dust(configuration));
+    const clock = await Promise.resolve(initParams.clock ? initParams.clock(configuration) : Clock.systemClock);
     const fetchBlockData: BlockDataFetcher = await Promise.resolve(
-      initParams.fetchBlockData
-        ? initParams.fetchBlockData(initParams.configuration)
-        : makeDefaultBlockDataFetcher(initParams.configuration),
+      initParams.fetchBlockData ? initParams.fetchBlockData(configuration) : makeDefaultBlockDataFetcher(configuration),
     );
     const validationService = await Promise.resolve(
       initParams.validationService
-        ? initParams.validationService(initParams.configuration, { fetchBlockData, clock })
+        ? initParams.validationService(configuration, { fetchBlockData, clock })
         : makeDefaultVersionedValidationService(
             {
               fetchBlockData,
-              networkId: initParams.configuration.networkId,
+              networkId: configuration.networkId,
               clock,
             },
-            initParams.configuration.forks.v9,
+            configuration.forks.v9,
           ),
     );
     return new WalletFacade(
@@ -891,8 +960,8 @@ export class WalletFacade {
       pendingTransactionsService,
       provingService,
       validationService,
-      initParams.configuration.txHistoryStorage,
-      initParams.configuration.forks.v9,
+      configuration.txHistoryStorage,
+      configuration.forks.v9,
       clock,
     );
   }

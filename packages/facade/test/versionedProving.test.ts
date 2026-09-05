@@ -39,6 +39,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type BalancingRecipe,
   type DefaultConfiguration,
+  type ResolvedConfiguration,
   WalletEntrySchema,
   WalletFacade,
   mergeWalletEntries,
@@ -66,20 +67,19 @@ class RecordingProver implements VersionedProvingService<V9UnboundTransaction> {
 }
 
 describe('Proving a transaction at the version it was built for', () => {
-  let configuration: DefaultConfiguration;
+  let configuration: ResolvedConfiguration;
   let facade: WalletFacade;
   let prover: RecordingProver;
 
   beforeEach(async () => {
-    configuration = {
+    configuration = WalletFacade.resolveConfiguration({
       networkId: NetworkId.NetworkId.Undeployed,
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       provingServerUrl: new URL('http://localhost:6300'),
       costParameters: { feeBlocksMargin: 0 },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
-    };
+    });
     const seed = '0000000000000000000000000000000000000000000000000000000000000001';
     const shieldedSeed = getShieldedSeed(seed);
     const unshieldedSeed = getUnshieldedSeed(seed);
@@ -167,15 +167,14 @@ describe('Proving with the backend configured for the epoch a transaction belong
 
   /** A facade built with the default proving service, so what is under test is the wiring rather than a stand-in. */
   const started = async (proving: Partial<DefaultConfiguration>): Promise<WalletFacade> => {
-    const configuration: DefaultConfiguration = {
+    const configuration = WalletFacade.resolveConfiguration({
       networkId: NetworkId.NetworkId.Undeployed,
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
       costParameters: { feeBlocksMargin: 0 },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
       ...proving,
-    };
+    });
     const seed = '0000000000000000000000000000000000000000000000000000000000000001';
     const unshieldedKeystore = createKeystore(
       { kind: 'schnorr', secret: getUnshieldedSeed(seed) },

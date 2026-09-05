@@ -12,3 +12,4 @@
 // limitations under the License.
 export * from './helpers.js';
 export * from './drivenStates.js';
+export * from './silentPendingTransactions.js';

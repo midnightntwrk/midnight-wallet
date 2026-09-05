@@ -57,7 +57,7 @@ describe('Wallet serialization and restoration', () => {
     indexerPort = startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088);
 
     shieldedConfiguration = {
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
+      forks: ProtocolVersion.V9NativeForkSchedule,
       indexerClientConnection: {
         indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
       },
@@ -68,7 +68,7 @@ describe('Wallet serialization and restoration', () => {
     unshieldedConfiguration = {
       // The same boundary the shielded configuration names, for the same reason: this stack runs the
       // ledger-v9-native node line, so the unshielded wallet reaches its V2 variant too.
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
+      forks: ProtocolVersion.V9NativeForkSchedule,
       indexerClientConnection: {
         indexerWsUrl: `ws://localhost:${indexerPort}/api/v4/graphql/ws`,
         indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
