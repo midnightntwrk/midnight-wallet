@@ -318,19 +318,13 @@ describe.sequential('Hard fork crossing @fork', () => {
     const configuration = {
       ...fixture.getWalletConfig(),
       ...fixture.getDustWalletConfig(),
-      // Version-keyed proving wins over the fixture's single `provingServerUrl`, and names both epochs, because that
+      // A backend per ledger version wins over the fixture's single `provingServerUrl`, and names both, because that
       // is what an application crossing the fork actually has to configure: no proof server serves both ledger
-      // versions, so a wallet that spends on each side of the boundary needs one entry per side.
-      provers: [
-        {
-          sinceVersion: ProtocolVersion.MinSupportedVersion,
-          backend: { kind: 'server', url: new URL(fixture.getV8ProverUri()) },
-        },
-        {
-          sinceVersion: ProtocolVersion.V9NativeForkVersion,
-          backend: { kind: 'server', url: new URL(fixture.getProverUri()) },
-        },
-      ] as const satisfies DefaultConfiguration['provers'],
+      // versions, so a wallet that spends on each side of the boundary needs one per side.
+      provers: {
+        v8: { kind: 'server', url: new URL(fixture.getV8ProverUri()) },
+        v9: { kind: 'server', url: new URL(fixture.getProverUri()) },
+      } satisfies DefaultConfiguration['provers'],
     };
     unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, fixture.getNetworkId());
 
@@ -418,8 +412,8 @@ describe.sequential('Hard fork crossing @fork', () => {
     async () => {
       // The half of proving no other lane can reach. Below the boundary the wallet builds ledger-v8 bytes, and only the
       // ledger-v8 can frame a proving request for them and only a ledger-v8 proof server can answer it — so what
-      // this proves is that the version-keyed backends were honoured, not merely accepted by configuration. The same
-      // wallet proves at the other server after the fork, which is the acceptance criterion for the pair.
+      // this proves is that the backends keyed by ledger version were honoured, not merely accepted by configuration.
+      // The same wallet proves at the other server after the fork, which is the acceptance criterion for the pair.
       preForkReceiver = await utils.initWalletWithSeed(V8_RECEIVER_SEED, fixture);
       const receiverBefore = await within(
         'the pre-fork receiver to sync',

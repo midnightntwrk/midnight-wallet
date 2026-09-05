@@ -59,8 +59,8 @@ no longer import a ledger package.
   reason. The unshielded `revertTransaction` ignores a handle from the other side of the fork.
 - Facade recipes (`FinalizedTransactionRecipe`, `UnboundTransactionRecipe`, `UnprovenTransactionRecipe`) gain a required
   `protocolVersion`, and `BlockData` gains a required `protocolVersion`.
-- Proving, validation and block ledger-parameter reads route on the transaction's version. Configure proof servers as
-  `provingServers: [{ sinceVersion, url }]`; `provingServerUrl` remains for a single server. Both fields of
+- Proving, validation and block ledger-parameter reads route on the transaction's version. Configure a proving backend
+  per ledger version as `provers: { v8, v9 }`; `provingServerUrl` remains for a single server. Both fields of
   `DefaultProvingConfiguration` are optional and a configuration with neither fails with `ProvingConfigurationError`.
   `defaultLedgerParametersCodecs(forkVersion)` is the version-routed codec set.
 

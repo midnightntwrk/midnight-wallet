@@ -25,12 +25,14 @@ import {
 import {
   ProvingEpochMismatchError,
   UnsupportedProvingVersionError,
+  type ProvingBackends,
   type UnboundTransaction,
   type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { Cause, Either, Option, Runtime } from 'effect';
 import * as rx from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -74,7 +76,7 @@ describe('Proving a transaction at the version it was built for', () => {
       forks: { v9: ProtocolVersion.V9NativeForkVersion },
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
-      provingServers: [{ sinceVersion: ProtocolVersion.MinSupportedVersion, url: new URL('http://localhost:6300') }],
+      provingServerUrl: new URL('http://localhost:6300'),
       costParameters: { feeBlocksMargin: 0 },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
@@ -247,13 +249,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
     );
 
   const v8ServerAndV9Wasm: Partial<DefaultConfiguration> = {
-    provers: [
-      {
-        sinceVersion: ProtocolVersion.MinSupportedVersion,
-        backend: { kind: 'server', url: new URL('http://pre-fork-prover:6300') },
-      },
-      { sinceVersion: ProtocolVersion.V9NativeForkVersion, backend: { kind: 'wasm' } },
-    ],
+    provers: { v8: { kind: 'server', url: new URL('http://pre-fork-prover:6300') }, v9: { kind: 'wasm' } },
   };
 
   it('proves a transaction built below the fork with ledger-v8', async () => {
@@ -264,9 +260,9 @@ describe('Proving with the backend configured for the epoch a transaction belong
     expect(provenBy(finalized)).toBeInstanceOf(preForkLedger.Transaction);
   });
 
-  it('splits the single-server configuration at the fork version the wallet was configured with', async () => {
+  it('drives the single-server configuration with ledger-v8 below the fork the wallet was configured with', async () => {
     // Naming one server for every version says nothing about ledger versions, and cannot. What makes it right below the
-    // boundary is that the facade hands proving the same fork version it hands its wallets.
+    // boundary is that the facade hands proving the same fork schedule it hands its wallets.
     const facade = await started({ provingServerUrl: new URL('http://only-prover:6300') });
 
     const finalized = await facade.finalizeTransaction(aV8Transaction());
@@ -287,12 +283,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
 
   it('refuses a transaction from a version no backend was configured for, naming that version', async () => {
     const facade = await started({
-      provers: [
-        {
-          sinceVersion: ProtocolVersion.V9NativeForkVersion,
-          backend: { kind: 'server', url: new URL('http://post-fork-prover:6300') },
-        },
-      ],
+      provers: { v9: { kind: 'server', url: new URL('http://post-fork-prover:6300') } },
     });
 
     const failure = await facade.finalizeTransaction(aV8Transaction()).then(
@@ -302,5 +293,15 @@ describe('Proving with the backend configured for the epoch a transaction belong
 
     expect(reported(failure)).toBeInstanceOf(UnsupportedProvingVersionError);
     expect((reported(failure) as UnsupportedProvingVersionError).protocolVersion).toStrictEqual(PRE_FORK);
+  });
+});
+
+describe('DefaultConfiguration', () => {
+  it('names a proving backend per ledger version, keyed the way `forks` is', () => {
+    type _1 = Expect<Equal<DefaultConfiguration['provers'], ProvingBackends | undefined>>;
+  });
+
+  it('no longer takes proof servers keyed by the protocol version each starts serving', () => {
+    type _1 = Expect<Equal<'provingServers' extends keyof DefaultConfiguration ? true : false, false>>;
   });
 });
