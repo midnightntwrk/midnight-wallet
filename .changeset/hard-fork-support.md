@@ -21,7 +21,7 @@ Hard-fork support. A wallet runs `@midnight-ntwrk/ledger-v8` below the chain's f
 history survive the crossing, and a wallet restored from a snapshot crosses too. Applications no longer import a ledger
 package directly.
 
-### Configuration
+### Breaking: configuration
 
 - `forks: { v9 }` is the protocol version from which ledger-v9 reads the chain. `ProtocolVersion.V9NativeForkVersion`
   (2000000) is the value a 2.x node reports, and `ProtocolVersion.V9NativeForkSchedule` is `{ v9: V9NativeForkVersion }`.
@@ -37,7 +37,7 @@ package directly.
   was produced under, so the wallet starts on the matching ledger version; the default asks the indexer. A failed probe
   never fails a start: the wallet starts on ledger-v8 and crosses on its first synced update.
 
-### Starting a wallet
+### Breaking: starting a wallet
 
 - Wallets start from seeds. `WalletSeeds.fromMasterSeed(masterSeed, { account?, addressIndex?, unshieldedRole? })`
   derives the shielded, dust and unshielded seeds and throws `SeedDerivationError` for a seed it cannot read.
@@ -55,7 +55,7 @@ package directly.
   instead of throwing; the dust wallet adds `peekProtocolVersion` and `UnsupportedSnapshotVersionError`; the shielded
   `Restore` and unshielded `UnshieldedRestore` namespaces inspect a snapshot.
 
-### Transactions carry the version that built them
+### Breaking: transactions carry the version that built them
 
 - Every facade and wallet method that took or returned a ledger transaction now uses `WalletTransaction`, a handle that
   records the protocol version the transaction was built for. A handle for the other ledger version is refused with
@@ -97,7 +97,7 @@ package directly.
 - Known limitations: the dust projections-based fast sync does not hand over at a fork on its own, and a fresh dust
   wallet on a chain that forked over history replays the ledger-v8 dust events before crossing.
 
-### Renamed exports
+### Breaking: renamed exports
 
 Everything typed by one ledger version now says which in its name, so the ledger-v8 counterparts can sit next to it. In
 `@midnightntwrk/wallet-sdk-capabilities/proving` and `/validation`, also reachable through
@@ -115,7 +115,7 @@ Everything typed by one ledger version now says which in its name, so the ledger
 `@midnightntwrk/wallet-sdk-shielded` re-exports `V9UnboundTransaction` in place of `UnboundTransaction`. The versioned
 `makeDefaultVersionedValidationService` and `makeDefaultVersionedValidationServiceEffect` keep their names.
 
-### Package APIs
+### Breaking: package APIs
 
 For code that composes wallets or test fixtures by hand.
 
