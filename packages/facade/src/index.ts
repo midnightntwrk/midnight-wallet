@@ -143,7 +143,7 @@ export const isFinalizedWalletEntry = (entry: WalletEntry): entry is FinalizedWa
  *   wallet has set the value, later writes are no-ops for these fields. This is correct because the value is the same
  *   across all wallets (it's a property of the on-chain tx, not the wallet's view of it).
  * - **`identifiers`** — unioned (each wallet may surface a different identifier subset).
- * - **`lifecycle`** — incoming wins (this is how `pending → finalized` transitions are recorded).
+ * - **`lifecycle`** — incoming wins, except that a late rejection cannot overwrite recorded on-chain inclusion.
  * - **Wallet sections** (`shielded`, `unshielded`, `dust`) — combined via per-section merge when both sides have them;
  *   otherwise whichever side is present is used.
  */
@@ -178,8 +178,10 @@ export function mergeWalletEntries(existing: WalletEntry, incoming: WalletEntry)
     status: existing.status ?? incoming.status,
     timestamp: existing.timestamp ?? incoming.timestamp,
     fees: existing.fees ?? incoming.fees,
-    // lifecycle: incoming wins — this is how pending → finalized/rejected transitions are recorded
-    lifecycle: incoming.lifecycle,
+    lifecycle:
+      existing.lifecycle.status === 'finalized' && incoming.lifecycle.status === 'rejected'
+        ? existing.lifecycle
+        : incoming.lifecycle,
     ...(shielded !== undefined ? { shielded } : {}),
     ...(unshielded !== undefined ? { unshielded } : {}),
     ...(dust !== undefined ? { dust } : {}),
@@ -1021,7 +1023,11 @@ export class WalletFacade {
       .state()
       .pipe(
         concatMap((pending) => PendingTransactions.allRejected(pending)),
-        concatMap((item) => this.revert(item.tx, rejectionReason(item.result))),
+        concatMap(async (item) => {
+          if (!(await this.reconcileFinalizedTransaction(item.tx, await this.#txHistoryStorage.getAll()))) {
+            await this.revert(item.tx, rejectionReason(item.result));
+          }
+        }),
       )
       .subscribe();
     // Deliberately built from the wallets' own states rather than from `state()`: `state()` includes the pending set,
@@ -1037,6 +1043,8 @@ export class WalletFacade {
         ),
         distinctUntilChanged(),
         tap((version) => this.#observedProtocolVersion.next(Option.some(version))),
+        // Nothing fallible belongs here: this chain is the only writer of the observed version, and an orphaned
+        // transaction sync already saw included is reconciled by the pending subscription like any other verdict.
         concatMap((version) => this.pendingTransactionsService.orphanBeyond(version)),
       )
       .subscribe();
@@ -1887,6 +1895,39 @@ export class WalletFacade {
       : [txOrRecipe];
 
     await Promise.all(transactionsToRevert.map((tx) => this.revertTransaction(tx, reason)));
+  }
+
+  /**
+   * The finalized entry recording `tx`, if sync has written one, even under the hash aggregation gave it on-chain. A
+   * transaction whose stamp no epoch can read has no entry, rather than an error, so a verdict on it still resolves.
+   */
+  private finalizedEntryFor(tx: AnyTx, history: readonly WalletEntry[]): FinalizedWalletEntry | undefined {
+    return Option.match(
+      Either.getRight(WalletTransaction.unwrapWithin<Carried>(tx, this.epochOf(tx.protocolVersion))),
+      {
+        onNone: () => undefined,
+        onSome: (carried) => {
+          const key = submitTxHistoryKey(carried);
+          return history.find(
+            (entry): entry is FinalizedWalletEntry =>
+              isFinalizedWalletEntry(entry) && TransactionHistoryStorage.coversTransaction(entry, key),
+          );
+        },
+      },
+    );
+  }
+
+  /** Sync can record inclusion before the independent pending-status poller observes it. */
+  private async reconcileFinalizedTransaction(tx: FinalizedTx, history: readonly WalletEntry[]): Promise<boolean> {
+    const entry = this.finalizedEntryFor(tx, history);
+    if (entry === undefined) return false;
+    // Included failures still need their unexecuted coin reservations released.
+    if (entry.status === 'FAILURE' || entry.status === 'PARTIAL_SUCCESS') {
+      await this.revertTransaction(tx);
+    } else {
+      await this.pendingTransactionsService.clear(tx);
+    }
+    return true;
   }
 
   async revertTransaction(tx: AnyTx, reason?: string): Promise<void> {

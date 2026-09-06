@@ -37,7 +37,7 @@ import {
   WalletTransaction,
   type FinalizedTx,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet, type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet, type ShieldedWalletState } from '@midnightntwrk/wallet-sdk-shielded';
@@ -49,7 +49,8 @@ import {
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { DateTime, Option } from 'effect';
 import * as rx from 'rxjs';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { finalizedTransactionTraits } from '../src/transaction.js';
 import {
   type ResolvedConfiguration,
   WalletEntrySchema,
@@ -244,5 +245,89 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
     await verdictArrives(finalized, { status: 'FAILURE', segments: [] });
 
     expect(pending.cleared).toContain(finalized);
+  });
+
+  it.each(['orphan', 'TTL', 'partial success'] as const)(
+    'preserves on-chain history when a late %s verdict arrives under the submission hash',
+    async (verdict) => {
+      const tx = await submitThenCross();
+      const [submitted] = await facade.getAllFromTxHistory();
+      // Aggregation can give the included transaction a different hash and additional identifiers.
+      await configuration.txHistoryStorage.gotFinalized({
+        hash: 'aggregated-chain-hash',
+        identifiers: [...submitted.identifiers, 'another-intent'],
+        status: verdict === 'partial success' ? 'PARTIAL_SUCCESS' : 'SUCCESS',
+        protocolVersion: Number(v8Version),
+        finalizedBlock: { hash: 'ledger-v8-block', height: 10, timestamp: new Date() },
+      });
+      const revert = vi.spyOn(facade.shielded, 'revertTransaction');
+      await verdictArrives(
+        tx,
+        verdict === 'orphan'
+          ? { status: 'ORPHANED_BY_FORK', authoredFor: tx.protocolVersion, chainNow: v9Version }
+          : { status: verdict === 'TTL' ? 'FAILURE' : 'PARTIAL_SUCCESS', segments: [] },
+      );
+
+      const entries = await facade.getAllFromTxHistory();
+      expect(entries).toHaveLength(1);
+      expect(entries[0].hash).toBe('aggregated-chain-hash');
+      expect(entries[0].lifecycle.status).toBe('finalized');
+      expect(pending.cleared).toContain(tx);
+      if (verdict === 'partial success') expect(revert).toHaveBeenCalledWith(tx);
+      else expect(revert).not.toHaveBeenCalled();
+    },
+  );
+
+  it('clears a pending transaction the fork orphaned once its inclusion is known, recording no rejection', async () => {
+    const tx = await facade.finalizeTransaction(v8Transaction());
+    await facade.submitTransaction(tx);
+    const [submitted] = await facade.getAllFromTxHistory();
+    await configuration.txHistoryStorage.gotFinalized({
+      hash: submitted.hash,
+      identifiers: submitted.identifiers,
+      status: 'SUCCESS',
+      finalizedBlock: { hash: 'ledger-v8-block', height: 10, timestamp: new Date() },
+    });
+    const traits = finalizedTransactionTraits(forkVersion);
+    pending.states.next({
+      all: [{ tx, creationTime: DateTime.unsafeMake(Date.now()), protocolVersion: Option.some(tx.protocolVersion) }],
+    });
+    vi.spyOn(pending, 'clear').mockImplementation((transaction) => {
+      pending.states.next(PendingTransactions.clear(pending.states.value, transaction, traits));
+      return Promise.resolve();
+    });
+    const orphan = vi.spyOn(pending, 'orphanBeyond').mockImplementation((version) => {
+      pending.states.next(PendingTransactions.orphanBeyond(pending.states.value, traits, version));
+      return Promise.resolve();
+    });
+
+    shieldedStates.next(shieldedAt(shieldedStates.value, v9Version));
+    unshieldedStates.next(unshieldedAt(unshieldedStates.value, v9Version));
+    dustStates.next(dustAt(dustStates.value, v9Version));
+
+    await vi.waitFor(() => expect(orphan).toHaveBeenCalledWith(v9Version));
+    await vi.waitFor(() => expect(pending.states.value.all).toHaveLength(0));
+    expect((await facade.getAllFromTxHistory()).map((entry) => entry.lifecycle.status)).toEqual(['finalized']);
+  });
+
+  it('keeps orphaning at each version the wallets reach when the history storage cannot be read', async () => {
+    const tx = await facade.finalizeTransaction(v8Transaction());
+    await facade.submitTransaction(tx);
+    pending.states.next({
+      all: [{ tx, creationTime: DateTime.unsafeMake(Date.now()), protocolVersion: Option.some(tx.protocolVersion) }],
+    });
+    vi.spyOn(configuration.txHistoryStorage, 'getAll').mockRejectedValue(new Error('history storage unavailable'));
+    const orphan = vi.spyOn(pending, 'orphanBeyond');
+
+    shieldedStates.next(shieldedAt(shieldedStates.value, v9Version));
+    unshieldedStates.next(unshieldedAt(unshieldedStates.value, v9Version));
+    dustStates.next(dustAt(dustStates.value, v9Version));
+    await vi.waitFor(() => expect(orphan).toHaveBeenCalledWith(v9Version));
+
+    const later = ProtocolVersion.ProtocolVersion(v9Version + 1n);
+    shieldedStates.next(shieldedAt(shieldedStates.value, later));
+    unshieldedStates.next(unshieldedAt(unshieldedStates.value, later));
+    dustStates.next(dustAt(dustStates.value, later));
+    await vi.waitFor(() => expect(orphan).toHaveBeenCalledWith(later));
   });
 });
