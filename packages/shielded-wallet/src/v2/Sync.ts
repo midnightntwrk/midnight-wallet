@@ -612,10 +612,10 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
       }
 
       // First, and before any early return: a wallet that crossed the ledger-version boundary arrives with its whole
-      // local state but no hashes for it, and this update is the first place its keys are at hand. An empty batch is
-      // exactly the case that must not skip this — a wallet whose timeline has gone quiet still has to be able to name
-      // the coins it crossed with.
-      const state = CoreWallet.resolveCoinHashes(wallet, wrappedUpdate.secretKeys);
+      // local state but neither hashes for it nor a way to un-book the spends it carried, and this update is the first
+      // place its keys are at hand. An empty batch is exactly the case that must not skip this — a wallet whose
+      // timeline has gone quiet still has to be able to name and to spend the coins it crossed with.
+      const state = CoreWallet.completeCrossing(wallet, wrappedUpdate.secretKeys);
 
       if (wrappedUpdate.updates.length === 0) {
         return [state, noChanges(state)];
@@ -732,7 +732,7 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
 
       // The same first step as the indexer capability's, for the same reason: this is where a migrated wallet's keys
       // and its carried state first meet, and a block that turns out to hold nothing must not skip it.
-      const state = CoreWallet.resolveCoinHashes(wallet, secretKeys);
+      const state = CoreWallet.completeCrossing(wallet, secretKeys);
 
       const lastBlock = getLastBlock(simulatorState);
       if (lastBlock === undefined) {

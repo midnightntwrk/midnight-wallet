@@ -1092,12 +1092,25 @@ export class WalletFacade {
     );
   }
 
-  /** Seals a transaction the facade or a wallet produced, at the version the facade is acting at. */
+  /**
+   * Seals a transaction the facade or a wallet produced, at the version its bytes were fixed by.
+   *
+   * @remarks
+   *   The version is the caller's to state, never read from the facade here, because the two can differ: a crossing can
+   *   land while a transaction is at the prover, and what comes back is still the bytes of the ledger version that made
+   *   them. A caller sealing something it has just built passes the version it is building at; a caller sealing
+   *   something that has travelled through an await passes the version stamped on the handle it started from.
+   * @param stage How far along the building of the transaction the sealed handle is.
+   * @param transaction The transaction to seal.
+   * @param protocolVersion The version the transaction's bytes were fixed by.
+   * @returns The sealed handle.
+   */
   private seal<TStage extends WalletTransaction.Stage>(
     stage: TStage,
     transaction: { serialize: () => Uint8Array },
+    protocolVersion: ProtocolVersion.ProtocolVersion,
   ): WalletTransaction<TStage> {
-    return WalletTransaction.adopt(stage, transaction, this.currentVersion());
+    return WalletTransaction.adopt(stage, transaction, protocolVersion);
   }
 
   /** The ledger primitives the facade signs with on its current side of the boundary. */
@@ -1179,7 +1192,12 @@ export class WalletFacade {
    *   boundary is not a failure to compute, it is unrepresentable, and saying so is the whole point of the stamp.
    */
   private mergeUnprovenTransactions(a: UnprovenTx | undefined, b: UnprovenTx | undefined): UnprovenTx | undefined {
-    if (a && b) return this.seal('Unproven', this.accept<CarriedUnproven>(a).merge(this.accept<CarriedUnproven>(b)));
+    if (a && b)
+      return this.seal(
+        'Unproven',
+        this.accept<CarriedUnproven>(a).merge(this.accept<CarriedUnproven>(b)),
+        this.currentVersion(),
+      );
     return a ?? b;
   }
 
@@ -1518,6 +1536,7 @@ export class WalletFacade {
               this.accept<CarriedFinalized>(recipe.originalTransaction).merge(
                 this.accept<CarriedFinalized>(finalizedBalancing),
               ),
+              recipe.originalTransaction.protocolVersion,
             );
           }
           case 'UNBOUND_TRANSACTION': {
@@ -1530,6 +1549,7 @@ export class WalletFacade {
               finalizedBalancingTx
                 ? finalizedTransaction.merge(this.accept<CarriedFinalized>(finalizedBalancingTx))
                 : finalizedTransaction,
+              recipe.baseTransaction.protocolVersion,
             );
           }
           case 'UNPROVEN_TRANSACTION': {
@@ -1540,7 +1560,7 @@ export class WalletFacade {
       .then(async (finalizedTx) => {
         await this.pendingTransactionsService.addPendingTransaction(
           finalizedTx,
-          this.#observedProtocolVersion.getValue(),
+          Option.some(finalizedTx.protocolVersion),
         );
         return finalizedTx;
       });
@@ -1609,11 +1629,19 @@ export class WalletFacade {
    * Proves and binds an unproven transaction, and records it as pending.
    *
    * @remarks
-   *   Proved at the version stamped on the transaction itself, which is the version that fixed its bytes. A fork landing
-   *   between building a transaction and proving it therefore cannot send it to the wrong prover — and a transaction of
-   *   the epoch the facade is no longer in is refused rather than proved into something nobody can include.
+   *   Proved at the version stamped on the transaction itself, which is the version that fixed its bytes, and sealed at
+   *   that same version: proving is a long await, so the wallets can move under it, and neither the prover a
+   *   transaction is routed to nor the stamp it comes back with may be decided by where they have moved to.
+   *
+   *   Where they have moved to decides one thing only, and it is decided again once the proof is back: a crossing while
+   *   the transaction was in flight leaves it belonging to an epoch the wallets have left, and no chain they are on can
+   *   include it. Such a transaction is refused rather than sealed, and nothing is recorded as pending for it — a
+   *   pending entry would only wait out a TTL for an inclusion that cannot happen — while the reservations it made in
+   *   the three wallets are given back like those of any other failure here.
    * @param tx The unproven transaction.
-   * @returns The finalized transaction.
+   * @returns The finalized transaction, stamped with the version it was authored at.
+   * @throws {@link ProtocolVersionMismatchError} When the wallets left the transaction's epoch while it was being
+   *   proved, or were never in it.
    */
   async finalizeTransaction(tx: UnprovenTx): Promise<FinalizedTx> {
     try {
@@ -1623,10 +1651,13 @@ export class WalletFacade {
         this.accept<ledgerV9.UnprovenTransaction>(tx),
         tx.protocolVersion,
       );
-      const finalizedTx = this.seal('Finalized', (unboundTx as unknown as CarriedUnbound).bind());
+      // Read again on the far side of the proof: the epoch is the one thing about the transaction that a crossing
+      // during proving can change, and this is where it is caught.
+      this.accept<CarriedUnproven>(tx);
+      const finalizedTx = this.seal('Finalized', (unboundTx as unknown as CarriedUnbound).bind(), tx.protocolVersion);
       await this.pendingTransactionsService.addPendingTransaction(
         finalizedTx,
-        this.#observedProtocolVersion.getValue(),
+        Option.some(finalizedTx.protocolVersion),
       );
       return finalizedTx;
     } catch (error) {
@@ -1749,7 +1780,11 @@ export class WalletFacade {
     const signature = authoring.signData(fakeSigningKey, intent.signatureData(1));
     const fakeSignedTx = await this.dust.addDustGenerationSignature(fakeUnsignedTx, signature);
 
-    const finalizedFakeTx = this.seal('Finalized', this.accept<CarriedUnproven>(fakeSignedTx).mockProve().bind());
+    const finalizedFakeTx = this.seal(
+      'Finalized',
+      this.accept<CarriedUnproven>(fakeSignedTx).mockProve().bind(),
+      this.currentVersion(),
+    );
 
     const fee = await this.calculateTransactionFee(finalizedFakeTx);
 
