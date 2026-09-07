@@ -4,6 +4,9 @@ This document is intended for maintainers and contributors to the **Midnight Wal
 It describes the internal development and **release management** process used to maintain consistent, automated
 versioning and publishing.
 
+> 💡 Using Claude Code on this repo? Recommended personal permission settings (secret-read denies, gated git/gh
+> commands) are documented in [`docs/ClaudeCode.md`](docs/ClaudeCode.md).
+
 ---
 
 ## 📚 Overview
@@ -24,17 +27,24 @@ This setup ensures that:
 
 ## Branching Strategy
 
-We use a simple, linear workflow:
+We use a simple, linear workflow. Branch names are not enforced, but the strongly recommended pattern is:
 
-- `feat/*` → New features
+```
+<type>/<ticket>-<short-description>
+```
 
-- `fix/*` → Bug fixes
+- `<type>` is a [Conventional Commits](https://www.conventionalcommits.org/) type: `feat`, `fix`, `docs`, `style`,
+  `refactor`, `perf`, `test`, `build`, `ci`, `chore`.
 
-- `chore/*` → Maintenance and build-related updates
+- `<ticket>` is the issue number, when there is one (omit if there genuinely isn't).
+
+- `<short-description>` is kebab-case.
+
+Examples: `feat/123-optional-balancing`, `docs/576-restructure-docs-and-claude`, `chore/bump-ledger-v9`.
 
 **Rules**
 
-- Open PRs from `feat/*`, `fix/*`, or `chore/*` → merge into `main` after review and green CI.
+- Open PRs from these branches → merge into `main` after review and green CI.
 
 - Do **not** bump versions or edit changelogs manually — Changesets handles this.
 
@@ -128,6 +138,39 @@ Execute these steps **in order** when the v2 line is ready to replace 1.x as the
    publishes.
 5. **Sanity-check dist-tags** on the registry afterwards: `latest` → 2.x, `v1` → last 1.x, and the `beta` tag points at
    the final pre-release (it is not moved automatically).
+
+---
+
+## Testing Tiers & CI
+
+Tests are split by **filename suffix** so each tier can run independently:
+
+- **Unit** — `*.test.ts`: pure, no Docker/network/external services. `yarn test:unit`.
+- **Integration** — `*.integration.test.ts`: require infra (Docker/testcontainers, indexer, node, prover).
+  `yarn test:integration`.
+- **End-to-end** — full wallet flows through the public API live in the `e2e-tests` package as `*.undeployed.test.ts`
+  and run via `turbo test-undeployed` (smoke subset on PRs, full suite nightly). The docs-snippets runner is also e2e
+  and runs in that lane while staying in its own package.
+- **Fork crossing** — a fourth e2e sub-project, `fork` (`*.fork.test.ts`, `yarn turbo test-fork`): boots a chain from
+  the ledger-v8 node's spec, runs it on the ledger-v9 binary, and enacts the real ledger 8 → 9 runtime upgrade so a
+  wallet crosses an actual protocol boundary — something no other lane does, since every other stack is on ledger-v9
+  from block 1. It is in neither the PR smoke lane nor the nightly undeployed run; it has its own nightly/dispatch
+  workflow, `.github/workflows/e2e-hard-fork.yml`, and is documented in `packages/e2e-tests/README.md`.
+
+In CI, unit tests run as a fast early gate. Integration tests run as a **matrix with one job per file** (own runner +
+own Docker stack), so no two files contend for infra and a failing file never cancels the rest. The file list is
+discovered dynamically from `*.integration.test.ts` — adding a test automatically gets it its own parallel CI job, and
+wall-clock time stays at the slowest single file regardless of how files are distributed across packages. The matrix
+lives in a reusable workflow (`.github/workflows/integration.yml`) invoked as a single `Integration Tests` job, so
+GitHub nests the per-file jobs under one collapsible check.
+
+The required status check for merge is the aggregate **`Tests`** job, which passes only when **all** tiers pass — it
+gates on unit, integration, and smoke e2e (`needs: [test-unit, integration, e2e-smoke]`).
+
+**Local setup:** `nvm use && corepack enable`, then `yarn` (or `nix develop` with direnv). For tests requiring
+infrastructure: `cp .env.example .env` and set `APP_INFRA_SECRET` (e.g. `openssl rand -hex 32`).
+
+**Web packaging note:** browser builds require polyfills for Node's `Buffer` and `assert`.
 
 ---
 
