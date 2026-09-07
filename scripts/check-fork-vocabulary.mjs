@@ -36,7 +36,10 @@ const SELF = 'scripts/check-fork-vocabulary.mjs';
 const RETIRED = [
   { pattern: /pre[-_ ]?fork/i, instead: 'the ledger version (v8) or the variant (V1)' },
   { pattern: /post[-_ ]?fork/i, instead: 'the ledger version (v9) or the variant (V2)' },
-  { pattern: /before[-_ ]?fork(?!ing\b|ed\b)|before the fork/i, instead: 'below `forks.v9`, or the ledger version (v8)' },
+  {
+    pattern: /before[-_ ]?fork(?!ing\b|ed\b)|before the fork/i,
+    instead: 'below `forks.v9`, or the ledger version (v8)',
+  },
   { pattern: /after[-_ ]?fork(?!ing\b|ed\b)|after the fork/i, instead: 'from `forks.v9`, or the ledger version (v9)' },
   { pattern: /current[-_ ]?ledger/i, instead: 'ledger-v9; "current" is wrong the day after the next fork' },
   // Phrases only: `newLedger` as a parameter is relative to the block just applied, and `new ledger.X()` is a constructor.
@@ -92,9 +95,12 @@ const hitsIn = (file, text) =>
     { allowing: false, hits: [] },
   ).hits;
 
+// Regular files only: a tracked symlink (the vendored skills under `.claude/skills/` point outside the repo) has a
+// path for content, not prose, and its target need not exist on the machine running the check.
 const trackedFiles = execFileSync('git', ['ls-files', '-z'], { cwd: repoRoot, encoding: 'utf-8' })
   .split('\0')
-  .filter((file) => file !== '' && !isExcluded(file));
+  .filter((file) => file !== '' && !isExcluded(file))
+  .filter((file) => fs.lstatSync(path.join(repoRoot, file)).isFile());
 
 const hits = trackedFiles.flatMap((file) => {
   const bytes = fs.readFileSync(path.join(repoRoot, file));
