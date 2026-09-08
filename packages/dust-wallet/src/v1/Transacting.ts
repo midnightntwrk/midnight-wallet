@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Either, pipe, BigInt as BigIntOps, Iterable as IterableOps, Option } from 'effect';
+import { Either, pipe, BigInt as BigIntOps, Iterable as IterableOps, Option } from 'effect';
 import {
   DustActions,
   DustRegistration,
@@ -212,6 +212,67 @@ const distributeFeeAcrossInputs = <T extends { value: bigint }>(
     },
     { result: [], remaining: fee },
   ).result;
+
+/**
+ * Picks the largest-value coin from the pool. Used only as a fallback inside `computeBalancingRecipe` when the caller's
+ * configured selection order leaves an affordable set of coins unselected (see the comment there) — not exported, since
+ * overriding the configured order is this loop's own last resort, not a general-purpose selector.
+ */
+const largestFirst: CoinSelection = (coins) =>
+  coins
+    .filter((coin) => coin.value > 0n)
+    .toSorted((a, b) => (b.value > a.value ? 1 : b.value < a.value ? -1 : 0))
+    .at(0);
+
+/**
+ * Selects dust inputs, under one coin-selection order, until they cover the fee of the transaction they produce. Each
+ * pass hands the balancer only the fee still unpaid by the coins already chosen — the deficit, expressed as a negative
+ * imbalance — over the coins not yet selected, then re-prices the transaction with everything selected so far via
+ * `feeFor`. Adding an input can only raise the fee, so a pass that does not converge has strictly grown the input set;
+ * with a finite coin pool that bounds the number of passes by the pool's size. Throws the balancer's own
+ * `BalancingInsufficientFundsError` when the pool cannot cover the fee under this order — including when
+ * `coinSelection` itself returns nothing from a non-empty pool.
+ */
+const runBalancingPasses = (
+  coins: ReadonlyArray<CoinWithValue<Dust>>,
+  initialImbalance: bigint,
+  feeFor: (inputs: ReadonlyArray<CoinWithValue<Dust>>) => bigint,
+  coinSelection: CoinSelection,
+): { fee: bigint; recipeInputs: ReadonlyArray<CoinWithValue<Dust>> } => {
+  const inputs: CoinWithValue<Dust>[] = [];
+  let remaining = coins;
+  let fee = -initialImbalance;
+
+  // Every pass either returns or consumes at least one coin from `remaining`, so this bound
+  // is never actually reached; it turns a broken invariant into a thrown error instead of an
+  // infinite loop.
+  for (let pass = 0; pass <= coins.length; pass++) {
+    const covered = inputs.reduce((sum, input) => sum + input.value, 0n);
+    if (fee <= covered) {
+      return { fee, recipeInputs: distributeFeeAcrossInputs(inputs, fee) };
+    }
+
+    const recipe = getBalanceRecipe({
+      coins: remaining.map((coin) => ({ type: 'dust', value: coin.value, token: coin.token })),
+      initialImbalances: CapImbalances.fromEntry('dust', covered - fee),
+      feeTokenType: 'dust',
+      coinSelection,
+      transactionCostModel: { inputFeeOverhead: 0n, outputFeeOverhead: 0n },
+      createOutput: (coin) => coin,
+      isCoinEqual: (a, b) => a.token.nonce === b.token.nonce,
+    });
+
+    const chosen = new Set(recipe.inputs.map((input) => input.token.nonce));
+    for (const coin of remaining) {
+      if (chosen.has(coin.token.nonce)) inputs.push(coin);
+    }
+    remaining = remaining.filter((coin) => !chosen.has(coin.token.nonce));
+
+    fee = feeFor(inputs);
+  }
+
+  throw new Error(`DUST fee balancing failed to converge after ${coins.length + 1} passes`);
+};
 
 export class TransactingCapabilityImplementation<TTransaction extends AnyTransaction> implements TransactingCapability<
   DustSecretKey,
@@ -614,6 +675,18 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     return imbalance ?? 0n;
   }
 
+  /**
+   * Balances a fee-paying dust intent: selects enough dust to cover the transaction's fee, and reports the fee those
+   * inputs must pay.
+   *
+   * The previous implementation of this method (`Effect.iterate`) had no bound on the number of passes and no check
+   * that a pass had made progress. Its first pass was seeded with the transaction's dust imbalance, which is negative
+   * (a deficit); every later pass was seeded with the fee it had just computed, which is positive. `getBalanceRecipe`
+   * treats a non-negative seed as a surplus of the fee token — it adds a change output and selects zero inputs — so any
+   * wallet whose first pass under-covered its own fee looped forever, rebuilding and proof-erasing an identical
+   * transaction on every pass. `runBalancingPasses` fixes this by seeding every pass with the outstanding deficit
+   * rather than the raw fee, which both corrects the sign and bounds the loop: see its own comment for why.
+   */
   computeBalancingRecipe(
     secretKey: DustSecretKey,
     state: CoreWallet,
@@ -629,76 +702,40 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       0n,
     );
 
+    // A non-negative imbalance means the transaction already carries enough dust of its own;
+    // nothing to select. Reported via `feeFor([])`, not `-initialFees`, since the two coincide
+    // only in the (usual) case where the imbalance is exactly the negated fee.
+    const feeFor = (inputs: ReadonlyArray<CoinWithValue<Dust>>): bigint =>
+      this.dryRunFee(inputs, transactions, secretKey, state, ttl, currentTime, ledgerParams);
+    if (initialFees >= 0n) {
+      return Either.right({ fee: feeFor([]), recipeInputs: [] });
+    }
+
     const dust = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
+    const coinSelection = this.getCoinSelection();
 
-    return pipe(
-      Effect.iterate(
-        { currentFee: initialFees, recipeInputs: [] as ReadonlyArray<CoinWithValue<Dust>>, converged: false } as {
-          currentFee: bigint;
-          recipeInputs: ReadonlyArray<CoinWithValue<Dust>>;
-          converged: boolean;
-        },
-        {
-          while: (s) => !s.converged,
-          body: ({ currentFee }) =>
-            Effect.try({
-              try: () => {
-                const recipe = getBalanceRecipe({
-                  coins: dust.map((coin) => ({
-                    type: 'dust',
-                    value: coin.value,
-                    token: coin.token,
-                  })),
-                  initialImbalances: CapImbalances.fromEntry('dust', currentFee),
-                  feeTokenType: 'dust',
-                  coinSelection: this.getCoinSelection(),
-                  transactionCostModel: {
-                    inputFeeOverhead: 0n,
-                    outputFeeOverhead: 0n,
-                  },
-                  createOutput: (coin) => coin,
-                  isCoinEqual: (a, b) => a.token.nonce === b.token.nonce,
-                });
-
-                const recipeInputs = recipe.inputs.map(({ token, value }) => ({ token, value }));
-
-                const newFee = this.dryRunFee(
-                  recipeInputs,
-                  transactions,
-                  secretKey,
-                  state,
-                  ttl,
-                  currentTime,
-                  ledgerParams,
-                );
-
-                const recipeAmountCoverage = recipeInputs.reduce((sum, input) => sum + input.value, 0n);
-
-                return { currentFee: newFee, recipeInputs, converged: newFee <= recipeAmountCoverage };
-              },
-              catch: (err) => {
-                if (err instanceof BalancingInsufficientFundsError) {
-                  return new InsufficientFundsError({
-                    message: err.message,
-                    tokenType: err.tokenType,
-                  });
-                } else {
-                  return new OtherWalletError({
-                    message: err instanceof Error ? err.message : 'Dust balancing failed',
-                    cause: err,
-                  });
-                }
-              },
+    return Either.try({
+      try: () => {
+        try {
+          return runBalancingPasses(dust, initialFees, feeFor, coinSelection);
+        } catch (err) {
+          if (!(err instanceof BalancingInsufficientFundsError)) throw err;
+          // The additive loop above is complete only when it selects from the top: adding a
+          // coin can only raise the fee, so under an ascending order it can take a small coin,
+          // be forced to add a large one to cover the resulting fee, and find the pair's fee
+          // exceeds the pool — when the large coin alone would have paid the fee for one input.
+          // Retrying once, greedily by value, recovers exactly that case before giving up.
+          return runBalancingPasses(dust, initialFees, feeFor, largestFirst);
+        }
+      },
+      catch: (err) =>
+        err instanceof BalancingInsufficientFundsError
+          ? new InsufficientFundsError({ message: err.message, tokenType: err.tokenType })
+          : new OtherWalletError({
+              message: err instanceof Error ? err.message : 'Dust balancing failed',
+              cause: err,
             }),
-        },
-      ),
-      Effect.either,
-      Effect.runSync,
-      Either.map(({ currentFee, recipeInputs }) => ({
-        fee: currentFee,
-        recipeInputs: distributeFeeAcrossInputs(recipeInputs, currentFee),
-      })),
-    );
+    });
   }
 
   estimateFee(
