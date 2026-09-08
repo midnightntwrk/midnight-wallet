@@ -1,0 +1,12 @@
+{
+  "name": "cross-release-corpus",
+  "private": true,
+  "type": "module",
+  "description": "Generates snapshot fixtures using the last pre-fork SDK release. Deliberately outside the workspace.",
+  "scripts": {
+    "generate": "node generate.mjs"
+  },
+  "dependencies": {
+    "@midnightntwrk/wallet-sdk": "1.2.0"
+  }
+}
