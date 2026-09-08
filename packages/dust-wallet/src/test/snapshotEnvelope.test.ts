@@ -28,14 +28,14 @@
 // variant's own directory could not state that.
 //
 // Tier: unit.
-import * as preForkLedger from '@midnight-ntwrk/ledger-v8';
-import * as postForkLedger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Order, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { CoreWallet as PreForkWallet } from '../v1/CoreWallet.js';
+import { CoreWallet as V1Wallet } from '../v1/CoreWallet.js';
 import { makeDefaultV1SerializationCapability } from '../v1/Serialization.js';
-import { CoreWallet as PostForkWallet } from '../v2/CoreWallet.js';
+import { CoreWallet as V2Wallet } from '../v2/CoreWallet.js';
 import { makeDefaultV2SerializationCapability } from '../v2/Serialization.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
@@ -43,10 +43,10 @@ const seedHex = '000000000000000000000000000000000000000000000000000000000000000
 // Each variant must be handed ITS OWN ledger module's objects: a `DustParameters` is a wasm-bindgen instance owned by
 // the module that made it, and handing v9's to the v8 tree fails with "expected instance of DustParameters".
 const seed = () => Buffer.from(seedHex, 'hex');
-const preForkParameters = () => preForkLedger.LedgerParameters.initialParameters().dust;
-const postForkParameters = () => postForkLedger.LedgerParameters.initialParameters().dust;
-const preForkSecretKey = () => preForkLedger.DustSecretKey.fromSeed(seed());
-const postForkSecretKey = () => postForkLedger.DustSecretKey.fromSeed(seed());
+const v8Parameters = () => ledgerV8.LedgerParameters.initialParameters().dust;
+const v9Parameters = () => ledgerV9.LedgerParameters.initialParameters().dust;
+const v8SecretKey = () => ledgerV8.DustSecretKey.fromSeed(seed());
+const v9SecretKey = () => ledgerV9.DustSecretKey.fromSeed(seed());
 
 const isJsonArray = Schema.is(Schema.Array(Schema.Unknown));
 const isJsonObject = Schema.is(Schema.Record({ key: Schema.String, value: Schema.Unknown }));
@@ -79,13 +79,13 @@ const keyPaths = (value: unknown, prefix = ''): readonly string[] => {
 const sorted = (paths: readonly string[]) => Arr.sort(paths, Order.string);
 
 /** A wallet whose cursor is set, so the optional `offset` is present and its absence would be visible. */
-const preForkWallet = () =>
-  PreForkWallet.updateProgress(PreForkWallet.initEmpty(preForkParameters(), preForkSecretKey(), networkId), {
+const v1Wallet = () =>
+  V1Wallet.updateProgress(V1Wallet.initEmpty(v8Parameters(), v8SecretKey(), networkId), {
     appliedIndex: 42n,
   });
 
-const postForkWallet = () =>
-  PostForkWallet.updateProgress(PostForkWallet.initEmpty(postForkParameters(), postForkSecretKey(), networkId), {
+const v2Wallet = () =>
+  V2Wallet.updateProgress(V2Wallet.initEmpty(v9Parameters(), v9SecretKey(), networkId), {
     appliedIndex: 42n,
   });
 
@@ -93,30 +93,30 @@ const postForkWallet = () =>
 const expectedPaths = ['networkId', 'offset', 'protocolVersion', 'publicKey.publicKey', 'state'];
 
 describe('the dust snapshot envelope', () => {
-  it('is the pinned shape on the pre-fork variant', () => {
-    const parsed: unknown = JSON.parse(makeDefaultV1SerializationCapability().serialize(preForkWallet()));
+  it('is the pinned shape on the V1 variant', () => {
+    const parsed: unknown = JSON.parse(makeDefaultV1SerializationCapability().serialize(v1Wallet()));
 
     expect(sorted(keyPaths(parsed))).toEqual(sorted(expectedPaths));
   });
 
-  it('is the pinned shape on the post-fork variant', () => {
-    const parsed: unknown = JSON.parse(makeDefaultV2SerializationCapability().serialize(postForkWallet()));
+  it('is the pinned shape on the V2 variant', () => {
+    const parsed: unknown = JSON.parse(makeDefaultV2SerializationCapability().serialize(v2Wallet()));
 
     expect(sorted(keyPaths(parsed))).toEqual(sorted(expectedPaths));
   });
 
   it('is the same shape on both variants, which is what lets either read the other’s snapshot', () => {
-    const preFork: unknown = JSON.parse(makeDefaultV1SerializationCapability().serialize(preForkWallet()));
-    const postFork: unknown = JSON.parse(makeDefaultV2SerializationCapability().serialize(postForkWallet()));
+    const v1Snapshot: unknown = JSON.parse(makeDefaultV1SerializationCapability().serialize(v1Wallet()));
+    const v2Snapshot: unknown = JSON.parse(makeDefaultV2SerializationCapability().serialize(v2Wallet()));
 
-    expect(sorted(keyPaths(preFork))).toEqual(sorted(keyPaths(postFork)));
+    expect(sorted(keyPaths(v1Snapshot))).toEqual(sorted(keyPaths(v2Snapshot)));
   });
 
   it('encodes each field the way the reader expects, and leaves the ledger blob to the ledger', () => {
     // The encoders, not just the names. `offset` and `protocolVersion` are bigints written as decimal strings, and the
     // public key likewise — a change to a JSON number would round-trip for small values and silently lose precision
     // for real ones.
-    const parsed = JSON.parse(makeDefaultV2SerializationCapability().serialize(postForkWallet())) as {
+    const parsed = JSON.parse(makeDefaultV2SerializationCapability().serialize(v2Wallet())) as {
       offset: unknown;
       protocolVersion: unknown;
       publicKey: { publicKey: unknown };

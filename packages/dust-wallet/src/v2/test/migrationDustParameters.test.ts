@@ -99,7 +99,7 @@ describe('a cross-ledger dust migration handed parameters that are not the chain
 
   it('misvalues the dust it regenerates from the replay when the decay rate is wrong', async () => {
     // Answers the second and third possibilities: not harmless. The migrated wallet re-discovers its dust by replaying
-    // the post-fork timeline, and every UTXO it recovers is valued against whatever parameters its local state was
+    // the ledger-v9 timeline, and every UTXO it recovers is valued against whatever parameters its local state was
     // built on. Same secret key, same events, same instant — only the configured decay rate differs.
     const chain = await buildDustChain();
     const secretKey: DustSecretKey = fixtureSecretKey();

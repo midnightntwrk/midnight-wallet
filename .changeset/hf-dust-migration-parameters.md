@@ -3,7 +3,7 @@
 
 test(dust-wallet): cover a cross-ledger migration handed the wrong dust parameters
 
-Test-only. The migration builds its post-fork state on parameters it is given, and the existing case asserts only the
+Test-only. The migration builds its ledger-v9 state on parameters it is given, and the existing case asserts only the
 agreeable path — that the parameters used are this ledger version's. Its fixture supplies the ledger's initial
 parameters, which are also what a migration ignoring its configuration would reach for, so the assertion holds either
 way.

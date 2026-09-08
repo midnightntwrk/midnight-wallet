@@ -20,7 +20,7 @@
 //
 // The pair matters because it is what `SyncProgress.isCompleteWithin` reads. A wallet whose tip collapsed onto its
 // applied position at the boundary would report a source gap of zero, and so report itself caught up, at precisely the
-// moment it has the most left to do: the whole post-fork replay.
+// moment it has the most left to do: the whole replay after the v9 fork.
 //
 // `highestTransactionId` is also known NOT to survive `serialize` -> `restore`; it is absent from the snapshot and
 // rebuilt as `appliedId`. Pinning it here records that the two carry routes genuinely differ, rather than leaving it
