@@ -15,7 +15,9 @@ import * as Dust from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 
 const REPO_ROOT = new URL('../../', import.meta.url).pathname;
-const outFor = (pkg) => join(REPO_ROOT, 'packages', pkg, 'test', 'fixtures', 'cross-release');
+// Named for the release that wrote them, so bumping the pin adds a corpus rather than overwriting one. A fork after
+// the next still wants the older snapshots: proving the oldest format a wallet may hold still reads is the whole point.
+const outFor = (pkg) => join(REPO_ROOT, 'packages', pkg, 'test', 'fixtures', 'cross-release', `from-${provenance.sdk}`);
 const NETWORK = 'undeployed';
 
 const versionOf = (pkg) => JSON.parse(readFileSync(join('node_modules', pkg, 'package.json'), 'utf8')).version;

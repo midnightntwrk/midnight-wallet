@@ -23,9 +23,11 @@ npm install          # installs the pinned ledger-v8 release
 npm run generate     # rewrites the fixtures in place
 ```
 
-The generator writes each wallet's fixtures into that wallet's own `test/fixtures/cross-release/` directory, beside a
-`provenance.json` recording the exact package versions that produced them. **Do not hand-edit a fixture**: a snapshot
-that no release ever wrote proves nothing, and the provenance file is what stops a stale one passing as a parity check.
+The generator writes each wallet's fixtures into that wallet's own `test/fixtures/cross-release/from-<release>/`
+directory, beside a `provenance.json` recording the exact package versions that produced them. The directory is named
+for the release that wrote it, and derived from the pinned version — so bumping the pin **adds** a corpus rather than
+overwriting one. **Do not hand-edit a fixture**: a snapshot that no release ever wrote proves nothing, and the
+provenance file is what stops a stale one passing as a parity check.
 
 ## Changing the pinned version
 

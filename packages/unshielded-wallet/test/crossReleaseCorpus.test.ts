@@ -29,7 +29,15 @@ import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { peekProtocolVersion, variantForSnapshot } from '../src/Restore.js';
 import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js';
 
-const corpus = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'cross-release');
+/**
+ * The corpus this file asserts against, named by the release that wrote it.
+ *
+ * Explicit rather than discovered: the values below — which coins, which cursor — are facts about _this_ release's
+ * output, so a second corpus from a later release is a second block of cases, not the same ones pointed elsewhere.
+ */
+const FROM_RELEASE = 'from-1.2.0';
+
+const corpus = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'cross-release', FROM_RELEASE);
 const fixture = (name: string): string => readFileSync(join(corpus, `${name}.json`), 'utf8');
 const restored = (name: string) => {
   const result = makeDefaultV1SerializationCapability().deserialize(fixture(name));

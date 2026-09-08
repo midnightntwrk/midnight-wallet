@@ -26,7 +26,15 @@ import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { describe, expect, it } from 'vitest';
 import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js';
 
-const corpus = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'cross-release');
+/**
+ * The corpus this file asserts against, named by the release that wrote it.
+ *
+ * Explicit rather than discovered: the values below — which coins, which cursor — are facts about _this_ release's
+ * output, so a second corpus from a later release is a second block of cases, not the same ones pointed elsewhere.
+ */
+const FROM_RELEASE = 'from-1.2.0';
+
+const corpus = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'cross-release', FROM_RELEASE);
 const fixture = (name: string): string => readFileSync(join(corpus, `${name}.json`), 'utf8');
 describe('a Dust snapshot written by the last ledger-v8 release', () => {
   it('restores on this build, with the identity and the network that release wrote', () => {
