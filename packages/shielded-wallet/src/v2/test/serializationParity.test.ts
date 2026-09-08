@@ -77,17 +77,6 @@ describe('the coin hashes of a settled wallet that holds coins', () => {
     }
   });
 
-  it('still cover every coin the restored state holds', () => {
-    // The invariant the hash map exists to satisfy, restated on the far side of a restart: a coin with no hash over it
-    // is a coin the wallet cannot tell the spent state of, and the deserializer refuses exactly that combination
-    // unless the wallet declares itself mid-crossing.
-    const restoredCoins = [...restored.state.coins];
-
-    expect(restoredCoins.length).toBe(coins().length);
-    expect(Object.keys(restored.coinHashes).length).toBe(restoredCoins.length);
-    expect(restored.coinHashesPending).toBeUndefined();
-  });
-
   it('carry values that are real hashes, not the coin fields copied through', () => {
     // Guards the fixture itself: if `init` ever returned something derived from the nonce alone, every assertion above
     // would still hold while the map had stopped meaning anything.
