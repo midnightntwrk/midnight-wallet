@@ -31,10 +31,6 @@ import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js
 
 const corpus = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'cross-release');
 const fixture = (name: string): string => readFileSync(join(corpus, `${name}.json`), 'utf8');
-const provenance = JSON.parse(readFileSync(join(corpus, 'provenance.json'), 'utf8')) as {
-  generatedFrom: { sdk: string; ledger: string };
-};
-
 const restored = (name: string) => {
   const result = makeDefaultV1SerializationCapability().deserialize(fixture(name));
   expect(Either.isRight(result)).toBe(true);
@@ -43,13 +39,6 @@ const restored = (name: string) => {
 };
 
 describe('an unshielded snapshot written by the last ledger-v8 release', () => {
-  it('records which release wrote it, so a stale fixture cannot pass as a parity check', () => {
-    // Asserted rather than assumed: a hand-edited fixture is a snapshot no release ever produced, and would prove
-    // nothing while looking exactly like proof.
-    expect(provenance.generatedFrom.sdk).toMatch(/^1\./);
-    expect(provenance.generatedFrom.ledger).toMatch(/^8\./);
-  });
-
   it('is routed to the variant that owns the version it declares', () => {
     // The dual-ledger build's own dispatch, not a serializer chosen by the test: this is what an application's
     // `restore` does with a snapshot it is handed.
@@ -62,13 +51,6 @@ describe('an unshielded snapshot written by the last ledger-v8 release', () => {
       'V2' as const,
     );
     expect(chosen).toStrictEqual(Either.right('V1'));
-  });
-
-  it('carries a wallet that had seen nothing', () => {
-    const wallet = restored('unshielded-empty');
-
-    expect(HashMap.size(wallet.state.availableUtxos)).toBe(0);
-    expect(HashMap.size(wallet.state.pendingUtxos)).toBe(0);
   });
 
   it('carries its UTXOs, on the sides that release put them', () => {

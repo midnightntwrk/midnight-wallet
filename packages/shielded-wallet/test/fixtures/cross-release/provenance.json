@@ -8,11 +8,6 @@
   },
   "fixtures": [
     {
-      "name": "shielded-empty",
-      "describes": "a wallet that has seen nothing",
-      "bytes": 361
-    },
-    {
       "name": "shielded-funded",
       "describes": "two coins in a real ledger-v8 commitment tree, with the hashes derived over them",
       "bytes": 4526

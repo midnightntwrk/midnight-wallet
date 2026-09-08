@@ -82,13 +82,6 @@ const unshieldedSerializer = Unshielded.Serialization.makeDefaultV1Serialization
 const corpus = [
   {
     pkg: 'unshielded-wallet',
-    name: 'unshielded-empty',
-    describes: 'a wallet that has seen nothing',
-    snapshot: () =>
-      unshieldedSerializer.serialize(unshieldedWallet([], [], { appliedId: 0n, highestTransactionId: 0n })),
-  },
-  {
-    pkg: 'unshielded-wallet',
     name: 'unshielded-funded',
     describes:
       'available and pending UTXOs on their own sides, a value beyond what a double holds exactly, both dust-registration states, and a sync cursor whose two indices differ',
@@ -100,12 +93,6 @@ const corpus = [
           { appliedId: 42n, highestTransactionId: 99n },
         ),
       ),
-  },
-  {
-    pkg: 'shielded-wallet',
-    name: 'shielded-empty',
-    describes: 'a wallet that has seen nothing',
-    snapshot: () => shieldedSerializer.serialize(shieldedWallet([])),
   },
   {
     pkg: 'shielded-wallet',

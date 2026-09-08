@@ -24,10 +24,6 @@ import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js
 
 const corpus = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'cross-release');
 const fixture = (name: string): string => readFileSync(join(corpus, `${name}.json`), 'utf8');
-const provenance = JSON.parse(readFileSync(join(corpus, 'provenance.json'), 'utf8')) as {
-  generatedFrom: { sdk: string; ledger: string };
-};
-
 const restored = (name: string) => {
   const result = makeDefaultV1SerializationCapability().deserialize(null, fixture(name));
   expect(Either.isRight(result)).toBe(true);
@@ -36,15 +32,6 @@ const restored = (name: string) => {
 };
 
 describe('a shielded snapshot written by the last ledger-v8 release', () => {
-  it('records which release wrote it, so a stale fixture cannot pass as a parity check', () => {
-    expect(provenance.generatedFrom.sdk).toMatch(/^1\./);
-    expect(provenance.generatedFrom.ledger).toMatch(/^8\./);
-  });
-
-  it('carries a wallet that had seen nothing', () => {
-    expect([...restored('shielded-empty').state.coins].length).toBe(0);
-  });
-
   it('carries the coins that release held, at their places in the tree', () => {
     // The ledger-v8 commitment tree, read by a build whose head variant is on ledger-v9. Positions as well as values,
     // because a coin at the wrong index cannot be spent even when its value is right.

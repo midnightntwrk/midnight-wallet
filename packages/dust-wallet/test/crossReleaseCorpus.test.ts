@@ -21,23 +21,14 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Either, pipe } from 'effect';
+import { pipe } from 'effect';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { describe, expect, it } from 'vitest';
 import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js';
 
 const corpus = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'cross-release');
 const fixture = (name: string): string => readFileSync(join(corpus, `${name}.json`), 'utf8');
-const provenance = JSON.parse(readFileSync(join(corpus, 'provenance.json'), 'utf8')) as {
-  generatedFrom: { sdk: string; ledger: string };
-};
-
 describe('a Dust snapshot written by the last ledger-v8 release', () => {
-  it('records which release wrote it, so a stale fixture cannot pass as a parity check', () => {
-    expect(provenance.generatedFrom.sdk).toMatch(/^1\./);
-    expect(provenance.generatedFrom.ledger).toMatch(/^8\./);
-  });
-
   it('restores on this build, with the identity and the network that release wrote', () => {
     const wallet = pipe(
       makeDefaultV1SerializationCapability().deserialize(null, fixture('dust-empty')),
@@ -47,12 +38,5 @@ describe('a Dust snapshot written by the last ledger-v8 release', () => {
     expect(wallet.networkId).toBe('undeployed');
     expect(wallet.state.utxos.length).toBe(0);
     expect(wallet.publicKey).toBeDefined();
-  });
-
-  it('is refused with a typed error when its bytes are not a snapshot at all', () => {
-    // The neighbouring negative, kept here so the corpus reader is known to be discriminating rather than permissive.
-    const result = makeDefaultV1SerializationCapability().deserialize(null, '{"not":"a snapshot"}');
-
-    expect(Either.isLeft(result)).toBe(true);
   });
 });

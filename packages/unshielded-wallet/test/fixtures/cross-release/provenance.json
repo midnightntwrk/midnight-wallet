@@ -8,11 +8,6 @@
   },
   "fixtures": [
     {
-      "name": "unshielded-empty",
-      "describes": "a wallet that has seen nothing",
-      "bytes": 375
-    },
-    {
       "name": "unshielded-funded",
       "describes": "available and pending UTXOs on their own sides, a value beyond what a double holds exactly, both dust-registration states, and a sync cursor whose two indices differ",
       "bytes": 980
