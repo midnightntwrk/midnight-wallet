@@ -11,10 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Either, pipe, Schema } from 'effect';
-import { type SignatureKind } from '@midnightntwrk/ledger-v9';
+import { addressFromKey } from '@midnight-ntwrk/ledger-v8';
 import { OtherWalletError, type WalletError } from './WalletError.js';
-import { assertKeyAddressConsistency } from '../SchemeConsistency.js';
 import { CoreWallet } from './CoreWallet.js';
+import { type PublicKey } from './KeyStore.js';
 import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { UnshieldedState } from './UnshieldedState.js';
 
@@ -23,30 +23,44 @@ export type SerializationCapability<TWallet, TSerialized> = {
   deserialize(data: TSerialized): Either.Either<TWallet, WalletError>;
 };
 
+/**
+ * Asserts that a {@link PublicKey}'s stored address was really derived from its stored verifying key.
+ *
+ * @remarks
+ *   Deserialization is a trust boundary — a snapshot is whatever was handed back to the wallet — and the schema alone
+ *   cannot catch a spliced key/address pair, since both fields are well-formed strings either way. Deriving one from
+ *   the other is what shows they belong together. Deriving also exercises the ledger's key decoder, which traps in wasm
+ *   on a malformed key, so the call is wrapped and the boundary fails closed with a typed error rather than letting an
+ *   exception escape.
+ *
+ *   The ledger-v9 variant makes the same assertion but reports a mismatch as a `SchemeMismatchError`, naming the
+ *   signature scheme the address must have been derived under. Ledger-v8 has a single scheme, so there is no scheme to
+ *   name and the mismatch is an ordinary wallet error.
+ * @param publicKey - The public-key bundle read out of a snapshot.
+ * @returns `Right(publicKey)` when the address matches the key; otherwise `Left(OtherWalletError)`.
+ */
+export const assertKeyAddressConsistency = (publicKey: PublicKey): Either.Either<PublicKey, WalletError> =>
+  pipe(
+    Either.try({
+      try: () => addressFromKey(publicKey.publicKey),
+      catch: (cause) => new OtherWalletError({ message: 'Unshielded verifying key could not be decoded.', cause }),
+    }),
+    Either.flatMap((derivedAddress): Either.Either<PublicKey, WalletError> =>
+      derivedAddress === publicKey.addressHex
+        ? Either.right(publicKey)
+        : Either.left(
+            new OtherWalletError({
+              message: 'Unshielded address does not match its verifying key.',
+            }),
+          ),
+    ),
+  );
+
 export type DefaultSerializationConfiguration = {
   networkId: NetworkId.NetworkId;
 };
 
 export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, string> => {
-  // Annotated with the ledger type so this fails to typecheck if SignatureKind gains or loses members
-  const SignatureKindSchema: Schema.Schema<SignatureKind> = Schema.Literal('schnorr', 'ecdsa');
-
-  const SignatureVerifyingKeySchema = Schema.Struct({
-    tag: SignatureKindSchema,
-    value: Schema.String,
-  });
-
-  // Legacy (ledger-v8) snapshots stored the verifying key as a plain string, which was implicitly schnorr
-  const LegacySignatureVerifyingKeySchema = Schema.transform(
-    Schema.String,
-    Schema.typeSchema(SignatureVerifyingKeySchema),
-    {
-      strict: true,
-      decode: (value) => ({ tag: 'schnorr' as const, value }),
-      encode: ({ value }) => value,
-    },
-  );
-
   const UtxoWithMetaSchema = Schema.Struct({
     utxo: Schema.Struct({
       value: Schema.BigInt,
@@ -63,8 +77,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
 
   const SnapshotSchema = Schema.Struct({
     publicKey: Schema.Struct({
-      // Tagged form first so encoding always writes the tag; the legacy member only matches string inputs on decode
-      publicKey: Schema.Union(SignatureVerifyingKeySchema, LegacySignatureVerifyingKeySchema),
+      publicKey: Schema.String,
       addressHex: Schema.String,
       address: Schema.String,
     }),
@@ -95,11 +108,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         serialized,
         Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
         Either.mapLeft((err) => new OtherWalletError(err)),
-        // Enforce scheme consistency at the deserialization trust boundary: the
-        // stored address must derive from the stored verifying key. This rejects
-        // relabelled or spliced snapshots — a key whose encoding does not match
-        // its scheme tag fails to decode (OtherWalletError), and a key/address
-        // scheme mismatch is reported as a SchemeMismatchError.
+        // The schema proves the snapshot's shape; this proves its key and address belong to each other.
         Either.flatMap((snapshot) =>
           pipe(
             assertKeyAddressConsistency(snapshot.publicKey),

@@ -22,6 +22,7 @@ export const DustLedgerEvents = Subscription.make(
         id
         raw
         maxId
+        protocolVersion
       }
     }
   `),

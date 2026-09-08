@@ -10,17 +10,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Either, Exit, Option, Scope, Stream, SubscriptionRef, SynchronizedRef } from 'effect';
+import { Effect, Either, Exit, Option, PubSub, Scope, Stream, SubscriptionRef, SynchronizedRef } from 'effect';
 import { type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { StateChange, type Variant, VersionChangeType, WalletRuntimeError } from './abstractions/index.js';
 import { EitherOps, HList, Poly } from '@midnightntwrk/wallet-sdk-utilities';
 
+/**
+ * The state a {@link Runtime} publishes: the variant's state, the protocol version, and the variant that produced it.
+ *
+ * @remarks
+ *   Distributed over the registered variants rather than formed as one `ProtocolState` of two unions, so that
+ *   `variantTag` is a genuine discriminant: branching on it narrows `state` to what that variant actually produces.
+ *   Pairing them any more loosely would leave every reader to re-establish the correspondence with a cast, which is the
+ *   cost the tag exists to remove.
+ */
+export type RuntimeState<Variants extends Variant.AnyVersionedVariantArray> = {
+  [K in keyof Variants]: ProtocolState.ProtocolState<Variant.StateOf<Variants[K]>, Variant.VariantTag<Variants[K]>>;
+}[number];
+
 /** The {@link Runtime} service type. */
 export interface Runtime<Variants extends Variant.AnyVersionedVariantArray> {
-  readonly stateChanges: Stream.Stream<
-    ProtocolState.ProtocolState<Variant.StateOf<HList.Each<Variants>>>,
-    WalletRuntimeError
-  >;
+  readonly stateChanges: Stream.Stream<RuntimeState<Variants>, WalletRuntimeError>;
 
   readonly progress: Effect.Effect<Progress>;
 
@@ -29,6 +39,23 @@ export interface Runtime<Variants extends Variant.AnyVersionedVariantArray> {
   dispatch<TResult, E = never>(
     impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, Effect.Effect<TResult, E>>,
   ): Effect.Effect<TResult, WalletRuntimeError | E>;
+
+  /**
+   * Registers a watcher that is notified whenever a migration activates a new variant, with the running variant that
+   * became current.
+   *
+   * @remarks
+   *   The watcher is _not_ invoked for the variant the runtime started with — only for activations caused by a protocol
+   *   version change. It is meant for work that has to be re-established on the new variant, e.g. restarting background
+   *   synchronization with the keys the application passed to `start`.
+   *
+   *   The returned effect completes only once the watcher is subscribed, so an activation triggered right after it
+   *   resolves cannot be missed. A watcher that fails does not affect the runtime, nor other watchers, and stays
+   *   subscribed for subsequent activations.
+   */
+  onVariantActivation<E = never>(
+    impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, Effect.Effect<void, E>>,
+  ): Effect.Effect<void>;
 }
 
 export type RunningVariant<
@@ -86,13 +113,23 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
     Effect.bind('currentStateRef', ({ initiatedFirstVariant }) =>
       initiatedFirstVariant.currentStateRef.get.pipe(
         Effect.flatMap((state: Variant.StateOf<HList.Each<Variants>>) =>
-          SubscriptionRef.make<
-            Either.Either<ProtocolState.ProtocolState<Variant.StateOf<HList.Each<Variants>>>, WalletRuntimeError>
-          >(Either.right({ version: initiatedFirstVariant.initProtocolVersion, state })),
+          SubscriptionRef.make<Either.Either<RuntimeState<Variants>, WalletRuntimeError>>(
+            Either.right({
+              version: initiatedFirstVariant.initProtocolVersion,
+              variantTag: variantTagOf(initiatedFirstVariant),
+              state,
+            }),
+          ),
         ),
       ),
     ),
     Effect.bind('progressRef', () => SynchronizedRef.make<Progress>({ applyGap: 0n, sourceGap: 0n })),
+    // The scope the whole runtime lives in — activation watchers registered later are forked into it,
+    // so they are torn down exactly when the runtime is.
+    Effect.bind('runtimeScope', () => Effect.scope),
+    Effect.bind('activations', () =>
+      Effect.acquireRelease(PubSub.unbounded<EachRunningVariant<Variants>>(), (pubsub) => PubSub.shutdown(pubsub)),
+    ),
     Effect.bind('currentVariantRef', ({ initiatedFirstVariant }) =>
       Effect.acquireRelease(SynchronizedRef.make<EachRunningVariant<Variants>>(initiatedFirstVariant), (ref, exit) =>
         Effect.gen(function* () {
@@ -103,15 +140,24 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
         }),
       ),
     ),
-    Effect.bind('runningStream', ({ initiatedFirstVariant, currentStateRef, progressRef, currentVariantRef }) => {
-      return runVariantStream(initiatedFirstVariant, currentStateRef, progressRef, currentVariantRef).pipe(
-        Effect.catchAll((error: WalletRuntimeError) => {
-          return SubscriptionRef.set(currentStateRef, Either.left(error));
-        }),
-        Effect.forkScoped,
-      );
-    }),
-    Effect.map(({ currentStateRef, progressRef, currentVariantRef }): Runtime<Variants> => {
+    Effect.bind(
+      'runningStream',
+      ({ initiatedFirstVariant, currentStateRef, progressRef, currentVariantRef, activations }) => {
+        return runVariantStream(
+          initiatedFirstVariant,
+          currentStateRef,
+          progressRef,
+          currentVariantRef,
+          activations,
+        ).pipe(
+          Effect.catchAll((error: WalletRuntimeError) => {
+            return SubscriptionRef.set(currentStateRef, Either.left(error));
+          }),
+          Effect.forkScoped,
+        );
+      },
+    ),
+    Effect.map(({ currentStateRef, progressRef, currentVariantRef, activations, runtimeScope }): Runtime<Variants> => {
       // Latest-value semantics with bounded memory: each subscriber gets the current state on
       // subscription (SubscriptionRef.changes emits it atomically with subsequent changes) and
       // may skip intermediate states when it lags behind the producer — the sliding buffer of
@@ -133,12 +179,42 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
         dispatch: <TResult, E = never>(
           impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, Effect.Effect<TResult, E>>,
         ): Effect.Effect<TResult, WalletRuntimeError | E> => dispatch(runtime, impl),
+        onVariantActivation: <E = never>(
+          impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, Effect.Effect<void, E>>,
+        ): Effect.Effect<void> =>
+          Effect.gen(function* () {
+            // Subscribing before forking the consumer is what makes the returned effect a
+            // "watcher is live" guarantee: an activation published right after this resolves is
+            // already enqueued for this subscription.
+            const subscription = yield* Scope.extend(PubSub.subscribe(activations), runtimeScope);
+            const consumer = Stream.fromQueue(subscription).pipe(
+              Stream.runForEach((activated) =>
+                // A failing watcher must neither stop the runtime nor unsubscribe itself.
+                Poly.dispatch(activated.runningVariant as Variant.RunningVariantOf<HList.Each<Variants>>, impl).pipe(
+                  Effect.ignoreLogged,
+                ),
+              ),
+            );
+            yield* Effect.forkIn(consumer, runtimeScope);
+          }),
       };
 
       return runtime;
     }),
   );
 };
+
+/**
+ * The tag of the variant a running variant record belongs to, narrowed to the tags this runtime can produce.
+ *
+ * @remarks
+ *   Type cast required because: inside a function generic over `Variants`, `EachRunningVariant` still describes its tag
+ *   through the `AnyVariant` constraint, so the property reads as `string | symbol`. The value is the same one
+ *   `initHeadVariant` copies off the variant it started, which is by construction one of `Variants`.
+ */
+const variantTagOf = <Variants extends Variant.AnyVersionedVariantArray>(
+  running: EachRunningVariant<Variants>,
+): Variant.VariantTag<HList.Each<Variants>> => running.__polyTag__ as Variant.VariantTag<HList.Each<Variants>>;
 
 export const dispatch = <Variants extends Variant.AnyVersionedVariantArray, TResult, E = never>(
   runtime: Runtime<Variants>,
@@ -223,7 +299,7 @@ const initHeadVariant = <Variants extends Variant.AnyVersionedVariantArray>(
     const stateRef = yield* SubscriptionRef.make(init.state);
     const variantScope = yield* Scope.make();
     const runningVariant = yield* headVersionedVariant.variant
-      .start({ stateRef })
+      .start({ stateRef, activationRange: validVersionRange })
       .pipe(Effect.provideService(Scope.Scope, variantScope)) as Effect.Effect<
       Variant.RunningVariantOf<HList.Head<Variants>>,
       WalletRuntimeError
@@ -248,11 +324,10 @@ const initHeadVariant = <Variants extends Variant.AnyVersionedVariantArray>(
 
 const runVariantStream = <Variants extends Variant.AnyVersionedVariantArray>(
   initiatedVariant: EachRunningVariant<Variants>,
-  stateRef: SubscriptionRef.SubscriptionRef<
-    Either.Either<ProtocolState.ProtocolState<Variant.StateOf<HList.Each<Variants>>>, WalletRuntimeError>
-  >,
+  stateRef: SubscriptionRef.SubscriptionRef<Either.Either<RuntimeState<Variants>, WalletRuntimeError>>,
   progressRef: SynchronizedRef.SynchronizedRef<Progress>,
   currentVariantRef: SynchronizedRef.SynchronizedRef<EachRunningVariant<Variants>>,
+  activations: PubSub.PubSub<EachRunningVariant<Variants>>,
 ): Effect.Effect<void, WalletRuntimeError> => {
   type Accumulator = {
     protocolVersion: ProtocolVersion.ProtocolVersion;
@@ -275,7 +350,14 @@ const runVariantStream = <Variants extends Variant.AnyVersionedVariantArray>(
         State: ({ state }) => {
           return SubscriptionRef.set(
             stateRef,
-            Either.right({ version: accumulator.protocolVersion, state } as const),
+            // The tag is taken from the variant whose stream this is, so an emission can never be
+            // attributed to a variant that did not produce it — including across a migration, where
+            // this function is re-entered with the newly activated variant.
+            Either.right({
+              version: accumulator.protocolVersion,
+              variantTag: variantTagOf(initiatedVariant),
+              state,
+            } as const),
           ).pipe(Effect.as({ ...accumulator, lastState: state }));
         },
         ProgressUpdate: (progress) => {
@@ -304,7 +386,16 @@ const runVariantStream = <Variants extends Variant.AnyVersionedVariantArray>(
                   initProtocolVersion: newProtocolVersion,
                 });
                 yield* SynchronizedRef.set(currentVariantRef, newInitiatedVariant);
-                return yield* runVariantStream(newInitiatedVariant, stateRef, progressRef, currentVariantRef);
+                // Published before handing control to the new variant's stream, so watchers can
+                // re-establish their work (e.g. background sync) on it right away.
+                yield* PubSub.publish(activations, newInitiatedVariant);
+                return yield* runVariantStream(
+                  newInitiatedVariant,
+                  stateRef,
+                  progressRef,
+                  currentVariantRef,
+                  activations,
+                );
               }),
             });
           } else {

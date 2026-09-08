@@ -27,6 +27,7 @@ export const DustNullifierTransactions = Subscription.make(
         transaction {
           __typename
           block {
+            protocolVersion
             ledgerParameters
           }
           ... on RegularTransaction {

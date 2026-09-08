@@ -20,7 +20,9 @@ import {
   mainnet,
   type NetworkId,
 } from '@midnightntwrk/wallet-sdk';
-import * as ledger from '@midnightntwrk/ledger-v9';
+// Addresses are a property of the seed, not of the ledger version: ledger-v8 derives the same keys from the
+// same seeds, so an address stays valid across a protocol boundary. Ledger-v9 is imported here to derive them.
+import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
 
 const networkId: NetworkId.NetworkId = 'undeployed';
 

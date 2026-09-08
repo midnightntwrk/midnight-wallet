@@ -49,6 +49,25 @@ export type VersionedVariantBuilder<TBuilder extends AnyVariantBuilder> = Readon
   variantBuilder: TBuilder;
 }>;
 
+/**
+ * A {@link VersionedVariantBuilder} registered together with the configuration it is to be built from.
+ *
+ * @remarks
+ *   A wallet's build-time configuration is the intersection of what its variants need, which works only while every
+ *   variant means the same thing by a given key. Across a protocol boundary they need not: two variants speaking
+ *   different ledgers can both want a `simulator`, or a `dustParameters`, of mutually unassignable types. Registering a
+ *   variant with its own configuration settles that at registration instead, and takes it out of the intersection —
+ *   nothing about it is left for `build` to ask for.
+ */
+export type SelfConfiguredVariantBuilder<TBuilder extends AnyVariantBuilder> = Readonly<{
+  sinceVersion: ProtocolVersion.ProtocolVersion;
+  variantBuilder: TBuilder;
+  configuration: ConfigurationOf<TBuilder>;
+}>;
+
+/** A utility type that represents any {@link SelfConfiguredVariantBuilder}. */
+export type AnySelfConfiguredVariantBuilder = SelfConfiguredVariantBuilder<AnyVariantBuilder>;
+
 export type VariantsOf<T> = T extends [infer THead, ...infer TRest]
   ? [VariantOf<THead>, ...VariantsOf<TRest>]
   : T extends []
@@ -69,5 +88,11 @@ export type ConfigurationOf<T> =
       ? ConfigurationOf<Builder>
       : never;
 
+/**
+ * The part of a registered variant's configuration that is still owed at build time: nothing at all, once the variant
+ * has been registered with its own.
+ */
+export type PendingConfigurationOf<T> = T extends AnySelfConfiguredVariantBuilder ? never : ConfigurationOf<T>;
+
 /** A type that associates a {@link VariantBuilder} with a given version of the Midnight protocol. */
-export type AnyVersionedVariantBuilder = VersionedVariantBuilder<AnyVariantBuilder>;
+export type AnyVersionedVariantBuilder = VersionedVariantBuilder<AnyVariantBuilder> | AnySelfConfiguredVariantBuilder;

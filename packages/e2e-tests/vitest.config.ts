@@ -44,6 +44,16 @@ export default defineConfig({
           exclude: ['**/fundTestWallets.remote.test.ts'],
         },
       },
+      {
+        extends: true,
+        test: {
+          name: 'fork',
+          include: ['**/**/tests/*.fork.test.ts'],
+          // No retry: a retried fork test would re-run against an already-forked chain and
+          // fail for a reason that has nothing to do with what it is checking.
+          retry: 0,
+        },
+      },
     ],
   },
   resolve: {

@@ -10,22 +10,27 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
+/*
+ * Proving in this process, either side of a protocol boundary.
+ *
+ * The bundled prover drives a zkir runtime over bytes and never looks at a ledger version, so — unlike a proof server,
+ * which is built against one — the same description serves both ledger versions. Naming it under both `v8` and `v9`
+ * covers the whole timeline: the SDK drives each side with its own ledger, and where one side ends and the other
+ * begins is `forks.v9`, which the facade presets.
+ */
 import {
+  WalletSeeds,
   type DefaultConfiguration,
   DustWallet,
   InMemoryTransactionHistoryStorage,
   WalletEntrySchema,
   WalletFacade,
-  HDWallet,
-  Roles,
   ShieldedWallet,
   createKeystore,
   PublicKey,
   UnshieldedWallet,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk';
-import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk/capabilities';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
 
@@ -40,6 +45,9 @@ const configuration: DefaultConfiguration = {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
+  // The in-process prover, for every ledger version. `keyMaterialProvider` can be supplied here to point the prover
+  // at key material of your own; left out, it reads the published circuits, which both ledger versions accept.
+  provers: { v8: { kind: 'wasm' }, v9: { kind: 'wasm' } },
   indexerClientConnection: {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
@@ -48,42 +56,21 @@ const configuration: DefaultConfiguration = {
 };
 
 const initWalletWithSeed = async (seed: Buffer) => {
-  const hdWallet = HDWallet.fromSeed(seed);
-
-  if (hdWallet.type !== 'seedOk') {
-    throw new Error('Failed to initialize HDWallet');
-  }
-
-  const derivationResult = hdWallet.hdWallet
-    .selectAccount(0)
-    .selectRoles([Roles.Zswap, Roles.NightExternal, Roles.Dust])
-    .deriveKeysAt(0);
-
-  if (derivationResult.type !== 'keysDerived') {
-    throw new Error('Failed to derive keys');
-  }
-
-  hdWallet.hdWallet.clear();
-
-  const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(derivationResult.keys[Roles.Zswap]);
-  const dustSecretKey = ledger.DustSecretKey.fromSeed(derivationResult.keys[Roles.Dust]);
-  const unshieldedKeystore = createKeystore(
-    { kind: 'schnorr', secret: derivationResult.keys[Roles.NightExternal] },
-    configuration.networkId,
-  );
+  // One master seed, three wallet seeds. A seed is the only key material that crosses a protocol boundary, so this is
+  // what lets one wallet follow the chain through a fork.
+  const seeds = WalletSeeds.fromMasterSeed(seed);
+  const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, configuration.networkId);
 
   const wallet: WalletFacade = await WalletFacade.init({
     configuration,
-    shielded: (config) => ShieldedWallet(config).startWithSecretKeys(shieldedSecretKeys),
+    shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
-    dust: (config) =>
-      DustWallet(config).startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust),
-    provingService: () => makeWasmProvingService(),
+    dust: (config) => DustWallet(config).startWithSeed(seeds.dust),
   });
 
-  await wallet.start(shieldedSecretKeys, dustSecretKey);
+  await wallet.start(seeds);
 
-  return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
+  return { wallet, seeds, unshieldedKeystore };
 };
 
 const { wallet } = await initWalletWithSeed(

@@ -50,6 +50,34 @@ class HttpProverClient {
 }
 ```
 
+### Proving providers, per ledger version
+
+A proof preimage is produced by the ledger version that built the transaction, and the request carrying it has to be
+framed and read back by that same version. `HttpProverClient` therefore offers one provider per ledger version:
+
+```typescript
+const client = await Effect.runPromise(HttpProverClient.create({ url: proofServerUrl }));
+
+client.asV9ProvingProvider(); // frames with @midnightntwrk/ledger-v9; asProvingProvider() is the same provider
+client.asV8ProvingProvider(); // frames with @midnight-ntwrk/ledger-v8
+```
+
+`WasmProver` offers both names too, and returns the same provider for each: the in-process prover drives a zkir runtime
+over bytes and never looks at a ledger version.
+
+Its key material is read from a published bucket, one line per circuit generation rather than per ledger:
+
+```typescript
+WasmProver.makeDefaultKeyMaterialProvider(); // the line both ledger versions accept
+WasmProver.makeDefaultKeyMaterialProvider({ circuits: 8 }); // an explicit override
+```
+
+The default is what both ledger versions accept today; `circuits` exists so an operator whose bucket says otherwise can
+say so, not because a fork implies a change of line.
+
+> This package depends on both ledger runtimes, `@midnight-ntwrk/ledger-v8` and `@midnightntwrk/ledger-v9`. Both are
+> WASM modules, so a direct consumer bundling this package ships both.
+
 ## Exports
 
 ### Default Export

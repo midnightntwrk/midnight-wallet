@@ -171,14 +171,7 @@ describe('WalletFacade in simulation mode', () => {
       // Step 8: Create, finalize, and submit the transfer transaction with fee payment
       // payFees: true by default - transaction is balanced with Dust spend
       const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
-        senderFacade.transferTransaction(
-          transferOutputs,
-          {
-            shieldedSecretKeys: senderKeys.shieldedKeys,
-            dustSecretKey: senderKeys.dustKey,
-          },
-          { ttl },
-        ),
+        senderFacade.transferTransaction(transferOutputs, { ttl }),
       );
 
       const finalizedTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(transferRecipe));
@@ -307,7 +300,6 @@ describe('WalletFacade in simulation mode', () => {
       const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
         senderFacade.transferTransaction(
           [{ type: 'unshielded', outputs: [{ type: nightTokenType, receiverAddress, amount: tokenValue(100n) }] }],
-          { shieldedSecretKeys: senderKeys.shieldedKeys, dustSecretKey: senderKeys.dustKey },
           { ttl }, // payFees: true (default)
         ),
       );
@@ -405,7 +397,6 @@ describe('WalletFacade in simulation mode', () => {
       const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
         senderFacade.transferTransaction(
           [{ type: 'unshielded', outputs: [{ type: nightTokenType, receiverAddress, amount: tokenValue(100n) }] }],
-          { shieldedSecretKeys: senderKeys.shieldedKeys, dustSecretKey: senderKeys.dustKey },
           { ttl }, // payFees: true (default)
         ),
       );
@@ -495,7 +486,6 @@ describe('WalletFacade in simulation mode', () => {
       const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
         senderFacade.transferTransaction(
           [{ type: 'unshielded', outputs: [{ type: nightTokenType, receiverAddress, amount: tokenValue(100n) }] }],
-          { shieldedSecretKeys: senderKeys.shieldedKeys, dustSecretKey: senderKeys.dustKey },
           { ttl }, // payFees: true (default)
         ),
       );

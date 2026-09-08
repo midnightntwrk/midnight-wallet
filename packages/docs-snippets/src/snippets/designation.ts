@@ -11,11 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // #region setup
-import * as ledger from '@midnightntwrk/ledger-v9';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';
-import { generateRandomSeed } from '@midnightntwrk/wallet-sdk';
+import { generateRandomSeed, Token } from '@midnightntwrk/wallet-sdk';
 
 const sender = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
@@ -33,15 +32,11 @@ await sender.wallet
           {
             amount: 500_000_000_000n,
             receiverAddress: await wallet.unshielded.getAddress(),
-            type: ledger.nativeToken().raw,
+            type: Token.night,
           },
         ],
       },
     ],
-    {
-      shieldedSecretKeys: sender.shieldedSecretKeys,
-      dustSecretKey: sender.dustSecretKey,
-    },
     {
       ttl: new Date(Date.now() + 30 * 60 * 1000),
     },
@@ -54,7 +49,7 @@ await sender.wallet
       wallet.state().pipe(
         rx.filter((s) => s.isSynced),
         rx.filter((s) => {
-          const nightBalance = s.unshielded.balances[ledger.nativeToken().raw] ?? 0n;
+          const nightBalance = s.unshielded.balances[Token.night] ?? 0n;
           return nightBalance > 0n;
         }),
       ),

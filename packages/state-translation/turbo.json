@@ -1,0 +1,24 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    // What another package asks for when it needs the translation: "the WASM is there, and it is known to translate".
+    // Command-less on purpose — the same shape as the repo's verify:* tasks — so nothing outside this package has to
+    // name build:wasm, or know that a Rust toolchain, a wasm-bindgen pin and a vendored midnight-storage patch stand
+    // behind it. How the artifact is produced stays ours to change; consumers only ever depend on this gate.
+    "artifacts": {
+      "dependsOn": ["build:wasm", "verify:wasm"]
+    },
+    "test:integration": {
+      // These import the built WASM statically, so the artifact has to exist — and be known good, which is why the
+      // gate and not build:wasm alone — before they run.
+      //
+      // Deliberately hung off the integration tier and NOT off dist: `dist`, `typecheck`, `lint` and `test:unit` are
+      // Rust-free across the whole repo, so anyone who never touches the translation builds and unit-tests without
+      // rustup, wasm-bindgen or LLVM. The committed .d.ts is what lets dist typecheck against an artifact it never
+      // builds. Integration tests are the only thing that loads the wasm, and they already require the toolchain, so
+      // the edge belongs here — moving it to dist would be more predictable at the cost of a Rust toolchain on every
+      // `yarn dist`.
+      "dependsOn": ["$TURBO_EXTENDS$", "artifacts"]
+    }
+  }
+}

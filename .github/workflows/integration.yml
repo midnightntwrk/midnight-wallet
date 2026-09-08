@@ -10,11 +10,14 @@ on:
   workflow_call:
 
 env:
-  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
   NETWORK: undeployed
   DEPLOYMENT: local
   APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
+  # For the files that rebuild the translation WASM. Ubuntu's clang can target wasm32 (Apple's cannot), and the stack
+  # protector pulls in OS code that does not exist there.
+  CC_wasm32_unknown_unknown: clang
+  CFLAGS_wasm32_unknown_unknown: -fno-stack-protector
 
 # checks: write lets the junit-report action create test-result check-runs;
 # contents: read is for checkout. Capped by the caller job's permissions in ci.yml.
@@ -66,7 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -87,7 +90,7 @@ jobs:
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: 'https://ghcr.io'
-          username: ${{ env.MIDNIGHT_GH_USER }}
+          username: ${{ github.actor }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Configure yarn
@@ -110,6 +113,58 @@ jobs:
         with:
           name: build-artifacts-${{ github.run_id }}
           path: .
+
+      # `test:integration` in `capabilities`, `state-translation` and `shielded-wallet` declares a turbo dependency on
+      # the translation WASM, so those files — and only those — need the Rust toolchain and the build's turbo cache.
+      # A minority of the integration files, so this is gated rather than paid everywhere.
+      - name: Does this file need the translation WASM?
+        id: wasm
+        env:
+          WALLET_TEST_FILE: ${{ matrix.test-file }}
+        run: |
+          case "$WALLET_TEST_FILE" in
+            packages/capabilities/*|packages/state-translation/*|packages/shielded-wallet/*) needed=true ;;
+            *) needed=false ;;
+          esac
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
+          echo "translation WASM needed: $needed"
+
+      # A hit means turbo skips build:wasm entirely. On a miss it rebuilds, which is why the cargo cache and the
+      # toolchain below are restored too — a miss should cost a minute, not a cold six-minute LTO build.
+      - name: Restore WASM turbo cache
+        if: steps.wasm.outputs.needed == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-wasm-${{ github.run_attempt }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-wasm-
+
+      - name: Restore cargo cache
+        if: steps.wasm.outputs.needed == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.rustup/toolchains
+            target
+          key: cargo-wasm-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            cargo-wasm-${{ runner.os }}-
+
+      - name: Install wasm-bindgen and wasm-opt
+        if: steps.wasm.outputs.needed == 'true'
+        env:
+          WASM_BINDGEN_VERSION: '0.2.104'
+          BINARYEN_VERSION: '131'
+        run: |
+          curl -sSfL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${WASM_BINDGEN_VERSION}/wasm-bindgen-${WASM_BINDGEN_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar xz -C /tmp
+          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
+            | tar xz -C /tmp
+          echo "/tmp/wasm-bindgen-${WASM_BINDGEN_VERSION}-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
+          echo "/tmp/binaryen-version_${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
 
       - name: Pre-pull Docker images
         run: docker compose -f infra/compose/docker-compose-dynamic.yml pull

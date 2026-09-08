@@ -23,18 +23,18 @@ import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Cause, Effect, Either, Exit, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, PublicKey, type UnshieldedKeystore } from '../src/KeyStore.js';
-import { makeDefaultCoinsAndBalancesCapability } from '../src/v1/CoinsAndBalances.js';
-import { CoreWallet } from '../src/v1/CoreWallet.js';
-import { makeDefaultKeysCapability } from '../src/v1/Keys.js';
-import { makeDefaultSigningService } from '../src/v1/Signing.js';
+import { makeDefaultCoinsAndBalancesCapability } from '../src/v2/CoinsAndBalances.js';
+import { CoreWallet } from '../src/v2/CoreWallet.js';
+import { makeDefaultKeysCapability } from '../src/v2/Keys.js';
+import { makeDefaultSigningService } from '../src/v2/Signing.js';
 import {
   type DefaultTransactingConfiguration,
   type DefaultTransactingContext,
   makeDefaultTransactingCapability,
-} from '../src/v1/Transacting.js';
-import { TransactionOps } from '../src/v1/TransactionOps.js';
-import { UnshieldedState, UtxoWithMeta } from '../src/v1/UnshieldedState.js';
-import { SignError } from '../src/v1/WalletError.js';
+} from '../src/v2/Transacting.js';
+import { TransactionOps } from '../src/v2/TransactionOps.js';
+import { UnshieldedState, UtxoWithMeta } from '../src/v2/UnshieldedState.js';
+import { SignError } from '../src/v2/WalletError.js';
 import { verifyWithOracle } from './ecdsaOracle.js';
 
 const NIGHT = ledger.nativeToken().raw;

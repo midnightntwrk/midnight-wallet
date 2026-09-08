@@ -11,16 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
+import { type DefaultShieldedConfiguration } from '@midnightntwrk/wallet-sdk-shielded';
 import { exit } from 'process';
 import { randomUUID } from 'node:crypto';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { type StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
 import { type MidnightNetwork, sleep } from './helpers/network.js';
 import { logger } from './logger.js';
-import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
-import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-shielded/v1';
-import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { type DefaultV2Configuration as DefaultDustV2Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { type DefaultProvingConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { type DefaultSubmissionConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/submission';
@@ -234,7 +234,9 @@ export class TestContainersFixture {
     }
   }
 
-  public getWalletConfig(): DefaultV1Configuration & DefaultSubmissionConfiguration & DefaultProvingConfiguration {
+  public getWalletConfig(): DefaultShieldedConfiguration &
+    DefaultSubmissionConfiguration &
+    DefaultProvingConfiguration {
     return {
       indexerClientConnection: {
         indexerHttpUrl: this.getIndexerUri(),
@@ -244,10 +246,13 @@ export class TestContainersFixture {
       relayURL: new URL(this.getNodeUri()),
       networkId: this.getNetworkId(),
       txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+      // Every environment these suites run against is on the ledger-v9-native node line, so the wallet reaches its V2
+      // variant; the final mainnet fork constant is still an open question.
+      forks: ProtocolVersion.V9NativeForkSchedule,
     };
   }
 
-  public getDustWalletConfig(): DefaultDustV1Configuration {
+  public getDustWalletConfig(): DefaultDustV2Configuration {
     return {
       networkId: this.getNetworkId(),
       costParameters: {

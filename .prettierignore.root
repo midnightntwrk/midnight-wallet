@@ -13,3 +13,8 @@ reports/
 .turbo/
 .yarn/
 packages/
+# Rust build output (root Cargo workspace target dir)
+target/
+
+# Third-party skills are vendored, not ours to reformat — keep in sync with .prettierignore
+.claude/

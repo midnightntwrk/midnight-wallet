@@ -16,13 +16,12 @@ import {
   ShieldedEncryptionPublicKey,
 } from '@midnightntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Array as Arr, Effect, Iterable, Order, pipe, Record } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
-import { makeSimulatorProvingServiceEffect } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { CoreWallet } from '../CoreWallet.js';
 import {
   type DefaultTransactingConfiguration,
@@ -34,6 +33,14 @@ import { getNonDustImbalance } from '../../test/testUtils.js';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { OtherWalletError } from '../WalletError.js';
 import { Either } from 'effect';
+
+// Local ledger-v8 twin of capabilities' makeSimulatorProvingServiceEffect, whose published interface is typed on
+// ledger-v9 and has no v8 counterpart.
+const makeSimulatorProvingServiceEffect = (): {
+  prove(transaction: ledger.UnprovenTransaction): Effect.Effect<ledger.ProofErasedTransaction>;
+} => ({
+  prove: (transaction) => Effect.succeed(transaction.eraseProofs()),
+});
 
 const shieldedValue = (value: number): bigint => BigInt(value * 10 ** 6);
 

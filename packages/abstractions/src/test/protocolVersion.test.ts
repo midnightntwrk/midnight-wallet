@@ -29,6 +29,18 @@ describe('ProtocolVersion', () => {
     });
   });
 
+  describe('V9NativeForkVersion', () => {
+    it('is the version a midnight-node 2.x reports on its ledger events, 2000000', () => {
+      expect(ProtocolVersion.V9NativeForkVersion).toBe(2_000_000n);
+      expect(ProtocolVersion.is(ProtocolVersion.V9NativeForkVersion)).toBeTruthy();
+    });
+
+    it('lies strictly inside the supported range, so it splits it into two non-empty epochs', () => {
+      expect(ProtocolVersion.V9NativeForkVersion).toBeGreaterThan(ProtocolVersion.MinSupportedVersion);
+      expect(ProtocolVersion.V9NativeForkVersion).toBeLessThan(ProtocolVersion.MaxSupportedVersion);
+    });
+  });
+
   it.each([ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion])(
     'should be encodable and decodable',
     (input) => {
@@ -42,4 +54,29 @@ describe('ProtocolVersion', () => {
       expect(protocolVersion).toBe(input);
     },
   );
+});
+
+describe('ForkSchedule', () => {
+  it('names where each ledger version after the first begins, keyed by ledger version', () => {
+    const schedule: ProtocolVersion.ForkSchedule = { v9: ProtocolVersion.V9NativeForkVersion };
+    expect(schedule.v9).toBe(ProtocolVersion.V9NativeForkVersion);
+  });
+
+  it('has no entry for ledger-v8, which begins at MinSupportedVersion', () => {
+    // A type-level fact stated as a value: were `v8` a key, this annotation would be `true` and the assignment would
+    // not compile.
+    const v8Scheduled: 'v8' extends keyof ProtocolVersion.ForkSchedule ? true : false = false;
+    expect(v8Scheduled).toBe(false);
+  });
+});
+
+describe('V9NativeForkSchedule', () => {
+  it('has ledger-v9 begin at V9NativeForkVersion, and says nothing else', () => {
+    expect(ProtocolVersion.V9NativeForkSchedule).toStrictEqual({ v9: ProtocolVersion.V9NativeForkVersion });
+  });
+
+  it('is a ForkSchedule, so a configuration can name it where it would otherwise write the literal', () => {
+    const schedule: ProtocolVersion.ForkSchedule = ProtocolVersion.V9NativeForkSchedule;
+    expect(schedule.v9).toBe(ProtocolVersion.V9NativeForkVersion);
+  });
 });

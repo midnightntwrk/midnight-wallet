@@ -34,7 +34,7 @@ import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, type PublicKey, type UnshieldedKeystore } from '../src/KeyStore.js';
 import { assertKeyAddressConsistency, assertSignatureMatchesKey } from '../src/SchemeConsistency.js';
-import { SchemeMismatchError } from '../src/v1/WalletError.js';
+import { SchemeMismatchError } from '../src/v2/WalletError.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 

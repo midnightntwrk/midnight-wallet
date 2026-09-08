@@ -27,9 +27,10 @@ import {
   isFinalizedWalletEntry,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { makeDefaultSubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
+import { carried } from './helpers/transactions.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
 
@@ -82,6 +83,7 @@ describe('Dust Deregistration', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      forks: ProtocolVersion.V9NativeForkSchedule,
       costParameters: {
         feeBlocksMargin: 5,
       },
@@ -107,10 +109,7 @@ describe('Dust Deregistration', () => {
       submissionService: (configuration) => makeDefaultSubmissionService(configuration),
     });
 
-    await walletFacade.start(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),
-      ledger.DustSecretKey.fromSeed(dustWalletSeed),
-    );
+    await walletFacade.start({ shielded: shieldedWalletSeed, unshielded: shieldedWalletSeed, dust: dustWalletSeed });
   });
 
   afterEach(async () => {
@@ -139,16 +138,9 @@ describe('Dust Deregistration', () => {
       unshieldedWalletKeystore.signDataAsync,
     );
 
-    const balancingRecipe = await walletFacade.balanceUnprovenTransaction(
-      dustDeregistrationTx.transaction,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletSeed),
-      },
-      {
-        ttl: new Date(Date.now() + 30 * 60 * 1000),
-      },
-    );
+    const balancingRecipe = await walletFacade.balanceUnprovenTransaction(dustDeregistrationTx.transaction, {
+      ttl: new Date(Date.now() + 30 * 60 * 1000),
+    });
 
     const finalizedDustDeregistrationTx = await walletFacade.finalizeRecipe(balancingRecipe);
 
@@ -159,7 +151,9 @@ describe('Dust Deregistration', () => {
     const walletStateAfterDeregistration = await rx.firstValueFrom(
       walletFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await walletFacade.queryTxHistoryByHash(finalizedDustDeregistrationTx.transactionHash());
+          const txInHistory = await walletFacade.queryTxHistoryByHash(
+            carried<ledger.FinalizedTransaction>(finalizedDustDeregistrationTx).transactionHash(),
+          );
 
           return {
             state,

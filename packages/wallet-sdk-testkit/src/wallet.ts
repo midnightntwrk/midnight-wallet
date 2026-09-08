@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import * as rx from 'rxjs';
 import { existsSync } from 'node:fs';
 import * as fsAsync from 'node:fs/promises';
@@ -27,8 +28,9 @@ import {
   type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { type DefaultDustConfiguration, DustWallet, type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { type DefaultDustConfiguration } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { type DustWalletFactory } from './dust-sync.js';
 import { type WalletTestEnvironment } from './types.js';
 import { logger } from './logger.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed } from './seeds.js';
@@ -37,6 +39,8 @@ export type WalletInit = {
   wallet: WalletFacade;
   shieldedSecretKeys: ledger.ZswapSecretKeys;
   dustSecretKey: ledger.DustSecretKey;
+  /** The three per-wallet seeds, which is what the facade is started and stepped with. */
+  seeds: WalletSeeds;
   unshieldedKeystore: UnshieldedKeystore;
 };
 
@@ -57,7 +61,7 @@ export interface ProvideWalletOptions {
    * `makeEventLessSyncService` to exercise the projections-based sync instead. Applies to both the restored and the
    * built-from-scratch paths, so a cold cache cannot silently fall back to a different sync model.
    */
-  dustWallet?: ((config: DefaultDustConfiguration) => DustWalletClass) | undefined;
+  dustWallet?: DustWalletFactory | undefined;
   /**
    * Starts the facade without background syncing, leaving the caller to drive `facade.doSync()`. Defaults to `false`
    * (background sync), which is what every existing scenario relies on.
@@ -107,13 +111,15 @@ const restoreUnshieldedWallet = async (
     const serialized = await readIfExists(path);
     if (serialized) {
       const keyStore = createKeystore({ kind: 'schnorr', secret: getUnshieldedSeed(seed) }, env.endpoints.networkId);
-      const wallet = UnshieldedWallet({
+      const wallet = await UnshieldedWallet({
         networkId: env.endpoints.networkId,
         indexerClientConnection: {
           indexerHttpUrl: env.endpoints.indexerHttpUrl,
           indexerWsUrl: env.endpoints.indexerWsUrl,
         },
         txHistoryStorage,
+        // The same boundary the shielded configuration names, taken from the one place this environment defines it.
+        forks: env.getWalletConfig().forks,
       }).startWithPublicKey(PublicKey.fromKeyStore(keyStore));
       logger.info(`Restored unshielded wallet from ${path}`);
       return wallet;
@@ -127,9 +133,9 @@ const restoreUnshieldedWallet = async (
 
 const restoreDustWallet = async (
   path: string,
-  walletConfig: DefaultV1Configuration,
+  walletConfig: DefaultDustConfiguration,
   readIfExists: (path: string) => Promise<string | undefined>,
-  dustWallet: (config: DefaultDustConfiguration) => DustWalletClass = DustWallet,
+  dustWallet: DustWalletFactory = DustWallet,
 ) => {
   try {
     const serialized = await readIfExists(path);
@@ -174,12 +180,14 @@ export const provideWallet = async (env: WalletTestEnvironment, options: Provide
   const dustWalletConfig = { ...env.getDustWalletConfig(), txHistoryStorage };
   const Wallet = ShieldedWallet(walletConfig);
 
-  const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
-  const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
-  const unshieldedKeystore = createKeystore(
-    { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
-    env.endpoints.networkId,
-  );
+  const seeds: WalletSeeds = {
+    shielded: getShieldedSeed(seed),
+    unshielded: getUnshieldedSeed(seed),
+    dust: getDustSeed(seed),
+  };
+  const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(seeds.shielded);
+  const dustSecretKey = ledger.DustSecretKey.fromSeed(seeds.dust);
+  const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, env.endpoints.networkId);
 
   const readIfExists = async (p: string): Promise<string | undefined> => {
     try {
@@ -215,7 +223,7 @@ export const provideWallet = async (env: WalletTestEnvironment, options: Provide
       unshielded: () => restoredUnshielded,
       dust: () => restoredDust,
     });
-    await restoredWallet.start(shieldedSecretKeys, dustSecretKey, manualSync ?? false);
+    await restoredWallet.start(seeds, { manualSync: manualSync ?? false });
     // check if wallet is syncing correctly
     await waitForSyncProgress(restoredWallet);
     const restoredWalletState = await rx.firstValueFrom(restoredWallet.state());
@@ -228,7 +236,7 @@ export const provideWallet = async (env: WalletTestEnvironment, options: Provide
       return initWalletWithSeed(env, seed);
     } else {
       logger.info('Successfully restored wallet facade.');
-      return { wallet: restoredWallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
+      return { wallet: restoredWallet, shieldedSecretKeys, dustSecretKey, seeds, unshieldedKeystore };
     }
   }
 };
@@ -289,6 +297,11 @@ export const initWalletWithSeed = async (
 ): Promise<WalletInit> => {
   const dustWalletClass = options.dustWallet ?? DustWallet;
   const walletConfig = env.getWalletConfig();
+  const seeds: WalletSeeds = {
+    shielded: getShieldedSeed(seed),
+    unshielded: getUnshieldedSeed(seed),
+    dust: getDustSeed(seed),
+  };
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
   const unshieldedKeystore = createKeystore(
@@ -304,9 +317,8 @@ export const initWalletWithSeed = async (
     },
     shielded: (config) => ShieldedWallet(config).startWithSeed(getShieldedSeed(seed)),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
-    dust: (config) =>
-      dustWalletClass(config).startWithSeed(getDustSeed(seed), ledger.LedgerParameters.initialParameters().dust),
+    dust: (config) => dustWalletClass(config).startWithSeed(getDustSeed(seed)),
   });
-  await facade.start(shieldedSecretKeys, dustSecretKey, options.manualSync ?? false);
-  return { wallet: facade, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
+  await facade.start(seeds, { manualSync: options.manualSync ?? false });
+  return { wallet: facade, shieldedSecretKeys, dustSecretKey, seeds, unshieldedKeystore };
 };

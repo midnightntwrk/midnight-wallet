@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
-import type * as ledger from '@midnightntwrk/ledger-v9';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
 
 export type WalletError =
   | OtherWalletError
@@ -20,7 +20,6 @@ export type WalletError =
   | SyncWalletError
   | TransactingError
   | SignError
-  | SchemeMismatchError
   | ApplyTransactionError
   | RollbackUtxoError
   | SpendUtxoError;
@@ -55,18 +54,6 @@ export class TransactingError extends Data.TaggedError('Wallet.Transacting')<{
 export class SignError extends Data.TaggedError('Wallet.Sign')<{
   message: string;
   cause?: unknown;
-}> {}
-
-/**
- * Raised when a signature scheme (`schnorr` vs `ecdsa`) is mixed across an unshielded key, address, or signature.
- * Mismatches are rejected early — at wallet construction or at signature provision — never silently coerced. The `at`
- * field records where the mismatch was caught.
- */
-export class SchemeMismatchError extends Data.TaggedError('Wallet.SchemeMismatch')<{
-  message: string;
-  expected: ledger.SignatureKind;
-  supplied: ledger.SignatureKind;
-  at: 'construction' | 'signature-provision';
 }> {}
 
 export class ApplyTransactionError extends Data.TaggedError('Wallet.ApplyTransaction')<{

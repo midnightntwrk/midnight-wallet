@@ -18,6 +18,8 @@ import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { type CombinedTokenTransfer, type WalletEntry } from '@midnightntwrk/wallet-sdk-facade';
 import { randomBytes } from 'node:crypto';
+import { type FinalizedTx } from '@midnightntwrk/wallet-sdk';
+import { carried, sealed } from './helpers/transactions.js';
 
 /** Tests performing a token transfer */
 
@@ -88,16 +90,9 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txRecipe = await funded.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 60 * 60 * 1000),
-        },
-      );
+      const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 60 * 60 * 1000),
+      });
       logger.info('Sending transaction...');
       const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
@@ -117,7 +112,7 @@ describe('Token transfer', () => {
       expect(pendingState.shielded.pendingCoins.length).toBeLessThanOrEqual(2);
       expect(pendingState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
 
-      const txHash = finalizedTx.transactionHash();
+      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
       const senderTxEntry = await utils.waitForTxInHistory(txHash, funded.wallet, {
         ready: (e) => e.shielded !== undefined,
       });
@@ -191,16 +186,9 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txRecipe = await funded.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 60 * 60 * 1000),
-        },
-      );
+      const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 60 * 60 * 1000),
+      });
       const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
@@ -216,7 +204,7 @@ describe('Token transfer', () => {
       expect(pendingState.unshielded.pendingCoins.length).toBeLessThanOrEqual(2);
       expect(pendingState.unshielded.totalCoins.length).toBe(initialState.unshielded.totalCoins.length);
 
-      const txHash = finalizedTx.transactionHash();
+      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
       const senderTxEntry = await utils.waitForTxInHistory(txHash, funded.wallet, {
         ready: (e) => e.unshielded !== undefined,
       });
@@ -307,16 +295,9 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txRecipe = await funded.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 60 * 60 * 1000),
-        },
-      );
+      const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 60 * 60 * 1000),
+      });
       logger.info('Sending transaction...');
       const provenTx = await funded.wallet.finalizeRecipe(txRecipe);
       const txId = await funded.wallet.submitTransaction(provenTx);
@@ -328,7 +309,7 @@ describe('Token transfer', () => {
       logger.info(pendingState.shielded.balances);
       logger.info(`Wallet 1: ${pendingState.dust.balance(new Date())} tDUST`);
 
-      const txHash = provenTx.transactionHash();
+      const txHash = carried<ledger.FinalizedTransaction>(provenTx).transactionHash();
       const senderTxEntry = await utils.waitForTxInHistory(txHash, funded.wallet, {
         ready: (e) => e.shielded !== undefined,
       });
@@ -404,23 +385,16 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txRecipe = await funded.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 60 * 60 * 1000),
-        },
-      );
+      const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 60 * 60 * 1000),
+      });
       logger.info('Sending transaction...');
       const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
       const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
-      const txHash = finalizedTx.transactionHash();
+      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
       const txEntry = await utils.waitForTxInHistory(txHash, funded.wallet, {
         ready: (entry) =>
           entry.shielded !== undefined &&
@@ -508,16 +482,9 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txRecipe = await funded.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 60 * 60 * 1000),
-        },
-      );
+      const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 60 * 60 * 1000),
+      });
       logger.info('Sending transaction...');
       const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
@@ -525,7 +492,7 @@ describe('Token transfer', () => {
       const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
       logger.info('Transaction id: ' + txId);
       logger.info('Wait for pending...');
-      const txHash = finalizedTx.transactionHash();
+      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
       await utils.waitForUnshieldedCoinUpdate(receiver1.wallet, 0);
       await utils.waitForUnshieldedCoinUpdate(receiver2.wallet, 0);
       const finalState = await funded.wallet.waitForSyncedState();
@@ -621,16 +588,9 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txRecipe = await funded.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 60 * 60 * 1000),
-        },
-      );
+      const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 60 * 60 * 1000),
+      });
       logger.info('Sending transaction...');
       const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
@@ -658,7 +618,7 @@ describe('Token transfer', () => {
       logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
 
       // Init swap token 1
-      const swapCoin1Tx: ledger.FinalizedTransaction = await receiver1.wallet
+      const swapCoin1Tx: FinalizedTx = await receiver1.wallet
         .initSwap(
           { shielded: { [shieldedToken1]: outputValue } },
           [
@@ -673,17 +633,13 @@ describe('Token transfer', () => {
               ],
             },
           ],
-          {
-            shieldedSecretKeys: receiver1.shieldedSecretKeys,
-            dustSecretKey: receiver1.dustSecretKey,
-          },
           { ttl: new Date(Date.now() + 30 * 60 * 1000) },
         )
         .then((tx) => receiver1.wallet.finalizeRecipe(tx));
       logger.info('Swap coin 1 transaction prepared');
 
       // Init swap token 2
-      const swapCoin2Tx: ledger.FinalizedTransaction = await receiver2.wallet
+      const swapCoin2Tx: FinalizedTx = await receiver2.wallet
         .initSwap(
           { shielded: { [shieldedToken2]: outputValue } },
           [
@@ -698,10 +654,6 @@ describe('Token transfer', () => {
               ],
             },
           ],
-          {
-            shieldedSecretKeys: receiver2.shieldedSecretKeys,
-            dustSecretKey: receiver2.dustSecretKey,
-          },
           { ttl: new Date(Date.now() + 30 * 60 * 1000) },
         )
         .then((tx) => receiver2.wallet.finalizeRecipe(tx));
@@ -710,11 +662,12 @@ describe('Token transfer', () => {
       // Pay fees and submit tx
       await utils.waitForDustBalance(receiver3.wallet);
       const balancedTransactionRecipe = await receiver3.wallet.balanceFinalizedTransaction(
-        swapCoin1Tx.merge(swapCoin2Tx),
-        {
-          shieldedSecretKeys: receiver3.shieldedSecretKeys,
-          dustSecretKey: receiver3.dustSecretKey,
-        },
+        // Merged by the caller, so the two are opened at the version they were both built at and the result sealed
+        // back — a merge is only defined between transactions of one ledger version.
+        sealed(
+          'Finalized',
+          carried<ledger.FinalizedTransaction>(swapCoin1Tx).merge(carried<ledger.FinalizedTransaction>(swapCoin2Tx)),
+        ),
         { ttl: new Date(Date.now() + 30 * 60 * 1000) },
       );
 
@@ -764,8 +717,8 @@ describe('Token transfer', () => {
       );
       const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenRaw, outputValue);
       const unprovenTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
-      const finalizedTx = await funded.wallet.finalizeTransaction(unprovenTx);
-      const txHash = finalizedTx.transactionHash();
+      const finalizedTx = await funded.wallet.finalizeTransaction(sealed('Unproven', unprovenTx));
+      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
       await expect(
         Promise.all([funded.wallet.submitTransaction(finalizedTx), funded.wallet.submitTransaction(finalizedTx)]),
       ).rejects.toThrow();
@@ -813,16 +766,9 @@ describe('Token transfer', () => {
         },
       ];
       await expect(
-        funded.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          {
-            ttl: new Date(Date.now() + 60 * 60 * 1000),
-          },
-        ),
+        funded.wallet.transferTransaction(outputsToCreate, {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        }),
       ).rejects.toThrow(`Insufficient funds`);
     },
     timeout,
@@ -851,16 +797,9 @@ describe('Token transfer', () => {
         },
       ];
       await expect(
-        funded.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          {
-            ttl: new Date(Date.now() + 60 * 60 * 1000),
-          },
-        ),
+        funded.wallet.transferTransaction(outputsToCreate, {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        }),
       ).rejects.toThrow(`Insufficient funds`);
     },
     timeout,
@@ -890,16 +829,9 @@ describe('Token transfer', () => {
         },
       ];
       await expect(
-        funded.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          {
-            ttl: new Date(Date.now() + 60 * 60 * 1000),
-          },
-        ),
+        funded.wallet.transferTransaction(outputsToCreate, {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        }),
       ).rejects.toThrow(`Failed to process desired outputs`);
     },
     timeout,
@@ -926,16 +858,9 @@ describe('Token transfer', () => {
         },
       ];
       await expect(
-        funded.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          {
-            ttl: new Date(Date.now() + 60 * 60 * 1000),
-          },
-        ),
+        funded.wallet.transferTransaction(outputsToCreate, {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        }),
       ).rejects.toThrow('The amount needs to be positive');
     },
     timeout,
@@ -962,16 +887,9 @@ describe('Token transfer', () => {
       ];
 
       await expect(
-        funded.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          {
-            ttl: new Date(Date.now() + 60 * 60 * 1000),
-          },
-        ),
+        funded.wallet.transferTransaction(outputsToCreate, {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        }),
       ).rejects.toThrow('The amount needs to be positive');
     },
     timeout,
@@ -1000,15 +918,7 @@ describe('Token transfer', () => {
       ];
 
       await expect(
-        funded.wallet.initSwap(
-          desiredInputs,
-          desiredOutputs,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          { ttl: new Date(Date.now() + 60 * 60 * 1000) },
-        ),
+        funded.wallet.initSwap(desiredInputs, desiredOutputs, { ttl: new Date(Date.now() + 60 * 60 * 1000) }),
       ).rejects.toThrow('The amount needs to be positive');
     },
     timeout,
@@ -1039,15 +949,7 @@ describe('Token transfer', () => {
       ];
 
       await expect(
-        funded.wallet.initSwap(
-          desiredInputs,
-          desiredOutputs,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          { ttl: new Date(Date.now() + 60 * 60 * 1000) },
-        ),
+        funded.wallet.initSwap(desiredInputs, desiredOutputs, { ttl: new Date(Date.now() + 60 * 60 * 1000) }),
       ).rejects.toThrow('The input amounts need to be positive');
     },
     timeout,
@@ -1061,16 +963,9 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
       await expect(
-        funded.wallet.transferTransaction(
-          [],
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          {
-            ttl: new Date(),
-          },
-        ),
+        funded.wallet.transferTransaction([], {
+          ttl: new Date(),
+        }),
       ).rejects.toThrow('At least one shielded or unshielded output is required.');
     },
     timeout,
@@ -1108,7 +1003,7 @@ describe('Token transfer', () => {
       );
       const offer = ledger.ZswapOffer.fromOutput(output, tokenTypeHash, outputValueNativeToken);
       const unprovenTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
-      const finalizedTx = await funded.wallet.finalizeTransaction(unprovenTx);
+      const finalizedTx = await funded.wallet.finalizeTransaction(sealed('Unproven', unprovenTx));
 
       await expect(
         Promise.all([funded.wallet.submitTransaction(finalizedTx), funded.wallet.submitTransaction(finalizedTx)]),
@@ -1125,79 +1020,10 @@ describe('Token transfer', () => {
     timeout,
   );
 
-  test(
-    'error message when attempting to make transfer using incorrect shielded secret key',
-    async () => {
-      const incorrectSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(seed));
-      const syncedState = await funded.wallet.waitForSyncedState();
-      const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
-      logger.info(`Wallet 1 balance is: ${initialBalance}`);
-
-      const initialState2 = await rx.firstValueFrom(funded.wallet.state());
-      const outputsToCreate: CombinedTokenTransfer[] = [
-        {
-          type: 'shielded',
-          outputs: [
-            {
-              type: dustTokenHash,
-              amount: outputValue,
-              receiverAddress: initialState2.shielded.address,
-            },
-          ],
-        },
-      ];
-      const txRecipe = await funded.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: incorrectSecretKey,
-          dustSecretKey: funded.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 60 * 60 * 1000),
-        },
-      );
-      await expect(funded.wallet.finalizeRecipe(txRecipe)).rejects.toThrow('Failed to prove transaction');
-    },
-    timeout,
-  );
-
-  test(
-    'error message when attempting to make transfer using incorrect dust secret key',
-    async () => {
-      const incorrectDustKey = receiver.dustSecretKey;
-      const syncedState = await funded.wallet.waitForSyncedState();
-      const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
-      logger.info(`Wallet 1 balance is: ${initialBalance}`);
-
-      const initialState2 = await rx.firstValueFrom(funded.wallet.state());
-
-      const outputsToCreate: CombinedTokenTransfer[] = [
-        {
-          type: 'shielded',
-          outputs: [
-            {
-              type: shieldedTokenRaw,
-              amount: outputValue,
-              receiverAddress: initialState2.shielded.address,
-            },
-          ],
-        },
-      ];
-      await expect(
-        funded.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: incorrectDustKey,
-          },
-          {
-            ttl: new Date(Date.now() + 60 * 60 * 1000),
-          },
-        ),
-      ).rejects.toThrow("attempted to spend Dust UTXO that's not in the wallet state:");
-    },
-    timeout,
-  );
+  // The two tests that stood here asked what happens when a caller passes the *wrong* secret key to a transfer. That
+  // question no longer has a way to be asked: a wallet spanning a protocol boundary derives the key its current
+  // variant needs from what it was started with, because a caller-supplied key object can only ever belong to one
+  // ledger version. What the tests pinned is now unrepresentable rather than merely untested.
 
   test(
     'coin becomes available when tx does not get proved',
@@ -1226,16 +1052,9 @@ describe('Token transfer', () => {
             ],
           },
         ];
-        const txRecipe = await funded.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          {
-            ttl: new Date(Date.now() + 60 * 60 * 1000),
-          },
-        );
+        const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        });
         await expect(funded.wallet.finalizeRecipe(txRecipe)).rejects.toThrow();
 
         const finalState = await utils.waitForFacadePendingClear(funded.wallet);
@@ -1272,16 +1091,9 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txRecipe = await funded.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 60 * 60 * 1000),
-        },
-      );
+      const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 60 * 60 * 1000),
+      });
       const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
 
       // Verify coins are pending after finalization

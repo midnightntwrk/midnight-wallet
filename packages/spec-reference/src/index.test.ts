@@ -11,7 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as crypto from 'node:crypto';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
+
+// The parity and roundtrip cases run the spec's pure-JS cryptography against the WASM ledger; on CI runners several of
+// them take 7-14 s, past vitest's 5 s default. First observed the first time this file ran in CI at all.
+vi.setConfig({ testTimeout: 30_000 });
 import {
   Bech32m,
   type Bech32mCodec,

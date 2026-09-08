@@ -12,9 +12,9 @@
 // limitations under the License.
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { createSyncProgress, type SyncProgress, type SyncProgressData } from './SyncProgress.js';
-import { type PublicKey } from '../KeyStore.js';
+import { type PublicKey } from './KeyStore.js';
 import { UnshieldedState, type UnshieldedUpdate } from './UnshieldedState.js';
-import type * as ledger from '@midnightntwrk/ledger-v9';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Either, Array as Arr, pipe } from 'effect';
 import { ApplyTransactionError, RollbackUtxoError, SpendUtxoError, type WalletError } from './WalletError.js';
 
@@ -63,6 +63,21 @@ export const CoreWallet = {
       isConnected: isConnected ?? wallet.progress.isConnected,
     });
     return { ...wallet, progress };
+  },
+
+  /**
+   * Records an observed protocol version, monotonically.
+   *
+   * @remarks
+   *   Only ever raises it. A stale lower report — a reconnect replaying from an earlier cursor, say — would otherwise
+   *   look like a downward version change and send the runtime migrating backwards into a variant this wallet has
+   *   already left.
+   * @param wallet The wallet to annotate.
+   * @param version The protocol version the source reported.
+   * @returns The wallet carrying the higher of the two versions.
+   */
+  withProtocolVersion(wallet: CoreWallet, version: ProtocolVersion.ProtocolVersion): CoreWallet {
+    return version > wallet.protocolVersion ? { ...wallet, protocolVersion: version } : wallet;
   },
 
   applyUpdate(coreWallet: CoreWallet, update: UnshieldedUpdate): Either.Either<CoreWallet, WalletError> {

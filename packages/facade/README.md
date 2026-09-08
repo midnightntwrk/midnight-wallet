@@ -40,6 +40,46 @@ const facade = new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
 await facade.start(shieldedSecretKeys, dustSecretKey);
 ```
 
+### Where the chain forks
+
+Every configuration in the SDK carries `forks`, the protocol version from which each ledger version after the first
+reads the chain. The wallet packages require it, because where a chain forks is a fact about the chain. The facade
+presets it: left out of the configuration handed to `WalletFacade.init`, `forks` becomes `DefaultForkSchedule` —
+`ProtocolVersion.V9NativeForkSchedule`, ledger-v9 from the version a 2.x node reports — and every factory in
+`InitParams` is handed the configuration with it filled in, typed `ResolvedConfiguration`. That is why
+`shielded: (config) => ShieldedWallet(config)` compiles against a wallet package that requires the field. Code outside a
+factory that needs the same configuration — to build a wallet package directly, or to read `forks` back — gets it from
+`WalletFacade.resolveConfiguration(configuration)`, and may hand the result to `init` as it is. A chain that hands over
+elsewhere states its own `forks`, which wins.
+
+### Configuring where proving happens
+
+A transaction is proved by the backend for the ledger version that authored its bytes, never by the version the chain
+has since reached. Backends are named per ledger version, keyed the way `forks` is, and the range each serves is read
+off `forks` rather than restated:
+
+```typescript
+const configuration = {
+  // ... the rest of the wallet configuration; `forks` may be left out, the facade presets `DefaultForkSchedule`
+  provers: {
+    // Below `forks.v9`: a proof server built against ledger-v8.
+    v8: { kind: 'server', url: new URL('http://localhost:6301') },
+    // From `forks.v9`: proving in this process, with the published circuits.
+    v9: { kind: 'wasm' },
+  },
+};
+```
+
+`v9` is required, because it is what every new transaction is proved with. `v8` may be left out on a chain whose history
+below the boundary the wallet never authors for; a transaction stamped there then fails with
+`UnsupportedProvingVersionError`, naming the version.
+
+One shorthand remains: `provingServerUrl: url` is one proof server under every key, read only when `provers` is absent.
+The SDK drives it with each ledger version on its own side of `forks.v9`, so the same URL frames its requests correctly
+on both. A proof server, though, is built against one ledger version: no published image serves both, so a chain with
+history below the boundary wants `provers` with a server per side. The in-process prover works on bytes and does serve
+both, under both keys.
+
 ### Observing Combined State
 
 ```typescript

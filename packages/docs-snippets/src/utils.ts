@@ -10,20 +10,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
+import type * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
 import {
-  type DefaultConfiguration,
   DustWallet,
   InMemoryTransactionHistoryStorage,
   WalletEntrySchema,
   WalletFacade,
-  HDWallet,
-  Roles,
   ShieldedWallet,
   createKeystore,
   PublicKey as UnshieldedPublicKey,
   UnshieldedWallet,
   type UnshieldedKeystore,
+  WalletSeeds,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
@@ -31,67 +29,59 @@ import { type Buffer } from 'buffer';
 const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
 const NODE_PORT = Number.parseInt(process.env['NODE_PORT'] ?? '9944', 10);
 const PROOF_SERVER_PORT = Number.parseInt(process.env['PROOF_SERVER_PORT'] ?? '6300', 10);
+// The proof server built against ledger-v8, for the chain's history below `forks.v9`. Never contacted on a chain
+// that has been on ledger-v9 since genesis, like the one this runs against.
+const V8_PROOF_SERVER_PORT = Number.parseInt(process.env['V8_PROOF_SERVER_PORT'] ?? '6301', 10);
 const INDEXER_HTTP_URL = `http://localhost:${INDEXER_PORT}/api/v4/graphql`;
 const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 
-const configuration: DefaultConfiguration = {
+// Resolved up front rather than left to `WalletFacade.init`, which does the same for the factories it calls: the
+// snippets read `forks` back to choose which ledger version authors a transaction, and `init` takes the resolved
+// configuration as it is.
+export const configuration = WalletFacade.resolveConfiguration({
   networkId: 'undeployed',
   costParameters: {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
-  provingServerUrl: new URL(`http://localhost:${PROOF_SERVER_PORT}`),
+  // One proof server per ledger version, keyed the way `forks` is: `v8` answers below `forks.v9`, `v9` from it. A
+  // transaction is proved by the backend for the ledger version that authored its bytes, so the wallet proves on either
+  // side of the fork and across it. `hard-fork-support.ts` explains the shape in full.
+  provers: {
+    v8: { kind: 'server', url: new URL(`http://localhost:${V8_PROOF_SERVER_PORT}`) },
+    v9: { kind: 'server', url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
+  },
   indexerClientConnection: {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
   },
   txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
-};
+});
 
 export const initWalletWithSeed = async (
   seed: Buffer,
 ): Promise<{
   wallet: WalletFacade;
-  shieldedSecretKeys: ledger.ZswapSecretKeys;
-  dustSecretKey: ledger.DustSecretKey;
+  seeds: WalletSeeds;
   unshieldedKeystore: UnshieldedKeystore;
 }> => {
-  const hdWallet = HDWallet.fromSeed(seed);
+  // One master seed, three wallet seeds. A seed is the only key material that crosses a protocol boundary, so this is
+  // what lets one wallet follow the chain through a fork.
+  const seeds = WalletSeeds.fromMasterSeed(seed);
 
-  if (hdWallet.type !== 'seedOk') {
-    throw new Error('Failed to initialize HDWallet');
-  }
-
-  const derivationResult = hdWallet.hdWallet
-    .selectAccount(0)
-    .selectRoles([Roles.Zswap, Roles.NightExternal, Roles.Dust])
-    .deriveKeysAt(0);
-
-  if (derivationResult.type !== 'keysDerived') {
-    throw new Error('Failed to derive keys');
-  }
-
-  hdWallet.hdWallet.clear();
-
-  const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(derivationResult.keys[Roles.Zswap]);
-  const dustSecretKey = ledger.DustSecretKey.fromSeed(derivationResult.keys[Roles.Dust]);
-  const unshieldedKeystore = createKeystore(
-    { kind: 'schnorr', secret: derivationResult.keys[Roles.NightExternal] },
-    configuration.networkId,
-  );
+  const unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, configuration.networkId);
 
   const wallet: WalletFacade = await WalletFacade.init({
     configuration,
-    shielded: (config) => ShieldedWallet(config).startWithSecretKeys(shieldedSecretKeys),
+    shielded: (config) => ShieldedWallet(config).startWithSeed(seeds.shielded),
     unshielded: (config) =>
       UnshieldedWallet(config).startWithPublicKey(UnshieldedPublicKey.fromKeyStore(unshieldedKeystore)),
-    dust: (config) =>
-      DustWallet(config).startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust),
+    dust: (config) => DustWallet(config).startWithSeed(seeds.dust),
   });
 
-  await wallet.start(shieldedSecretKeys, dustSecretKey);
+  await wallet.start(seeds);
 
-  return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
+  return { wallet, seeds, unshieldedKeystore };
 };
 
 export const aFakeProvingProvider: ledger.ProvingProvider = {

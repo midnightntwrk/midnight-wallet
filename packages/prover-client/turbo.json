@@ -3,6 +3,12 @@
   "tasks": {
     "test": {
       "dependsOn": ["dist"]
+    },
+    "test:unit": {
+      "dependsOn": ["dist"]
+    },
+    "test:integration": {
+      "dependsOn": ["dist"]
     }
   }
 }

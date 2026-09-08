@@ -27,6 +27,7 @@ import {
   unshieldedKeyPairFromUniformBytes,
   dustKeys,
 } from './key-derivation-reference.js';
+import { Roles, derivationPath, seedAt, walletSeeds } from './seed-derivation-reference.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as crypto from 'node:crypto';
 
@@ -51,9 +52,24 @@ export type AddressVector = {
   shieldedCPK: AddressEntry;
 };
 
+/** One master seed placed at one account and address index, and every seed the tree yields there. */
+export type SeedDerivationVector = {
+  masterSeed: string;
+  account: number;
+  addressIndex: number;
+  /**
+   * The seed at every role of the path, so an implementation taking its unshielded seed from a role other than the
+   * default can be checked against the same file.
+   */
+  seedsByRole: Record<keyof typeof Roles, { path: string; seed: string }>;
+  /** The three seeds an application holds: the default roles, which is what the specification's table states. */
+  walletSeeds: { unshielded: string; dust: string; shielded: string };
+};
+
 export type TestVectors = {
   keyDerivation: KeyDerivationVector[];
   addresses: AddressVector[];
+  seedDerivation: SeedDerivationVector[];
 };
 
 export const networkIds = [null, 'my-private-net', 'devnet', 'testnet', 'my-private-net-5']; //null stands for mainnet
@@ -165,9 +181,59 @@ export function generateAddressFormattingTestVectors(seeds: Buffer[]): AddressVe
   });
 }
 
+/**
+ * The master seeds the per-wallet seed derivation is stated over.
+ *
+ * Kept apart from `seeds` above deliberately: those are per-wallet seeds, the input to every other derivation in this
+ * package, and this walk produces them rather than consuming them. The first entry is the one
+ * `@midnightntwrk/wallet-sdk-hd` pins its own tests against, so the two cannot come to disagree about the same master
+ * seed.
+ */
+export const masterSeeds = [
+  Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
+  Buffer.alloc(32, 0),
+  Buffer.alloc(32, 255),
+  Buffer.from('b49408db310c043ab736fb57a98e15c8cedbed4c38450df3755ac9726ee14d0c', 'hex'), //random
+  Buffer.from('06004625b6cb2ccead21b15fee2a940c404365702b697b4721bfeecfc6b1b15e', 'hex'), //random
+  Buffer.from('215ca8a6923ec73f241c92ef702ccfc277aa5856bc94f59afa7e82ec94547850', 'hex'), //random
+];
+
+/** Where in the tree the seeds are taken from — the first address, and enough others to pin both levels. */
+export const seedPlacements = [
+  { account: 0, addressIndex: 0 },
+  { account: 0, addressIndex: 1 },
+  { account: 1, addressIndex: 0 },
+  { account: 2, addressIndex: 5 },
+];
+
+export function generateSeedDerivationTestVectors(masterSeeds: Buffer[]): SeedDerivationVector[] {
+  const placed = masterSeeds.flatMap((masterSeed) => seedPlacements.map((placement) => ({ masterSeed, ...placement })));
+  return placed.map(({ masterSeed, account, addressIndex }) => {
+    const seedsByRole = Object.fromEntries(
+      Object.entries(Roles).map(([name, role]) => {
+        const path = derivationPath(account, role, addressIndex);
+        return [name, { path, seed: seedAt(masterSeed, path).toString('hex') }];
+      }),
+    ) as SeedDerivationVector['seedsByRole'];
+    const wallet = walletSeeds(masterSeed, { account, index: addressIndex });
+    return {
+      masterSeed: masterSeed.toString('hex'),
+      account,
+      addressIndex,
+      seedsByRole,
+      walletSeeds: {
+        unshielded: wallet.unshielded.toString('hex'),
+        dust: wallet.dust.toString('hex'),
+        shielded: wallet.shielded.toString('hex'),
+      },
+    };
+  });
+}
+
 export function generateTestVectors(seeds: Buffer[]): TestVectors {
   return {
     keyDerivation: generateKeyDerivationTestVectors(seeds),
     addresses: generateAddressFormattingTestVectors(seeds),
+    seedDerivation: generateSeedDerivationTestVectors(masterSeeds),
   };
 }

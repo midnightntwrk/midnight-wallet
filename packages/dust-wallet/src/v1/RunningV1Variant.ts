@@ -26,13 +26,12 @@ import {
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import {
   type DustSecretKey,
-  nativeToken,
   type Signature,
   type SignatureVerifyingKey,
   type FinalizedTransaction,
   type UnprovenTransaction,
-} from '@midnightntwrk/ledger-v9';
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+} from '@midnight-ntwrk/ledger-v8';
+import { ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
@@ -43,9 +42,8 @@ import {
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
-import { type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
-import { type BlockData } from './SyncSchema.js';
-import { type SimulatorState } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { type BlockData, type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
+import { type V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import {
   type CoinsAndBalancesCapability,
   type CoinSelection,
@@ -69,8 +67,26 @@ const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   return [StateChange.ProgressUpdate({ sourceGap, applyGap })];
 };
 
-const protocolVersionChange = (previous: CoreWallet, current: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
-  return previous.protocolVersion != current.protocolVersion
+/**
+ * The version signals this variant puts on its state stream.
+ *
+ * @remarks
+ *   Two of them, for two different situations. A transition is the ordinary one: the state moved to a version the variant
+ *   may or may not own, and the runtime decides. The healing emission covers restore: a snapshot taken between the
+ *   moment sync annotated an out-of-range version and the moment the runtime acted on it comes back with a version this
+ *   variant does not own and no transition to announce it, so it would sit there forever. Announcing it on the first
+ *   observation is what forward-migrates such a snapshot.
+ */
+const protocolVersionChange = (
+  previous: CoreWallet,
+  current: CoreWallet,
+  isInitial: boolean,
+  activationRange: ProtocolVersion.ProtocolVersion.Range,
+): StateChange.StateChange<CoreWallet>[] => {
+  const transitioned = previous.protocolVersion != current.protocolVersion;
+  const strandedOutsideRange = isInitial && !ProtocolVersion.withinRange(current.protocolVersion, activationRange);
+
+  return transitioned || strandedOutsideRange
     ? [
         StateChange.VersionChange({
           change: VersionChangeType.Version({
@@ -98,7 +114,7 @@ export declare namespace RunningV1Variant {
 
 export const V1Tag: unique symbol = Symbol('V1');
 
-export type DefaultRunningV1 = RunningV1Variant<string, SimulatorState, FinalizedTransaction, DustSecretKey>;
+export type DefaultRunningV1 = RunningV1Variant<string, V8.SimulatorState, FinalizedTransaction, DustSecretKey>;
 
 export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux> implements Variant.RunningVariant<
   typeof V1Tag,
@@ -128,18 +144,27 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
         context.stateRef.changes.pipe(
-          Stream.mapAccum(initialState, (previous: CoreWallet, current: CoreWallet) => {
-            return [current, [previous, current]] as const;
-          }),
+          // The accumulator carries the "have we seen anything yet" flag alongside the previous state: the first
+          // observation is the only one that can be a restored state nobody has inspected against this variant's
+          // range yet, and `SubscriptionRef.changes` replays the current value, so it is exactly this element.
+          Stream.mapAccum(
+            { previous: initialState, isInitial: true },
+            (seen, current: CoreWallet) =>
+              [{ previous: current, isInitial: false }, [seen.previous, current, seen.isInitial] as const] as const,
+          ),
         ),
       ),
       Stream.mapConcat(
-        ([previous, current]: readonly [CoreWallet, CoreWallet]): StateChange.StateChange<CoreWallet>[] => {
+        ([previous, current, isInitial]: readonly [
+          CoreWallet,
+          CoreWallet,
+          boolean,
+        ]): StateChange.StateChange<CoreWallet>[] => {
           // TODO: emit progress only upon actual change
           return [
             StateChange.State({ state: current }),
             ...progress(current),
-            ...protocolVersionChange(previous, current),
+            ...protocolVersionChange(previous, current, isInitial, context.activationRange),
           ];
         },
       ),
@@ -166,12 +191,24 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     );
   }
 
+  /**
+   * Runs one sync pass to completion, rather than forking it into the background.
+   *
+   * @remarks
+   *   Only meaningful with a sync service whose stream terminates. The indexer-event service this variant defaults to is
+   *   an open subscription, so use {@link startSyncInBackground} with it; this entry point exists for a finite service
+   *   supplied through the builder's `withSync`. It shares {@link startSync}'s lock, so a pass started while a
+   *   background sync is running returns immediately without touching the state.
+   */
   sync(startAux: TStartAux): Effect.Effect<void, WalletError> {
     return this.startSync(startAux).pipe(Stream.runScoped(Sink.drain), Effect.scoped);
   }
 
   startSync(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
     return pipe(
+      // One sync at a time per variant: a second start would open its own subscription against the same state ref
+      // and apply every update twice. The loser of the race gets an empty stream, and only the winner releases the
+      // lock — on the way out of its own stream, whether it ended or failed.
       Ref.modify(this.#syncLock, (isLocked) => [!isLocked, true] as const),
       Stream.fromEffect,
       Stream.flatMap((acquired) => {
@@ -186,7 +223,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
             SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
               Effect.try({
                 try: () => {
-                  const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(state, update);
+                  const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(
+                    state,
+                    update,
+                    this.#context.activationRange,
+                  );
                   return [changesResult, newState] as const;
                 },
                 catch: (err) =>
@@ -217,10 +258,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                               ),
                             ),
                             Effect.catchAllCause((cause) =>
-                              // A sustained indexer outage (longer than getTransactionDetails' retry window) still lands
-                              // here. applyUpdate has already advanced appliedIndex, so this change.source won't be
-                              // re-processed — the dust section is permanently lost. Surface that as a structured error
-                              // carrying the tx hash, not a silent Console.error defect.
+                              // A sustained indexer outage (longer than getTransactionDetails' retry window) still
+                              // lands here. applyUpdate has already advanced appliedIndex, so this change.source won't
+                              // be re-processed — the dust section is permanently lost. Surface that as a structured
+                              // error carrying the tx hash, not a silent Console.error defect.
                               Effect.logError(cause, `Failed to record dust tx-history section for ${change.source}`),
                             ),
                           ),
@@ -248,7 +289,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
   ): Effect.Effect<UnprovenTransaction, WalletError> {
-    if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
+    if (nightUtxos.some((utxo) => utxo.type !== Token.night)) {
       return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
     }
     return Effect.Do.pipe(
@@ -281,7 +322,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     isRegistration: boolean,
   ): Effect.Effect<NightUtxoSplitForDustRegistration, WalletError> {
-    if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
+    if (nightUtxos.some((utxo) => utxo.type !== Token.night)) {
       return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
     }
     return Effect.gen(this, function* () {

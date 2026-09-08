@@ -154,10 +154,6 @@ export function registerDustHealthchecks({
         const balancedTransactionRecipe = await wallet.wallet.balanceUnprovenTransaction(
           dustDeregistrationRecipe.transaction,
           {
-            shieldedSecretKeys: wallet.shieldedSecretKeys,
-            dustSecretKey: wallet.dustSecretKey,
-          },
-          {
             ttl: new Date(Date.now() + 30 * 60 * 1000),
           },
         );

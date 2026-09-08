@@ -30,6 +30,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import * as PendingTransactions from './pendingTransactions.js';
+import { type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import type * as rx from 'rxjs';
 import { HttpQueryClient, type QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { TransactionStatus, type TransactionStatusQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
@@ -39,8 +40,23 @@ export type PendingTransactionsService<TTransaction> = {
   start: () => Promise<void>;
   stop: () => Promise<void>;
   state: () => rx.Observable<PendingTransactions.PendingTransactions<TTransaction>>;
-  addPendingTransaction: (tx: TTransaction) => Promise<void>;
+  /**
+   * Records a transaction as pending, stamped with the protocol version the chain had reached when it was authored.
+   *
+   * @param tx The transaction.
+   * @param protocolVersion The observed chain version, or `Option.none()` when no wallet has reported one yet.
+   */
+  addPendingTransaction: (
+    tx: TTransaction,
+    protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
+  ) => Promise<void>;
   clear: (tx: TTransaction) => Promise<void>;
+  /**
+   * Gives up on every pending transaction whose protocol version epoch the chain has moved past.
+   *
+   * @param chainNow The protocol version the wallets have reached.
+   */
+  orphanBeyond: (chainNow: ProtocolVersion.ProtocolVersion) => Promise<void>;
 };
 
 export type IndexerClientConnection = {
@@ -53,7 +69,7 @@ export type DefaultPendingTransactionsServiceConfiguration = {
 };
 
 export type InitParams<TTransaction> = {
-  txTrait: PendingTransactions.TransactionTrait<TTransaction>;
+  txTraits: PendingTransactions.VersionedTransactionTrait<TTransaction>;
   initialState?: PendingTransactions.PendingTransactions<TTransaction>;
   configuration: DefaultPendingTransactionsServiceConfiguration;
 };
@@ -67,14 +83,14 @@ export class PendingTransactionsServiceImpl<TTransaction> implements PendingTran
 
   static restore<TTransaction>(
     data: string,
-    txTrait: PendingTransactions.TransactionTrait<TTransaction>,
+    txTraits: PendingTransactions.VersionedTransactionTrait<TTransaction>,
     configuration: DefaultPendingTransactionsServiceConfiguration,
   ): Promise<PendingTransactionsServiceImpl<TTransaction>> {
     return pipe(
-      PendingTransactions.deserialize(data, txTrait),
+      PendingTransactions.deserialize(data, txTraits),
       EitherOps.toEffect,
       Effect.andThen((state) =>
-        PendingTransactionsServiceImpl.initEffect({ txTrait, initialState: state, configuration }),
+        PendingTransactionsServiceImpl.initEffect({ txTraits, initialState: state, configuration }),
       ),
       Effect.runPromise,
     );
@@ -85,7 +101,7 @@ export class PendingTransactionsServiceImpl<TTransaction> implements PendingTran
   ): Effect.Effect<PendingTransactionsServiceImpl<TTransaction>> {
     return Effect.gen(function* () {
       const service = new PendingTransactionsServiceEffectImpl<TTransaction>(
-        initParams.txTrait,
+        initParams.txTraits,
         initParams.initialState,
       );
       const scope = yield* Scope.make();
@@ -108,12 +124,19 @@ export class PendingTransactionsServiceImpl<TTransaction> implements PendingTran
     this.#configuration = configuration;
   }
 
-  addPendingTransaction(tx: TTransaction): Promise<void> {
-    return this.#effectService.addPendingTransaction(tx).pipe(Effect.runPromise);
+  addPendingTransaction(
+    tx: TTransaction,
+    protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
+  ): Promise<void> {
+    return this.#effectService.addPendingTransaction(tx, protocolVersion).pipe(Effect.runPromise);
   }
 
   clear(tx: TTransaction): Promise<void> {
     return this.#effectService.clear(tx).pipe(Effect.runPromise);
+  }
+
+  orphanBeyond(chainNow: ProtocolVersion.ProtocolVersion): Promise<void> {
+    return this.#effectService.orphanBeyond(chainNow).pipe(Effect.runPromise);
   }
 
   start(): Promise<void> {
@@ -142,33 +165,37 @@ export class PendingTransactionsServiceImpl<TTransaction> implements PendingTran
 export type PendingTransactionsServiceEffect<TTransaction> = {
   startPolling: (ticks: Stream.Stream<unknown>) => Effect.Effect<void, Error, QueryClient | Scope.Scope | Clock.Clock>;
   state: () => Stream.Stream<PendingTransactions.PendingTransactions<TTransaction>>;
-  addPendingTransaction: (tx: TTransaction) => Effect.Effect<void, never, never>;
+  addPendingTransaction: (
+    tx: TTransaction,
+    protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
+  ) => Effect.Effect<void, never, never>;
   clear: (tx: TTransaction) => Effect.Effect<void, never, never>;
+  orphanBeyond: (chainNow: ProtocolVersion.ProtocolVersion) => Effect.Effect<void, never, never>;
 };
 
 export class PendingTransactionsServiceEffectImpl<
   TTransaction,
 > implements PendingTransactionsServiceEffect<TTransaction> {
   #state: SubscriptionRef.SubscriptionRef<PendingTransactions.PendingTransactions<TTransaction>>;
-  #txTrait: PendingTransactions.TransactionTrait<TTransaction>;
+  #txTraits: PendingTransactions.VersionedTransactionTrait<TTransaction>;
 
   static restore<TTransaction>(
     data: string,
-    txTrait: PendingTransactions.TransactionTrait<TTransaction>,
+    txTraits: PendingTransactions.VersionedTransactionTrait<TTransaction>,
   ): Effect.Effect<PendingTransactionsServiceEffectImpl<TTransaction>, ParseResult.ParseError> {
     return pipe(
       data,
-      (data) => PendingTransactions.deserialize<TTransaction>(data, txTrait),
+      (data) => PendingTransactions.deserialize<TTransaction>(data, txTraits),
       EitherOps.toEffect,
-      Effect.map((state) => new PendingTransactionsServiceEffectImpl<TTransaction>(txTrait, state)),
+      Effect.map((state) => new PendingTransactionsServiceEffectImpl<TTransaction>(txTraits, state)),
     );
   }
 
   constructor(
-    txTrait: PendingTransactions.TransactionTrait<TTransaction>,
+    txTraits: PendingTransactions.VersionedTransactionTrait<TTransaction>,
     initialState?: PendingTransactions.PendingTransactions<TTransaction>,
   ) {
-    this.#txTrait = txTrait;
+    this.#txTraits = txTraits;
     this.#state = SubscriptionRef.make<PendingTransactions.PendingTransactions<TTransaction>>(
       initialState ?? PendingTransactions.empty(),
     ).pipe(Effect.runSync); // Should not be here, but otherwise initialization would be too involved
@@ -185,7 +212,9 @@ export class PendingTransactionsServiceEffectImpl<
       Stream.mapConcatEffect((item) => {
         return Effect.gen(this, function* () {
           const now: DateTime.Utc = yield* DateTime.now;
-          const result = yield* this.queryForStatus(item.tx);
+          const trait = PendingTransactions.traitForVersion(this.#txTraits, item.protocolVersion);
+          if (Option.isNone(trait)) return [];
+          const result = yield* this.queryForStatus(item.tx, trait.value);
 
           return Option.match(result, {
             onSome: (status) => [{ ...item, result: status }],
@@ -194,7 +223,7 @@ export class PendingTransactionsServiceEffectImpl<
                 status: 'FAILURE',
                 segments: [],
               };
-              return this.#txTrait.hasTTLExpired(item.tx, item.creationTime, now)
+              return trait.value.hasTTLExpired(item.tx, item.creationTime, now)
                 ? [{ ...item, result: failedResult }]
                 : [];
             },
@@ -219,17 +248,28 @@ export class PendingTransactionsServiceEffectImpl<
     );
   }
 
-  addPendingTransaction(tx: TTransaction): Effect.Effect<void> {
+  addPendingTransaction(
+    tx: TTransaction,
+    protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
+  ): Effect.Effect<void> {
     return SubscriptionRef.updateEffect(this.#state, (state) => {
       return DateTime.now.pipe(
-        Effect.andThen((now) => PendingTransactions.addPendingTransaction(state, tx, now, this.#txTrait)),
+        Effect.andThen((now) =>
+          PendingTransactions.addPendingTransaction(state, tx, now, this.#txTraits, protocolVersion),
+        ),
       );
     });
   }
 
   clear(tx: TTransaction): Effect.Effect<void> {
     return SubscriptionRef.update(this.#state, (state) => {
-      return PendingTransactions.clear(state, tx, this.#txTrait);
+      return PendingTransactions.clear(state, tx, this.#txTraits);
+    });
+  }
+
+  orphanBeyond(chainNow: ProtocolVersion.ProtocolVersion): Effect.Effect<void> {
+    return SubscriptionRef.update(this.#state, (state) => {
+      return PendingTransactions.orphanBeyond(state, this.#txTraits, chainNow);
     });
   }
 
@@ -239,18 +279,20 @@ export class PendingTransactionsServiceEffectImpl<
         return this.clear(tx);
       case 'FAILURE':
       case 'PARTIAL_SUCCESS':
+      case 'ORPHANED_BY_FORK':
         return SubscriptionRef.update(this.#state, (state) => {
-          return PendingTransactions.saveResult(state, tx, result, this.#txTrait);
+          return PendingTransactions.saveResult(state, tx, result, this.#txTraits);
         });
     }
   }
 
   private queryForStatus(
     tx: TTransaction,
+    txTrait: PendingTransactions.TransactionTrait<TTransaction>,
   ): Effect.Effect<Option.Option<PendingTransactions.TransactionResult>, Error, QueryClient> {
-    return Effect.gen(this, function* () {
+    return Effect.gen(function* () {
       const statusQuery = yield* TransactionStatus;
-      const result = yield* statusQuery({ transactionId: this.#txTrait.firstId(tx) }).pipe(
+      const result = yield* statusQuery({ transactionId: txTrait.firstId(tx) }).pipe(
         Effect.catchAll((error) => {
           const fallback: TransactionStatusQuery = { transactions: [] };
           return pipe(
@@ -275,7 +317,7 @@ export class PendingTransactionsServiceEffectImpl<
             return Option.none();
           }
 
-          if (this.#txTrait.areAllTxIdsIncluded(tx, res.identifiers)) {
+          if (txTrait.areAllTxIdsIncluded(tx, res.identifiers)) {
             return Option.some<PendingTransactions.TransactionResult>({
               status: res.transactionResult.status,
               segments: res.transactionResult.segments ?? [],
