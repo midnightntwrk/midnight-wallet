@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Snapshots written by the last pre-fork release of the SDK, replayed on this build. See
+// Snapshots written by the last SDK release on the ledger-v8 line, replayed on this build. See
 // `scripts/cross-release-corpus/README.md` for what they are and how they are regenerated; the short version is that
 // every other serialization test round-trips a snapshot this code wrote a moment earlier, which cannot see a format
 // that drifted between releases.
@@ -35,7 +35,7 @@ const restored = (name: string) => {
   return result.right;
 };
 
-describe('a shielded snapshot written by the last pre-fork release', () => {
+describe('a shielded snapshot written by the last ledger-v8 release', () => {
   it('records which release wrote it, so a stale fixture cannot pass as a parity check', () => {
     expect(provenance.generatedFrom.sdk).toMatch(/^1\./);
     expect(provenance.generatedFrom.ledger).toMatch(/^8\./);
@@ -45,7 +45,7 @@ describe('a shielded snapshot written by the last pre-fork release', () => {
     expect([...restored('shielded-empty').state.coins].length).toBe(0);
   });
 
-  it('carries the coins the pre-fork release held, at their places in the tree', () => {
+  it('carries the coins that release held, at their places in the tree', () => {
     // The ledger-v8 commitment tree, read by a build whose head variant is on ledger-v9. Positions as well as values,
     // because a coin at the wrong index cannot be spent even when its value is right.
     const wallet = restored('shielded-funded');

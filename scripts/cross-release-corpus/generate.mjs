@@ -1,7 +1,7 @@
-// Regenerates the cross-release fixture corpus from a PINNED pre-fork release of the SDK.
+// Regenerates the cross-release fixture corpus from a PINNED ledger-v8 release of the SDK.
 //
 // Why a separate install rather than a workspace package: the fixtures have to be written by the SDK as it actually
-// shipped before the fork, so this directory pins that release and resolves it from npm. The repository's own build
+// shipped on ledger-v8, so this directory pins that release and resolves it from npm. The repository's own build
 // must never be on the import path here, or the corpus would only ever prove that the current code agrees with itself.
 //
 // Every fixture records the versions that produced it, so a stale file cannot masquerade as a passing parity check.

@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Snapshots written by the last pre-fork release of the SDK, replayed on this build. See
+// Snapshots written by the last SDK release on the ledger-v8 line, replayed on this build. See
 // `scripts/cross-release-corpus/README.md`; the short version is that every other serialization test round-trips a
 // snapshot this code wrote a moment earlier, which cannot see a format that drifted between releases.
 //
-// Only the empty shape is here so far. Generating a *funded* dust snapshot on the pre-fork release means driving a
+// Only the empty shape is here so far. Generating a *funded* dust snapshot on that release means driving a
 // real dust chain through that release's simulator, since a dust UTXO and the generation entry behind it are produced
 // by a registration rather than constructed; that is worth doing and is not done yet.
 import { readFileSync } from 'node:fs';
@@ -32,13 +32,13 @@ const provenance = JSON.parse(readFileSync(join(corpus, 'provenance.json'), 'utf
   generatedFrom: { sdk: string; ledger: string };
 };
 
-describe('a Dust snapshot written by the last pre-fork release', () => {
+describe('a Dust snapshot written by the last ledger-v8 release', () => {
   it('records which release wrote it, so a stale fixture cannot pass as a parity check', () => {
     expect(provenance.generatedFrom.sdk).toMatch(/^1\./);
     expect(provenance.generatedFrom.ledger).toMatch(/^8\./);
   });
 
-  it('restores on this build, with the identity and the network the pre-fork release wrote', () => {
+  it('restores on this build, with the identity and the network that release wrote', () => {
     const wallet = pipe(
       makeDefaultV1SerializationCapability().deserialize(null, fixture('dust-empty')),
       EitherOps.getOrThrowLeft,
