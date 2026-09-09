@@ -1,5 +1,20 @@
 # @midnightntwrk/wallet-sdk-facade
 
+## 5.0.0-beta.4
+
+### Patch Changes
+
+- 3ccc26e: fix(facade): build both legs of a mixed shielded/unshielded swap in `initSwap` (#554)
+
+  `WalletFacade.initSwap` only built the leg matching the _input_ kind, so a mixed swap (e.g. shielded input →
+  unshielded output) silently dropped the counter-leg's requested output and returned a one-legged transaction that
+  still signed, proved, balanced and submitted. Each leg is now built whenever its part is present — a leg may be all
+  give (inputs) or all want (outputs) — so mixed swaps carry both the give and want sides.
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-beta.4
+
 ## 5.0.0-beta.3
 
 ### Major Changes
