@@ -153,3 +153,21 @@ export const syncedStateOrExplanation = async (
     ? describeLiveness(progress.indexerLiveness)
     : 'The indexer subscription is down; the wallet is reconnecting.';
 };
+
+// Every verdict, described. Run as a script, this prints what a user would see in each state. It is also what the
+// snippet test snapshots, so the wording above cannot drift unnoticed — and a snippet that only exported functions
+// produced no output to snapshot at all.
+const examples: readonly IndexerLiveness.IndexerLiveness[] = [
+  IndexerLiveness.Unknown(),
+  IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_002n }),
+  IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n }),
+  IndexerLiveness.Ahead({ indexerHeight: 1_050n, finalizedHeight: 1_000n, overshoot: 50n }),
+  IndexerLiveness.Unavailable({ consecutiveFailures: 3, lastError: 'Poll abandoned: a read did not complete in time' }),
+  IndexerLiveness.Skipped({ reason: 'no-node-configured' }),
+  IndexerLiveness.WrongNetwork({ indexerGenesisHash: 'ab'.repeat(32), nodeGenesisHash: `0x${'cd'.repeat(32)}` }),
+];
+
+examples.forEach((verdict) => {
+  console.log(`${verdict._tag} — blocks sync completion: ${IndexerLiveness.blocksSyncCompletion(verdict)}`);
+  console.log(`  ${describeLiveness(verdict)}`);
+});
