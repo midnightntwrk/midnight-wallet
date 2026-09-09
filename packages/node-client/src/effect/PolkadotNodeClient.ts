@@ -315,7 +315,9 @@ export class PolkadotNodeClient implements NodeClient.Service {
       () =>
         pipe(
           this.ensureConnection(),
-          Effect.andThen(() => Effect.promise(() => this.api.rpc.chain.getBlock(this.api.genesisHash))),
+          // `tryPromise` rather than `promise`: a rejected RPC has to reach the `mapError` below and the caller's
+          // `catchTag`, not arrive as a defect that bypasses both and kills the fibre as a crash.
+          Effect.andThen(() => Effect.tryPromise(() => this.api.rpc.chain.getBlock(this.api.genesisHash))),
           // https://polkadot.js.org/docs/api/cookbook/blocks/#how-do-i-view-extrinsic-information
           Effect.map(({ block }) => ({
             transactions: block.extrinsics

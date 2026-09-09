@@ -238,6 +238,21 @@ describe('PolkadotNodeClient lifecycle', () => {
     expect(result.transactions).toEqual([]);
   });
 
+  it('getGenesis surfaces a rejected RPC as a ConnectionError rather than a defect', async () => {
+    // A rejection inside `Effect.promise` is a defect: it bypasses the `mapError` that names the failure and any
+    // `catchTag('ConnectionError')` in the caller, killing that fibre as a crash. Every other RPC on this client goes
+    // through `tryPromise` for exactly that reason; this one must too.
+    const { client } = await makeClient();
+    mockApi.rpc.chain.getBlock.mockRejectedValue(new Error('node went away mid-request'));
+
+    const exit = await Effect.runPromiseExit(client.getGenesis());
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none();
+    expect(Option.isSome(failure)).toBe(true);
+    expect(Option.getOrThrow(failure)._tag).toBe('ConnectionError');
+  });
+
   it('does not disconnect a shared connection while another operation is in flight', async () => {
     const { client } = await makeClient();
     mockApi.disconnect.mockClear();
