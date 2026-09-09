@@ -22,3 +22,4 @@ export * from './network.js';
 export * from './seeds.js';
 export * from './primitives.js';
 export * from './wallet.js';
+export * from './dust-sync.js';

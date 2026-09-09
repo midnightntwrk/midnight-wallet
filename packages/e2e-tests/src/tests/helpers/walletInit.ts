@@ -110,11 +110,14 @@ const restoreDustWallet = async (
   path: string,
   walletConfig: DefaultDustConfiguration,
   readIfExists: (path: string) => Promise<string | undefined>,
+  // Defaults to the event-based DustWallet. Pass a factory (e.g. one built with makeEventLessSyncService) to
+  // restore the snapshot into a projections-synced wallet instead.
+  dustWallet: CustomWallets['dustWallet'] = DustWallet,
 ) => {
   try {
     const serialized = await readIfExists(path);
     if (serialized) {
-      const DustInstance = DustWallet({
+      const DustInstance = dustWallet({
         ...walletConfig,
         costParameters: walletConfig?.costParameters ?? {
           feeBlocksMargin: 5,
@@ -135,6 +138,7 @@ export const provideWallet = async (
   filename: string,
   seed: string,
   fixture: TestContainersFixture,
+  customWallets: CustomWallets = {},
 ): Promise<WalletInit> => {
   // Single shared tx-history storage so all three sub-wallets and the facade read/write
   // the same instance; otherwise shielded/unshielded writes go to a storage the facade
@@ -175,12 +179,18 @@ export const provideWallet = async (
   const [restoredShielded, restoredUnshielded, restoredDust] = await Promise.all([
     restoreShieldedWallet(`${directoryPath}/shielded-${filename}`, Wallet, readIfExists),
     restoreUnshieldedWallet(`${directoryPath}/unshielded-${filename}`, seed, fixture, readIfExists, txHistoryStorage),
-    restoreDustWallet(`${directoryPath}/dust-${filename}`, { ...walletConfig, ...dustWalletConfig }, readIfExists),
+    restoreDustWallet(
+      `${directoryPath}/dust-${filename}`,
+      { ...walletConfig, ...dustWalletConfig },
+      readIfExists,
+      customWallets.dustWallet,
+    ),
   ]);
 
   if (!restoredShielded || !restoredUnshielded || !restoredDust) {
+    // A cold cache must not silently downgrade to the default sync — the caller asked for a specific one.
     logger.info('Building wallet facade from scratch');
-    return initWalletWithSeed(seed, fixture);
+    return initWalletWithSeed(seed, fixture, 'schnorr', customWallets);
   } else {
     const restoredWallet = await WalletFacade.init({
       configuration: {
@@ -191,7 +201,7 @@ export const provideWallet = async (
       unshielded: () => restoredUnshielded,
       dust: () => restoredDust,
     });
-    await restoredWallet.start(seeds);
+    await restoredWallet.start(seeds, { manualSync: customWallets.manualSync ?? false });
     // check if wallet is syncing correctly
     await waitForSyncProgress(restoredWallet);
     const restoredWalletState = await rx.firstValueFrom(restoredWallet.state());
@@ -201,7 +211,7 @@ export const provideWallet = async (
     if ((applyGap ?? 0) < 0) {
       logger.warn('Unable to sync restored wallet. Building wallet facade from scratch');
       await restoredWallet.stop();
-      return initWalletWithSeed(seed, fixture);
+      return initWalletWithSeed(seed, fixture, 'schnorr', customWallets);
     } else {
       logger.info('Successfully restored wallet facade.');
       return { wallet: restoredWallet, shieldedSecretKeys, dustSecretKey, seeds, unshieldedKeystore };
@@ -274,6 +284,8 @@ export type CustomWallets = {
    */
   dustWallet?: (config: DefaultDustConfiguration) => {
     startWithSeed(seed: Uint8Array, dustParameters?: ledger.DustParameters): DustWalletAPI | Promise<DustWalletAPI>;
+    /** Also required of the composition, because `provideWallet` restores a snapshot into it. */
+    restore(serializedState: string): DustWalletAPI;
   };
   manualSync?: boolean;
 };

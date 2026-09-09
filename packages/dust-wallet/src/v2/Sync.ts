@@ -594,112 +594,119 @@ export const doEventlessSync = (
   indexerSyncService: IndexerSyncService,
   ledgerParametersCodecs: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters> = defaultLedgerParametersCodecs,
 ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
-  return Stream.asyncEffect((emit) =>
-    Effect.gen(function* () {
-      const latestBlock = yield* indexerSyncService.blockData();
-      const maxCommitmentTreeIndex = latestBlock.dustCommitmentEndIndex - 1;
-      const maxGeneratingTreeIndex = latestBlock.dustGenerationEndIndex - 1;
-      const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree - 1n;
-      const lastSyncedGenerationIndex = state.state.generatingTreeFirstFree - 1n;
-      const lastSyncedBlockHeight = state.progress.highestIndex;
+  return Stream.asyncEffect(
+    (emit) =>
+      Effect.gen(function* () {
+        const latestBlock = yield* indexerSyncService.blockData();
+        const maxCommitmentTreeIndex = latestBlock.dustCommitmentEndIndex - 1;
+        const maxGeneratingTreeIndex = latestBlock.dustGenerationEndIndex - 1;
+        const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree - 1n;
+        const lastSyncedGenerationIndex = state.state.generatingTreeFirstFree - 1n;
+        const lastSyncedBlockHeight = state.progress.highestIndex;
 
-      const highestInitialIndex =
-        maxGeneratingTreeIndex + maxCommitmentTreeIndex + state.state.nullifiers.size * maxCommitmentTreeIndex;
-      const initialAppliedIndex =
-        Number(lastSyncedGenerationIndex) +
-        Number(lastSyncedCommitmentIndex) +
-        state.state.nullifiers.size * Number(maxCommitmentTreeIndex);
+        const highestInitialIndex =
+          maxGeneratingTreeIndex + maxCommitmentTreeIndex + state.state.nullifiers.size * maxCommitmentTreeIndex;
+        const initialAppliedIndex =
+          Number(lastSyncedGenerationIndex) +
+          Number(lastSyncedCommitmentIndex) +
+          state.state.nullifiers.size * Number(maxCommitmentTreeIndex);
 
-      // What this pass resumed from, in one line. A projections pass is a single snapshot fetch, so when it comes back
-      // with less than expected the only question worth asking is where it started — and the three cursors that decide
-      // that are otherwise invisible to anything outside this function, including to a wallet that arrived here by
-      // migration and is running its first pass on the far side of a fork.
-      yield* Effect.logDebug(
-        `Projections sync resuming from block height ${lastSyncedBlockHeight}, generation index` +
-          ` ${lastSyncedGenerationIndex}, commitment index ${lastSyncedCommitmentIndex}; chain at block` +
-          ` ${latestBlock.height} with generation index ${maxGeneratingTreeIndex} and commitment index` +
-          ` ${maxCommitmentTreeIndex}`,
-      );
+        // What this pass resumed from, in one line. A projections pass is a single snapshot fetch, so when it comes back
+        // with less than expected the only question worth asking is where it started — and the three cursors that decide
+        // that are otherwise invisible to anything outside this function, including to a wallet that arrived here by
+        // migration and is running its first pass on the far side of a fork.
+        yield* Effect.logDebug(
+          `Projections sync resuming from block height ${lastSyncedBlockHeight}, generation index` +
+            ` ${lastSyncedGenerationIndex}, commitment index ${lastSyncedCommitmentIndex}; chain at block` +
+            ` ${latestBlock.height} with generation index ${maxGeneratingTreeIndex} and commitment index` +
+            ` ${maxCommitmentTreeIndex}`,
+        );
 
-      yield* Effect.promise(() =>
-        emit.single(ProgressUpdate({ highestRelevantIndex: highestInitialIndex, appliedIndex: initialAppliedIndex })),
-      );
+        yield* Effect.promise(() =>
+          emit.single(ProgressUpdate({ highestRelevantIndex: highestInitialIndex, appliedIndex: initialAppliedIndex })),
+        );
 
-      const rawGenerations = yield* pipe(
-        indexerSyncService.subscribeDustGenerations(
-          DustAddress.encodePublicKey(state.networkId, secretKey.publicKey),
-          Number(lastSyncedBlockHeight),
-          maxGeneratingTreeIndex,
-          latestBlock,
-        ),
-        Stream.runCollect,
-        Effect.map(Chunk.toArray),
-      );
-      const dustGenerationUpdates = DustGenerationsSyncUpdate.create(
-        rawGenerations,
-        secretKey,
-        state.publicKey,
-        lastSyncedGenerationIndex,
-      );
-
-      const allNullifiers = dustGenerationUpdates.newGenerations
-        .map((n) => n.dustNullifier)
-        .concat([...state.state.nullifiers.keys(), ...state.pendingDust.map((d) => d.nullifier)]);
-
-      const highestRelevantIndex =
-        maxGeneratingTreeIndex + maxCommitmentTreeIndex + allNullifiers.length * maxCommitmentTreeIndex;
-
-      // increase the highestRelevantIndex as our nullifier list got expanded by new generations
-      // appliedIndex now reflects the completed generation tree sync
-      yield* Effect.promise(() =>
-        emit.single(ProgressUpdate({ highestRelevantIndex, appliedIndex: maxGeneratingTreeIndex })),
-      );
-
-      const newUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
-      const { nextUtxos: finalUtxos, nextSpentUtxos: finalSpentUtxos } = yield* resolveNullifierSpends(
-        allNullifiers,
-        newUtxos,
-        CoreWallet.pendingDustToMap(state.pendingDust),
-        state.state,
-        secretKey,
-        latestBlock,
-        dustGenerationUpdates,
-        indexerSyncService,
-        anonymityLevel,
-        ledgerParametersCodecs,
-        emit,
-      );
-
-      yield* Effect.promise(() =>
-        emit.single(
-          ProgressUpdate({ appliedIndex: maxGeneratingTreeIndex + allNullifiers.length * maxCommitmentTreeIndex }),
-        ),
-      );
-
-      // lastSyncedCommitmentIndex out of maxCommitmentTreeIndex
-      const collapsedCommitments = yield* loadCollapsedCommitments(
-        Number(lastSyncedCommitmentIndex),
-        maxCommitmentTreeIndex,
-        finalUtxos,
-        indexerSyncService,
-      );
-
-      yield* Effect.promise(() =>
-        emit.single(
-          StateUpdate({
-            dustGenerations: dustGenerationUpdates,
-            spentUtxos: finalSpentUtxos,
-            newUtxos: finalUtxos,
-            collapsedCommitments,
+        const rawGenerations = yield* pipe(
+          indexerSyncService.subscribeDustGenerations(
+            DustAddress.encodePublicKey(state.networkId, secretKey.publicKey),
+            Number(lastSyncedBlockHeight),
+            maxGeneratingTreeIndex,
             latestBlock,
-          }),
-        ),
-      );
+          ),
+          Stream.runCollect,
+          Effect.map(Chunk.toArray),
+        );
+        const dustGenerationUpdates = DustGenerationsSyncUpdate.create(
+          rawGenerations,
+          secretKey,
+          state.publicKey,
+          lastSyncedGenerationIndex,
+        );
 
-      // NOTE: appliedIndex = highestRelevantIndex means we're fully synced
-      yield* Effect.promise(() => emit.single(ProgressUpdate({ appliedIndex: highestRelevantIndex })));
-      yield* Effect.promise(() => emit.end());
-    }),
+        const allNullifiers = dustGenerationUpdates.newGenerations
+          .map((n) => n.dustNullifier)
+          .concat([...state.state.nullifiers.keys(), ...state.pendingDust.map((d) => d.nullifier)]);
+
+        const highestRelevantIndex =
+          maxGeneratingTreeIndex + maxCommitmentTreeIndex + allNullifiers.length * maxCommitmentTreeIndex;
+
+        // increase the highestRelevantIndex as our nullifier list got expanded by new generations
+        // appliedIndex now reflects the completed generation tree sync
+        yield* Effect.promise(() =>
+          emit.single(ProgressUpdate({ highestRelevantIndex, appliedIndex: maxGeneratingTreeIndex })),
+        );
+
+        const newUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
+        const { nextUtxos: finalUtxos, nextSpentUtxos: finalSpentUtxos } = yield* resolveNullifierSpends(
+          allNullifiers,
+          newUtxos,
+          CoreWallet.pendingDustToMap(state.pendingDust),
+          state.state,
+          secretKey,
+          latestBlock,
+          dustGenerationUpdates,
+          indexerSyncService,
+          anonymityLevel,
+          ledgerParametersCodecs,
+          emit,
+        );
+
+        yield* Effect.promise(() =>
+          emit.single(
+            ProgressUpdate({ appliedIndex: maxGeneratingTreeIndex + allNullifiers.length * maxCommitmentTreeIndex }),
+          ),
+        );
+
+        // lastSyncedCommitmentIndex out of maxCommitmentTreeIndex
+        const collapsedCommitments = yield* loadCollapsedCommitments(
+          Number(lastSyncedCommitmentIndex),
+          maxCommitmentTreeIndex,
+          finalUtxos,
+          indexerSyncService,
+        );
+
+        yield* Effect.promise(() =>
+          emit.single(
+            StateUpdate({
+              dustGenerations: dustGenerationUpdates,
+              spentUtxos: finalSpentUtxos,
+              newUtxos: finalUtxos,
+              collapsedCommitments,
+              latestBlock,
+            }),
+          ),
+        );
+
+        // NOTE: appliedIndex = highestRelevantIndex means we're fully synced
+        yield* Effect.promise(() => emit.single(ProgressUpdate({ appliedIndex: highestRelevantIndex })));
+        yield* Effect.promise(() => emit.end());
+      }),
+    // The whole pass runs inside this register effect, and Effect only starts draining the stream once that effect
+    // returns — so every update a pass emits has to sit in the buffer simultaneously. The default buffer is bounded
+    // (16), which caps the sync at a handful of Dust spends: the emission that overflows it suspends waiting for
+    // capacity no consumer is running to free, and the pass deadlocks silently rather than failing. A pass emits one
+    // update per resolved spend, so the ceiling is reached by any wallet with a modest spend history.
+    'unbounded',
   );
 };
 
