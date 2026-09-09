@@ -12,7 +12,7 @@
 // limitations under the License.
 import { describe, it, vi, expect, beforeEach } from 'vitest';
 import BN from 'bn.js';
-import { Cause, Duration, Effect, Exit, Option, pipe, Scope, Stream } from 'effect';
+import { Cause, Duration, Effect, Exit, Fiber, Option, pipe, Scope, Stream } from 'effect';
 import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 
 // `ensureConnection` establishes readiness by making a call rather than reading `isConnected`, so a double for this
@@ -306,5 +306,33 @@ describe('PolkadotNodeClient lifecycle', () => {
     // so a make() that does not wait leaves isConnected stale-true and ensureConnection()
     // skips the reconnect, sending on a dying socket.
     expect(client.api.isConnected).toBe(false);
+  });
+
+  it('make() stops waiting for the close once a finite reconnectionTimeout elapses', async () => {
+    // A node that completes the handshake and then goes half-open never acknowledges the close frame. Only ws's own
+    // 30-second close timeout ended that wait, from inside an uninterruptible acquire no outer deadline can cut short —
+    // so a caller who asked for a 10-second bound waited 40. The bound the caller asked for covers the whole build,
+    // the close included.
+    //
+    // Forked and polled rather than raced: interrupting an uninterruptible acquire would block the test forever.
+    mockApi.disconnect.mockImplementationOnce(() => Promise.resolve()); // never emits 'disconnected'
+
+    const settled = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkDaemon(
+          Effect.gen(function* () {
+            const scope = yield* Scope.make();
+            return yield* PolkadotNodeClient.make({
+              nodeURL: new URL('ws://127.0.0.1:9944'),
+              reconnectionTimeout: Duration.millis(200),
+            }).pipe(Effect.provideService(Scope.Scope, scope));
+          }),
+        );
+        yield* Effect.sleep(Duration.seconds(1));
+        return yield* Fiber.poll(fiber);
+      }).pipe(Effect.scoped),
+    );
+
+    expect(Option.isSome(settled)).toBe(true);
   });
 });

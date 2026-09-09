@@ -219,6 +219,12 @@ export class LivenessServiceImpl implements LivenessService {
   #poll(): Effect.Effect<void> {
     return this.#compareOnce().pipe(
       Effect.map((verdict) => () => verdict),
+      // `disconnect` makes the deadline below a hard one. A timeout interrupts its loser and then waits for it, so a
+      // read stuck inside an uninterruptible region — the node client's connection build is one, and cannot be made
+      // otherwise without leaking the client it builds — would stretch the deadline to the read's own length. Disconnected,
+      // the read is interrupted in the background instead: the verdict lands on time, and a build that does finish still
+      // caches its client for the next poll.
+      Effect.disconnect,
       // A bound on the whole poll, not only on the reads' own deadlines: polls run one at a time, so a read that hangs
       // — an endpoint that accepts a connection and never answers — would otherwise stop the loop forever, freezing
       // the verdict at whatever was published last. A hung read must not be able to switch the check off.

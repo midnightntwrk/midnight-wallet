@@ -27,8 +27,12 @@ import { type LivenessReads, LivenessReadError } from './livenessService.js';
  *   `PolkadotNodeClient` defaults to `Duration.infinity`, which suits transaction submission — a caller waiting to submit
  *   wants to keep trying. It is wrong here: a liveness check that waits forever on an unreachable node never publishes
  *   the {@link IndexerLiveness.Unavailable} verdict that exists to report exactly that condition, and its poll fibre
- *   hangs instead. This bound must stay well under the poll interval so a failing read cannot outlive the tick that
- *   started it.
+ *   hangs instead.
+ *
+ *   The bound applies twice within one connection build — once to the handshake, once to the close that follows it — so
+ *   the build's worst case is double this value, and the build runs uninterruptibly. That is why the poll's own
+ *   deadline does not depend on it: the service disconnects the read before applying its timeout, so a slow build
+ *   finishes in the background and its client is cached for the next poll, while the verdict still lands on time.
  */
 const NODE_CONNECTION_TIMEOUT = Duration.seconds(10);
 
@@ -178,7 +182,10 @@ export const makeDefaultLivenessReads = (
      *   interrupted. The client's acquire is uninterruptible on its own, so without this the interrupt would land
      *   between the acquire completing and the cache write — stranding a fully-built client on the sync-lifetime scope
      *   with the cache still empty, once per poll for as long as the indexer stays down. Deferring the interrupt past
-     *   the write costs at most the build's own ten-second connection bound.
+     *   the write costs at most the build's worst case: the connection bound for the handshake plus the same again for
+     *   the close, twenty seconds with the current value. The poll does not wait that long for its verdict — the
+     *   service disconnects the read before applying its own timeout — but the build itself runs to completion or to
+     *   that bound.
      */
     const client = (nodeURL: URL): Effect.Effect<LivenessNodeReader, NodeClientError.NodeClientError> =>
       Effect.uninterruptible(
