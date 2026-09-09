@@ -26,8 +26,9 @@ is reported as `Skipped` (`no-liveness-feed`), so it can still reach "synced". T
 - `api.rpc` calls (`getGenesis()`) work after client creation; they previously failed as disconnected.
 - Node connection failures are typed errors reachable by `catchTag`/`catchAll`, no longer defects.
 - A finite `reconnectionTimeout` also bounds the initial connection — the handshake and the close that follows it — and
-  the liveness poll's own timeout is hard even when a read is stuck in that build; no timeout (submission) stays
-  unbounded.
+  the whole window is used: a node that is restarting connects on a later attempt rather than failing the build on the
+  first socket error. The liveness poll's own timeout is hard even when a read is stuck in that build; no timeout
+  (submission) stays unbounded.
 - The sync streams' retry backoff is genuinely capped at two minutes. The cap was applied to the schedule's output
   rather than its interval, so retries kept doubling — half an hour apart by the twelfth — until the timer overflowed
   and the stream stopped retrying.

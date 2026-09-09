@@ -69,7 +69,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
 
     // A finite `reconnectionTimeout` is a caller asking to be told when the node cannot be reached. Honouring it here as
     // well as in `ensureConnection` is what makes that possible: left to its defaults, `WsProvider` retries on a timer
-    // and `throwOnConnect: false` means `ApiPromise.create` waits for a connection that may never arrive.
+    // and `ApiPromise.create` waits for a connection that may never arrive.
     const isBounded = Duration.isFinite(config.reconnectionTimeout);
 
     // The bound is enforced inside the promise rather than with `Effect.timeout`, because `Effect.acquireRelease` runs
@@ -85,8 +85,11 @@ export class PolkadotNodeClient implements NodeClient.Service {
       const created = ApiPromise.create({
         // @ts-expect-error -- exactOptionalPropertyTypes cause an incompatibility here
         provider,
-        // Surfacing a connection error rather than retrying past it, but only for a caller that asked to be bounded.
-        throwOnConnect: isBounded,
+        // Off for bounded callers too. With it on, `create` returns `isReadyOrError`, which rejects on the provider's
+        // first `error` event — any socket error, such as a node restarting — although the provider would have retried
+        // and connected moments later. A bounded caller then failed within milliseconds and never used the window it
+        // asked for. The race below is the bound; the provider's retries fill the window, as `ensureConnection`'s do.
+        throwOnConnect: false,
         noInitWarn: true,
       });
 
