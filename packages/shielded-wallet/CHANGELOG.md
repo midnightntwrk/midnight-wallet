@@ -1,5 +1,11 @@
 # @midnightntwrk/wallet-sdk-shielded
 
+## 4.0.0-beta.4
+
+### Patch Changes
+
+- @midnightntwrk/wallet-sdk-capabilities@4.0.0-beta.4
+
 ## 4.0.0-beta.3
 
 ### Major Changes

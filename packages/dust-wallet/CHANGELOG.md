@@ -1,5 +1,11 @@
 # @midnightntwrk/wallet-sdk-dust-wallet
 
+## 5.0.0-beta.4
+
+### Patch Changes
+
+- @midnightntwrk/wallet-sdk-capabilities@4.0.0-beta.4
+
 ## 5.0.0-beta.3
 
 ### Major Changes
