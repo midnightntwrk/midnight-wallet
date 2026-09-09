@@ -30,8 +30,9 @@ first reached (`IndexerLiveness.equivalent` is the predicate). Tune with `livene
 - Node connection failures are typed errors reachable by `catchTag`/`catchAll`, no longer defects.
 - A finite `reconnectionTimeout` also bounds the initial connection — the handshake and the close that follows it — and
   the whole window is used: a node that is restarting connects on a later attempt rather than failing the build on the
-  first socket error. The liveness poll's own timeout is hard even when a read is stuck in that build; no timeout
-  (submission) stays unbounded.
+  first socket error. The same wait for the close, under the same bound, runs when the last in-flight call releases the
+  socket, so the next call does not start on a stale connection flag. The liveness poll's own timeout is hard even when
+  a read is stuck in that build; no timeout (submission) stays unbounded.
 - The sync streams' retry backoff is genuinely capped at two minutes. The cap was applied to the schedule's output
   rather than its interval, so retries kept doubling — half an hour apart by the twelfth — until the timer overflowed
   and the stream stopped retrying.

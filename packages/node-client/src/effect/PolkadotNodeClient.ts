@@ -51,6 +51,56 @@ export type Config = {
  */
 const MAX_CONNECTED_PROBE_FAILURES = 3;
 
+/**
+ * Clamps a duration to the largest delay `setTimeout` honours.
+ *
+ * @remarks
+ *   A delay of 2^31 ms or more overflows and fires after about a millisecond, which turned a generous bound such as 30
+ *   days into an instant failure on every connection attempt. A bound that large behaves as "still waiting" on any
+ *   human timescale, so the clamp loses nothing.
+ */
+const toTimerMillis = (duration: Duration.Duration): number => Math.min(Duration.toMillis(duration), 2 ** 31 - 1);
+
+/**
+ * Disconnects the api and waits until its socket has actually closed.
+ *
+ * @remarks
+ *   `WsProvider.disconnect()` is fire-and-forget: it dispatches the close frame and returns while the socket is still
+ *   CLOSING, and `isConnected` only flips false once the close event fires. A caller that returns without waiting
+ *   leaves the next `ensureConnection()` reading a stale `true`: it skips the reconnect, drops its readiness probe on
+ *   the dying socket, sleeps `reconnectionDelay`, reconnects, and usually fails one more pre-open probe — seconds lost
+ *   on every call. Locally the close-ack lands fast enough to hide this; against a remote node it does not. Both places
+ *   that release the socket — the build in `make()` and the last call's `#deregister` — wait here, so the two cannot
+ *   drift.
+ *
+ *   The wait shares the caller's bound. A node that completes the handshake and then goes half-open never acknowledges
+ *   the close frame, and only ws's own 30-second close timeout would end the wait — from inside an uninterruptible
+ *   acquire, in `make()`'s case, which no outer deadline can cut short. A finite bound is therefore honoured here too:
+ *   the wait is abandoned once it elapses, the socket is left CLOSING for ws to finish, and a stale `isConnected` costs
+ *   one failed readiness probe. An infinite bound waits for the event, as an unbounded caller expects.
+ * @param api - The api whose socket to release.
+ * @param bound - How long to wait for the close to be acknowledged; `Duration.infinity` waits indefinitely.
+ * @returns A promise that settles once the socket has closed or the bound has elapsed.
+ */
+const disconnectAndAwaitClose = (api: ApiPromise, bound: Duration.Duration): Promise<void> =>
+  new Promise<void>((resolve) => {
+    if (!api.isConnected) {
+      resolve();
+      return;
+    }
+    const closeTimer: { handle?: ReturnType<typeof setTimeout> } = {};
+    // The handler stays registered if the bound wins: firing later, it resolves a settled promise and clears a fired
+    // timer, both no-ops. `once` returns the api, not an unsubscribe, so there is nothing cheaper to do.
+    api.once('disconnected', () => {
+      if (closeTimer.handle !== undefined) clearTimeout(closeTimer.handle);
+      resolve();
+    });
+    if (Duration.isFinite(bound)) {
+      closeTimer.handle = setTimeout(resolve, toTimerMillis(bound));
+    }
+    void api.disconnect();
+  });
+
 export const DEFAULT_CONFIG = {
   reconnectionTimeout: Duration.infinity,
   reconnectionDelay: Duration.seconds(1),
@@ -93,10 +143,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
         noInitWarn: true,
       });
 
-      // Clamped to the largest delay `setTimeout` honours: a delay of 2^31ms or more overflows and fires after ~1ms,
-      // which turned a generous bound such as 30 days into an instant failure on every connection attempt. A bound
-      // that large behaves as "still waiting" on any human timescale, so the clamp loses nothing.
-      const timeoutMillis = Math.min(Duration.toMillis(config.reconnectionTimeout), 2 ** 31 - 1);
+      const timeoutMillis = toTimerMillis(config.reconnectionTimeout);
       // Held so the timer can be cleared once the race settles. Left armed, it keeps Node's event loop alive, so a
       // short-lived process that reads once cannot exit until it fires.
       const timer: { handle?: ReturnType<typeof setTimeout> } = {};
@@ -120,32 +167,9 @@ export class PolkadotNodeClient implements NodeClient.Service {
 
       // Disconnect immediately after loading metadata to avoid keeping the WebSocket open.
       // The health-check timer (10s interval) and timeout handler (5s interval) are cleared on disconnect.
-      // Metadata and type registry remain cached in memory for subsequent on-demand connections.
-      //
-      // WsProvider.disconnect() is fire-and-forget: it dispatches the close frame and returns while the socket is
-      // still CLOSING. `isConnected` only flips false once #onSocketClose fires, so returning here without waiting
-      // leaves ensureConnection() reading a stale `true`, skipping the reconnect, and sending on a dying socket.
-      // Locally the close-ack lands fast enough to hide this; against a remote node it does not.
-      //
-      // The wait shares the caller's bound. A node that completes the handshake and then goes half-open never
-      // acknowledges the close frame, and only ws's own 30-second close timeout would end the wait — from inside this
-      // uninterruptible acquire, which no outer deadline can cut short. A caller who asked for a bound asked for it
-      // on the whole build, so the wait is abandoned once it elapses: the socket is left CLOSING for ws to finish, and
-      // a stale `isConnected` costs one failed readiness probe, since `ensureConnection` establishes readiness with a
-      // call rather than the flag.
-      await new Promise<void>((resolve) => {
-        if (!api.isConnected) {
-          resolve();
-          return;
-        }
-        const closeTimer: { handle?: ReturnType<typeof setTimeout> } = {};
-        api.once('disconnected', () => {
-          if (closeTimer.handle !== undefined) clearTimeout(closeTimer.handle);
-          resolve();
-        });
-        if (isBounded) closeTimer.handle = setTimeout(resolve, timeoutMillis);
-        void api.disconnect();
-      });
+      // Metadata and type registry remain cached in memory for subsequent on-demand connections. The wait for the
+      // close, and its bound, are explained on `disconnectAndAwaitClose`.
+      await disconnectAndAwaitClose(api, config.reconnectionTimeout);
       return api;
     });
 
@@ -201,10 +225,19 @@ export class PolkadotNodeClient implements NodeClient.Service {
     return SynchronizedRef.update(this.#activeCalls, (active) => active + 1);
   }
 
-  /** Deregisters one call, disconnecting the shared socket when it was the last one in flight. */
+  /**
+   * Deregisters one call, disconnecting the shared socket when it was the last one in flight.
+   *
+   * @remarks
+   *   Waits for the close to be acknowledged, as `make()` does — see `disconnectAndAwaitClose`. Returning on
+   *   `disconnect()` alone left the next call a stale `isConnected: true` and cost it a dropped probe and a reconnect
+   *   delay.
+   */
   #deregister(): Effect.Effect<void> {
     return SynchronizedRef.updateEffect(this.#activeCalls, (active) =>
-      active === 1 ? Effect.promise(() => this.api.disconnect()).pipe(Effect.as(0)) : Effect.succeed(active - 1),
+      active === 1
+        ? Effect.promise(() => disconnectAndAwaitClose(this.api, this.config.reconnectionTimeout)).pipe(Effect.as(0))
+        : Effect.succeed(active - 1),
     );
   }
 
