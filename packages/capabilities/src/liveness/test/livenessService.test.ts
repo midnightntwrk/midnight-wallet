@@ -214,6 +214,40 @@ describe('LivenessServiceImpl', () => {
     ]);
   });
 
+  it('should not republish InSync as the chain advances, so a healthy idle wallet is quiet between real changes', async () => {
+    // On a live network both heights climb about five blocks per poll, so consecutive InSync verdicts are never
+    // structurally equal — and a dedup keyed on structure let every poll fan a new wallet state out to every subscriber.
+    const program = Effect.gen(function* () {
+      // Mutable only as test setup: the chain advances five blocks between polls, indexer and node in step.
+      const polls = yield* Ref.make(0n);
+      const advancing = sameChainReads({
+        indexerHeight: () => Ref.getAndUpdate(polls, (n) => n + 1n).pipe(Effect.map((n) => 1_000n + 5n * n)),
+        finalizedHeight: () => Ref.get(polls).pipe(Effect.map((n) => 1_000n + 5n * n)),
+      });
+      const service = yield* LivenessServiceImpl.make(advancing, tolerances);
+      const seen = yield* Ref.make<readonly IndexerLiveness.IndexerLiveness[]>([]);
+      const subscribed = yield* Deferred.make<void>();
+
+      const subscriber = yield* Effect.fork(
+        service.state().pipe(
+          Stream.tap(() => Deferred.succeed(subscribed, undefined)),
+          Stream.runForEach((verdict) => Ref.update(seen, (all) => [...all, verdict])),
+        ),
+      );
+      yield* Deferred.await(subscribed);
+
+      yield* service.startPolling(Stream.make(1, 2, 3));
+      yield* Effect.sleep(Duration.millis(20));
+      yield* Fiber.interrupt(subscriber);
+
+      return yield* Ref.get(seen);
+    });
+
+    const seen = await Effect.runPromise(program);
+
+    expect(seen.map((verdict) => verdict._tag)).toStrictEqual(['Unknown', 'InSync']);
+  });
+
   it('should recover once a read succeeds again, so a transient outage leaves no trace', async () => {
     const program = Effect.gen(function* () {
       // Mutable only as test setup: the node read fails once, then succeeds.

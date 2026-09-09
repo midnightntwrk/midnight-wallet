@@ -16,7 +16,10 @@ result is an `IndexerLiveness` verdict on `SyncProgress`: `Behind`, `Unknown` an
 other four (`InSync`, `Ahead`, `Unavailable`, `Skipped`) do not. A poll that fails after a `Behind` or `WrongNetwork`
 verdict leaves that verdict in place — an unreachable endpoint disproves nothing — so a node outage cannot release a
 caller waiting on a stale indexer. A custom sync service supplied through `withSync` that exposes no `livenessUpdates`
-is reported as `Skipped` (`no-liveness-feed`), so it can still reach "synced". Tune with `livenessConfiguration` and
+is reported as `Skipped` (`no-liveness-feed`), so it can still reach "synced". A verdict is republished only when it
+says something new — its kind, a `Behind`'s lag, an `Unavailable`'s failure count — not because the chain advanced, so
+an idle wallet's state does not change once per poll; the heights on a published `InSync` are those at which it was
+first reached (`IndexerLiveness.equivalent` is the predicate). Tune with `livenessConfiguration` and
 `livenessPollInterval`. This detects staleness, not withholding.
 
 ### Fixes
