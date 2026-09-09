@@ -261,4 +261,59 @@ describe('RunningV1Variant.startSync', () => {
     // The user-visible symptom: connected, caught up, and still never "synced".
     expect(progress.isStrictlyComplete()).toBe(true);
   });
+
+  it('should treat a subscription that ends cleanly as dropped, clearing isConnected and rebuilding it', async () => {
+    // The indexer closes a subscription with a graphql-ws `complete` when its own stream ends; the client turns that
+    // into a clean stream end. A live wallet's update source has no legitimate end — every source is open-ended — so an
+    // end is a dropped connection by another name. Without this, the sync fiber simply finished: no retry, no flag
+    // reset, and the wallet went on reporting itself synchronized while no further transaction could ever reach it.
+    const builds = { indexer: 0 };
+
+    const endingSyncService: SyncService<CoreWallet, SyncUpdate> = {
+      updates: () => {
+        builds.indexer += 1;
+        return builds.indexer === 1
+          ? // The first subscription reports a caught-up wallet, then the indexer completes it.
+            Stream.make<SyncUpdate[]>({ type: 'UnshieldedTransactionsProgress', highestTransactionId: 0 })
+          : // The rebuilt one says nothing, so the flag the retry cleared stays observable.
+            Stream.never;
+      },
+    };
+
+    const program = Effect.gen(function* () {
+      const stateRef = yield* SubscriptionRef.make(CoreWallet.init(publicKey, 'undeployed'));
+      const scope = yield* Scope.make();
+
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef },
+        // Type cast required because: the test exercises only the sync service and capability; building the full
+        // context would drag transacting, serialization and key material into a test about subscription lifetime.
+        {
+          syncService: endingSyncService,
+          syncCapability,
+          transactionHistoryService: noOpHistory,
+        } as unknown as RunningV1Variant.Context<string, SyncUpdate>,
+      );
+
+      yield* variant.startSyncInBackground().pipe(Effect.provideService(Scope.Scope, scope));
+
+      // Give the retry a bounded chance to rebuild the subscription; the assertions below decide the outcome.
+      yield* Effect.sync(() => builds.indexer).pipe(
+        Effect.repeat({ until: (count) => count >= 2, schedule: Schedule.spaced(Duration.millis(50)) }),
+        Effect.timeoutOption(Duration.seconds(5)),
+      );
+
+      const wallet = yield* SubscriptionRef.get(stateRef);
+      yield* Scope.close(scope, Exit.void);
+
+      return { progress: wallet.progress, builds: builds.indexer };
+    });
+
+    const observed = await Effect.runPromise(Effect.scoped(program));
+
+    expect(observed.builds).toBeGreaterThanOrEqual(2);
+    expect(observed.progress.isConnected).toBe(false);
+    expect(observed.progress.isStrictlyComplete()).toBe(false);
+  });
 });
