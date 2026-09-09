@@ -71,7 +71,13 @@ export type IndexerLiveness = Data.TaggedEnum<{
     readonly lastError: string;
   };
 
-  /** The indexer's position is within the accepted tolerance of the node's finalized head. */
+  /**
+   * The indexer's position is within the accepted tolerance of the node's finalized head.
+   *
+   * @remarks
+   *   The heights are those at which this verdict was first reached, not the chain's current position: a publisher that
+   *   deduplicates with {@link equivalent} does not republish an `InSync` for the chain merely advancing.
+   */
   InSync: {
     /** The height of the latest block the indexer reports having processed. */
     readonly indexerHeight: bigint;
@@ -305,3 +311,41 @@ export const afterFailedPoll = (previous: IndexerLiveness, lastError: string): I
         consecutiveFailures: isUnavailable(previous) ? previous.consecutiveFailures + 1 : 1,
         lastError,
       });
+
+/**
+ * Decides whether two verdicts say the same thing to a caller.
+ *
+ * @remarks
+ *   Structural equality is the wrong test for "has anything changed": {@link IndexerLiveness.InSync},
+ *   {@link IndexerLiveness.Behind} and {@link IndexerLiveness.Ahead} carry the two heights they were computed from, and
+ *   on a live chain both advance about five blocks per poll, so consecutive verdicts are never structurally equal. A
+ *   publisher deduplicating on structure would fan a new wallet state out to every subscriber once per poll, forever,
+ *   with nothing about the wallet changed.
+ *
+ *   What a caller acts on is the kind of verdict and, where the variant carries one, its magnitude: a `Behind` whose lag
+ *   has grown is news, a lengthening outage keeps counting, and a different reason or a different pair of hashes is a
+ *   different statement. The heights alone are not: an `InSync` at a later height is the same report as the one before
+ *   it. A publisher that deduplicates with this predicate therefore leaves the heights on a published verdict as they
+ *   were when that verdict was first reached.
+ * @example
+ *   ```ts
+ *   const quiet = verdicts.pipe(Stream.changesWith(IndexerLiveness.equivalent));
+ *   ```;
+ *
+ * @param left - One verdict.
+ * @param right - The other.
+ * @returns `true` when a caller would learn nothing new from `right` after `left`.
+ */
+export const equivalent = (left: IndexerLiveness, right: IndexerLiveness): boolean =>
+  match(left, {
+    Skipped: ({ reason }) => isSkipped(right) && right.reason === reason,
+    Unknown: () => isUnknown(right),
+    Unavailable: ({ consecutiveFailures }) => isUnavailable(right) && right.consecutiveFailures === consecutiveFailures,
+    InSync: () => isInSync(right),
+    Behind: ({ lag }) => isBehind(right) && right.lag === lag,
+    Ahead: () => isAhead(right),
+    WrongNetwork: ({ indexerGenesisHash, nodeGenesisHash }) =>
+      isWrongNetwork(right) &&
+      right.indexerGenesisHash === indexerGenesisHash &&
+      right.nodeGenesisHash === nodeGenesisHash,
+  });

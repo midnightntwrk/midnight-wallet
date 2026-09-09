@@ -298,4 +298,71 @@ describe('IndexerLiveness', () => {
       expect(IndexerLiveness.blocksSyncCompletion(result)).toBe(true);
     });
   });
+
+  describe('equivalent', () => {
+    // The heights on InSync, Behind and Ahead advance with the chain — about five blocks per poll — so two consecutive
+    // verdicts are never structurally equal on a live network. A dedup keyed on structure therefore never dedups, and a
+    // healthy idle wallet republishes its whole state to every subscriber once per poll, forever. What a caller acts on
+    // is the kind of verdict and, where the variant carries one, its magnitude: the lag, the failure count, the hashes.
+    it('should treat InSync verdicts at different heights as the same report', () => {
+      const earlier = IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n });
+      const later = IndexerLiveness.InSync({ indexerHeight: 1_005n, finalizedHeight: 1_005n });
+
+      expect(IndexerLiveness.equivalent(earlier, later)).toBe(true);
+    });
+
+    it('should treat Ahead verdicts as the same report whatever the heights, since only the kind is acted on', () => {
+      const earlier = IndexerLiveness.Ahead({ indexerHeight: 1_020n, finalizedHeight: 1_000n, overshoot: 20n });
+      const later = IndexerLiveness.Ahead({ indexerHeight: 1_030n, finalizedHeight: 1_005n, overshoot: 25n });
+
+      expect(IndexerLiveness.equivalent(earlier, later)).toBe(true);
+    });
+
+    it('should distinguish verdicts of different kinds', () => {
+      const inSync = IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n });
+      const behind = IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n });
+
+      expect(IndexerLiveness.equivalent(inSync, behind)).toBe(false);
+    });
+
+    it('should treat Behind verdicts with the same lag at different heights as the same report', () => {
+      const earlier = IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n });
+      const later = IndexerLiveness.Behind({ indexerHeight: 905n, finalizedHeight: 1_005n, lag: 100n });
+
+      expect(IndexerLiveness.equivalent(earlier, later)).toBe(true);
+    });
+
+    it('should distinguish Behind verdicts whose lag changed, because a growing lag is news', () => {
+      const earlier = IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n });
+      const later = IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_005n, lag: 105n });
+
+      expect(IndexerLiveness.equivalent(earlier, later)).toBe(false);
+    });
+
+    it('should distinguish Unavailable verdicts by their failure count, so a lengthening outage keeps reporting', () => {
+      const first = IndexerLiveness.Unavailable({ consecutiveFailures: 1, lastError: 'websocket closed' });
+      const second = IndexerLiveness.Unavailable({ consecutiveFailures: 2, lastError: 'websocket closed' });
+
+      expect(IndexerLiveness.equivalent(first, first)).toBe(true);
+      expect(IndexerLiveness.equivalent(first, second)).toBe(false);
+    });
+
+    it('should distinguish Skipped verdicts by reason and WrongNetwork verdicts by their hashes', () => {
+      const noNode = IndexerLiveness.Skipped({ reason: 'no-node-configured' });
+      const simulation = IndexerLiveness.Skipped({ reason: 'simulation' });
+      const mismatch = IndexerLiveness.WrongNetwork({
+        indexerGenesisHash: 'aa'.repeat(32),
+        nodeGenesisHash: 'bb'.repeat(32),
+      });
+      const otherMismatch = IndexerLiveness.WrongNetwork({
+        indexerGenesisHash: 'aa'.repeat(32),
+        nodeGenesisHash: 'cc'.repeat(32),
+      });
+
+      expect(IndexerLiveness.equivalent(noNode, noNode)).toBe(true);
+      expect(IndexerLiveness.equivalent(noNode, simulation)).toBe(false);
+      expect(IndexerLiveness.equivalent(mismatch, mismatch)).toBe(true);
+      expect(IndexerLiveness.equivalent(mismatch, otherMismatch)).toBe(false);
+    });
+  });
 });

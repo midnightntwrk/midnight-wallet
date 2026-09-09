@@ -196,11 +196,13 @@ export class LivenessServiceImpl implements LivenessService {
     // `changes` already replays the current value before subsequent ones, under the ref's own semaphore. Prepending a
     // separate `get` would emit the first verdict twice — and read it outside that semaphore.
     //
-    // `Stream.changes` then drops consecutive equal verdicts. Every poll writes unconditionally, and each write fans
+    // `changesWith` then drops a verdict that says nothing new. Every poll writes unconditionally, and each write fans
     // out into the wallet's full state stream — without this, a healthy idle wallet re-notified every subscriber once
-    // per poll, forever. Verdicts are structural data, so a lengthening outage still reports: `Unavailable`'s failure
-    // count climbs, which makes consecutive verdicts unequal.
-    return this.#state.changes.pipe(Stream.changes);
+    // per poll, forever. Structural equality would not do: the heights on `InSync`, `Behind` and `Ahead` advance with
+    // the chain every poll, so consecutive verdicts are never structurally equal. `equivalent` compares what a caller
+    // acts on — the kind, a `Behind`'s lag, `Unavailable`'s climbing count — so a lengthening outage or a growing lag
+    // still reports, and a healthy idle wallet stays quiet.
+    return this.#state.changes.pipe(Stream.changesWith(IndexerLiveness.equivalent));
   }
 
   startPolling(ticks: Stream.Stream<unknown>): Effect.Effect<void> {
