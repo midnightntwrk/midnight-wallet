@@ -1231,3 +1231,23 @@ dust:
 ",
 ]
 `;
+
+exports[`Snippet outputs > without network > should output the correct result for 'indexer-liveness' 1`] = `
+[
+  "Unknown — blocks sync completion: true
+  Indexer has not been verified against a node yet.
+InSync — blocks sync completion: false
+  Indexer is up to date (block 1000 against a finalized head of 1002).
+Behind — blocks sync completion: true
+  Indexer is 100 block(s) behind the chain (900 against 1000). Balances may be missing recent funds.
+Ahead — blocks sync completion: false
+  Indexer reports block 1050, which is 50 ahead of this node's finalized head (1000). Check that both point at the same network.
+Unavailable — blocks sync completion: false
+  The indexer cannot be verified right now — 3 poll(s) have failed. Most recently: Poll abandoned: a read did not complete in time
+Skipped — blocks sync completion: false
+  Indexer is not being verified against a node (no-node-configured).
+WrongNetwork — blocks sync completion: true
+  The indexer and the node are on different networks (indexer genesis abababababababababababababababababababababababababababababababab, node genesis 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd). Check the configured endpoints.
+",
+]
+`;

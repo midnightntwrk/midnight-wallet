@@ -40,7 +40,9 @@ export const CoreWallet = {
   restore(
     state: UnshieldedState,
     publicKey: PublicKey,
-    syncProgress: Omit<SyncProgressData, 'isConnected'>,
+    // A restored wallet holds no live verdict: `indexerLiveness` is re-established by the running liveness check, never
+    // rehydrated from storage, so that a stale verdict cannot outlive the session that produced it.
+    syncProgress: Omit<SyncProgressData, 'isConnected' | 'indexerLiveness'>,
     protocolVersion: ProtocolVersion.ProtocolVersion,
     networkId: string,
   ): CoreWallet {
@@ -55,12 +57,13 @@ export const CoreWallet = {
 
   updateProgress(
     wallet: CoreWallet,
-    { appliedId, highestTransactionId, isConnected }: Partial<SyncProgressData>,
+    { appliedId, highestTransactionId, isConnected, indexerLiveness }: Partial<SyncProgressData>,
   ): CoreWallet {
     const progress = createSyncProgress({
       appliedId: appliedId ?? wallet.progress.appliedId,
       highestTransactionId: highestTransactionId ?? wallet.progress.highestTransactionId,
       isConnected: isConnected ?? wallet.progress.isConnected,
+      indexerLiveness: indexerLiveness ?? wallet.progress.indexerLiveness,
     });
     return { ...wallet, progress };
   },

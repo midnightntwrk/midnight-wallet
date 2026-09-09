@@ -15,7 +15,21 @@ import { PolkadotNodeClient } from '../PolkadotNodeClient.js';
 import * as NodeClient from '../NodeClient.js';
 import * as SubmissionEvent from '../SubmissionEvent.js';
 import { type StartedTestContainer, Wait } from 'testcontainers';
-import { Array as EArray, Chunk, Effect, Either, Exit, Order, pipe, Random, Scope, Stream } from 'effect';
+import {
+  Array as EArray,
+  Cause,
+  Chunk,
+  Duration,
+  Effect,
+  Either,
+  Exit,
+  Order,
+  pipe,
+  Random,
+  Schedule,
+  Scope,
+  Stream,
+} from 'effect';
 import { TestTransactions } from '../../testing/index.js';
 import { TestContainers } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { NodeContext } from '@effect/platform-node';
@@ -29,8 +43,7 @@ const clientLayer = (nodePort: number) =>
 // It takes some time to pass through enough rounds of consensus, even in tests
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
-// There are issues with replaying transactions after node restart
-describe.skip('PolkadotNodeClient', () => {
+describe('PolkadotNodeClient', () => {
   let scope: Scope.CloseableScope | undefined = undefined;
   let node: StartedTestContainer | undefined = undefined;
 
@@ -61,7 +74,11 @@ describe.skip('PolkadotNodeClient', () => {
     }
   });
 
-  it('does report an error if transaction fails well-formedness check upon submission', async () => {
+  // Skipped: needs `temp-resources/test-txs.json`, which nothing produces (see the other skipped tests below). Worse
+  // than merely failing, this one passed vacuously: `Effect.either` absorbed the fixture-load failure, so the
+  // `isLeft` assertion succeeded on the missing file rather than on a node rejection — burning a node container to
+  // assert nothing.
+  it.skip('does report an error if transaction fails well-formedness check upon submission', async () => {
     const result = await pipe(
       Effect.gen(function* () {
         const transactions = yield* TestTransactions.load(TestTransactions.defaultPaths.fullPath);
@@ -88,7 +105,9 @@ describe.skip('PolkadotNodeClient', () => {
     });
   });
 
-  it('does report an error if node cannot deserialize transaction', async () => {
+  // Skipped: same missing fixture, same vacuous pass — `Stream.either` turned the fixture-load failure into a single
+  // `Left` that satisfied the per-item `isLeft` assertion.
+  it.skip('does report an error if node cannot deserialize transaction', async () => {
     const modifyTx = (txBytes: Uint8Array) => {
       return Effect.gen(function* () {
         const pickNumber = Random.nextIntBetween(0, txBytes.length - 1);
@@ -133,7 +152,51 @@ describe.skip('PolkadotNodeClient', () => {
     });
   });
 
-  it('does submit a transaction', async () => {
+  // These two cover the Effect-based read path — connect, issue an `api.rpc` call, disconnect. Nothing exercised it
+  // before, which is how it came to be broken: `make()` disconnects after loading metadata, and a subsequent reconnect
+  // has to leave the client actually usable, not merely connected. Neither test needs the transaction fixture.
+  it('does read the genesis transactions', async () => {
+    const result = await pipe(
+      NodeClient.getGenesisTransactions(),
+      Effect.provide(clientLayer(node!.getMappedPort(9944))),
+      Effect.provide(NodeContext.layer),
+      Effect.scoped,
+      Effect.runPromiseExit,
+    );
+
+    // Comparing against 'ok' so a failure reports the cause instead of just `false`.
+    expect(Exit.isSuccess(result) ? 'ok' : Cause.pretty(result.cause)).toBe('ok');
+  });
+
+  it('does read the finalized block', async () => {
+    // The container waits for block 1 to be imported, but finalization trails import by a few consensus rounds, so the
+    // read is retried until the finalized head has advanced past genesis.
+    const result = await pipe(
+      // `Effect.repeat` yields the schedule's output — a repetition count — so the value is read again afterwards
+      // rather than taken from the repeat.
+      Effect.gen(function* () {
+        yield* NodeClient.getFinalizedBlock().pipe(
+          Effect.repeat({ until: ({ height }) => height > 0n, schedule: Schedule.spaced(Duration.seconds(1)) }),
+          Effect.timeout(Duration.seconds(60)),
+        );
+        return yield* NodeClient.getFinalizedBlock();
+      }),
+      Effect.provide(clientLayer(node!.getMappedPort(9944))),
+      Effect.provide(NodeContext.layer),
+      Effect.scoped,
+      Effect.runPromiseExit,
+    );
+
+    expect(Exit.isSuccess(result) ? 'ok' : Cause.pretty(result.cause)).toBe('ok');
+    expect(Exit.isSuccess(result) ? result.value.height : 0n).toBeGreaterThan(0n);
+    expect(Exit.isSuccess(result) ? result.value.hash : '').toMatch(/^0x[0-9a-f]{64}$/);
+  });
+
+  // Skipped: needs `temp-resources/test-txs.json`, which nothing produces. The generator this package points at
+  // (`gen-txs.ts`) is absent, no CI job builds the file, and `temp-resources/` is gitignored — so these three can only
+  // pass on a machine where the fixture was generated by hand. Restoring that pipeline is its own piece of work; the
+  // rest of this suite runs, rather than the whole file being skipped for their sake.
+  it.skip('does submit a transaction', async () => {
     const submitAllTransactions = TestTransactions.load(TestTransactions.defaultPaths.fullPath).pipe(
       Stream.fromEffect,
       Stream.flatMap(TestTransactions.streamAllValid),
@@ -152,7 +215,11 @@ describe.skip('PolkadotNodeClient', () => {
     expect(Exit.isSuccess(result)).toBe(true);
   });
 
-  it.concurrent('does emit subsequent events', async () => {
+  // Skipped: needs `temp-resources/test-txs.json`, which nothing produces. The generator this package points at
+  // (`gen-txs.ts`) is absent, no CI job builds the file, and `temp-resources/` is gitignored — so these three can only
+  // pass on a machine where the fixture was generated by hand. Restoring that pipeline is its own piece of work; the
+  // rest of this suite runs, rather than the whole file being skipped for their sake.
+  it.skip('does emit subsequent events', async () => {
     const submitAndCollectEvents = TestTransactions.load(TestTransactions.defaultPaths.fullPath).pipe(
       Stream.fromEffect,
       Stream.flatMap(TestTransactions.streamAllValid),
@@ -181,7 +248,11 @@ describe.skip('PolkadotNodeClient', () => {
     // );
   });
 
-  it("is able to submit transaction after node's unavailability", async () => {
+  // Skipped: needs `temp-resources/test-txs.json`, which nothing produces. The generator this package points at
+  // (`gen-txs.ts`) is absent, no CI job builds the file, and `temp-resources/` is gitignored — so these three can only
+  // pass on a machine where the fixture was generated by hand. Restoring that pipeline is its own piece of work; the
+  // rest of this suite runs, rather than the whole file being skipped for their sake.
+  it.skip("is able to submit transaction after node's unavailability", async () => {
     const first2Transactions = TestTransactions.load(TestTransactions.defaultPaths.fullPath).pipe(
       Stream.fromEffect,
       Stream.flatMap(TestTransactions.streamAllValid),
