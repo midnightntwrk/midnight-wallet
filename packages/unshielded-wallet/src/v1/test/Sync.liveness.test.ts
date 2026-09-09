@@ -149,7 +149,15 @@ describe('makeLivenessUpdates', () => {
     const behind = IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n });
 
     const first = await Effect.runPromise(
-      Stream.runHead(Option.getOrThrow(makeLivenessUpdates(withNode, behind))).pipe(Effect.scoped),
+      Stream.runHead(
+        Option.getOrThrow(
+          // Reads are injected, as in every sibling: the default factory opens a socket to the node and an HTTP request
+          // to the indexer, and a unit test may touch neither.
+          makeLivenessUpdates(withNode, behind, () =>
+            Effect.succeed(fixedHeightReads({ indexerHeight: 900n, finalizedHeight: 1_000n })),
+          ),
+        ),
+      ).pipe(Effect.scoped),
     );
 
     expect(first).toStrictEqual(Option.some({ type: 'IndexerLiveness', verdict: behind }));
