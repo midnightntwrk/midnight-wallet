@@ -153,6 +153,32 @@ describe('LivenessServiceImpl', () => {
     expect(Option.getOrThrow(verdict)._tag).toBe('Unavailable');
   });
 
+  it('should publish Unavailable at the poll timeout even when the hung read cannot be interrupted', async () => {
+    // A read that hangs inside an uninterruptible region — the node client's connection build is one — cannot be cut
+    // short, and a timeout that interrupts and then awaits its loser inherits that wait: the bound becomes as soft as
+    // the read is long. The verdict must still land at the deadline, with the read left to finish in the background.
+    const program = Effect.gen(function* () {
+      const reads = sameChainReads({
+        finalizedHeight: () => Effect.uninterruptible(Effect.sleep(Duration.minutes(1)).pipe(Effect.as(1_000n))),
+      });
+      const service = yield* LivenessServiceImpl.make(reads, { ...tolerances, pollTimeout: Duration.seconds(5) });
+
+      // A daemon, not a child: the test program must not wait on a poll that is still stuck at its end.
+      const polling = yield* Effect.forkDaemon(service.startPolling(Stream.make(1)));
+      yield* TestClock.adjust(Duration.seconds(5));
+      // Let the timed-out poll run through to its verdict. The clock has not moved far enough for the read to finish.
+      yield* Effect.yieldNow();
+      yield* Effect.yieldNow();
+
+      return { settled: yield* Fiber.poll(polling), verdict: yield* currentVerdict(service) };
+    });
+
+    const { settled, verdict } = await Effect.runPromise(program.pipe(Effect.provide(TestContext.TestContext)));
+
+    expect(Option.isSome(settled)).toBe(true);
+    expect(Option.getOrThrow(verdict)._tag).toBe('Unavailable');
+  });
+
   it('should publish a verdict only when it changes, so an idle wallet is not re-notified every poll', async () => {
     // Every poll wrote its verdict unconditionally, and that write fans out into the wallet's full state stream — so
     // a healthy, idle wallet re-published its entire state to every subscriber once per poll, forever. Verdicts are

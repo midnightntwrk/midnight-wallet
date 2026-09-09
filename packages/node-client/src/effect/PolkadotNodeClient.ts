@@ -123,12 +123,24 @@ export class PolkadotNodeClient implements NodeClient.Service {
       // still CLOSING. `isConnected` only flips false once #onSocketClose fires, so returning here without waiting
       // leaves ensureConnection() reading a stale `true`, skipping the reconnect, and sending on a dying socket.
       // Locally the close-ack lands fast enough to hide this; against a remote node it does not.
+      //
+      // The wait shares the caller's bound. A node that completes the handshake and then goes half-open never
+      // acknowledges the close frame, and only ws's own 30-second close timeout would end the wait — from inside this
+      // uninterruptible acquire, which no outer deadline can cut short. A caller who asked for a bound asked for it
+      // on the whole build, so the wait is abandoned once it elapses: the socket is left CLOSING for ws to finish, and
+      // a stale `isConnected` costs one failed readiness probe, since `ensureConnection` establishes readiness with a
+      // call rather than the flag.
       await new Promise<void>((resolve) => {
         if (!api.isConnected) {
           resolve();
           return;
         }
-        api.once('disconnected', () => resolve());
+        const closeTimer: { handle?: ReturnType<typeof setTimeout> } = {};
+        api.once('disconnected', () => {
+          if (closeTimer.handle !== undefined) clearTimeout(closeTimer.handle);
+          resolve();
+        });
+        if (isBounded) closeTimer.handle = setTimeout(resolve, timeoutMillis);
         void api.disconnect();
       });
       return api;
