@@ -276,5 +276,26 @@ describe('IndexerLiveness', () => {
         IndexerLiveness.Unavailable({ consecutiveFailures: 1, lastError: 'connection refused' }),
       );
     });
+
+    it('should keep a proven Behind, because a failed poll disproves nothing and Unavailable would open the sync gate', () => {
+      const previous = IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n });
+
+      const result = IndexerLiveness.afterFailedPoll(previous, 'websocket closed');
+
+      expect(result).toStrictEqual(previous);
+      expect(IndexerLiveness.blocksSyncCompletion(result)).toBe(true);
+    });
+
+    it('should keep a proven WrongNetwork, because a chain mismatch cannot be undone by an unreachable endpoint', () => {
+      const previous = IndexerLiveness.WrongNetwork({
+        indexerGenesisHash: 'aa'.repeat(32),
+        nodeGenesisHash: `0x${'bb'.repeat(32)}`,
+      });
+
+      const result = IndexerLiveness.afterFailedPoll(previous, 'websocket closed');
+
+      expect(result).toStrictEqual(previous);
+      expect(IndexerLiveness.blocksSyncCompletion(result)).toBe(true);
+    });
   });
 });
