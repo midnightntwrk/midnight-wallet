@@ -12,6 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import {
@@ -24,6 +25,15 @@ import { Option } from 'effect';
 import * as crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { type DefaultConfiguration, mergeWalletEntries, WalletEntrySchema, WalletFacade } from '../src/index.js';
+
+// Injected so `init` never builds the default submission service: that would open a real node client on `relayURL`
+// with an infinite reconnection timeout, leaving a WebSocket reconnect loop running for the rest of the worker. A unit
+// test may not touch the network, and this test is about configuration plumbing, not submission.
+const fakeSubmission: SubmissionService<ledger.FinalizedTransaction> = {
+  // `Promise<never>` satisfies every overload of the method type; a bare `Promise.reject` is typed to the last one only.
+  submitTransaction: (): Promise<never> => Promise.reject(new Error('This submission implementation does not submit')),
+  close: () => Promise.resolve(),
+};
 
 /**
  * A configuration of the shape an integrator actually writes: a `relayURL` for submission, and no
@@ -53,6 +63,7 @@ describe('indexer liveness wiring through the facade', () => {
 
     await WalletFacade.init({
       configuration,
+      submissionService: () => fakeSubmission,
       shielded: (config) => {
         const shielded = vi.mockObject(ShieldedWallet(config).startWithSeed(seed));
         shielded.start.mockResolvedValue(undefined);
