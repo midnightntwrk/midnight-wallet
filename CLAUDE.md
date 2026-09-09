@@ -22,7 +22,8 @@ spec's test vectors — live in this repository, at `docs/spec/` and `packages/s
 
 Hard rules load automatically from `.claude/rules/` when matching files are touched: `functional-style.md` (SDK code),
 `testing.md` (tests), `transactions.md` (transaction-handling packages), `spec-reference.md` (key derivation / address
-formatting), `claude-config.md` (`.claude/**`).
+formatting), `claude-config.md` (`.claude/**`). `code-review.md` has no path filter and is always loaded: it governs how
+review findings are turned into fixes.
 
 **Specs over guesses:** never guess protocol or API semantics — consult the wallet spec (`docs/spec/Specification.md`,
 in-repo), the ledger spec (`midnightntwrk/midnight-ledger` → `spec/`), or the DApp Connector API
