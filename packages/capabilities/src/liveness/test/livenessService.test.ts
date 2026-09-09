@@ -217,6 +217,38 @@ describe('LivenessServiceImpl', () => {
     );
   });
 
+  it('should keep gating on Behind when a later poll fails, so a node outage cannot clear a proven stale view', async () => {
+    // A Behind verdict is proof the indexer is stale; a failed poll after it proves nothing.
+    // Replacing it with Unavailable, which does not gate, would let a pending waitForSyncedState() resolve over the
+    // same stale indexer the first poll caught.
+    const program = Effect.gen(function* () {
+      // Mutable only as test setup: the node read answers once, then the endpoint goes away.
+      const answersRemaining = yield* Ref.make(1);
+      const reads = sameChainReads({
+        indexerHeight: () => Effect.succeed(900n),
+        finalizedHeight: () =>
+          Ref.getAndUpdate(answersRemaining, (remaining) => (remaining > 0 ? remaining - 1 : 0)).pipe(
+            Effect.flatMap((remaining) =>
+              remaining > 0
+                ? Effect.succeed(1_000n)
+                : Effect.fail(new LivenessReadError({ message: 'websocket closed' })),
+            ),
+          ),
+      });
+      const service = yield* LivenessServiceImpl.make(reads, tolerances);
+
+      yield* service.startPolling(Stream.make(1, 2));
+
+      return yield* currentVerdict(service);
+    });
+
+    const verdict = await Effect.runPromise(program);
+
+    expect(verdict).toStrictEqual(
+      Option.some(IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n })),
+    );
+  });
+
   describe('genesis cross-check', () => {
     it('should pin WrongNetwork when the genesis hashes differ, never comparing heights on any poll', async () => {
       // A mismatch cannot heal: both hashes were read successfully and differ, and neither endpoint changes chain

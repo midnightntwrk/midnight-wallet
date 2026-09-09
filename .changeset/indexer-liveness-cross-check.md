@@ -13,8 +13,10 @@ The wallet now verifies "synced" against the chain instead of the indexer's self
 head (every 30 seconds by default) and, once, checks that both endpoints name the same genesis block. The node is
 `nodeClientConnection` on the configuration, falling back to `relayURL`; a wallet naming neither is not checked. The
 result is an `IndexerLiveness` verdict on `SyncProgress`: `Behind`, `Unknown` and `WrongNetwork` block completion; the
-other four (`InSync`, `Ahead`, `Unavailable`, `Skipped`) do not. Tune with `livenessConfiguration` and
-`livenessPollInterval`. This detects staleness, not withholding.
+other four (`InSync`, `Ahead`, `Unavailable`, `Skipped`) do not. A poll that fails after a `Behind` or `WrongNetwork`
+verdict leaves that verdict in place — an unreachable endpoint disproves nothing — so a node outage cannot release a
+caller waiting on a stale indexer. Tune with `livenessConfiguration` and `livenessPollInterval`. This detects
+staleness, not withholding.
 
 ### Fixes
 

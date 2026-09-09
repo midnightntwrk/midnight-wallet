@@ -105,9 +105,10 @@ export type LivenessService = {
    *
    * @remarks
    *   Ticks are supplied by the caller rather than generated here, so that tests drive the loop directly instead of
-   *   waiting on a clock. The returned effect cannot fail: a read that fails becomes an
-   *   {@link IndexerLiveness.Unavailable} verdict, because a check that gave up on its first network error would be
-   *   useless against exactly the conditions it exists to detect.
+   *   waiting on a clock. The returned effect cannot fail: a read that fails is folded into the verdict by
+   *   {@link IndexerLiveness.afterFailedPoll} — {@link IndexerLiveness.Unavailable}, or a gating verdict kept as it is —
+   *   because a check that gave up on its first network error would be useless against exactly the conditions it exists
+   *   to detect.
    */
   readonly startPolling: (ticks: Stream.Stream<unknown>) => Effect.Effect<void>;
   /** The current verdict, followed by each subsequent one. */
@@ -210,10 +211,10 @@ export class LivenessServiceImpl implements LivenessService {
    * Compares the two heights once and publishes the result.
    *
    * @remarks
-   *   The whole poll is folded into the verdict: `catchAll` converts a failed read into an `Unavailable` verdict, so the
+   *   The whole poll is folded into the verdict: `catchAllCause` hands a failed read to `afterFailedPoll`, so the
    *   returned effect has no error channel and the polling loop survives an unreachable node. `SubscriptionRef.update`
-   *   reads the previous verdict inside the callback, which is what lets `afterFailedPoll` continue a run of failures
-   *   without a separate get-then-write race.
+   *   reads the previous verdict inside the callback, which is what lets `afterFailedPoll` continue a run of failures —
+   *   or keep a `Behind` that a failed poll cannot disprove — without a separate get-then-write race.
    */
   #poll(): Effect.Effect<void> {
     return this.#compareOnce().pipe(

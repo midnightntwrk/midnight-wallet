@@ -53,6 +53,11 @@ export type IndexerLiveness = Data.TaggedEnum<{
    *   that a misconfigured or dead endpoint is visible to the caller instead of being indistinguishable from a check
    *   that has not yet run. The protection this check provides degrades while polls fail, and this variant is how that
    *   degradation announces itself.
+   *
+   *   A failed poll never replaces a verdict that gates. {@link IndexerLiveness.Behind} and
+   *   {@link IndexerLiveness.WrongNetwork} are proofs about the indexer, and an endpoint going quiet disproves neither —
+   *   only a successful comparison can. Were they replaced, one timeout would open the sync gate over the same stale
+   *   view the previous poll caught; see {@link afterFailedPoll}.
    */
   Unavailable: {
     /** How many consecutive polls have failed. */
@@ -263,13 +268,19 @@ export const evaluate = ({
 };
 
 /**
- * Produces the verdict that follows an attempt to read the node failing.
+ * Produces the verdict that follows a poll failing.
  *
  * @remarks
- *   The consecutive-failure count is the only state a liveness check carries between polls, and this function is where it
- *   advances. It counts up while failures continue, so a caller can tell a single missed poll from a node that has been
- *   unreachable for a long time, and resets once any other verdict has intervened, so a fresh outage is not reported as
- *   a continuing one.
+ *   A verdict that gates sync completion on the strength of a successful comparison — {@link IndexerLiveness.Behind} or
+ *   {@link IndexerLiveness.WrongNetwork} — is kept as it is. A failed poll proves nothing, so it cannot disprove what an
+ *   earlier poll established; only another successful comparison can. Replacing such a verdict with
+ *   {@link IndexerLiveness.Unavailable}, which does not gate, would let a single timeout release a caller waiting on a
+ *   stale indexer.
+ *
+ *   Every other verdict becomes `Unavailable`. Its consecutive-failure count is the only state a liveness check carries
+ *   between polls, and this function is where it advances. It counts up while failures continue, so a caller can tell a
+ *   single missed poll from a node that has been unreachable for a long time, and resets once any other verdict has
+ *   intervened, so a fresh outage is not reported as a continuing one.
  * @example
  *   ```ts
  *   const next = IndexerLiveness.afterFailedPoll(previous, 'websocket closed');
@@ -277,12 +288,15 @@ export const evaluate = ({
  *
  * @param previous - The verdict before this poll.
  * @param lastError - The message from the failure that just occurred.
- * @returns An {@link IndexerLiveness.Unavailable} verdict whose count continues the previous run of failures, or starts
- *   a new one.
+ * @returns `previous` unchanged when it is {@link IndexerLiveness.Behind} or {@link IndexerLiveness.WrongNetwork};
+ *   otherwise an {@link IndexerLiveness.Unavailable} verdict whose count continues the previous run of failures, or
+ *   starts a new one.
  */
 export const afterFailedPoll = (previous: IndexerLiveness, lastError: string): IndexerLiveness =>
-  Unavailable({
-    // Any other verdict means the node was reachable since the last failure, so this outage starts a fresh count.
-    consecutiveFailures: isUnavailable(previous) ? previous.consecutiveFailures + 1 : 1,
-    lastError,
-  });
+  isBehind(previous) || isWrongNetwork(previous)
+    ? previous
+    : Unavailable({
+        // Any other verdict means the node was reachable since the last failure, so this outage starts a fresh count.
+        consecutiveFailures: isUnavailable(previous) ? previous.consecutiveFailures + 1 : 1,
+        lastError,
+      });
