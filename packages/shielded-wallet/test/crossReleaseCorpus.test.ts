@@ -18,9 +18,10 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Either } from 'effect';
+import { Effect, Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js';
+import { makeCrossLedgerMigration } from '../src/v2/Migration.js';
 
 /**
  * The corpus this file asserts against, named by the release that wrote it.
@@ -59,5 +60,36 @@ describe('a shielded snapshot written by the last ledger-v8 release', () => {
     for (const entry of Object.values(wallet.coinHashes)) {
       expect(entry.commitment).not.toBe(entry.nullifier);
     }
+  });
+});
+
+describe('a shielded snapshot from that release, carried across the ledger boundary', () => {
+  // The step the cases above stop short of, and the one only a foreign snapshot can exercise. The shielded carry is
+  // `ZswapLocalState.deserialize(previous.state.serialize())` — so a state decoded from another release's bytes is
+  // re-serialized by *this* build's ledger-v8 and handed to ledger-v9. The corpus was written against ledger-v8
+  // 8.1.2 and this build resolves 8.1.0; a state that decodes but does not survive that pair would strand exactly
+  // the wallets that upgraded.
+  const carried = () => Effect.runPromise(makeCrossLedgerMigration().migrate(restored('shielded-funded')));
+
+  it('arrives on ledger-v9 holding those coins, at the same places in the tree', async () => {
+    const migrated = await carried();
+    const coins = [...migrated.state.coins];
+
+    // The corpus's own literals, not values read back off the source wallet: comparing the two sides would be
+    // satisfied by a carry that returned its input untouched, which is the one thing a carry must not be trusted on.
+    expect(coins.length).toBe(2);
+    expect(coins.map((coin) => coin.value).sort((a, b) => Number(a - b))).toEqual([100n, 250n]);
+    expect(coins.map((coin) => coin.mt_index).sort((a, b) => Number(a - b))).toEqual([0n, 1n]);
+    expect(migrated.state.firstFree).toBe(2n);
+  });
+
+  it('keeps the identity that release recorded, so the same owner holds the crossed coins', async () => {
+    const migrated = await carried();
+
+    expect(migrated.publicKeys.coinPublicKey).toBe('7c509af3e074189300874c4562cac07e4529746387989507c0e71c47255ddf1a');
+    expect(migrated.publicKeys.encryptionPublicKey).toBe(
+      '8aeb07fbd7719d401ead333a59a247071c7fa8811ada3ef2f5fac3bb8356058f',
+    );
+    expect(migrated.networkId).toBe('undeployed');
   });
 });
