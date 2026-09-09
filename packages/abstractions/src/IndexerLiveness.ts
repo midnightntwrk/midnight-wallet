@@ -18,8 +18,13 @@ import { Data } from 'effect';
  * @remarks
  *   Modelled as a union rather than a bare boolean so that additional skip conditions can be introduced without a
  *   breaking change to {@link IndexerLiveness}.
+ *
+ *   - `no-node-configured`: the default sync service found no node endpoint to compare the indexer against.
+ *   - `simulation`: the wallet syncs from an in-memory simulator, which has no node and never will.
+ *   - `no-liveness-feed`: the wallet's sync service exposes no liveness feed at all — a custom source supplied through the
+ *       builder — so no check can exist for it to run.
  */
-export type SkipReason = 'no-node-configured' | 'simulation';
+export type SkipReason = 'no-node-configured' | 'simulation' | 'no-liveness-feed';
 
 /**
  * The result of cross-checking an indexer's reported position against a node's finalized head.

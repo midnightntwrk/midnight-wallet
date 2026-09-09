@@ -15,8 +15,9 @@ head (every 30 seconds by default) and, once, checks that both endpoints name th
 result is an `IndexerLiveness` verdict on `SyncProgress`: `Behind`, `Unknown` and `WrongNetwork` block completion; the
 other four (`InSync`, `Ahead`, `Unavailable`, `Skipped`) do not. A poll that fails after a `Behind` or `WrongNetwork`
 verdict leaves that verdict in place — an unreachable endpoint disproves nothing — so a node outage cannot release a
-caller waiting on a stale indexer. Tune with `livenessConfiguration` and `livenessPollInterval`. This detects
-staleness, not withholding.
+caller waiting on a stale indexer. A custom sync service supplied through `withSync` that exposes no `livenessUpdates`
+is reported as `Skipped` (`no-liveness-feed`), so it can still reach "synced". Tune with `livenessConfiguration` and
+`livenessPollInterval`. This detects staleness, not withholding.
 
 ### Fixes
 
