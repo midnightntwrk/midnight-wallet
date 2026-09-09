@@ -26,6 +26,7 @@ vi.mock('@polkadot/api', () => ({
 }));
 
 const { PolkadotNodeClient } = await import('../PolkadotNodeClient.js');
+const { ApiPromise } = await import('@polkadot/api');
 
 const makeClient = (reconnectionTimeout?: Duration.Duration) =>
   Effect.gen(function* () {
@@ -54,6 +55,31 @@ const settleWithin = (millis: number, reconnectionTimeout?: Duration.Duration) =
   ).pipe(Effect.runPromise);
 
 describe('PolkadotNodeClient.make', () => {
+  it('should connect within a finite reconnectionTimeout even when the first socket attempt errors', async () => {
+    // With `throwOnConnect: true`, `ApiPromise.create` returns `isReadyOrError`, which rejects on the provider's first
+    // `error` event — any socket error, such as a node restarting — although `WsProvider` would have retried and
+    // connected a moment later. A bounded caller therefore failed within milliseconds and never used the window it
+    // asked for. The stub mirrors the library: rejection on the first error when throwing on connect, otherwise the
+    // connection lands after a retry. The api it yields is already disconnected, so `make()` has no close to wait for.
+    vi.mocked(ApiPromise).create.mockImplementationOnce((options) =>
+      options?.throwOnConnect
+        ? Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:1'))
+        : new Promise((resolve) =>
+            setTimeout(
+              // Type cast required because: the client only reads `isConnected` from the api during make(); a full
+              // ApiPromise double would drag the whole polkadot surface into a test about one connection option.
+              () => resolve({ isConnected: false } as unknown as Awaited<ReturnType<typeof ApiPromise.create>>),
+              50,
+            ),
+          ),
+    );
+
+    const result = await settleWithin(3_000, Duration.seconds(1));
+
+    expect(result.outcome).toBe('settled');
+    expect(result.exit !== undefined && Exit.isSuccess(result.exit)).toBe(true);
+  });
+
   it('should fail with a ConnectionError when a finite reconnectionTimeout elapses before the node answers', async () => {
     const result = await settleWithin(3_000, Duration.millis(200));
 
