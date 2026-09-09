@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
+import { Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Sink, Console } from 'effect';
 import { IndexerLiveness, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type WalletRuntimeError,
@@ -22,6 +22,7 @@ import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type SerializationCapability } from './Serialization.js';
 import { type SyncCapability, type SyncService } from './Sync.js';
 import { type SyncUpdate } from './SyncSchema.js';
+import { retrySchedule } from './RetrySchedule.js';
 import {
   type TransactingCapability,
   type TokenTransfer,
@@ -157,7 +158,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
           Stream.flatMap((state) => livenessUpdates(state)),
           Stream.mapEffect((update) => this.#applyUpdate(update)),
           Stream.tapError((error) => Console.error(error)),
-          Stream.retry(RunningV1Variant.#retrySchedule()),
+          Stream.retry(retrySchedule()),
           Stream.runScoped(Sink.drain),
           Effect.forkScoped,
           Effect.asVoid,
@@ -168,20 +169,6 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
   #applyUpdate(update: TSyncUpdate): Effect.Effect<void, WalletError> {
     return SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
       pipe(this.#v1Context.syncCapability.applyUpdate(state, update), EitherOps.toEffect),
-    );
-  }
-
-  /** Exponential backoff with jitter, capped at two minutes — shared by both sync streams. */
-  static #retrySchedule(): Schedule.Schedule<Duration.Duration, unknown> {
-    return pipe(
-      Schedule.exponential(Duration.seconds(1), 2),
-      Schedule.map((delay) => {
-        const maxDelay = Duration.minutes(2);
-        const jitter = Duration.millis(Math.floor(Math.random() * 1000));
-        const delayWithJitter = Duration.toMillis(delay) + Duration.toMillis(jitter);
-
-        return Duration.millis(Math.min(delayWithJitter, Duration.toMillis(maxDelay)));
-      }),
     );
   }
 
@@ -203,7 +190,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
           CoreWallet.updateProgress(state, { isConnected: false }),
         ),
       ),
-      Stream.retry(RunningV1Variant.#retrySchedule()),
+      Stream.retry(retrySchedule()),
     );
   }
 

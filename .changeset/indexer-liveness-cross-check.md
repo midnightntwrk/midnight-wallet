@@ -25,6 +25,9 @@ is reported as `Skipped` (`no-liveness-feed`), so it can still reach "synced". T
 - `api.rpc` calls (`getGenesis()`) work after client creation; they previously failed as disconnected.
 - Node connection failures are typed errors reachable by `catchTag`/`catchAll`, no longer defects.
 - A finite `reconnectionTimeout` also bounds the initial connection; no timeout (submission) stays unbounded.
+- The sync streams' retry backoff is genuinely capped at two minutes. The cap was applied to the schedule's output
+  rather than its interval, so retries kept doubling — half an hour apart by the twelfth — until the timer overflowed
+  and the stream stopped retrying.
 
 BREAKING CHANGE (`wallet-sdk`, `wallet-sdk-facade`, `wallet-sdk-unshielded-wallet`): `isStrictlyComplete()`,
 `isCompleteWithin()`, `FacadeState.isSynced` and `waitForSyncedState()` now also require the indexer not to trail the
