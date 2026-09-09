@@ -210,8 +210,9 @@ export const resolveNodeEndpoint = (config: DefaultSyncConfiguration): Option.Op
  *
  * @remarks
  *   Returns `Option.none` when no node endpoint is configured. There is nothing to compare the indexer against in that
- *   case, so no service is started and the wallet's progress keeps the {@link IndexerLiveness.Skipped} default set by
- *   `createSyncProgress` — "no check ran, because you configured no node".
+ *   case, so no service is started. The progress defaults to {@link IndexerLiveness.Unknown}, which gates completion, so
+ *   the caller must still publish a verdict: the default sync service answers `Option.none` with a single
+ *   {@link IndexerLiveness.Skipped} — "no check ran, because you configured no node".
  * @param config - The sync configuration, whose `nodeClientConnection` decides whether a check is possible, and whose
  *   `livenessConfiguration` and `livenessPollInterval` override the defaults.
  * @param initialVerdict - The verdict to start from, so a rebuilt stream does not discard what is already known.

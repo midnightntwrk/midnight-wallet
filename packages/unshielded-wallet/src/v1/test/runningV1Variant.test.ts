@@ -200,4 +200,65 @@ describe('RunningV1Variant.startSync', () => {
       expect(observed.liveness).toBe(1);
     },
   );
+
+  it('should report Skipped when the sync service has no liveness feed, so a custom source can still report synced', async () => {
+    // `Unknown` is the progress default and gates completion; the only writers that move a wallet off it are a liveness
+    // feed and the simulator capability. A service without `livenessUpdates` — any custom source supplied through
+    // `withSync` — therefore left the wallet blocked forever, with no error and no log. The variant is the one place
+    // that inspects the service, so the absence of a feed is turned into a verdict there, once.
+    const feedlessSyncService: SyncService<CoreWallet, SyncUpdate> = {
+      updates: () =>
+        Stream.concat(
+          Stream.make<SyncUpdate[]>({ type: 'UnshieldedTransactionsProgress', highestTransactionId: 0 }),
+          // Held open: a live subscription does not end.
+          Stream.never,
+        ),
+    };
+
+    const program = Effect.gen(function* () {
+      const stateRef = yield* SubscriptionRef.make(CoreWallet.init(publicKey, 'undeployed'));
+      const scope = yield* Scope.make();
+
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef },
+        // Type cast required because: the test exercises only the sync service and capability; building the full
+        // context would drag transacting, serialization and key material into a test about the liveness default.
+        {
+          syncService: feedlessSyncService,
+          syncCapability,
+          transactionHistoryService: noOpHistory,
+        } as unknown as RunningV1Variant.Context<string, SyncUpdate>,
+      );
+
+      const connected = yield* Effect.fork(
+        stateRef.changes.pipe(
+          Stream.filter((wallet) => wallet.progress.isConnected),
+          Stream.runHead,
+        ),
+      );
+      yield* Effect.yieldNow();
+
+      yield* variant.startSyncInBackground().pipe(Effect.provideService(Scope.Scope, scope));
+
+      yield* connected.await.pipe(
+        Effect.flatten,
+        Effect.timeoutFailCause({
+          duration: Duration.seconds(3),
+          onTimeout: () => Cause.die(new Error('the progress update never reached the wallet state')),
+        }),
+      );
+
+      const wallet = yield* SubscriptionRef.get(stateRef);
+      yield* Scope.close(scope, Exit.void);
+
+      return wallet.progress;
+    });
+
+    const progress = await Effect.runPromise(Effect.scoped(program));
+
+    expect(progress.indexerLiveness).toStrictEqual(IndexerLiveness.Skipped({ reason: 'no-liveness-feed' }));
+    // The user-visible symptom: connected, caught up, and still never "synced".
+    expect(progress.isStrictlyComplete()).toBe(true);
+  });
 });
