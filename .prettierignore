@@ -8,3 +8,6 @@ reports/
 
 # Third-party skills are vendored, not ours to reformat
 .claude/
+# Snapshots written by a released SDK. They are bytes, not source: reformatting one would mean the corpus no
+# longer holds what any release actually wrote.
+**/test/fixtures/cross-release/
