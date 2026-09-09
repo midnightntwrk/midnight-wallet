@@ -9,7 +9,7 @@
 
 feat(unshielded-wallet): cross-check the indexer's reported tip against the node's finalized head
 
-The wallet now verifies "synced" against the chain instead of the indexer's self-report: it polls a node's finalized
+The unshielded wallet now verifies "synced" against the chain instead of the indexer's self-report: it polls a node's finalized
 head (every 30 seconds by default) and, once, checks that both endpoints name the same genesis block. The node is
 `nodeClientConnection` on the configuration, falling back to `relayURL`; a wallet naming neither is not checked. The
 result is an `IndexerLiveness` verdict on `SyncProgress`: `Behind`, `Unknown` and `WrongNetwork` block completion; the
@@ -20,12 +20,15 @@ is reported as `Skipped` (`no-liveness-feed`), so it can still reach "synced". A
 says something new — its kind, a `Behind`'s lag, an `Unavailable`'s failure count — not because the chain advanced, so
 an idle wallet's state does not change once per poll; the heights on a published `InSync` are those at which it was
 first reached (`IndexerLiveness.equivalent` is the predicate). Tune with `livenessConfiguration` and
-`livenessPollInterval`. This detects staleness, not withholding.
+`livenessPollInterval`. This detects staleness, not withholding. The shielded and dust wallets are not gated: their
+shared `SyncProgress` carries no verdict, and `FacadeState.isSynced` gates only through the unshielded wallet's progress
+(#743).
 
 ### Fixes
 
-- `isConnected` on the sync progress clears when the indexer subscription drops or is completed by the indexer, and the
-  subscription is rebuilt in both cases; it previously latched `true`, and a completed subscription was never rebuilt.
+- `isConnected` on the unshielded wallet's sync progress clears when the indexer subscription drops or is completed by
+  the indexer, and the subscription is rebuilt in both cases; it previously latched `true`, and a completed
+  subscription was never rebuilt. The shielded and dust wallets still latch it (#743).
 - `api.rpc` calls (`getGenesis()`) work after client creation; they previously failed as disconnected.
 - Node connection failures are typed errors reachable by `catchTag`/`catchAll`, no longer defects.
 - A finite `reconnectionTimeout` also bounds the initial connection — the handshake and the close that follows it — and
@@ -33,13 +36,14 @@ first reached (`IndexerLiveness.equivalent` is the predicate). Tune with `livene
   first socket error. The same wait for the close, under the same bound, runs when the last in-flight call releases the
   socket, so the next call does not start on a stale connection flag. The liveness poll's own timeout is hard even when
   a read is stuck in that build; no timeout (submission) stays unbounded.
-- The sync streams' retry backoff is genuinely capped at two minutes. The cap was applied to the schedule's output
-  rather than its interval, so retries kept doubling — half an hour apart by the twelfth — until the timer overflowed
-  and the stream stopped retrying.
+- The unshielded wallet's sync streams' retry backoff is genuinely capped at two minutes. The cap was applied to the
+  schedule's output rather than its interval, so retries kept doubling — half an hour apart by the twelfth — until the
+  timer overflowed and the stream stopped retrying. The shielded and dust wallets still carry the old schedule (#742).
 
-BREAKING CHANGE (`wallet-sdk`, `wallet-sdk-facade`, `wallet-sdk-unshielded-wallet`): `isStrictlyComplete()`,
-`isCompleteWithin()`, `FacadeState.isSynced` and `waitForSyncedState()` now also require the indexer not to trail the
-finalized head, a matching genesis, and a first verdict (`Skipped` — no node, or a simulation — does not block). On by
+BREAKING CHANGE (`wallet-sdk`, `wallet-sdk-facade`, `wallet-sdk-unshielded-wallet`): the unshielded wallet's
+`isStrictlyComplete()` and `isCompleteWithin()`, and through its progress `FacadeState.isSynced` and the facade's
+`waitForSyncedState()`, now also require the indexer not to trail the finalized head, a matching genesis, and a first
+verdict (`Skipped` — no node, or a simulation — does not block). On by
 default for every wallet with a `relayURL`. Against a stale indexer, `waitForSyncedState()` waits — it neither rejects
 nor times out; race it against a deadline of your own and read `progress.indexerLiveness` and `progress.isConnected`
 (the `indexer-liveness` docs snippet shows the pattern). `SyncProgressData` gains a required `indexerLiveness` field,
