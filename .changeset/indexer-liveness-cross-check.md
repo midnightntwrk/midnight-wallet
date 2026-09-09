@@ -21,7 +21,8 @@ is reported as `Skipped` (`no-liveness-feed`), so it can still reach "synced". T
 
 ### Fixes
 
-- `isConnected` on the sync progress clears when the indexer subscription drops; it previously latched `true`.
+- `isConnected` on the sync progress clears when the indexer subscription drops or is completed by the indexer, and the
+  subscription is rebuilt in both cases; it previously latched `true`, and a completed subscription was never rebuilt.
 - `api.rpc` calls (`getGenesis()`) work after client creation; they previously failed as disconnected.
 - Node connection failures are typed errors reachable by `catchTag`/`catchAll`, no longer defects.
 - A finite `reconnectionTimeout` also bounds the initial connection; no timeout (submission) stays unbounded.

@@ -32,7 +32,7 @@ import {
 } from './Transacting.js';
 import { type UtxoWithMeta } from './UnshieldedState.js';
 import { type UnboundTransaction } from './TransactionOps.js';
-import { type WalletError } from './WalletError.js';
+import { SyncWalletError, type WalletError } from './WalletError.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 import { type CoinSelection } from '@midnightntwrk/wallet-sdk-capabilities';
@@ -177,6 +177,12 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
       SubscriptionRef.get(this.#context.stateRef),
       Stream.fromEffect,
       Stream.flatMap((state) => this.#v1Context.syncService.updates(state)),
+      // A live wallet's update source has no legitimate end — the indexer subscription and the simulator's state feed
+      // are both open-ended — so a stream that completes has been dropped as surely as one that failed. The indexer
+      // does exactly this: a graphql-ws `complete` ends the stream cleanly. Left as an end, the sync fibre simply
+      // finished: no retry, no flag reset, and no further transaction could ever reach the wallet. Failing here puts
+      // an end through the same path as a failure — the log, the flag, the backoff.
+      Stream.concat(Stream.fail(new SyncWalletError({ message: 'Sync subscription ended' }))),
       Stream.mapEffect((update) => this.#applyUpdate(update)),
       Stream.tapError((error) => Console.error(error)),
       // The flag is written true on every progress update and nowhere else goes false, so without this it latches: a

@@ -39,7 +39,14 @@ import { type IndexerLivenessUpdate, type SyncUpdate, WalletSyncUpdateSchema } f
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 
 export interface SyncService<TState, TUpdate> {
-  /** The wallet's subscription to its update source. Rebuilt by the variant's retry whenever it fails. */
+  /**
+   * The wallet's subscription to its update source. Rebuilt by the variant's retry whenever it fails.
+   *
+   * @remarks
+   *   Expected to be open-ended. A stream that completes is treated by the variant exactly like one that failed — logged,
+   *   `isConnected` cleared, and rebuilt after backoff — because a wallet has no use for a source that has stopped
+   *   speaking, whatever the reason.
+   */
   updates: (state: TState) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
   /**
    * Updates whose lifetime is the wallet's, not the subscription's.
