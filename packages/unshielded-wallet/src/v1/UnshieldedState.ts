@@ -128,6 +128,25 @@ export const UnshieldedState = {
     ),
 
   /**
+   * Releases a booked coin named by its id, returning it to the available side. A reservation records the ids of the
+   * coins it books rather than the coins themselves, so releasing one has to be possible from the id alone.
+   *
+   * Like {@link UnshieldedState.rollbackSpend}, an id that is not booked is left alone rather than reported: sync may
+   * have cleared the coin first, and that race is expected.
+   */
+  rollbackSpendByHash: (state: UnshieldedState, hash: UtxoHash): UnshieldedState =>
+    pipe(
+      HashMap.get(state.pendingUtxos, hash),
+      Option.match({
+        onNone: () => state,
+        onSome: ({ utxo }) => ({
+          availableUtxos: HashMap.set(state.availableUtxos, hash, utxo),
+          pendingUtxos: HashMap.remove(state.pendingUtxos, hash),
+        }),
+      }),
+    ),
+
+  /**
    * Releases every booking that has reached its expiry, returning those coins to the available side. A booking is only
    * released by the submit path today, so a transaction abandoned between balancing and submission leaks its coins;
    * this sweep is what bounds that leak to the transaction's own lifetime.
