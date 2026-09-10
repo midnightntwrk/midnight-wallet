@@ -13,7 +13,7 @@
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { createSyncProgress, type SyncProgress, type SyncProgressData } from './SyncProgress.js';
 import { type PublicKey } from '../KeyStore.js';
-import { UnshieldedState, type UnshieldedUpdate } from './UnshieldedState.js';
+import { UnshieldedState, type UnshieldedUpdate, type UtxoHash } from './UnshieldedState.js';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Either, Array as Arr, pipe } from 'effect';
 import { ApplyTransactionError, RollbackUtxoError, SpendUtxoError, type WalletError } from './WalletError.js';
@@ -89,6 +89,17 @@ export const CoreWallet = {
   /** Releases every booking that has reached its expiry. See {@link UnshieldedState.expirePending}. */
   expirePending(coreWallet: CoreWallet, now: Date): CoreWallet {
     return { ...coreWallet, state: UnshieldedState.expirePending(coreWallet.state, now) };
+  },
+
+  /**
+   * Releases the booked coins named by `hashes`. Unlike {@link CoreWallet.rollbackUtxo}, this needs no transaction,
+   * which is what lets a caller holding only a record of the ids release them. Ids that are not booked are ignored.
+   */
+  revertUtxos(coreWallet: CoreWallet, hashes: ReadonlyArray<UtxoHash>): CoreWallet {
+    return {
+      ...coreWallet,
+      state: hashes.reduce(UnshieldedState.rollbackSpendByHash, coreWallet.state),
+    };
   },
 
   spend(coreWallet: CoreWallet, utxo: ledger.Utxo, ttl: Date): Either.Either<CoreWallet, WalletError> {

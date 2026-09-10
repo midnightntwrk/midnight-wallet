@@ -34,7 +34,7 @@ import {
   type UnprovenTransactionBalanceResult,
 } from './v1/Transacting.js';
 import { type WalletSyncUpdate } from './v1/SyncSchema.js';
-import { type UtxoWithMeta } from './v1/UnshieldedState.js';
+import { type UtxoHash, type UtxoWithMeta } from './v1/UnshieldedState.js';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import { type PublicKey } from './KeyStore.js';
@@ -164,6 +164,23 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
   revertTransaction(
     transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
   ): Promise<void>;
+
+  /**
+   * Releases the booked coins named by `utxoIds`, making them spendable again.
+   *
+   * Use this when the transaction that booked them is not to hand — a caller tracking only the ids it reserved, or a
+   * reservation being cleaned up. When the transaction is available, prefer {@link revertTransaction}.
+   *
+   * @example
+   *   ```typescript
+   *   await wallet.revertUtxos(['4b0f…#0', '4b0f…#1']);
+   *   ```;
+   *
+   * @param utxoIds - Ids of the coins to release, each `intentHash#outputNo`. An id that is not booked is ignored,
+   *   since sync may have cleared the coin first.
+   * @returns A promise that resolves once the wallet state has been updated
+   */
+  revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void>;
 
   getAddress(): Promise<UnshieldedAddress>;
 
@@ -334,6 +351,14 @@ export function CustomUnshieldedWallet<
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.revertTransaction(transaction),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.revertUtxos(utxoIds),
         })
         .pipe(Effect.runPromise);
     }

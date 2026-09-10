@@ -15,7 +15,7 @@ import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, Option, pipe, Array as Arr } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { InsufficientFundsError, OtherWalletError, TransactingError, type WalletError } from './WalletError.js';
-import { type UtxoWithMeta } from './UnshieldedState.js';
+import { type UtxoHash, type UtxoWithMeta } from './UnshieldedState.js';
 import {
   type BalanceRecipe,
   type CoinSelection,
@@ -109,6 +109,9 @@ export interface TransactingCapability<TState> {
     wallet: CoreWallet,
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Either.Either<CoreWallet, WalletError>;
+
+  /** Releases booked coins by id, for a caller that holds a record of the ids rather than the transaction. */
+  revertUtxos(wallet: CoreWallet, utxoIds: ReadonlyArray<UtxoHash>): CoreWallet;
 
   signUnboundTransaction(
     transaction: UnboundTransaction,
@@ -484,6 +487,17 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
    *   UnprovenTransaction)
    * @returns The updated wallet with rolled back UTXOs if successful, otherwise an error
    */
+  /**
+   * Releases the booked coins named by `utxoIds`, without needing the transaction that booked them.
+   *
+   * @param wallet - The wallet holding the bookings
+   * @param utxoIds - Ids of the coins to release, as `intentHash#outputNo`
+   * @returns The wallet with those coins available again; ids that are not booked are ignored
+   */
+  revertUtxos(wallet: CoreWallet, utxoIds: ReadonlyArray<UtxoHash>): CoreWallet {
+    return CoreWallet.revertUtxos(wallet, utxoIds);
+  }
+
   revertTransaction(
     wallet: CoreWallet,
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,

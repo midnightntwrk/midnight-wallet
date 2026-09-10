@@ -485,6 +485,80 @@ describe('UnshieldedState', () => {
     });
   });
 
+  describe('rollbackSpendByHash', () => {
+    // A reservation records the ids of the coins it books, not the coins themselves, so releasing one has to be
+    // possible from the id alone.
+    const bookedState = (...utxos: readonly UtxoWithMeta[]): UnshieldedState =>
+      utxos.reduce(
+        (state, utxo) =>
+          pipe(
+            UnshieldedState.applyUpdate(state, { createdUtxos: [utxo], spentUtxos: [], status: 'SUCCESS' }),
+            getOrThrow,
+            (s) => UnshieldedState.spend(s, utxo, TTL),
+            getOrThrow,
+          ),
+        UnshieldedState.empty(),
+      );
+
+    it('returns a booked coin to the available side, with its meta intact', () => {
+      const booked = generateMockUtxoWithMeta({ intentHash: 'h-by-hash', outputNo: 0 });
+
+      const state = UnshieldedState.rollbackSpendByHash(bookedState(booked), utxoHash(booked));
+
+      expect(Option.getOrNull(HashMap.get(state.availableUtxos, utxoHash(booked)))).toEqual(booked);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('releases only the coin named by the id', () => {
+      const released = generateMockUtxoWithMeta({ intentHash: 'h-released', outputNo: 0 });
+      const kept = generateMockUtxoWithMeta({ intentHash: 'h-kept', outputNo: 0 });
+
+      const state = UnshieldedState.rollbackSpendByHash(bookedState(released, kept), utxoHash(released));
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(released)]);
+      expect([...HashMap.keys(state.pendingUtxos)]).toEqual([utxoHash(kept)]);
+    });
+
+    it('ignores an id that is not booked, since sync may have cleared it first', () => {
+      const available = generateMockUtxoWithMeta({ intentHash: 'h-not-booked', outputNo: 0 });
+      const seeded = pipe(
+        UnshieldedState.applyUpdate(UnshieldedState.empty(), {
+          createdUtxos: [available],
+          spentUtxos: [],
+          status: 'SUCCESS',
+        }),
+        getOrThrow,
+      );
+
+      const state = UnshieldedState.rollbackSpendByHash(seeded, utxoHash(available));
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(available)]);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('ignores an id this wallet has never seen', () => {
+      const stranger = generateMockUtxoWithMeta({ intentHash: 'h-stranger', outputNo: 0 });
+
+      const state = UnshieldedState.rollbackSpendByHash(UnshieldedState.empty(), utxoHash(stranger));
+
+      expect(HashMap.size(state.availableUtxos)).toEqual(0);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('is safe to repeat, so a release racing with sync cannot fail', () => {
+      const booked = generateMockUtxoWithMeta({ intentHash: 'h-twice', outputNo: 0 });
+
+      const state = pipe(
+        bookedState(booked),
+        (s) => UnshieldedState.rollbackSpendByHash(s, utxoHash(booked)),
+        (s) => UnshieldedState.rollbackSpendByHash(s, utxoHash(booked)),
+      );
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(booked)]);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+  });
+
   describe('booking expiry', () => {
     const seedAvailable = (...utxos: readonly UtxoWithMeta[]): UnshieldedState =>
       pipe(
