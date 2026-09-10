@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { DateTime, HashSet, Order, pipe } from 'effect';
+import { DateTime, Either, HashSet, Order, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as PendingTransactions from '../pendingTransactions.js';
 
@@ -179,6 +179,53 @@ describe('Reservations', () => {
       const cleared = PendingTransactions.clear(state, { ids: ['id-a'] }, txTrait);
 
       expect(cleared.reservations).toEqual([]);
+    });
+  });
+
+  describe('persistence', () => {
+    const withOneOfEach = pipe(
+      PendingTransactions.addPendingTransaction(empty, { ids: ['id-tx'] }, CREATED_AT, txTrait),
+      (s) => PendingTransactions.addReservation(s, reservation({ identifiers: ['id-reserved'] })),
+    );
+
+    const roundTrip = (state: PendingTransactions.PendingTransactions<FakeTransaction>) =>
+      PendingTransactions.deserialize<FakeTransaction>(PendingTransactions.serialize(state, txTrait), txTrait);
+
+    it('brings a reservation back with every field it was stored with', () => {
+      // A reservation is the only record that a coin is spoken for, so losing one on restart strands that coin.
+      const restored = roundTrip(withOneOfEach);
+
+      expect(Either.getOrThrow(restored).reservations).toEqual([reservation({ identifiers: ['id-reserved'] })]);
+    });
+
+    it('still brings back the tracked transactions', () => {
+      const restored = Either.getOrThrow(roundTrip(withOneOfEach));
+
+      expect(restored.all.map((item) => item.tx)).toEqual([{ ids: ['id-tx'] }]);
+    });
+
+    it('reads a snapshot written before reservations existed, with none of them', () => {
+      // Such a snapshot records transactions only; a wallet restoring it has no reservations to speak of.
+      const v1 = JSON.stringify({
+        version: 'v1',
+        transactions: [
+          {
+            tx: Buffer.from(JSON.stringify({ ids: ['id-old'] }), 'utf-8').toString('hex'),
+            creationTime: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      });
+
+      const restored = Either.getOrThrow(PendingTransactions.deserialize<FakeTransaction>(v1, txTrait));
+
+      expect(restored.all.map((item) => item.tx)).toEqual([{ ids: ['id-old'] }]);
+      expect(restored.reservations).toEqual([]);
+    });
+
+    it('refuses a snapshot whose version it does not know', () => {
+      const unknown = JSON.stringify({ version: 'v99', transactions: [] });
+
+      expect(Either.isLeft(PendingTransactions.deserialize<FakeTransaction>(unknown, txTrait))).toBe(true);
     });
   });
 });

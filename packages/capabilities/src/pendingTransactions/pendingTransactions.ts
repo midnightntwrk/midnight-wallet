@@ -238,10 +238,50 @@ export const SerializedSchema = <TTransaction>(
   });
 };
 
+const ReservationSchema = Schema.Struct({
+  identifiers: Schema.Array(Schema.String),
+  intentHashes: Schema.Array(Schema.String),
+  inputs: Schema.Struct({ unshielded: Schema.Array(Schema.String) }),
+  ttl: Schema.Date,
+  createdAt: Schema.DateTimeUtc,
+  expired: Schema.Boolean,
+});
+
+/** `v1` plus the reservations. Written by every `serialize`; `v1` is still read, and decodes to no reservations. */
+type SerializedV2<TTransaction> = Readonly<{
+  version: 'v2';
+  transactions: readonly PendingItem<TTransaction>[];
+  reservations: readonly Reservation[];
+}>;
+
+export const SerializedV2Schema = <TTransaction>(
+  txTrait: TransactionTrait<TTransaction>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- as above, the encoded side is plain JSON
+): Schema.Schema<SerializedV2<TTransaction>, any> => {
+  const TxSchema = Schema.declare<TTransaction>((tx: unknown): tx is TTransaction => txTrait.isTx(tx));
+  const TxFromHex: Schema.Schema<TTransaction, string> = Schema.transform(Schema.Uint8ArrayFromHex, TxSchema, {
+    encode: (tx): Uint8Array => txTrait.serialize(tx),
+    decode: (bytes) => txTrait.deserialize(bytes),
+  });
+
+  return Schema.Struct({
+    version: Schema.Literal('v2'),
+    transactions: Schema.Array(Schema.Struct({ tx: TxFromHex, creationTime: Schema.DateTimeUtc })),
+    reservations: Schema.Array(ReservationSchema),
+  });
+};
+
+/** Every format this module can read. A snapshot written by a newer version is refused rather than half-read. */
+const AnySerializedSchema = <TTransaction>(
+  txTrait: TransactionTrait<TTransaction>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- as above
+): Schema.Schema<SerializedV2<TTransaction> | Serialized<TTransaction>, any> =>
+  Schema.Union(SerializedV2Schema(txTrait), SerializedSchema(txTrait));
+
 export const serialize = <TTransaction>(
   state: PendingTransactions<TTransaction>,
   txTrait: TransactionTrait<TTransaction>,
-): string => pipe(state, toSerialized, Schema.encodeSync(SerializedSchema(txTrait)), JSON.stringify);
+): string => pipe(state, toSerialized, Schema.encodeSync(SerializedV2Schema(txTrait)), JSON.stringify);
 
 export const deserialize = <TTransaction>(
   serialized: string,
@@ -249,25 +289,27 @@ export const deserialize = <TTransaction>(
 ): Either.Either<PendingTransactions<TTransaction>, ParseResult.ParseError> => {
   return pipe(
     serialized,
-    Schema.decodeUnknownEither(Schema.parseJson(SerializedSchema<TTransaction>(txTrait))),
+    Schema.decodeUnknownEither(Schema.parseJson(AnySerializedSchema<TTransaction>(txTrait))),
     Either.map((data) => fromSerialized<TTransaction>(data)),
   );
 };
 
 export const toSerialized = <TTransaction>(
   pendingTransactions: PendingTransactions<TTransaction>,
-): Serialized<TTransaction> => {
+): SerializedV2<TTransaction> => {
   return {
-    version: 'v1',
+    version: 'v2',
     transactions: pendingTransactions.all,
+    reservations: pendingTransactions.reservations,
   };
 };
 
 export const fromSerialized = <TTransaction>(
-  serialized: Serialized<TTransaction>,
+  serialized: SerializedV2<TTransaction> | Serialized<TTransaction>,
 ): PendingTransactions<TTransaction> => {
   return {
     all: serialized.transactions,
-    reservations: [],
+    // A snapshot written before reservations existed records none, which is the truth about what it knew.
+    reservations: serialized.version === 'v2' ? serialized.reservations : [],
   };
 };
