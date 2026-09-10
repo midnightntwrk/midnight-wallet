@@ -106,7 +106,12 @@ export const makeDefaultSyncCapability = (
 ): SyncCapability<CoreWallet, WalletSyncUpdate> => {
   return {
     applyUpdate: (state: CoreWallet, update: WalletSyncUpdate): Either.Either<CoreWallet, WalletError> => {
-      const swept = state;
+      // Every update is an opportunity to release a booking nothing else will: a transaction abandoned between
+      // balancing and submission leaves one behind, and past its TTL the ledger would reject that transaction
+      // anyway. Progress updates count, because a leaked booking blocks its coin whether or not the address sees
+      // further activity. This path follows the chain, so the expiry it compares against is wall time; the
+      // simulator path uses simulator time instead.
+      const swept = CoreWallet.expirePending(state, new Date());
 
       if (update.type === 'UnshieldedTransactionsProgress') {
         return Either.right(
@@ -190,7 +195,8 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
       update: SimulatorSyncUpdate,
     ): Either.Either<CoreWallet, WalletError> => {
       const { ledger: ledgerState, currentTime } = update.update;
-      const state = walletBeforeSweep;
+      // Simulator time drives the wallet here, so the booking sweep expires against it rather than the wall clock.
+      const state = CoreWallet.expirePending(walletBeforeSweep, currentTime);
       const walletAddress = state.publicKey.addressHex;
       const nativeTokenType = ledger.nativeToken().raw;
 
