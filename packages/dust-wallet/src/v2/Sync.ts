@@ -101,6 +101,16 @@ import { type Dust } from './types/index.js';
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
   blockData: (height?: number) => Effect.Effect<BlockData, WalletError>;
+  /**
+   * Delay after which background synchronization re-runs `updates` once it has completed.
+   *
+   * Only meaningful for a service whose `updates` is finite. The projections service ends its stream after a single
+   * pass, so without this a wallet synchronizing in the background would converge once and then never observe anything
+   * again — the variant's background retry does not cover it, because that re-runs a pass on failure, not on
+   * completion. A service whose `updates` is a long-lived subscription omits this and is left running one pass, as that
+   * pass never ends.
+   */
+  readonly backgroundRepeatDelay?: Duration.DurationInput;
 }
 
 export type ChangesResult = {
@@ -255,6 +265,19 @@ export type DefaultSyncConfiguration = {
   versionWatch?: VersionWatchConfig;
   /** The ledger parameters codecs blocks are read with; defaults to {@link defaultLedgerParametersCodecs}. */
   ledgerParametersCodecs?: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters>;
+  /**
+   * Delay in milliseconds between background synchronization passes, for a sync service that synchronizes in finite
+   * passes rather than over a live subscription — currently only the projections service. Ignored by the event-based
+   * service, whose subscription never completes.
+   *
+   * Lower values keep the wallet closer to the chain tip at the cost of more idle queries; a pass with nothing to do
+   * costs one block query, because the generation subscription and the commitment load both short-circuit on an
+   * unchanged tip. Passes never overlap regardless of this value: a pass that cannot take the sync lock yields to the
+   * one already running and waits for the next interval.
+   *
+   * @default 5000
+   */
+  backgroundSyncInterval?: number;
 };
 
 /** How often the chain is asked its version when the configuration does not say. */
@@ -718,6 +741,8 @@ export const makeEventLessSyncService = (
   const anonymityLevel = config.anonymityLevel ?? 7;
 
   return {
+    // Each pass ends its own stream, so background synchronization has to be told to run another one.
+    backgroundRepeatDelay: Duration.millis(config.backgroundSyncInterval ?? 5_000),
     updates: (
       state: CoreWallet,
       secretKey: DustSecretKey,

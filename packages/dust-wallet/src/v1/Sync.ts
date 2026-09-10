@@ -52,6 +52,15 @@ import { Uint8ArraySchema } from './Serialization.js';
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
   blockData: () => Effect.Effect<BlockData, WalletError>;
+  /**
+   * Delay after which background synchronization re-runs `updates` once it has completed.
+   *
+   * Only meaningful for a service whose `updates` is finite. A service whose `updates` is a long-lived subscription
+   * omits this and is left running the one pass, because that pass never ends — which is every service this variant
+   * has, the finite-pass projections sync being a ledger-v9 capability that no published ledger-v8 can support. The
+   * field is declared in both twins so their background synchronization reads one contract.
+   */
+  readonly backgroundRepeatDelay?: Duration.DurationInput;
 }
 
 // TODO: use schema instead
