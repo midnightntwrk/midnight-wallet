@@ -135,7 +135,19 @@ export const UnshieldedState = {
    * @param now - The instant to expire against. A booking expires at its TTL, not after it, because the ledger already
    *   rejects the transaction at that instant.
    */
-  expirePending: (state: UnshieldedState, _now: Date): UnshieldedState => state,
+  expirePending: (state: UnshieldedState, now: Date): UnshieldedState => {
+    const expired = HashMap.filter(state.pendingUtxos, ({ ttl }) => ttl.getTime() <= now.getTime());
+
+    return HashMap.isEmpty(expired)
+      ? state
+      : {
+          availableUtxos: HashMap.union(
+            state.availableUtxos,
+            HashMap.map(expired, ({ utxo }) => utxo),
+          ),
+          pendingUtxos: HashMap.removeMany(state.pendingUtxos, HashMap.keys(expired)),
+        };
+  },
 
   applyUpdate: (
     state: UnshieldedState,
