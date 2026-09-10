@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { Array as Arr, type DateTime, Either, Order, type ParseResult, pipe, Schema } from 'effect';
+import { Array as Arr, DateTime, Either, Order, type ParseResult, pipe, Schema } from 'effect';
 
 export type TransactionTrait<TTransaction> = {
   ids: (tx: TTransaction) => readonly string[];
@@ -48,9 +48,79 @@ export type FailedTransactionItem<TTransaction> = PendingTransactionsItem<TTrans
   result: FailedTransactionResult;
 };
 
+/**
+ * A transaction that has been balanced but not yet proven or submitted.
+ *
+ * Balancing reserves the coins a transaction will spend, and until the transaction is submitted nothing else records
+ * that those coins are spoken for — so a transaction abandoned in between strands them. A reservation is that missing
+ * record. It never holds the transaction itself: an unproven transaction carries key material and must not be
+ * persisted.
+ *
+ * `identifiers` is what ties a reservation to the transaction that later arrives, and it is stable: proving and binding
+ * both leave a transaction's identifiers unchanged. `intentHashes` is kept alongside because it is the value the ledger
+ * stamps on the coins the transaction creates.
+ */
+export type Reservation = Readonly<{
+  identifiers: readonly string[];
+  intentHashes: readonly string[];
+  /** Ids of the coins this transaction reserved, per wallet, so each wallet can release its own. */
+  inputs: Readonly<{ unshielded: readonly string[] }>;
+  /** The transaction's TTL: from this instant the ledger rejects it, so the reservation cannot still be valid. */
+  ttl: Date;
+  createdAt: DateTime.Utc;
+  expired: boolean;
+}>;
+
 export type PendingTransactions<TTransaction> = Readonly<{
   all: ReadonlyArray<PendingTransactionsItem<TTransaction>>;
+  reservations: ReadonlyArray<Reservation>;
 }>;
+
+/** Two reservations, or a reservation and a transaction, are the same spend if they share any identifier. */
+const sharesIdentifier = (reservation: Reservation, identifiers: readonly string[]): boolean =>
+  reservation.identifiers.some((id) => identifiers.includes(id));
+
+/** Records a balanced transaction, replacing any earlier reservation for the same spend. */
+export const addReservation = <TTransaction>(
+  state: PendingTransactions<TTransaction>,
+  reservation: Reservation,
+): PendingTransactions<TTransaction> => ({
+  ...state,
+  reservations: Arr.append(
+    Arr.filter(state.reservations, (existing) => !sharesIdentifier(existing, reservation.identifiers)),
+    reservation,
+  ),
+});
+
+/** Forgets every reservation holding one of `identifiers`. */
+export const clearReservation = <TTransaction>(
+  state: PendingTransactions<TTransaction>,
+  identifiers: readonly string[],
+): PendingTransactions<TTransaction> => ({
+  ...state,
+  reservations: Arr.filter(state.reservations, (reservation) => !sharesIdentifier(reservation, identifiers)),
+});
+
+/**
+ * Marks every reservation whose TTL `now` has reached. Marked rather than removed, mirroring how a failed transaction
+ * is kept until a caller has acted on it: the coins still have to be released before the record is dropped.
+ */
+export const expireReservations = <TTransaction>(
+  state: PendingTransactions<TTransaction>,
+  now: DateTime.Utc,
+): PendingTransactions<TTransaction> => ({
+  ...state,
+  reservations: Arr.map(state.reservations, (reservation) =>
+    reservation.expired || reservation.ttl.getTime() > DateTime.toEpochMillis(now)
+      ? reservation
+      : { ...reservation, expired: true },
+  ),
+});
+
+/** The reservations whose transactions can no longer be accepted, and whose coins are therefore free. */
+export const allExpiredReservations = <TTransaction>(
+  state: PendingTransactions<TTransaction>,
+): ReadonlyArray<Reservation> => Arr.filter(state.reservations, (reservation) => reservation.expired);
 
 export const has = <TTransaction>(
   transactions: PendingTransactions<TTransaction>,
@@ -84,6 +154,7 @@ export const allPending = <TTransaction>(
 export const empty = <TTransaction>(): PendingTransactions<TTransaction> => {
   return {
     all: [],
+    reservations: [],
   };
 };
 
@@ -109,6 +180,8 @@ export const addPendingTransaction = <TTransaction>(
   return {
     ...state,
     all: Arr.append(rest, theBiggestMatchingTx),
+    // The transaction now stands for the spend its reservation was holding open, and carries the same identifiers.
+    reservations: Arr.filter(state.reservations, (reservation) => !sharesIdentifier(reservation, txTrait.ids(tx))),
   };
 };
 
@@ -120,6 +193,8 @@ export const clear = <TTransaction>(
   return {
     ...state,
     all: Arr.filter(state.all, (item) => !txTrait.areAllTxIdsIncluded(item.tx, txTrait.ids(tx))),
+    // Whatever stopped tracking the transaction — a revert, or a spend that confirmed — also ends the reservation.
+    reservations: Arr.filter(state.reservations, (reservation) => !sharesIdentifier(reservation, txTrait.ids(tx))),
   };
 };
 
@@ -193,5 +268,6 @@ export const fromSerialized = <TTransaction>(
 ): PendingTransactions<TTransaction> => {
   return {
     all: serialized.transactions,
+    reservations: [],
   };
 };
