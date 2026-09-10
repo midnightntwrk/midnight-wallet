@@ -26,6 +26,16 @@ export class UtxoWithMeta extends Data.Class<{
   readonly meta: UtxoMeta;
 }> {}
 
+/**
+ * A coin reserved by a transaction that has been balanced but has not settled, together with the expiry that
+ * reservation was taken with. `ttl` is the TTL of the transaction the coin was booked for: from that instant the ledger
+ * rejects the transaction, so the reservation cannot still be valid and the coin returns to the available side.
+ */
+export interface PendingUtxo {
+  readonly utxo: UtxoWithMeta;
+  readonly ttl: Date;
+}
+
 export type UpdateStatus = 'SUCCESS' | 'FAILURE' | 'PARTIAL_SUCCESS';
 
 export interface UnshieldedUpdate {
@@ -36,7 +46,7 @@ export interface UnshieldedUpdate {
 
 export interface UnshieldedState {
   readonly availableUtxos: HashMap.HashMap<UtxoHash, UtxoWithMeta>;
-  readonly pendingUtxos: HashMap.HashMap<UtxoHash, UtxoWithMeta>;
+  readonly pendingUtxos: HashMap.HashMap<UtxoHash, PendingUtxo>;
 }
 
 const UtxoHash = (utxo: ledger.Utxo): UtxoHash => `${utxo.intentHash}#${utxo.outputNo}`;
@@ -52,8 +62,8 @@ export const UnshieldedState = {
    * records in both is kept on the pending side only: the spend that booked it may still be on its way, and expiry
    * releases it if it is not.
    */
-  restore: (availableUtxos: readonly UtxoWithMeta[], pendingUtxos: readonly UtxoWithMeta[]): UnshieldedState => {
-    const pending = HashMap.fromIterable(pendingUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo] as const));
+  restore: (availableUtxos: readonly UtxoWithMeta[], pendingUtxos: readonly PendingUtxo[]): UnshieldedState => {
+    const pending = HashMap.fromIterable(pendingUtxos.map((entry) => [UtxoHash(entry.utxo.utxo), entry] as const));
     return {
       availableUtxos: HashMap.fromIterable(
         availableUtxos
@@ -64,7 +74,13 @@ export const UnshieldedState = {
     };
   },
 
-  spend: (state: UnshieldedState, utxo: UtxoWithMeta): Either.Either<UnshieldedState, UtxoNotFoundError> =>
+  /**
+   * Books a coin for a transaction being balanced, moving it from the available side to the pending side.
+   *
+   * @param ttl - The TTL of the transaction the coin is being booked for. It bounds the reservation: nothing else
+   *   releases a booking whose transaction is abandoned before submission, so without it the coin is stuck forever.
+   */
+  spend: (state: UnshieldedState, utxo: UtxoWithMeta, ttl: Date): Either.Either<UnshieldedState, UtxoNotFoundError> =>
     Either.gen(function* () {
       const hash = UtxoHash(utxo.utxo);
       if (!HashMap.has(state.availableUtxos, hash)) {
@@ -72,7 +88,7 @@ export const UnshieldedState = {
       }
       return {
         availableUtxos: HashMap.remove(state.availableUtxos, hash),
-        pendingUtxos: HashMap.set(state.pendingUtxos, hash, utxo),
+        pendingUtxos: HashMap.set(state.pendingUtxos, hash, { utxo, ttl }),
       };
     }),
 
@@ -88,14 +104,18 @@ export const UnshieldedState = {
     });
   },
 
-  spendByUtxo: (state: UnshieldedState, utxo: ledger.Utxo): Either.Either<UnshieldedState, UtxoNotFoundError> =>
+  spendByUtxo: (
+    state: UnshieldedState,
+    utxo: ledger.Utxo,
+    ttl: Date,
+  ): Either.Either<UnshieldedState, UtxoNotFoundError> =>
     Either.gen(function* () {
       const hash = UtxoHash(utxo);
       const found = yield* Either.fromOption(
         HashMap.get(state.availableUtxos, hash),
         () => new UtxoNotFoundError({ utxo }),
       );
-      return yield* UnshieldedState.spend(state, found);
+      return yield* UnshieldedState.spend(state, found, ttl);
     }),
 
   rollbackSpendByUtxo: (state: UnshieldedState, utxo: ledger.Utxo): Either.Either<UnshieldedState, never> =>
@@ -103,9 +123,19 @@ export const UnshieldedState = {
       HashMap.get(state.pendingUtxos, UtxoHash(utxo)),
       Option.match({
         onNone: () => Either.right(state),
-        onSome: (found) => UnshieldedState.rollbackSpend(state, found),
+        onSome: (found) => UnshieldedState.rollbackSpend(state, found.utxo),
       }),
     ),
+
+  /**
+   * Releases every booking that has reached its expiry, returning those coins to the available side. A booking is only
+   * released by the submit path today, so a transaction abandoned between balancing and submission leaks its coins;
+   * this sweep is what bounds that leak to the transaction's own lifetime.
+   *
+   * @param now - The instant to expire against. A booking expires at its TTL, not after it, because the ledger already
+   *   rejects the transaction at that instant.
+   */
+  expirePending: (state: UnshieldedState, _now: Date): UnshieldedState => state,
 
   applyUpdate: (
     state: UnshieldedState,
@@ -160,7 +190,7 @@ export const UnshieldedState = {
     state: UnshieldedState,
   ): {
     readonly availableUtxos: readonly UtxoWithMeta[];
-    readonly pendingUtxos: readonly UtxoWithMeta[];
+    readonly pendingUtxos: readonly PendingUtxo[];
   } => ({
     availableUtxos: HashMap.toValues(state.availableUtxos),
     pendingUtxos: HashMap.toValues(state.pendingUtxos),

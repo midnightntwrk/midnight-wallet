@@ -14,7 +14,7 @@ import { Either, pipe, Schema } from 'effect';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { UnshieldedState } from './UnshieldedState.js';
+import { UnshieldedState, UtxoWithMeta } from './UnshieldedState.js';
 
 export type SerializationCapability<TWallet, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
@@ -40,6 +40,16 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     }),
   });
 
+  /**
+   * A pending entry is a UTxO plus the expiry its booking was taken with. `ttl` is additive: a snapshot written before
+   * bookings carried an expiry decodes at the epoch, so the first expiry sweep releases the coin — which is the repair
+   * such a snapshot needs, because nothing in the writing process is left to release it.
+   */
+  const PendingUtxoSchema = Schema.Struct({
+    ...UtxoWithMetaSchema.fields,
+    ttl: Schema.optionalWith(Schema.Date, { default: () => new Date(0) }),
+  });
+
   const SnapshotSchema = Schema.Struct({
     publicKey: Schema.Struct({
       publicKey: Schema.String,
@@ -48,7 +58,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     }),
     state: Schema.Struct({
       availableUtxos: Schema.Array(UtxoWithMetaSchema),
-      pendingUtxos: Schema.Array(UtxoWithMetaSchema),
+      pendingUtxos: Schema.Array(PendingUtxoSchema),
     }),
     protocolVersion: Schema.BigInt,
     appliedId: Schema.optional(Schema.BigInt),
@@ -58,13 +68,21 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
   type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
   return {
     serialize: (wallet) => {
-      const buildSnapshot = (w: CoreWallet): Snapshot => ({
-        publicKey: w.publicKey,
-        state: UnshieldedState.toArrays(w.state),
-        protocolVersion: w.protocolVersion,
-        networkId: w.networkId,
-        appliedId: w.progress?.appliedId,
-      });
+      const buildSnapshot = (w: CoreWallet): Snapshot => {
+        const { availableUtxos, pendingUtxos } = UnshieldedState.toArrays(w.state);
+
+        return {
+          publicKey: w.publicKey,
+          state: {
+            availableUtxos,
+            // The snapshot keeps one flat record per pending coin, with its booking's expiry alongside its meta.
+            pendingUtxos: pendingUtxos.map(({ utxo, ttl }) => ({ utxo: utxo.utxo, meta: utxo.meta, ttl })),
+          },
+          protocolVersion: w.protocolVersion,
+          networkId: w.networkId,
+          appliedId: w.progress?.appliedId,
+        };
+      };
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
     },
@@ -75,7 +93,13 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         Either.mapLeft((err) => new OtherWalletError(err)),
         Either.map((snapshot) => {
           return CoreWallet.restore(
-            UnshieldedState.restore(snapshot.state.availableUtxos, snapshot.state.pendingUtxos),
+            UnshieldedState.restore(
+              snapshot.state.availableUtxos,
+              snapshot.state.pendingUtxos.map(({ utxo, meta, ttl }) => ({
+                utxo: new UtxoWithMeta({ utxo, meta }),
+                ttl,
+              })),
+            ),
             snapshot.publicKey,
             {
               highestTransactionId: snapshot.appliedId ?? 0n,

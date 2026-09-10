@@ -64,7 +64,7 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
     UnshieldedState.toArrays(state.state).availableUtxos;
 
   const getPendingCoins = (state: CoreWallet): readonly UtxoWithMeta[] =>
-    UnshieldedState.toArrays(state.state).pendingUtxos;
+    UnshieldedState.toArrays(state.state).pendingUtxos.map(({ utxo }) => utxo);
 
   const getTotalCoins = (state: CoreWallet): readonly UtxoWithMeta[] => [
     ...getAvailableCoins(state),
