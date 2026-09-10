@@ -213,12 +213,14 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
         .map(([, utxo]) => utxo);
 
       // Spent: in wallet (pending or available) but no longer in simulator
-      const spentUtxos = [
-        ...Array.from(HashMap.entries(state.state.pendingUtxos)),
+      const trackedUtxos: readonly (readonly [string, UtxoWithMeta])[] = [
+        ...Array.from(HashMap.entries(state.state.pendingUtxos)).map(
+          ([hash, pending]) => [hash, pending.utxo] as const,
+        ),
         ...Array.from(HashMap.entries(state.state.availableUtxos)),
-      ]
-        .filter(([hash]) => !simulatorUtxoMap.has(hash))
-        .map(([, utxo]) => utxo);
+      ];
+
+      const spentUtxos = trackedUtxos.filter(([hash]) => !simulatorUtxoMap.has(hash)).map(([, utxo]) => utxo);
 
       const blockNumber = getCurrentBlockNumber(update.update);
       const updateProgress = (wallet: CoreWallet) =>

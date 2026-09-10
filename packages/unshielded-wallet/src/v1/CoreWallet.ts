@@ -86,16 +86,27 @@ export const CoreWallet = {
     );
   },
 
-  spend(coreWallet: CoreWallet, utxo: ledger.Utxo): Either.Either<CoreWallet, WalletError> {
-    return UnshieldedState.spendByUtxo(coreWallet.state, utxo).pipe(
+  /** Releases every booking that has reached its expiry. See {@link UnshieldedState.expirePending}. */
+  expirePending(coreWallet: CoreWallet, now: Date): CoreWallet {
+    return { ...coreWallet, state: UnshieldedState.expirePending(coreWallet.state, now) };
+  },
+
+  spend(coreWallet: CoreWallet, utxo: ledger.Utxo, ttl: Date): Either.Either<CoreWallet, WalletError> {
+    return UnshieldedState.spendByUtxo(coreWallet.state, utxo, ttl).pipe(
       Either.map((state) => ({ ...coreWallet, state })),
       Either.mapLeft((error) => new SpendUtxoError(error)),
     );
   },
 
+  /**
+   * Books each of `utxos` for a transaction being balanced.
+   *
+   * @param ttl - The TTL of the transaction the coins are being booked for; it bounds every reservation taken here.
+   */
   spendUtxos(
     wallet: CoreWallet,
     utxos: ReadonlyArray<ledger.Utxo>,
+    ttl: Date,
   ): Either.Either<[ReadonlyArray<ledger.Utxo>, CoreWallet], WalletError> {
     return pipe(
       utxos,
@@ -104,7 +115,7 @@ export const CoreWallet = {
         (acc, utxoToSpend) =>
           acc.pipe(
             Either.flatMap(([accUtxos, state]) =>
-              UnshieldedState.spendByUtxo(state, utxoToSpend).pipe(
+              UnshieldedState.spendByUtxo(state, utxoToSpend, ttl).pipe(
                 Either.map(
                   (nextState) => [accUtxos.concat([utxoToSpend]), nextState] as [ledger.Utxo[], UnshieldedState],
                 ),

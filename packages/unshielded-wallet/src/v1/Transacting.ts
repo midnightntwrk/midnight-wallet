@@ -227,7 +227,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
 
-      const { newState, offer } = yield* this.#prepareOffer(wallet, recipe);
+      const { newState, offer } = yield* this.#prepareOffer(wallet, recipe, intent!.ttl);
 
       const balancingIntent = ledger.Intent.new(intent!.ttl);
       balancingIntent.guaranteedUnshieldedOffer = offer;
@@ -277,10 +277,14 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
         this.getCoinSelection(),
       );
 
-      const { newState, offer } = yield* this.#prepareOffer(wallet, {
-        inputs: recipe.inputs,
-        outputs: [...recipe.outputs, ...ledgerOutputs],
-      });
+      const { newState, offer } = yield* this.#prepareOffer(
+        wallet,
+        {
+          inputs: recipe.inputs,
+          outputs: [...recipe.outputs, ...ledgerOutputs],
+        },
+        ttl,
+      );
 
       const intent = ledger.Intent.new(ttl);
 
@@ -343,7 +347,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       };
 
       const allUtxos = [...guaranteedUtxos, ...fallibleUtxos].map(({ utxo }) => utxo);
-      const [, walletAfterBooking] = yield* CoreWallet.spendUtxos(wallet, allUtxos);
+      const [, walletAfterBooking] = yield* CoreWallet.spendUtxos(wallet, allUtxos, ttl);
 
       const guaranteedOffer = makeOffer(guaranteedUtxos);
       const fallibleOffer = makeOffer(fallibleUtxos);
@@ -415,10 +419,14 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       const recipe = yield* this.#balanceSegment(wallet, Imbalances.empty(), targetImbalances, this.getCoinSelection());
 
-      const { newState, offer } = yield* this.#prepareOffer(wallet, {
-        inputs: recipe.inputs,
-        outputs: [...recipe.outputs, ...ledgerOutputs],
-      });
+      const { newState, offer } = yield* this.#prepareOffer(
+        wallet,
+        {
+          inputs: recipe.inputs,
+          outputs: [...recipe.outputs, ...ledgerOutputs],
+        },
+        ttl,
+      );
 
       const intent = ledger.Intent.new(ttl);
       intent.guaranteedUnshieldedOffer = offer;
@@ -553,9 +561,10 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   #prepareOffer(
     wallet: CoreWallet,
     balanceRecipe: BalanceRecipe<ledger.Utxo, ledger.UtxoOutput>,
+    ttl: Date,
   ): Either.Either<{ newState: CoreWallet; offer: ledger.UnshieldedOffer<ledger.SignatureEnabled> }, WalletError> {
     return Either.gen(function* () {
-      const [spentInputs, updatedWallet] = yield* CoreWallet.spendUtxos(wallet, balanceRecipe.inputs);
+      const [spentInputs, updatedWallet] = yield* CoreWallet.spendUtxos(wallet, balanceRecipe.inputs, ttl);
       const { publicKey } = wallet.publicKey;
 
       const ledgerInputs = spentInputs.map((input) => ({
@@ -643,7 +652,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
         const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
 
-        const { offer } = yield* this.#prepareOffer(wallet, recipe);
+        const { offer } = yield* this.#prepareOffer(wallet, recipe, intent.ttl);
 
         const targetOffer =
           segment !== GUARANTEED_SEGMENT ? intent.fallibleUnshieldedOffer : intent.guaranteedUnshieldedOffer;
