@@ -106,9 +106,11 @@ export const makeDefaultSyncCapability = (
 ): SyncCapability<CoreWallet, WalletSyncUpdate> => {
   return {
     applyUpdate: (state: CoreWallet, update: WalletSyncUpdate): Either.Either<CoreWallet, WalletError> => {
+      const swept = state;
+
       if (update.type === 'UnshieldedTransactionsProgress') {
         return Either.right(
-          CoreWallet.updateProgress(state, {
+          CoreWallet.updateProgress(swept, {
             highestTransactionId: BigInt(update.highestTransactionId),
             isConnected: true,
           }),
@@ -122,8 +124,8 @@ export const makeDefaultSyncCapability = (
 
         const stateAfterApplyingUpdate =
           update.status === 'FAILURE'
-            ? CoreWallet.applyFailedUpdate(state, updatePayload)
-            : CoreWallet.applyUpdate(state, updatePayload);
+            ? CoreWallet.applyFailedUpdate(swept, updatePayload)
+            : CoreWallet.applyUpdate(swept, updatePayload);
 
         return stateAfterApplyingUpdate.pipe(
           Either.map((wallet) => {
@@ -183,8 +185,12 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
   const utxoKey = (utxo: { intentHash: string; outputNo: number }) => `${utxo.intentHash}#${utxo.outputNo}`;
 
   return {
-    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): Either.Either<CoreWallet, WalletError> => {
+    applyUpdate: (
+      walletBeforeSweep: CoreWallet,
+      update: SimulatorSyncUpdate,
+    ): Either.Either<CoreWallet, WalletError> => {
       const { ledger: ledgerState, currentTime } = update.update;
+      const state = walletBeforeSweep;
       const walletAddress = state.publicKey.addressHex;
       const nativeTokenType = ledger.nativeToken().raw;
 
