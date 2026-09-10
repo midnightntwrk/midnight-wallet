@@ -205,6 +205,45 @@ describe('UnshieldedState', () => {
       expect(Option.getOrNull(HashMap.get(state.availableUtxos, utxoHash(b)))).toEqual(b);
       expect(HashMap.size(state.availableUtxos)).toEqual(2);
     });
+
+    it('does not re-admit a created utxo that is currently pending (replay of the creating tx)', () => {
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-replay', outputNo: 0 });
+      const created: UnshieldedUpdate = { createdUtxos: [u], spentUtxos: [], status: 'SUCCESS' };
+
+      const state = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, created),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, u),
+        getOrThrow,
+        // A resync from an earlier cursor delivers the creating transaction again while `u` is still booked.
+        (s) => UnshieldedState.applyUpdate(s, created),
+        getOrThrow,
+      );
+
+      expect(HashMap.has(state.availableUtxos, utxoHash(u))).toBe(false);
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual(u);
+      expect(HashMap.size(state.availableUtxos)).toEqual(0);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(1);
+    });
+
+    it('still admits the other created utxos of an update that replays a pending one', () => {
+      const pending = generateMockUtxoWithMeta({ intentHash: 'h-mixed', outputNo: 0 });
+      const fresh = generateMockUtxoWithMeta({ intentHash: 'h-mixed', outputNo: 1 });
+
+      const state = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, { createdUtxos: [pending], spentUtxos: [], status: 'SUCCESS' }),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, pending),
+        getOrThrow,
+        (s) => UnshieldedState.applyUpdate(s, { createdUtxos: [pending, fresh], spentUtxos: [], status: 'SUCCESS' }),
+        getOrThrow,
+      );
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(fresh)]);
+      expect([...HashMap.keys(state.pendingUtxos)]).toEqual([utxoHash(pending)]);
+    });
   });
 
   describe('applyFailedUpdate', () => {
@@ -462,6 +501,40 @@ describe('UnshieldedState', () => {
       expect(arrays.availableUtxos.length).toEqual(2);
       expect(arrays.pendingUtxos.length).toEqual(1);
     });
+
+    it('drops a utxo present in both arrays, keeping the pending side (repairs a corrupted snapshot)', () => {
+      const duplicated = generateMockUtxoWithMeta({ intentHash: 'h-dup', outputNo: 0 });
+      const onlyAvailable = generateMockUtxoWithMeta({ intentHash: 'h-avail', outputNo: 0 });
+
+      const state = UnshieldedState.restore([onlyAvailable, duplicated], [duplicated]);
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(onlyAvailable)]);
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(duplicated)))).toEqual(duplicated);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(1);
+    });
+
+    it('restore always yields disjoint maps, whatever overlap the arrays carry', () => {
+      fc.assert(
+        fc.property(
+          fc.uniqueArray(utxoArb, { maxLength: 6, selector: utxoHash }),
+          fc.array(fc.nat(2), { maxLength: 6 }),
+          (utxos, placements) => {
+            // 0 = available only, 1 = pending only, 2 = both (the shape a corrupted snapshot carries).
+            const available = utxos.filter((_, i) => (placements[i] ?? 0) !== 1);
+            const pending = utxos.filter((_, i) => (placements[i] ?? 0) !== 0);
+
+            const state = UnshieldedState.restore(available, pending);
+
+            const availableKeys = new Set(HashMap.keys(state.availableUtxos));
+            const pendingKeys = [...HashMap.keys(state.pendingUtxos)];
+            expect(pendingKeys.some((k) => availableKeys.has(k))).toBe(false);
+            expect(HashMap.size(state.availableUtxos) + HashMap.size(state.pendingUtxos)).toEqual(utxos.length);
+            expect(pendingKeys.toSorted()).toEqual(pending.map(utxoHash).toSorted());
+          },
+        ),
+        { numRuns: 100 },
+      );
+    });
   });
 
   describe('lifecycle sequences', () => {
@@ -621,7 +694,8 @@ describe('UnshieldedState', () => {
       | { tag: 'spend'; utxo: UtxoWithMeta }
       | { tag: 'rollback'; utxo: UtxoWithMeta }
       | { tag: 'confirm'; utxo: UtxoWithMeta }
-      | { tag: 'fail'; utxo: UtxoWithMeta };
+      | { tag: 'fail'; utxo: UtxoWithMeta }
+      | { tag: 'replay'; utxo: UtxoWithMeta };
 
     // Apply an operation, ignoring failures (e.g. spending a missing utxo).
     // The point of these invariants is that *valid* operations preserve them;
@@ -645,6 +719,13 @@ describe('UnshieldedState', () => {
               spentUtxos: [op.utxo],
               status: 'FAILURE',
             });
+          case 'replay':
+            // The indexer re-delivers the transaction that created the utxo (resync from an earlier cursor).
+            return UnshieldedState.applyUpdate(state, {
+              createdUtxos: [op.utxo],
+              spentUtxos: [],
+              status: 'SUCCESS',
+            });
         }
       })();
       return Either.match(result, {
@@ -657,7 +738,7 @@ describe('UnshieldedState', () => {
       fc.assert(
         fc.property(
           fc.array(utxoArb, { minLength: 1, maxLength: 5 }),
-          fc.array(fc.nat(3), { maxLength: 20 }),
+          fc.array(fc.nat(4), { maxLength: 20 }),
           (utxos, opTags) => {
             // Seed state with all utxos available.
             const initial = pipe(
@@ -681,8 +762,10 @@ describe('UnshieldedState', () => {
                   return { tag: 'rollback', utxo };
                 case 2:
                   return { tag: 'confirm', utxo };
-                default:
+                case 3:
                   return { tag: 'fail', utxo };
+                default:
+                  return { tag: 'replay', utxo };
               }
             });
 
