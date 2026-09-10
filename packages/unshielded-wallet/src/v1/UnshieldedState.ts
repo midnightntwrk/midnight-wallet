@@ -47,10 +47,22 @@ export const UnshieldedState = {
     pendingUtxos: HashMap.empty(),
   }),
 
-  restore: (availableUtxos: readonly UtxoWithMeta[], pendingUtxos: readonly UtxoWithMeta[]): UnshieldedState => ({
-    availableUtxos: HashMap.fromIterable(availableUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo])),
-    pendingUtxos: HashMap.fromIterable(pendingUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo])),
-  }),
+  /**
+   * Rebuilds the state from a persisted snapshot. The two maps are disjoint by construction, so a UTxO a snapshot
+   * records in both is kept on the pending side only: the spend that booked it may still be on its way, and expiry
+   * releases it if it is not.
+   */
+  restore: (availableUtxos: readonly UtxoWithMeta[], pendingUtxos: readonly UtxoWithMeta[]): UnshieldedState => {
+    const pending = HashMap.fromIterable(pendingUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo] as const));
+    return {
+      availableUtxos: HashMap.fromIterable(
+        availableUtxos
+          .filter((utxo) => !HashMap.has(pending, UtxoHash(utxo.utxo)))
+          .map((utxo) => [UtxoHash(utxo.utxo), utxo] as const),
+      ),
+      pendingUtxos: pending,
+    };
+  },
 
   spend: (state: UnshieldedState, utxo: UtxoWithMeta): Either.Either<UnshieldedState, UtxoNotFoundError> =>
     Either.gen(function* () {
@@ -104,18 +116,22 @@ export const UnshieldedState = {
         return yield* Either.left(new ApplyTransactionError({ message: `Invalid status: ${update.status}` }));
       }
 
+      const spentHashes = update.spentUtxos.map((utxo) => UtxoHash(utxo.utxo));
+      const pendingUtxos = HashMap.removeMany(state.pendingUtxos, spentHashes);
+
       return {
         availableUtxos: HashMap.union(
-          HashMap.removeMany(
-            state.availableUtxos,
-            update.spentUtxos.map((utxo) => UtxoHash(utxo.utxo)),
+          HashMap.removeMany(state.availableUtxos, spentHashes),
+          // A created UTxO that is still booked must not re-enter availableUtxos. The indexer replays the
+          // transaction that created a booked coin whenever sync resumes from a cursor predating it, and the two
+          // maps are disjoint by construction — every balance accessor counts them independently.
+          HashMap.fromIterable(
+            update.createdUtxos
+              .filter((utxo) => !HashMap.has(pendingUtxos, UtxoHash(utxo.utxo)))
+              .map((utxo) => [UtxoHash(utxo.utxo), utxo] as const),
           ),
-          HashMap.fromIterable(update.createdUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo])),
         ),
-        pendingUtxos: HashMap.removeMany(
-          state.pendingUtxos,
-          update.spentUtxos.map((utxo) => UtxoHash(utxo.utxo)),
-        ),
+        pendingUtxos,
       };
     }),
 
