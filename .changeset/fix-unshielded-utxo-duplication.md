@@ -15,14 +15,19 @@ abandoned before submission. Persisted, the result survived every restart.
   loading a snapshot holding one coin in both maps keeps it on the pending side only. State already corrupted in the
   field repairs itself on the next start.
 - A booked coin now carries the TTL of the transaction it was booked for, and both sync capabilities release expired
-  bookings on every applied update. Past that instant the ledger rejects the transaction, so the booking cannot still be
-  valid. A pending entry restored from a snapshot written before this change is released by the first sweep.
+  bookings as updates arrive. This is the only thing that releases a booking, so two sweeps on different clocks cannot
+  free the same coin twice. It runs only once sync has caught up with the chain, because a replay from an earlier cursor
+  can still be carrying the transaction that spent a booked coin, and it releases strictly after the TTL rather than at
+  it, because the ledger accepts an intent while its TTL is at or after the block's timestamp.
 - A transaction that has been balanced but not yet proven is recorded as a reservation in the pending-transactions
   service: its identifiers, the ids of the coins it booked, and its TTL, never the transaction itself, which carries key
-  material. The record persists, so a booking held for a counterparty that has not answered yet survives a restart. The
-  service's existing poll marks a reservation whose TTL has passed, and the facade then releases its coins.
-- Bookings restored from a snapshot are released once sync reaches the chain tip, unless a reservation still accounts
-  for them, returning an abandoned coin in seconds rather than at its transaction's TTL.
+  material. In-place balancing records only the coins the wallet moved onto the pending side, not inputs the caller had
+  already put in the transaction. A reservation is dropped wherever its booking is reverted, and when its TTL passes.
+- Bookings restored from a snapshot are released once sync reaches the chain tip, unless a reservation or a transaction
+  being tracked still accounts for the spend, returning an abandoned coin in seconds rather than at its transaction's
+  TTL.
+- Balancing a transaction in place now books the coins it selects, so two balance calls can no longer select the same
+  coin.
 - `UnshieldedWallet.revertUtxos(ids)` releases booked coins without the transaction that booked them, for a caller
   holding only a record of the ids.
 
@@ -32,5 +37,7 @@ take the TTL of the transaction the coins are booked for as a required last argu
 gains `revertUtxos` and `releaseRestoredPending`, so a custom implementation of that interface must add them. The public
 coin accessors are unchanged: `pendingCoins`, `availableCoins` and `balances` still report UTxOs.
 
-The pending-transactions store gains a new format version carrying reservations. A store written before this change
-still loads; one written after it cannot be read by an earlier version of `@midnightntwrk/wallet-sdk-capabilities`.
+Both stored formats gained an optional member rather than a new version, so a store written by this release is still
+readable by an earlier one: the unshielded snapshot carries each booking's expiry, and the pending-transactions store
+carries its reservations. A pending entry restored from a snapshot that predates expiries is granted a full transaction
+lifetime from the moment it is loaded.
