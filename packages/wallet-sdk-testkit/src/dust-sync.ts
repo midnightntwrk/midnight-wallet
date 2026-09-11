@@ -43,12 +43,17 @@ export type DustWalletFactory = (config: DefaultDustConfiguration) => {
  * The sync service is swapped in at build time, so a wallet built without this factory gets the event-based sync no
  * matter what else it configures.
  *
- * **This is a one-shot sync and must be driven explicitly.** Where the event-based service's `updates` is a long-lived
- * indexer subscription, the projections service does a single pass up to the block it read at the start and then ends
- * its stream. Background syncing therefore converges once and never observes anything afterwards, and the variant's
- * background retry only re-runs the pass on _failure_, not on completion. Pair this factory with `manualSync: true` —
- * see {@link projectionsDustSyncOptions} — and call `facade.doSync(seeds)` at every point that would otherwise wait for
- * background convergence.
+ * The projections sync synchronizes in finite passes rather than over a live subscription, but background
+ * synchronization re-runs those passes on an interval, so this factory can be used on its own and the usual state
+ * waiters behave as they do for the event-based sync. Pair it with `manualSync` — see {@link projectionsDustSyncOptions}
+ * — only when a caller wants to decide when each pass happens.
+ *
+ * **A wallet built this way syncs, but must not transact.** `CustomDustWallet` is a single-variant composition, whose
+ * one variant answers for the whole protocol timeline: it reports the minimum supported version and stamps whatever it
+ * builds at that version. A facade acts at the lowest version its three sub-wallets report, so this sub-wallet holds
+ * the facade below the ledger-v9 boundary, and the facade then refuses the shielded wallet's ledger-v9 transaction
+ * because the two sides of a boundary cannot be merged. Build transactions on a wallet using the shipped two-variant
+ * dust wallet, and use one built here to observe the result.
  */
 export const eventLessDustWallet: DustWalletFactory = (config) =>
   CustomDustWallet(
@@ -64,12 +69,16 @@ export const eventLessDustWallet: DustWalletFactory = (config) =>
 export const eventBasedDustWallet: DustWalletFactory = DustWallet;
 
 /**
- * The correct way to opt a wallet into the projections-based dust sync: the factory plus `manualSync`, so the caller
- * owns when each snapshot is taken.
+ * The projections dust sync with background synchronization switched off, so the caller decides when each pass runs.
  *
- * A caller that spreads this in still has to drive `facade.doSync(seeds)` itself — after start, and again after
- * anything that changes dust state. Waiting on `waitForSyncedState()` alone will block, because with `manualSync`
+ * Use this when a test needs passes to happen at known points — asserting on the state a specific pass produced, for
+ * instance. A caller that spreads this in must drive `facade.doSync(seeds)` itself, after start and again after
+ * anything that changes dust state; waiting on `waitForSyncedState()` alone will block, because with `manualSync`
  * nothing advances the dust wallet until `doSync` runs.
+ *
+ * For a test that just wants the wallet to keep up on its own, pass `{ dustWallet: eventLessDustWallet }` instead and
+ * let background synchronization run the passes. Either way the wallet syncs but must not transact — see
+ * {@link eventLessDustWallet}.
  */
 export const projectionsDustSyncOptions: {
   readonly dustWallet: DustWalletFactory;

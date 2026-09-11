@@ -42,7 +42,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
-import { type BlockData, type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
+import { BackgroundRepeat, type BlockData, type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
 import { type V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import {
   type CoinsAndBalancesCapability,
@@ -172,7 +172,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   }
 
   startSyncInBackground(startAux: TStartAux): Effect.Effect<void> {
-    return this.startSync(startAux).pipe(
+    const pass = this.startSync(startAux).pipe(
       Stream.retry(
         pipe(
           Schedule.exponential(Duration.seconds(1), 2),
@@ -185,6 +185,18 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
           }),
         ),
       ),
+    );
+
+    // A service that synchronizes in finite passes would otherwise leave the wallet frozen at whatever its first pass
+    // saw. Repeating re-runs `startSync`, which re-reads the wallet state, so each pass resumes from what the previous
+    // one applied. The retry above cannot serve this purpose: it re-runs a pass on failure, not on completion.
+    // Repeating outside it keeps a transient failure to the pass it happened in, rather than restarting the cycle.
+    const passes = BackgroundRepeat.$match(this.#v1Context.syncService.backgroundRepeat, {
+      Once: () => pass,
+      WithDelay: ({ delay }) => Stream.repeat(pass, Schedule.spaced(delay)),
+    });
+
+    return passes.pipe(
       Stream.runScoped(Sink.drain),
       Effect.forkScoped,
       Effect.provideService(Scope.Scope, this.#scope),

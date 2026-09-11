@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
+  Data,
   Effect,
   Either,
   Layer,
@@ -49,9 +50,48 @@ import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from './types/ledger.js';
 import { Uint8ArraySchema } from './Serialization.js';
 
+/**
+ * How often background synchronization runs a sync service's `updates`.
+ *
+ * @remarks
+ *   Every service states this, because the answer cannot be inferred from the service: it follows from whether `updates`
+ *   is finite, which only the service knows. A service whose `updates` is a long-lived subscription is
+ *   {@link BackgroundRepeat.Once} — that single pass never ends, so there is nothing to repeat. A service that
+ *   synchronizes in finite passes is {@link BackgroundRepeat.WithDelay}, or a wallet synchronizing in the background
+ *   would converge once and then never observe anything again. The variant's background retry does not cover the
+ *   latter: it re-runs a pass on failure, not on completion.
+ *
+ *   Every service this variant has is {@link BackgroundRepeat.Once}: the finite-pass projections sync is a ledger-v9
+ *   capability that no published ledger-v8 can support. The type is declared in both twins so that their background
+ *   synchronization reads one contract, and so that a ledger-v8 service which one day synchronizes in finite passes has
+ *   the vocabulary to say so.
+ */
+export type BackgroundRepeat = Data.TaggedEnum<{
+  /** Run `updates` once and leave it running. For a service whose `updates` never completes. */
+  Once: {}; // eslint-disable-line @typescript-eslint/no-empty-object-type
+
+  /** Re-run `updates` this long after each pass completes. For a service that synchronizes in finite passes. */
+  WithDelay: { readonly delay: Duration.DurationInput };
+}>;
+/**
+ * Constructors and matchers for {@link BackgroundRepeat}.
+ *
+ * @example
+ *   ```ts
+ *   const service: SyncService<CoreWallet, DustSecretKey, WalletSyncUpdate> = {
+ *     backgroundRepeat: BackgroundRepeat.Once(),
+ *     updates: (state, secretKey) => subscribe(state, secretKey),
+ *     blockData: () => latestBlock(),
+ *   };
+ *   ```;
+ */
+export const BackgroundRepeat = Data.taggedEnum<BackgroundRepeat>();
+
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
   blockData: () => Effect.Effect<BlockData, WalletError>;
+  /** How often background synchronization re-runs {@link SyncService.updates}. See {@link BackgroundRepeat}. */
+  readonly backgroundRepeat: BackgroundRepeat;
 }
 
 // TODO: use schema instead
@@ -514,6 +554,8 @@ export const makeDefaultSyncService = (
 ): SyncService<CoreWallet, DustSecretKey, WalletSyncUpdate> => {
   const indexerSyncService = makeIndexerSyncService(config);
   return {
+    // A long-lived indexer subscription: the one pass never ends, so there is nothing to repeat.
+    backgroundRepeat: BackgroundRepeat.Once(),
     updates: (
       state: CoreWallet,
       secretKey: DustSecretKey,
@@ -764,6 +806,8 @@ export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, SimulatorSyncUpdate> => {
   return {
+    // A live feed of simulator states: the one pass never ends, so there is nothing to repeat.
+    backgroundRepeat: BackgroundRepeat.Once(),
     updates: (_state: CoreWallet, secretKey: DustSecretKey) => {
       // Get the initial state immediately to ensure we process the genesis block.
       // Then subscribe to state$ for subsequent changes, but deduplicate by block number
