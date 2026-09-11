@@ -23,7 +23,7 @@ import { WsSubscriptionClient, ConnectionHelper } from '@midnightntwrk/wallet-sd
 import { SyncWalletError, type WalletError } from './WalletError.js';
 import { WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
-import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { Clock, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type WalletSyncUpdate, WalletSyncUpdateSchema } from './SyncSchema.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 
@@ -43,6 +43,11 @@ export type IndexerClientConnection = {
 
 export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
+  /**
+   * The clock the booking sweep expires against. Defaults to system time; inject one to pin the expiry boundary in a
+   * test, or to follow a simulated chain.
+   */
+  clock?: Clock.Clock;
 };
 
 export type DefaultSyncContext = {
@@ -101,24 +106,37 @@ export const makeDefaultSyncService = (config: DefaultSyncConfiguration): SyncSe
 };
 
 export const makeDefaultSyncCapability = (
-  _config: DefaultSyncConfiguration,
+  config: DefaultSyncConfiguration,
   getContext: () => DefaultSyncContext,
 ): SyncCapability<CoreWallet, WalletSyncUpdate> => {
+  const clock = config.clock ?? Clock.systemClock;
+
+  /**
+   * Releases bookings nothing else will: a transaction abandoned between balancing and submission leaves one behind,
+   * and past its TTL the ledger would reject that transaction anyway.
+   *
+   * Only once the wallet has caught up with the chain. While a replay from an earlier cursor is still running, a coin
+   * can be booked here and already spent on chain by a transaction the replay has not delivered yet; releasing it then
+   * offers a coin that is gone, and over-reports the balance until the spend arrives. Applying the update first and
+   * judging on the result is what lets the update that reaches the tip sweep straight away, rather than waiting for
+   * whatever arrives next on a chain that may now be quiet.
+   *
+   * This path follows the chain, so the expiry it compares against is wall time; the simulator path uses simulator time
+   * instead.
+   */
+  const sweepIfCaughtUp = (wallet: CoreWallet): CoreWallet =>
+    wallet.progress.isStrictlyComplete() ? CoreWallet.expirePending(wallet, clock.now()) : wallet;
+
   return {
     applyUpdate: (state: CoreWallet, update: WalletSyncUpdate): Either.Either<CoreWallet, WalletError> => {
-      // Every update is an opportunity to release a booking nothing else will: a transaction abandoned between
-      // balancing and submission leaves one behind, and past its TTL the ledger would reject that transaction
-      // anyway. Progress updates count, because a leaked booking blocks its coin whether or not the address sees
-      // further activity. This path follows the chain, so the expiry it compares against is wall time; the
-      // simulator path uses simulator time instead.
-      const swept = CoreWallet.expirePending(state, new Date());
-
       if (update.type === 'UnshieldedTransactionsProgress') {
         return Either.right(
-          CoreWallet.updateProgress(swept, {
-            highestTransactionId: BigInt(update.highestTransactionId),
-            isConnected: true,
-          }),
+          sweepIfCaughtUp(
+            CoreWallet.updateProgress(state, {
+              highestTransactionId: BigInt(update.highestTransactionId),
+              isConnected: true,
+            }),
+          ),
         );
       } else {
         const updatePayload = {
@@ -129,8 +147,8 @@ export const makeDefaultSyncCapability = (
 
         const stateAfterApplyingUpdate =
           update.status === 'FAILURE'
-            ? CoreWallet.applyFailedUpdate(swept, updatePayload)
-            : CoreWallet.applyUpdate(swept, updatePayload);
+            ? CoreWallet.applyFailedUpdate(state, updatePayload)
+            : CoreWallet.applyUpdate(state, updatePayload);
 
         return stateAfterApplyingUpdate.pipe(
           Either.map((wallet) => {
@@ -141,7 +159,7 @@ export const makeDefaultSyncCapability = (
             const { transactionHistoryService } = getContext();
             Effect.runFork(transactionHistoryService.put(update));
 
-            return stateAfterUpdatingProgress;
+            return sweepIfCaughtUp(stateAfterUpdatingProgress);
           }),
         );
       }

@@ -34,17 +34,38 @@ const FAR_FUTURE = new Date('2999-01-01T00:00:00.000Z');
 const keystore = createKeystore(Buffer.from(ledger.sampleSigningKey(), 'hex'), NetworkId.NetworkId.Undeployed);
 const ownerPublicKey = PublicKey.fromKeyStore(keystore);
 
+const connected = (
+  available: readonly UtxoWithMeta[],
+  pending: ReadonlyArray<Omit<PendingUtxo, 'restored'>>,
+  progress: { appliedId: bigint; highestTransactionId: bigint },
+): CoreWalletType =>
+  pipe(
+    CoreWallet.restore(
+      UnshieldedState.restore(available, pending),
+      ownerPublicKey,
+      progress,
+      ProtocolVersion.ProtocolVersion(1n),
+      NetworkId.NetworkId.Undeployed,
+    ),
+    (wallet) => CoreWallet.updateProgress(wallet, { isConnected: true }),
+  );
+
+/**
+ * Connected and level with the chain at `atTransactionId`, which is where the wallet has the whole picture and may
+ * sweep. Tests pass the id the update under test carries, so the wallet is still level once that update is applied.
+ */
 const walletHolding = (
   available: readonly UtxoWithMeta[],
   pending: ReadonlyArray<Omit<PendingUtxo, 'restored'>>,
+  atTransactionId: bigint = 1n,
 ): CoreWalletType =>
-  CoreWallet.restore(
-    UnshieldedState.restore(available, pending),
-    ownerPublicKey,
-    { appliedId: 1n, highestTransactionId: 1n },
-    ProtocolVersion.ProtocolVersion(1n),
-    NetworkId.NetworkId.Undeployed,
-  );
+  connected(available, pending, { appliedId: atTransactionId, highestTransactionId: atTransactionId });
+
+/** Still replaying history from a cursor behind the chain, so transactions it has not seen yet are still coming. */
+const walletCatchingUp = (
+  available: readonly UtxoWithMeta[],
+  pending: ReadonlyArray<Omit<PendingUtxo, 'restored'>>,
+): CoreWalletType => connected(available, pending, { appliedId: 1n, highestTransactionId: 900n });
 
 /** Records nothing: these tests are about wallet state, and history is written on a forked fibre regardless. */
 const historyContext = { transactionHistoryService: { put: () => Effect.void } };
@@ -100,11 +121,29 @@ describe('Unshielded indexer sync capability', () => {
       const booked = generateMockUtxoWithMeta({ intentHash: 'h-stale', outputNo: 0 });
 
       const after = getOrThrow(
-        capability.applyUpdate(walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }]), progressUpdate(9)),
+        capability.applyUpdate(walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 9n), progressUpdate(9)),
       );
 
       expect(HashMap.has(after.state.availableUtxos, utxoHash(booked))).toBe(true);
       expect(HashMap.size(after.state.pendingUtxos)).toEqual(0);
+    });
+
+    it('leaves a booking alone while sync is still catching up, however old its expiry', () => {
+      // Replaying history from a cursor behind the chain, the wallet has not yet been told about the transaction
+      // that spent this coin. Releasing on that evidence offers a coin the chain has already taken, and the
+      // over-reported balance lasts until the replay reaches the spend.
+      const booked = generateMockUtxoWithMeta({ intentHash: 'h-catching-up', outputNo: 0 });
+
+      const after = getOrThrow(
+        capability.applyUpdate(walletCatchingUp([], [{ utxo: booked, ttl: LONG_EXPIRED }]), progressUpdate(900)),
+      );
+
+      expect(HashMap.has(after.state.availableUtxos, utxoHash(booked))).toBe(false);
+      expect(Option.getOrNull(HashMap.get(after.state.pendingUtxos, utxoHash(booked)))).toEqual({
+        utxo: booked,
+        ttl: LONG_EXPIRED,
+        restored: true,
+      });
     });
 
     it('leaves a booking whose expiry has not passed', () => {
@@ -127,7 +166,7 @@ describe('Unshielded indexer sync capability', () => {
       const booked = generateMockUtxoWithMeta({ intentHash: 'h-quiet', outputNo: 0 });
 
       const after = getOrThrow(
-        capability.applyUpdate(walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }]), progressUpdate(42)),
+        capability.applyUpdate(walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 42n), progressUpdate(42)),
       );
 
       expect(HashMap.has(after.state.availableUtxos, utxoHash(booked))).toBe(true);
@@ -140,7 +179,7 @@ describe('Unshielded indexer sync capability', () => {
 
       const after = getOrThrow(
         capability.applyUpdate(
-          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }]),
+          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 5n),
           transactionUpdate(5, [arriving], []),
         ),
       );
@@ -175,7 +214,7 @@ describe('Unshielded indexer sync capability', () => {
 
       const after = getOrThrow(
         capability.applyUpdate(
-          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }]),
+          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 6n),
           transactionUpdate(6, [booked], []),
         ),
       );
@@ -190,7 +229,7 @@ describe('Unshielded indexer sync capability', () => {
 
       const after = getOrThrow(
         capability.applyUpdate(
-          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }]),
+          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 7n),
           transactionUpdate(7, [], [booked]),
         ),
       );
