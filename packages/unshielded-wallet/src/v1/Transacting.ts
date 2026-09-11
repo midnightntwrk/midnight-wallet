@@ -110,10 +110,36 @@ export interface TransactingCapability<TState> {
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Either.Either<CoreWallet, WalletError>;
 
-  /** Releases booked coins by id, for a caller that holds a record of the ids rather than the transaction. */
+  /**
+   * Releases booked coins by id, for a caller that holds a record of the ids rather than the transaction.
+   *
+   * An implementation must move each named coin back to the available side and leave the rest alone. Prefer
+   * {@link TransactingCapability.revertTransaction} where the transaction itself is to hand.
+   *
+   * @example
+   *   const released = capability.revertUtxos(wallet, ['4b0f…#0']);
+   *
+   * @param wallet - The wallet holding the bookings
+   * @param utxoIds - Ids of the coins to release, each `intentHash#outputNo`. An id that is not booked is ignored
+   *   rather than reported, since sync may have cleared the coin first
+   * @returns The wallet with those coins available again
+   */
   revertUtxos(wallet: CoreWallet, utxoIds: ReadonlyArray<UtxoHash>): CoreWallet;
 
-  /** Releases bookings restored from a snapshot that nothing in `coveredIds` still accounts for. */
+  /**
+   * Releases bookings restored from a snapshot that nothing in `coveredIds` still accounts for.
+   *
+   * Meant for the moment sync reaches the chain tip, where every transaction the address is party to has been applied,
+   * so a coin still booked was never spent by the process that booked it. An implementation must release only bookings
+   * that came back from a snapshot, and must leave every covered id booked.
+   *
+   * @example
+   *   const reconciled = capability.releaseRestoredPending(wallet, idsStillSpokenFor);
+   *
+   * @param wallet - The wallet holding the restored bookings
+   * @param coveredIds - Coins some durable record still accounts for, such as a transaction waiting on a counterparty
+   * @returns The wallet with the uncovered restored coins available again
+   */
   releaseRestoredPending(wallet: CoreWallet, coveredIds: ReadonlyArray<UtxoHash>): CoreWallet;
 
   signUnboundTransaction(
