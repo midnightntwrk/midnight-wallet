@@ -182,6 +182,23 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
    */
   revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void>;
 
+  /**
+   * Releases bookings that came back from a snapshot and that `coveredIds` does not account for.
+   *
+   * Call this once sync has reached the chain tip: from there, every transaction the address is party to has been
+   * applied, so a coin still booked was never spent by the process that booked it. Pass the coins some durable record
+   * still accounts for — a transaction waiting on a counterparty, say — and those stay booked.
+   *
+   * @example
+   *   ```typescript
+   *   await wallet.releaseRestoredPending(idsStillSpokenFor);
+   *   ```;
+   *
+   * @param coveredIds - Ids of coins to leave booked, each `intentHash#outputNo`
+   * @returns A promise that resolves once the wallet state has been updated
+   */
+  releaseRestoredPending(coveredIds: ReadonlyArray<UtxoHash>): Promise<void>;
+
   getAddress(): Promise<UnshieldedAddress>;
 
   stop(): Promise<void>;
@@ -359,6 +376,14 @@ export function CustomUnshieldedWallet<
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.revertUtxos(utxoIds),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    releaseRestoredPending(coveredIds: ReadonlyArray<UtxoHash>): Promise<void> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.releaseRestoredPending(coveredIds),
         })
         .pipe(Effect.runPromise);
     }

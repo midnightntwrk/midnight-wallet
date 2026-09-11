@@ -34,6 +34,12 @@ export class UtxoWithMeta extends Data.Class<{
 export interface PendingUtxo {
   readonly utxo: UtxoWithMeta;
   readonly ttl: Date;
+  /**
+   * True when this booking came back from a snapshot rather than being taken by the running process. The process that
+   * took it is gone, so once sync proves nothing on chain spent the coin, only a durable record of the transaction can
+   * justify keeping it booked.
+   */
+  readonly restored: boolean;
 }
 
 export type UpdateStatus = 'SUCCESS' | 'FAILURE' | 'PARTIAL_SUCCESS';
@@ -62,8 +68,14 @@ export const UnshieldedState = {
    * records in both is kept on the pending side only: the spend that booked it may still be on its way, and expiry
    * releases it if it is not.
    */
-  restore: (availableUtxos: readonly UtxoWithMeta[], pendingUtxos: readonly PendingUtxo[]): UnshieldedState => {
-    const pending = HashMap.fromIterable(pendingUtxos.map((entry) => [UtxoHash(entry.utxo.utxo), entry] as const));
+  restore: (
+    availableUtxos: readonly UtxoWithMeta[],
+    // Every entry read back is restored by definition, so the caller does not get to say otherwise.
+    pendingUtxos: ReadonlyArray<Omit<PendingUtxo, 'restored'>>,
+  ): UnshieldedState => {
+    const pending = HashMap.fromIterable(
+      pendingUtxos.map((entry) => [UtxoHash(entry.utxo.utxo), { ...entry, restored: true }] as const),
+    );
     return {
       availableUtxos: HashMap.fromIterable(
         availableUtxos
@@ -88,7 +100,7 @@ export const UnshieldedState = {
       }
       return {
         availableUtxos: HashMap.remove(state.availableUtxos, hash),
-        pendingUtxos: HashMap.set(state.pendingUtxos, hash, { utxo, ttl }),
+        pendingUtxos: HashMap.set(state.pendingUtxos, hash, { utxo, ttl, restored: false }),
       };
     }),
 
@@ -145,6 +157,33 @@ export const UnshieldedState = {
         }),
       }),
     ),
+
+  /**
+   * Releases every booking that came back from a snapshot and that `coveredIds` does not account for.
+   *
+   * Meant for the moment sync reaches the chain tip: from there, every transaction the address is party to has been
+   * applied, so a coin still booked was never spent by the process that booked it. Releasing it then returns it in
+   * seconds rather than at the transaction's TTL.
+   *
+   * @param coveredIds - Coins some durable record still accounts for, such as a transaction waiting on a counterparty.
+   *   Those stay booked: the wallet cannot see that transaction, but something else knows it is still live.
+   */
+  releaseRestoredPending: (state: UnshieldedState, coveredIds: ReadonlyArray<UtxoHash>): UnshieldedState => {
+    const releasable = HashMap.filter(
+      state.pendingUtxos,
+      ({ restored }, hash) => restored && !coveredIds.includes(hash),
+    );
+
+    return HashMap.isEmpty(releasable)
+      ? state
+      : {
+          availableUtxos: HashMap.union(
+            state.availableUtxos,
+            HashMap.map(releasable, ({ utxo }) => utxo),
+          ),
+          pendingUtxos: HashMap.removeMany(state.pendingUtxos, HashMap.keys(releasable)),
+        };
+  },
 
   /**
    * Releases every booking that has reached its expiry, returning those coins to the available side. A booking is only

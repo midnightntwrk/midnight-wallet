@@ -51,7 +51,7 @@ import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnig
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { Array as Arr, DateTime, pipe, Schema } from 'effect';
 import { TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import { combineLatest, map, type Observable, firstValueFrom, type Subscription, concatMap } from 'rxjs';
+import { combineLatest, map, type Observable, filter, firstValueFrom, take, type Subscription, concatMap } from 'rxjs';
 import {
   type DefaultPendingTransactionsServiceConfiguration,
   PendingTransactions,
@@ -537,6 +537,7 @@ export class WalletFacade {
   readonly clock: Clock.Clock;
   #pendingSubscription: Subscription;
   #expiredReservationSubscription: Subscription;
+  #restoredBookingSubscription: Subscription;
 
   /**
    * Constructor is private on purpose - much of initialization of the facade is potentially asynchronous, and adding
@@ -581,6 +582,25 @@ export class WalletFacade {
         concatMap(async (reservation) => {
           await this.unshielded.revertUtxos(reservation.inputs.unshielded);
           await this.pendingTransactionsService.clearReservation(reservation.identifiers);
+        }),
+      )
+      .subscribe();
+
+    // Coins a previous process left booked would otherwise sit until their transactions' TTLs, which can be an hour.
+    // Once sync reaches the tip, every transaction this address is party to has been applied, so a coin still booked
+    // was never spent — unless a reservation says a transaction for it is still out there, waiting on someone else.
+    this.#restoredBookingSubscription = this.unshielded.state
+      .pipe(
+        filter((unshielded) => unshielded.state.progress.isStrictlyComplete()),
+        // Only bookings restored at startup are candidates, and this releases all of them at once, so the first time
+        // sync reaches the tip is the only time there is anything to do. Acting once also keeps the reaction from
+        // feeding itself: releasing publishes new state, which would otherwise satisfy this same condition again.
+        take(1),
+        concatMap(async () => {
+          const stillSpokenFor = (await firstValueFrom(this.pendingTransactionsService.state())).reservations.flatMap(
+            (reservation) => reservation.inputs.unshielded,
+          );
+          await this.unshielded.releaseRestoredPending(stillSpokenFor);
         }),
       )
       .subscribe();
@@ -1439,6 +1459,7 @@ export class WalletFacade {
       this.pendingTransactionsService.stop(),
       Promise.resolve(this.#pendingSubscription?.unsubscribe()),
       Promise.resolve(this.#expiredReservationSubscription?.unsubscribe()),
+      Promise.resolve(this.#restoredBookingSubscription?.unsubscribe()),
     ]);
   }
 

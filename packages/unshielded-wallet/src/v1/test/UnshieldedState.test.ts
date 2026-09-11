@@ -27,7 +27,10 @@ const getOrThrow = <E, A>(either: Either.Either<A, E>): A =>
 const TTL = new Date('2026-01-01T01:00:00.000Z');
 
 /** A pending entry as `restore` expects one: the coin plus the expiry it was booked with. */
-const pendingAt = (utxo: UtxoWithMeta, ttl: Date = TTL): PendingUtxo => ({ utxo, ttl });
+const pendingAt = (utxo: UtxoWithMeta, ttl: Date = TTL): PendingUtxo => ({ utxo, ttl, restored: true });
+
+/** A pending entry as `spend` produces one, booked by the running process. */
+const bookedNow = (utxo: UtxoWithMeta, ttl: Date = TTL): PendingUtxo => ({ utxo, ttl, restored: false });
 
 describe('UnshieldedState', () => {
   describe('applyUpdate', () => {
@@ -228,7 +231,7 @@ describe('UnshieldedState', () => {
       );
 
       expect(HashMap.has(state.availableUtxos, utxoHash(u))).toBe(false);
-      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual(pendingAt(u));
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual(bookedNow(u));
       expect(HashMap.size(state.availableUtxos)).toEqual(0);
       expect(HashMap.size(state.pendingUtxos)).toEqual(1);
     });
@@ -559,6 +562,68 @@ describe('UnshieldedState', () => {
     });
   });
 
+  describe('releasing bookings restored from a snapshot', () => {
+    // Once sync has caught up, every transaction the address is party to has been applied, so a coin still booked
+    // was never spent by the process that booked it. Only a durable record of that transaction justifies keeping it.
+    const restoredHolding = (...utxos: readonly UtxoWithMeta[]): UnshieldedState =>
+      UnshieldedState.restore(
+        [],
+        utxos.map((u) => pendingAt(u)),
+      );
+
+    it('returns a restored coin nothing accounts for, rather than waiting out its expiry', () => {
+      const abandoned = generateMockUtxoWithMeta({ intentHash: 'h-abandoned', outputNo: 0 });
+
+      const state = UnshieldedState.releaseRestoredPending(restoredHolding(abandoned), []);
+
+      expect(Option.getOrNull(HashMap.get(state.availableUtxos, utxoHash(abandoned)))).toEqual(abandoned);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('keeps a restored coin something still accounts for', () => {
+      // The wallet cannot see that transaction — it may be sitting with a counterparty — but something else knows.
+      const heldForSwap = generateMockUtxoWithMeta({ intentHash: 'h-swap', outputNo: 0 });
+
+      const state = UnshieldedState.releaseRestoredPending(restoredHolding(heldForSwap), [utxoHash(heldForSwap)]);
+
+      expect(HashMap.has(state.availableUtxos, utxoHash(heldForSwap))).toBe(false);
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(heldForSwap)))).toEqual(pendingAt(heldForSwap));
+    });
+
+    it('releases only the restored coins nothing accounts for', () => {
+      const abandoned = generateMockUtxoWithMeta({ intentHash: 'h-abandoned-2', outputNo: 0 });
+      const held = generateMockUtxoWithMeta({ intentHash: 'h-held', outputNo: 0 });
+
+      const state = UnshieldedState.releaseRestoredPending(restoredHolding(abandoned, held), [utxoHash(held)]);
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(abandoned)]);
+      expect([...HashMap.keys(state.pendingUtxos)]).toEqual([utxoHash(held)]);
+    });
+
+    it('never touches a booking this process took, since its caller may still be proving', () => {
+      const bookedHere = generateMockUtxoWithMeta({ intentHash: 'h-in-flight', outputNo: 0 });
+      const booked = pipe(
+        UnshieldedState.applyUpdate(UnshieldedState.empty(), {
+          createdUtxos: [bookedHere],
+          spentUtxos: [],
+          status: 'SUCCESS',
+        }),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, bookedHere, TTL),
+        getOrThrow,
+      );
+
+      const state = UnshieldedState.releaseRestoredPending(booked, []);
+
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(bookedHere)))).toEqual(bookedNow(bookedHere));
+      expect(HashMap.size(state.availableUtxos)).toEqual(0);
+    });
+
+    it('is a no-op when nothing was restored', () => {
+      expect(UnshieldedState.releaseRestoredPending(UnshieldedState.empty(), [])).toEqual(UnshieldedState.empty());
+    });
+  });
+
   describe('booking expiry', () => {
     const seedAvailable = (...utxos: readonly UtxoWithMeta[]): UnshieldedState =>
       pipe(
@@ -572,7 +637,7 @@ describe('UnshieldedState', () => {
 
       const state = pipe(seedAvailable(u), (s) => UnshieldedState.spend(s, u, TTL), getOrThrow);
 
-      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual({ utxo: u, ttl: TTL });
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual(bookedNow(u));
     });
 
     it('records the expiry when booking by ledger utxo', () => {
@@ -580,7 +645,7 @@ describe('UnshieldedState', () => {
 
       const state = pipe(seedAvailable(u), (s) => UnshieldedState.spendByUtxo(s, u.utxo, TTL), getOrThrow);
 
-      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual({ utxo: u, ttl: TTL });
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual(bookedNow(u));
     });
 
     it('releases a booking whose expiry has passed, coin and meta intact', () => {
@@ -622,7 +687,7 @@ describe('UnshieldedState', () => {
       );
 
       expect(HashMap.has(state.availableUtxos, utxoHash(u))).toBe(false);
-      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual({ utxo: u, ttl: TTL });
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual(bookedNow(u));
     });
 
     it('releases only the bookings that have expired', () => {
