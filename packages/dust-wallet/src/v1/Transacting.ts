@@ -10,7 +10,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Either, pipe, BigInt as BigIntOps, Iterable as IterableOps, Option } from 'effect';
+import {
+  Array as EArray,
+  BigInt as BigIntOps,
+  Data,
+  Either,
+  Iterable as IterableOps,
+  Match,
+  Option,
+  pipe,
+} from 'effect';
 import {
   DustActions,
   DustRegistration,
@@ -213,10 +222,67 @@ const distributeFeeAcrossInputs = <T extends { value: bigint }>(
     { result: [], remaining: fee },
   ).result;
 
+/** The transactions being balanced, proof-erased and merged once, with the segment a balancing intent may use. */
+type MergedTransactions = {
+  readonly transaction: ProofErasedTransaction;
+  readonly segmentId: number;
+};
+
 /**
- * Picks the largest-value coin from the pool. Used only as a fallback inside `computeBalancingRecipe` when the caller's
- * configured selection order leaves an affordable set of coins unselected (see the comment there) — not exported, since
- * overriding the configured order is this loop's own last resort, not a general-purpose selector.
+ * Proof-erases and merges the transactions being balanced. This does not depend on which dust inputs are being priced,
+ * so callers pricing several input sets against the same transactions do it once, not once per pass. `None` when there
+ * is nothing to balance against. May throw: it is ledger arithmetic, and callers wrap it in `LedgerOps.ledgerTry`.
+ */
+const mergeErasedTransactions = (
+  transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
+): Option.Option<MergedTransactions> =>
+  pipe(
+    transactions.map((tx) => tx.eraseProofs()),
+    EArray.match({
+      onEmpty: () => Option.none(),
+      onNonEmpty: ([first, ...rest]) => {
+        const transaction = rest.reduce((acc, tx) => acc.merge(tx), first);
+        return Option.some({
+          transaction,
+          segmentId: Option.getOrElse(findAvailableSegmentId(transaction), () => 1),
+        });
+      },
+    }),
+  );
+
+/** What `computeBalancingRecipe` produces: the total fee of the balanced result and what each selected coin pays. */
+type DustBalancingRecipe = {
+  readonly fee: bigint;
+  readonly recipeInputs: ReadonlyArray<CoinWithValue<Dust>>;
+};
+
+/** The pool ran out under the configured order before the fee was covered — an ordering artefact, retried largest-first. */
+class SelectionExhausted extends Data.TaggedError('DustBalancing.SelectionExhausted')<{
+  readonly message: string;
+}> {}
+
+/** The configured selector declined the coins it was offered — a policy, honoured as-is and never retried. */
+class SelectionRefused extends Data.TaggedError('DustBalancing.SelectionRefused')<{
+  readonly remaining: number;
+}> {}
+
+/** The selector returned coins that were not among those offered, so a pass consumed nothing and could not progress. */
+class SelectionMadeNoProgress extends Data.TaggedError('DustBalancing.SelectionMadeNoProgress')<{
+  readonly returned: number;
+  readonly remaining: number;
+}> {}
+
+/** `getBalanceRecipe` threw something other than its insufficient-funds error. */
+class BalancerFailed extends Data.TaggedError('DustBalancing.BalancerFailed')<{
+  readonly cause: unknown;
+}> {}
+
+type SelectionFailure = SelectionExhausted | SelectionRefused | SelectionMadeNoProgress | BalancerFailed;
+
+/**
+ * Picks the largest-value coin from the pool. Used only for the one retry inside `computeBalancingRecipe`, when the
+ * configured order exhausts the pool with an affordable set of coins left unselected; not exported, since it is that
+ * loop's last resort rather than a general-purpose selector.
  */
 const largestFirst: CoinSelection = (coins) =>
   coins
@@ -225,54 +291,159 @@ const largestFirst: CoinSelection = (coins) =>
     .at(0);
 
 /**
- * Selects dust inputs, under one coin-selection order, until they cover the fee of the transaction they produce. Each
- * pass hands the balancer only the fee still unpaid by the coins already chosen — the deficit, expressed as a negative
- * imbalance — over the coins not yet selected, then re-prices the transaction with everything selected so far via
- * `feeFor`. Adding an input can only raise the fee, so a pass that does not converge has strictly grown the input set;
- * with a finite coin pool that bounds the number of passes by the pool's size. Throws the balancer's own
- * `BalancingInsufficientFundsError` when the pool cannot cover the fee under this order — including when
- * `coinSelection` itself returns nothing from a non-empty pool.
+ * A selector declines by returning `undefined`, and the balancer folds that into the same `InsufficientFundsError` it
+ * throws for an exhausted pool. The two must stay distinguishable — declining is the caller's policy and must never be
+ * overridden by the largest-first retry — so a decline on a non-empty pool is surfaced as its own failure here.
+ * Throwing is the only way out of `getBalanceRecipe`, whose failure contract is exceptions; it is caught by the
+ * `Either.try` in `selectForDeficit` and never leaves this module.
  */
-const runBalancingPasses = (
-  coins: ReadonlyArray<CoinWithValue<Dust>>,
-  initialImbalance: bigint,
-  feeFor: (inputs: ReadonlyArray<CoinWithValue<Dust>>) => bigint,
+const surfacingRefusal =
+  (coinSelection: CoinSelection): CoinSelection =>
+  (coins) => {
+    const chosen = coinSelection(coins);
+    if (chosen === undefined && coins.length > 0) {
+      throw new SelectionRefused({ remaining: coins.length });
+    }
+    return chosen;
+  };
+
+/**
+ * One pass of selection: coins from `remaining`, in the configured order, until their value covers `deficit` plus
+ * `inputFeeOverhead` for each coin taken. Returned in selection order — `distributeFeeAcrossInputs` relies on that to
+ * drain the coins chosen first (under the default order, the smaller ones) before touching the later ones.
+ */
+const selectForDeficit = (
+  remaining: ReadonlyArray<CoinWithValue<Dust>>,
+  deficit: bigint,
+  inputFeeOverhead: bigint,
   coinSelection: CoinSelection,
-): { fee: bigint; recipeInputs: ReadonlyArray<CoinWithValue<Dust>> } => {
-  const inputs: CoinWithValue<Dust>[] = [];
-  let remaining = coins;
-  let fee = -initialImbalance;
+): Either.Either<EArray.NonEmptyReadonlyArray<CoinWithValue<Dust>>, SelectionFailure> =>
+  pipe(
+    Either.try({
+      try: () =>
+        getBalanceRecipe({
+          coins: remaining.map((coin) => ({ type: 'dust', value: coin.value, token: coin.token })),
+          initialImbalances: CapImbalances.fromEntry('dust', -deficit),
+          feeTokenType: 'dust',
+          coinSelection: surfacingRefusal(coinSelection),
+          transactionCostModel: { inputFeeOverhead, outputFeeOverhead: 0n },
+          createOutput: (coin) => coin,
+          isCoinEqual: (a, b) => a.token.nonce === b.token.nonce,
+        }),
+      catch: (err): SelectionFailure =>
+        err instanceof SelectionRefused
+          ? err
+          : err instanceof BalancingInsufficientFundsError
+            ? new SelectionExhausted({ message: err.message })
+            : new BalancerFailed({ cause: err }),
+    }),
+    Either.flatMap((recipe) => {
+      const added = EArray.filterMap(recipe.inputs, (input) =>
+        EArray.findFirst(remaining, (coin) => coin.token.nonce === input.token.nonce),
+      );
+      return EArray.isNonEmptyReadonlyArray(added)
+        ? Either.right(added)
+        : Either.left(new SelectionMadeNoProgress({ returned: recipe.inputs.length, remaining: remaining.length }));
+    }),
+  );
 
-  // Every pass either returns or consumes at least one coin from `remaining`, so this bound
-  // is never actually reached; it turns a broken invariant into a thrown error instead of an
-  // infinite loop.
-  for (let pass = 0; pass <= coins.length; pass++) {
-    const covered = inputs.reduce((sum, input) => sum + input.value, 0n);
-    if (fee <= covered) {
-      return { fee, recipeInputs: distributeFeeAcrossInputs(inputs, fee) };
-    }
+/**
+ * The fee grows with every dust input, and the balancer can anticipate that through `inputFeeOverhead`, which it
+ * subtracts from the outstanding deficit per coin it takes. The ledger's cost model does not expose the figure, so it
+ * is measured: the fee increase over the base fee so far, averaged over the inputs taken, rounded up. Zero until the
+ * first pass has priced something, so that pass selects on raw value and later passes complete what it left short.
+ */
+const marginalFeePerInput = (feeIncrease: bigint, inputs: number): bigint =>
+  inputs === 0 || feeIncrease <= 0n ? 0n : (feeIncrease + BigInt(inputs) - 1n) / BigInt(inputs);
 
-    const recipe = getBalanceRecipe({
-      coins: remaining.map((coin) => ({ type: 'dust', value: coin.value, token: coin.token })),
-      initialImbalances: CapImbalances.fromEntry('dust', covered - fee),
-      feeTokenType: 'dust',
-      coinSelection,
-      transactionCostModel: { inputFeeOverhead: 0n, outputFeeOverhead: 0n },
-      createOutput: (coin) => coin,
-      isCoinEqual: (a, b) => a.token.nonce === b.token.nonce,
+/**
+ * Selects dust inputs until, together with the dust the transactions already carry, they cover the fee of the
+ * transaction they produce. Each pass covers only the outstanding deficit from the coins not yet selected, then
+ * re-prices with everything selected so far. A pass that takes no coin fails as `SelectionMadeNoProgress`, so every
+ * pass shrinks `remaining` and the recursion is bounded by the pool size.
+ */
+const selectDustInputs = (args: {
+  readonly coins: ReadonlyArray<CoinWithValue<Dust>>;
+  readonly baseFee: bigint;
+  readonly existingDust: bigint;
+  readonly feeWith: (
+    inputs: EArray.NonEmptyReadonlyArray<CoinWithValue<Dust>>,
+  ) => Either.Either<bigint, LedgerOps.LedgerError>;
+  readonly coinSelection: CoinSelection;
+}): Either.Either<DustBalancingRecipe, SelectionFailure | LedgerOps.LedgerError> => {
+  const { baseFee, existingDust, feeWith, coinSelection } = args;
+  const go = (
+    remaining: ReadonlyArray<CoinWithValue<Dust>>,
+    inputs: ReadonlyArray<CoinWithValue<Dust>>,
+    fee: bigint,
+  ): Either.Either<DustBalancingRecipe, SelectionFailure | LedgerOps.LedgerError> =>
+    Either.gen(function* () {
+      const covered = BigIntOps.sumAll(inputs.map((input) => input.value));
+      const deficit = fee - existingDust - covered;
+      if (deficit <= 0n) {
+        return { fee, recipeInputs: distributeFeeAcrossInputs(inputs, fee - existingDust) };
+      }
+      const added = yield* selectForDeficit(
+        remaining,
+        deficit,
+        marginalFeePerInput(fee - baseFee, inputs.length),
+        coinSelection,
+      );
+      const nextInputs = EArray.appendAll(inputs, added);
+      const nextFee = yield* feeWith(nextInputs);
+      const rest = remaining.filter((coin) => !added.some((taken) => taken.token.nonce === coin.token.nonce));
+      return yield* go(rest, nextInputs, nextFee);
     });
-
-    const chosen = new Set(recipe.inputs.map((input) => input.token.nonce));
-    for (const coin of remaining) {
-      if (chosen.has(coin.token.nonce)) inputs.push(coin);
-    }
-    remaining = remaining.filter((coin) => !chosen.has(coin.token.nonce));
-
-    fee = feeFor(inputs);
-  }
-
-  throw new Error(`DUST fee balancing failed to converge after ${coins.length + 1} passes`);
+  return go(args.coins, [], baseFee);
 };
+
+/**
+ * Runs selection under the configured order and, only if that exhausts the pool, once more largest-first: an additive
+ * selection is guaranteed to find a covering set only when it takes coins from the top, since the k largest coins
+ * dominate every other k-subset. Any other failure — a declining selector above all — is reported as it is.
+ */
+const selectWithLargestFirstRetry = (
+  select: (
+    coinSelection: CoinSelection,
+  ) => Either.Either<DustBalancingRecipe, SelectionFailure | LedgerOps.LedgerError>,
+  configured: CoinSelection,
+): Either.Either<DustBalancingRecipe, SelectionFailure | LedgerOps.LedgerError> =>
+  pipe(
+    select(configured),
+    Either.orElse((failure) =>
+      failure._tag === 'DustBalancing.SelectionExhausted' ? select(largestFirst) : Either.left(failure),
+    ),
+  );
+
+const toWalletError = (failure: SelectionFailure | LedgerOps.LedgerError): WalletError =>
+  Match.value(failure).pipe(
+    Match.tag(
+      'DustBalancing.SelectionExhausted',
+      ({ message }) => new InsufficientFundsError({ message, tokenType: 'dust' }),
+    ),
+    Match.tag(
+      'DustBalancing.SelectionRefused',
+      ({ remaining }) =>
+        new InsufficientFundsError({
+          message: `Insufficient Funds: the configured coin selection declined the remaining ${remaining} dust coin(s)`,
+          tokenType: 'dust',
+        }),
+    ),
+    Match.tag(
+      'DustBalancing.SelectionMadeNoProgress',
+      ({ returned, remaining }) =>
+        new TransactingError({
+          message: `Coin selection returned ${returned} coin(s), none of them among the ${remaining} offered; a selector must pick from the coins it is given`,
+        }),
+    ),
+    Match.tag(
+      'DustBalancing.BalancerFailed',
+      ({ cause }) =>
+        new OtherWalletError({ message: cause instanceof Error ? cause.message : 'Dust balancing failed', cause }),
+    ),
+    Match.tag('LedgerError', (error) => error),
+    Match.exhaustive,
+  );
 
 export class TransactingCapabilityImplementation<TTransaction extends AnyTransaction> implements TransactingCapability<
   DustSecretKey,
@@ -628,6 +799,12 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     );
   }
 
+  /**
+   * The fee the transactions would carry with `recipeInputs` attached as dust spends in a balancing intent. With no
+   * inputs there is no intent to attach — an intent with empty `DustActions` is not well-formed — so it is the fee of
+   * the transactions as they are. Nothing is persisted. `merged` lets a caller pricing several input sets against the
+   * same transactions proof-erase and merge them once; it is derived from `transactions` when omitted.
+   */
   dryRunFee(
     recipeInputs: ReadonlyArray<CoinWithValue<Dust>>,
     transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
@@ -636,33 +813,40 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
+    merged: Option.Option<MergedTransactions> = mergeErasedTransactions(transactions),
   ): bigint {
-    const network = this.networkId;
-
-    // Create a balancing tx from recipe inputs without persisting state changes
-    const [spends] = CoreWallet.spendCoins(state, secretKey, recipeInputs, currentTime);
-
-    const intent = Intent.new(ttl);
-    intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
-      SignatureMarker.signature,
-      ProofMarker.preProof,
-      currentTime,
-      [...spends],
-      [],
+    const priced = EArray.match(recipeInputs, {
+      onEmpty: () => Option.map(merged, (existing) => existing.transaction),
+      onNonEmpty: (inputs) => {
+        const [spends] = CoreWallet.spendCoins(state, secretKey, inputs, currentTime);
+        const intent = Intent.new(ttl);
+        intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
+          SignatureMarker.signature,
+          ProofMarker.preProof,
+          currentTime,
+          [...spends],
+          [],
+        );
+        const segmentId = pipe(
+          merged,
+          Option.map((existing) => existing.segmentId),
+          Option.getOrElse(() => 1),
+        );
+        const balancing = Transaction.fromParts(this.networkId)
+          .addIntent({ tag: 'specific', value: segmentId }, intent)
+          .eraseProofs();
+        return Option.some(
+          pipe(
+            merged,
+            Option.match({ onNone: () => balancing, onSome: (existing) => existing.transaction.merge(balancing) }),
+          ),
+        );
+      },
+    });
+    return pipe(
+      priced,
+      Option.match({ onNone: () => 0n, onSome: (transaction) => this.calculateFee(transaction, ledgerParams) }),
     );
-
-    // Merge existing transactions first so we can pick a segment that doesn't collide
-    const [first, ...rest] = transactions.map((tx) => tx.eraseProofs());
-    const mergedExisting = first ? rest.reduce((acc, tx) => acc.merge(tx), first) : undefined;
-
-    const segmentId = mergedExisting ? Option.getOrElse(findAvailableSegmentId(mergedExisting), () => 1) : 1;
-
-    const balancingTx = Transaction.fromParts(network).addIntent({ tag: 'specific', value: segmentId }, intent);
-    const erasedBalancing = balancingTx.eraseProofs();
-
-    const mergedTx = mergedExisting ? mergedExisting.merge(erasedBalancing) : erasedBalancing;
-
-    return this.calculateFee(mergedTx, ledgerParams);
   }
 
   static feeImbalance(transaction: AnyTransaction, totalFee: bigint): bigint {
@@ -676,16 +860,14 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   }
 
   /**
-   * Balances a fee-paying dust intent: selects enough dust to cover the transaction's fee, and reports the fee those
-   * inputs must pay.
+   * Selects the dust inputs a balancing intent needs so that, merged with `transactions`, the result covers its own fee
+   * — including the fee those inputs add — net of any dust the transactions already carry. `fee` is the total fee of
+   * that merged result, the figure {@link estimateFee} reports; `recipeInputs` lists the selected coins in selection
+   * order, each valued at the part of the shortfall it pays. Both are empty when the transactions already cover their
+   * fee.
    *
-   * The previous implementation of this method (`Effect.iterate`) had no bound on the number of passes and no check
-   * that a pass had made progress. Its first pass was seeded with the transaction's dust imbalance, which is negative
-   * (a deficit); every later pass was seeded with the fee it had just computed, which is positive. `getBalanceRecipe`
-   * treats a non-negative seed as a surplus of the fee token — it adds a change output and selects zero inputs — so any
-   * wallet whose first pass under-covered its own fee looped forever, rebuilding and proof-erasing an identical
-   * transaction on every pass. `runBalancingPasses` fixes this by seeding every pass with the outstanding deficit
-   * rather than the raw fee, which both corrects the sign and bounds the loop: see its own comment for why.
+   * Selection runs under the configured {@link CoinSelection} and is retried once largest-first only if that order
+   * exhausts the pool; a selector that declines coins is honoured and reports insufficient funds directly.
    */
   computeBalancingRecipe(
     secretKey: DustSecretKey,
@@ -694,47 +876,39 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-  ): Either.Either<{ fee: bigint; recipeInputs: ReadonlyArray<CoinWithValue<Dust>> }, WalletError> {
-    const initialFees = transactions.reduce(
-      (total, transaction) =>
-        total +
-        TransactingCapabilityImplementation.feeImbalance(transaction, this.calculateFee(transaction, ledgerParams)),
-      0n,
-    );
-
-    // A non-negative imbalance means the transaction already carries enough dust of its own;
-    // nothing to select. Reported via `feeFor([])`, not `-initialFees`, since the two coincide
-    // only in the (usual) case where the imbalance is exactly the negated fee.
-    const feeFor = (inputs: ReadonlyArray<CoinWithValue<Dust>>): bigint =>
-      this.dryRunFee(inputs, transactions, secretKey, state, ttl, currentTime, ledgerParams);
-    if (initialFees >= 0n) {
-      return Either.right({ fee: feeFor([]), recipeInputs: [] });
-    }
-
-    const dust = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
-    const coinSelection = this.getCoinSelection();
-
-    return Either.try({
-      try: () => {
-        try {
-          return runBalancingPasses(dust, initialFees, feeFor, coinSelection);
-        } catch (err) {
-          if (!(err instanceof BalancingInsufficientFundsError)) throw err;
-          // The additive loop above is complete only when it selects from the top: adding a
-          // coin can only raise the fee, so under an ascending order it can take a small coin,
-          // be forced to add a large one to cover the resulting fee, and find the pair's fee
-          // exceeds the pool — when the large coin alone would have paid the fee for one input.
-          // Retrying once, greedily by value, recovers exactly that case before giving up.
-          return runBalancingPasses(dust, initialFees, feeFor, largestFirst);
-        }
-      },
-      catch: (err) =>
-        err instanceof BalancingInsufficientFundsError
-          ? new InsufficientFundsError({ message: err.message, tokenType: err.tokenType })
-          : new OtherWalletError({
-              message: err instanceof Error ? err.message : 'Dust balancing failed',
-              cause: err,
-            }),
+  ): Either.Either<DustBalancingRecipe, WalletError> {
+    return Either.gen(this, function* () {
+      const merged = yield* LedgerOps.ledgerTry(() => mergeErasedTransactions(transactions));
+      const standaloneFees = yield* LedgerOps.ledgerTry(() =>
+        transactions.map((transaction) => this.calculateFee(transaction, ledgerParams)),
+      );
+      // `feeImbalance` nets the dust a transaction already carries (spends, registration allowances) against its own
+      // fee. Adding the fees back isolates that dust, which counts toward coverage on every pass.
+      const existingDust = yield* LedgerOps.ledgerTry(
+        () =>
+          BigIntOps.sumAll(
+            EArray.zipWith(transactions, standaloneFees, (transaction, fee) =>
+              TransactingCapabilityImplementation.feeImbalance(transaction, fee),
+            ),
+          ) + BigIntOps.sumAll(standaloneFees),
+      );
+      const baseFee = yield* LedgerOps.ledgerTry(() =>
+        pipe(
+          merged,
+          Option.match({
+            onNone: () => 0n,
+            onSome: (existing) => this.calculateFee(existing.transaction, ledgerParams),
+          }),
+        ),
+      );
+      const coins = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
+      const feeWith = (inputs: EArray.NonEmptyReadonlyArray<CoinWithValue<Dust>>) =>
+        LedgerOps.ledgerTry(() =>
+          this.dryRunFee(inputs, transactions, secretKey, state, ttl, currentTime, ledgerParams, merged),
+        );
+      const select = (coinSelection: CoinSelection) =>
+        selectDustInputs({ coins, baseFee, existingDust, feeWith, coinSelection });
+      return yield* Either.mapLeft(selectWithLargestFirstRetry(select, this.getCoinSelection()), toWalletError);
     });
   }
 
@@ -764,32 +938,36 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
     return pipe(
       this.computeBalancingRecipe(secretKey, state, transactions, ttl, currentTime, ledgerParams),
-      Either.flatMap(({ recipeInputs }) => {
-        return LedgerOps.ledgerTry(() => {
-          const intent = Intent.new(ttl);
-          const [spends, updatedState] = CoreWallet.spendCoins(state, secretKey, recipeInputs, currentTime);
-
-          intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
-            SignatureMarker.signature,
-            ProofMarker.preProof,
-            currentTime,
-            [...spends],
-            [],
-          );
-
-          // Merge existing transactions first so we can pick a segment that doesn't collide
-          const [first, ...rest] = transactions.map((tx) => tx.eraseProofs());
-          const mergedExisting = first ? rest.reduce((acc, tx) => acc.merge(tx), first) : undefined;
-          const segmentId = mergedExisting ? Option.getOrElse(findAvailableSegmentId(mergedExisting), () => 1) : 1;
-
-          const feeTransaction = Transaction.fromParts(networkId).addIntent(
-            { tag: 'specific', value: segmentId },
-            intent,
-          );
-
-          return [feeTransaction, updatedState];
-        });
-      }),
+      Either.flatMap(({ recipeInputs }) =>
+        LedgerOps.ledgerTry((): [UnprovenTransaction, CoreWallet] =>
+          EArray.match(recipeInputs, {
+            // The transactions already cover their fee. An intent with empty `DustActions` is not well-formed, so
+            // there is nothing to add: an empty transaction merges into anything as the identity, and no dust is
+            // booked as pending.
+            onEmpty: () => [Transaction.fromParts(networkId), state],
+            onNonEmpty: (inputs) => {
+              const [spends, updatedState] = CoreWallet.spendCoins(state, secretKey, inputs, currentTime);
+              const intent = Intent.new(ttl);
+              intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
+                SignatureMarker.signature,
+                ProofMarker.preProof,
+                currentTime,
+                [...spends],
+                [],
+              );
+              const segmentId = pipe(
+                mergeErasedTransactions(transactions),
+                Option.map((existing) => existing.segmentId),
+                Option.getOrElse(() => 1),
+              );
+              return [
+                Transaction.fromParts(networkId).addIntent({ tag: 'specific', value: segmentId }, intent),
+                updatedState,
+              ];
+            },
+          }),
+        ),
+      ),
     );
   }
 

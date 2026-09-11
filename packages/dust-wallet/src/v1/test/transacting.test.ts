@@ -14,7 +14,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   chooseCoin,
   makeDefaultCoinsAndBalancesCapability,
@@ -274,22 +274,40 @@ describe('addDustRegistrationSignature', () => {
 });
 
 describe('computeBalancingRecipe', () => {
-  // `dryRunFee` and `calculateFee` are the WASM-backed parts of balancing — they build and
-  // erase proofs on a real ledger transaction. These tests exercise the balancing loop itself
-  // (progress, termination, the fallback selector), so they replace both with a fee model
-  // whose one relevant property matches the real one: the fee grows with the number of dust
-  // inputs. `computeBalancingRecipe` itself, and every SDK function it calls
-  // (`getBalanceRecipe`, `Imbalances`), are exercised unmodified.
+  // `dryRunFee` and `calculateFee` are the WASM-backed parts of balancing — they build and erase proofs on a real
+  // ledger transaction. These tests exercise the selection loop itself, so both are replaced by an analytic fee model
+  // whose one relevant property matches the real one: the fee grows with each dust input. Everything else —
+  // `computeBalancingRecipe`, `balanceTransactions`, the SDK's `getBalanceRecipe` and `Imbalances` — runs unmodified.
   const FEE_BASE = 1_400_000_000_000_000n;
   const FEE_PER_INPUT = 3_750_000_000_000n;
-  const feeFor = (inputs: number): bigint => FEE_BASE + FEE_PER_INPUT * BigInt(inputs);
+  const linearFee = (inputs: number): bigint => FEE_BASE + FEE_PER_INPUT * BigInt(inputs);
 
   class TestableTransacting extends TransactingCapabilityImplementation<ledger.FinalizedTransaction> {
+    readonly #feeModel: (inputs: number) => bigint;
+
+    constructor(
+      coins: ReadonlyArray<CoinWithValue<Dust>>,
+      coinSelection: CoinSelection,
+      feeModel: (inputs: number) => bigint = linearFee,
+    ) {
+      // Type cast required because: only `getAvailableCoinsWithGeneratedDust` is reached from `computeBalancingRecipe`.
+      const coinsAndBalancesCapability = {
+        getAvailableCoinsWithGeneratedDust: () => coins,
+      } as unknown as CoinsAndBalancesCapability<never>;
+      super(
+        config.networkId,
+        config.costParameters,
+        () => coinSelection,
+        () => coinsAndBalancesCapability,
+        () => keysCapability,
+      );
+      this.#feeModel = feeModel;
+    }
     override calculateFee(): bigint {
-      return feeFor(0);
+      return this.#feeModel(0);
     }
     override dryRunFee(recipeInputs: ReadonlyArray<CoinWithValue<Dust>>): bigint {
-      return feeFor(recipeInputs.length);
+      return this.#feeModel(recipeInputs.length);
     }
   }
 
@@ -304,109 +322,171 @@ describe('computeBalancingRecipe', () => {
   });
   const coin = (value: bigint, n: number): CoinWithValue<Dust> => ({ value, token: dustToken(n) });
 
-  // A transaction whose dust imbalance at its own fee is the ledger's usual sign: negative,
-  // i.e. a deficit of `feeFor(0)`.
-  const fakeTx = {
-    imbalances: () => new Map([[{ tag: 'dust' }, -feeFor(0)]]),
-  } as unknown as ledger.FinalizedTransaction;
+  // A transaction that, at its own fee, carries `carriedDust` of dust already: its dust imbalance is the ledger's
+  // netted figure, `carriedDust - fee`. Proof-erasure and merging are inert here; the fee model stands in for pricing.
+  const fakeTx = (carriedDust: bigint = 0n): ledger.FinalizedTransaction =>
+    // Type cast required because: the fee model replaces every ledger call `computeBalancingRecipe` would make on it.
+    ({
+      imbalances: () => new Map([[{ tag: 'dust' }, carriedDust - linearFee(0)]]),
+      eraseProofs: () => ({ merge: (other: unknown) => other, intents: undefined }),
+    }) as unknown as ledger.FinalizedTransaction;
 
-  const makeTransacting = (
-    coins: ReadonlyArray<CoinWithValue<Dust>>,
-    coinSelection: CoinSelection,
-  ): TestableTransacting => {
-    const coinsAndBalancesCapability = {
-      getAvailableCoinsWithGeneratedDust: () => coins,
-    } as unknown as CoinsAndBalancesCapability<never>;
-    return new TestableTransacting(
-      config.networkId,
-      config.costParameters,
-      () => coinSelection,
-      () => coinsAndBalancesCapability,
-      () => keysCapability,
-    );
-  };
+  // Type cast required because: with `dryRunFee` and `spendCoins` never reached, the state is only passed through.
+  const state = { untouched: true } as unknown as never;
 
-  const run = (transacting: TestableTransacting) =>
+  const run = (transacting: TestableTransacting, tx: ledger.FinalizedTransaction = fakeTx()) =>
     transacting.computeBalancingRecipe(
       ledger.sampleDustSecretKey(),
-      undefined as never,
-      [fakeTx],
+      state,
+      [tx],
       TTL,
       NOW,
       ledger.LedgerParameters.initialParameters(),
     );
 
-  it('converges once the deficit-seeded pass covers the fee, even when the first pass falls short', () => {
-    // Twelve part-drained coins beside two near their generation cap — ascending selection
-    // takes eight of the small ones on pass 1, which is short of the fee that spending eight
-    // coins costs; a second pass, seeded with the remaining deficit, adds one more and covers it.
+  const sumOf = (inputs: ReadonlyArray<CoinWithValue<Dust>>): bigint => inputs.reduce((sum, i) => sum + i.value, 0n);
+
+  it('converges on a second pass when the first under-covers the fee its own inputs add', () => {
+    // Twelve part-drained coins beside two near their generation cap. Ascending selection takes eight small ones on
+    // the first pass — enough for the base fee, short of the fee that spending eight coins costs — and the second pass,
+    // seeded with that shortfall and the marginal fee measured on the first, adds one more and covers it. Two prices.
     const drained = Array.from({ length: 12 }, (_, i) => coin(176_250_000_000_000n, i));
     const full = [coin(50_000_000_000_000_000n, 90), coin(30_000_000_000_000_000n, 91)];
-    const result = run(makeTransacting([...drained, ...full], chooseCoin)).pipe(EitherOps.getOrThrowLeft);
+    const transacting = new TestableTransacting([...drained, ...full], chooseCoin);
+    const dryRuns = vi.spyOn(transacting, 'dryRunFee');
+
+    const result = run(transacting).pipe(EitherOps.getOrThrowLeft);
 
     expect(result.recipeInputs).toHaveLength(9);
-    expect(result.fee).toBe(feeFor(9));
-    expect(result.recipeInputs.reduce((sum, i) => sum + i.value, 0n)).toBe(result.fee);
+    expect(result.fee).toBe(linearFee(9));
+    expect(sumOf(result.recipeInputs)).toBe(result.fee);
+    expect(dryRuns).toHaveBeenCalledTimes(2);
   });
 
-  it('falls back to largest-first when ascending order strands the coin that could pay alone', () => {
-    // Adding a coin can only raise the fee, so the additive loop is complete only when it
-    // selects from the top. `getBalanceRecipe` itself has no notion of that growth — its
-    // `inputFeeOverhead` is 0n here, same as the SDK's own call site — so a single call keeps
-    // taking coins, smallest first, until their raw sum covers the *seeded* deficit, with no
-    // regard for what selecting them will do to the *real* fee once `dryRunFee` re-prices the
-    // result. Here that means ascending order's one call to `getBalanceRecipe` takes both
-    // coins (their sum clears the seeded fee(0) deficit) — but the real fee for two inputs,
-    // fee(2), is still short of what was collected, and the pool is now empty: insufficient
-    // funds, on a wallet where the large coin alone would have covered fee(1).
+  it('keeps selection order, so the coins chosen first are drained first and no input pays nothing', () => {
+    // Pool order is ledger-state order, here the large coin first. Ascending selection takes the small coin, then
+    // the large one; the fee must be split in that order, or the small coin would be nullified and re-committed for
+    // a zero fee while the large one is drained instead.
+    const big = coin(2_000_000_000_000_000n, 0);
+    const small = coin(1_000_000_000_000n, 1);
+
+    const result = run(new TestableTransacting([big, small], chooseCoin)).pipe(EitherOps.getOrThrowLeft);
+
+    expect(result.recipeInputs.map((i) => i.token.nonce)).toEqual([small.token.nonce, big.token.nonce]);
+    expect(result.recipeInputs.map((i) => i.value)).toEqual([small.value, linearFee(2) - small.value]);
+    expect(result.recipeInputs.every((i) => i.value > 0n)).toBe(true);
+  });
+
+  it('retries largest-first when ascending order exhausts the pool but the large coin alone could pay', () => {
+    // The balancer takes coins until their raw value covers the seeded deficit, with no notion that each input raises
+    // the real fee. Ascending order therefore takes both coins here; the fee for two inputs is still short of them,
+    // the pool is empty, and the configured order is exhausted — while the large coin alone covers the fee for one.
     const small = coin(1_000_000_000_000n, 0);
-    const large = coin(1_404_000_000_000_000n, 1); // > fee(1) = 1_403_750_000_000_000n
-    const result = run(makeTransacting([small, large], chooseCoin)).pipe(EitherOps.getOrThrowLeft);
+    const large = coin(1_404_000_000_000_000n, 1); // > linearFee(1) = 1_403_750_000_000_000n
+    const transacting = new TestableTransacting([small, large], chooseCoin);
+    const dryRuns = vi.spyOn(transacting, 'dryRunFee');
 
-    // Exactly the large coin was chosen, not the small one — `distributeFeeAcrossInputs`
-    // reports how much of it pays the fee, which is the whole fee since one input suffices.
+    const result = run(transacting).pipe(EitherOps.getOrThrowLeft);
+
     expect(result.recipeInputs.map((i) => i.token.nonce)).toEqual([large.token.nonce]);
-    expect(result.recipeInputs.map((i) => i.value)).toEqual([feeFor(1)]);
-    expect(result.fee).toBe(feeFor(1));
+    expect(result.recipeInputs.map((i) => i.value)).toEqual([linearFee(1)]);
+    expect(result.fee).toBe(linearFee(1));
+    // One price under the configured order (two coins), one under the retry (one coin).
+    expect(dryRuns).toHaveBeenCalledTimes(2);
   });
 
-  it('reports InsufficientFundsError, not a hang, when no order of the pool can pay', () => {
-    const coins = [coin(1n, 0), coin(2n, 1)];
-    const error = run(makeTransacting(coins, chooseCoin)).pipe(EitherOps.getOrThrowRight);
+  it('honours a selector that declines coins: no retry spends what the policy excluded', () => {
+    // A selector that never offers coins above a cap is a policy, not an order. When the coins it allows cannot pay,
+    // the answer is insufficient funds — not a largest-first retry that spends the excluded coin.
+    const cap = 10_000_000_000_000n;
+    const capped: CoinSelection = (coins) => chooseCoin(coins.filter((c) => c.value <= cap));
+    const allowed = coin(1_000_000_000_000n, 0);
+    const excluded = coin(5_000_000_000_000_000n, 1);
+    const transacting = new TestableTransacting([allowed, excluded], capped);
+    const dryRuns = vi.spyOn(transacting, 'dryRunFee');
+
+    const error = run(transacting).pipe(EitherOps.getOrThrowRight);
 
     expect(error).toBeInstanceOf(InsufficientFundsError);
-    expect((error as InsufficientFundsError).tokenType).toBe('dust');
+    expect((error as InsufficientFundsError).message).toMatch(/declined/);
+    expect(dryRuns).not.toHaveBeenCalled();
   });
 
-  it('never terminates worse than the coin count: converges on a uniformly tiny wallet too', () => {
-    // The one shape neither selection order can rescue by picking a different coin: every
-    // coin is far below fee size, so covering the fee needs several of them regardless of
-    // order. The loop must still terminate — in at most `coins.length + 1` passes.
-    const coins = Array.from({ length: 12 }, (_, i) => coin(176_250_000_000_000n, i));
-    const result = run(makeTransacting(coins, chooseCoin)).pipe(EitherOps.getOrThrowLeft);
+  it('fails fast when the selector returns a coin that was not offered, instead of repeating identical passes', () => {
+    // The balancer books whatever coin the selector returns, so a selector ignoring its argument satisfies the deficit
+    // with a coin the pool never had. Nothing can be consumed from the pool, so nothing can change between passes.
+    const foreign = coin(9_000_000_000_000_000n, 999);
+    const ignoresItsArgument: CoinSelection = <T extends { value: bigint }>(_coins: readonly T[]): T | undefined =>
+      // Type cast required because: the point of the test is a selector that returns a coin of the right shape
+      // that is not one of `_coins`.
+      ({ type: 'dust', value: foreign.value, token: foreign.token }) as unknown as T;
+    const transacting = new TestableTransacting([coin(1_000_000_000_000n, 0)], ignoresItsArgument);
+    const dryRuns = vi.spyOn(transacting, 'dryRunFee');
 
-    expect(result.recipeInputs.length).toBeLessThanOrEqual(coins.length);
-    expect(result.recipeInputs.reduce((sum, i) => sum + i.value, 0n)).toBeGreaterThanOrEqual(result.fee);
+    const error = run(transacting).pipe(EitherOps.getOrThrowRight);
+
+    expect(error).toBeInstanceOf(TransactingError);
+    expect((error as TransactingError).message).toMatch(/none of them among the 1 offered/);
+    expect(dryRuns).not.toHaveBeenCalled();
   });
 
-  it('selects nothing and reports the real fee when the transaction already carries enough dust', () => {
-    const positiveImbalanceTx = {
-      imbalances: () => new Map([[{ tag: 'dust' }, 5n]]),
-    } as unknown as ledger.FinalizedTransaction;
-    const transacting = makeTransacting([coin(1_000_000n, 0)], chooseCoin);
+  it('nets off dust the transactions already carry, so new inputs pay only the shortfall', () => {
+    // The transaction already carries 60% of its base fee in dust. The new input must pay the remaining 40% plus what
+    // its own presence adds — not the whole fee on top — while the reported fee is the total the merged result pays.
+    const carried = (linearFee(0) * 6n) / 10n;
+    const only = coin(linearFee(0), 0);
 
-    const result = transacting
-      .computeBalancingRecipe(
+    const result = run(new TestableTransacting([only], chooseCoin), fakeTx(carried)).pipe(EitherOps.getOrThrowLeft);
+
+    expect(result.fee).toBe(linearFee(1));
+    expect(result.recipeInputs.map((i) => i.value)).toEqual([linearFee(1) - carried]);
+  });
+
+  it('selects nothing when the transactions already cover their fee, and then adds no intent at all', () => {
+    // An intent with empty `DustActions` is not well-formed, so a fully-covered transaction must get an empty balancing
+    // transaction — the identity under merge — not an intent with nothing in it. The fee reported is the fee as it is,
+    // not the price of a merged result carrying an extra empty intent.
+    const covered = fakeTx(linearFee(0) + 5n);
+    const transacting = new TestableTransacting([coin(1_000_000_000_000_000_000n, 0)], chooseCoin);
+    const dryRuns = vi.spyOn(transacting, 'dryRunFee');
+
+    const recipe = run(transacting, covered).pipe(EitherOps.getOrThrowLeft);
+    expect(recipe.recipeInputs).toEqual([]);
+    expect(recipe.fee).toBe(linearFee(0));
+    expect(dryRuns).not.toHaveBeenCalled();
+
+    const [balancing, nextState] = transacting
+      .balanceTransactions(
         ledger.sampleDustSecretKey(),
-        undefined as never,
-        [positiveImbalanceTx],
+        state,
+        [covered],
         TTL,
         NOW,
         ledger.LedgerParameters.initialParameters(),
       )
       .pipe(EitherOps.getOrThrowLeft);
+    expect(balancing.intents?.size ?? 0).toBe(0);
+    expect(nextState).toBe(state);
+  });
 
-    expect(result.recipeInputs).toEqual([]);
-    expect(result.fee).toBe(feeFor(0));
+  it('reports InsufficientFundsError when no order of the pool can pay', () => {
+    const error = run(new TestableTransacting([coin(1n, 0), coin(2n, 1)], chooseCoin)).pipe(EitherOps.getOrThrowRight);
+
+    expect(error).toBeInstanceOf(InsufficientFundsError);
+    expect((error as InsufficientFundsError).tokenType).toBe('dust');
+  });
+
+  it('terminates on a fee model that can never be covered, pricing at most once per coin per attempt', () => {
+    // Each input costs exactly its own value, so no set of inputs can ever cover the fee it produces. Every pass still
+    // consumes at least one coin, so both the configured attempt and the retry run out of pool and stop.
+    const value = 100_000_000_000_000n;
+    const coins = Array.from({ length: 5 }, (_, i) => coin(value, i));
+    const transacting = new TestableTransacting(coins, chooseCoin, (inputs) => FEE_BASE + value * BigInt(inputs));
+    const dryRuns = vi.spyOn(transacting, 'dryRunFee');
+
+    const error = run(transacting).pipe(EitherOps.getOrThrowRight);
+
+    expect(error).toBeInstanceOf(InsufficientFundsError);
+    expect(dryRuns.mock.calls.length).toBeLessThanOrEqual(2 * coins.length);
   });
 });
