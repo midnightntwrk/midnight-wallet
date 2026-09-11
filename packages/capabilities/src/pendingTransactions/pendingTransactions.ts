@@ -80,7 +80,16 @@ export type PendingTransactions<TTransaction> = Readonly<{
 const sharesIdentifier = (reservation: Reservation, identifiers: readonly string[]): boolean =>
   reservation.identifiers.some((id) => identifiers.includes(id));
 
-/** Records a balanced transaction, replacing any earlier reservation for the same spend. */
+/**
+ * Records a balanced transaction, replacing any earlier reservation for the same spend.
+ *
+ * @example
+ *   const held = addReservation(state, { identifiers: tx.identifiers(), inputs: { unshielded: ids }, ttl });
+ *
+ * @param state - The pending transactions to add to
+ * @param reservation - The record of what the balanced transaction booked
+ * @returns The state with that reservation held, and any it replaces gone
+ */
 export const addReservation = <TTransaction>(
   state: PendingTransactions<TTransaction>,
   reservation: Reservation,
@@ -92,7 +101,16 @@ export const addReservation = <TTransaction>(
   ),
 });
 
-/** Forgets every reservation holding one of `identifiers`. */
+/**
+ * Forgets every reservation holding one of `identifiers`.
+ *
+ * @example
+ *   const cleared = clearReservation(state, [...tx.identifiers()]);
+ *
+ * @param state - The pending transactions to clear from
+ * @param identifiers - Identifiers of the spend whose record is finished with
+ * @returns The state with those reservations gone; identifiers no reservation holds are ignored
+ */
 export const clearReservation = <TTransaction>(
   state: PendingTransactions<TTransaction>,
   identifiers: readonly string[],
@@ -102,20 +120,64 @@ export const clearReservation = <TTransaction>(
 });
 
 /**
- * Marks every reservation whose TTL `now` has reached. Marked rather than removed, mirroring how a failed transaction
- * is kept until a caller has acted on it: the coins still have to be released before the record is dropped.
+ * Marks every reservation whose TTL `now` has passed. Marked rather than removed, mirroring how a failed transaction is
+ * kept until a caller has acted on it: the coins still have to be released before the record is dropped.
+ *
+ * Passed, not reached: the ledger accepts an intent while its TTL is at or after the block's timestamp, so a
+ * transaction is still perfectly valid at the instant its TTL names.
+ *
+ * Returns the state it was given when nothing reaches its expiry. This runs on a timer, so most visits change nothing,
+ * and handing back the same value is what lets a caller publish only when something actually moved.
+ *
+ * @example
+ *   const swept = expireReservations(state, DateTime.unsafeNow());
+ *
+ * @param state - The pending transactions to sweep
+ * @param now - The instant to expire against
+ * @returns The state with newly expired reservations marked, or the same state when none is
  */
 export const expireReservations = <TTransaction>(
   state: PendingTransactions<TTransaction>,
   now: DateTime.Utc,
-): PendingTransactions<TTransaction> => ({
-  ...state,
-  reservations: Arr.map(state.reservations, (reservation) =>
-    reservation.expired || reservation.ttl.getTime() > DateTime.toEpochMillis(now)
-      ? reservation
-      : { ...reservation, expired: true },
-  ),
-});
+): PendingTransactions<TTransaction> => {
+  const hasExpiry = (reservation: Reservation): boolean =>
+    !reservation.expired && reservation.ttl.getTime() < DateTime.toEpochMillis(now);
+
+  return Arr.some(state.reservations, hasExpiry)
+    ? {
+        ...state,
+        reservations: Arr.map(state.reservations, (reservation) =>
+          hasExpiry(reservation) ? { ...reservation, expired: true } : reservation,
+        ),
+      }
+    : state;
+};
+
+/**
+ * The unshielded coin ids some spend still accounts for.
+ *
+ * Every reservation's inputs, plus the inputs of every transaction being tracked. Both halves are needed: a reservation
+ * covers a transaction that was balanced and never submitted, and registering a transaction drops the reservation
+ * standing in for it, so from submission onwards only the tracked transaction says the coins are spoken for.
+ *
+ * @example
+ *   const spokenFor = coveredUnshieldedIds(pending, (tx) => ownInputIdsOf(tx));
+ *
+ * @param state - The reservations and tracked transactions to read
+ * @param unshieldedInputsOf - How to name the unshielded coins a tracked transaction spends
+ * @returns Every such coin id, without repeats
+ */
+export const coveredUnshieldedIds = <TTransaction>(
+  state: PendingTransactions<TTransaction>,
+  unshieldedInputsOf: (tx: TTransaction) => readonly string[],
+): readonly string[] =>
+  pipe(
+    Arr.appendAll(
+      Arr.flatMap(state.reservations, (reservation) => reservation.inputs.unshielded),
+      Arr.flatMap(state.all, (item) => unshieldedInputsOf(item.tx)),
+    ),
+    Arr.dedupe,
+  );
 
 /** The reservations whose transactions can no longer be accepted, and whose coins are therefore free. */
 export const allExpiredReservations = <TTransaction>(
@@ -212,10 +274,26 @@ export const saveResult = <TTransaction>(
   };
 };
 
-//It has to stay immutable in the code now. Any changes made should be separate schemas with fallbacks/conversions
+const ReservationSchema = Schema.Struct({
+  identifiers: Schema.Array(Schema.String),
+  intentHashes: Schema.Array(Schema.String),
+  inputs: Schema.Struct({ unshielded: Schema.Array(Schema.String) }),
+  ttl: Schema.Date,
+  createdAt: Schema.DateTimeUtc,
+  expired: Schema.Boolean,
+});
+
+/**
+ * The stored shape. Reservations arrived after the format was already in the field, so they are an optional member of
+ * the version that was already there rather than a version of their own: a reader that predates them sees the version
+ * it knows and ignores the member it does not, which is what keeps a store written here readable by an older package.
+ *
+ * A snapshot that omits them records no reservations, which is the truth about what the writer knew.
+ */
 type Serialized<TTransaction> = Readonly<{
   version: 'v1';
   transactions: readonly PendingItem<TTransaction>[];
+  reservations: readonly Reservation[];
 }>;
 
 export const SerializedSchema = <TTransaction>(
@@ -235,53 +313,14 @@ export const SerializedSchema = <TTransaction>(
   return Schema.Struct({
     version: Schema.Literal('v1'),
     transactions: Schema.Array(TxItemSchema),
+    reservations: Schema.optionalWith(Schema.Array(ReservationSchema), { default: () => [] }),
   });
 };
-
-const ReservationSchema = Schema.Struct({
-  identifiers: Schema.Array(Schema.String),
-  intentHashes: Schema.Array(Schema.String),
-  inputs: Schema.Struct({ unshielded: Schema.Array(Schema.String) }),
-  ttl: Schema.Date,
-  createdAt: Schema.DateTimeUtc,
-  expired: Schema.Boolean,
-});
-
-/** `v1` plus the reservations. Written by every `serialize`; `v1` is still read, and decodes to no reservations. */
-type SerializedV2<TTransaction> = Readonly<{
-  version: 'v2';
-  transactions: readonly PendingItem<TTransaction>[];
-  reservations: readonly Reservation[];
-}>;
-
-export const SerializedV2Schema = <TTransaction>(
-  txTrait: TransactionTrait<TTransaction>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- as above, the encoded side is plain JSON
-): Schema.Schema<SerializedV2<TTransaction>, any> => {
-  const TxSchema = Schema.declare<TTransaction>((tx: unknown): tx is TTransaction => txTrait.isTx(tx));
-  const TxFromHex: Schema.Schema<TTransaction, string> = Schema.transform(Schema.Uint8ArrayFromHex, TxSchema, {
-    encode: (tx): Uint8Array => txTrait.serialize(tx),
-    decode: (bytes) => txTrait.deserialize(bytes),
-  });
-
-  return Schema.Struct({
-    version: Schema.Literal('v2'),
-    transactions: Schema.Array(Schema.Struct({ tx: TxFromHex, creationTime: Schema.DateTimeUtc })),
-    reservations: Schema.Array(ReservationSchema),
-  });
-};
-
-/** Every format this module can read. A snapshot written by a newer version is refused rather than half-read. */
-const AnySerializedSchema = <TTransaction>(
-  txTrait: TransactionTrait<TTransaction>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- as above
-): Schema.Schema<SerializedV2<TTransaction> | Serialized<TTransaction>, any> =>
-  Schema.Union(SerializedV2Schema(txTrait), SerializedSchema(txTrait));
 
 export const serialize = <TTransaction>(
   state: PendingTransactions<TTransaction>,
   txTrait: TransactionTrait<TTransaction>,
-): string => pipe(state, toSerialized, Schema.encodeSync(SerializedV2Schema(txTrait)), JSON.stringify);
+): string => pipe(state, toSerialized, Schema.encodeSync(SerializedSchema(txTrait)), JSON.stringify);
 
 export const deserialize = <TTransaction>(
   serialized: string,
@@ -289,27 +328,26 @@ export const deserialize = <TTransaction>(
 ): Either.Either<PendingTransactions<TTransaction>, ParseResult.ParseError> => {
   return pipe(
     serialized,
-    Schema.decodeUnknownEither(Schema.parseJson(AnySerializedSchema<TTransaction>(txTrait))),
+    Schema.decodeUnknownEither(Schema.parseJson(SerializedSchema<TTransaction>(txTrait))),
     Either.map((data) => fromSerialized<TTransaction>(data)),
   );
 };
 
 export const toSerialized = <TTransaction>(
   pendingTransactions: PendingTransactions<TTransaction>,
-): SerializedV2<TTransaction> => {
+): Serialized<TTransaction> => {
   return {
-    version: 'v2',
+    version: 'v1',
     transactions: pendingTransactions.all,
     reservations: pendingTransactions.reservations,
   };
 };
 
 export const fromSerialized = <TTransaction>(
-  serialized: SerializedV2<TTransaction> | Serialized<TTransaction>,
+  serialized: Serialized<TTransaction>,
 ): PendingTransactions<TTransaction> => {
   return {
     all: serialized.transactions,
-    // A snapshot written before reservations existed records none, which is the truth about what it knew.
-    reservations: serialized.version === 'v2' ? serialized.reservations : [],
+    reservations: serialized.reservations,
   };
 };

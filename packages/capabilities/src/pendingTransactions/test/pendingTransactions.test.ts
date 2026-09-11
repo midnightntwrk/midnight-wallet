@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { DateTime, Either, HashSet, Order, pipe } from 'effect';
+import { DateTime, Either, HashSet, Order, pipe, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as PendingTransactions from '../pendingTransactions.js';
 
@@ -117,12 +117,12 @@ describe('Reservations', () => {
       expect(expired.reservations).toEqual([reservation({ expired: true })]);
     });
 
-    it('marks one at exactly its expiry, since the ledger rejects it from that instant', () => {
+    it('leaves one at exactly its expiry, since a block stamped with that instant still accepts it', () => {
       const state = PendingTransactions.addReservation(empty, reservation());
 
-      const expired = PendingTransactions.expireReservations(state, at('2026-01-01T01:00:00.000Z'));
+      const swept = PendingTransactions.expireReservations(state, at('2026-01-01T01:00:00.000Z'));
 
-      expect(expired.reservations).toEqual([reservation({ expired: true })]);
+      expect(swept.reservations).toEqual([reservation()]);
     });
 
     it('leaves one a millisecond short of its expiry', () => {
@@ -227,5 +227,108 @@ describe('Reservations', () => {
 
       expect(Either.isLeft(PendingTransactions.deserialize<FakeTransaction>(unknown, txTrait))).toBe(true);
     });
+  });
+});
+
+describe('Coins a spend still accounts for', () => {
+  // Restored bookings are released once sync reaches the tip, and this is the set that survives that release. A
+  // reservation covers a transaction that was never submitted; a tracked transaction covers one that was, because
+  // registering it drops the reservation standing in for it. Either alone leaves half the window open.
+  const empty = PendingTransactions.empty<FakeTransaction>();
+  const unshieldedInputsOf = (tx: FakeTransaction): readonly string[] => tx.ids.map((id) => `${id}#0`);
+
+  it('covers the coins of a reservation, for a transaction never submitted', () => {
+    const state = PendingTransactions.addReservation(empty, reservation({ inputs: { unshielded: ['4b0f#0'] } }));
+
+    expect(PendingTransactions.coveredUnshieldedIds(state, unshieldedInputsOf)).toEqual(['4b0f#0']);
+  });
+
+  it('covers the coins of a tracked transaction, whose reservation registering it dropped', () => {
+    const submitted: FakeTransaction = { ids: ['4b0f'] };
+    const state = PendingTransactions.addPendingTransaction(empty, submitted, CREATED_AT, txTrait);
+
+    expect(state.reservations).toEqual([]);
+    expect(PendingTransactions.coveredUnshieldedIds(state, unshieldedInputsOf)).toEqual(['4b0f#0']);
+  });
+
+  it('covers both at once, without repeating a coin two of them name', () => {
+    const shared = PendingTransactions.addReservation(
+      empty,
+      reservation({ identifiers: ['other'], inputs: { unshielded: ['4b0f#0', 'aa11#0'] } }),
+    );
+    const state = PendingTransactions.addPendingTransaction(shared, { ids: ['4b0f'] }, CREATED_AT, txTrait);
+
+    expect([...PendingTransactions.coveredUnshieldedIds(state, unshieldedInputsOf)].toSorted()).toEqual([
+      '4b0f#0',
+      'aa11#0',
+    ]);
+  });
+
+  it('covers nothing when nothing is tracked and nothing is reserved', () => {
+    expect(PendingTransactions.coveredUnshieldedIds(empty, unshieldedInputsOf)).toEqual([]);
+  });
+});
+
+describe('Staying readable by an older reader', () => {
+  // Reservations were added to a format that was already in the field. Adding them as an optional member of the same
+  // version, rather than a new one, keeps a store written here readable by a package version that predates them: it
+  // sees the version it knows and ignores the member it does not.
+  const empty = PendingTransactions.empty<FakeTransaction>();
+
+  /** The schema as it stood before reservations existed, which is what an older reader applies. */
+  const olderReaderSchema = Schema.Struct({
+    version: Schema.Literal('v1'),
+    transactions: Schema.Array(Schema.Struct({ tx: Schema.Uint8ArrayFromHex, creationTime: Schema.DateTimeUtc })),
+  });
+
+  it('writes a snapshot an older reader still accepts', () => {
+    const state = pipe(PendingTransactions.addPendingTransaction(empty, { ids: ['id-a'] }, CREATED_AT, txTrait), (s) =>
+      PendingTransactions.addReservation(s, reservation()),
+    );
+
+    const written: unknown = JSON.parse(PendingTransactions.serialize(state, txTrait));
+
+    expect(Either.isRight(Schema.decodeUnknownEither(olderReaderSchema)(written))).toBe(true);
+  });
+
+  it('round-trips the reservations for a reader that does know them', () => {
+    const state = PendingTransactions.addReservation(empty, reservation());
+
+    const restored = Either.getOrThrow(
+      PendingTransactions.deserialize<FakeTransaction>(PendingTransactions.serialize(state, txTrait), txTrait),
+    );
+
+    expect(restored.reservations).toEqual([reservation()]);
+  });
+});
+
+describe('Sweeping when nothing has changed', () => {
+  // The sweep runs on a timer, so it visits a state where nothing has expired far more often than one where something
+  // has. Handing back the state it was given, rather than a rebuilt copy, is what lets a caller tell the two apart.
+  const empty = PendingTransactions.empty<FakeTransaction>();
+
+  it('hands back the very same state when no reservation reaches its expiry', () => {
+    const state = PendingTransactions.addReservation(empty, reservation());
+
+    expect(PendingTransactions.expireReservations(state, at('2026-01-01T00:30:00.000Z'))).toBe(state);
+  });
+
+  it('hands back the very same state when every reservation is already expired', () => {
+    const state = PendingTransactions.addReservation(empty, reservation({ expired: true }));
+
+    expect(PendingTransactions.expireReservations(state, at('2026-01-01T02:00:00.000Z'))).toBe(state);
+  });
+
+  it('hands back the very same state when there are no reservations at all', () => {
+    expect(PendingTransactions.expireReservations(empty, at('2026-01-01T02:00:00.000Z'))).toBe(empty);
+  });
+
+  it('builds a new state when a reservation does reach its expiry', () => {
+    const state = PendingTransactions.addReservation(empty, reservation());
+
+    const swept = PendingTransactions.expireReservations(state, at('2026-01-01T01:00:00.001Z'));
+
+    expect(swept).not.toBe(state);
+    expect(swept.reservations).toEqual([reservation({ expired: true })]);
   });
 });
