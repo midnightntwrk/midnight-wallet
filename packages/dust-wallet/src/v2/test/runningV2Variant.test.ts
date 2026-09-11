@@ -40,7 +40,7 @@ import { makeDefaultKeysCapability } from '../Keys.js';
 import { StateChange, VersionChangeType } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { RunningV2Variant } from '../RunningV2Variant.js';
 import { makeDefaultV2SerializationCapability } from '../Serialization.js';
-import { type ChangesResult, type SyncCapability, type SyncService } from '../Sync.js';
+import { BackgroundRepeat, type ChangesResult, type SyncCapability, type SyncService } from '../Sync.js';
 import { makeDefaultTransactingCapability } from '../Transacting.js';
 import { type TransactionHistoryService } from '../TransactionHistory.js';
 
@@ -60,6 +60,7 @@ const changeOf = (source: string): DustStateChanges => ({
 });
 
 const syncServiceOf = (batches: readonly FakeSyncUpdate[]): SyncService<CoreWallet, null, FakeSyncUpdate> => ({
+  backgroundRepeat: BackgroundRepeat.Once(),
   updates: () => Stream.fromIterable(batches),
   blockData: () =>
     Effect.succeed({
@@ -129,6 +130,7 @@ const immediateHistoryService = (recorded: Ref.Ref<number>): TransactionHistoryS
  *   service is. How often it was opened is therefore how many synchronization passes actually ran.
  */
 const countingSyncService = (subscriptions: Ref.Ref<number>): SyncService<CoreWallet, null, FakeSyncUpdate> => ({
+  backgroundRepeat: BackgroundRepeat.Once(),
   updates: () =>
     Stream.unwrap(
       Ref.update(subscriptions, (n) => n + 1).pipe(
@@ -238,6 +240,7 @@ describe('RunningV2Variant sync serialization', () => {
       const gate = yield* Deferred.make<void>();
 
       const gatedSyncService: SyncService<CoreWallet, null, FakeSyncUpdate> = {
+        backgroundRepeat: BackgroundRepeat.Once(),
         updates: () =>
           Stream.unwrap(
             Effect.gen(function* () {
@@ -430,8 +433,8 @@ describe('RunningV2Variant.state protocol version signalling', () => {
  * projections service converges once and never observes anything again — and the existing `Stream.retry` does not help,
  * because it re-runs on failure, not on completion.
  *
- * A service declares that it needs this by setting `backgroundRepeatDelay`; a service with a long-lived `updates` omits
- * it and must be unaffected.
+ * A service declares that it needs this as `BackgroundRepeat.WithDelay`; one with a long-lived `updates` declares
+ * `BackgroundRepeat.Once` and must be unaffected.
  */
 describe('RunningV2Variant background sync of a finite updates stream', () => {
   /**
@@ -440,16 +443,16 @@ describe('RunningV2Variant background sync of a finite updates stream', () => {
    */
   const finiteSyncServiceOf = (
     seenAppliedIndexes: Ref.Ref<readonly number[]>,
-    backgroundRepeatDelay?: Duration.DurationInput,
+    backgroundRepeat: BackgroundRepeat,
   ): SyncService<CoreWallet, null, FakeSyncUpdate> => ({
     ...syncServiceOf([]),
+    backgroundRepeat,
     updates: (state) =>
       pipe(
         Ref.update(seenAppliedIndexes, (seen) => [...seen, Number(state.progress.appliedIndex)]),
         Stream.fromEffect,
         Stream.as(['tx'] as FakeSyncUpdate),
       ),
-    ...(backgroundRepeatDelay !== undefined ? { backgroundRepeatDelay } : {}),
   });
 
   /** The whole timeline: nothing in this block is about which versions the variant owns. */
@@ -467,7 +470,7 @@ describe('RunningV2Variant background sync of a finite updates stream', () => {
   };
 
   const runBackgroundFor = async (
-    backgroundRepeatDelay: Duration.DurationInput | undefined,
+    backgroundRepeat: BackgroundRepeat,
     elapsed: Duration.DurationInput,
   ): Promise<readonly number[]> =>
     Effect.gen(function* () {
@@ -482,7 +485,7 @@ describe('RunningV2Variant background sync of a finite updates stream', () => {
         { stateRef, activationRange: wholeRange },
         {
           ...variantContextOf([], { getTransactionDetails: () => Effect.die('unused'), put: () => Effect.void }),
-          syncService: finiteSyncServiceOf(seen, backgroundRepeatDelay),
+          syncService: finiteSyncServiceOf(seen, backgroundRepeat),
           syncCapability: advancingCapability,
         },
       );
@@ -497,20 +500,23 @@ describe('RunningV2Variant background sync of a finite updates stream', () => {
   it('re-runs the pass on the declared delay, each pass starting from the state the last one produced', async () => {
     // 5s delay over 12s of clock: the initial pass plus two repeats. Each pass must observe the applied index the
     // previous pass advanced, which is only true if the repeat re-reads state rather than reusing a snapshot.
-    const seen = await runBackgroundFor(Duration.seconds(5), Duration.seconds(12));
+    const seen = await runBackgroundFor(
+      BackgroundRepeat.WithDelay({ delay: Duration.seconds(5) }),
+      Duration.seconds(12),
+    );
 
     expect(seen).toEqual([0, 1, 2]);
   });
 
-  it('leaves a service that declares no delay running exactly one pass', async () => {
+  it('leaves a service that declares `Once` running exactly one pass', async () => {
     // Guards the event-based service: its `updates` never completes in production, and nothing here may start
     // re-running passes behind its back.
-    const seen = await runBackgroundFor(undefined, Duration.minutes(5));
+    const seen = await runBackgroundFor(BackgroundRepeat.Once(), Duration.minutes(5));
 
     expect(seen).toEqual([0]);
   });
 
-  it('keeps an explicitly driven sync to a single pass even when a repeat delay is declared', async () => {
+  it('keeps an explicitly driven sync to a single pass even when a repeat is declared', async () => {
     // `sync()` backs `facade.doSync()`, which must return. If the repeat leaked into it, the caller would never be
     // handed control back.
     const seen = await Effect.gen(function* () {
@@ -525,7 +531,7 @@ describe('RunningV2Variant background sync of a finite updates stream', () => {
         { stateRef, activationRange: wholeRange },
         {
           ...variantContextOf([], { getTransactionDetails: () => Effect.die('unused'), put: () => Effect.void }),
-          syncService: finiteSyncServiceOf(seenRef, Duration.seconds(5)),
+          syncService: finiteSyncServiceOf(seenRef, BackgroundRepeat.WithDelay({ delay: Duration.seconds(5) })),
           syncCapability: advancingCapability,
         },
       );

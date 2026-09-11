@@ -230,6 +230,7 @@ type V2SourceConfiguration = Readonly<{
 const v1SyncService = (
   configuration: V1SourceConfiguration,
 ): V1Sync.SyncService<V1CoreWallet, V8SecretKey, V1Sync.WalletSyncUpdate> => ({
+  backgroundRepeat: V1Sync.BackgroundRepeat.Once(),
   updates: (state, secretKey) => {
     const from = resumeFrom(state.progress.appliedIndex);
     return pipe(
@@ -253,6 +254,7 @@ const v1SyncService = (
 const v2SyncService = (
   configuration: V2SourceConfiguration,
 ): V2Sync.SyncService<V2CoreWallet, V9SecretKey, V2Update> => ({
+  backgroundRepeat: V2Sync.BackgroundRepeat.Once(),
   updates: (state, secretKey) => {
     const from = resumeFrom(state.progress.appliedIndex);
     return pipe(
