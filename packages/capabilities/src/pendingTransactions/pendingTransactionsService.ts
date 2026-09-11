@@ -188,8 +188,15 @@ export class PendingTransactionsServiceEffectImpl<
     ).pipe(Effect.runSync); // Should not be here, but otherwise initialization would be too involved
   }
 
+  /**
+   * The state, published when it moves. The poll writes the ref on every tick whether or not anything expired, and a
+   * write publishes regardless, so consecutive identical values are dropped here. Every real change builds a new value,
+   * so comparing by identity keeps a change from being mistaken for a repeat.
+   */
   state(): Stream.Stream<PendingTransactions.PendingTransactions<TTransaction>> {
-    return Stream.concat(Stream.fromEffect(SubscriptionRef.get(this.#state)), this.#state.changes);
+    return Stream.concat(Stream.fromEffect(SubscriptionRef.get(this.#state)), this.#state.changes).pipe(
+      Stream.changesWith((a, b) => a === b),
+    );
   }
 
   startPolling(ticks: Stream.Stream<unknown>): Effect.Effect<void, Error, QueryClient | Scope.Scope> {
