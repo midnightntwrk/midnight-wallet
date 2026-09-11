@@ -113,6 +113,9 @@ export interface TransactingCapability<TState> {
   /** Releases booked coins by id, for a caller that holds a record of the ids rather than the transaction. */
   revertUtxos(wallet: CoreWallet, utxoIds: ReadonlyArray<UtxoHash>): CoreWallet;
 
+  /** Releases bookings restored from a snapshot that nothing in `coveredIds` still accounts for. */
+  releaseRestoredPending(wallet: CoreWallet, coveredIds: ReadonlyArray<UtxoHash>): CoreWallet;
+
   signUnboundTransaction(
     transaction: UnboundTransaction,
     signSegment: (data: Uint8Array) => ledger.Signature,
@@ -496,6 +499,17 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
    */
   revertUtxos(wallet: CoreWallet, utxoIds: ReadonlyArray<UtxoHash>): CoreWallet {
     return CoreWallet.revertUtxos(wallet, utxoIds);
+  }
+
+  /**
+   * Releases bookings restored from a snapshot that `coveredIds` does not account for.
+   *
+   * @param wallet - The wallet holding the restored bookings
+   * @param coveredIds - Coins some durable record still accounts for; those stay booked
+   * @returns The wallet with the uncovered restored coins available again
+   */
+  releaseRestoredPending(wallet: CoreWallet, coveredIds: ReadonlyArray<UtxoHash>): CoreWallet {
+    return CoreWallet.releaseRestoredPending(wallet, coveredIds);
   }
 
   revertTransaction(

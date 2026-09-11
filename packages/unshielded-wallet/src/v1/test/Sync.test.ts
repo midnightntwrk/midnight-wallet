@@ -34,7 +34,10 @@ const FAR_FUTURE = new Date('2999-01-01T00:00:00.000Z');
 const keystore = createKeystore(Buffer.from(ledger.sampleSigningKey(), 'hex'), NetworkId.NetworkId.Undeployed);
 const ownerPublicKey = PublicKey.fromKeyStore(keystore);
 
-const walletHolding = (available: readonly UtxoWithMeta[], pending: readonly PendingUtxo[]): CoreWalletType =>
+const walletHolding = (
+  available: readonly UtxoWithMeta[],
+  pending: ReadonlyArray<Omit<PendingUtxo, 'restored'>>,
+): CoreWalletType =>
   CoreWallet.restore(
     UnshieldedState.restore(available, pending),
     ownerPublicKey,
@@ -115,6 +118,7 @@ describe('Unshielded indexer sync capability', () => {
       expect(Option.getOrNull(HashMap.get(after.state.pendingUtxos, utxoHash(booked)))).toEqual({
         utxo: booked,
         ttl: FAR_FUTURE,
+        restored: true,
       });
     });
 
@@ -264,6 +268,7 @@ describe('Unshielded simulator sync capability', () => {
           expect(Option.getOrNull(HashMap.get(after.state.pendingUtxos, utxoHash(coin)))).toEqual({
             utxo: coin,
             ttl: SIM_TTL,
+            restored: true,
           });
         }),
       ),

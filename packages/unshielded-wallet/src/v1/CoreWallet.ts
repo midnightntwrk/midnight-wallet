@@ -86,9 +86,27 @@ export const CoreWallet = {
     );
   },
 
+  /**
+   * Rewraps `coreWallet` around a new state, or hands back the very same wallet when the state did not change.
+   *
+   * Identity matters here: wallet state is published through a ref that emits on every write, and a caller that reacts
+   * to those emissions and then calls back in would drive itself in a loop if a no-op still produced a new object.
+   */
+  withState(coreWallet: CoreWallet, state: UnshieldedState): CoreWallet {
+    return state === coreWallet.state ? coreWallet : { ...coreWallet, state };
+  },
+
   /** Releases every booking that has reached its expiry. See {@link UnshieldedState.expirePending}. */
   expirePending(coreWallet: CoreWallet, now: Date): CoreWallet {
-    return { ...coreWallet, state: UnshieldedState.expirePending(coreWallet.state, now) };
+    return CoreWallet.withState(coreWallet, UnshieldedState.expirePending(coreWallet.state, now));
+  },
+
+  /**
+   * Releases the bookings that came back from a snapshot and that `coveredIds` does not account for. See
+   * {@link UnshieldedState.releaseRestoredPending}.
+   */
+  releaseRestoredPending(coreWallet: CoreWallet, coveredIds: ReadonlyArray<UtxoHash>): CoreWallet {
+    return CoreWallet.withState(coreWallet, UnshieldedState.releaseRestoredPending(coreWallet.state, coveredIds));
   },
 
   /**
@@ -96,10 +114,7 @@ export const CoreWallet = {
    * which is what lets a caller holding only a record of the ids release them. Ids that are not booked are ignored.
    */
   revertUtxos(coreWallet: CoreWallet, hashes: ReadonlyArray<UtxoHash>): CoreWallet {
-    return {
-      ...coreWallet,
-      state: hashes.reduce(UnshieldedState.rollbackSpendByHash, coreWallet.state),
-    };
+    return CoreWallet.withState(coreWallet, hashes.reduce(UnshieldedState.rollbackSpendByHash, coreWallet.state));
   },
 
   spend(coreWallet: CoreWallet, utxo: ledger.Utxo, ttl: Date): Either.Either<CoreWallet, WalletError> {

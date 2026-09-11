@@ -45,7 +45,10 @@ const getOrThrow = <E, A>(either: Either.Either<A, E>): A =>
     Either.getOrThrowWith((e) => new Error(`Unexpected error: ${JSON.stringify(e)}`)),
   );
 
-const walletHolding = (available: readonly UtxoWithMeta[], pending: readonly PendingUtxo[]): CoreWallet =>
+const walletHolding = (
+  available: readonly UtxoWithMeta[],
+  pending: ReadonlyArray<Omit<PendingUtxo, 'restored'>>,
+): CoreWallet =>
   CoreWallet.restore(
     UnshieldedState.restore(available, pending),
     ownerPublicKey,
@@ -79,6 +82,7 @@ describe('Unshielded wallet serialization', () => {
       expect(Option.getOrNull(HashMap.get(restored.state.pendingUtxos, utxoHash(booked)))).toEqual({
         utxo: booked,
         ttl: TTL,
+        restored: true,
       });
       expect(HashMap.size(restored.state.availableUtxos)).toEqual(0);
     });
@@ -144,6 +148,7 @@ describe('Unshielded wallet serialization', () => {
       expect(Option.getOrNull(HashMap.get(restored.state.pendingUtxos, utxoHash(booked)))).toEqual({
         utxo: booked,
         ttl: new Date(0),
+        restored: true,
       });
 
       const swept = CoreWallet.expirePending(restored, new Date('2000-01-01T00:00:00.000Z'));

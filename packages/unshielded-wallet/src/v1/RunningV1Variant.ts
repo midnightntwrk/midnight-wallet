@@ -248,6 +248,12 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     );
   }
 
+  releaseRestoredPending(coveredIds: ReadonlyArray<UtxoHash>): Effect.Effect<void, WalletError> {
+    return SubscriptionRef.update(this.#context.stateRef, (state) =>
+      this.#v1Context.transactingCapability.releaseRestoredPending(state, coveredIds),
+    );
+  }
+
   serializeState(state: CoreWallet): TSerialized {
     return this.#v1Context.serializationCapability.serialize(state);
   }
