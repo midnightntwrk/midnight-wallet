@@ -123,6 +123,96 @@ describe('UnshieldedWallet', () => {
     await restoredWallet.stop();
   });
 
+  describe('bookings carried across a restart', () => {
+    // These start from a hand-written snapshot rather than a funded wallet: the coins only have to be tracked, and
+    // the indexer never mentions them, so what is being watched is how the wallet treats its own restored state
+    // while real sync updates arrive.
+    const coin = (intentHash: string, ttl?: string) => ({
+      utxo: { value: '1000', owner: 'owner-1', type: 'token-1', intentHash, outputNo: 0 },
+      meta: { ctime: '2026-01-01T00:00:00.000Z', registeredForDustGeneration: false },
+      ...(ttl === undefined ? {} : { ttl }),
+    });
+
+    const coinId = (intentHash: string) => `${intentHash}#0`;
+
+    /** A snapshot this wallet would accept, with its coin arrays replaced. */
+    const snapshotHolding = async (
+      available: ReturnType<typeof coin>[],
+      pending: ReturnType<typeof coin>[],
+    ): Promise<string> => {
+      const config = createWalletConfig(indexerPort);
+      const keystore = createKeystore(unshieldedSeed, config.networkId);
+      const wallet = UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(keystore));
+      await wallet.start();
+      const empty = JSON.parse(await wallet.serializeState()) as { state: unknown };
+      await wallet.stop();
+
+      return JSON.stringify({ ...empty, state: { availableUtxos: available, pendingUtxos: pending } });
+    };
+
+    it('loads a snapshot holding one coin as both available and pending with the coin only pending, and keeps the two apart while syncing', async () => {
+      const duplicated = 'h-integration-duplicate';
+      const snapshot = await snapshotHolding([coin(duplicated)], [coin(duplicated, '2999-01-01T00:00:00.000Z')]);
+
+      const wallet = UnshieldedWallet(createWalletConfig(indexerPort)).restore(snapshot);
+      await wallet.start();
+
+      const seen: { available: string[]; pending: string[] }[] = [];
+      const subscription = wallet.state.subscribe((state) => {
+        seen.push({
+          available: state.availableCoins.map((c) => coinId(c.utxo.intentHash)),
+          pending: state.pendingCoins.map((c) => coinId(c.utxo.intentHash)),
+        });
+      });
+
+      await wallet.waitForSyncedState();
+      subscription.unsubscribe();
+      await wallet.stop();
+
+      expect(seen.length).toBeGreaterThan(0);
+      for (const { available, pending } of seen) {
+        expect(pending.filter((id) => available.includes(id))).toEqual([]);
+      }
+      expect(seen.at(-1)?.pending).toEqual([coinId(duplicated)]);
+    });
+
+    it('releases a booking whose transaction can no longer be accepted, as sync updates arrive', async () => {
+      // Nothing on chain will ever mention this coin, so only the wallet noticing the expiry can free it.
+      const stale = 'h-integration-stale';
+      const snapshot = await snapshotHolding([], [coin(stale, '1970-01-01T00:00:00.000Z')]);
+
+      const wallet = UnshieldedWallet(createWalletConfig(indexerPort)).restore(snapshot);
+      await wallet.start();
+      const state = await wallet.waitForSyncedState();
+      await wallet.stop();
+
+      expect(state.pendingCoins.map((c) => coinId(c.utxo.intentHash))).not.toContain(coinId(stale));
+      expect(state.availableCoins.map((c) => coinId(c.utxo.intentHash))).toContain(coinId(stale));
+    });
+
+    it('keeps a restored booking something still accounts for, and frees it once nothing does', async () => {
+      // The coin a counterparty has not answered on yet: sync proves nothing spent it, but a record elsewhere says
+      // its transaction is still out there.
+      const held = 'h-integration-held';
+      const snapshot = await snapshotHolding([], [coin(held, '2999-01-01T00:00:00.000Z')]);
+
+      const wallet = UnshieldedWallet(createWalletConfig(indexerPort)).restore(snapshot);
+      await wallet.start();
+      await wallet.waitForSyncedState();
+
+      await wallet.releaseRestoredPending([coinId(held)]);
+      const stillHeld = await firstValueFrom(wallet.state);
+      expect(stillHeld.pendingCoins.map((c) => coinId(c.utxo.intentHash))).toEqual([coinId(held)]);
+
+      await wallet.releaseRestoredPending([]);
+      const freed = await firstValueFrom(wallet.state);
+      await wallet.stop();
+
+      expect(freed.pendingCoins.map((c) => coinId(c.utxo.intentHash))).not.toContain(coinId(held));
+      expect(freed.availableCoins.map((c) => coinId(c.utxo.intentHash))).toContain(coinId(held));
+    });
+  });
+
   afterAll(async () => {
     if (startedEnvironment) {
       await startedEnvironment.down();
