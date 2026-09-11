@@ -512,6 +512,13 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     return CoreWallet.releaseRestoredPending(wallet, coveredIds);
   }
 
+  /**
+   * Releases the bookings a transaction took, for a caller that still holds the transaction itself.
+   *
+   * @param wallet - The wallet holding the bookings
+   * @param transaction - The transaction whose own inputs are to be released
+   * @returns The wallet with those coins available again, or the error that stopped a coin being released
+   */
   revertTransaction(
     wallet: CoreWallet,
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
@@ -647,59 +654,87 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     wallet: CoreWallet,
     transaction: T,
   ): Either.Either<[T | undefined, CoreWallet], WalletError> {
+    const segments = this.txOps.getSegments(transaction);
+
+    // no segments to balance
+    if (segments.length === 0) {
+      return Either.right([undefined, wallet]);
+    }
+
+    // Each segment is balanced against the wallet the previous segment left behind, so a coin booked for one
+    // segment can no longer be selected for the next one, and the caller receives every booking this call made.
+    return pipe(
+      [...segments, GUARANTEED_SEGMENT],
+      Arr.reduce(Either.right(wallet) as Either.Either<CoreWallet, WalletError>, (walletAcc, segment) =>
+        pipe(
+          walletAcc,
+          Either.flatMap((walletSoFar) => this.#balanceSegmentInPlace(walletSoFar, transaction, segments, segment)),
+        ),
+      ),
+      Either.map((balancedWallet): [T, CoreWallet] => [transaction, balancedWallet]),
+    );
+  }
+
+  /**
+   * Balances one segment of an unboundish transaction, merging the balancing offer into the intent that carries the
+   * segment and booking the coins it selects.
+   *
+   * @param wallet - The wallet to select and book coins from
+   * @param transaction - The transaction being balanced in place
+   * @param segments - The segments the transaction carries intents for
+   * @param segment - The segment to balance
+   * @returns The wallet with the selected coins booked, or the untouched wallet if the segment is already balanced
+   */
+  #balanceSegmentInPlace<T extends ledger.UnprovenTransaction | UnboundTransaction>(
+    wallet: CoreWallet,
+    transaction: T,
+    segments: ReadonlyArray<number>,
+    segment: number,
+  ): Either.Either<CoreWallet, WalletError> {
     return Either.gen(this, function* () {
-      const segments = this.txOps.getSegments(transaction);
+      const imbalances = this.txOps.getImbalances(transaction, segment);
 
-      // no segments to balance
-      if (segments.length === 0) {
-        return [undefined, wallet];
+      // intent is balanced
+      if (imbalances.size === 0) {
+        return wallet;
       }
 
-      for (const segment of [...segments, GUARANTEED_SEGMENT]) {
-        const imbalances = this.txOps.getImbalances(transaction, segment);
+      // if segment is GUARANTEED_SEGMENT, use the first intent to place the balancing offer in the guaranteed section
+      const intentSegment = segment === GUARANTEED_SEGMENT ? segments[0] : segment;
 
-        // intent is balanced
-        if (imbalances.size === 0) {
-          continue;
-        }
+      const intent = transaction.intents?.get(intentSegment) as IntentOf<T> | undefined;
 
-        // if segment is GUARANTEED_SEGMENT, use the first intent to place the balancing offer in the guaranteed section
-        const intentSegment = segment === GUARANTEED_SEGMENT ? segments[0] : segment;
-
-        const intent = transaction.intents?.get(intentSegment) as IntentOf<T> | undefined;
-
-        if (!intent) {
-          return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} was not found` }));
-        }
-
-        const isBound = this.txOps.isIntentBound(intent);
-
-        if (isBound) {
-          return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} is already bound` }));
-        }
-
-        const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
-
-        const { offer } = yield* this.#prepareOffer(wallet, recipe, intent.ttl);
-
-        const targetOffer =
-          segment !== GUARANTEED_SEGMENT ? intent.fallibleUnshieldedOffer : intent.guaranteedUnshieldedOffer;
-
-        const mergedOffer = yield* this.#mergeOffers(offer, targetOffer);
-
-        if (segment !== GUARANTEED_SEGMENT) {
-          intent.fallibleUnshieldedOffer = mergedOffer;
-        } else {
-          intent.guaranteedUnshieldedOffer = mergedOffer;
-        }
-
-        (transaction.intents as Map<number, IntentOf<T>>) = (transaction.intents as Map<number, IntentOf<T>>).set(
-          intentSegment,
-          intent,
-        );
+      if (!intent) {
+        return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} was not found` }));
       }
 
-      return [transaction, wallet];
+      const isBound = this.txOps.isIntentBound(intent);
+
+      if (isBound) {
+        return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} is already bound` }));
+      }
+
+      const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
+
+      const { newState, offer } = yield* this.#prepareOffer(wallet, recipe, intent.ttl);
+
+      const targetOffer =
+        segment !== GUARANTEED_SEGMENT ? intent.fallibleUnshieldedOffer : intent.guaranteedUnshieldedOffer;
+
+      const mergedOffer = yield* this.#mergeOffers(offer, targetOffer);
+
+      if (segment !== GUARANTEED_SEGMENT) {
+        intent.fallibleUnshieldedOffer = mergedOffer;
+      } else {
+        intent.guaranteedUnshieldedOffer = mergedOffer;
+      }
+
+      (transaction.intents as Map<number, IntentOf<T>>) = (transaction.intents as Map<number, IntentOf<T>>).set(
+        intentSegment,
+        intent,
+      );
+
+      return newState;
     });
   }
 }
