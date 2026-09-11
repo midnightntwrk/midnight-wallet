@@ -22,6 +22,7 @@ import { Effect } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { type FacadeState } from '../src/index.js';
+import type { ProvingService, UnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import {
   createSimulatorWalletFactories,
   deriveWalletKeys,
@@ -102,9 +103,7 @@ describe('Reservations taken while balancing', () => {
 
       // Every coin that left the available side is named by a reservation.
       const reserved = new Set(after.pending.reservations.flatMap((r) => r.inputs.unshielded));
-      for (const id of booked) {
-        expect(reserved.has(id)).toBe(true);
-      }
+      expect(booked.filter((id) => !reserved.has(id))).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('gives the reservation an expiry matching the transaction it was taken for', () =>
@@ -170,5 +169,113 @@ describe('Reservations taken while balancing', () => {
       const finalized = yield* Effect.promise(() => facade.finalizeRecipe(recipe));
 
       expect([...finalized.identifiers()].toSorted()).toEqual(beforeProving);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+describe('A balanced transaction that never gets proven', () => {
+  // Proving is the first thing after balancing that can fail, and the caller is handed the error with the coins
+  // already booked. The booking is undone there, and the record standing for it has to go with it: a record left
+  // behind outlives the coins it named, and the next thing to read it is told a spend is still out there.
+  const failingProver: ProvingService<UnboundTransaction> = {
+    prove: () => Promise.reject(new Error('the proof server is on a different ledger version')),
+  };
+
+  it('leaves neither a booking nor the record that stood for it', () =>
+    Effect.gen(function* () {
+      const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
+      const simulator = yield* Simulator.init({
+        genesisMints: [nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress)],
+        blockProducer: immediateBlockProducer(),
+      });
+      const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
+      const facade = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config), {
+        provingService: () => failingProver,
+      });
+
+      yield* waitForUnshieldedBalance(facade, NIGHT, 1n);
+      yield* simulator.fastForward(10_000n);
+      const address = yield* Effect.promise(() => facade.unshielded.getAddress());
+
+      const recipe = yield* Effect.promise(() =>
+        facade.transferTransaction(
+          [
+            {
+              type: 'unshielded' as const,
+              outputs: [{ type: NIGHT, receiverAddress: address, amount: tokenValue(1n) }],
+            },
+          ],
+          { shieldedSecretKeys: keys.shieldedKeys, dustSecretKey: keys.dustKey },
+          { ttl: new Date(Date.now() + 60 * 60 * 1000), payFees: false },
+        ),
+      );
+
+      const booked: FacadeState = yield* Effect.promise(() => rx.firstValueFrom(facade.state()));
+      expect(booked.pending.reservations).toHaveLength(1);
+
+      const outcome = yield* Effect.either(Effect.tryPromise(() => facade.finalizeRecipe(recipe)));
+      expect(outcome._tag).toEqual('Left');
+
+      const after: FacadeState = yield* Effect.promise(() => rx.firstValueFrom(facade.state()));
+
+      expect(after.pending.reservations).toEqual([]);
+      expect(after.unshielded.pendingCoins).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+describe('Balancing a transaction the caller already put its own coins into', () => {
+  // In-place balancing hands back the caller's transaction with the wallet's inputs added, so the transaction names
+  // coins from two sources. A reservation covers the wallet's booking, and only the coins the wallet moved out of the
+  // available side are that. Naming the caller's as well would have the record hold coins it never took.
+  it('records only the coins the wallet itself booked', () =>
+    Effect.gen(function* () {
+      const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
+      const simulator = yield* Simulator.init({
+        genesisMints: [nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress)],
+        blockProducer: immediateBlockProducer(),
+      });
+      const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
+      const facade = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config));
+
+      yield* waitForUnshieldedBalance(facade, NIGHT, 1n);
+      yield* simulator.fastForward(10_000n);
+      const address = yield* Effect.promise(() => facade.unshielded.getAddress());
+      const ttl = new Date(Date.now() + 60 * 60 * 1000);
+
+      // A transaction that already spends this wallet's coins, with the booking it was built with given back, so the
+      // coins it names are available again — the state a caller's own transaction arrives in.
+      const recipe = yield* Effect.promise(() =>
+        facade.transferTransaction(
+          [
+            {
+              type: 'unshielded' as const,
+              outputs: [{ type: NIGHT, receiverAddress: address, amount: tokenValue(1n) }],
+            },
+          ],
+          { shieldedSecretKeys: keys.shieldedKeys, dustSecretKey: keys.dustKey },
+          { ttl, payFees: false },
+        ),
+      );
+      yield* Effect.promise(() => facade.revert(recipe));
+
+      const beforeBalancing: FacadeState = yield* Effect.promise(() => rx.firstValueFrom(facade.state()));
+      expect(beforeBalancing.pending.reservations).toEqual([]);
+      const pendingBefore = new Set(beforeBalancing.unshielded.pendingCoins.map(utxoKey));
+
+      yield* Effect.promise(() =>
+        facade.balanceUnprovenTransaction(
+          recipe.transaction,
+          {
+            shieldedSecretKeys: keys.shieldedKeys,
+            dustSecretKey: keys.dustKey,
+          },
+          { ttl, tokenKindsToBalance: ['unshielded'] },
+        ),
+      );
+
+      const after: FacadeState = yield* Effect.promise(() => rx.firstValueFrom(facade.state()));
+      const newlyBooked = after.unshielded.pendingCoins.map(utxoKey).filter((id) => !pendingBefore.has(id));
+      const recorded = after.pending.reservations.flatMap((r) => r.inputs.unshielded);
+
+      expect(recorded.toSorted()).toEqual(newlyBooked.toSorted());
     }).pipe(Effect.scoped, Effect.runPromise));
 });
