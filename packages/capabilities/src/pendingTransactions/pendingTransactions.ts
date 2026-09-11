@@ -179,7 +179,18 @@ export const coveredUnshieldedIds = <TTransaction>(
     Arr.dedupe,
   );
 
-/** The reservations whose transactions can no longer be accepted, and whose coins are therefore free. */
+/**
+ * The reservations whose transactions can no longer be accepted, and whose coins are therefore free.
+ *
+ * Expiry marks a reservation rather than removing it, so this is what a caller reads to find the records it still has
+ * to act on before dropping them.
+ *
+ * @example
+ *   const finished = allExpiredReservations(state);
+ *
+ * @param state - The pending transactions to read
+ * @returns The marked reservations, in the order they were added; empty when none has expired
+ */
 export const allExpiredReservations = <TTransaction>(
   state: PendingTransactions<TTransaction>,
 ): ReadonlyArray<Reservation> => Arr.filter(state.reservations, (reservation) => reservation.expired);

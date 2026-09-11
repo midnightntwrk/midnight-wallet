@@ -41,9 +41,32 @@ export type PendingTransactionsService<TTransaction> = {
   state: () => rx.Observable<PendingTransactions.PendingTransactions<TTransaction>>;
   addPendingTransaction: (tx: TTransaction) => Promise<void>;
   clear: (tx: TTransaction) => Promise<void>;
-  /** Records that a balanced transaction has coins reserved, before it is proven or submitted. */
+  /**
+   * Records that a balanced transaction has coins reserved, before it is proven or submitted.
+   *
+   * Between balancing and submission nothing else says those coins are spoken for, so this is the only durable record
+   * of them. Any earlier reservation sharing an identifier is replaced, so re-balancing the same spend does not
+   * accumulate records.
+   *
+   * @example
+   *   await service.addReservation({ identifiers: tx.identifiers(), inputs: { unshielded: ids }, ttl, ... });
+   *
+   * @param reservation - What the balanced transaction booked, and when the ledger stops accepting it
+   * @returns A promise that resolves once the record is held
+   */
   addReservation: (reservation: PendingTransactions.Reservation) => Promise<void>;
-  /** Forgets the reservation holding any of `identifiers`, once its coins have been released. */
+  /**
+   * Forgets the reservation holding any of `identifiers`, once its coins have been released.
+   *
+   * Call it wherever the booking it stands for ends: the transaction is registered and tracked on its own, the booking
+   * is reverted, or the record has expired. A record left behind outlives the coins it named.
+   *
+   * @example
+   *   await service.clearReservation([...tx.identifiers()]);
+   *
+   * @param identifiers - Identifiers of the spend whose record is finished with; unknown ones are ignored
+   * @returns A promise that resolves once the record is gone
+   */
   clearReservation: (identifiers: readonly string[]) => Promise<void>;
 };
 
