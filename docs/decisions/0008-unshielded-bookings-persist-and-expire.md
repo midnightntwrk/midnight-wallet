@@ -56,29 +56,47 @@ the pending side only, so state already corrupted in the field repairs itself on
 duplicate forward.
 
 **2. A booking carries the TTL of the transaction it was taken for**, and both sync capabilities release expired
-bookings on every applied update — the indexer path against wall time, the simulator path against simulator time. Past
-that instant the ledger rejects the transaction, so the reservation cannot still be valid. This bounds the damage of any
-abandoned transaction to that transaction's own lifetime, with no help from the caller, and it is the floor for a wallet
-used without the facade. A snapshot written before bookings carried a TTL decodes at the epoch, so the first sweep
-releases it — which is the repair such a snapshot needs.
+bookings on every applied update — the indexer path against wall time, the simulator path against simulator time. Once
+that instant has passed the ledger rejects the transaction, so the reservation cannot still be valid. This bounds the
+damage of any abandoned transaction to that transaction's own lifetime, with no help from the caller, and it is the
+floor for a wallet used without the facade. It is also the only thing that releases a booking: everything below decides
+what to hold, never what to free, so one mechanism owns release and two sweeps on different clocks cannot free the same
+coin twice.
+
+Two details decide whether this is safe. It sweeps only once sync has caught up with the chain: while a replay from an
+earlier cursor is running, a coin can be booked here and already spent by a transaction the replay has not delivered,
+and releasing it then offers a coin that is gone. And a booking expires strictly after its TTL rather than at it,
+because the ledger accepts an intent while its TTL is at or after the block's timestamp. A snapshot written before
+bookings carried a TTL says nothing about when its coins were booked, so each is granted a full transaction lifetime
+from the moment it is loaded rather than being treated as already expired.
 
 **3. A balanced transaction is recorded as a reservation** in the pending-transactions service: the identifiers of the
 transaction, the intent hashes, the ids of the coins it booked, and the TTL. It never holds the transaction itself.
 Between balancing and submission nothing else recorded that those coins were spoken for, and this is that record. It
 persists, so it survives the restart that the swap case turns on. Registering or clearing the real transaction drops the
-reservation standing in for it, and the service's existing poll marks one whose TTL has passed so the facade can release
-its coins.
+reservation standing in for it, and the service's existing poll marks one whose TTL has passed, which retires the record
+alone — the coins it named are the wallet's own sweep to release, on the wallet's own clock.
 
 **4. Bookings restored from a snapshot are reconciled once sync reaches the chain tip.** At that point every transaction
 the address is party to has been applied, so a coin still booked was never spent by the process that booked it — unless
-a reservation says its transaction is still out there. Uncovered coins are released in seconds instead of waiting out a
-TTL that defaults to an hour; covered ones stay booked.
+something still accounts for the spend. Uncovered coins are released in seconds instead of waiting out a TTL that
+defaults to an hour; covered ones stay booked.
 
 The last mechanism is the one that has to be stated carefully, because both of its simpler forms are wrong. Releasing
 restored bookings once sync completes, unguarded, would invalidate a swap whose counterpart has not answered. Never
-releasing them leaves a coin stuck for up to an hour after sync has already proved nothing holds it. The reservation is
-what makes the difference visible to the wallet, and the guard is one sentence: **release a restored booking when sync
-is strictly complete, unless a reservation accounts for it.**
+releasing them leaves a coin stuck for up to an hour after sync has already proved nothing holds it. The guard is one
+sentence: **release a restored booking when sync is strictly complete, unless a reservation or a transaction being
+tracked accounts for it.**
+
+Both halves of that guard are load-bearing, and for the same reason mechanism 3 exists. A reservation covers a
+transaction that was balanced and never submitted. Registering the real transaction drops that reservation, so from
+submission onwards the tracked transaction is the only thing saying its coins are spoken for — and a transaction sitting
+in the mempool when the tip is reached is exactly the case that must not be released.
+
+The guard can only see what the services were given. The facade's default pending-transactions service starts empty, so
+a consumer that restores the wallet's snapshot but not the pending store reaches the tip with nothing accounting for the
+spends its previous process submitted. Restoring both is what makes this mechanism safe across a restart; restoring
+neither leaves mechanism 2 as the only rule, which is where this started.
 
 ### Positive Consequences
 
@@ -95,8 +113,12 @@ is strictly complete, unless a reservation accounts for it.**
 
 - A pending coin's stored shape gained a field, and `spend` gained a required argument, so this is a breaking change for
   anyone driving the wallet's state functions directly.
-- The pending-transactions store gained a new format version. A snapshot written before this change still loads, but a
-  snapshot written after it cannot be read by an earlier version of the package.
+- Both stored formats gained an optional member rather than a version: the pending coin its expiry, the
+  pending-transactions store its reservations. A snapshot written before this change still loads, and one written after
+  it is still readable by an earlier version of the package, which simply does not see the new member.
+- A booking is held for longer in two places than the first cut of this decision held it: through a replay, and at the
+  TTL instant itself. Both are the conservative direction — a coin unavailable slightly longer, rather than offered
+  while a transaction may still spend it.
 - A consumer that balances through its own code rather than the facade gets no reservation, so its bookings are
   protected by the TTL alone. That is the same protection they had before, not a regression.
 - The facade's trigger for the fourth mechanism has no automated test: the simulator never reports a chain tip, so the
