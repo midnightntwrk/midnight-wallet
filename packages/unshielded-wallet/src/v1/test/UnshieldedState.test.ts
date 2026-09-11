@@ -662,7 +662,7 @@ describe('UnshieldedState', () => {
       expect(HashMap.size(state.pendingUtxos)).toEqual(0);
     });
 
-    it('releases a booking at exactly its expiry, since the ledger rejects the transaction from that instant', () => {
+    it('keeps a booking at exactly its expiry, since a block stamped with that instant still accepts it', () => {
       const u = generateMockUtxoWithMeta({ intentHash: 'h-boundary', outputNo: 0 });
 
       const state = pipe(
@@ -672,8 +672,8 @@ describe('UnshieldedState', () => {
         (s) => UnshieldedState.expirePending(s, TTL),
       );
 
-      expect(HashMap.has(state.availableUtxos, utxoHash(u))).toBe(true);
-      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+      expect(HashMap.has(state.availableUtxos, utxoHash(u))).toBe(false);
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual(bookedNow(u));
     });
 
     it('keeps a booking one millisecond before its expiry', () => {
