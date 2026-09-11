@@ -57,6 +57,33 @@ export interface UnshieldedState {
 
 const UtxoHash = (utxo: ledger.Utxo): UtxoHash => `${utxo.intentHash}#${utxo.outputNo}`;
 
+/**
+ * Moves every booking `shouldRelease` selects back to the available side.
+ *
+ * The three ways a booking ends — its id is named, it came back from a snapshot nothing accounts for, its expiry has
+ * passed — differ only in which bookings they pick, so the move itself lives here. A booking nothing selects is left
+ * alone rather than reported: sync may have cleared the coin first, and that race is expected.
+ *
+ * Returns the state it was given when nothing is selected, so a caller publishing on change does not publish on a sweep
+ * that found nothing.
+ */
+const releaseBookings = (
+  state: UnshieldedState,
+  shouldRelease: (booking: PendingUtxo, hash: UtxoHash) => boolean,
+): UnshieldedState => {
+  const releasable = HashMap.filter(state.pendingUtxos, shouldRelease);
+
+  return HashMap.isEmpty(releasable)
+    ? state
+    : {
+        availableUtxos: HashMap.union(
+          state.availableUtxos,
+          HashMap.map(releasable, ({ utxo }) => utxo),
+        ),
+        pendingUtxos: HashMap.removeMany(state.pendingUtxos, HashMap.keys(releasable)),
+      };
+};
+
 export const UnshieldedState = {
   empty: (): UnshieldedState => ({
     availableUtxos: HashMap.empty(),
@@ -147,16 +174,7 @@ export const UnshieldedState = {
    * have cleared the coin first, and that race is expected.
    */
   rollbackSpendByHash: (state: UnshieldedState, hash: UtxoHash): UnshieldedState =>
-    pipe(
-      HashMap.get(state.pendingUtxos, hash),
-      Option.match({
-        onNone: () => state,
-        onSome: ({ utxo }) => ({
-          availableUtxos: HashMap.set(state.availableUtxos, hash, utxo),
-          pendingUtxos: HashMap.remove(state.pendingUtxos, hash),
-        }),
-      }),
-    ),
+    releaseBookings(state, (_booking, booked) => booked === hash),
 
   /**
    * Releases every booking that came back from a snapshot and that `coveredIds` does not account for.
@@ -169,20 +187,9 @@ export const UnshieldedState = {
    *   Those stay booked: the wallet cannot see that transaction, but something else knows it is still live.
    */
   releaseRestoredPending: (state: UnshieldedState, coveredIds: ReadonlyArray<UtxoHash>): UnshieldedState => {
-    const releasable = HashMap.filter(
-      state.pendingUtxos,
-      ({ restored }, hash) => restored && !coveredIds.includes(hash),
-    );
+    const covered = new Set(coveredIds);
 
-    return HashMap.isEmpty(releasable)
-      ? state
-      : {
-          availableUtxos: HashMap.union(
-            state.availableUtxos,
-            HashMap.map(releasable, ({ utxo }) => utxo),
-          ),
-          pendingUtxos: HashMap.removeMany(state.pendingUtxos, HashMap.keys(releasable)),
-        };
+    return releaseBookings(state, ({ restored }, hash) => restored && !covered.has(hash));
   },
 
   /**
@@ -190,22 +197,12 @@ export const UnshieldedState = {
    * released by the submit path today, so a transaction abandoned between balancing and submission leaks its coins;
    * this sweep is what bounds that leak to the transaction's own lifetime.
    *
-   * @param now - The instant to expire against. A booking expires at its TTL, not after it, because the ledger already
-   *   rejects the transaction at that instant.
+   * @param now - The instant to expire against. A booking expires once its TTL has passed, not at it: the ledger
+   *   accepts an intent while its TTL is at or after the block's timestamp, so the transaction is still valid at the
+   *   instant its TTL names.
    */
-  expirePending: (state: UnshieldedState, now: Date): UnshieldedState => {
-    const expired = HashMap.filter(state.pendingUtxos, ({ ttl }) => ttl.getTime() <= now.getTime());
-
-    return HashMap.isEmpty(expired)
-      ? state
-      : {
-          availableUtxos: HashMap.union(
-            state.availableUtxos,
-            HashMap.map(expired, ({ utxo }) => utxo),
-          ),
-          pendingUtxos: HashMap.removeMany(state.pendingUtxos, HashMap.keys(expired)),
-        };
-  },
+  expirePending: (state: UnshieldedState, now: Date): UnshieldedState =>
+    releaseBookings(state, ({ ttl }) => ttl.getTime() < now.getTime()),
 
   applyUpdate: (
     state: UnshieldedState,
