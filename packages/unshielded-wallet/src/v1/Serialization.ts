@@ -25,6 +25,13 @@ export type DefaultSerializationConfiguration = {
   networkId: NetworkId.NetworkId;
 };
 
+/**
+ * How long a booking restored from a snapshot that predates booking expiries is given, measured from the moment the
+ * snapshot is loaded. It matches the transaction lifetime the facade hands out by default, so such a booking is bounded
+ * exactly like one written by this version.
+ */
+export const LEGACY_BOOKING_LIFETIME_MS = 60 * 60 * 1000;
+
 export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, string> => {
   const UtxoWithMetaSchema = Schema.Struct({
     utxo: Schema.Struct({
@@ -42,12 +49,18 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
 
   /**
    * A pending entry is a UTxO plus the expiry its booking was taken with. `ttl` is additive: a snapshot written before
-   * bookings carried an expiry decodes at the epoch, so the first expiry sweep releases the coin — which is the repair
-   * such a snapshot needs, because nothing in the writing process is left to release it.
+   * bookings carried an expiry has no expiry to restore, so one is granted from the moment it is loaded.
+   *
+   * Granted rather than assumed to have passed, because such a snapshot says nothing about when its coins were booked.
+   * The process that wrote it may have submitted the transaction moments before it stopped, and dating the booking in
+   * the past would offer a coin that transaction is still spending. A full lifetime ahead releases the coin only once
+   * no transaction could still be accepted, which is the bound every other booking already has.
    */
   const PendingUtxoSchema = Schema.Struct({
     ...UtxoWithMetaSchema.fields,
-    ttl: Schema.optionalWith(Schema.Date, { default: () => new Date(0) }),
+    ttl: Schema.optionalWith(Schema.Date, {
+      default: () => new Date(Date.now() + LEGACY_BOOKING_LIFETIME_MS),
+    }),
   });
 
   const SnapshotSchema = Schema.Struct({

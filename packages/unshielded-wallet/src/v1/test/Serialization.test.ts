@@ -16,7 +16,7 @@ import { Either, HashMap, Option, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, PublicKey } from '../../KeyStore.js';
 import { CoreWallet } from '../CoreWallet.js';
-import { makeDefaultV1SerializationCapability } from '../Serialization.js';
+import { makeDefaultV1SerializationCapability, LEGACY_BOOKING_LIFETIME_MS } from '../Serialization.js';
 import { type PendingUtxo, UnshieldedState, type UtxoWithMeta } from '../UnshieldedState.js';
 import { generateMockUtxoWithMeta, utxoHash } from './testUtils.js';
 
@@ -139,22 +139,26 @@ describe('Unshielded wallet serialization', () => {
       expect(Either.isRight(result)).toBe(true);
     });
 
-    it('dates the booking at the epoch, so the first expiry sweep releases the coin', () => {
-      // Nothing in the process that wrote such a snapshot is left to release its bookings, so the wallet must.
+    it('gives the booking a full transaction lifetime from now, rather than an expiry already behind it', () => {
+      // The snapshot does not say when these coins were booked, and the writing process may have submitted the
+      // transaction moments before it stopped. Dating them in the past would release a coin that a live transaction
+      // is still spending; dating them a lifetime ahead releases them only once no transaction could still be
+      // accepted, which is the same bound every other booking gets.
       const booked = generateMockUtxoWithMeta({ intentHash: 'h-legacy-sweep', outputNo: 0 });
+      const loadedAt = Date.now();
 
       const restored = load(withoutExpiries(walletHolding([], [{ utxo: booked, ttl: TTL }])));
+      const entry = Option.getOrThrow(HashMap.get(restored.state.pendingUtxos, utxoHash(booked)));
 
-      expect(Option.getOrNull(HashMap.get(restored.state.pendingUtxos, utxoHash(booked)))).toEqual({
-        utxo: booked,
-        ttl: new Date(0),
-        restored: true,
-      });
+      expect(entry.ttl.getTime()).toBeGreaterThanOrEqual(loadedAt + LEGACY_BOOKING_LIFETIME_MS);
+      expect(entry.restored).toBe(true);
 
-      const swept = CoreWallet.expirePending(restored, new Date('2000-01-01T00:00:00.000Z'));
+      const sweptWithinLifetime = CoreWallet.expirePending(restored, new Date(loadedAt));
+      expect(HashMap.has(sweptWithinLifetime.state.pendingUtxos, utxoHash(booked))).toBe(true);
 
-      expect(HashMap.has(swept.state.availableUtxos, utxoHash(booked))).toBe(true);
-      expect(HashMap.size(swept.state.pendingUtxos)).toEqual(0);
+      const sweptAfterLifetime = CoreWallet.expirePending(restored, new Date(entry.ttl.getTime() + 1));
+      expect(HashMap.has(sweptAfterLifetime.state.availableUtxos, utxoHash(booked))).toBe(true);
+      expect(HashMap.size(sweptAfterLifetime.state.pendingUtxos)).toEqual(0);
     });
   });
 
