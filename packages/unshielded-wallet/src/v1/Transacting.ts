@@ -15,7 +15,7 @@ import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, Option, pipe, Array as Arr } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { InsufficientFundsError, OtherWalletError, TransactingError, type WalletError } from './WalletError.js';
-import { type UtxoWithMeta } from './UnshieldedState.js';
+import { type UtxoHash, type UtxoWithMeta } from './UnshieldedState.js';
 import {
   type BalanceRecipe,
   type CoinSelection,
@@ -109,6 +109,38 @@ export interface TransactingCapability<TState> {
     wallet: CoreWallet,
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Either.Either<CoreWallet, WalletError>;
+
+  /**
+   * Releases booked coins by id, for a caller that holds a record of the ids rather than the transaction.
+   *
+   * An implementation must move each named coin back to the available side and leave the rest alone. Prefer
+   * {@link TransactingCapability.revertTransaction} where the transaction itself is to hand.
+   *
+   * @example
+   *   const released = capability.revertUtxos(wallet, ['4b0f…#0']);
+   *
+   * @param wallet - The wallet holding the bookings
+   * @param utxoIds - Ids of the coins to release, each `intentHash#outputNo`. An id that is not booked is ignored
+   *   rather than reported, since sync may have cleared the coin first
+   * @returns The wallet with those coins available again
+   */
+  revertUtxos(wallet: CoreWallet, utxoIds: ReadonlyArray<UtxoHash>): CoreWallet;
+
+  /**
+   * Releases bookings restored from a snapshot that nothing in `coveredIds` still accounts for.
+   *
+   * Meant for the moment sync reaches the chain tip, where every transaction the address is party to has been applied,
+   * so a coin still booked was never spent by the process that booked it. An implementation must release only bookings
+   * that came back from a snapshot, and must leave every covered id booked.
+   *
+   * @example
+   *   const reconciled = capability.releaseRestoredPending(wallet, idsStillSpokenFor);
+   *
+   * @param wallet - The wallet holding the restored bookings
+   * @param coveredIds - Coins some durable record still accounts for, such as a transaction waiting on a counterparty
+   * @returns The wallet with the uncovered restored coins available again
+   */
+  releaseRestoredPending(wallet: CoreWallet, coveredIds: ReadonlyArray<UtxoHash>): CoreWallet;
 
   signUnboundTransaction(
     transaction: UnboundTransaction,
@@ -227,7 +259,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
 
-      const { newState, offer } = yield* this.#prepareOffer(wallet, recipe);
+      const { newState, offer } = yield* this.#prepareOffer(wallet, recipe, intent!.ttl);
 
       const balancingIntent = ledger.Intent.new(intent!.ttl);
       balancingIntent.guaranteedUnshieldedOffer = offer;
@@ -277,10 +309,14 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
         this.getCoinSelection(),
       );
 
-      const { newState, offer } = yield* this.#prepareOffer(wallet, {
-        inputs: recipe.inputs,
-        outputs: [...recipe.outputs, ...ledgerOutputs],
-      });
+      const { newState, offer } = yield* this.#prepareOffer(
+        wallet,
+        {
+          inputs: recipe.inputs,
+          outputs: [...recipe.outputs, ...ledgerOutputs],
+        },
+        ttl,
+      );
 
       const intent = ledger.Intent.new(ttl);
 
@@ -343,7 +379,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       };
 
       const allUtxos = [...guaranteedUtxos, ...fallibleUtxos].map(({ utxo }) => utxo);
-      const [, walletAfterBooking] = yield* CoreWallet.spendUtxos(wallet, allUtxos);
+      const [, walletAfterBooking] = yield* CoreWallet.spendUtxos(wallet, allUtxos, ttl);
 
       const guaranteedOffer = makeOffer(guaranteedUtxos);
       const fallibleOffer = makeOffer(fallibleUtxos);
@@ -415,10 +451,14 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       const recipe = yield* this.#balanceSegment(wallet, Imbalances.empty(), targetImbalances, this.getCoinSelection());
 
-      const { newState, offer } = yield* this.#prepareOffer(wallet, {
-        inputs: recipe.inputs,
-        outputs: [...recipe.outputs, ...ledgerOutputs],
-      });
+      const { newState, offer } = yield* this.#prepareOffer(
+        wallet,
+        {
+          inputs: recipe.inputs,
+          outputs: [...recipe.outputs, ...ledgerOutputs],
+        },
+        ttl,
+      );
 
       const intent = ledger.Intent.new(ttl);
       intent.guaranteedUnshieldedOffer = offer;
@@ -475,6 +515,35 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
    * @param transaction - The transaction to revert (can be FinalizedTransaction, UnboundTransaction, or
    *   UnprovenTransaction)
    * @returns The updated wallet with rolled back UTXOs if successful, otherwise an error
+   */
+  /**
+   * Releases the booked coins named by `utxoIds`, without needing the transaction that booked them.
+   *
+   * @param wallet - The wallet holding the bookings
+   * @param utxoIds - Ids of the coins to release, as `intentHash#outputNo`
+   * @returns The wallet with those coins available again; ids that are not booked are ignored
+   */
+  revertUtxos(wallet: CoreWallet, utxoIds: ReadonlyArray<UtxoHash>): CoreWallet {
+    return CoreWallet.revertUtxos(wallet, utxoIds);
+  }
+
+  /**
+   * Releases bookings restored from a snapshot that `coveredIds` does not account for.
+   *
+   * @param wallet - The wallet holding the restored bookings
+   * @param coveredIds - Coins some durable record still accounts for; those stay booked
+   * @returns The wallet with the uncovered restored coins available again
+   */
+  releaseRestoredPending(wallet: CoreWallet, coveredIds: ReadonlyArray<UtxoHash>): CoreWallet {
+    return CoreWallet.releaseRestoredPending(wallet, coveredIds);
+  }
+
+  /**
+   * Releases the bookings a transaction took, for a caller that still holds the transaction itself.
+   *
+   * @param wallet - The wallet holding the bookings
+   * @param transaction - The transaction whose own inputs are to be released
+   * @returns The wallet with those coins available again, or the error that stopped a coin being released
    */
   revertTransaction(
     wallet: CoreWallet,
@@ -553,9 +622,10 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   #prepareOffer(
     wallet: CoreWallet,
     balanceRecipe: BalanceRecipe<ledger.Utxo, ledger.UtxoOutput>,
+    ttl: Date,
   ): Either.Either<{ newState: CoreWallet; offer: ledger.UnshieldedOffer<ledger.SignatureEnabled> }, WalletError> {
     return Either.gen(function* () {
-      const [spentInputs, updatedWallet] = yield* CoreWallet.spendUtxos(wallet, balanceRecipe.inputs);
+      const [spentInputs, updatedWallet] = yield* CoreWallet.spendUtxos(wallet, balanceRecipe.inputs, ttl);
       const { publicKey } = wallet.publicKey;
 
       const ledgerInputs = spentInputs.map((input) => ({
@@ -610,59 +680,87 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     wallet: CoreWallet,
     transaction: T,
   ): Either.Either<[T | undefined, CoreWallet], WalletError> {
+    const segments = this.txOps.getSegments(transaction);
+
+    // no segments to balance
+    if (segments.length === 0) {
+      return Either.right([undefined, wallet]);
+    }
+
+    // Each segment is balanced against the wallet the previous segment left behind, so a coin booked for one
+    // segment can no longer be selected for the next one, and the caller receives every booking this call made.
+    return pipe(
+      [...segments, GUARANTEED_SEGMENT],
+      Arr.reduce(Either.right(wallet) as Either.Either<CoreWallet, WalletError>, (walletAcc, segment) =>
+        pipe(
+          walletAcc,
+          Either.flatMap((walletSoFar) => this.#balanceSegmentInPlace(walletSoFar, transaction, segments, segment)),
+        ),
+      ),
+      Either.map((balancedWallet): [T, CoreWallet] => [transaction, balancedWallet]),
+    );
+  }
+
+  /**
+   * Balances one segment of an unboundish transaction, merging the balancing offer into the intent that carries the
+   * segment and booking the coins it selects.
+   *
+   * @param wallet - The wallet to select and book coins from
+   * @param transaction - The transaction being balanced in place
+   * @param segments - The segments the transaction carries intents for
+   * @param segment - The segment to balance
+   * @returns The wallet with the selected coins booked, or the untouched wallet if the segment is already balanced
+   */
+  #balanceSegmentInPlace<T extends ledger.UnprovenTransaction | UnboundTransaction>(
+    wallet: CoreWallet,
+    transaction: T,
+    segments: ReadonlyArray<number>,
+    segment: number,
+  ): Either.Either<CoreWallet, WalletError> {
     return Either.gen(this, function* () {
-      const segments = this.txOps.getSegments(transaction);
+      const imbalances = this.txOps.getImbalances(transaction, segment);
 
-      // no segments to balance
-      if (segments.length === 0) {
-        return [undefined, wallet];
+      // intent is balanced
+      if (imbalances.size === 0) {
+        return wallet;
       }
 
-      for (const segment of [...segments, GUARANTEED_SEGMENT]) {
-        const imbalances = this.txOps.getImbalances(transaction, segment);
+      // if segment is GUARANTEED_SEGMENT, use the first intent to place the balancing offer in the guaranteed section
+      const intentSegment = segment === GUARANTEED_SEGMENT ? segments[0] : segment;
 
-        // intent is balanced
-        if (imbalances.size === 0) {
-          continue;
-        }
+      const intent = transaction.intents?.get(intentSegment) as IntentOf<T> | undefined;
 
-        // if segment is GUARANTEED_SEGMENT, use the first intent to place the balancing offer in the guaranteed section
-        const intentSegment = segment === GUARANTEED_SEGMENT ? segments[0] : segment;
-
-        const intent = transaction.intents?.get(intentSegment) as IntentOf<T> | undefined;
-
-        if (!intent) {
-          return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} was not found` }));
-        }
-
-        const isBound = this.txOps.isIntentBound(intent);
-
-        if (isBound) {
-          return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} is already bound` }));
-        }
-
-        const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
-
-        const { offer } = yield* this.#prepareOffer(wallet, recipe);
-
-        const targetOffer =
-          segment !== GUARANTEED_SEGMENT ? intent.fallibleUnshieldedOffer : intent.guaranteedUnshieldedOffer;
-
-        const mergedOffer = yield* this.#mergeOffers(offer, targetOffer);
-
-        if (segment !== GUARANTEED_SEGMENT) {
-          intent.fallibleUnshieldedOffer = mergedOffer;
-        } else {
-          intent.guaranteedUnshieldedOffer = mergedOffer;
-        }
-
-        (transaction.intents as Map<number, IntentOf<T>>) = (transaction.intents as Map<number, IntentOf<T>>).set(
-          intentSegment,
-          intent,
-        );
+      if (!intent) {
+        return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} was not found` }));
       }
 
-      return [transaction, wallet];
+      const isBound = this.txOps.isIntentBound(intent);
+
+      if (isBound) {
+        return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} is already bound` }));
+      }
+
+      const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
+
+      const { newState, offer } = yield* this.#prepareOffer(wallet, recipe, intent.ttl);
+
+      const targetOffer =
+        segment !== GUARANTEED_SEGMENT ? intent.fallibleUnshieldedOffer : intent.guaranteedUnshieldedOffer;
+
+      const mergedOffer = yield* this.#mergeOffers(offer, targetOffer);
+
+      if (segment !== GUARANTEED_SEGMENT) {
+        intent.fallibleUnshieldedOffer = mergedOffer;
+      } else {
+        intent.guaranteedUnshieldedOffer = mergedOffer;
+      }
+
+      (transaction.intents as Map<number, IntentOf<T>>) = (transaction.intents as Map<number, IntentOf<T>>).set(
+        intentSegment,
+        intent,
+      );
+
+      return newState;
     });
   }
 }

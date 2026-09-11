@@ -19,6 +19,7 @@ import {
   Chunk,
   DateTime,
   Deferred,
+  Duration,
   Effect,
   Equal,
   Exit,
@@ -666,4 +667,75 @@ describe('Pending Transactions Service (Effect)', () => {
       }),
     );
   });
+});
+
+describe('PendingTransactionsService reservations', () => {
+  const reservation = (overrides: Partial<PendingTransactions.Reservation> = {}): PendingTransactions.Reservation => ({
+    identifiers: ['id-a'],
+    intentHashes: ['intent-a'],
+    inputs: { unshielded: ['4b0f#0'] },
+    ttl: new Date('2026-01-01T01:00:00.000Z'),
+    createdAt: DateTime.unsafeMake('2026-01-01T00:00:00.000Z'),
+    expired: false,
+    ...overrides,
+  });
+
+  const currentState = (service: PendingTransactionsServiceEffectImpl<FakeTransaction>) =>
+    pipe(service.state(), Stream.runHead, Effect.map(Option.getOrThrow));
+
+  it('holds a reservation a caller registers, and lets it be cleared again', () =>
+    Effect.gen(function* () {
+      const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+
+      yield* service.addReservation(reservation());
+      expect((yield* currentState(service)).reservations).toEqual([reservation()]);
+
+      yield* service.clearReservation(['id-a']);
+      expect((yield* currentState(service)).reservations).toEqual([]);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.scoped, Effect.runPromise));
+
+  it('marks a reservation expired once its TTL passes, on the same poll that reaps transactions', () =>
+    // Nothing else notices that a balanced transaction was abandoned, so the poll is what turns a stale
+    // reservation into something a caller can act on.
+    Effect.gen(function* () {
+      const fakeTxStatus = new FakeTransactionStatus();
+      const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+
+      yield* TestClock.setTime(new Date('2026-01-01T02:00:00.000Z').getTime());
+      yield* service.addReservation(reservation());
+
+      yield* service
+        .startPolling(Stream.make(undefined))
+        .pipe(
+          Effect.provideService(TransactionStatus.tag, fakeTxStatus.runQuery),
+          Effect.provideService(QueryClient, {} as unknown as QueryClient.Service),
+          Effect.forkScoped,
+        );
+      yield* TestClock.adjust(Duration.seconds(1));
+
+      const state = yield* currentState(service);
+      expect(PendingTransactions.allExpiredReservations(state)).toEqual([reservation({ expired: true })]);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.scoped, Effect.runPromise));
+
+  it('leaves a reservation alone while its TTL is still ahead', () =>
+    Effect.gen(function* () {
+      const fakeTxStatus = new FakeTransactionStatus();
+      const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
+
+      yield* TestClock.setTime(new Date('2026-01-01T00:30:00.000Z').getTime());
+      yield* service.addReservation(reservation());
+
+      yield* service
+        .startPolling(Stream.make(undefined))
+        .pipe(
+          Effect.provideService(TransactionStatus.tag, fakeTxStatus.runQuery),
+          Effect.provideService(QueryClient, {} as unknown as QueryClient.Service),
+          Effect.forkScoped,
+        );
+      yield* TestClock.adjust(Duration.seconds(1));
+
+      const state = yield* currentState(service);
+      expect(PendingTransactions.allExpiredReservations(state)).toEqual([]);
+      expect(state.reservations).toEqual([reservation()]);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.scoped, Effect.runPromise));
 });

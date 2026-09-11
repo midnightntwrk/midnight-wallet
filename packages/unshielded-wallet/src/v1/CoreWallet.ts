@@ -13,7 +13,7 @@
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { createSyncProgress, type SyncProgress, type SyncProgressData } from './SyncProgress.js';
 import { type PublicKey } from '../KeyStore.js';
-import { UnshieldedState, type UnshieldedUpdate } from './UnshieldedState.js';
+import { UnshieldedState, type UnshieldedUpdate, type UtxoHash } from './UnshieldedState.js';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Either, Array as Arr, pipe } from 'effect';
 import { ApplyTransactionError, RollbackUtxoError, SpendUtxoError, type WalletError } from './WalletError.js';
@@ -86,16 +86,53 @@ export const CoreWallet = {
     );
   },
 
-  spend(coreWallet: CoreWallet, utxo: ledger.Utxo): Either.Either<CoreWallet, WalletError> {
-    return UnshieldedState.spendByUtxo(coreWallet.state, utxo).pipe(
+  /**
+   * Rewraps `coreWallet` around a new state, or hands back the very same wallet when the state did not change.
+   *
+   * Identity matters here: wallet state is published through a ref that emits on every write, and a caller that reacts
+   * to those emissions and then calls back in would drive itself in a loop if a no-op still produced a new object.
+   */
+  withState(coreWallet: CoreWallet, state: UnshieldedState): CoreWallet {
+    return state === coreWallet.state ? coreWallet : { ...coreWallet, state };
+  },
+
+  /** Releases every booking that has reached its expiry. See {@link UnshieldedState.expirePending}. */
+  expirePending(coreWallet: CoreWallet, now: Date): CoreWallet {
+    return CoreWallet.withState(coreWallet, UnshieldedState.expirePending(coreWallet.state, now));
+  },
+
+  /**
+   * Releases the bookings that came back from a snapshot and that `coveredIds` does not account for. See
+   * {@link UnshieldedState.releaseRestoredPending}.
+   */
+  releaseRestoredPending(coreWallet: CoreWallet, coveredIds: ReadonlyArray<UtxoHash>): CoreWallet {
+    return CoreWallet.withState(coreWallet, UnshieldedState.releaseRestoredPending(coreWallet.state, coveredIds));
+  },
+
+  /**
+   * Releases the booked coins named by `hashes`. Unlike {@link CoreWallet.rollbackUtxo}, this needs no transaction,
+   * which is what lets a caller holding only a record of the ids release them. Ids that are not booked are ignored.
+   */
+  revertUtxos(coreWallet: CoreWallet, hashes: ReadonlyArray<UtxoHash>): CoreWallet {
+    return CoreWallet.withState(coreWallet, hashes.reduce(UnshieldedState.rollbackSpendByHash, coreWallet.state));
+  },
+
+  spend(coreWallet: CoreWallet, utxo: ledger.Utxo, ttl: Date): Either.Either<CoreWallet, WalletError> {
+    return UnshieldedState.spendByUtxo(coreWallet.state, utxo, ttl).pipe(
       Either.map((state) => ({ ...coreWallet, state })),
       Either.mapLeft((error) => new SpendUtxoError(error)),
     );
   },
 
+  /**
+   * Books each of `utxos` for a transaction being balanced.
+   *
+   * @param ttl - The TTL of the transaction the coins are being booked for; it bounds every reservation taken here.
+   */
   spendUtxos(
     wallet: CoreWallet,
     utxos: ReadonlyArray<ledger.Utxo>,
+    ttl: Date,
   ): Either.Either<[ReadonlyArray<ledger.Utxo>, CoreWallet], WalletError> {
     return pipe(
       utxos,
@@ -104,7 +141,7 @@ export const CoreWallet = {
         (acc, utxoToSpend) =>
           acc.pipe(
             Either.flatMap(([accUtxos, state]) =>
-              UnshieldedState.spendByUtxo(state, utxoToSpend).pipe(
+              UnshieldedState.spendByUtxo(state, utxoToSpend, ttl).pipe(
                 Either.map(
                   (nextState) => [accUtxos.concat([utxoToSpend]), nextState] as [ledger.Utxo[], UnshieldedState],
                 ),
