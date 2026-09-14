@@ -54,7 +54,6 @@ This document comprises a couple of sections:
       - [Zswap seed](#zswap-seed)
       - [Output encryption keys](#output-encryption-keys)
       - [Coin keys](#coin-keys)
-    - [Metadata keys](#metadata-keys)
     - [Scalar sampling](#scalar-sampling)
   - [Address format](#address-format)
     - [Unshielded Payment address](#unshielded-payment-address)
@@ -271,7 +270,7 @@ Where:
 | Unshielded (and Night) Internal chain | 1     | Only present for BIP-44 compatibility, can be used to derive change addresses                      |
 | Dust                                  | 2     | Dust is needed to pay fees on Midnight                                                             |
 | Shielded                              | 3     | Shielded tokens, managed is a Zswap-based sub-protocol                                             |
-| Metadata                              | 4     | Keys for signing metadata                                                                          |
+| Unshielded (and Night) ECDSA          | 4     | ECDSA-only role for unshielded tokens, including Night                                             |
 
 > [!NOTE] `role` and `index` path levels use public derivation for BIP-44 compatibility. For many keys it will not be
 > possible to meaningfully perform public parent key -> public child key derivation. In many cases it is only the secret
@@ -283,10 +282,16 @@ Where:
 
 ### Night and unshielded tokens keys
 
-Unshielded tokens use Schnorr signature over secp256k1 curve.
+Unshielded tokens use Schnorr signature over secp256k1 curve as the primary scheme.
 
-That makes a private key derived at certain path, the private key for Night. The public key being derived accordingly,
-e.g. as specified in [BIP-340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki).
+That makes a private key derived at a path under role `0` or `1`, the private key for Night. The public key being
+derived accordingly, e.g. as specified in [BIP-340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki).
+
+As an opt-in alternative, ECDSA over secp256k1 with SHA-256 (deterministic nonces per
+[RFC 6979](https://datatracker.ietf.org/doc/html/rfc6979), low-s per
+[BIP-62](https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki#low-s-values-in-signatures)) is supported for
+keys derived under role `4`. The bytes at the leaf path are interpreted as a secp256k1 scalar modulo the curve order;
+zero is rejected. The corresponding verifying key is the 33-byte compressed SEC1 encoding of the resulting point.
 
 ### Dust keys
 
@@ -345,12 +350,6 @@ function coinPublicKey(coinSecretKey: Buffer): Buffer {
 }
 ```
 
-### Metadata keys
-
-Similarly to Night, metadata signing uses Schnorr signatures over secp256k1 curve, thus a private key derived at a path
-is a private key for signature, with public key being derived accordingly for Schnorr (e.g. as specified in
-[BIP-0340](https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki)).
-
 ### Scalar sampling
 
 Zswap and Dust keys require sampling a scalar value out of uniform bytes. The procedure to follow is the same for both,
@@ -401,11 +400,15 @@ The human-readable part should consist of 3 parts, separated by underscore:
 
 ### Unshielded Payment address
 
-Primary payment address in the network. It allows receiving Night and other unshielded tokens. It is an SHA256 hash of
-an unshielded token public key, encoded as-is - that is 32 bytes of the hash contents, with no additional prefixes or
-tags.
+Primary payment address in the network. It allows receiving Night and other unshielded tokens. The address is always 32
+bytes, encoded as-is with no additional prefixes or tags. Its credential type is `addr`.
 
-Its credential type is `addr`.
+For Schnorr keys (roles `0` and `1`), the address is `SHA-256(verifying_key)`, where `verifying_key` is the 32-byte
+BIP-340 x-only public key.
+
+For ECDSA keys (role `4`), the address is `SHA-256("midnight:ecdsa:" ‖ verifying_key)`, where `verifying_key` is the
+33-byte compressed-SEC1-encoded public key. The domain separator binds the address to the ECDSA scheme, preventing
+accidental cross-scheme key reuse.
 
 Example human-readable parts:
 
@@ -922,8 +925,8 @@ requires offer, transient, its input randomness and coin information - type and 
 
 #### Building an unshielded input
 
-UTxO spend is almost the same as UTxO itself, with the difference that instead of an address, a Schnorr verifying key is
-provided.
+UTxO spend is almost the same as UTxO itself, with the difference that instead of an address, a verifying key is
+provided — Schnorr for role `0`/`1` keys, ECDSA for role `4` keys.
 
 While inputs/outputs is a common vocabulary for UTxO-based systems and unshielded offer has a field called inputs, the
 ledger specification calls the datatype used as an input to transaction a UTxO Spend, hence mentioning both names.
@@ -998,7 +1001,7 @@ An intent can be constructed as follows:
 3. In each unshielded offer present, for each of its inputs provide a signature and append it to the list of signatures
    (so that when finished the number of signatures matches the number of inputs, and the keys match):
    - Over segment id and proof- and signature-erased intent.
-   - Using Schnorr secret key to authorize particular spend.
+   - Using the signing key (Schnorr for role `0`/`1` keys, ECDSA for role `4` keys) to authorize particular spend.
 4. Return the segment id, intent, the fallible shielded offer and binding randomnesses for both the intent and the
    fallible shielded offer
 

@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { bech32m } from '@scure/base';
+import * as crypto from 'node:crypto';
 import { BLSScalar, JubJubScalar } from './field.js';
 import * as subsquidScale from '@subsquid/scale-codec';
 
@@ -128,6 +129,16 @@ export class UnshieldedAddress {
       throw new Error('Unshielded address needs to be 32 bytes long');
     }
     this.data = data;
+  }
+
+  static fromSchnorrPublicKey(xOnlyPublicKey: Buffer): UnshieldedAddress {
+    return new UnshieldedAddress(crypto.hash('sha-256', xOnlyPublicKey, 'buffer'));
+  }
+
+  static fromEcdsaPublicKey(compressedPublicKey: Buffer): UnshieldedAddress {
+    return new UnshieldedAddress(
+      crypto.hash('sha-256', Buffer.concat([Buffer.from('midnight:ecdsa:', 'utf-8'), compressedPublicKey]), 'buffer'),
+    );
   }
 }
 
