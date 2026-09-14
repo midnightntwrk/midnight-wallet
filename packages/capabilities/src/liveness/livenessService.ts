@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { IndexerLiveness } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Cause, Data, Duration, Effect, Option, Ref, Stream, SubscriptionRef } from 'effect';
+import { Cause, Data, Deferred, Duration, Effect, identity, Option, Stream, SubscriptionRef } from 'effect';
 
 /**
  * A block height could not be read.
@@ -135,15 +135,15 @@ const describeFailure = (cause: Cause.Cause<LivenessReadError>): string =>
   });
 
 /**
- * What the one-time genesis comparison has established.
+ * What the one-time genesis comparison established.
  *
  * @remarks
- *   `Mismatch` carries its verdict rather than the hashes, so it is built exactly once — at the moment of proof — and
- *   every later poll republishes the same value, which the state stream's deduplication then collapses.
+ *   Only outcomes are named here. "Not yet compared" is not a value of this type but the empty `Deferred` that holds it,
+ *   so a settled check can never be confused with a pending one. `Mismatch` carries its verdict rather than the hashes,
+ *   so it is built exactly once — at the moment of proof — and every later poll republishes the same value, which the
+ *   state stream's deduplication then collapses.
  */
 type GenesisCheck = Data.TaggedEnum<{
-  /** No successful comparison yet: the hashes have not both been read. */
-  Unverified: {}; // eslint-disable-line @typescript-eslint/no-empty-object-type
   /** Both endpoints reported the same genesis block; heights are comparable. */
   SameChain: {}; // eslint-disable-line @typescript-eslint/no-empty-object-type
   /** The endpoints are on different chains; the verdict is pinned for the service's lifetime. */
@@ -155,9 +155,9 @@ export class LivenessServiceImpl implements LivenessService {
   readonly #state: SubscriptionRef.SubscriptionRef<IndexerLiveness.IndexerLiveness>;
   readonly #reads: LivenessReads;
   readonly #configuration: LivenessConfiguration;
-  // A plain `Ref` read at the top of a poll and written mid-poll — not a race, because polls run strictly one at a
-  // time: `startPolling` awaits each poll before taking the next tick.
-  readonly #genesisCheck: Ref.Ref<GenesisCheck>;
+  // The check settles once and is never rewritten. A `Deferred` enforces that where a `Ref` would only promise it: a
+  // second completion is a no-op, and "not yet settled" is the empty `Deferred` rather than a sentinel value.
+  readonly #genesisCheck: Deferred.Deferred<GenesisCheck>;
 
   /**
    * Creates a service whose verdict starts as {@link IndexerLiveness.Unknown} — a check exists but has not yet run.
@@ -176,7 +176,7 @@ export class LivenessServiceImpl implements LivenessService {
   ): Effect.Effect<LivenessServiceImpl> {
     return Effect.all([
       SubscriptionRef.make<IndexerLiveness.IndexerLiveness>(initialVerdict),
-      Ref.make<GenesisCheck>(GenesisCheck.Unverified()),
+      Deferred.make<GenesisCheck>(),
     ]).pipe(Effect.map(([state, genesisCheck]) => new LivenessServiceImpl(state, reads, configuration, genesisCheck)));
   }
 
@@ -184,7 +184,7 @@ export class LivenessServiceImpl implements LivenessService {
     state: SubscriptionRef.SubscriptionRef<IndexerLiveness.IndexerLiveness>,
     reads: LivenessReads,
     configuration: LivenessConfiguration,
-    genesisCheck: Ref.Ref<GenesisCheck>,
+    genesisCheck: Deferred.Deferred<GenesisCheck>,
   ) {
     this.#state = state;
     this.#reads = reads;
@@ -259,23 +259,13 @@ export class LivenessServiceImpl implements LivenessService {
    *   poll tries the hashes again.
    */
   #compareOnce(): Effect.Effect<IndexerLiveness.IndexerLiveness, LivenessReadError> {
-    return Ref.get(this.#genesisCheck).pipe(
+    // `poll` reads without waiting: an empty `Deferred` means the hashes have not yet been compared, so compare them now.
+    return Deferred.poll(this.#genesisCheck).pipe(
+      Effect.flatMap(Option.match({ onNone: () => this.#verifyGenesis(), onSome: identity })),
       Effect.flatMap(
         GenesisCheck.$match({
           Mismatch: ({ verdict }) => Effect.succeed(verdict),
           SameChain: () => this.#compareHeights(),
-          Unverified: () =>
-            this.#verifyGenesis().pipe(
-              Effect.flatMap(
-                GenesisCheck.$match({
-                  Mismatch: ({ verdict }) => Effect.succeed(verdict),
-                  SameChain: () => this.#compareHeights(),
-                  // Unreachable: #verifyGenesis only ever returns a settled check. Comparing heights anyway keeps the
-                  // match total without inventing an error for a state that cannot occur.
-                  Unverified: () => this.#compareHeights(),
-                }),
-              ),
-            ),
         }),
       ),
     );
@@ -289,7 +279,7 @@ export class LivenessServiceImpl implements LivenessService {
           ? GenesisCheck.SameChain()
           : GenesisCheck.Mismatch({ verdict: IndexerLiveness.WrongNetwork({ indexerGenesisHash, nodeGenesisHash }) }),
       ),
-      Effect.tap((check) => Ref.set(this.#genesisCheck, check)),
+      Effect.tap((check) => Deferred.succeed(this.#genesisCheck, check)),
     );
   }
 
