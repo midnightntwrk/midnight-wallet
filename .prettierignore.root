@@ -13,3 +13,6 @@ reports/
 .turbo/
 .yarn/
 packages/
+
+# Third-party skills are vendored, not ours to reformat — keep in sync with .prettierignore
+.claude/

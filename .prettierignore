@@ -5,4 +5,6 @@ reports/
 .changeset/
 .turbo/
 .yarn/
+
+# Third-party skills are vendored, not ours to reformat
 .claude/

@@ -6,7 +6,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "yarn format:check:root 2>/dev/null || echo '[Claude Hook] Format check failed - run yarn format to fix'"
+            "command": "yarn format:changed"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/claude/hook-stop-verify.mjs",
+            "timeout": 600
           }
         ]
       }
