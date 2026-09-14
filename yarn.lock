@@ -2532,7 +2532,7 @@ __metadata:
     "@types/tar-stream": "npm:3.1.4"
     bn.js: "npm:^5.2.3"
     effect: "npm:^3.19.19"
-    tar-stream: "npm:3.2.1"
+    tar-stream: "npm:3.2.0"
     tsx: "npm:4.23.13"
   peerDependencies:
     "@midnight-ntwrk/ledger-v8": ^8.1.0
@@ -3678,7 +3678,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@scure/base@npm:2.4.0, @scure/base@npm:^2.0.0":
+"@scure/base@npm:2.4.0":
   version: 2.4.0
   resolution: "@scure/base@npm:2.4.0"
   checksum: 10c0/985a4bdcafa4289e0cb8b6d53453347308d5ff6ffcbe84d8fac102374fb419b52db565e98fa3931b79a4be1cc3218583065bbca27dfaabca687aac0f3db3639d
@@ -3689,6 +3689,13 @@ __metadata:
   version: 1.2.6
   resolution: "@scure/base@npm:1.2.6"
   checksum: 10c0/49bd5293371c4e062cb6ba689c8fe3ea3981b7bb9c000400dc4eafa29f56814cdcdd27c04311c2fec34de26bc373c593a1d6ca6d754398a488d587943b7c128a
+  languageName: node
+  linkType: hard
+
+"@scure/base@npm:^2.0.0":
+  version: 2.2.0
+  resolution: "@scure/base@npm:2.2.0"
+  checksum: 10c0/30158ccf5da86b0f06928f1cfe24a29fbea22824adf6f8895222910cade1ad4fe7593958aacf563287e6b4c55746f47395178e7a4763b059c22d6ee8e6f76387
   languageName: node
   linkType: hard
 
@@ -10086,15 +10093,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tar-stream@npm:3.2.1":
-  version: 3.2.1
-  resolution: "tar-stream@npm:3.2.1"
+"tar-stream@npm:3.2.0":
+  version: 3.2.0
+  resolution: "tar-stream@npm:3.2.0"
   dependencies:
     b4a: "npm:^1.6.4"
     bare-fs: "npm:^4.5.5"
     fast-fifo: "npm:^1.2.0"
     streamx: "npm:^2.15.0"
-  checksum: 10c0/0fef57b5e8bf15698f9b4bde4125ab690422cd98ff59cddd76addfb23a6999ad32bddbeeea0858e2756f8a0f36ef4e636a51efe5e8ef4c0a3dac4c2df5714858
+  checksum: 10c0/8a06c915f93c9b0906e79867e36a9cfe197da4d41b72e89ec0de99577ae755505d14815c1346b70c2410aa09d3145c3e3af2ff5802b6af84990cdd6c60dbb997
   languageName: node
   linkType: hard
 
