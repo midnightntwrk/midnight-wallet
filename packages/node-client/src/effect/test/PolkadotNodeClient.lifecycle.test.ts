@@ -21,10 +21,25 @@ const mockApi = {
     mockApi.isConnected = true;
     return Promise.resolve();
   }),
+  // WsProvider.disconnect() is fire-and-forget: it returns while the socket is still
+  // CLOSING and isConnected only clears once the close event fires.
   disconnect: vi.fn(() => {
-    mockApi.isConnected = false;
+    setTimeout(() => {
+      mockApi.isConnected = false;
+      mockApi.__emit('disconnected');
+    }, 5);
     return Promise.resolve();
   }),
+  __handlers: {} as Record<string, Array<() => void>>,
+  once: vi.fn((event: string, handler: () => void) => {
+    (mockApi.__handlers[event] ??= []).push(handler);
+    return () => {};
+  }),
+  __emit: (event: string) => {
+    const handlers = mockApi.__handlers[event] ?? [];
+    mockApi.__handlers[event] = [];
+    handlers.forEach((h) => h());
+  },
   tx: {
     midnight: {
       sendMnTransaction: vi.fn(),
@@ -64,6 +79,7 @@ describe('PolkadotNodeClient lifecycle', () => {
   beforeEach(() => {
     mockApi.isConnected = false;
     mockApi.connect.mockClear();
+    mockApi.__handlers = {};
     mockApi.disconnect.mockClear();
     mockApi.tx.midnight.sendMnTransaction.mockClear();
     mockApi.rpc.chain.getBlock.mockClear();
@@ -141,5 +157,75 @@ describe('PolkadotNodeClient lifecycle', () => {
     expect(mockApi.connect).toHaveBeenCalled();
     expect(mockApi.disconnect).toHaveBeenCalled();
     expect(result.transactions).toEqual([]);
+  });
+
+  it('does not disconnect a shared connection while another operation is in flight', async () => {
+    const { client } = await makeClient();
+    mockApi.disconnect.mockClear();
+    mockApi.connect.mockClear();
+
+    const fakeTx = SerializedTransaction.of(new Uint8Array([1, 2, 3]));
+
+    // Hold the submission open until the test releases it, so getGenesis has to
+    // overlap with it on the same shared api instance.
+    let finishSubmission: () => void = () => {};
+    mockApi.tx.midnight.sendMnTransaction.mockReturnValue({
+      send: vi.fn((callback: (result: unknown) => Promise<void>) => {
+        finishSubmission = () => {
+          void callback({
+            status: {
+              isReady: false,
+              isFuture: false,
+              isBroadcast: false,
+              isRetracted: false,
+              isInBlock: false,
+              isFinalized: true,
+              asFinalized: { toString: () => '0xabc' },
+              isFinalityTimeout: false,
+              isUsurped: false,
+              isDropped: false,
+              isInvalid: false,
+            },
+            txHash: { toString: () => '0xdef' },
+            blockNumber: new BN(42),
+          });
+        };
+        return Promise.resolve(() => {});
+      }),
+    });
+    mockApi.rpc.chain.getBlock.mockResolvedValue({ block: { extrinsics: [] } });
+
+    const submission = pipe(
+      client.sendMidnightTransaction(fakeTx),
+      Stream.runCollect,
+      Effect.scoped,
+      Effect.runPromise,
+    );
+
+    // Let the submission acquire the connection before the second operation runs.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await pipe(client.getGenesis(), Effect.runPromise);
+
+    // getGenesis finishing must not close the transport the submission is using.
+    expect(mockApi.isConnected).toBe(true);
+    expect(mockApi.disconnect).not.toHaveBeenCalled();
+
+    finishSubmission();
+    await submission;
+
+    // Only once the last holder finishes does the connection close.
+    expect(mockApi.disconnect).toHaveBeenCalledTimes(1);
+    // The close itself is asynchronous, mirroring WsProvider.
+    await vi.waitFor(() => expect(mockApi.isConnected).toBe(false));
+  });
+
+  it('make() waits for the socket to actually close before returning', async () => {
+    const { client } = await makeClient();
+
+    // The regression: WsProvider.disconnect() returns while the socket is still CLOSING,
+    // so a make() that does not wait leaves isConnected stale-true and ensureConnection()
+    // skips the reconnect, sending on a dying socket.
+    expect(client.api.isConnected).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["NODE_AUTH_TOKEN", "MIDNIGHT_GH_USER", "MIDNIGHT_GH_TOKEN"],
+  "globalEnv": ["NODE_AUTH_TOKEN", "MIDNIGHT_GH_TOKEN"],
   "tasks": {
     "lint": {
       "inputs": [
