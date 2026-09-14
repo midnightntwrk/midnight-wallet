@@ -35,7 +35,7 @@ export const getLogger = (): Logger => current;
 // whatever `setLogger` installed, without every helper having to call `getLogger()`.
 export const logger: Logger = new Proxy({} as Logger, {
   get(_target, property) {
-    const value = current[property as keyof Logger];
+    const value: unknown = Reflect.get(current, property);
     return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(current) : value;
   },
 });
