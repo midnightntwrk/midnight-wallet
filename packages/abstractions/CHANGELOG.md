@@ -1,5 +1,13 @@
 # @midnightntwrk/wallet-sdk-abstractions
 
+## 3.0.0
+
+### Major Changes
+
+- e89ab0b: Track transaction lifecycle in transaction history. Submitted transactions are now recorded as pending,
+  transition to finalized once confirmed by the indexer, and to rejected if they are reverted — giving a single,
+  consistent view of in-flight and settled transactions.
+
 ## 2.1.0
 
 ### Minor Changes
