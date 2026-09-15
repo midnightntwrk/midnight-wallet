@@ -23,6 +23,7 @@ import {
   makeDefaultSyncService,
   makeLivenessUpdates,
   makeSimulatorSyncCapability,
+  makeSimulatorSyncService,
   resolveNodeEndpoint,
 } from '../Sync.js';
 import { type IndexerLivenessUpdate } from '../SyncSchema.js';
@@ -127,10 +128,31 @@ describe('makeDefaultSyncCapability', () => {
 });
 
 describe('makeSimulatorSyncCapability', () => {
-  it('should mark the liveness check skipped, because a simulation has no node to cross-check against', () => {
-    // `Unknown` gates sync completion, so a wallet whose progress never left `Unknown` would never report itself
-    // synchronized. The simulator wiring knows no check will ever run, and says so — the same principle as the default
-    // sync service reporting `Skipped` when no node is configured.
+  it('should leave the liveness verdict alone, because the sync service’s feed is what reports it', () => {
+    // Two writers of one fact is one too many: the simulator's feed states the verdict once, at wallet start, and a
+    // capability writing it again on every update would silently overwrite whatever the feed had settled.
+    const emptySimulatorState = {
+      currentTime: new Date(0),
+      blocks: [{ number: 7n }],
+      ledger: { dust: { toString: () => '' }, utxo: { filter: () => [] } },
+      // Type cast required because: the capability reads only these fields, and a real LedgerState needs the ledger
+      // WASM runtime, which a unit test must not load.
+    } as unknown as SimulatorState;
+
+    const settled = CoreWallet.updateProgress(CoreWallet.init(publicKey, 'undeployed'), {
+      indexerLiveness: IndexerLiveness.Skipped({ reason: 'simulation' }),
+    });
+
+    const result = makeSimulatorSyncCapability().applyUpdate(settled, { update: emptySimulatorState });
+
+    expect(Either.getOrThrow(result).progress.indexerLiveness).toStrictEqual(
+      IndexerLiveness.Skipped({ reason: 'simulation' }),
+    );
+  });
+
+  it('should not invent a verdict of its own, so a wallet that has not been told anything stays Unknown', () => {
+    // The capability sees only simulator state; it has no standing to judge the indexer. `Unknown` here is correct and
+    // gates completion until the service's feed says otherwise.
     const emptySimulatorState = {
       currentTime: new Date(0),
       blocks: [{ number: 7n }],
@@ -143,9 +165,7 @@ describe('makeSimulatorSyncCapability', () => {
       update: emptySimulatorState,
     });
 
-    expect(Either.getOrThrow(result).progress.indexerLiveness).toStrictEqual(
-      IndexerLiveness.Skipped({ reason: 'simulation' }),
-    );
+    expect(Either.getOrThrow(result).progress.indexerLiveness).toStrictEqual(IndexerLiveness.Unknown());
   });
 });
 
@@ -273,11 +293,7 @@ describe('makeDefaultSyncService liveness feed', () => {
     const service = makeDefaultSyncService(indexerOnly);
     const wallet = CoreWallet.init(publicKey, 'undeployed');
 
-    const collected = await Effect.runPromise(
-      // Non-null assertion required because: the default service always provides the feed; its absence would itself
-      // be the failure under test.
-      service.livenessUpdates!(wallet).pipe(Stream.runCollect, Effect.scoped),
-    );
+    const collected = await Effect.runPromise(service.livenessUpdates(wallet).pipe(Stream.runCollect, Effect.scoped));
 
     const updates = Chunk.toReadonlyArray(collected);
     expect(updates).toHaveLength(1);
@@ -289,6 +305,22 @@ describe('makeDefaultSyncService liveness feed', () => {
     // wallet scope. A verdict emitted through `updates()` would silently re-tie the poller to the retry loop.
     const service = makeDefaultSyncService(withNode);
 
-    expect(service.livenessUpdates).toBeDefined();
+    expect(service.livenessUpdates).not.toBe(service.updates);
+  });
+});
+
+describe('makeSimulatorSyncService liveness feed', () => {
+  it('should report the check skipped once, because a simulation has no node to cross-check against', async () => {
+    // The feed is not optional: a source with no check says so, rather than leaving the variant to infer it from a
+    // missing field. `Unknown` gates completion, so a simulator wallet that said nothing would never report synced.
+    // Type cast required because: only `updates` reads `config.simulator`, and this test exercises only the feed.
+    const service = makeSimulatorSyncService({} as unknown as Parameters<typeof makeSimulatorSyncService>[0]);
+    const wallet = CoreWallet.init(publicKey, 'undeployed');
+
+    const collected = await Effect.runPromise(service.livenessUpdates(wallet).pipe(Stream.runCollect, Effect.scoped));
+
+    const updates = Chunk.toReadonlyArray(collected);
+    expect(updates).toHaveLength(1);
+    expect(updates[0]).toStrictEqual(livenessUpdate(IndexerLiveness.Skipped({ reason: 'simulation' })));
   });
 });

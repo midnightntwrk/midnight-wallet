@@ -59,6 +59,12 @@ BREAKING CHANGE (`wallet-sdk-node-client`): `NodeClient.Service` gains required 
 `getBlockHashAt` answers `Option.none` for a height the node has no block at — absence is an answer about the chain,
 not a read failure.
 
+BREAKING CHANGE (`wallet-sdk-unshielded-wallet`): `SyncService.livenessUpdates` is required rather than optional, so
+"no check is running" is a verdict a source reports rather than a field it leaves out. A custom source with nothing to
+check returns a stream of one `IndexerLiveness.Skipped({ reason: 'no-liveness-feed' })` and ends; `Skipped` does not
+gate completion. `SimulatorSyncUpdate` widens to include a liveness update, which its capability applies — the
+simulator's verdict now comes from its feed rather than being written on every state update.
+
 BREAKING CHANGE (`wallet-sdk-abstractions`): `IndexerLiveness.WrongNetwork` carries `{ height, indexerBlockHash,
 nodeBlockHash }`, where the hashes are `Option<string>`, instead of the two genesis hashes — the verdict is now reached
 at any height, and `height: 0n` is the genesis case. `IndexerLiveness.sameGenesis` is renamed `sameBlockHash`, and

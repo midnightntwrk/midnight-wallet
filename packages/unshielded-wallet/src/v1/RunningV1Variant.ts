@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Sink, Console } from 'effect';
-import { IndexerLiveness, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type WalletRuntimeError,
   type Variant,
@@ -129,7 +129,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
   }
 
   /**
-   * Forks the sync service's liveness feed, when it has one, for the lifetime of the wallet.
+   * Forks the sync service's liveness feed for the lifetime of the wallet.
    *
    * @remarks
    *   Deliberately outside {@link RunningV1Variant.startSync} and its retry: rebuilding the feed on every indexer-stream
@@ -138,31 +138,22 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
    *   the wallet's scope closes. It still retries on its own failures, which its verdict streams are built never to
    *   produce — a failure here is a bug, and backing off beats silently losing the check.
    *
-   *   A service with no feed gets a verdict too. The progress defaults to `Unknown`, which gates completion until a first
-   *   verdict arrives — and for such a service none ever would, so the wallet could never report itself synchronized.
-   *   This is the one place that inspects the service, so the absence is turned into `Skipped` here, once. The write is
-   *   unconditional: a verdict restored with a serialized state came from a check this wallet no longer has.
+   *   Every service has a feed, so there is no absence to interpret here. A source that runs no check reports
+   *   `IndexerLiveness.Skipped` through its own feed, which is a statement this fibre applies like any other verdict
+   *   rather than a missing field this class has to translate.
    */
   #startLivenessInBackground(): Effect.Effect<void, never, Scope.Scope> {
-    const livenessUpdates = this.#v1Context.syncService.livenessUpdates;
-
-    return livenessUpdates === undefined
-      ? SubscriptionRef.update(this.#context.stateRef, (state) =>
-          CoreWallet.updateProgress(state, {
-            indexerLiveness: IndexerLiveness.Skipped({ reason: 'no-liveness-feed' }),
-          }),
-        )
-      : pipe(
-          SubscriptionRef.get(this.#context.stateRef),
-          Stream.fromEffect,
-          Stream.flatMap((state) => livenessUpdates(state)),
-          Stream.mapEffect((update) => this.#applyUpdate(update)),
-          Stream.tapError((error) => Console.error(error)),
-          Stream.retry(retrySchedule()),
-          Stream.runScoped(Sink.drain),
-          Effect.forkScoped,
-          Effect.asVoid,
-        );
+    return pipe(
+      SubscriptionRef.get(this.#context.stateRef),
+      Stream.fromEffect,
+      Stream.flatMap((state) => this.#v1Context.syncService.livenessUpdates(state)),
+      Stream.mapEffect((update) => this.#applyUpdate(update)),
+      Stream.tapError((error) => Console.error(error)),
+      Stream.retry(retrySchedule()),
+      Stream.runScoped(Sink.drain),
+      Effect.forkScoped,
+      Effect.asVoid,
+    );
   }
 
   /** Folds one update into the wallet state through the sync capability. */
