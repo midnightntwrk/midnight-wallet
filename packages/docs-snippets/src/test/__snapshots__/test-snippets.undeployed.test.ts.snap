@@ -391,6 +391,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
       appliedId: 9n,
       highestTransactionId: 9n,
       isConnected: true,
+      indexerLiveness: { indexerHeight: 1n, finalizedHeight: 1n, _tag: 'InSync' },
       isStrictlyComplete: [Function: isStrictlyComplete],
       isCompleteWithin: [Function: isCompleteWithin]
     },
@@ -987,6 +988,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
       appliedId: 9n,
       highestTransactionId: 9n,
       isConnected: true,
+      indexerLiveness: { indexerHeight: 1n, finalizedHeight: 1n, _tag: 'InSync' },
       isStrictlyComplete: [Function: isStrictlyComplete],
       isCompleteWithin: [Function: isCompleteWithin]
     },
@@ -1228,6 +1230,30 @@ shielded:
 dust:
   seed b9b76cce66828aa6bd798abbb15b012331a6aa1e5f99e678724c37463b5775a1
   public key 1a4773e2a3c668ac50092b0a6e5a7bca49a332dab58a2c923e7078b8cbac4aff
+",
+]
+`;
+
+exports[`Snippet outputs > without network > should output the correct result for 'indexer-liveness' 1`] = `
+[
+  "Unknown — blocks sync completion: true
+  Indexer has not been verified against a node yet.
+InSync — blocks sync completion: false
+  Indexer is up to date (block 1000 against a finalized head of 1002).
+Behind — blocks sync completion: true
+  Indexer is 100 block(s) behind the chain (900 against 1000). Balances may be missing recent funds.
+Ahead — blocks sync completion: false
+  Indexer reports block 1050, which is 50 ahead of this node's finalized head (1000). Check that both point at the same network.
+Unavailable — blocks sync completion: false
+  The indexer cannot be verified right now — 3 poll(s) have failed. Most recently: Poll abandoned: a read did not complete in time
+Skipped — blocks sync completion: false
+  Indexer is not being verified against a node (no-node-configured).
+WrongNetwork — blocks sync completion: true
+  The indexer and the node are not on the same chain — they disagree about block 0 (indexer abababababababababababababababababababababababababababababababab, node 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd). Check the configured endpoints.
+WrongNetwork — blocks sync completion: true
+  The indexer and the node are not on the same chain — they disagree about block 1000 (indexer 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, node 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff). Check the configured endpoints.
+WrongNetwork — blocks sync completion: true
+  The indexer and the node are not on the same chain — they disagree about block 1000 (indexer could not name a block there, node 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff). Check the configured endpoints.
 ",
 ]
 `;

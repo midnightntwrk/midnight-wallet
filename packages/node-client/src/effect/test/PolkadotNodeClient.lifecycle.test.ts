@@ -12,8 +12,14 @@
 // limitations under the License.
 import { describe, it, vi, expect, beforeEach } from 'vitest';
 import BN from 'bn.js';
-import { Effect, pipe, Scope, Stream } from 'effect';
+import { Cause, Duration, Effect, Exit, Fiber, Option, pipe, Scope, Stream } from 'effect';
 import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
+
+// `ensureConnection` establishes readiness by making a call rather than reading `isConnected`, so a double for this
+// client has to answer it — and answer it faithfully: a probe that succeeded while disconnected would let the
+// readiness loop pass without ever connecting.
+const faithfulProbe = () =>
+  mockApi.isConnected ? Promise.resolve('Midnight Dev') : Promise.reject(new Error('disconnected'));
 
 const mockApi = {
   isConnected: false,
@@ -49,6 +55,9 @@ const mockApi = {
     chain: {
       getBlock: vi.fn(),
     },
+    system: {
+      chain: vi.fn(faithfulProbe),
+    },
   },
   genesisHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
 };
@@ -83,6 +92,24 @@ describe('PolkadotNodeClient lifecycle', () => {
     mockApi.disconnect.mockClear();
     mockApi.tx.midnight.sendMnTransaction.mockClear();
     mockApi.rpc.chain.getBlock.mockClear();
+    // Restored here rather than inside the tests that override it: a test that fails mid-override must not poison the
+    // tests after it.
+    mockApi.rpc.system.chain.mockImplementation(faithfulProbe);
+  });
+
+  it('getGenesisHash answers from the api without opening a connection', async () => {
+    // The genesis hash is fetched once by `ApiPromise.create` and cached on the api, so reading it must not run the
+    // ensure-connection dance — the liveness check calls this on every first poll and a wrong-network wallet would
+    // otherwise pay a connection round-trip to learn what the client already knows.
+    const { client } = await makeClient();
+    mockApi.connect.mockClear();
+    mockApi.disconnect.mockClear();
+
+    const hash = await Effect.runPromise(client.getGenesisHash());
+
+    expect(hash).toBe(mockApi.genesisHash);
+    expect(mockApi.connect).not.toHaveBeenCalled();
+    expect(mockApi.disconnect).not.toHaveBeenCalled();
   });
 
   it('disconnects immediately after make()', async () => {
@@ -141,6 +168,58 @@ describe('PolkadotNodeClient lifecycle', () => {
     expect(events[0]._tag).toBe('Finalized');
   });
 
+  it('retries a rejected connect() until it succeeds, rather than dying on it', async () => {
+    // `Effect.promise` treated a rejected connect() as a defect: it bypassed the typed ConnectionError mapping and
+    // killed the caller's fibre as a crash — while the changeset promises connection failures reach catchTag/catchAll.
+    // A rejection is one failed attempt, not a verdict: the readiness loop retries it like any unusable probe.
+    const scope = await Effect.runPromise(Scope.make());
+    const client = await Effect.runPromise(
+      PolkadotNodeClient.make({
+        nodeURL: new URL('ws://127.0.0.1:9944'),
+        reconnectionDelay: Duration.millis(5),
+        reconnectionTimeout: Duration.seconds(5),
+      }).pipe(Effect.provideService(Scope.Scope, scope)),
+    );
+    mockApi.connect.mockClear();
+    mockApi.connect
+      .mockImplementationOnce(() => Promise.reject(new Error('boom')))
+      .mockImplementationOnce(() => {
+        mockApi.isConnected = true;
+        return Promise.resolve();
+      });
+    mockApi.rpc.chain.getBlock.mockResolvedValue({ block: { extrinsics: [] } });
+
+    const result = await pipe(client.getGenesis(), Effect.runPromiseExit);
+
+    expect(Exit.isSuccess(result)).toBe(true);
+    expect(mockApi.connect).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces a ConnectionError when the node answers the socket but not RPC, rather than hanging forever', async () => {
+    // The readiness probe swallowed every RPC error and retried without limit. Under the default (infinite)
+    // reconnectionTimeout — what submission uses — a node whose socket connects but whose RPC persistently fails
+    // therefore turned from a loud failure into a silent hang: before the probe existed, `ensureConnection` completed
+    // on the socket flag and the first real call failed on the error channel. A connected socket whose probe keeps
+    // failing is a verdict about the node, not a connection still on its way up.
+    const scope = await Effect.runPromise(Scope.make());
+    const client = await Effect.runPromise(
+      PolkadotNodeClient.make({
+        nodeURL: new URL('ws://127.0.0.1:9944'),
+        reconnectionDelay: Duration.millis(5),
+        // Deliberately no reconnectionTimeout: the silent hang existed precisely for the unbounded default.
+      }).pipe(Effect.provideService(Scope.Scope, scope)),
+    );
+    mockApi.isConnected = true;
+    mockApi.rpc.system.chain.mockImplementation(() => Promise.reject(new Error('RPC broken')));
+
+    const exit = await Effect.runPromiseExit(client.ensureConnection());
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none();
+    expect(Option.isSome(failure)).toBe(true);
+    expect(Option.getOrThrow(failure)._tag).toBe('ConnectionError');
+  });
+
   it('getGenesis connects before and disconnects after', async () => {
     const { client } = await makeClient();
     mockApi.disconnect.mockClear();
@@ -157,6 +236,35 @@ describe('PolkadotNodeClient lifecycle', () => {
     expect(mockApi.connect).toHaveBeenCalled();
     expect(mockApi.disconnect).toHaveBeenCalled();
     expect(result.transactions).toEqual([]);
+  });
+
+  it('waits for the socket to actually close when the last call releases it', async () => {
+    // `api.disconnect()` returns while the socket is still CLOSING; `isConnected` clears only when the close event
+    // fires. A release that does not wait leaves the next call reading a stale `true`: it skips `connect()`, drops its
+    // readiness probe on the dying socket, sleeps `reconnectionDelay`, reconnects, and usually fails one more pre-open
+    // probe — two seconds or more of a liveness read's ten-second budget. `make()` already waits for the event for this
+    // reason; the release path must too.
+    const { client } = await makeClient();
+    mockApi.rpc.chain.getBlock.mockResolvedValue({ block: { extrinsics: [] } });
+
+    await Effect.runPromise(client.getGenesis());
+
+    expect(client.api.isConnected).toBe(false);
+  });
+
+  it('getGenesis surfaces a rejected RPC as a ConnectionError rather than a defect', async () => {
+    // A rejection inside `Effect.promise` is a defect: it bypasses the `mapError` that names the failure and any
+    // `catchTag('ConnectionError')` in the caller, killing that fibre as a crash. Every other RPC on this client goes
+    // through `tryPromise` for exactly that reason; this one must too.
+    const { client } = await makeClient();
+    mockApi.rpc.chain.getBlock.mockRejectedValue(new Error('node went away mid-request'));
+
+    const exit = await Effect.runPromiseExit(client.getGenesis());
+
+    expect(Exit.isFailure(exit)).toBe(true);
+    const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none();
+    expect(Option.isSome(failure)).toBe(true);
+    expect(Option.getOrThrow(failure)._tag).toBe('ConnectionError');
   });
 
   it('does not disconnect a shared connection while another operation is in flight', async () => {
@@ -227,5 +335,33 @@ describe('PolkadotNodeClient lifecycle', () => {
     // so a make() that does not wait leaves isConnected stale-true and ensureConnection()
     // skips the reconnect, sending on a dying socket.
     expect(client.api.isConnected).toBe(false);
+  });
+
+  it('make() stops waiting for the close once a finite reconnectionTimeout elapses', async () => {
+    // A node that completes the handshake and then goes half-open never acknowledges the close frame. Only ws's own
+    // 30-second close timeout ended that wait, from inside an uninterruptible acquire no outer deadline can cut short —
+    // so a caller who asked for a 10-second bound waited 40. The bound the caller asked for covers the whole build,
+    // the close included.
+    //
+    // Forked and polled rather than raced: interrupting an uninterruptible acquire would block the test forever.
+    mockApi.disconnect.mockImplementationOnce(() => Promise.resolve()); // never emits 'disconnected'
+
+    const settled = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkDaemon(
+          Effect.gen(function* () {
+            const scope = yield* Scope.make();
+            return yield* PolkadotNodeClient.make({
+              nodeURL: new URL('ws://127.0.0.1:9944'),
+              reconnectionTimeout: Duration.millis(200),
+            }).pipe(Effect.provideService(Scope.Scope, scope));
+          }),
+        );
+        yield* Effect.sleep(Duration.seconds(1));
+        return yield* Fiber.poll(fiber);
+      }).pipe(Effect.scoped),
+    );
+
+    expect(Option.isSome(settled)).toBe(true);
   });
 });

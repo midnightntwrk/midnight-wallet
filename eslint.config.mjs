@@ -39,6 +39,16 @@ export const defaultConfig = defineConfig(
       'eol-last': ['error', 'always'],
       'brace-style': ['error', 'stroustrup'],
       'no-console': 'warn',
+      // A comment must stand on its own for a reader with only the file open. One that cites a review, reviewer or PR
+      // thread as its justification carries context nobody can recover later — that history lives in the commit
+      // message and the PR. Backstop for `.claude/rules/code-review.md`.
+      'no-warning-comments': [
+        'error',
+        {
+          terms: ['reviewer', 'review finding', 'review comment', 'per review', 'as discussed', 'addresses comment'],
+          location: 'anywhere',
+        },
+      ],
       'no-unused-vars': 'off',
       'object-curly-newline': [
         'error',
