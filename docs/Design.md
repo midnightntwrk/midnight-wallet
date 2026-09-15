@@ -271,6 +271,16 @@ For example:
 - for coins, there is a capability only, which lists available coins, as well as computes different kinds of balances
   (available, total, pending)
 
+The synchronization capability also validates the order of what the service delivers, so an indexer fault surfaces as a
+typed error rather than as corrupted state. Shielded and Dust ledger event ids form one dense global sequence (the
+subscription takes only a cursor, and `maxId` is the maximum over all events), so once the boundary event the inclusive
+cursor re-delivers has been dropped, a batch must run consecutively from `appliedIndex + 1`; otherwise the whole batch
+is refused with `OutOfOrderSyncUpdateError`. Unshielded transaction ids are a sparse per-address subsequence of a global
+id, so only "strictly above the cursor" is checked there: an id equal to the cursor is a re-delivery and a no-op, and a
+spend of a UTXO the wallet does not hold is refused before the cursor moves. In every case state and cursor stay
+untouched, and the running variant logs the error and retries from the same cursor. The density of event ids is an
+assumption about the indexer, not something its schema states.
+
 ### Summary and code example
 
 Immutability, combined with allowing only pure functional, synchronous operations on the state, covers a lot of what is
