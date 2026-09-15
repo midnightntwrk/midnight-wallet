@@ -21,8 +21,9 @@ import { Data, Option } from 'effect';
  *
  *   - `no-node-configured`: the default sync service found no node endpoint to compare the indexer against.
  *   - `simulation`: the wallet syncs from an in-memory simulator, which has no node and never will.
- *   - `no-liveness-feed`: the wallet's sync service exposes no liveness feed at all — a custom source supplied through the
- *       builder — so no check can exist for it to run.
+ *   - `no-liveness-feed`: the wallet's sync service has no check to run — a custom source supplied through the builder.
+ *       Every service exposes a liveness feed, so such a source reports this through its own feed rather than by
+ *       leaving one out.
  */
 export type SkipReason = 'no-node-configured' | 'simulation' | 'no-liveness-feed';
 

@@ -34,8 +34,22 @@ const syncCapability = makeDefaultSyncCapability(
   () => ({ transactionHistoryService: noOpHistory }),
 );
 
+/**
+ * A liveness feed for doubles whose test is about the indexer subscription rather than the check.
+ *
+ * @remarks
+ *   Every service supplies a feed, so one with no check to run says so. `Skipped` does not gate completion, which keeps
+ *   these tests measuring the subscription behaviour they are about.
+ */
+const noCheck = () =>
+  Stream.make<SyncUpdate[]>({
+    type: 'IndexerLiveness',
+    verdict: IndexerLiveness.Skipped({ reason: 'no-liveness-feed' }),
+  });
+
 /** A subscription that reports a fully synchronized wallet, then dies — an indexer WebSocket dropping mid-session. */
 const dyingSyncService: SyncService<CoreWallet, SyncUpdate> = {
+  livenessUpdates: noCheck,
   updates: () =>
     Stream.concat(
       Stream.make<SyncUpdate[]>(
@@ -201,11 +215,11 @@ describe('RunningV1Variant.startSync', () => {
     },
   );
 
-  it('should report Skipped when the sync service has no liveness feed, so a custom source can still report synced', async () => {
-    // `Unknown` is the progress default and gates completion; the only writers that move a wallet off it are a liveness
-    // feed and the simulator capability. A service without `livenessUpdates` — any custom source supplied through
-    // `withSync` — therefore left the wallet blocked forever, with no error and no log. The variant is the one place
-    // that inspects the service, so the absence of a feed is turned into a verdict there, once.
+  it('should report Skipped when the sync service runs no check, so a custom source can still report synced', async () => {
+    // `Unknown` is the progress default and gates completion, so a source that will never be checked has to say so or
+    // the wallet is blocked forever, with no error and no log. Every service supplies a feed — the field is required —
+    // so one with no check to run reports it through that feed rather than by leaving the field out, and the variant
+    // has no absence to interpret.
     const feedlessSyncService: SyncService<CoreWallet, SyncUpdate> = {
       updates: () =>
         Stream.concat(
@@ -213,6 +227,11 @@ describe('RunningV1Variant.startSync', () => {
           // Held open: a live subscription does not end.
           Stream.never,
         ),
+      livenessUpdates: () =>
+        Stream.make<SyncUpdate[]>({
+          type: 'IndexerLiveness',
+          verdict: IndexerLiveness.Skipped({ reason: 'no-liveness-feed' }),
+        }),
     };
 
     const program = Effect.gen(function* () {
@@ -270,6 +289,7 @@ describe('RunningV1Variant.startSync', () => {
     const builds = { indexer: 0 };
 
     const endingSyncService: SyncService<CoreWallet, SyncUpdate> = {
+      livenessUpdates: noCheck,
       updates: () => {
         builds.indexer += 1;
         return builds.indexer === 1

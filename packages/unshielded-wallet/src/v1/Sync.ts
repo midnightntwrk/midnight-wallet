@@ -54,10 +54,16 @@ export interface SyncService<TState, TUpdate> {
    * @remarks
    *   Forked once at wallet scope and never rebuilt: `updates` failing and retrying must not restart this feed, so a
    *   liveness poller keeps its node connection — and keeps publishing verdicts — while the indexer subscription is
-   *   down. Optional because not every source has such a feed: the simulator reports its skipped check through its
-   *   capability instead.
+   *   down.
+   *
+   *   Required, and deliberately not optional. The wallet's progress starts at `Unknown`, which gates completion until a
+   *   verdict arrives, so a source that runs no check must still say so or the wallet never reports itself
+   *   synchronized. An omitted field would make that silence representable and leave every consumer to interpret it; a
+   *   source with nothing to check emits `IndexerLiveness.Skipped` once and ends, which is a statement rather than an
+   *   absence. Both in-repo sources do exactly that — the default one when no node is configured, the simulator
+   *   always.
    */
-  livenessUpdates?: (state: TState) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
+  livenessUpdates: (state: TState) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
 }
 
 export interface SyncCapability<TState, TUpdate> {
@@ -316,9 +322,12 @@ export type SimulatorSyncConfiguration = {
   simulator: Simulator;
 };
 
-export type SimulatorSyncUpdate = {
-  update: SimulatorState;
-};
+/** What the simulator's sync service emits: its own state, and the one liveness verdict it has to report. */
+export type SimulatorSyncUpdate =
+  | {
+      update: SimulatorState;
+    }
+  | IndexerLivenessUpdate;
 
 export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,
@@ -333,6 +342,14 @@ export const makeSimulatorSyncService = (
         Stream.map((state) => ({ update: state })),
       );
     },
+    // A simulation has no node to cross-check against and never will, so the one verdict this feed has is stated once
+    // and the stream ends. Said here rather than written by the capability on every update: the wallet's progress
+    // starts at `Unknown`, which gates completion, and one settled statement beats a fact re-asserted forever.
+    livenessUpdates: (_state: CoreWallet) =>
+      Stream.make({
+        type: 'IndexerLiveness' as const,
+        verdict: IndexerLiveness.Skipped({ reason: 'simulation' as const }),
+      }),
   };
 };
 
@@ -354,6 +371,12 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
 
   return {
     applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): Either.Either<CoreWallet, WalletError> => {
+      if ('type' in update) {
+        // Only the verdict is written. A verdict says nothing about which transactions have been applied, so touching
+        // the sync cursor here would let the liveness check corrupt it.
+        return Either.right(CoreWallet.updateProgress(state, { indexerLiveness: update.verdict }));
+      }
+
       const { ledger: ledgerState, currentTime } = update.update;
       const walletAddress = state.publicKey.addressHex;
       const nativeTokenType = ledger.nativeToken().raw;
@@ -392,13 +415,11 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
 
       const blockNumber = getCurrentBlockNumber(update.update);
       const updateProgress = (wallet: CoreWallet) =>
+        // No `indexerLiveness`: the verdict belongs to the sync service's liveness feed, which states it once before
+        // sync starts. A capability that wrote it again on every update would be a second writer of a settled fact.
         CoreWallet.updateProgress(wallet, {
           appliedId: blockNumber,
           isConnected: true,
-          // `Unknown` gates sync completion, so a wallet whose progress never left it would never report itself
-          // synchronized. A simulation has no node to cross-check against and never will — the wiring that knows
-          // says so, the same way the default sync service reports `Skipped` when no node is configured.
-          indexerLiveness: IndexerLiveness.Skipped({ reason: 'simulation' }),
         });
 
       if (createdUtxos.length === 0 && spentUtxos.length === 0) {
