@@ -56,7 +56,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type URLError, WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { OtherWalletError, SyncWalletError, type WalletError } from './WalletError.js';
+import { OtherWalletError, OutOfOrderSyncUpdateError, SyncWalletError, type WalletError } from './WalletError.js';
 import { type Simulator, type SimulatorState, getLastBlock } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from './types/ledger.js';
@@ -950,6 +950,38 @@ const applyVersionSignal = (state: CoreWallet, update: VersionSignalSyncUpdate):
   noChanges(state),
 ];
 
+/**
+ * Checks that freshly delivered events run consecutively from `appliedIndex + 1`.
+ *
+ * @remarks
+ *   Rests on dust event ids being one dense global sequence: the subscription takes only a cursor and `maxId` is the
+ *   maximum over all events. The indexer schema does not state this, so it is recorded here as an assumption. An empty
+ *   batch is trivially consecutive; events at or below the cursor were already dropped by the boundary filter.
+ * @param fresh The events left after the cursor filter, in source order.
+ * @param appliedIndex The highest event id already folded into the wallet.
+ * @returns The batch unchanged, or the first discrepancy as an {@link OutOfOrderSyncUpdateError}.
+ */
+const expectContiguous = <T extends { readonly id: number }>(
+  fresh: readonly T[],
+  appliedIndex: bigint,
+): Either.Either<readonly T[], OutOfOrderSyncUpdateError> =>
+  pipe(
+    fresh,
+    Arr.map((item, index) => ({ item, expected: appliedIndex + BigInt(index) + 1n })),
+    Arr.findFirst(({ item, expected }) => BigInt(item.id) !== expected),
+    Option.match({
+      onNone: () => Either.right(fresh),
+      onSome: ({ item, expected }) =>
+        Either.left(
+          new OutOfOrderSyncUpdateError({
+            message: `Dust event ${item.id} delivered where ${expected} was due; batch refused, applied index stays at ${appliedIndex}`,
+            expected,
+            received: BigInt(item.id),
+          }),
+        ),
+    }),
+  );
+
 export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
   return {
     applyUpdate(
@@ -975,8 +1007,16 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
       // tail even when the tail belongs to the next protocol version.
       const highestRelevantWalletIndex = BigInt(updates.at(-1)!.maxId);
 
+      // Refuse the whole batch, sound prefix included: deferring at the gap would park the cursor while still reporting
+      // `isConnected: true`, and a batch caps at ten events. State and cursor stay untouched, so the retry re-fetches the
+      // same range — a transient reorder heals, a persistent one fails visibly instead of corrupting the trees.
+      //
+      // `SyncCapability.applyUpdate` has no typed error channel, so throwing preserves its public tuple-returning API;
+      // `RunningV2Variant` catches this at the capability boundary. See #572 for the planned `Either`-based API.
+      const orderedUpdates = Either.getOrThrowWith(expectContiguous(freshUpdates, appliedIndex), identity);
+
       const { applied, observedVersion } = splitAtVersionBoundary(
-        freshUpdates,
+        orderedUpdates,
         (update) => update.protocolVersion,
         activeRange,
       );

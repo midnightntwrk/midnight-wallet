@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Either, identity } from 'effect';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { type CoreWallet } from '../CoreWallet.js';
 import { makeDefaultSyncCapability, makeSimulatorSyncCapability } from '../Sync.js';
@@ -255,6 +256,104 @@ describe('makeDefaultSyncCapability.applyUpdate boundary handling', () => {
     expect(utxoCount(state)).toBe(DUST_EVENT_COUNT);
     // The last version actually observed in the batch is what gets recorded.
     expect(state.protocolVersion).toBe(4n);
+  });
+});
+
+// Dust event ids are one dense global timeline (cursor-only subscription, `maxId` over all events), so contiguity can
+// and must be checked: a batch applied across a gap corrupts the commitment trees and drops the gap's events for good.
+describe('dust sync capability ordering', () => {
+  const capability = makeDefaultSyncCapability();
+
+  /** Applies a batch, capturing the throw as a Left. */
+  const attempt = (
+    wallet: CoreWallet,
+    update: WalletSyncUpdate,
+  ): Either.Either<ReturnType<typeof capability.applyUpdate>, unknown> =>
+    Either.try({ try: () => capability.applyUpdate(wallet, update, activeRange), catch: identity });
+
+  /**
+   * Reads the refusal structurally: the tag and both ids are all a caller sees once the running variant re-labels the
+   * throw.
+   */
+  const isOutOfOrderRefusal = (
+    thrown: unknown,
+  ): thrown is { readonly _tag: 'Wallet.OutOfOrderSyncUpdate'; readonly expected: bigint; readonly received: bigint } =>
+    typeof thrown === 'object' && thrown !== null && '_tag' in thrown && thrown._tag === 'Wallet.OutOfOrderSyncUpdate';
+
+  it('rejects a batch that does not start right after the applied index', () => {
+    const [wallet] = capability.applyUpdate(freshWallet(), batch([[1, undefined]]), activeRange);
+    const utxosBefore = utxoCount(wallet);
+    const balanceBefore = dustBalance(wallet);
+
+    // The audit's scenario: event 2 has not arrived and the source opens the batch at 3.
+    const outcome = attempt(
+      wallet,
+      batch([
+        [3, undefined],
+        [4, undefined],
+      ]),
+    );
+
+    expect(Either.isLeft(outcome)).toBe(true);
+    if (Either.isLeft(outcome)) {
+      expect(isOutOfOrderRefusal(outcome.left)).toBe(true);
+      if (isOutOfOrderRefusal(outcome.left)) {
+        expect(outcome.left.expected).toBe(2n);
+        expect(outcome.left.received).toBe(3n);
+      }
+    }
+
+    // Cursor and state untouched, so the retry re-fetches from event 2.
+    expect(wallet.progress.appliedIndex).toBe(1n);
+    expect(utxoCount(wallet)).toBe(utxosBefore);
+    expect(dustBalance(wallet)).toBe(balanceBefore);
+  });
+
+  it('rejects a batch with a gap inside it', () => {
+    const wallet = freshWallet();
+
+    const outcome = attempt(
+      wallet,
+      batch([
+        [1, undefined],
+        [2, undefined],
+        [4, undefined],
+      ]),
+    );
+
+    expect(Either.isLeft(outcome)).toBe(true);
+    if (Either.isLeft(outcome)) {
+      expect(isOutOfOrderRefusal(outcome.left)).toBe(true);
+      if (isOutOfOrderRefusal(outcome.left)) {
+        expect(outcome.left.expected).toBe(3n);
+        expect(outcome.left.received).toBe(4n);
+      }
+    }
+
+    // The whole batch is refused, prefix included.
+    expect(wallet.progress.appliedIndex).toBe(0n);
+    expect(utxoCount(wallet)).toBe(0);
+  });
+
+  it('still applies a contiguous batch after the re-delivered boundary event', () => {
+    const [atFirstEvent] = capability.applyUpdate(freshWallet(), batch([[1, undefined]]), activeRange);
+    expect(atFirstEvent.progress.appliedIndex).toBe(1n);
+    expect(utxoCount(atFirstEvent)).toBe(1);
+
+    // The inclusive cursor re-delivers event 1; contiguity is checked on what survives the boundary filter (2, 3).
+    const [state, result] = capability.applyUpdate(
+      atFirstEvent,
+      batch([
+        [1, undefined],
+        [2, undefined],
+        [3, undefined],
+      ]),
+      activeRange,
+    );
+
+    expect(state.progress.appliedIndex).toBe(3n);
+    expect(utxoCount(state)).toBe(3);
+    expect(result.changes.length).toBe(2);
   });
 });
 
