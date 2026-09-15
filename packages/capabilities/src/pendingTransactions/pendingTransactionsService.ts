@@ -41,6 +41,33 @@ export type PendingTransactionsService<TTransaction> = {
   state: () => rx.Observable<PendingTransactions.PendingTransactions<TTransaction>>;
   addPendingTransaction: (tx: TTransaction) => Promise<void>;
   clear: (tx: TTransaction) => Promise<void>;
+  /**
+   * Records that a balanced transaction has coins reserved, before it is proven or submitted.
+   *
+   * Between balancing and submission nothing else says those coins are spoken for, so this is the only durable record
+   * of them. Any earlier reservation sharing an identifier is replaced, so re-balancing the same spend does not
+   * accumulate records.
+   *
+   * @example
+   *   await service.addReservation({ identifiers: tx.identifiers(), inputs: { unshielded: ids }, ttl, ... });
+   *
+   * @param reservation - What the balanced transaction booked, and when the ledger stops accepting it
+   * @returns A promise that resolves once the record is held
+   */
+  addReservation: (reservation: PendingTransactions.Reservation) => Promise<void>;
+  /**
+   * Forgets the reservation holding any of `identifiers`, once its coins have been released.
+   *
+   * Call it wherever the booking it stands for ends: the transaction is registered and tracked on its own, the booking
+   * is reverted, or the record has expired. A record left behind outlives the coins it named.
+   *
+   * @example
+   *   await service.clearReservation([...tx.identifiers()]);
+   *
+   * @param identifiers - Identifiers of the spend whose record is finished with; unknown ones are ignored
+   * @returns A promise that resolves once the record is gone
+   */
+  clearReservation: (identifiers: readonly string[]) => Promise<void>;
 };
 
 export type IndexerClientConnection = {
@@ -116,6 +143,14 @@ export class PendingTransactionsServiceImpl<TTransaction> implements PendingTran
     return this.#effectService.clear(tx).pipe(Effect.runPromise);
   }
 
+  addReservation(reservation: PendingTransactions.Reservation): Promise<void> {
+    return this.#effectService.addReservation(reservation).pipe(Effect.runPromise);
+  }
+
+  clearReservation(identifiers: readonly string[]): Promise<void> {
+    return this.#effectService.clearReservation(identifiers).pipe(Effect.runPromise);
+  }
+
   start(): Promise<void> {
     return this.#effectService.startPolling(Stream.tick(Duration.seconds(1))).pipe(
       Effect.provide(
@@ -144,6 +179,8 @@ export type PendingTransactionsServiceEffect<TTransaction> = {
   state: () => Stream.Stream<PendingTransactions.PendingTransactions<TTransaction>>;
   addPendingTransaction: (tx: TTransaction) => Effect.Effect<void, never, never>;
   clear: (tx: TTransaction) => Effect.Effect<void, never, never>;
+  addReservation: (reservation: PendingTransactions.Reservation) => Effect.Effect<void, never, never>;
+  clearReservation: (identifiers: readonly string[]) => Effect.Effect<void, never, never>;
 };
 
 export class PendingTransactionsServiceEffectImpl<
@@ -174,12 +211,22 @@ export class PendingTransactionsServiceEffectImpl<
     ).pipe(Effect.runSync); // Should not be here, but otherwise initialization would be too involved
   }
 
+  /**
+   * The state, published when it moves. The poll writes the ref on every tick whether or not anything expired, and a
+   * write publishes regardless, so consecutive identical values are dropped here. Every real change builds a new value,
+   * so comparing by identity keeps a change from being mistaken for a repeat.
+   */
   state(): Stream.Stream<PendingTransactions.PendingTransactions<TTransaction>> {
-    return Stream.concat(Stream.fromEffect(SubscriptionRef.get(this.#state)), this.#state.changes);
+    return Stream.concat(Stream.fromEffect(SubscriptionRef.get(this.#state)), this.#state.changes).pipe(
+      Stream.changesWith((a, b) => a === b),
+    );
   }
 
   startPolling(ticks: Stream.Stream<unknown>): Effect.Effect<void, Error, QueryClient | Scope.Scope> {
     return ticks.pipe(
+      // A reservation stands in for a transaction that was never submitted, so no indexer query can settle it. The
+      // only thing that can is its TTL, checked on the same beat that reaps the transactions.
+      Stream.tap(() => this.expireReservations()),
       Stream.mapEffect(() => SubscriptionRef.get(this.#state)),
       Stream.mapConcat(PendingTransactions.allPending),
       Stream.mapConcatEffect((item) => {
@@ -225,6 +272,21 @@ export class PendingTransactionsServiceEffectImpl<
         Effect.andThen((now) => PendingTransactions.addPendingTransaction(state, tx, now, this.#txTrait)),
       );
     });
+  }
+
+  addReservation(reservation: PendingTransactions.Reservation): Effect.Effect<void> {
+    return SubscriptionRef.update(this.#state, (state) => PendingTransactions.addReservation(state, reservation));
+  }
+
+  clearReservation(identifiers: readonly string[]): Effect.Effect<void> {
+    return SubscriptionRef.update(this.#state, (state) => PendingTransactions.clearReservation(state, identifiers));
+  }
+
+  /** Marks the reservations whose transactions the ledger would no longer accept. Runs on every poll. */
+  private expireReservations(): Effect.Effect<void> {
+    return SubscriptionRef.updateEffect(this.#state, (state) =>
+      DateTime.now.pipe(Effect.map((now) => PendingTransactions.expireReservations(state, now))),
+    );
   }
 
   clear(tx: TTransaction): Effect.Effect<void> {
