@@ -21,6 +21,7 @@ export type WalletError =
   | TransactingError
   | SignError
   | ApplyTransactionError
+  | OutOfOrderSyncUpdateError
   | RollbackUtxoError
   | SpendUtxoError;
 
@@ -59,6 +60,38 @@ export class SignError extends Data.TaggedError('Wallet.Sign')<{
 export class ApplyTransactionError extends Data.TaggedError('Wallet.ApplyTransaction')<{
   message: string;
   cause?: unknown;
+}> {}
+
+/**
+ * Raised when a sync source delivers a transaction the wallet has already folded — an id strictly below its applied
+ * cursor — so applying it again would double-count the UTXOs that transaction created or spent.
+ *
+ * @remarks
+ *   The id a wallet is served is the indexer's global transaction id filtered to this address, so what reaches it is a
+ *   strictly increasing but sparse subsequence: "is this past my cursor?" is the only ordering question it can answer,
+ *   and contiguity is not one of them. An id EQUAL to the cursor is the resume boundary answered inclusively and folds
+ *   to a no-op rather than to this error; only a strictly lower one is a replay.
+ *
+ *   Nothing is written when it is produced. The fold hands this back in place of a new state, so the running variant
+ *   never writes its `SubscriptionRef`: the wallet keeps the state and the cursor it had, the sync stream fails, and
+ *   the retry reopens the subscription at that same unmoved cursor — which is what gives the source the chance to
+ *   deliver the timeline in order.
+ * @example
+ *   ```ts
+ *   import { Either } from 'effect';
+ *
+ *   const outcome = capability.applyUpdate(wallet, update, activeRange);
+ *   if (Either.isLeft(outcome) && outcome.left._tag === 'Wallet.OutOfOrderSyncUpdate') {
+ *   console.warn(`replayed ${outcome.left.received}, already at ${outcome.left.expected}`);
+ *   }
+ *   ```
+ */
+export class OutOfOrderSyncUpdateError extends Data.TaggedError('Wallet.OutOfOrderSyncUpdate')<{
+  readonly message: string;
+  /** The cursor the delivered id had to exceed: the highest transaction id already folded into this wallet. */
+  readonly expected: bigint;
+  /** The transaction id the source delivered. */
+  readonly received: bigint;
 }> {}
 
 export class RollbackUtxoError extends Data.TaggedError('Wallet.RollbackUtxo')<{

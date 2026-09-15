@@ -159,11 +159,15 @@ describe('UnshieldedState', () => {
       expect(HashMap.size(after.pendingUtxos)).toEqual(0);
     });
 
-    it('should silently ignore spentUtxos that are not in state', () => {
+    // A spend of a UTXO this state has never held is not a harmless extra: it is the one observable sign that the
+    // source delivered a spend ahead of the create it consumes. Absorbing it would leave the create to arrive later and
+    // restore an already-spent UTXO to the available set. Rejecting it keeps the fold atomic, and the caller's cursor
+    // where it was.
+    it('should reject spentUtxos that are neither available nor pending', () => {
       const present = generateMockUtxoWithMeta({ intentHash: 'h-present', outputNo: 0 });
       const ghost = generateMockUtxoWithMeta({ intentHash: 'h-ghost', outputNo: 0 });
 
-      const state = pipe(
+      const seeded = pipe(
         UnshieldedState.empty(),
         (s) =>
           UnshieldedState.applyUpdate(s, {
@@ -172,18 +176,61 @@ describe('UnshieldedState', () => {
             status: 'SUCCESS',
           }),
         getOrThrow,
+      );
+
+      const result = UnshieldedState.applyUpdate(seeded, {
+        createdUtxos: [],
+        spentUtxos: [ghost],
+        status: 'SUCCESS',
+      });
+
+      expect(Either.isLeft(result)).toBe(true);
+      if (Either.isLeft(result)) {
+        expect(result.left).toBeInstanceOf(UtxoNotFoundError);
+        if (result.left instanceof UtxoNotFoundError) {
+          expect(result.left.utxo).toEqual(ghost.utxo);
+        }
+      }
+
+      // The rejected fold changed nothing: the state the caller holds is the one it had.
+      expect(HashMap.has(seeded.availableUtxos, utxoHash(present))).toBe(true);
+      expect(HashMap.size(seeded.availableUtxos)).toEqual(1);
+      expect(HashMap.size(seeded.pendingUtxos)).toEqual(0);
+    });
+
+    it('should accept a spentUtxo that is pending rather than available', () => {
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-pending-only', outputNo: 0 });
+
+      const pendingOnly = pipe(
+        UnshieldedState.empty(),
         (s) =>
           UnshieldedState.applyUpdate(s, {
-            createdUtxos: [],
-            spentUtxos: [ghost],
+            createdUtxos: [u],
+            spentUtxos: [],
             status: 'SUCCESS',
           }),
         getOrThrow,
+        (s) => UnshieldedState.spend(s, u),
+        getOrThrow,
       );
 
-      expect(HashMap.has(state.availableUtxos, utxoHash(present))).toBe(true);
-      expect(HashMap.size(state.availableUtxos)).toEqual(1);
-      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+      // Precondition: the UTXO is known, but only through pendingUtxos.
+      expect(HashMap.has(pendingOnly.availableUtxos, utxoHash(u))).toBe(false);
+      expect(HashMap.has(pendingOnly.pendingUtxos, utxoHash(u))).toBe(true);
+
+      const after = pipe(
+        UnshieldedState.applyUpdate(pendingOnly, {
+          createdUtxos: [],
+          spentUtxos: [u],
+          status: 'SUCCESS',
+        }),
+        getOrThrow,
+      );
+
+      expect(HashMap.has(after.pendingUtxos, utxoHash(u))).toBe(false);
+      expect(HashMap.has(after.availableUtxos, utxoHash(u))).toBe(false);
+      expect(HashMap.size(after.pendingUtxos)).toEqual(0);
+      expect(HashMap.size(after.availableUtxos)).toEqual(0);
     });
 
     it('should place the specific created utxo into availableUtxos by hash', () => {
@@ -280,21 +327,13 @@ describe('UnshieldedState', () => {
       expect(HashMap.size(after.pendingUtxos)).toEqual(0);
     });
 
-    it('should reject PARTIAL_SUCCESS status (only FAILURE is valid)', () => {
-      const result = UnshieldedState.applyFailedUpdate(UnshieldedState.empty(), {
-        createdUtxos: [],
-        spentUtxos: [],
-        status: 'PARTIAL_SUCCESS',
-      });
+    // The mirror of the rule on the success path: a failed transaction can only return to the available set UTXOs this
+    // state already knows. An unknown one would be a phantom conjured out of a spend whose create was never folded.
+    it('should reject spentUtxos that are neither available nor pending', () => {
+      const present = generateMockUtxoWithMeta({ intentHash: 'h-present-failed', outputNo: 0 });
+      const ghost = generateMockUtxoWithMeta({ intentHash: 'h-ghost-failed', outputNo: 0 });
 
-      expect(Either.isLeft(result)).toBe(true);
-    });
-
-    it('should be a no-op for spentUtxos not present in pendingUtxos', () => {
-      const present = generateMockUtxoWithMeta({ intentHash: 'h-present', outputNo: 0 });
-      const ghost = generateMockUtxoWithMeta({ intentHash: 'h-ghost', outputNo: 0 });
-
-      const after = pipe(
+      const seeded = pipe(
         UnshieldedState.empty(),
         (s) =>
           UnshieldedState.applyUpdate(s, {
@@ -303,17 +342,34 @@ describe('UnshieldedState', () => {
             status: 'SUCCESS',
           }),
         getOrThrow,
-        (s) =>
-          UnshieldedState.applyFailedUpdate(s, {
-            createdUtxos: [],
-            spentUtxos: [ghost],
-            status: 'FAILURE',
-          }),
-        getOrThrow,
       );
-      expect(HashMap.has(after.availableUtxos, utxoHash(present))).toBe(true);
-      expect(HashMap.has(after.availableUtxos, utxoHash(ghost))).toBe(true);
-      expect(HashMap.size(after.pendingUtxos)).toEqual(0);
+
+      const result = UnshieldedState.applyFailedUpdate(seeded, {
+        createdUtxos: [],
+        spentUtxos: [ghost],
+        status: 'FAILURE',
+      });
+
+      expect(Either.isLeft(result)).toBe(true);
+      if (Either.isLeft(result)) {
+        expect(result.left).toBeInstanceOf(UtxoNotFoundError);
+        if (result.left instanceof UtxoNotFoundError) {
+          expect(result.left.utxo).toEqual(ghost.utxo);
+        }
+      }
+
+      expect(HashMap.has(seeded.availableUtxos, utxoHash(ghost))).toBe(false);
+      expect(HashMap.size(seeded.availableUtxos)).toEqual(1);
+    });
+
+    it('should reject PARTIAL_SUCCESS status (only FAILURE is valid)', () => {
+      const result = UnshieldedState.applyFailedUpdate(UnshieldedState.empty(), {
+        createdUtxos: [],
+        spentUtxos: [],
+        status: 'PARTIAL_SUCCESS',
+      });
+
+      expect(Either.isLeft(result)).toBe(true);
     });
   });
 
