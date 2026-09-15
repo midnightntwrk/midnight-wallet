@@ -3,14 +3,19 @@
 '@midnightntwrk/wallet-sdk-facade': major
 '@midnightntwrk/wallet-sdk-unshielded-wallet': major
 '@midnightntwrk/wallet-sdk-node-client': major
-'@midnightntwrk/wallet-sdk-abstractions': minor
-'@midnightntwrk/wallet-sdk-capabilities': minor
+'@midnightntwrk/wallet-sdk-abstractions': major
+'@midnightntwrk/wallet-sdk-capabilities': major
 ---
 
 feat(unshielded-wallet): cross-check the indexer's reported tip against the node's finalized head
 
 The unshielded wallet now verifies "synced" against the chain instead of the indexer's self-report: it polls a node's finalized
-head (every 30 seconds by default) and, once, checks that both endpoints name the same genesis block. The node is
+head (every 30 seconds by default) and compares blocks, not only heights. A height is a number the indexer chooses, so
+each poll also checks that both endpoints name the same block at the newest height both claim to have passed — one
+extra read, and none when the two are already level. Genesis is the height-zero case of that same comparison, checked
+once. Both endpoints serve finalized blocks, which cannot be reorganised away, so a disagreement about one proves they
+are not on the same chain (`WrongNetwork`) rather than indicating a fork; an endpoint that cannot name a block it has
+just claimed to have passed counts the same way, since it has not shown itself to be on this chain. The node is
 `nodeClientConnection` on the configuration, falling back to `relayURL`; a wallet naming neither is not checked. The
 result is an `IndexerLiveness` verdict on `SyncProgress`: `Behind`, `Unknown` and `WrongNetwork` block completion; the
 other four (`InSync`, `Ahead`, `Unavailable`, `Skipped`) do not. A poll that fails after a `Behind` or `WrongNetwork`
@@ -49,5 +54,16 @@ nor times out; race it against a deadline of your own and read `progress.indexer
 (the `indexer-liveness` docs snippet shows the pattern). `SyncProgressData` gains a required `indexerLiveness` field,
 defaulted by `createSyncProgress()`; sync types are parameterised on `SyncUpdate`, a superset of `WalletSyncUpdate`.
 
-BREAKING CHANGE (`wallet-sdk-node-client`): `NodeClient.Service` gains required `getFinalizedBlock()` and
-`getGenesisHash()` methods. Callers are unaffected; implementers must add them.
+BREAKING CHANGE (`wallet-sdk-node-client`): `NodeClient.Service` gains required `getFinalizedBlock()`,
+`getGenesisHash()` and `getBlockHashAt(height)` methods. Callers are unaffected; implementers must add them.
+`getBlockHashAt` answers `Option.none` for a height the node has no block at — absence is an answer about the chain,
+not a read failure.
+
+BREAKING CHANGE (`wallet-sdk-abstractions`): `IndexerLiveness.WrongNetwork` carries `{ height, indexerBlockHash,
+nodeBlockHash }`, where the hashes are `Option<string>`, instead of the two genesis hashes — the verdict is now reached
+at any height, and `height: 0n` is the genesis case. `IndexerLiveness.sameGenesis` is renamed `sameBlockHash`, and
+`evaluateTips` joins `evaluate` for callers comparing blocks rather than heights alone.
+
+BREAKING CHANGE (`wallet-sdk-capabilities`): `LivenessReads` replaces `indexerHeight` and `finalizedHeight` with
+`indexerTip` and `finalizedBlock`, which return a height and a hash together, and adds `indexerBlockHashAt(height)` and
+`nodeBlockHashAt(height)`. Only callers supplying their own reads are affected.

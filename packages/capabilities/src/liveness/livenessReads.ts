@@ -97,13 +97,13 @@ export type LivenessReadsConfiguration = {
 };
 
 /**
- * The two calls the liveness check makes on a node client.
+ * The calls the liveness check makes on a node client.
  *
  * @remarks
  *   Narrowed to what the check uses so that a test double answers those methods rather than the whole of
  *   `NodeClient.Service`, and so that this module depends on no more of the node client's surface than it reads.
  */
-export type LivenessNodeReader = Pick<NodeClient.Service, 'getFinalizedBlock' | 'getGenesisHash'>;
+export type LivenessNodeReader = Pick<NodeClient.Service, 'getFinalizedBlock' | 'getGenesisHash' | 'getBlockHashAt'>;
 
 /** Builds a client for the liveness check's node reads, scoped so the connection is released with its caller. */
 export type NodeClientFactory = (
@@ -120,7 +120,7 @@ const connectToNode: NodeClientFactory = (nodeURL) =>
   PolkadotNodeClient.make({ nodeURL, reconnectionTimeout: NODE_CONNECTION_TIMEOUT });
 
 /**
- * Builds the pair of block-height reads a liveness check compares.
+ * Builds the reads a liveness check compares.
  *
  * @remarks
  *   This is the only place the two sources meet, and it exists in `capabilities` rather than in a wallet package so that
@@ -211,7 +211,7 @@ export const makeDefaultLivenessReads = (
       }).pipe(Effect.flatMap((nodeURL) => client(nodeURL)));
 
     return {
-      indexerHeight: () =>
+      indexerTip: () =>
         Effect.gen(function* () {
           const query = yield* BlockHash;
           const { block } = yield* query({ offset: null });
@@ -228,7 +228,9 @@ export const makeDefaultLivenessReads = (
                   message: `Indexer reported an unusable block height: ${String(block.height)}`,
                 }),
               ),
-            onSome: Effect.succeed,
+            // The hash comes from the same answer as the height, so the two describe one block. Reading them
+            // separately would let a chain that advanced in between pair a height with another block's hash.
+            onSome: (height: bigint) => Effect.succeed({ height, hash: block.hash }),
           });
         }).pipe(
           Effect.provide(HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl })),
@@ -240,10 +242,9 @@ export const makeDefaultLivenessReads = (
           ),
         ),
 
-      finalizedHeight: () =>
+      finalizedBlock: () =>
         nodeReader().pipe(
           Effect.flatMap((reader) => reader.getFinalizedBlock()),
-          Effect.map(({ height }) => height),
           // A bound on the whole read, not just the connection: a node that accepts a socket and then never answers would
           // otherwise stall the poll just as effectively as one that refuses it.
           Effect.timeoutFail({
@@ -254,6 +255,40 @@ export const makeDefaultLivenessReads = (
             cause instanceof LivenessReadError
               ? Effect.fail(cause)
               : Effect.fail(readError('Failed to read the node’s finalized head', cause)),
+          ),
+        ),
+
+      indexerBlockHashAt: (height) =>
+        Effect.gen(function* () {
+          const query = yield* BlockHash;
+          // `Number` rather than the bigint: the height is one the indexer itself just reported, so it is within the
+          // range the indexer's own payload uses.
+          const { block } = yield* query({ offset: { height: Number(height) } });
+
+          // Absence, not failure: the caller asked for a height this endpoint claimed to have passed, and "I have no
+          // block there" is an answer about the chain rather than a read that went wrong.
+          return block === null || block === undefined ? Option.none() : Option.some(block.hash);
+        }).pipe(
+          Effect.provide(HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl })),
+          Effect.scoped,
+          Effect.catchAll((cause) =>
+            cause instanceof LivenessReadError
+              ? Effect.fail(cause)
+              : Effect.fail(readError(`Failed to read the indexer’s block at height ${height}`, cause)),
+          ),
+        ),
+
+      nodeBlockHashAt: (height) =>
+        nodeReader().pipe(
+          Effect.flatMap((reader) => reader.getBlockHashAt(height)),
+          Effect.timeoutFail({
+            duration: NODE_CONNECTION_TIMEOUT,
+            onTimeout: () => readError(`Timed out reading the node’s block at height ${height}`, undefined),
+          }),
+          Effect.catchAll((cause) =>
+            cause instanceof LivenessReadError
+              ? Effect.fail(cause)
+              : Effect.fail(readError(`Failed to read the node’s block at height ${height}`, cause)),
           ),
         ),
 

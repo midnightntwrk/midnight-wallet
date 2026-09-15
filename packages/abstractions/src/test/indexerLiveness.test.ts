@@ -10,6 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as IndexerLiveness from '../IndexerLiveness.js';
 
@@ -213,8 +214,9 @@ describe('IndexerLiveness', () => {
       // proves one of the two endpoints points at another chain and will keep pointing there until reconfigured. An
       // application waiting for sync must not proceed — and then submit — over data from the wrong network.
       const verdict = IndexerLiveness.WrongNetwork({
-        indexerGenesisHash: 'aa'.repeat(32),
-        nodeGenesisHash: `0x${'bb'.repeat(32)}`,
+        height: 0n,
+        indexerBlockHash: Option.some('aa'.repeat(32)),
+        nodeBlockHash: Option.some(`0x${'bb'.repeat(32)}`),
       });
 
       expect(IndexerLiveness.blocksSyncCompletion(verdict)).toBe(true);
@@ -226,25 +228,26 @@ describe('IndexerLiveness', () => {
       // `indicatesStaleView` answers "may this balance be missing recent funds?". Wrong-network data deserves its own,
       // louder message, which callers write by matching the variant — not the staleness one.
       const verdict = IndexerLiveness.WrongNetwork({
-        indexerGenesisHash: 'aa'.repeat(32),
-        nodeGenesisHash: `0x${'bb'.repeat(32)}`,
+        height: 0n,
+        indexerBlockHash: Option.some('aa'.repeat(32)),
+        nodeBlockHash: Option.some(`0x${'bb'.repeat(32)}`),
       });
 
       expect(IndexerLiveness.indicatesStaleView(verdict)).toBe(false);
     });
   });
 
-  describe('sameGenesis', () => {
+  describe('sameBlockHash', () => {
     it('should tolerate presentation differences, so a formatting mismatch is never reported as a wrong network', () => {
       // The node reports its genesis hash 0x-prefixed and lowercase; the indexer serves a plain hex string with no
       // guaranteed prefix or case. Only the bytes may decide.
-      expect(IndexerLiveness.sameGenesis(`0x${'Ab'.repeat(32)}`, 'aB'.repeat(32))).toBe(true);
-      expect(IndexerLiveness.sameGenesis('ab'.repeat(32), 'ab'.repeat(32))).toBe(true);
+      expect(IndexerLiveness.sameBlockHash(`0x${'Ab'.repeat(32)}`, 'aB'.repeat(32))).toBe(true);
+      expect(IndexerLiveness.sameBlockHash('ab'.repeat(32), 'ab'.repeat(32))).toBe(true);
     });
 
     it('should reject different hashes regardless of formatting', () => {
-      expect(IndexerLiveness.sameGenesis(`0x${'aa'.repeat(32)}`, `0x${'bb'.repeat(32)}`)).toBe(false);
-      expect(IndexerLiveness.sameGenesis('aa'.repeat(32), 'bb'.repeat(32))).toBe(false);
+      expect(IndexerLiveness.sameBlockHash(`0x${'aa'.repeat(32)}`, `0x${'bb'.repeat(32)}`)).toBe(false);
+      expect(IndexerLiveness.sameBlockHash('aa'.repeat(32), 'bb'.repeat(32))).toBe(false);
     });
   });
 
@@ -288,8 +291,9 @@ describe('IndexerLiveness', () => {
 
     it('should keep a proven WrongNetwork, because a chain mismatch cannot be undone by an unreachable endpoint', () => {
       const previous = IndexerLiveness.WrongNetwork({
-        indexerGenesisHash: 'aa'.repeat(32),
-        nodeGenesisHash: `0x${'bb'.repeat(32)}`,
+        height: 0n,
+        indexerBlockHash: Option.some('aa'.repeat(32)),
+        nodeBlockHash: Option.some(`0x${'bb'.repeat(32)}`),
       });
 
       const result = IndexerLiveness.afterFailedPoll(previous, 'websocket closed');
@@ -351,18 +355,246 @@ describe('IndexerLiveness', () => {
       const noNode = IndexerLiveness.Skipped({ reason: 'no-node-configured' });
       const simulation = IndexerLiveness.Skipped({ reason: 'simulation' });
       const mismatch = IndexerLiveness.WrongNetwork({
-        indexerGenesisHash: 'aa'.repeat(32),
-        nodeGenesisHash: 'bb'.repeat(32),
+        height: 0n,
+        indexerBlockHash: Option.some('aa'.repeat(32)),
+        nodeBlockHash: Option.some('bb'.repeat(32)),
       });
       const otherMismatch = IndexerLiveness.WrongNetwork({
-        indexerGenesisHash: 'aa'.repeat(32),
-        nodeGenesisHash: 'cc'.repeat(32),
+        height: 0n,
+        indexerBlockHash: Option.some('aa'.repeat(32)),
+        nodeBlockHash: Option.some('cc'.repeat(32)),
       });
 
       expect(IndexerLiveness.equivalent(noNode, noNode)).toBe(true);
       expect(IndexerLiveness.equivalent(noNode, simulation)).toBe(false);
       expect(IndexerLiveness.equivalent(mismatch, mismatch)).toBe(true);
       expect(IndexerLiveness.equivalent(mismatch, otherMismatch)).toBe(false);
+    });
+  });
+
+  describe('evaluateTips', () => {
+    // Heights alone can be fabricated: an indexer passes a height-only check by reporting a number it never reached.
+    // A verdict is therefore only reached once both endpoints name the same block at a height both claim to have
+    // passed — and an endpoint that cannot name one there has contradicted its own tip.
+    const indexerTip = (height: bigint, hash: string) => ({ height, hash });
+    const finalizedBlock = (height: bigint, hash: string) => ({ height, hash });
+
+    const HASH_A = `0x${'aa'.repeat(32)}`;
+    const HASH_B = `0x${'bb'.repeat(32)}`;
+
+    describe('when the two endpoints are at the same height', () => {
+      it('should compare the tip hashes directly, so an agreeing pair still reaches a height verdict', () => {
+        const result = IndexerLiveness.evaluateTips({
+          indexer: indexerTip(1_000n, 'aa'.repeat(32)),
+          finalized: finalizedBlock(1_000n, HASH_A),
+          sharedHash: Option.none(),
+          ...tolerances,
+        });
+
+        expect(result).toStrictEqual(IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n }));
+      });
+
+      it('should report WrongNetwork when the tip hashes differ, because one block cannot have two hashes', () => {
+        const result = IndexerLiveness.evaluateTips({
+          indexer: indexerTip(1_000n, HASH_A),
+          finalized: finalizedBlock(1_000n, HASH_B),
+          sharedHash: Option.none(),
+          ...tolerances,
+        });
+
+        expect(result).toStrictEqual(
+          IndexerLiveness.WrongNetwork({
+            height: 1_000n,
+            indexerBlockHash: Option.some(HASH_A),
+            nodeBlockHash: Option.some(HASH_B),
+          }),
+        );
+      });
+    });
+
+    describe('when the indexer is ahead of the finalized head', () => {
+      it('should accept the indexer once it resolves the finalized head to the same hash', () => {
+        const result = IndexerLiveness.evaluateTips({
+          indexer: indexerTip(1_002n, HASH_B),
+          finalized: finalizedBlock(1_000n, HASH_A),
+          sharedHash: Option.some('aa'.repeat(32)),
+          ...tolerances,
+        });
+
+        expect(result).toStrictEqual(IndexerLiveness.InSync({ indexerHeight: 1_002n, finalizedHeight: 1_000n }));
+      });
+
+      it('should report WrongNetwork when the indexer names a different block at the finalized height', () => {
+        const result = IndexerLiveness.evaluateTips({
+          indexer: indexerTip(1_002n, HASH_B),
+          finalized: finalizedBlock(1_000n, HASH_A),
+          sharedHash: Option.some(HASH_B),
+          ...tolerances,
+        });
+
+        expect(result).toStrictEqual(
+          IndexerLiveness.WrongNetwork({
+            height: 1_000n,
+            indexerBlockHash: Option.some(HASH_B),
+            nodeBlockHash: Option.some(HASH_A),
+          }),
+        );
+      });
+
+      it('should report WrongNetwork when the indexer cannot name a block it claims to have passed', () => {
+        // An indexer reporting height 1002 has, by its own account, ingested block 1000. Being unable to serve it is
+        // not an outage — it contradicts the tip the same answer just claimed.
+        const result = IndexerLiveness.evaluateTips({
+          indexer: indexerTip(1_002n, HASH_B),
+          finalized: finalizedBlock(1_000n, HASH_A),
+          sharedHash: Option.none(),
+          ...tolerances,
+        });
+
+        expect(result).toStrictEqual(
+          IndexerLiveness.WrongNetwork({
+            height: 1_000n,
+            indexerBlockHash: Option.none(),
+            nodeBlockHash: Option.some(HASH_A),
+          }),
+        );
+      });
+
+      it('should still report Ahead when the shared block agrees but the overshoot exceeds the tolerance', () => {
+        // Agreement on a common ancestor does not make an impossible overshoot acceptable; the height verdict runs
+        // once the hashes have cleared the fork gate.
+        const result = IndexerLiveness.evaluateTips({
+          indexer: indexerTip(5_000n, HASH_B),
+          finalized: finalizedBlock(1_000n, HASH_A),
+          sharedHash: Option.some(HASH_A),
+          ...tolerances,
+        });
+
+        expect(result).toStrictEqual(
+          IndexerLiveness.Ahead({ indexerHeight: 5_000n, finalizedHeight: 1_000n, overshoot: 4_000n }),
+        );
+      });
+    });
+
+    describe('when the indexer trails the finalized head', () => {
+      it('should accept the indexer once the node confirms its tip hash at that height', () => {
+        const result = IndexerLiveness.evaluateTips({
+          indexer: indexerTip(995n, 'aa'.repeat(32)),
+          finalized: finalizedBlock(1_000n, HASH_B),
+          sharedHash: Option.some(HASH_A),
+          ...tolerances,
+        });
+
+        expect(result).toStrictEqual(IndexerLiveness.InSync({ indexerHeight: 995n, finalizedHeight: 1_000n }));
+      });
+
+      it('should report WrongNetwork when the node names a different block at the indexer’s tip height', () => {
+        const result = IndexerLiveness.evaluateTips({
+          indexer: indexerTip(995n, HASH_A),
+          finalized: finalizedBlock(1_000n, HASH_B),
+          sharedHash: Option.some(HASH_B),
+          ...tolerances,
+        });
+
+        expect(result).toStrictEqual(
+          IndexerLiveness.WrongNetwork({
+            height: 995n,
+            indexerBlockHash: Option.some(HASH_A),
+            nodeBlockHash: Option.some(HASH_B),
+          }),
+        );
+      });
+
+      it('should report WrongNetwork when the node has no block at a height below its own finalized head', () => {
+        // The height is below the node's finalized head, so a canonical chain must have a block there. Nothing at that
+        // height means the indexer's tip is not on the chain the node finalized.
+        const result = IndexerLiveness.evaluateTips({
+          indexer: indexerTip(995n, HASH_A),
+          finalized: finalizedBlock(1_000n, HASH_B),
+          sharedHash: Option.none(),
+          ...tolerances,
+        });
+
+        expect(result).toStrictEqual(
+          IndexerLiveness.WrongNetwork({
+            height: 995n,
+            indexerBlockHash: Option.some(HASH_A),
+            nodeBlockHash: Option.none(),
+          }),
+        );
+      });
+
+      it('should still report Behind when the shared block agrees but the lag exceeds the tolerance', () => {
+        const result = IndexerLiveness.evaluateTips({
+          indexer: indexerTip(900n, HASH_A),
+          finalized: finalizedBlock(1_000n, HASH_B),
+          sharedHash: Option.some(HASH_A),
+          ...tolerances,
+        });
+
+        expect(result).toStrictEqual(
+          IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n }),
+        );
+      });
+    });
+
+    it('should compare hashes by their bytes, so presentation differences are never read as a fork', () => {
+      // The node answers 0x-prefixed and lowercase; the indexer serves bare hex with no guaranteed case.
+      const result = IndexerLiveness.evaluateTips({
+        indexer: indexerTip(1_000n, 'AB'.repeat(32)),
+        finalized: finalizedBlock(1_000n, `0x${'ab'.repeat(32)}`),
+        sharedHash: Option.none(),
+        ...tolerances,
+      });
+
+      expect(result).toStrictEqual(IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n }));
+    });
+  });
+
+  describe('WrongNetwork reached at a later height', () => {
+    const mismatch = IndexerLiveness.WrongNetwork({
+      height: 1_000n,
+      indexerBlockHash: Option.some(`0x${'aa'.repeat(32)}`),
+      nodeBlockHash: Option.some(`0x${'bb'.repeat(32)}`),
+    });
+
+    it('should block sync completion, because the indexer is serving a chain the node did not finalize', () => {
+      // Unlike Unavailable, this was proven by two successful reads of finalized blocks. An application waiting for
+      // sync must not proceed — and then submit — over blocks the node's chain does not contain.
+      expect(IndexerLiveness.blocksSyncCompletion(mismatch)).toBe(true);
+    });
+
+    it('should not indicate a stale view, because the data is from another chain rather than out of date', () => {
+      expect(IndexerLiveness.indicatesStaleView(mismatch)).toBe(false);
+    });
+
+    it('should survive a later failed poll, so an outage cannot clear a proven mismatch', () => {
+      // A failed poll proves nothing, so it cannot disprove what a successful comparison established. Replacing this
+      // with Unavailable, which does not gate, would release a caller waiting on an indexer serving another chain.
+      expect(IndexerLiveness.afterFailedPoll(mismatch, 'websocket closed')).toStrictEqual(mismatch);
+    });
+
+    it('should be equivalent only to a WrongNetwork verdict naming the same block', () => {
+      const sameMismatch = IndexerLiveness.WrongNetwork({
+        height: 1_000n,
+        indexerBlockHash: Option.some(`0x${'aa'.repeat(32)}`),
+        nodeBlockHash: Option.some(`0x${'bb'.repeat(32)}`),
+      });
+      const laterMismatch = IndexerLiveness.WrongNetwork({
+        height: 1_005n,
+        indexerBlockHash: Option.some(`0x${'aa'.repeat(32)}`),
+        nodeBlockHash: Option.some(`0x${'bb'.repeat(32)}`),
+      });
+      const unresolved = IndexerLiveness.WrongNetwork({
+        height: 1_000n,
+        indexerBlockHash: Option.none(),
+        nodeBlockHash: Option.some(`0x${'bb'.repeat(32)}`),
+      });
+
+      expect(IndexerLiveness.equivalent(mismatch, sameMismatch)).toBe(true);
+      expect(IndexerLiveness.equivalent(mismatch, laterMismatch)).toBe(false);
+      expect(IndexerLiveness.equivalent(mismatch, unresolved)).toBe(false);
+      expect(IndexerLiveness.equivalent(mismatch, IndexerLiveness.Unknown())).toBe(false);
     });
   });
 });

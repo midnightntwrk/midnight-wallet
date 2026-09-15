@@ -29,20 +29,41 @@ export class LivenessReadError extends Data.TaggedError('LivenessReadError')<{
 }> {}
 
 /**
- * The reads a liveness check runs, supplied as a dictionary so that callers decide where each comes from: the two block
- * heights it compares every poll, and the two genesis hashes it compares once to establish that the heights describe
- * the same chain.
+ * The reads a liveness check runs, supplied as a dictionary so that callers decide where each comes from: the two tips
+ * it compares every poll, the block those tips share, and the two genesis hashes it compares once to establish that the
+ * tips describe the same chain.
  *
  * @remarks
- *   Both reads are required. A service is only started when a node endpoint is configured — when none is, no service runs
- *   at all and the progress keeps its {@link IndexerLiveness.Skipped} default. That is why neither read is optional: a
+ *   Every read is required. A service is only started when a node endpoint is configured — when none is, no service runs
+ *   at all and the progress keeps its {@link IndexerLiveness.Skipped} default. That is why no read is optional: a
  *   service that might have no node would have to represent, and handle, a state it should never be in.
+ *
+ *   The tips carry hashes as well as heights because a height alone proves nothing — it is a number the indexer chooses.
+ *   The block at that height is what it cannot invent, so the check compares one block per poll: the newest one both
+ *   endpoints claim to have passed.
  */
 export type LivenessReads = {
-  /** Reads the height of the latest block the indexer reports having processed. */
-  readonly indexerHeight: () => Effect.Effect<bigint, LivenessReadError>;
-  /** Reads the height of the node's highest finalized block. */
-  readonly finalizedHeight: () => Effect.Effect<bigint, LivenessReadError>;
+  /** Reads the height and hash of the latest block the indexer reports having processed. */
+  readonly indexerTip: () => Effect.Effect<IndexerLiveness.BlockRef, LivenessReadError>;
+  /** Reads the height and hash of the node's highest finalized block. */
+  readonly finalizedBlock: () => Effect.Effect<IndexerLiveness.BlockRef, LivenessReadError>;
+  /**
+   * Reads the hash of the indexer's block at a given height, or `Option.none` when it has none there.
+   *
+   * @remarks
+   *   Called only for a height the indexer has just claimed to have passed, which is why absence is part of a verdict
+   *   rather than a failure: an indexer that cannot serve a block it reports having ingested contradicts its own
+   *   answer.
+   */
+  readonly indexerBlockHashAt: (height: bigint) => Effect.Effect<Option.Option<string>, LivenessReadError>;
+  /**
+   * Reads the hash of the node's block at a given height, or `Option.none` when it has none there.
+   *
+   * @remarks
+   *   Called only for a height at or below the node's own finalized head, where a canonical chain always has a block — so
+   *   absence says this node does not have the block being claimed, not that the read went wrong.
+   */
+  readonly nodeBlockHashAt: (height: bigint) => Effect.Effect<Option.Option<string>, LivenessReadError>;
   /** Reads the hash of the indexer's block at height zero — the chain the indexer is indexing. */
   readonly indexerGenesisHash: () => Effect.Effect<string, LivenessReadError>;
   /** Reads the hash of the node's genesis block — the chain the node is on. */
@@ -265,7 +286,7 @@ export class LivenessServiceImpl implements LivenessService {
       Effect.flatMap(
         GenesisCheck.$match({
           Mismatch: ({ verdict }) => Effect.succeed(verdict),
-          SameChain: () => this.#compareHeights(),
+          SameChain: () => this.#compareTips(),
         }),
       ),
     );
@@ -275,25 +296,56 @@ export class LivenessServiceImpl implements LivenessService {
   #verifyGenesis(): Effect.Effect<GenesisCheck, LivenessReadError> {
     return Effect.all([this.#reads.indexerGenesisHash(), this.#reads.nodeGenesisHash()], { concurrency: 2 }).pipe(
       Effect.map(([indexerGenesisHash, nodeGenesisHash]) =>
-        IndexerLiveness.sameGenesis(indexerGenesisHash, nodeGenesisHash)
+        IndexerLiveness.sameBlockHash(indexerGenesisHash, nodeGenesisHash)
           ? GenesisCheck.SameChain()
-          : GenesisCheck.Mismatch({ verdict: IndexerLiveness.WrongNetwork({ indexerGenesisHash, nodeGenesisHash }) }),
+          : GenesisCheck.Mismatch({
+              // The genesis comparison is the height-zero case of the same block comparison every poll runs.
+              verdict: IndexerLiveness.WrongNetwork({
+                height: 0n,
+                indexerBlockHash: Option.some(indexerGenesisHash),
+                nodeBlockHash: Option.some(nodeGenesisHash),
+              }),
+            }),
       ),
       Effect.tap((check) => Deferred.succeed(this.#genesisCheck, check)),
     );
   }
 
-  /** Reads both heights and reduces them to a verdict under the configured tolerances. */
-  #compareHeights(): Effect.Effect<IndexerLiveness.IndexerLiveness, LivenessReadError> {
-    return Effect.all([this.#reads.indexerHeight(), this.#reads.finalizedHeight()], { concurrency: 2 }).pipe(
-      Effect.map(([indexerHeight, finalizedHeight]) =>
-        IndexerLiveness.evaluate({
-          indexerHeight,
-          finalizedHeight,
-          maxBehindBlocks: this.#configuration.maxBehindBlocks,
-          maxAheadBlocks: this.#configuration.maxAheadBlocks,
-        }),
+  /**
+   * Reads both tips, confirms they name the same block where they overlap, and reduces the heights to a verdict.
+   *
+   * @remarks
+   *   Only one extra block is read per poll, and none at all when the two tips are already at the same height: the
+   *   endpoint that trails is reporting the shared block as its own tip, so the only open question is what the endpoint
+   *   that leads names there. Asking both would be a second round trip for an answer already in hand.
+   */
+  #compareTips(): Effect.Effect<IndexerLiveness.IndexerLiveness, LivenessReadError> {
+    return Effect.all([this.#reads.indexerTip(), this.#reads.finalizedBlock()], { concurrency: 2 }).pipe(
+      Effect.flatMap(([indexer, finalized]) =>
+        this.#sharedBlockHash(indexer, finalized).pipe(
+          Effect.map((sharedHash) =>
+            IndexerLiveness.evaluateTips({
+              indexer,
+              finalized,
+              sharedHash,
+              maxBehindBlocks: this.#configuration.maxBehindBlocks,
+              maxAheadBlocks: this.#configuration.maxAheadBlocks,
+            }),
+          ),
+        ),
       ),
     );
+  }
+
+  /** Asks whichever endpoint is ahead what it names at the other's height; neither, when the two are level. */
+  #sharedBlockHash(
+    indexer: IndexerLiveness.BlockRef,
+    finalized: IndexerLiveness.BlockRef,
+  ): Effect.Effect<Option.Option<string>, LivenessReadError> {
+    return indexer.height === finalized.height
+      ? Effect.succeed(Option.none())
+      : indexer.height > finalized.height
+        ? this.#reads.indexerBlockHashAt(finalized.height)
+        : this.#reads.nodeBlockHashAt(indexer.height);
   }
 }

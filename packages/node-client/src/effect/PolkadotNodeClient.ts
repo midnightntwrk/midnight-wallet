@@ -18,6 +18,7 @@ import {
   Effect,
   Either,
   Layer,
+  Option,
   type ParseResult,
   pipe,
   Ref,
@@ -60,6 +61,15 @@ const MAX_CONNECTED_PROBE_FAILURES = 3;
  *   human timescale, so the clamp loses nothing.
  */
 const toTimerMillis = (duration: Duration.Duration): number => Math.min(Duration.toMillis(duration), 2 ** 31 - 1);
+
+/**
+ * Recognises the hash the chain RPC answers with for a height it has no block at.
+ *
+ * @remarks
+ *   It is a well-formed hash of all zeroes rather than an error, so only its value distinguishes "no such block" from a
+ *   real answer. The `0x` prefix is optional here because nothing guarantees which presentation a given codec returns.
+ */
+const isEmptyHash = (hash: string): boolean => /^(0x)?0*$/.test(hash);
 
 /**
  * Disconnects the api and waits until its socket has actually closed.
@@ -400,6 +410,33 @@ export class PolkadotNodeClient implements NodeClient.Service {
             (error) =>
               new NodeClientError.ConnectionError({
                 message: 'Failed to retrieve the finalized block',
+                cause: error,
+              }),
+          ),
+        ),
+      () => this.#deregister(),
+    );
+  }
+
+  getBlockHashAt(height: bigint): Effect.Effect<Option.Option<string>, NodeClientError.NodeClientError> {
+    return Effect.acquireUseRelease(
+      this.#register(),
+      () =>
+        pipe(
+          this.ensureConnection(),
+          Effect.andThen(() =>
+            // `tryPromise` rather than `promise`: an unreachable node has to surface as a typed failure the periodic
+            // liveness check can handle, not as a defect that tears the caller's fiber down.
+            Effect.tryPromise(() => this.api.rpc.chain.getBlockHash(height)),
+          ),
+          // The RPC does not fail for a height the chain has nothing at — it answers with a hash of all zeroes. Passed
+          // on as a hash, that would compare unequal to every real block and so read as a chain mismatch rather than as
+          // the absence it is.
+          Effect.map((hash) => Option.liftPredicate(hash.toString(), (value) => !isEmptyHash(value))),
+          Effect.mapError(
+            (error) =>
+              new NodeClientError.ConnectionError({
+                message: `Failed to retrieve the block hash at height ${height}`,
                 cause: error,
               }),
           ),
