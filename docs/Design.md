@@ -272,14 +272,14 @@ For example:
   (available, total, pending)
 
 The synchronization capability also validates the order of what the service delivers, so an indexer fault surfaces as a
-typed error rather than as corrupted state. Shielded and Dust ledger event ids form one dense global sequence (the
-subscription takes only a cursor, and `maxId` is the maximum over all events), so once the boundary event the inclusive
-cursor re-delivers has been dropped, a batch must run consecutively from `appliedIndex + 1`; otherwise the whole batch
-is refused with `OutOfOrderSyncUpdateError`. Unshielded transaction ids are a sparse per-address subsequence of a global
-id, so only "strictly above the cursor" is checked there: an id equal to the cursor is a re-delivery and a no-op, and a
-spend of a UTXO the wallet does not hold is refused before the cursor moves. In every case state and cursor stay
-untouched, and the running variant logs the error and retries from the same cursor. The density of event ids is an
-assumption about the indexer, not something its schema states.
+typed error rather than as corrupted state. Shielded and Dust ledger events must arrive in strictly ascending id order;
+a batch with an id at or below its predecessor, or at or below the applied cursor, is refused whole with
+`OutOfOrderSyncUpdateError`. Contiguity is deliberately not checked: in the indexer, zswap, dust and contract events
+share one id sequence and each subscription filters its own grouping, so gaps in a stream are normal, and a skipped
+commitment-inserting event is caught by the ledger's own insertion check instead. Unshielded transaction ids are a
+sparse per-address subsequence of a global id, so only "strictly above the cursor" is checked there: an id equal to the
+cursor is a re-delivery and a no-op, and a spend of a UTXO the wallet does not hold is refused before the cursor moves.
+In every case state and cursor stay untouched, and the running variant logs the error and retries from the same cursor.
 
 ### Summary and code example
 

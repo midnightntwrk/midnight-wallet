@@ -90,21 +90,22 @@ export class TransactionHistoryError extends Data.TaggedError('Wallet.Transactio
 }> {}
 
 /**
- * A batch of zswap ledger events did not run consecutively from the wallet's applied cursor: it opened past a gap, or
- * had a hole inside it.
+ * A batch of zswap ledger events was not in ascending id order: an event arrived at or below the one before it, or at
+ * or below the applied cursor.
  *
  * @remarks
- *   Zswap event ids form one dense global timeline (the subscription takes only a cursor and `maxId` is the maximum over
- *   all events), and the ledger inserts their commitments in chain order, refusing a non-linear insertion. The whole
- *   batch is refused, nothing is applied and the cursor stays, so the running variant retries from the same place.
+ *   Order is all the wallet can check: zswap events share one id sequence with dust and contract events in the indexer,
+ *   so gaps in the stream are normal and a skipped event is only ever caught by the ledger's own insertion check. The
+ *   whole batch is refused, nothing is applied and the cursor stays, so the running variant retries from the same
+ *   place.
  * @example
  *   ```ts
- *   if (error._tag === 'Wallet.OutOfOrderSyncUpdate') console.warn(`expected ${error.expected}, got ${error.received}`);
+ *   if (error._tag === 'Wallet.OutOfOrderSyncUpdate') console.warn(`expected above ${error.expected}, got ${error.received}`);
  *   ```
  */
 export class OutOfOrderSyncUpdateError extends Data.TaggedError('Wallet.OutOfOrderSyncUpdate')<{
   readonly message: string;
-  /** The event id that had to come next. */
+  /** The id the delivered event had to exceed: its predecessor in the batch, or the applied cursor. */
   readonly expected: bigint;
   /** The event id the source delivered instead. */
   readonly received: bigint;

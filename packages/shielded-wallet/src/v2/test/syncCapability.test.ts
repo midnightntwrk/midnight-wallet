@@ -337,8 +337,8 @@ describe('makeEventsSyncCapability.applyUpdate boundary handling', () => {
   });
 });
 
-// Zswap event ids are one dense global timeline (cursor-only subscription, `maxId` over all events), so contiguity can
-// and must be checked: a batch applied across a gap inserts commitments non-linearly and drops the gap's events for good.
+// Zswap events share one id sequence with dust and contract events in the indexer, so a zswap stream is strictly
+// ascending but full of gaps. Order is checked; contiguity must not be, or every honest stream would be refused.
 describe('shielded sync capability ordering', () => {
   const capability = makeEventsSyncCapability();
 
@@ -358,49 +358,54 @@ describe('shielded sync capability ordering', () => {
   ): thrown is { readonly _tag: 'Wallet.OutOfOrderSyncUpdate'; readonly expected: bigint; readonly received: bigint } =>
     typeof thrown === 'object' && thrown !== null && '_tag' in thrown && thrown._tag === 'Wallet.OutOfOrderSyncUpdate';
 
-  it('rejects a batch that does not start right after the applied index', () => {
-    const [wallet] = capability.applyUpdate(
+  /** Like `batch`, but each item names the event it carries, so ids can be chosen freely and have gaps. */
+  const sparseBatch = (items: readonly (readonly [id: number, eventIndex: number])[]): WalletSyncUpdate =>
+    WalletSyncUpdate.create(
+      items.map(([id, eventIndex]): EventsSyncUpdate => ({
+        _tag: 'EventsSyncUpdate',
+        id,
+        protocolVersion: 3,
+        maxId: Math.max(...items.map(([itemId]) => itemId)),
+        raw: eventHex[eventIndex],
+      })),
+      secretKeys(),
+    );
+
+  it('applies a batch whose ids skip ahead, since the gaps belong to other event groupings', () => {
+    const [afterFirst] = capability.applyUpdate(
       freshWallet(),
-      batch([
-        [1, 3],
-        [2, 3],
+      sparseBatch([
+        [1, 0],
+        [4, 1],
+        [9, 2],
       ]),
       activeRange,
     );
-    expect(wallet.progress.appliedIndex).toBe(2n);
+    expect(afterFirst.progress.appliedIndex).toBe(9n);
+    expect(coinIndices(afterFirst)).toEqual([0n, 1n, 2n]);
 
-    // The audit's scenario: event 3 has not arrived and the source opens the batch at 4.
-    const outcome = attempt(
-      wallet,
-      batch([
-        [4, 3],
-        [5, 3],
+    // The boundary event comes back under its sparse id; the next real event sits well past it.
+    const [afterSecond] = capability.applyUpdate(
+      afterFirst,
+      sparseBatch([
+        [9, 2],
+        [15, 3],
       ]),
+      activeRange,
     );
-
-    expect(Either.isLeft(outcome)).toBe(true);
-    if (Either.isLeft(outcome)) {
-      expect(isOutOfOrderRefusal(outcome.left)).toBe(true);
-      if (isOutOfOrderRefusal(outcome.left)) {
-        expect(outcome.left.expected).toBe(3n);
-        expect(outcome.left.received).toBe(4n);
-      }
-    }
-
-    // Cursor and state untouched, so the retry re-fetches from event 3.
-    expect(wallet.progress.appliedIndex).toBe(2n);
-    expect(coinIndices(wallet)).toEqual([0n, 1n]);
+    expect(afterSecond.progress.appliedIndex).toBe(15n);
+    expect(coinIndices(afterSecond)).toEqual([0n, 1n, 2n, 3n]);
   });
 
-  it('rejects a batch with a gap inside it', () => {
+  it('rejects a batch whose ids are not ascending', () => {
     const wallet = freshWallet();
 
     const outcome = attempt(
       wallet,
-      batch([
-        [1, 3],
-        [2, 3],
-        [4, 3],
+      sparseBatch([
+        [1, 0],
+        [3, 1],
+        [2, 2],
       ]),
     );
 
@@ -409,12 +414,35 @@ describe('shielded sync capability ordering', () => {
       expect(isOutOfOrderRefusal(outcome.left)).toBe(true);
       if (isOutOfOrderRefusal(outcome.left)) {
         expect(outcome.left.expected).toBe(3n);
-        expect(outcome.left.received).toBe(4n);
+        expect(outcome.left.received).toBe(2n);
       }
     }
 
     // The whole batch is refused, sound prefix included.
     expect(wallet.progress.appliedIndex).toBe(0n);
+    expect(coinIndices(wallet)).toEqual([]);
+  });
+
+  it('rejects an id repeated within a batch', () => {
+    const wallet = freshWallet();
+
+    const outcome = attempt(
+      wallet,
+      sparseBatch([
+        [1, 0],
+        [2, 1],
+        [2, 2],
+      ]),
+    );
+
+    expect(Either.isLeft(outcome)).toBe(true);
+    if (Either.isLeft(outcome)) {
+      expect(isOutOfOrderRefusal(outcome.left)).toBe(true);
+      if (isOutOfOrderRefusal(outcome.left)) {
+        expect(outcome.left.expected).toBe(2n);
+        expect(outcome.left.received).toBe(2n);
+      }
+    }
     expect(coinIndices(wallet)).toEqual([]);
   });
 
