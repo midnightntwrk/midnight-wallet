@@ -271,6 +271,16 @@ For example:
 - for coins, there is a capability only, which lists available coins, as well as computes different kinds of balances
   (available, total, pending)
 
+The synchronization capability also validates the order of what the service delivers, so an indexer fault surfaces as a
+typed error rather than as corrupted state. Shielded and Dust ledger events must arrive in strictly ascending id order;
+a batch with an id at or below its predecessor, or at or below the applied cursor, is refused whole with
+`OutOfOrderSyncUpdateError`. Contiguity is deliberately not checked: in the indexer, zswap, dust and contract events
+share one id sequence and each subscription filters its own grouping, so gaps in a stream are normal, and a skipped
+commitment-inserting event is caught by the ledger's own insertion check instead. Unshielded transaction ids are a
+sparse per-address subsequence of a global id, so only "strictly above the cursor" is checked there: an id equal to the
+cursor is a re-delivery and a no-op, and a spend of a UTXO the wallet does not hold is refused before the cursor moves.
+In every case state and cursor stay untouched, and the running variant logs the error and retries from the same cursor.
+
 ### Summary and code example
 
 Immutability, combined with allowing only pure functional, synchronous operations on the state, covers a lot of what is
