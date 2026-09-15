@@ -951,31 +951,38 @@ const applyVersionSignal = (state: CoreWallet, update: VersionSignalSyncUpdate):
 ];
 
 /**
- * Checks that freshly delivered events run consecutively from `appliedIndex + 1`.
+ * Checks that freshly delivered events arrive in strictly ascending id order.
  *
  * @remarks
- *   Rests on dust event ids being one dense global sequence: the subscription takes only a cursor and `maxId` is the
- *   maximum over all events. The indexer schema does not state this, so it is recorded here as an assumption. An empty
- *   batch is trivially consecutive; events at or below the cursor were already dropped by the boundary filter.
+ *   Order is all that can be checked, never contiguity: dust events share one id sequence with zswap and contract events
+ *   in the indexer, so gaps in a dust stream are normal. A skipped commitment-inserting event is caught by the ledger's
+ *   own insertion check instead. An empty batch is trivially ordered.
  * @param fresh The events left after the cursor filter, in source order.
- * @param appliedIndex The highest event id already folded into the wallet.
- * @returns The batch unchanged, or the first discrepancy as an {@link OutOfOrderSyncUpdateError}.
+ * @param appliedIndex The highest event id already applied; the first fresh id must exceed it.
+ * @returns The batch unchanged, or the first id that fails to exceed its predecessor as an
+ *   {@link OutOfOrderSyncUpdateError}.
  */
-const expectContiguous = <T extends { readonly id: number }>(
+const expectAscending = <T extends { readonly id: number }>(
   fresh: readonly T[],
   appliedIndex: bigint,
 ): Either.Either<readonly T[], OutOfOrderSyncUpdateError> =>
   pipe(
-    fresh,
-    Arr.map((item, index) => ({ item, expected: appliedIndex + BigInt(index) + 1n })),
-    Arr.findFirst(({ item, expected }) => BigInt(item.id) !== expected),
+    Arr.zipWith(
+      fresh,
+      Arr.prepend(
+        Arr.map(fresh, (item) => BigInt(item.id)),
+        appliedIndex,
+      ),
+      (item, previous) => ({ item, previous }),
+    ),
+    Arr.findFirst(({ item, previous }) => BigInt(item.id) <= previous),
     Option.match({
       onNone: () => Either.right(fresh),
-      onSome: ({ item, expected }) =>
+      onSome: ({ item, previous }) =>
         Either.left(
           new OutOfOrderSyncUpdateError({
-            message: `Dust event ${item.id} delivered where ${expected} was due; batch refused, applied index stays at ${appliedIndex}`,
-            expected,
+            message: `Dust event ${item.id} delivered at or below its predecessor ${previous}; batch refused, applied index stays at ${appliedIndex}`,
+            expected: previous,
             received: BigInt(item.id),
           }),
         ),
@@ -1007,13 +1014,13 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
       // tail even when the tail belongs to the next protocol version.
       const highestRelevantWalletIndex = BigInt(updates.at(-1)!.maxId);
 
-      // Refuse the whole batch, sound prefix included: deferring at the gap would park the cursor while still reporting
-      // `isConnected: true`, and a batch caps at ten events. State and cursor stay untouched, so the retry re-fetches the
-      // same range — a transient reorder heals, a persistent one fails visibly instead of corrupting the trees.
+      // Refuse the whole batch: applying the sound prefix would move the cursor and hide the fault behind
+      // `isConnected: true`. State and cursor stay untouched, so the retry re-fetches the same range; a transient
+      // reorder heals, a persistent one fails visibly.
       //
       // `SyncCapability.applyUpdate` has no typed error channel, so throwing preserves its public tuple-returning API;
       // `RunningV2Variant` catches this at the capability boundary. See #572 for the planned `Either`-based API.
-      const orderedUpdates = Either.getOrThrowWith(expectContiguous(freshUpdates, appliedIndex), identity);
+      const orderedUpdates = Either.getOrThrowWith(expectAscending(freshUpdates, appliedIndex), identity);
 
       const { applied, observedVersion } = splitAtVersionBoundary(
         orderedUpdates,
