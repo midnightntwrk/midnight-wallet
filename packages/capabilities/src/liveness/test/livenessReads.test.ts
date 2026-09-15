@@ -34,6 +34,7 @@ const reachableNode = {
 const stubReader: LivenessNodeReader = {
   getFinalizedBlock: () => Effect.succeed({ hash: '0xfinalized', height: 1_000n }),
   getGenesisHash: () => Effect.succeed(`0x${'ab'.repeat(32)}`),
+  getBlockHashAt: (height) => Effect.succeed(Option.some(`0xblock${height}`)),
 };
 
 describe('makeDefaultLivenessReads', () => {
@@ -48,9 +49,9 @@ describe('makeDefaultLivenessReads', () => {
         const factory: NodeClientFactory = () => Ref.update(built, (n) => n + 1).pipe(Effect.as(stubReader));
 
         const reads = yield* makeDefaultLivenessReads(reachableNode, factory);
-        const heights = yield* Effect.all([reads.finalizedHeight(), reads.finalizedHeight(), reads.finalizedHeight()]);
+        const blocks = yield* Effect.all([reads.finalizedBlock(), reads.finalizedBlock(), reads.finalizedBlock()]);
 
-        return { built: yield* Ref.get(built), heights };
+        return { built: yield* Ref.get(built), heights: blocks.map(({ height }) => height) };
       });
 
       const result = await Effect.runPromise(Effect.scoped(program));
@@ -90,8 +91,8 @@ describe('makeDefaultLivenessReads', () => {
           );
 
         const reads = yield* makeDefaultLivenessReads(reachableNode, factory);
-        const first = yield* Effect.exit(reads.finalizedHeight());
-        const second = yield* Effect.exit(reads.finalizedHeight());
+        const first = yield* Effect.exit(reads.finalizedBlock());
+        const second = yield* Effect.exit(reads.finalizedBlock());
 
         return { attempts: yield* Ref.get(attempts), firstFailed: Exit.isFailure(first), second };
       });
@@ -100,7 +101,7 @@ describe('makeDefaultLivenessReads', () => {
 
       expect(result.attempts).toBe(2);
       expect(result.firstFailed).toBe(true);
-      expect(result.second).toStrictEqual(Exit.succeed(1_000n));
+      expect(result.second).toStrictEqual(Exit.succeed({ hash: '0xfinalized', height: 1_000n }));
     });
 
     it('should keep a client whose build outlived an abandoned poll, rather than stranding it and rebuilding', async () => {
@@ -125,8 +126,8 @@ describe('makeDefaultLivenessReads', () => {
         const reads = yield* makeDefaultLivenessReads(reachableNode, factory);
 
         // Interrupt the read mid-build, as the poll's fail-fast does when the indexer read errors first.
-        yield* reads.finalizedHeight().pipe(Effect.timeout(Duration.millis(10)), Effect.ignore);
-        yield* reads.finalizedHeight();
+        yield* reads.finalizedBlock().pipe(Effect.timeout(Duration.millis(10)), Effect.ignore);
+        yield* reads.finalizedBlock();
 
         return yield* Ref.get(builds);
       });
@@ -145,7 +146,7 @@ describe('makeDefaultLivenessReads', () => {
         yield* Effect.scoped(
           Effect.gen(function* () {
             const reads = yield* makeDefaultLivenessReads(reachableNode, factory);
-            yield* reads.finalizedHeight();
+            yield* reads.finalizedBlock();
           }),
         );
 
@@ -166,7 +167,7 @@ describe('makeDefaultLivenessReads', () => {
           const factory: NodeClientFactory = () => Ref.update(built, (n) => n + 1).pipe(Effect.as(stubReader));
 
           const reads = yield* makeDefaultLivenessReads(reachableNode, factory);
-          yield* reads.finalizedHeight();
+          yield* reads.finalizedBlock();
           const genesisHash = yield* reads.nodeGenesisHash();
 
           return { genesisHash, clientsBuilt: yield* Ref.get(built) };
@@ -191,7 +192,7 @@ describe('makeDefaultLivenessReads', () => {
               nodeClientConnection: { nodeURL: '127.0.0.1:9944' },
             });
 
-            return yield* reads.finalizedHeight();
+            return yield* reads.finalizedBlock();
           }),
         ),
       );

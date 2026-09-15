@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { IndexerLiveness } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createSyncProgress, SyncProgress, type SyncProgressData } from '../SyncProgress.js';
 
@@ -48,8 +49,9 @@ describe('SyncProgress', () => {
         const result = SyncProgress.isCompleteWithin(
           caughtUp(
             IndexerLiveness.WrongNetwork({
-              indexerGenesisHash: 'aa'.repeat(32),
-              nodeGenesisHash: `0x${'bb'.repeat(32)}`,
+              height: 0n,
+              indexerBlockHash: Option.some('aa'.repeat(32)),
+              nodeBlockHash: Option.some(`0x${'bb'.repeat(32)}`),
             }),
           ),
         );

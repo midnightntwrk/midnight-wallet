@@ -391,6 +391,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
       appliedId: 9n,
       highestTransactionId: 9n,
       isConnected: true,
+      indexerLiveness: { indexerHeight: 1n, finalizedHeight: 1n, _tag: 'InSync' },
       isStrictlyComplete: [Function: isStrictlyComplete],
       isCompleteWithin: [Function: isCompleteWithin]
     },
@@ -987,6 +988,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
       appliedId: 9n,
       highestTransactionId: 9n,
       isConnected: true,
+      indexerLiveness: { indexerHeight: 1n, finalizedHeight: 1n, _tag: 'InSync' },
       isStrictlyComplete: [Function: isStrictlyComplete],
       isCompleteWithin: [Function: isCompleteWithin]
     },
@@ -1247,7 +1249,11 @@ Unavailable — blocks sync completion: false
 Skipped — blocks sync completion: false
   Indexer is not being verified against a node (no-node-configured).
 WrongNetwork — blocks sync completion: true
-  The indexer and the node are on different networks (indexer genesis abababababababababababababababababababababababababababababababab, node genesis 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd). Check the configured endpoints.
+  The indexer and the node are not on the same chain — they disagree about block 0 (indexer abababababababababababababababababababababababababababababababab, node 0xcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd). Check the configured endpoints.
+WrongNetwork — blocks sync completion: true
+  The indexer and the node are not on the same chain — they disagree about block 1000 (indexer 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, node 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff). Check the configured endpoints.
+WrongNetwork — blocks sync completion: true
+  The indexer and the node are not on the same chain — they disagree about block 1000 (indexer could not name a block there, node 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff). Check the configured endpoints.
 ",
 ]
 `;

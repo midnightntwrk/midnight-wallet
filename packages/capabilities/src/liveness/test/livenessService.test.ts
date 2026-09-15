@@ -23,10 +23,22 @@ const tolerances = { maxBehindBlocks: 10n, maxAheadBlocks: 10n };
 const INDEXER_GENESIS = 'ab'.repeat(32);
 const NODE_GENESIS = `0x${'ab'.repeat(32)}`;
 
-/** Reads on one chain: matching genesis hashes and the given heights. */
+/**
+ * One chain, as the stubs model it: every block's hash is derived from its height, so both endpoints name the same
+ * block wherever they are both asked, and a stub that answers with any other hash is on a different chain by
+ * construction.
+ */
+const chainHash = (height: bigint): string => `0x${height.toString(16).padStart(64, '0')}`;
+
+/** A block on that chain. */
+const onChain = (height: bigint): IndexerLiveness.BlockRef => ({ height, hash: chainHash(height) });
+
+/** Reads on one chain: matching genesis hashes, agreeing block hashes, and the given heights. */
 const sameChainReads = (overrides: Partial<LivenessReads>): LivenessReads => ({
-  indexerHeight: () => Effect.succeed(1_000n),
-  finalizedHeight: () => Effect.succeed(1_000n),
+  indexerTip: () => Effect.succeed(onChain(1_000n)),
+  finalizedBlock: () => Effect.succeed(onChain(1_000n)),
+  indexerBlockHashAt: (height) => Effect.succeed(Option.some(chainHash(height))),
+  nodeBlockHashAt: (height) => Effect.succeed(Option.some(chainHash(height))),
   indexerGenesisHash: () => Effect.succeed(INDEXER_GENESIS),
   nodeGenesisHash: () => Effect.succeed(NODE_GENESIS),
   ...overrides,
@@ -34,8 +46,8 @@ const sameChainReads = (overrides: Partial<LivenessReads>): LivenessReads => ({
 
 const fixedReads = (indexerHeight: bigint, finalizedHeight: bigint): LivenessReads =>
   sameChainReads({
-    indexerHeight: () => Effect.succeed(indexerHeight),
-    finalizedHeight: () => Effect.succeed(finalizedHeight),
+    indexerTip: () => Effect.succeed(onChain(indexerHeight)),
+    finalizedBlock: () => Effect.succeed(onChain(finalizedHeight)),
   });
 
 /** The verdict currently published by the service. */
@@ -75,7 +87,7 @@ describe('LivenessServiceImpl', () => {
     // exists to detect, so `startPolling` cannot fail.
     const program = Effect.gen(function* () {
       const reads = sameChainReads({
-        finalizedHeight: () => Effect.fail(new LivenessReadError({ message: 'websocket closed' })),
+        finalizedBlock: () => Effect.fail(new LivenessReadError({ message: 'websocket closed' })),
       });
       const service = yield* LivenessServiceImpl.make(reads, tolerances);
 
@@ -98,11 +110,11 @@ describe('LivenessServiceImpl', () => {
     const program = Effect.gen(function* () {
       const diesOnce = yield* Ref.make(1);
       const reads = sameChainReads({
-        indexerHeight: () => Effect.succeed(1_000n),
-        finalizedHeight: () =>
+        indexerTip: () => Effect.succeed(onChain(1_000n)),
+        finalizedBlock: () =>
           Ref.getAndUpdate(diesOnce, (remaining) => (remaining > 0 ? remaining - 1 : 0)).pipe(
             Effect.flatMap((remaining) =>
-              remaining > 0 ? Effect.die(new RangeError('not an integer')) : Effect.succeed(1_000n),
+              remaining > 0 ? Effect.die(new RangeError('not an integer')) : Effect.succeed(onChain(1_000n)),
             ),
           ),
       });
@@ -133,8 +145,8 @@ describe('LivenessServiceImpl', () => {
     // while its indexer stalled. A hung read must not be able to switch the check off.
     const program = Effect.gen(function* () {
       const reads = sameChainReads({
-        indexerHeight: () => Effect.never,
-        finalizedHeight: () => Effect.succeed(1_000n),
+        indexerTip: () => Effect.never,
+        finalizedBlock: () => Effect.succeed(onChain(1_000n)),
       });
       const service = yield* LivenessServiceImpl.make(reads, {
         ...tolerances,
@@ -159,7 +171,8 @@ describe('LivenessServiceImpl', () => {
     // the read is long. The verdict must still land at the deadline, with the read left to finish in the background.
     const program = Effect.gen(function* () {
       const reads = sameChainReads({
-        finalizedHeight: () => Effect.uninterruptible(Effect.sleep(Duration.minutes(1)).pipe(Effect.as(1_000n))),
+        finalizedBlock: () =>
+          Effect.uninterruptible(Effect.sleep(Duration.minutes(1)).pipe(Effect.as(onChain(1_000n)))),
       });
       const service = yield* LivenessServiceImpl.make(reads, { ...tolerances, pollTimeout: Duration.seconds(5) });
 
@@ -221,8 +234,8 @@ describe('LivenessServiceImpl', () => {
       // Mutable only as test setup: the chain advances five blocks between polls, indexer and node in step.
       const polls = yield* Ref.make(0n);
       const advancing = sameChainReads({
-        indexerHeight: () => Ref.getAndUpdate(polls, (n) => n + 1n).pipe(Effect.map((n) => 1_000n + 5n * n)),
-        finalizedHeight: () => Ref.get(polls).pipe(Effect.map((n) => 1_000n + 5n * n)),
+        indexerTip: () => Ref.getAndUpdate(polls, (n) => n + 1n).pipe(Effect.map((n) => onChain(1_000n + 5n * n))),
+        finalizedBlock: () => Ref.get(polls).pipe(Effect.map((n) => onChain(1_000n + 5n * n))),
       });
       const service = yield* LivenessServiceImpl.make(advancing, tolerances);
       const seen = yield* Ref.make<readonly IndexerLiveness.IndexerLiveness[]>([]);
@@ -253,13 +266,13 @@ describe('LivenessServiceImpl', () => {
       // Mutable only as test setup: the node read fails once, then succeeds.
       const failuresRemaining = yield* Ref.make(1);
       const reads = sameChainReads({
-        indexerHeight: () => Effect.succeed(1_000n),
-        finalizedHeight: () =>
+        indexerTip: () => Effect.succeed(onChain(1_000n)),
+        finalizedBlock: () =>
           Ref.getAndUpdate(failuresRemaining, (remaining) => (remaining > 0 ? remaining - 1 : 0)).pipe(
             Effect.flatMap((remaining) =>
               remaining > 0
                 ? Effect.fail(new LivenessReadError({ message: 'websocket closed' }))
-                : Effect.succeed(1_000n),
+                : Effect.succeed(onChain(1_000n)),
             ),
           ),
       });
@@ -285,12 +298,12 @@ describe('LivenessServiceImpl', () => {
       // Mutable only as test setup: the node read answers once, then the endpoint goes away.
       const answersRemaining = yield* Ref.make(1);
       const reads = sameChainReads({
-        indexerHeight: () => Effect.succeed(900n),
-        finalizedHeight: () =>
+        indexerTip: () => Effect.succeed(onChain(900n)),
+        finalizedBlock: () =>
           Ref.getAndUpdate(answersRemaining, (remaining) => (remaining > 0 ? remaining - 1 : 0)).pipe(
             Effect.flatMap((remaining) =>
               remaining > 0
-                ? Effect.succeed(1_000n)
+                ? Effect.succeed(onChain(1_000n))
                 : Effect.fail(new LivenessReadError({ message: 'websocket closed' })),
             ),
           ),
@@ -316,9 +329,9 @@ describe('LivenessServiceImpl', () => {
       // comparison would be between two different chains and therefore meaningless.
       const calls = { heights: 0, genesis: 0 };
       const reads = sameChainReads({
-        indexerHeight: () => {
+        indexerTip: () => {
           calls.heights += 1;
-          return Effect.succeed(1_000n);
+          return Effect.succeed(onChain(1_000n));
         },
         indexerGenesisHash: () => {
           calls.genesis += 1;
@@ -338,8 +351,9 @@ describe('LivenessServiceImpl', () => {
       expect(verdict).toStrictEqual(
         Option.some(
           IndexerLiveness.WrongNetwork({
-            indexerGenesisHash: 'aa'.repeat(32),
-            nodeGenesisHash: `0x${'bb'.repeat(32)}`,
+            height: 0n,
+            indexerBlockHash: Option.some('aa'.repeat(32)),
+            nodeBlockHash: Option.some(`0x${'bb'.repeat(32)}`),
           }),
         ),
       );
@@ -401,6 +415,230 @@ describe('LivenessServiceImpl', () => {
         Option.some(IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n })),
       );
       expect(attempts.count).toBe(2);
+    });
+  });
+
+  describe('tip cross-check', () => {
+    // A height is a number the indexer chooses. Comparing heights alone therefore only proves it can count — the block
+    // at that height is the part it cannot invent, and both endpoints serve finalized blocks, so a disagreement about
+    // one is conclusive rather than a transient difference of view.
+    const OTHER_CHAIN = `0x${'99'.repeat(32)}`;
+
+    it('should publish WrongNetwork when the two tips are at the same height but name different blocks', async () => {
+      const reads = sameChainReads({
+        indexerTip: () => Effect.succeed({ height: 1_000n, hash: OTHER_CHAIN }),
+        finalizedBlock: () => Effect.succeed(onChain(1_000n)),
+      });
+
+      const verdict = await Effect.runPromise(
+        Effect.gen(function* () {
+          const service = yield* LivenessServiceImpl.make(reads, tolerances);
+          yield* service.startPolling(Stream.make('tick'));
+          return yield* currentVerdict(service);
+        }),
+      );
+
+      expect(verdict).toStrictEqual(
+        Option.some(
+          IndexerLiveness.WrongNetwork({
+            height: 1_000n,
+            indexerBlockHash: Option.some(OTHER_CHAIN),
+            nodeBlockHash: Option.some(chainHash(1_000n)),
+          }),
+        ),
+      );
+    });
+
+    it('should publish WrongNetwork when the indexer leads and names a different block at the finalized height', async () => {
+      // The overshoot is inside the tolerance, so a height-only check would have called this InSync.
+      const reads = sameChainReads({
+        indexerTip: () => Effect.succeed(onChain(1_002n)),
+        finalizedBlock: () => Effect.succeed(onChain(1_000n)),
+        indexerBlockHashAt: () => Effect.succeed(Option.some(OTHER_CHAIN)),
+      });
+
+      const verdict = await Effect.runPromise(
+        Effect.gen(function* () {
+          const service = yield* LivenessServiceImpl.make(reads, tolerances);
+          yield* service.startPolling(Stream.make('tick'));
+          return yield* currentVerdict(service);
+        }),
+      );
+
+      expect(verdict).toStrictEqual(
+        Option.some(
+          IndexerLiveness.WrongNetwork({
+            height: 1_000n,
+            indexerBlockHash: Option.some(OTHER_CHAIN),
+            nodeBlockHash: Option.some(chainHash(1_000n)),
+          }),
+        ),
+      );
+    });
+
+    it('should publish WrongNetwork when the indexer cannot name a block it claims to have passed', async () => {
+      // Reporting height 1_002 is a claim to have ingested block 1_000. Being unable to serve it contradicts that
+      // claim, so it gates like any other mismatch rather than passing as an unreadable answer.
+      const reads = sameChainReads({
+        indexerTip: () => Effect.succeed(onChain(1_002n)),
+        finalizedBlock: () => Effect.succeed(onChain(1_000n)),
+        indexerBlockHashAt: () => Effect.succeed(Option.none()),
+      });
+
+      const verdict = await Effect.runPromise(
+        Effect.gen(function* () {
+          const service = yield* LivenessServiceImpl.make(reads, tolerances);
+          yield* service.startPolling(Stream.make('tick'));
+          return yield* currentVerdict(service);
+        }),
+      );
+
+      expect(verdict).toStrictEqual(
+        Option.some(
+          IndexerLiveness.WrongNetwork({
+            height: 1_000n,
+            indexerBlockHash: Option.none(),
+            nodeBlockHash: Option.some(chainHash(1_000n)),
+          }),
+        ),
+      );
+    });
+
+    it('should publish WrongNetwork when the indexer trails and the node does not confirm its tip', async () => {
+      const reads = sameChainReads({
+        indexerTip: () => Effect.succeed({ height: 995n, hash: OTHER_CHAIN }),
+        finalizedBlock: () => Effect.succeed(onChain(1_000n)),
+      });
+
+      const verdict = await Effect.runPromise(
+        Effect.gen(function* () {
+          const service = yield* LivenessServiceImpl.make(reads, tolerances);
+          yield* service.startPolling(Stream.make('tick'));
+          return yield* currentVerdict(service);
+        }),
+      );
+
+      expect(verdict).toStrictEqual(
+        Option.some(
+          IndexerLiveness.WrongNetwork({
+            height: 995n,
+            indexerBlockHash: Option.some(OTHER_CHAIN),
+            nodeBlockHash: Option.some(chainHash(995n)),
+          }),
+        ),
+      );
+    });
+
+    it('should ask the endpoint that is ahead for the shared block, and only that one', async () => {
+      // The endpoint that trails is already reporting the shared block as its own tip, so asking it again would be a
+      // second round trip for an answer already in hand.
+      const asked = { indexer: [] as bigint[], node: [] as bigint[] };
+      const reads = sameChainReads({
+        indexerTip: () => Effect.succeed(onChain(1_002n)),
+        finalizedBlock: () => Effect.succeed(onChain(1_000n)),
+        indexerBlockHashAt: (height) => {
+          asked.indexer = [...asked.indexer, height];
+          return Effect.succeed(Option.some(chainHash(height)));
+        },
+        nodeBlockHashAt: (height) => {
+          asked.node = [...asked.node, height];
+          return Effect.succeed(Option.some(chainHash(height)));
+        },
+      });
+
+      const verdict = await Effect.runPromise(
+        Effect.gen(function* () {
+          const service = yield* LivenessServiceImpl.make(reads, tolerances);
+          yield* service.startPolling(Stream.make('tick'));
+          return yield* currentVerdict(service);
+        }),
+      );
+
+      expect(verdict).toStrictEqual(
+        Option.some(IndexerLiveness.InSync({ indexerHeight: 1_002n, finalizedHeight: 1_000n })),
+      );
+      expect(asked.indexer).toStrictEqual([1_000n]);
+      expect(asked.node).toStrictEqual([]);
+    });
+
+    it('should read no extra block when the heights are equal, because the two tips are already that block', async () => {
+      const asked = { indexer: 0, node: 0 };
+      const reads = sameChainReads({
+        indexerBlockHashAt: (height) => {
+          asked.indexer += 1;
+          return Effect.succeed(Option.some(chainHash(height)));
+        },
+        nodeBlockHashAt: (height) => {
+          asked.node += 1;
+          return Effect.succeed(Option.some(chainHash(height)));
+        },
+      });
+
+      const verdict = await Effect.runPromise(
+        Effect.gen(function* () {
+          const service = yield* LivenessServiceImpl.make(reads, tolerances);
+          yield* service.startPolling(Stream.make('tick'));
+          return yield* currentVerdict(service);
+        }),
+      );
+
+      expect(verdict).toStrictEqual(
+        Option.some(IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n })),
+      );
+      expect(asked).toStrictEqual({ indexer: 0, node: 0 });
+    });
+
+    it('should still report Behind when the endpoints agree on the shared block but the lag exceeds the tolerance', async () => {
+      // Agreement clears the way for the height comparison; it does not excuse a stale indexer.
+      const verdict = await Effect.runPromise(
+        Effect.gen(function* () {
+          const service = yield* LivenessServiceImpl.make(fixedReads(900n, 1_000n), tolerances);
+          yield* service.startPolling(Stream.make('tick'));
+          return yield* currentVerdict(service);
+        }),
+      );
+
+      expect(verdict).toStrictEqual(
+        Option.some(IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n })),
+      );
+    });
+
+    it('should keep a proven tip mismatch when a later poll fails, so an outage cannot clear it', async () => {
+      // The mismatch was proven by two successful reads of finalized blocks. A poll that cannot complete disproves
+      // nothing, and replacing the verdict with Unavailable — which does not gate — would release a caller waiting on
+      // an indexer serving another chain.
+      const program = Effect.gen(function* () {
+        // Mutable only as test setup: the node answers once, then the endpoint goes away.
+        const answersRemaining = yield* Ref.make(1);
+        const reads = sameChainReads({
+          indexerTip: () => Effect.succeed({ height: 1_000n, hash: OTHER_CHAIN }),
+          finalizedBlock: () =>
+            Ref.getAndUpdate(answersRemaining, (remaining) => (remaining > 0 ? remaining - 1 : 0)).pipe(
+              Effect.flatMap((remaining) =>
+                remaining > 0
+                  ? Effect.succeed(onChain(1_000n))
+                  : Effect.fail(new LivenessReadError({ message: 'websocket closed' })),
+              ),
+            ),
+        });
+        const service = yield* LivenessServiceImpl.make(reads, tolerances);
+
+        yield* service.startPolling(Stream.make(1, 2));
+
+        return yield* currentVerdict(service);
+      });
+
+      const verdict = await Effect.runPromise(program);
+
+      expect(verdict).toStrictEqual(
+        Option.some(
+          IndexerLiveness.WrongNetwork({
+            height: 1_000n,
+            indexerBlockHash: Option.some(OTHER_CHAIN),
+            nodeBlockHash: Option.some(chainHash(1_000n)),
+          }),
+        ),
+      );
     });
   });
 });

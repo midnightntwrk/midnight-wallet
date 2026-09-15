@@ -54,7 +54,7 @@ describe('makeDefaultLivenessReads', () => {
   }, timeoutMinutes(1));
 
   it(
-    'should read the latest block height from a real indexer',
+    'should read the latest block from a real indexer',
     async () => {
       // The wait strategy fires on the first indexed block, which is genesis at height 0, so the read is retried until
       // the chain has advanced. Retrying rather than accepting 0 keeps the assertion meaningful: a read that always
@@ -67,12 +67,12 @@ describe('makeDefaultLivenessReads', () => {
             // `Effect.repeat` yields the schedule's output — a repetition count — so the height is read again afterwards
             // rather than taken from the repeat, which would assert on the count instead.
             yield* reads
-              .indexerHeight()
+              .indexerTip()
               .pipe(
-                Effect.repeat({ until: (height) => height > 0n, schedule: Schedule.spaced(Duration.seconds(1)) }),
+                Effect.repeat({ until: ({ height }) => height > 0n, schedule: Schedule.spaced(Duration.seconds(1)) }),
                 Effect.timeout(Duration.seconds(45)),
               );
-            return yield* reads.indexerHeight();
+            return (yield* reads.indexerTip()).height;
           }),
         ),
       );
@@ -87,7 +87,7 @@ describe('makeDefaultLivenessReads', () => {
     async () => {
       // The comparison the WrongNetwork verdict rests on, run against real presentation: the node reports its genesis
       // hash 0x-prefixed, the indexer serves a plain hex string, and both containers share one chain — so
-      // `sameGenesis` must hold. A unit test cannot prove the format assumptions; only the real services can.
+      // `sameBlockHash` must hold. A unit test cannot prove the format assumptions; only the real services can.
       const hashes = await Effect.runPromise(
         Effect.scoped(
           Effect.gen(function* () {
@@ -101,23 +101,23 @@ describe('makeDefaultLivenessReads', () => {
 
       expect(hashes.indexerGenesisHash).toMatch(/^(0x)?[0-9a-fA-F]{64}$/);
       expect(hashes.nodeGenesisHash).toMatch(/^0x[0-9a-f]{64}$/);
-      expect(IndexerLiveness.sameGenesis(hashes.indexerGenesisHash, hashes.nodeGenesisHash)).toBe(true);
+      expect(IndexerLiveness.sameBlockHash(hashes.indexerGenesisHash, hashes.nodeGenesisHash)).toBe(true);
     },
     timeoutMinutes(1),
   );
 
   it(
-    'should read the finalized block height from a real node',
+    'should read the finalized block from a real node',
     async () => {
       // Proves the two-step read works against a real node: `chain_getFinalizedHead`, then `chain_getHeader` at that
       // hash. A unit test with a stubbed api cannot show that the call shape is accepted.
       const exit = await Effect.runPromiseExit(
-        Effect.scoped(Effect.flatMap(liveReads(), (reads) => reads.finalizedHeight())),
+        Effect.scoped(Effect.flatMap(liveReads(), (reads) => reads.finalizedBlock())),
       );
 
       // Printing the cause on failure: "Failed to read the node's finalized head" alone is not diagnosable from CI.
       expect(Exit.isSuccess(exit) ? 'ok' : Cause.pretty(exit.cause)).toBe('ok');
-      expect(Exit.isSuccess(exit) ? exit.value : 0n).toBeGreaterThan(0n);
+      expect(Exit.isSuccess(exit) ? exit.value.height : 0n).toBeGreaterThan(0n);
     },
     timeoutMinutes(1),
   );
@@ -133,15 +133,17 @@ describe('makeDefaultLivenessReads', () => {
         Effect.scoped(
           Effect.gen(function* () {
             const reads = yield* liveReads();
-            const first = yield* reads.finalizedHeight();
-            const second = yield* reads.finalizedHeight();
+            const first = yield* reads.finalizedBlock();
+            const second = yield* reads.finalizedBlock();
             return { first, second };
           }),
         ),
       );
 
       expect(Exit.isSuccess(exit) ? 'ok' : Cause.pretty(exit.cause)).toBe('ok');
-      const heights = Exit.isSuccess(exit) ? exit.value : { first: 0n, second: 0n };
+      const heights = Exit.isSuccess(exit)
+        ? { first: exit.value.first.height, second: exit.value.second.height }
+        : { first: 0n, second: 0n };
       expect(heights.first).toBeGreaterThan(0n);
       // The chain advances, so the second read is at least the first. Equality is fine — two reads can land in one block.
       expect(heights.second).toBeGreaterThanOrEqual(heights.first);
@@ -157,12 +159,12 @@ describe('makeDefaultLivenessReads', () => {
       const verdict = await Effect.runPromise(
         Effect.scoped(
           Effect.gen(function* () {
-            const { indexerHeight, finalizedHeight } = yield* liveReads();
-            const [indexer, finalized] = yield* Effect.all([indexerHeight(), finalizedHeight()]);
+            const { indexerTip, finalizedBlock } = yield* liveReads();
+            const [indexer, finalized] = yield* Effect.all([indexerTip(), finalizedBlock()]);
 
             return IndexerLiveness.evaluate({
-              indexerHeight: indexer,
-              finalizedHeight: finalized,
+              indexerHeight: indexer.height,
+              finalizedHeight: finalized.height,
               ...DEFAULT_LIVENESS_CONFIGURATION,
             });
           }),
@@ -186,7 +188,7 @@ describe('makeDefaultLivenessReads', () => {
       });
 
       const exit = await Effect.runPromiseExit(
-        Effect.scoped(Effect.flatMap(unreachable, (reads) => reads.finalizedHeight())),
+        Effect.scoped(Effect.flatMap(unreachable, (reads) => reads.finalizedBlock())),
       );
 
       expect(Exit.isFailure(exit)).toBe(true);

@@ -51,13 +51,21 @@ const livenessUpdate = (verdict: IndexerLiveness.IndexerLiveness): IndexerLivene
   verdict,
 });
 
-/** Reads that answer with fixed heights and matching genesis hashes, so a verdict depends only on the tolerances. */
+/**
+ * One chain, as the stubs model it: a block's hash follows from its height, so both endpoints name the same block
+ * wherever they are asked and a verdict depends only on the tolerances.
+ */
+const chainHash = (height: bigint): string => `0x${height.toString(16).padStart(64, '0')}`;
+
+/** Reads that answer with fixed heights on one chain, so a verdict depends only on the tolerances. */
 const fixedHeightReads = (heights: {
   readonly indexerHeight: bigint;
   readonly finalizedHeight: bigint;
 }): LivenessReads => ({
-  indexerHeight: () => Effect.succeed(heights.indexerHeight),
-  finalizedHeight: () => Effect.succeed(heights.finalizedHeight),
+  indexerTip: () => Effect.succeed({ height: heights.indexerHeight, hash: chainHash(heights.indexerHeight) }),
+  finalizedBlock: () => Effect.succeed({ height: heights.finalizedHeight, hash: chainHash(heights.finalizedHeight) }),
+  indexerBlockHashAt: (height) => Effect.succeed(Option.some(chainHash(height))),
+  nodeBlockHashAt: (height) => Effect.succeed(Option.some(chainHash(height))),
   indexerGenesisHash: () => Effect.succeed('ab'.repeat(32)),
   nodeGenesisHash: () => Effect.succeed(`0x${'ab'.repeat(32)}`),
 });
@@ -225,8 +233,11 @@ describe('makeLivenessUpdates', () => {
     const program = Effect.gen(function* () {
       const polls = yield* Ref.make(0);
       const countingReads: LivenessReads = {
-        indexerHeight: () => Ref.updateAndGet(polls, (n) => n + 1).pipe(Effect.as(1_000n)),
-        finalizedHeight: () => Effect.succeed(1_000n),
+        indexerTip: () =>
+          Ref.updateAndGet(polls, (n) => n + 1).pipe(Effect.as({ height: 1_000n, hash: chainHash(1_000n) })),
+        finalizedBlock: () => Effect.succeed({ height: 1_000n, hash: chainHash(1_000n) }),
+        indexerBlockHashAt: (height) => Effect.succeed(Option.some(chainHash(height))),
+        nodeBlockHashAt: (height) => Effect.succeed(Option.some(chainHash(height))),
         indexerGenesisHash: () => Effect.succeed('ab'.repeat(32)),
         nodeGenesisHash: () => Effect.succeed(`0x${'ab'.repeat(32)}`),
       };

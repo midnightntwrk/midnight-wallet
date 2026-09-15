@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Data } from 'effect';
+import { Data, Option } from 'effect';
 
 /**
  * Why an indexer liveness check did not produce a verdict.
@@ -116,21 +116,37 @@ export type IndexerLiveness = Data.TaggedEnum<{
   };
 
   /**
-   * The indexer and the node report different genesis blocks: they are on different chains.
+   * The indexer and the node name different blocks at a height both claim to have passed: they are not on the same
+   * chain.
    *
    * @remarks
+   *   A height is a number the indexer chooses, and nothing in it is derived from consensus. Comparing heights alone
+   *   therefore proves only that the indexer can count — an indexer reporting a height it never reached passes. This
+   *   verdict is the outcome of the stronger question: at a height both endpoints claim to have passed, do they name
+   *   the same block?
+   *
+   *   Both endpoints report finalized blocks only, and finality is what makes a disagreement conclusive: a finalized
+   *   block cannot be reorganised away, so two different hashes at the same finalized height cannot be two views of one
+   *   chain. Genesis is the `height: 0n` case of exactly this comparison, not a separate kind of failure.
+   *
    *   Unlike {@link IndexerLiveness.Unavailable}, this cannot be transient. Both hashes were read successfully and differ,
-   *   which proves at least one of the two endpoints points at another chain — and it will keep pointing there until
-   *   reconfigured. Every height the indexer reports therefore describes a different chain, so height comparison is
-   *   meaningless and this verdict gates sync completion (see {@link IndexerLiveness.blocksSyncCompletion}): an
-   *   application waiting for sync must not proceed — and then submit — over data from the wrong network. Both hashes
+   *   which proves at least one endpoint points at another chain — and it will keep pointing there until reconfigured.
+   *   Every height the indexer reports therefore describes a different chain, so height comparison is meaningless and
+   *   this verdict gates sync completion (see {@link IndexerLiveness.blocksSyncCompletion}): an application waiting for
+   *   sync must not proceed — and then submit — over data from the wrong network.
+   *
+   *   A hash is absent when that endpoint could not name a block at `height` despite having just claimed to have passed
+   *   it. That contradicts its own report rather than merely failing to answer — it has not shown itself to be on this
+   *   chain — so it belongs here rather than in {@link IndexerLiveness.Unavailable}, which does not gate. Both hashes
    *   are carried as reported, so a diagnostic can show the operator exactly what each endpoint answered.
    */
   WrongNetwork: {
-    /** The hash of the indexer's block at height zero, as the indexer reported it. */
-    readonly indexerGenesisHash: string;
-    /** The node's genesis hash, as the node reported it. */
-    readonly nodeGenesisHash: string;
+    /** The height at which the two endpoints were compared. Both claimed to have passed it; `0n` is the genesis check. */
+    readonly height: bigint;
+    /** The block the indexer names at `height`, as it reported it, or `Option.none` when it could not name one. */
+    readonly indexerBlockHash: Option.Option<string>;
+    /** The block the node names at `height`, as it reported it, or `Option.none` when it could not name one. */
+    readonly nodeBlockHash: Option.Option<string>;
   };
 }>;
 
@@ -160,7 +176,21 @@ export const isWrongNetwork = IndexerLiveness.$is('WrongNetwork');
 export const { $match: match, Skipped, Unknown, InSync, Behind, Ahead, Unavailable, WrongNetwork } = IndexerLiveness;
 
 /**
- * Decides whether two genesis-block hashes name the same chain.
+ * A block, named by the two things both endpoints can report about it.
+ *
+ * @remarks
+ *   The pair travels together because neither half is usable alone here: a height with no hash is a number the reporting
+ *   endpoint chose, and a hash with no height cannot be looked up on the other side.
+ */
+export type BlockRef = {
+  /** The block's height. */
+  readonly height: bigint;
+  /** The block's hash, in whatever presentation the reporting endpoint uses. */
+  readonly hash: string;
+};
+
+/**
+ * Decides whether two block hashes name the same block.
  *
  * @remarks
  *   Presentation differs by source — a node reports its genesis hash `0x`-prefixed and lowercase, an indexer serves a
@@ -170,7 +200,7 @@ export const { $match: match, Skipped, Unknown, InSync, Behind, Ahead, Unavailab
  * @param right - The other genesis-block hash, in any hex presentation.
  * @returns `true` when both hashes carry the same bytes.
  */
-export const sameGenesis = (left: string, right: string): boolean => normalizeHash(left) === normalizeHash(right);
+export const sameBlockHash = (left: string, right: string): boolean => normalizeHash(left) === normalizeHash(right);
 
 /** Reduces a hex hash to bare lowercase digits, so presentation cannot influence a comparison. */
 const normalizeHash = (hash: string): string => hash.toLowerCase().replace(/^0x/, '');
@@ -344,8 +374,100 @@ export const equivalent = (left: IndexerLiveness, right: IndexerLiveness): boole
     InSync: () => isInSync(right),
     Behind: ({ lag }) => isBehind(right) && right.lag === lag,
     Ahead: () => isAhead(right),
-    WrongNetwork: ({ indexerGenesisHash, nodeGenesisHash }) =>
+    WrongNetwork: ({ height, indexerBlockHash, nodeBlockHash }) =>
       isWrongNetwork(right) &&
-      right.indexerGenesisHash === indexerGenesisHash &&
-      right.nodeGenesisHash === nodeGenesisHash,
+      right.height === height &&
+      Option.getOrElse(right.indexerBlockHash, () => '') === Option.getOrElse(indexerBlockHash, () => '') &&
+      Option.getOrElse(right.nodeBlockHash, () => '') === Option.getOrElse(nodeBlockHash, () => ''),
   });
+
+/**
+ * Decides whether two endpoints that both claim a given block agree on which block it is.
+ *
+ * @remarks
+ *   An absent hash is a disagreement, not an unknown: the endpoint has just claimed to have passed this height, so being
+ *   unable to name the block there contradicts its own report.
+ */
+const agreeOn = (left: Option.Option<string>, right: Option.Option<string>): boolean =>
+  Option.match(left, {
+    onNone: () => false,
+    onSome: (leftHash) =>
+      Option.match(right, { onNone: () => false, onSome: (rightHash) => sameBlockHash(leftHash, rightHash) }),
+  });
+
+/**
+ * Cross-checks an indexer's reported tip against a node's finalized head, by block rather than by height alone.
+ *
+ * @remarks
+ *   Heights alone cannot decide this. A height is a number the indexer chooses, so an indexer that reports one it never
+ *   reached passes a height-only comparison at no cost. The block at that height is the part it cannot invent: both
+ *   endpoints serve finalized blocks, and a finalized block cannot be reorganised away, so a disagreement about one is
+ *   conclusive rather than a transient difference of view.
+ *
+ *   Exactly one block is compared, at the lower of the two heights — the newest block both endpoints claim to have
+ *   passed. `sharedHash` is that block as reported by whichever endpoint is ahead, and is the check's only extra read;
+ *   when the heights are equal the two tips are already the same block and `sharedHash` is ignored. An endpoint that
+ *   cannot name a block there has failed to show it is on this chain, which is why an absent hash produces
+ *   {@link IndexerLiveness.WrongNetwork} rather than {@link IndexerLiveness.Unavailable}.
+ *
+ *   The heights are still what decide a passing verdict: agreement on the shared block only clears the way for
+ *   {@link evaluate}, it does not excuse a lag or an overshoot beyond the tolerances.
+ * @example
+ *   ```ts
+ *   const verdict = IndexerLiveness.evaluateTips({
+ *     indexer: { height: 1_002n, hash: '0xabc…' },
+ *     finalized: { height: 1_000n, hash: '0xdef…' },
+ *     // The indexer leads, so this is the indexer's block at height 1_000.
+ *     sharedHash: Option.some('0xdef…'),
+ *     maxBehindBlocks: 10n,
+ *     maxAheadBlocks: 10n,
+ *   });
+ *   // IndexerLiveness.InSync({ indexerHeight: 1002n, finalizedHeight: 1000n })
+ *   ```;
+ *
+ * @param params - The two tips, the block they share, and the tolerances to allow in each direction.
+ * @param params.indexer - The height and hash of the latest block the indexer reports having processed.
+ * @param params.finalized - The height and hash of the node's highest finalized block.
+ * @param params.sharedHash - The block at the lower of the two heights, as reported by whichever endpoint is ahead of
+ *   the other, or `Option.none` when that endpoint could not name one. Ignored when the heights are equal.
+ * @param params.maxBehindBlocks - How many blocks the indexer may trail the finalized head by and still count as in
+ *   sync.
+ * @param params.maxAheadBlocks - How many blocks the indexer may lead the finalized head by and still count as in sync.
+ * @returns {@link IndexerLiveness.WrongNetwork} When the two endpoints do not name the same block at the shared height;
+ *   otherwise the height verdict from {@link evaluate}.
+ */
+export const evaluateTips = ({
+  indexer,
+  finalized,
+  sharedHash,
+  maxBehindBlocks,
+  maxAheadBlocks,
+}: {
+  readonly indexer: BlockRef;
+  readonly finalized: BlockRef;
+  readonly sharedHash: Option.Option<string>;
+  readonly maxBehindBlocks: bigint;
+  readonly maxAheadBlocks: bigint;
+}): IndexerLiveness => {
+  // The newest block both endpoints claim to have passed, and what each of them names there. Whichever endpoint is
+  // ahead had to be asked; the other one is already reporting that block as its own tip.
+  const shared =
+    indexer.height === finalized.height
+      ? {
+          height: indexer.height,
+          indexerBlockHash: Option.some(indexer.hash),
+          nodeBlockHash: Option.some(finalized.hash),
+        }
+      : indexer.height > finalized.height
+        ? { height: finalized.height, indexerBlockHash: sharedHash, nodeBlockHash: Option.some(finalized.hash) }
+        : { height: indexer.height, indexerBlockHash: Option.some(indexer.hash), nodeBlockHash: sharedHash };
+
+  return agreeOn(shared.indexerBlockHash, shared.nodeBlockHash)
+    ? evaluate({
+        indexerHeight: indexer.height,
+        finalizedHeight: finalized.height,
+        maxBehindBlocks,
+        maxAheadBlocks,
+      })
+    : WrongNetwork(shared);
+};

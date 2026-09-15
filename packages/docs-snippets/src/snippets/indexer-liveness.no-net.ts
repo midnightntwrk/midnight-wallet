@@ -13,11 +13,12 @@
 
 // Reading the indexer liveness verdict.
 //
-// The wallet compares the indexer's latest block against the node's highest finalized block — after establishing,
-// once, that both report the same genesis block. Three verdicts make the wallet report itself incomplete: `Behind`,
-// which proves its view is stale; `Unknown`, which lasts the few seconds until the first comparison lands; and
-// `WrongNetwork`, which proves the two endpoints are on different chains. The rest are informational. All seven are
-// readable at any time, so an application can explain a wallet's state to a user rather than only showing a boolean.
+// The wallet compares the indexer's latest block against the node's highest finalized block — both the heights and,
+// at the newest block both endpoints claim to have passed, the block itself. Three verdicts make the wallet report
+// itself incomplete: `Behind`, which proves its view is stale; `Unknown`, which lasts the few seconds until the first
+// comparison lands; and `WrongNetwork`, which proves the two endpoints are not on the same chain. The rest are
+// informational. All seven are readable at any time, so an application can explain a wallet's state to a user rather
+// than only showing a boolean.
 
 import {
   type DefaultConfiguration,
@@ -26,8 +27,12 @@ import {
   type UnshieldedWalletState,
   type WalletFacade,
 } from '@midnightntwrk/wallet-sdk';
-import { Duration } from 'effect';
+import { Duration, Option } from 'effect';
 import { firstValueFrom, type Subscription } from 'rxjs';
+
+// An endpoint that could name no block at the compared height has nothing to show but that absence.
+const describeBlock = (hash: Option.Option<string>): string =>
+  Option.getOrElse(hash, () => 'could not name a block there');
 
 // Turning a verdict into something worth showing a user. `$match` is exhaustive: adding a verdict later fails to compile
 // here until it is handled.
@@ -53,11 +58,14 @@ const describeLiveness = IndexerLiveness.match({
 
   Unknown: () => 'Indexer has not been verified against a node yet.',
 
-  // The loudest verdict: the two endpoints disagree about the genesis block, so one of them points at another chain
-  // and every balance shown is suspect. This pins until the configuration is fixed — it cannot heal on its own.
-  WrongNetwork: ({ indexerGenesisHash, nodeGenesisHash }) =>
-    `The indexer and the node are on different networks (indexer genesis ${indexerGenesisHash}, ` +
-    `node genesis ${nodeGenesisHash}). Check the configured endpoints.`,
+  // The loudest verdict: the two endpoints name different blocks at a height both claim to have passed, so one of them
+  // is on another chain and every balance shown is suspect. Height 0 is the genesis comparison the check runs once;
+  // any other height is a disagreement about a finalized block, which cannot be a difference of view. A missing hash
+  // means that endpoint could not name a block at a height it had just claimed to have passed.
+  WrongNetwork: ({ height, indexerBlockHash, nodeBlockHash }) =>
+    `The indexer and the node are not on the same chain — they disagree about block ${height} ` +
+    `(indexer ${describeBlock(indexerBlockHash)}, node ${describeBlock(nodeBlockHash)}). ` +
+    `Check the configured endpoints.`,
 });
 
 // The verdict lives on the wallet's state, so it is read wherever that state is read.
@@ -164,7 +172,24 @@ const examples: readonly IndexerLiveness.IndexerLiveness[] = [
   IndexerLiveness.Ahead({ indexerHeight: 1_050n, finalizedHeight: 1_000n, overshoot: 50n }),
   IndexerLiveness.Unavailable({ consecutiveFailures: 3, lastError: 'Poll abandoned: a read did not complete in time' }),
   IndexerLiveness.Skipped({ reason: 'no-node-configured' }),
-  IndexerLiveness.WrongNetwork({ indexerGenesisHash: 'ab'.repeat(32), nodeGenesisHash: `0x${'cd'.repeat(32)}` }),
+  // The genesis comparison, which runs once.
+  IndexerLiveness.WrongNetwork({
+    height: 0n,
+    indexerBlockHash: Option.some('ab'.repeat(32)),
+    nodeBlockHash: Option.some(`0x${'cd'.repeat(32)}`),
+  }),
+  // The same verdict reached at the tip instead: matching genesis, different finalized block.
+  IndexerLiveness.WrongNetwork({
+    height: 1_000n,
+    indexerBlockHash: Option.some(`0x${'ee'.repeat(32)}`),
+    nodeBlockHash: Option.some(`0x${'ff'.repeat(32)}`),
+  }),
+  // And where the indexer could not name the block it had just claimed to have passed.
+  IndexerLiveness.WrongNetwork({
+    height: 1_000n,
+    indexerBlockHash: Option.none(),
+    nodeBlockHash: Option.some(`0x${'ff'.repeat(32)}`),
+  }),
 ];
 
 examples.forEach((verdict) => {

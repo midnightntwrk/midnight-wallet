@@ -63,6 +63,35 @@ export interface Service {
   getFinalizedBlock(): Effect.Effect<FinalizedBlock, NodeClientError.NodeClientError>;
 
   /**
+   * Reads the hash of the block at a given height.
+   *
+   * @remarks
+   *   This is what makes the wallet's liveness check a comparison of blocks rather than of numbers. A height is a value
+   *   the indexer chooses, so an indexer reporting one it never reached passes a height-only comparison at no cost; the
+   *   block at that height is the part it cannot invent. The check reads one block here per poll — the newest block
+   *   both endpoints claim to have passed — and compares it against what the indexer names there.
+   *
+   *   `height` is at or below the node's own finalized head, so an implementation may answer from finalized blocks only.
+   *   A canonical chain has a block at every such height, which is what makes absence meaningful: it says this node
+   *   does not have the block the indexer is claiming, not that the read went wrong. Absence is therefore `Option.none`
+   *   rather than a failure — to the liveness check one is a wrong-network proof and the other an outage.
+   *
+   *   An unreachable node must surface as a typed `NodeClientError`, not a defect, for the same reason as
+   *   {@link Service.getFinalizedBlock}: the check turns that failure into an `Unavailable` verdict, and a defect would
+   *   kill its poll instead.
+   * @example
+   *   ```ts
+   *   const hash = yield* client.getBlockHashAt(1_000n);
+   *   // Option.some('0x1234…'), or Option.none() when this node has no block at that height
+   *   ```;
+   *
+   * @param height - The height to read, at or below the node's finalized head.
+   * @returns An effect yielding the block's hex-encoded hash, or `Option.none` when the node has no block at that
+   *   height.
+   */
+  getBlockHashAt(height: bigint): Effect.Effect<Option.Option<string>, NodeClientError.NodeClientError>;
+
+  /**
    * Reads the hash of the node's genesis block.
    *
    * @remarks
@@ -76,7 +105,7 @@ export interface Service {
    * @example
    *   ```ts
    *   const genesisHash = yield* client.getGenesisHash();
-   *   // '0x1234…' — compare with IndexerLiveness.sameGenesis(indexerHash, genesisHash)
+   *   // '0x1234…' — compare with IndexerLiveness.sameBlockHash(indexerHash, genesisHash)
    *   ```;
    *
    * @returns An effect yielding the genesis-block hash as a `0x`-prefixed hex string.
@@ -105,6 +134,26 @@ export const getGenesisTransactions = (): Effect.Effect<Genesis, NodeClientError
  */
 export const getFinalizedBlock = (): Effect.Effect<FinalizedBlock, NodeClientError.NodeClientError, NodeClient> =>
   NodeClient.pipe(Effect.flatMap((client) => client.getFinalizedBlock()));
+
+/**
+ * Reads the hash of the block at a given height.
+ *
+ * @remarks
+ *   The wallet's liveness check reads one block per poll through this, to compare the block the indexer names at that
+ *   height rather than only the height itself. Absence is `Option.none` rather than a failure: a node with no block at
+ *   a height below its own finalized head is answering that it does not have the block being claimed.
+ * @example
+ *   ```ts
+ *   const hash = yield* NodeClient.getBlockHashAt(1_000n);
+ *   ```;
+ *
+ * @param height - The height to read, at or below the node's finalized head.
+ * @returns An effect yielding the block's hex-encoded hash, or `Option.none` when the node has no block at that height.
+ */
+export const getBlockHashAt = (
+  height: bigint,
+): Effect.Effect<Option.Option<string>, NodeClientError.NodeClientError, NodeClient> =>
+  NodeClient.pipe(Effect.flatMap((client) => client.getBlockHashAt(height)));
 
 /**
  * Reads the hash of the node's genesis block.
