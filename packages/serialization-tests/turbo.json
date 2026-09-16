@@ -31,6 +31,17 @@
         "vitest.config.ts"
       ],
       "dependsOn": ["^dist", "typecheck"]
+    },
+    "capture": {
+      "inputs": [
+        "test/**/*.{ts,tsx}",
+        "fixtures/**/*.json",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        "vitest.config.ts"
+      ],
+      "dependsOn": ["^dist"],
+      "cache": false
     }
   }
 }
