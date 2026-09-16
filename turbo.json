@@ -55,19 +55,6 @@
       "outputLogs": "new-only",
       "dependsOn": ["^dist", "typecheck"]
     },
-    "test:serialization": {
-      "inputs": [
-        "test/**/*.{ts,tsx}",
-        "src/**/*.{ts,tsx}",
-        "tsconfig*.json",
-        "$TURBO_ROOT$/tsconfig.base.json",
-        "vitest.config.ts"
-      ],
-      "outputs": ["coverage/**", "reports/**"],
-      "env": ["DEBUG"],
-      "outputLogs": "new-only",
-      "dependsOn": ["^dist", "typecheck"]
-    },
     "typecheck": {
       "inputs": [
         "test/**/*.{ts,tsx}",

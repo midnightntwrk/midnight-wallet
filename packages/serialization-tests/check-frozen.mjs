@@ -46,20 +46,24 @@ const changed = git('diff', '--name-status', `${mergeBase}...HEAD`)
   .filter((line) => line.length > 0)
   .map((line) => {
     const [status, ...paths] = line.split('\t');
-    return { status: status[0], path: paths[paths.length - 1] };
+    // A rename or copy reports two paths, source then destination. Both matter: moving a frozen fixture out of the
+    // corpus loses the record just as surely as editing it.
+    return { status: status[0], paths };
   });
 
 // An added file under a new release folder is how a fixture corpus grows; anything else is a change to the record.
-const violations = changed.filter(({ status, path }) => FROZEN.test(path) && status !== 'A');
+const violations = changed.filter(({ status, paths }) => status !== 'A' && paths.some((path) => FROZEN.test(path)));
 
 if (violations.length === 0) {
   console.log(`No published fixture was modified (compared against ${BASE}).`);
   process.exit(0);
 }
 
+const LABELS = { D: 'deleted', R: 'moved', C: 'copied' };
+
 console.error('Published fixtures are frozen, but this branch changes them:\n');
-for (const { status, path } of violations) {
-  console.error(`  ${status === 'D' ? 'deleted ' : 'modified'}  ${path}`);
+for (const { status, paths } of violations) {
+  console.error(`  ${(LABELS[status] ?? 'modified').padEnd(8)}  ${paths.join(' -> ')}`);
 }
 console.error(`
 Each of these records what a published release actually wrote, so it is the evidence the compatibility tests check

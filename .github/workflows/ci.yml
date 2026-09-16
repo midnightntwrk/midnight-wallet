@@ -421,29 +421,10 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        id: setup-node
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'yarn'
-          cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
-
-      - name: Enable corepack
-        run: corepack enable
-
-      - name: Configure yarn
-        run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
-
-      - name: Install dependencies
-        run: yarn install --immutable
-
+      # No toolchain setup and no install: the check is a plain node script over `git diff`, using only the standard
+      # library, so the runner's own node runs it.
       - name: Check published fixtures are unmodified
-        run: yarn workspace @midnight/wallet-serialization-tests check:frozen origin/${{ github.base_ref || 'main' }}
-
-      - name: Run serialization compatibility and drift tests
-        run: yarn test:serialization
+        run: node packages/serialization-tests/check-frozen.mjs origin/${{ github.base_ref || 'main' }}
 
   # Single aggregate gate over all test stages. Produces the "Tests" status check
   # that branch protection requires (the old combined job was also named "Tests"),
