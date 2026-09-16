@@ -40,7 +40,9 @@ function deriveAllKeys(seed: Uint8Array) {
   const dustSeed = deriveRoleKey(account, Roles.Dust);
   const nightKey = deriveRoleKey(account, Roles.NightExternal);
 
-  hdWallet.hdWallet.clear(); // Clear the HDWallet to avoid holding the private key in memory for longer than needed
+  // Wipes the root key's private-key buffer. The derived keys above, and the intermediates BIP32 allocated to reach
+  // them, are not covered — this narrows the window, it does not clear the seed from the process.
+  hdWallet.hdWallet.clear();
 
   return {
     shielded: { seed: shieldedSeed, keys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed) },

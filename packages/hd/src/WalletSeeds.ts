@@ -111,7 +111,7 @@ export const WalletSeeds = {
       .selectRoles([Roles.Zswap, unshieldedRole, Roles.Dust])
       .deriveKeysAt(addressIndex);
 
-    // Wiped whether or not the derivation succeeded: a failed walk is no reason to leave the tree open.
+    // Wiped whether or not the derivation succeeded: a failed walk is no reason to leave the root key live.
     opened.hdWallet.clear();
 
     if (derived.type !== 'keysDerived') {

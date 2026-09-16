@@ -85,8 +85,11 @@ export class HDWallet {
   }
 
   /**
-   * Once all keys are derived - clear internals from private data, so that they do not reside in memory longer than
-   * needed.
+   * Wipes the root key's private-key buffer, narrowing the window in which the seed is reachable.
+   *
+   * It does not reach the intermediate keys BIP32 allocates at each level of a derivation path, nor the derived keys
+   * already handed to callers — neither is reachable from here, so both are left to the garbage collector. Call this
+   * once all keys are derived, but do not read it as a guarantee that the seed is gone from the process.
    */
   public clear(): void {
     this.rootKey.wipePrivateData();
