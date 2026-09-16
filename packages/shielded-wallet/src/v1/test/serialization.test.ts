@@ -112,7 +112,7 @@ describe('V1 Wallet serialization', () => {
     { seed: '0000000000000000000000000000000000000000000000000000000000000002' },
     { seed: '0000000000000000000000000000000000000000000000000000000000000003' },
     { seed: '0000000000000000000000000000000000000000000000000000000000000004' },
-  ])('maintains serialize ◦ deserialize == id property, including transaction history', ({ seed }) => {
+  ])('maintains serialize ◦ deserialize == id property for an empty wallet', ({ seed }) => {
     const networkId = NetworkId.NetworkId.Undeployed;
     const capability = makeDefaultV1SerializationCapability();
     const keys = ledger.ZswapSecretKeys.fromSeed(Buffer.from(seed, 'hex'));
@@ -207,5 +207,42 @@ describe('V1 shielded snapshot format version', () => {
     const restored = capability.deserialize(null, fromANewerSdk);
 
     expect(Either.isLeft(restored)).toBe(true);
+  });
+});
+
+describe('V1 shielded snapshot carrying an embedded transaction history', () => {
+  const capability = makeDefaultV1SerializationCapability();
+  const keys = ledger.ZswapSecretKeys.fromSeed(
+    Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
+  );
+  const emptyWallet = () => CoreWallet.initEmpty(keys, NetworkId.NetworkId.Undeployed);
+
+  /**
+   * The shielded snapshot written by 1.0.0 embedded the transaction history as `txHistory`, a list of hex-encoded
+   * proven ledger transactions, and carried no format version. The field was removed from the schema in #140, and
+   * Effect Schema ignores keys it does not know — so a snapshot like this one restores without complaint today and the
+   * history is dropped on the way through.
+   */
+  const withEmbeddedHistory = (txHistory: readonly string[]): string => {
+    const { version: _version, ...rest } = JSON.parse(capability.serialize(emptyWallet())) as Record<string, unknown>;
+    return JSON.stringify({ ...rest, txHistory });
+  };
+
+  const embedded = ['00aa11bb22cc', '33dd44ee55ff'];
+
+  it('should write the embedded history back out exactly as it was read', () => {
+    const restored = pipe(capability.deserialize(null, withEmbeddedHistory(embedded)), EitherOps.getOrThrowLeft);
+
+    const rewritten: unknown = JSON.parse(capability.serialize(restored));
+
+    expect(rewritten).toMatchObject({ txHistory: embedded });
+  });
+
+  it('should not invent the field for a snapshot that never carried one', () => {
+    const restored = pipe(capability.deserialize(null, capability.serialize(emptyWallet())), EitherOps.getOrThrowLeft);
+
+    const rewritten = JSON.parse(capability.serialize(restored)) as Record<string, unknown>;
+
+    expect('txHistory' in rewritten).toBe(false);
   });
 });
