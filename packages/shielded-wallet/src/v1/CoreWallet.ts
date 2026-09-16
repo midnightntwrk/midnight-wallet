@@ -146,8 +146,8 @@ export const CoreWallet = {
           coinHashes,
           progress: SyncProgress.createSyncProgress(syncProgress),
           protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
-          // Spread conditionally: a snapshot that carried no history must not gain the key, so that re-serializing
-          // it produces the bytes it came in with.
+          // Spread conditionally: a snapshot that carried no embedded history must not gain a `legacyTxHistory` key,
+          // so that re-serializing it writes no `txHistory` field it did not already have.
           ...(legacyTxHistory === undefined ? {} : { legacyTxHistory }),
         }),
       }),

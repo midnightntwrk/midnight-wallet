@@ -16,7 +16,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    exclude: [...configDefaults.exclude, '**/dist/**', '**/fixture-generator/**'],
+    exclude: [...configDefaults.exclude, '**/dist/**'],
     environment: 'node',
     globals: true,
     projects: [
@@ -26,13 +26,6 @@ export default defineConfig({
           name: 'unit',
           include: ['**/*.test.ts'],
           exclude: [...configDefaults.exclude, '**/dist/**', '**/*.integration.test.ts'],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: 'integration',
-          include: ['**/*.integration.test.ts'],
         },
       },
     ],

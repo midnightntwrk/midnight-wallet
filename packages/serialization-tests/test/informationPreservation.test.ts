@@ -80,6 +80,8 @@ describe('reading a stored payload and writing it back keeps everything it carri
     expect(cases.length).toBeGreaterThan(0);
   });
 
+  // One rewrite per fixture, checked twice: rewriting is the expensive part, and both questions are about the same
+  // written-back payload.
   it.each(cases.map(({ surface, fixture }) => ({ surface, fixture, id: fixture.id })))(
     '$id',
     async ({ surface, fixture }: { surface: (typeof SURFACES)[number]; fixture: Fixture }) => {
@@ -91,16 +93,9 @@ describe('reading a stored payload and writing it back keeps everything it carri
       const lost = before.filter((path) => !after.includes(path));
 
       expect({ id: fixture.id, lost }).toEqual({ id: fixture.id, lost: [] });
-    },
-  );
 
-  // A payload that arrives at one version and leaves at another has been upgraded, which is the intended behaviour —
-  // but it must be the version this build declares, not some third thing.
-  it.each(cases.map(({ surface, fixture }) => ({ surface, fixture, id: fixture.id })))(
-    '$id is rewritten at a known version',
-    async ({ surface, fixture }: { surface: (typeof SURFACES)[number]; fixture: Fixture }) => {
-      const rewritten = await rewriteWithCurrentCode(surface, fixture.serialized);
-
+      // A payload that arrives at one version and leaves at another has been upgraded, which is the intended
+      // behaviour — but it must be the version this build declares, not some third thing.
       expect(declaredVersionOf(rewritten)).toMatch(/^v\d+$/);
     },
   );

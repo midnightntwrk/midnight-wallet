@@ -122,6 +122,12 @@ export const baselineFilesFor = (surface: Surface): readonly string[] =>
  * A payload with no envelope is the first version of its surface — the envelope did not exist when it was written, so
  * its absence is the marker. No payload has ever been written carrying the literal `v1`.
  *
+ * Deliberately not `TransactionHistoryFormat.detectVersion`, whose fallback is `unrecognised`. This one answers a
+ * different question: it reads the declared version of any persisted surface, in a corpus where every payload is known
+ * to be one this repo wrote, so a payload with no envelope is the first format by definition rather than one that
+ * failed to parse. Refusing an unrecognised shape is the SDK's job; here it would only hide which fixture is wrong
+ * behind a fixture-loading error.
+ *
  * @param serialized - The stored payload.
  * @returns The format version, e.g. `v1`.
  */

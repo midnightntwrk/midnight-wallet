@@ -66,7 +66,7 @@ Ledger blob internals are the ledger's concern, not a format version of ours.
 
 ## Tests that must stay green
 
-Run: `yarn test:serialization`
+Run: `yarn test:unit --filter=@midnight/wallet-serialization-tests`
 
 | File | Question it answers |
 | --- | --- |
