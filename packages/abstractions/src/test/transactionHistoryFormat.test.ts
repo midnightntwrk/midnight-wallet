@@ -11,7 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, it, expect } from 'vitest';
-import { upgradeV1ToV2, upgradeToCurrentFormat } from '../TransactionHistoryFormat.js';
+import { Either } from 'effect';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
+import {
+  detectVersion,
+  upgradeV1ToV2,
+  upgradeToCurrentFormat,
+  TransactionHistoryRestoreError,
+} from '../TransactionHistoryFormat.js';
 
 /**
  * The first format: a bare array, no envelope. Entries carry no `lifecycle`, because the field did not exist when this
@@ -23,12 +30,43 @@ const firstFormat = [
   { hash: '0xbbb', protocolVersion: 1, status: 'FAILURE' },
 ];
 
+describe('detecting the format a payload was written in', () => {
+  it('should report a bare array as the first format and hand back its entries', () => {
+    const detected = detectVersion(firstFormat);
+
+    expect(detected._tag).toBe('v1');
+    expect(detected._tag === 'v1' ? detected.entries : undefined).toHaveLength(2);
+  });
+
+  it('should report a current-format envelope as v2 and hand back its entries', () => {
+    const detected = detectVersion({ version: 'v2', entries: [] });
+
+    expect(detected._tag).toBe('v2');
+    expect(detected._tag === 'v2' ? detected.entries : undefined).toEqual([]);
+  });
+
+  it('should report a string version this build does not know as unknown, carrying the version', () => {
+    const detected = detectVersion({ version: 'v9', entries: [] });
+
+    expect(detected).toEqual({ _tag: 'unknown', version: 'v9' });
+  });
+
+  it.each([
+    ['an empty object', {}],
+    ['null', null],
+    ['a non-string version', { version: 2 }],
+    ['a bare string', 'nonsense'],
+  ])('should report %s as unrecognised', (_label, payload) => {
+    expect(detectVersion(payload)).toEqual({ _tag: 'unrecognised' });
+  });
+});
+
 describe('the v1 to v2 upgrade step', () => {
   it('should wrap a bare array in a v2 envelope', () => {
     const upgraded = upgradeV1ToV2(firstFormat);
 
-    expect(upgraded).toMatchObject({ version: 'v2' });
-    expect((upgraded as { entries: readonly unknown[] }).entries).toHaveLength(2);
+    expect(upgraded.version).toBe('v2');
+    expect(upgraded.entries).toHaveLength(2);
   });
 
   it('should give every entry a finalized lifecycle with no block', () => {
@@ -76,7 +114,7 @@ describe('the v1 to v2 upgrade step', () => {
   });
 
   it('should produce the same result when applied to its own output', () => {
-    const once = upgradeV1ToV2(firstFormat) as { entries: readonly unknown[] };
+    const once = upgradeV1ToV2(firstFormat);
 
     const twice = upgradeV1ToV2(once.entries);
 
@@ -86,8 +124,8 @@ describe('the v1 to v2 upgrade step', () => {
 
 describe('running a stored payload through every upgrade step', () => {
   it('should bring the first format all the way to the current one', () => {
-    expect(upgradeToCurrentFormat(firstFormat)).toEqual({
-      version: 'v2',
+    expect(EitherOps.getOrThrowLeft(upgradeToCurrentFormat(firstFormat))).toEqual({
+      version: 'v1',
       entries: [
         {
           hash: '0xaaa',
@@ -109,11 +147,33 @@ describe('running a stored payload through every upgrade step', () => {
   });
 
   it('should leave a payload that is already in the current format untouched', () => {
-    const current = {
-      version: 'v2',
-      entries: [{ hash: '0xddd', identifiers: [], lifecycle: { status: 'pending', submittedAt: 1 } }],
-    };
+    const entries = [{ hash: '0xddd', identifiers: [], lifecycle: { status: 'pending', submittedAt: 1 } }];
 
-    expect(upgradeToCurrentFormat(current)).toEqual(current);
+    expect(EitherOps.getOrThrowLeft(upgradeToCurrentFormat({ version: 'v2', entries }))).toEqual({
+      version: 'v2',
+      entries,
+    });
+  });
+
+  it.each([
+    ['an empty object', {}],
+    ['null', null],
+    ['a non-string version', { version: 2 }],
+  ])('should refuse %s as having no recognisable format, never as zero entries', (_label, payload) => {
+    const result = upgradeToCurrentFormat(payload);
+
+    expect(Either.isLeft(result)).toBe(true);
+    const error = EitherOps.getOrThrowRight(result);
+    expect(error).toBeInstanceOf(TransactionHistoryRestoreError);
+    expect(error.detectedVersion).toBe('unrecognised');
+    expect(String(error.cause)).toContain('no recognisable format');
+  });
+
+  it('should refuse a version newer than this build with a message that says so', () => {
+    const result = upgradeToCurrentFormat({ version: 'v9', entries: [] });
+
+    const error = EitherOps.getOrThrowRight(result);
+    expect(error.detectedVersion).toBe('v9');
+    expect(String(error.cause)).toContain('newer than this build');
   });
 });

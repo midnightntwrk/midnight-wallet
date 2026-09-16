@@ -17,6 +17,7 @@ import { firstValueFrom } from 'rxjs';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
@@ -221,10 +222,8 @@ describe('Smoke tests', () => {
       const serializedTxHistory = await txHistoryStorage.serialize();
 
       logger.info('Restoring wallet from serialized state...');
-      const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
-        serializedTxHistory,
-        WalletEntrySchema,
-        mergeWalletEntries,
+      const restoredTxHistoryStorage = EitherOps.getOrThrowLeft(
+        InMemoryTransactionHistoryStorage.restore(serializedTxHistory, WalletEntrySchema, mergeWalletEntries),
       );
       const RestoredWallet = ShieldedWallet({
         ...walletConfig,
@@ -273,10 +272,8 @@ describe('Smoke tests', () => {
       const serializedTxHistory = await unshieldedTxHistoryStorage.serialize();
       await initialWallet.stop();
 
-      const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
-        serializedTxHistory,
-        WalletEntrySchema,
-        mergeWalletEntries,
+      const restoredTxHistoryStorage = EitherOps.getOrThrowLeft(
+        InMemoryTransactionHistoryStorage.restore(serializedTxHistory, WalletEntrySchema, mergeWalletEntries),
       );
       const restoredWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),

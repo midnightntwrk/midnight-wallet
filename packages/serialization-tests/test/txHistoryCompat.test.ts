@@ -12,6 +12,7 @@
 // limitations under the License.
 import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { describe, expect, it } from 'vitest';
 import { fixturesFor } from './fixtures.js';
 
@@ -24,7 +25,9 @@ describe('transaction histories written by published releases', () => {
 
   describe.each(fixtures)('$id (written by $writtenBy.name $writtenBy.version)', (fixture) => {
     const restore = () =>
-      InMemoryTransactionHistoryStorage.restore(fixture.serialized, WalletEntrySchema, mergeWalletEntries);
+      EitherOps.getOrThrowLeft(
+        InMemoryTransactionHistoryStorage.restore(fixture.serialized, WalletEntrySchema, mergeWalletEntries),
+      );
 
     it('should restore every entry it was written with, in order', async () => {
       const entries = await restore().getAll();

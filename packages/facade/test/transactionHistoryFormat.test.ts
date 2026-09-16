@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { WalletEntrySchema, mergeWalletEntries } from '../src/index.js';
 
 /**
@@ -33,7 +34,9 @@ const noEnvelopeLifecycleMissing = readFileSync(
 );
 
 const restoreLifecycleMissing = () =>
-  InMemoryTransactionHistoryStorage.restore(noEnvelopeLifecycleMissing, WalletEntrySchema, mergeWalletEntries);
+  EitherOps.getOrThrowLeft(
+    InMemoryTransactionHistoryStorage.restore(noEnvelopeLifecycleMissing, WalletEntrySchema, mergeWalletEntries),
+  );
 
 describe('restoring a history with no version envelope, whose entries have no lifecycle', () => {
   it('should restore every entry, in the order it was written', async () => {
@@ -178,10 +181,12 @@ describe('writing the version envelope', () => {
   it('should read back its own v2 output with every entry unchanged', async () => {
     const before = await restoreLifecycleMissing().getAll();
 
-    const roundTripped = await InMemoryTransactionHistoryStorage.restore(
-      await restoreLifecycleMissing().serialize(),
-      WalletEntrySchema,
-      mergeWalletEntries,
+    const roundTripped = await EitherOps.getOrThrowLeft(
+      InMemoryTransactionHistoryStorage.restore(
+        await restoreLifecycleMissing().serialize(),
+        WalletEntrySchema,
+        mergeWalletEntries,
+      ),
     ).getAll();
 
     expect(roundTripped).toEqual(before);
@@ -212,10 +217,8 @@ const noEnvelopeLifecyclePresent = JSON.stringify([
 
 describe('restoring a history with no version envelope, whose entries already have a lifecycle', () => {
   it('should leave that lifecycle exactly as written, block and all', async () => {
-    const entries = await InMemoryTransactionHistoryStorage.restore(
-      noEnvelopeLifecyclePresent,
-      WalletEntrySchema,
-      mergeWalletEntries,
+    const entries = await EitherOps.getOrThrowLeft(
+      InMemoryTransactionHistoryStorage.restore(noEnvelopeLifecyclePresent, WalletEntrySchema, mergeWalletEntries),
     ).getAll();
 
     expect(entries).toHaveLength(1);
@@ -235,19 +238,15 @@ const writtenByANewerSdk = JSON.stringify({
   entries: [{ hash: '0b0b0b0b', identifiers: [], lifecycle: { status: 'finalized' } }],
 });
 
-/** The value `restore` threw, or `undefined` if it returned a store instead of refusing the payload. */
-const thrownByRestoring = (serialized: string): unknown => {
-  try {
-    InMemoryTransactionHistoryStorage.restore(serialized, WalletEntrySchema, mergeWalletEntries);
-    return undefined;
-  } catch (error) {
-    return error;
-  }
-};
+/** The error `restore` refused with. Fails the test if it returned a store instead of refusing the payload. */
+const refusalFromRestoring = (serialized: string): unknown =>
+  EitherOps.getOrThrowRight(
+    InMemoryTransactionHistoryStorage.restore(serialized, WalletEntrySchema, mergeWalletEntries),
+  );
 
 describe('restoring a history whose version this build does not know', () => {
   it('should refuse the payload with a restore error naming the version it found', () => {
-    expect(thrownByRestoring(writtenByANewerSdk)).toMatchObject({
+    expect(refusalFromRestoring(writtenByANewerSdk)).toMatchObject({
       _tag: 'TransactionHistoryRestoreError',
       detectedVersion: 'v3',
     });

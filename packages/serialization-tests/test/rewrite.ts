@@ -19,13 +19,8 @@ import { Serialization as DustSerialization } from '@midnightntwrk/wallet-sdk-du
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import { Serialization as ShieldedSerialization } from '@midnightntwrk/wallet-sdk-shielded/v1';
 import { Serialization as UnshieldedSerialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
-import { Either } from 'effect';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { fixturesFor, type Fixture, type Surface } from './fixtures.js';
-
-const orThrow = <T>(what: string, result: Either.Either<T, unknown>): T => {
-  if (Either.isLeft(result)) throw new Error(`${what} did not restore: ${String(result.left)}`);
-  return result.right;
-};
 
 const shielded = ShieldedSerialization.makeDefaultV1SerializationCapability();
 const unshielded = UnshieldedSerialization.makeDefaultV1SerializationCapability();
@@ -38,13 +33,16 @@ const dust = DustSerialization.makeDefaultV1SerializationCapability();
  * one. One implementation for both, so the thing being recorded and the thing being checked can never diverge.
  */
 const rewriters: Record<Surface, (serialized: string) => Promise<string> | string> = {
-  shielded: (s) => shielded.serialize(orThrow('shielded', shielded.deserialize(null, s))),
-  unshielded: (s) => unshielded.serialize(orThrow('unshielded', unshielded.deserialize(s))),
-  dust: (s) => dust.serialize(orThrow('dust', dust.deserialize(null, s))),
-  'tx-history': (s) => InMemoryTransactionHistoryStorage.restore(s, WalletEntrySchema, mergeWalletEntries).serialize(),
+  shielded: (s) => shielded.serialize(EitherOps.getOrThrowLeft(shielded.deserialize(null, s))),
+  unshielded: (s) => unshielded.serialize(EitherOps.getOrThrowLeft(unshielded.deserialize(s))),
+  dust: (s) => dust.serialize(EitherOps.getOrThrowLeft(dust.deserialize(null, s))),
+  'tx-history': (s) =>
+    EitherOps.getOrThrowLeft(
+      InMemoryTransactionHistoryStorage.restore(s, WalletEntrySchema, mergeWalletEntries),
+    ).serialize(),
   'pending-transactions': (s) =>
     PendingTransactions.serialize(
-      orThrow('pending-transactions', PendingTransactions.deserialize(s, finalizedTransactionTrait)),
+      EitherOps.getOrThrowLeft(PendingTransactions.deserialize(s, finalizedTransactionTrait)),
       finalizedTransactionTrait,
     ),
 };

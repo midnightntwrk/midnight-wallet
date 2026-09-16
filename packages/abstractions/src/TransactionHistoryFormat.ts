@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Data } from 'effect';
+import { Data, Either } from 'effect';
 
 /**
  * The format version this build writes. Every persisted surface carries one, as `{ version: 'vN', ... }`; it is the
@@ -24,6 +24,9 @@ export const CURRENT_FORMAT_VERSION = 'v2';
  * one — no payload has ever been written carrying the literal `'v1'`.
  */
 export const FIRST_FORMAT_VERSION = 'v1';
+
+/** The `detectedVersion` reported for a payload that matches no format this build can name. */
+export const UNRECOGNISED_FORMAT_VERSION = 'unrecognised';
 
 /** Names this persisted surface on a {@link TransactionHistoryRestoreError}, so one error type can serve all five. */
 export const TRANSACTION_HISTORY_SURFACE = 'transaction-history';
@@ -42,6 +45,35 @@ export class TransactionHistoryRestoreError extends Data.TaggedError('Transactio
   /** The underlying failure — a `ParseError` from the schema, or a thrown value from `JSON.parse`. */
   readonly cause: unknown;
 }> {}
+
+/**
+ * The format a stored payload was written in, as a tagged union rather than a bare string, so every caller has to
+ * account for all four cases and each case carries exactly what that case makes available.
+ *
+ * - `v1` — a bare array; `entries` is that array.
+ * - `v2` — the current envelope; `entries` is whatever the `entries` key held, still unvalidated.
+ * - `unknown` — an envelope declaring a `version` string this build does not know, i.e. written by a newer SDK.
+ * - `unrecognised` — neither shape; nothing can be said about its contents.
+ */
+export type DetectedFormat =
+  | { readonly _tag: 'v1'; readonly entries: readonly unknown[] }
+  | { readonly _tag: 'v2'; readonly entries: unknown }
+  | { readonly _tag: 'unknown'; readonly version: string }
+  | { readonly _tag: 'unrecognised' };
+
+/**
+ * A payload brought up to {@link CURRENT_FORMAT_VERSION}, paired with the version it was actually read from.
+ *
+ * `version` is the _detected_ version, not the current one: it is what an error message has to name for a reader to
+ * know which stored shape failed. `entries` stays `unknown` because nothing has validated it yet — the entry schema
+ * runs afterwards, and it is the thing that decides whether the payload really held entries.
+ */
+export type UpgradedTransactionHistory = {
+  /** The version the payload was read from — `'v1'` for a bare array, `'v2'` for the current envelope. */
+  readonly version: string;
+  /** The upgraded entries, still unvalidated. */
+  readonly entries: unknown;
+};
 
 /** Narrow to a plain JSON object, so an array or `null` is not mistaken for one. */
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
@@ -62,13 +94,21 @@ const upgradeEntryToV2 = (entry: unknown): unknown =>
 /**
  * Read the format version a payload was written with. A bare array is the first format — the envelope did not exist
  * when it was written, so its absence is the marker.
+ *
+ * Exported because it is the one place that knows how a stored payload announces its shape; anything that needs to ask
+ * that question should ask here rather than re-derive it.
+ *
+ * @param payload - The parsed JSON of a stored history.
+ * @returns Which format the payload is in, and the entries that format makes available.
  */
-const detectVersion = (payload: unknown): string =>
+export const detectVersion = (payload: unknown): DetectedFormat =>
   Array.isArray(payload)
-    ? FIRST_FORMAT_VERSION
-    : isJsonObject(payload) && typeof payload['version'] === 'string'
-      ? payload['version']
-      : 'unrecognised';
+    ? { _tag: 'v1', entries: payload }
+    : !isJsonObject(payload) || typeof payload['version'] !== 'string'
+      ? { _tag: 'unrecognised' }
+      : payload['version'] === CURRENT_FORMAT_VERSION
+        ? { _tag: 'v2', entries: payload['entries'] }
+        : { _tag: 'unknown', version: payload['version'] };
 
 /**
  * Upgrade one encoded transaction-history payload from the first format to `v2`.
@@ -79,18 +119,24 @@ const detectVersion = (payload: unknown): string =>
  * The rule is fill in what is missing, never overwrite what is there — an entry that already carries a `lifecycle`
  * keeps it. That is what makes the step safe to apply to a payload it has already touched.
  *
+ * The parameter is an array, not `unknown`: a payload that is not a bare array is not in the first format at all, and
+ * deciding that is {@link detectVersion}'s job. Accepting anything here would let a non-array turn into an empty store,
+ * which is the one outcome this whole path exists to prevent.
+ *
  * @example
  *   ```ts
  *   upgradeV1ToV2([{ hash: '0xabc', status: 'SUCCESS' }]);
  *   // { version: 'v2', entries: [{ hash: '0xabc', status: 'SUCCESS', identifiers: [], lifecycle: { status: 'finalized' } }] }
  *   ```;
  *
- * @param payload - The parsed JSON of a stored history: a bare array of entries.
+ * @param payload - The entries of a stored history written in the first format: a bare array.
  * @returns The same entries wrapped in a `v2` envelope, each one carrying a `lifecycle`.
  */
-export const upgradeV1ToV2 = (payload: unknown): unknown => ({
+export const upgradeV1ToV2 = (
+  payload: readonly unknown[],
+): { readonly version: string; readonly entries: readonly unknown[] } => ({
   version: CURRENT_FORMAT_VERSION,
-  entries: (Array.isArray(payload) ? payload : []).map(upgradeEntryToV2),
+  entries: payload.map(upgradeEntryToV2),
 });
 
 /**
@@ -103,22 +149,41 @@ export const upgradeV1ToV2 = (payload: unknown): unknown => ({
  * @example
  *   ```ts
  *   upgradeToCurrentFormat(JSON.parse(serialized));
- *   // { version: 'v2', entries: [...] }
+ *   // Either.right({ version: 'v1', entries: [...] })
  *   ```;
  *
  * @param payload - The parsed JSON of a stored history, in any format version this build knows.
- * @returns The payload in the current format.
- * @throws {TransactionHistoryRestoreError} When the payload carries a version this build does not know.
+ * @returns The upgraded entries and the version they were read from, or a {@link TransactionHistoryRestoreError} when
+ *   the payload carries no format this build can read.
  */
-export const upgradeToCurrentFormat = (payload: unknown): unknown => {
-  const detectedVersion = detectVersion(payload);
-  if (detectedVersion === FIRST_FORMAT_VERSION) return upgradeV1ToV2(payload);
-  if (detectedVersion === CURRENT_FORMAT_VERSION) return payload;
-  throw new TransactionHistoryRestoreError({
-    surface: TRANSACTION_HISTORY_SURFACE,
-    detectedVersion,
-    cause: new Error(
-      `Transaction history was written in format ${detectedVersion}, which is newer than this build's ${CURRENT_FORMAT_VERSION}.`,
-    ),
-  });
+export const upgradeToCurrentFormat = (
+  payload: unknown,
+): Either.Either<UpgradedTransactionHistory, TransactionHistoryRestoreError> => {
+  const detected = detectVersion(payload);
+  switch (detected._tag) {
+    case 'v1':
+      return Either.right({ version: FIRST_FORMAT_VERSION, entries: upgradeV1ToV2(detected.entries).entries });
+    case 'v2':
+      return Either.right({ version: CURRENT_FORMAT_VERSION, entries: detected.entries });
+    case 'unknown':
+      return Either.left(
+        new TransactionHistoryRestoreError({
+          surface: TRANSACTION_HISTORY_SURFACE,
+          detectedVersion: detected.version,
+          cause: new Error(
+            `Transaction history was written in format ${detected.version}, which is newer than this build's ${CURRENT_FORMAT_VERSION}.`,
+          ),
+        }),
+      );
+    case 'unrecognised':
+      return Either.left(
+        new TransactionHistoryRestoreError({
+          surface: TRANSACTION_HISTORY_SURFACE,
+          detectedVersion: UNRECOGNISED_FORMAT_VERSION,
+          cause: new Error(
+            'Transaction history payload has no recognisable format: expected a bare array (v1) or an object with a string `version`.',
+          ),
+        }),
+      );
+  }
 };
