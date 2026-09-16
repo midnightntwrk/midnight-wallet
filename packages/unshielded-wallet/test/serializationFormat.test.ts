@@ -55,6 +55,20 @@ describe('V1 unshielded snapshot format version', () => {
     expect(Either.isLeft(restored)).toBe(true);
   });
 
+  it('should name the surface and the version it found when it refuses a snapshot', () => {
+    const fromANewerSdk = JSON.stringify({
+      ...(JSON.parse(capability.serialize(emptyWallet())) as Record<string, unknown>),
+      version: 'v2',
+    });
+
+    const restored = capability.deserialize(fromANewerSdk);
+    const failure = Either.isLeft(restored) ? restored.left.message : 'the snapshot was restored';
+
+    expect(failure).toContain(
+      'Refusing an unshielded snapshot written in format version "v2": this build reads v1 and does not downgrade.',
+    );
+  });
+
   it('should round-trip a wallet through serialize and deserialize unchanged', () => {
     const first = capability.serialize(emptyWallet());
 

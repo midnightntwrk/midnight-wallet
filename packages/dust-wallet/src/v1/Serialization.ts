@@ -69,8 +69,18 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
  */
 export const SNAPSHOT_FORMAT_VERSION = 'v1';
 
+/**
+ * The `version` field of a dust snapshot. A reader never downgrades: meeting a version it does not know, it refuses the
+ * payload and names both the surface it was reading and the version it found, so the failure is actionable without the
+ * reader having to parse a schema tree.
+ */
+const SnapshotVersionSchema = Schema.Literal(SNAPSHOT_FORMAT_VERSION).annotations({
+  message: (issue) =>
+    `Refusing a dust snapshot written in format version ${JSON.stringify(issue.actual)}: this build reads ${SNAPSHOT_FORMAT_VERSION} and does not downgrade.`,
+});
+
 const SnapshotSchema = Schema.Struct({
-  version: Schema.optionalWith(Schema.Literal(SNAPSHOT_FORMAT_VERSION), {
+  version: Schema.optionalWith(SnapshotVersionSchema, {
     default: () => SNAPSHOT_FORMAT_VERSION,
   }),
   publicKey: Schema.Struct({
@@ -102,7 +112,11 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
       return pipe(
         serialized,
         Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => new OtherWalletError({ message: 'Error while deserializing snapshot', cause: err })),
+        // The parse detail is carried in the message, not only in the cause: a caller that logs `error.message` must
+        // still learn why the snapshot was refused, including the format version it was written in.
+        Either.mapLeft(
+          (err) => new OtherWalletError({ message: `Error while deserializing snapshot: ${err.message}`, cause: err }),
+        ),
         Either.flatMap((snapshot: Snapshot) =>
           Either.try({
             try: () =>

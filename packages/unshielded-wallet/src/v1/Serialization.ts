@@ -70,6 +70,16 @@ export type DefaultSerializationConfiguration = {
  */
 export const SNAPSHOT_FORMAT_VERSION = 'v1';
 
+/**
+ * The `version` field of an unshielded snapshot. A reader never downgrades: meeting a version it does not know, it
+ * refuses the payload and names both the surface it was reading and the version it found, so the failure is actionable
+ * without the reader having to parse a schema tree.
+ */
+const SnapshotVersionSchema = Schema.Literal(SNAPSHOT_FORMAT_VERSION).annotations({
+  message: (issue) =>
+    `Refusing an unshielded snapshot written in format version ${JSON.stringify(issue.actual)}: this build reads ${SNAPSHOT_FORMAT_VERSION} and does not downgrade.`,
+});
+
 export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, string> => {
   const UtxoWithMetaSchema = Schema.Struct({
     utxo: Schema.Struct({
@@ -86,7 +96,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
   });
 
   const SnapshotSchema = Schema.Struct({
-    version: Schema.optionalWith(Schema.Literal(SNAPSHOT_FORMAT_VERSION), {
+    version: Schema.optionalWith(SnapshotVersionSchema, {
       default: () => SNAPSHOT_FORMAT_VERSION,
     }),
     publicKey: Schema.Struct({
