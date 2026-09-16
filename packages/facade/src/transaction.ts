@@ -48,7 +48,7 @@ export const txHistoryHash = (tx: { transactionHash: () => unknown; serialize: (
   }
 };
 
-const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV9.FinalizedTransaction> = {
+export const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV9.FinalizedTransaction> = {
   areAllTxIdsIncluded(tx: ledgerV9.FinalizedTransaction, txIds: readonly string[]): boolean {
     const txIdsSet = HashSet.fromIterable(tx.identifiers());
     const expectedIdSet = HashSet.fromIterable(txIds);
@@ -72,7 +72,7 @@ const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV9
       Arr.flatMap((i) => i.dustActions?.spends ?? []),
       Arr.isNonEmptyArray,
     );
-    const hasShieldedOffers = tx.guaranteedOffer != null || (tx.fallibleOffer?.size ?? 0) == 0;
+    const hasShieldedOffers = tx.guaranteedOffer != null || (tx.fallibleOffer?.size ?? 0) > 0;
     const maybeShieldedTTL: readonly DateTime.Utc[] =
       hasDustPayments || hasShieldedOffers
         ? pipe(creationTime, DateTime.addDuration(Duration.seconds(Number(defaultShieldedGracePeriod))), Arr.of)
@@ -117,7 +117,7 @@ const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV9
  *   is the classes that make this a separate trait: `instanceof` distinguishes them, each deserializer refuses the
  *   other's bytes, and a grace period is read off that version's own initial parameters.
  */
-const v8FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV8.FinalizedTransaction> = {
+export const v8FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV8.FinalizedTransaction> = {
   areAllTxIdsIncluded(tx, txIds) {
     return HashSet.isSubset(HashSet.fromIterable(tx.identifiers()), HashSet.fromIterable(txIds));
   },
@@ -139,7 +139,7 @@ const v8FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV8
       Arr.flatMap((i) => i.dustActions?.spends ?? []),
       Arr.isNonEmptyArray,
     );
-    const hasShieldedOffers = tx.guaranteedOffer != null || (tx.fallibleOffer?.size ?? 0) == 0;
+    const hasShieldedOffers = tx.guaranteedOffer != null || (tx.fallibleOffer?.size ?? 0) > 0;
     const maybeShieldedTTL: readonly DateTime.Utc[] =
       hasDustPayments || hasShieldedOffers
         ? pipe(creationTime, DateTime.addDuration(Duration.seconds(Number(defaultShieldedGracePeriod))), Arr.of)
