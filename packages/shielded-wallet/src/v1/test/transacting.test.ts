@@ -338,6 +338,49 @@ describe('V1 Wallet Transacting', () => {
       }).pipe(Effect.runPromise);
     });
 
+    it('balances a fallible-only deficit needing several coins of equal type and value', () => {
+      const wallets = prepareWallets({
+        A: {
+          keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)),
+          coins: [shieldedValue(1), shieldedValue(1), shieldedValue(1)],
+        },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+      });
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+      const proving = makeSimulatorProvingServiceEffect();
+      // The three coins share a type and a value and differ only in their nonce, so selecting one must not
+      // discard the other two: the deficit takes all of them.
+      const transactionValueFallible = shieldedValue(3);
+      const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 7593 });
+      const tx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, undefined, fallibleOffer);
+
+      return Effect.gen(function* () {
+        const [balancingTransaction, newState] = EitherOps.getOrThrowLeft(
+          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx),
+        );
+
+        expect(balancingTransaction).toBeDefined();
+
+        // all three coins were spent, not just the first one selected
+        expect(newState.state.pendingSpends.size).toBe(3);
+        expect(getAvailableCoins(newState).length).toBe(0);
+
+        const provenTransaction = yield* proving.prove(tx.merge(balancingTransaction!));
+
+        // check that the fallible section of the balancing transaction is correct
+        expect(
+          balancingTransaction!.fallibleOffer
+            ?.entries()
+            .map(([_, delta]) => delta.deltas.get(rawShieldedTokenType) ?? 0n)
+            .reduce((acc, curr) => acc + curr, 0n),
+        ).toEqual(transactionValueFallible);
+
+        // check that the final transaction is balanced in both segments
+        expect(getNonDustImbalance(provenTransaction.imbalances(0), rawShieldedTokenType)).toBe(0n);
+        expect(getNonDustImbalance(provenTransaction.imbalances(1), rawShieldedTokenType)).toBe(0n);
+      }).pipe(Effect.runPromise);
+    });
+
     it('books coins used in balancing', () => {
       const wallets = prepareWallets({
         A: {
