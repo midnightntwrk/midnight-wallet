@@ -14,6 +14,7 @@ import { Either, Schema } from 'effect';
 import {
   CURRENT_FORMAT_VERSION,
   TRANSACTION_HISTORY_SURFACE,
+  UNRECOGNISED_FORMAT_VERSION,
   TransactionHistoryRestoreError,
   upgradeToCurrentFormat,
 } from './TransactionHistoryFormat.js';
@@ -28,18 +29,22 @@ import {
   coversTransaction,
 } from './TransactionHistoryStorage.js';
 
-/** Parse a stored payload, turning a malformed one into the same failure as any other unreadable history. */
-const parseJson = (serialized: string): unknown => {
-  try {
-    return JSON.parse(serialized);
-  } catch (cause) {
-    throw new TransactionHistoryRestoreError({
-      surface: TRANSACTION_HISTORY_SURFACE,
-      detectedVersion: 'unrecognised',
-      cause,
-    });
-  }
-};
+/**
+ * Parse a stored payload, turning a malformed one into the same failure as any other unreadable history.
+ *
+ * `JSON.parse` throws, and that throw is the only one here: it is caught at the boundary and turned into the `Left`
+ * every other step in this path already speaks in, so no caller downstream has to know a throw was ever possible.
+ */
+const parseJson = (serialized: string): Either.Either<unknown, TransactionHistoryRestoreError> =>
+  Either.try({
+    try: () => JSON.parse(serialized) as unknown,
+    catch: (cause) =>
+      new TransactionHistoryRestoreError({
+        surface: TRANSACTION_HISTORY_SURFACE,
+        detectedVersion: UNRECOGNISED_FORMAT_VERSION,
+        cause,
+      }),
+  });
 
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
@@ -73,12 +78,18 @@ export class InMemoryTransactionHistoryStorage<
 
   async gotPending(input: PendingEntryInput<T>): Promise<void> {
     const { submittedAt, ...rest } = input;
+    // Type cast required because: `T` is an open generic, so TypeScript cannot see that `Omit<T, 'lifecycle'>` plus a
+    // `lifecycle` reconstitutes exactly `T`. The input type guarantees it — `PendingEntryInput<T>` is that `Omit` — but
+    // the compiler has no rule that puts a spread of a generic's `Omit` back together.
     const entry = { ...rest, lifecycle: { status: 'pending', submittedAt } } as unknown as T;
     await this.#upsert(entry);
   }
 
   async gotFinalized(input: FinalizedEntryInput<T>): Promise<void> {
     const { finalizedBlock, ...rest } = input;
+    // Type cast required because: `T` is an open generic, so TypeScript cannot see that `Omit<T, 'lifecycle'>` plus a
+    // `lifecycle` reconstitutes exactly `T`. The input type guarantees it — `FinalizedEntryInput<T>` is that `Omit` —
+    // but the compiler has no rule that puts a spread of a generic's `Omit` back together.
     const entry = { ...rest, lifecycle: { status: 'finalized', finalizedBlock } } as unknown as T;
     await this.#upsert(entry);
     this.#clearUnfinalizedCoveredBy(entry);
@@ -91,6 +102,9 @@ export class InMemoryTransactionHistoryStorage<
       reason !== undefined
         ? { status: 'rejected' as const, rejectedAt, reason }
         : { status: 'rejected' as const, rejectedAt };
+    // Type cast required because: `T` is an open generic, so TypeScript cannot see that `Omit<T, 'lifecycle'>` plus a
+    // `lifecycle` reconstitutes exactly `T`. The input type guarantees it — `RejectedEntryInput<T>` is that `Omit` —
+    // but the compiler has no rule that puts a spread of a generic's `Omit` back together.
     const entry = { ...rest, lifecycle } as unknown as T;
     await this.#upsert(entry);
   }
@@ -123,38 +137,43 @@ export class InMemoryTransactionHistoryStorage<
    *
    * @example
    *   ```ts
-   *   const storage = InMemoryTransactionHistoryStorage.restore(saved, WalletEntrySchema, mergeWalletEntries);
+   *   const restored = InMemoryTransactionHistoryStorage.restore(saved, WalletEntrySchema, mergeWalletEntries);
+   *   // Either.Either<InMemoryTransactionHistoryStorage<WalletEntry>, TransactionHistoryRestoreError>
    *   ```;
    *
    * @param serialized - The stored payload.
    * @param schema - The full entry schema, including any wallet-specific sections.
    * @param merge - How an incoming write combines with an existing entry under the same hash.
-   * @returns A storage holding every entry in the payload.
-   * @throws {TransactionHistoryRestoreError} When the payload is not readable JSON, was written in a format version
-   *   this build does not know, or does not decode against `schema` once upgraded.
+   * @returns A storage holding every entry in the payload, or a `Left` carrying a {@link TransactionHistoryRestoreError}
+   *   when the payload is not readable JSON, was written in a format version this build does not know, or does not
+   *   decode against `schema` once upgraded. The error names the version the payload was actually read from, not the
+   *   one this build writes.
    */
   static restore<T extends TransactionHistoryEntryCommon, Encoded>(
     serialized: SerializedTransactionHistory,
     schema: Schema.Schema<T, Encoded>,
     merge?: (existing: T, incoming: T) => T,
-  ): InMemoryTransactionHistoryStorage<T, Encoded> {
-    const upgraded = upgradeToCurrentFormat(parseJson(serialized));
-    const entries = (upgraded as { readonly entries: unknown }).entries;
-    const decoded = Schema.decodeUnknownEither(Schema.Array(schema))(entries);
-    return Either.match(decoded, {
-      onLeft: (cause) => {
-        throw new TransactionHistoryRestoreError({
-          surface: TRANSACTION_HISTORY_SURFACE,
-          detectedVersion: CURRENT_FORMAT_VERSION,
-          cause,
-        });
-      },
-      onRight: (values) => {
+  ): Either.Either<InMemoryTransactionHistoryStorage<T, Encoded>, TransactionHistoryRestoreError> {
+    return parseJson(serialized).pipe(
+      Either.flatMap(upgradeToCurrentFormat),
+      Either.flatMap(({ version, entries }) =>
+        Schema.decodeUnknownEither(Schema.Array(schema))(entries).pipe(
+          Either.mapLeft(
+            (cause) =>
+              new TransactionHistoryRestoreError({
+                surface: TRANSACTION_HISTORY_SURFACE,
+                detectedVersion: version,
+                cause,
+              }),
+          ),
+        ),
+      ),
+      Either.map((values) => {
         const storage = new InMemoryTransactionHistoryStorage<T, Encoded>(schema, merge);
         values.forEach((entry) => storage.#storage.set(entry.hash, entry));
         return storage;
-      },
-    });
+      }),
+    );
   }
 
   #upsert(entry: T): Promise<void> {

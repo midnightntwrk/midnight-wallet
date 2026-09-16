@@ -164,6 +164,11 @@ export type PendingEntryInput<T extends TransactionHistoryEntryCommon = Transact
  * Input for `gotFinalized` — the entry minus its `lifecycle` field, which the storage attaches itself. Carries
  * `finalizedBlock` directly so callers don't construct the lifecycle object. `T` is the entry shape including any
  * wallet-specific extensions (e.g. `shielded`, `dust`).
+ *
+ * `finalizedBlock` is required here even though it is optional on {@link FinalizedLifecycleSchema}: the SDK always knows
+ * the block when it writes a finalized entry, because the only writer runs from the sync path after the indexer
+ * returned the transaction inside one. The sole source of a blockless finalized entry is the v1-to-v2 upgrade of a
+ * history written before the lifecycle field existed, which invents no block it cannot prove.
  */
 export type FinalizedEntryInput<T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon> = Omit<
   T,

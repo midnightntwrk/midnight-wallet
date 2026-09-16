@@ -10,6 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { CURRENT_FORMAT_VERSION } from './TransactionHistoryFormat.js';
 import {
   type TransactionHistoryStorage,
   type TransactionHash,
@@ -43,7 +44,12 @@ export class NoOpTransactionHistoryStorage<
     return Promise.resolve(undefined);
   }
 
+  /**
+   * An empty history in the current format. Writing the bare `'[]'` would announce the first format, so a payload this
+   * storage produced would be run back through the v1 upgrade on restore — a no-op storage must still write something
+   * the rest of the SDK reads the same way every other storage's output is read.
+   */
   serialize(): Promise<SerializedTransactionHistory> {
-    return Promise.resolve('[]');
+    return Promise.resolve(JSON.stringify({ version: CURRENT_FORMAT_VERSION, entries: [] }));
   }
 }

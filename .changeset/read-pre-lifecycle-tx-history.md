@@ -15,7 +15,18 @@ the indexer had returned the transaction inside a block, so `status` is untouche
 just failed once it ran.
 
 Histories are now written as `{ version: 'v2', entries }`. `finalizedBlock` on a `finalized` lifecycle is optional,
-because an upgraded entry records no block; readers that need one fetch it from the indexer by transaction hash. A
-payload that cannot be read — unreadable JSON, or a version written by a newer SDK — raises a
-`TransactionHistoryRestoreError` naming the surface and the version found, instead of being handed back as an empty
-store.
+because an upgraded entry records no block; readers that need one fetch it from the indexer by transaction hash.
+
+`InMemoryTransactionHistoryStorage.restore` now returns an
+`Either<InMemoryTransactionHistoryStorage, TransactionHistoryRestoreError>` rather than throwing. A payload that cannot
+be read — unreadable JSON, a shape matching no known format, or a version written by a newer SDK — comes back as a
+`Left` naming the surface and the version the payload was read from, instead of being handed back as an empty store.
+Callers must handle the `Left`.
+
+`upgradeV1ToV2` now takes a `readonly unknown[]` rather than `unknown`: deciding whether a payload is a bare array is
+`detectVersion`'s job, and accepting anything else here is what used to let a non-array become an empty store.
+`detectVersion` is exported and returns a tagged union, and `upgradeToCurrentFormat` returns an `Either` carrying the
+upgraded entries alongside the version they were read from.
+
+`NoOpTransactionHistoryStorage.serialize` now writes `{ version: 'v2', entries: [] }` rather than the bare `[]`, which
+would have announced the first format.
