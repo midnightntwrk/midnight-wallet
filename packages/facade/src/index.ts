@@ -60,6 +60,7 @@ import {
   type UnboundTx,
   type UnprovenTx,
   WalletTransaction,
+  WireFormatError,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import { type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
@@ -260,24 +261,45 @@ const revertTxHistoryKey = (
 };
 
 /**
+ * How a stage's bytes are read, one entry per stage a handle can be at.
+ *
+ * @remarks
+ *   A stage is the wallet layer's word for a combination of the ledger's own markers — which signatures, proofs and
+ *   binding the bytes carry — and those markers are part of what the ledger checks as it reads. Stating the three
+ *   combinations here is what lets a caller name a stage instead of a marker triple, and is why bytes at another stage
+ *   are refused rather than misread. The ledger's other marker combinations are deliberately absent: a handle has no
+ *   stage for signature-erased transactions, so the facade cannot be asked for one.
+ */
+type StageDeserializers = Readonly<
+  Record<WalletTransaction.Stage, (bytes: Uint8Array) => { serialize: () => Uint8Array }>
+>;
+
+/**
  * The ledger operations the facade performs for itself rather than through a wallet, per protocol epoch.
  *
  * @remarks
- *   One place only: estimating what a dust registration will cost needs a signature over a transaction nobody will
- *   submit, and a signature comes from a ledger version's own primitives. Everything the facade hands back is in the
- *   ledger-v9's shape — a scheme and its bytes — so the ledger-v8 entry lifts what its ledger version writes as bare
- *   hex.
+ *   Two of them. Estimating what a dust registration will cost needs a signature over a transaction nobody will submit,
+ *   and a signature comes from a ledger version's own primitives; what those hand back is in the ledger-v9's shape — a
+ *   scheme and its bytes — so the ledger-v8 entries lift what their ledger version writes as bare hex. Reading bytes an
+ *   application hands in needs the deserializer of the ledger version that wrote them, and hands back nothing that
+ *   names a version: what it returns goes straight into a handle, which erases the type.
  */
 type EpochAuthoring = Readonly<{
   sampleSigningKey: () => unknown;
   signatureVerifyingKey: (signingKey: never) => ledgerV9.SignatureVerifyingKey;
   signData: (signingKey: never, data: Uint8Array) => ledgerV9.Signature;
+  deserializers: StageDeserializers;
 }>;
 
 const v9Authoring: EpochAuthoring = {
   sampleSigningKey: () => ledgerV9.sampleSigningKey(),
   signatureVerifyingKey: (signingKey: never) => ledgerV9.signatureVerifyingKey(signingKey),
   signData: (signingKey: never, data: Uint8Array) => ledgerV9.signData(signingKey, data),
+  deserializers: {
+    Unproven: (bytes) => ledgerV9.Transaction.deserialize('signature', 'pre-proof', 'pre-binding', bytes),
+    Unbound: (bytes) => ledgerV9.Transaction.deserialize('signature', 'proof', 'pre-binding', bytes),
+    Finalized: (bytes) => ledgerV9.Transaction.deserialize('signature', 'proof', 'binding', bytes),
+  },
 };
 
 const v8Authoring: EpochAuthoring = {
@@ -285,6 +307,11 @@ const v8Authoring: EpochAuthoring = {
   signatureVerifyingKey: (signingKey: never) =>
     Signatures.liftSignatureVerifyingKey(ledgerV8.signatureVerifyingKey(signingKey)),
   signData: (signingKey: never, data: Uint8Array) => Signatures.liftSignature(ledgerV8.signData(signingKey, data)),
+  deserializers: {
+    Unproven: (bytes) => ledgerV8.Transaction.deserialize('signature', 'pre-proof', 'pre-binding', bytes),
+    Unbound: (bytes) => ledgerV8.Transaction.deserialize('signature', 'proof', 'pre-binding', bytes),
+    Finalized: (bytes) => ledgerV8.Transaction.deserialize('signature', 'proof', 'binding', bytes),
+  },
 };
 
 type TokenKind = 'dust' | 'shielded' | 'unshielded';
@@ -1116,6 +1143,57 @@ export class WalletFacade {
   /** The ledger primitives the facade signs with on its current side of the boundary. */
   private authoring(): EpochAuthoring {
     return this.currentVersion() < this.#forkVersion ? v8Authoring : v9Authoring;
+  }
+
+  /**
+   * Reads a transaction from bytes that name no protocol version, at the version the facade is acting at.
+   *
+   * @remarks
+   *   For bytes that reach the wallet from outside the SDK — a dApp connector's serialized transaction above all, whose
+   *   contract carries no version alongside them. The bytes cannot say which ledger version wrote them, so this answers
+   *   with the only version the facade could act at anyway, and reads them with that version's ledger. Bytes the other
+   *   ledger version wrote are refused here rather than misread, because the markers a stage names are part of what the
+   *   ledger checks as it reads.
+   *
+   *   The version is the facade's rather than the caller's, which is the point: a caller that reads
+   *   {@link FacadeState.activeProtocolVersion} and seals a handle itself is answering the same question a moment
+   *   earlier, with a crossing able to land in between. It is still only the version at the moment of the call — a
+   *   crossing can land before the handle is used, and {@link ProtocolVersionMismatchError} from the operation that uses
+   *   it is what says so.
+   * @example
+   *   Balancing a transaction a dApp connector handed over as hex:
+   *
+   *   ```typescript
+   *   const handle = facade.adoptTransaction(Buffer.from(txHex, 'hex'), 'Unbound');
+   *   const recipe = await facade.balanceUnboundTransaction(handle, { ttl });
+   *   ```;
+   *
+   * @param bytes The transaction's own serialization, as the ledger version that wrote it produced it.
+   * @param stage How far along the building of the transaction these bytes are, which decides the markers they are read
+   *   with.
+   * @returns The sealed handle, stamped with the protocol version the facade is acting at.
+   * @throws {@link WireFormatError} When the bytes are not a transaction of that version at that stage — which is what
+   *   a transaction authored on the other side of a protocol boundary looks like from here.
+   */
+  adoptTransaction<TStage extends WalletTransaction.Stage>(
+    bytes: Uint8Array,
+    stage: TStage,
+  ): WalletTransaction<TStage> {
+    const protocolVersion = this.currentVersion();
+    return Either.getOrThrowWith(
+      Either.try({
+        try: () => this.authoring().deserializers[stage](bytes),
+        catch: (cause) =>
+          new WireFormatError({
+            message:
+              `These bytes are not a transaction of protocol version ${protocolVersion} at stage ${stage} — that is ` +
+              `the version this wallet is acting at, and a transaction built for another one has to be built again ` +
+              `for it.`,
+            cause,
+          }),
+      }).pipe(Either.map((transaction) => WalletTransaction.adopt(stage, transaction, protocolVersion))),
+      (error: WireFormatError) => error,
+    );
   }
 
   private defaultTtl(): Date {
