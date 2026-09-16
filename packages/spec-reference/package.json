@@ -12,13 +12,14 @@
   },
   "dependencies": {
     "@midnight-ntwrk/ledger-v8": "^8.1.0",
+    "@midnightntwrk/ledger-v9": "^1.0.0-rc.2",
     "@noble/curves": "^1.8.1",
     "@scure/base": "^2.0.0",
     "@subsquid/scale-codec": "^4.0.1",
     "commander": "^14.0.0"
   },
   "devDependencies": {
-    "tsx": "4.22.4"
+    "tsx": "4.23.13"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",

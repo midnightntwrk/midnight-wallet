@@ -25,7 +25,7 @@ while maintaining verifiability. It provides:
 
 ```typescript
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { randomBytes } from 'node:crypto';
 
 // Configuration for the wallet
@@ -78,8 +78,10 @@ wallet.state.subscribe((state) => {
 ### Creating Transfer Transactions
 
 ```typescript
+// tokenType: the shielded token type (raw hex) of a token you hold,
+// e.g. one minted by a contract — NIGHT is unshielded and cannot appear here
 const tx = await wallet.transferTransaction(shieldedSecretKeys, [
-  { type: 'NIGHT', receiverAddress: 'mn_shield-addr1...', amount: 1000n },
+  { type: tokenType, receiverAddress: 'mn_shield-addr1...', amount: 1000n },
 ]);
 ```
 
@@ -92,10 +94,12 @@ const balancingTx = await wallet.balanceTransaction(shieldedSecretKeys, transact
 ### Creating Swap Offers
 
 ```typescript
+// tokenTypeA / tokenTypeB: shielded token types (raw hex) — both sides of a
+// shielded swap are shielded tokens; NIGHT is unshielded and cannot appear here
 const swapTx = await wallet.initSwap(
   shieldedSecretKeys,
-  { NIGHT: 500n }, // inputs
-  [{ type: 'TOKEN_A', receiverAddress: shieldedAddress, amount: 100n }], // outputs
+  { [tokenTypeA]: 500n }, // inputs
+  [{ type: tokenTypeB, receiverAddress: shieldedAddress, amount: 100n }], // outputs
 );
 ```
 
