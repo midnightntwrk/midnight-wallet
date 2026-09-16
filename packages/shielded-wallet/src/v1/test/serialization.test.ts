@@ -172,3 +172,40 @@ describe('V1 Wallet serialization', () => {
     );
   });
 });
+
+describe('V1 shielded snapshot format version', () => {
+  const capability = makeDefaultV1SerializationCapability();
+  const keys = ledger.ZswapSecretKeys.fromSeed(
+    Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
+  );
+  const emptyWallet = () => CoreWallet.initEmpty(keys, NetworkId.NetworkId.Undeployed);
+
+  /** A snapshot as written before the format version existed: today's fields, with no `version` among them. */
+  const withoutVersion = (serialized: string): string => {
+    const { version: _version, ...rest } = JSON.parse(serialized) as Record<string, unknown>;
+    return JSON.stringify(rest);
+  };
+
+  it('should stamp the current format version into every snapshot it writes', () => {
+    const written: unknown = JSON.parse(capability.serialize(emptyWallet()));
+
+    expect(written).toMatchObject({ version: 'v1' });
+  });
+
+  it('should read a snapshot that carries no version as the first format', () => {
+    const restored = capability.deserialize(null, withoutVersion(capability.serialize(emptyWallet())));
+
+    expect(Either.isRight(restored)).toBe(true);
+  });
+
+  it('should refuse a snapshot whose version this build does not know', () => {
+    const fromANewerSdk = JSON.stringify({
+      ...(JSON.parse(capability.serialize(emptyWallet())) as Record<string, unknown>),
+      version: 'v2',
+    });
+
+    const restored = capability.deserialize(null, fromANewerSdk);
+
+    expect(Either.isLeft(restored)).toBe(true);
+  });
+});
