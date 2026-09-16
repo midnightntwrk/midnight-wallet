@@ -10,7 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Schema } from 'effect';
+import { Either, Schema } from 'effect';
+import {
+  CURRENT_FORMAT_VERSION,
+  TRANSACTION_HISTORY_SURFACE,
+  TransactionHistoryRestoreError,
+  upgradeToCurrentFormat,
+} from './TransactionHistoryFormat.js';
 import {
   type TransactionHistoryStorage,
   type TransactionHash,
@@ -21,6 +27,19 @@ import {
   type SerializedTransactionHistory,
   coversTransaction,
 } from './TransactionHistoryStorage.js';
+
+/** Parse a stored payload, turning a malformed one into the same failure as any other unreadable history. */
+const parseJson = (serialized: string): unknown => {
+  try {
+    return JSON.parse(serialized);
+  } catch (cause) {
+    throw new TransactionHistoryRestoreError({
+      surface: TRANSACTION_HISTORY_SURFACE,
+      detectedVersion: 'unrecognised',
+      cause,
+    });
+  }
+};
 
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
@@ -91,21 +110,51 @@ export class InMemoryTransactionHistoryStorage<
   serialize(): Promise<SerializedTransactionHistory> {
     const allEntries = [...this.#storage.values()];
     const encode = Schema.encodeSync(Schema.Array(this.#schema));
-    return Promise.resolve(JSON.stringify(encode(allEntries)));
+    return Promise.resolve(JSON.stringify({ version: CURRENT_FORMAT_VERSION, entries: encode(allEntries) }));
   }
 
+  /**
+   * Rebuild a storage from a payload produced by {@link serialize}, in any format version this build knows.
+   *
+   * A payload is brought up to the current format before the entry schema sees it, so a history written by an older SDK
+   * opens without the caller doing anything. A payload that cannot be read is refused with a
+   * {@link TransactionHistoryRestoreError} rather than handed back as an empty storage — losing a history silently is
+   * worse than failing to open it.
+   *
+   * @example
+   *   ```ts
+   *   const storage = InMemoryTransactionHistoryStorage.restore(saved, WalletEntrySchema, mergeWalletEntries);
+   *   ```;
+   *
+   * @param serialized - The stored payload.
+   * @param schema - The full entry schema, including any wallet-specific sections.
+   * @param merge - How an incoming write combines with an existing entry under the same hash.
+   * @returns A storage holding every entry in the payload.
+   * @throws {TransactionHistoryRestoreError} When the payload is not readable JSON, was written in a format version
+   *   this build does not know, or does not decode against `schema` once upgraded.
+   */
   static restore<T extends TransactionHistoryEntryCommon, Encoded>(
     serialized: SerializedTransactionHistory,
     schema: Schema.Schema<T, Encoded>,
     merge?: (existing: T, incoming: T) => T,
   ): InMemoryTransactionHistoryStorage<T, Encoded> {
-    const decode = Schema.decodeUnknownSync(Schema.Array(schema));
-    const decoded = decode(JSON.parse(serialized));
-    const storage = new InMemoryTransactionHistoryStorage<T, Encoded>(schema, merge);
-    for (const entry of decoded) {
-      storage.#storage.set(entry.hash, entry);
-    }
-    return storage;
+    const upgraded = upgradeToCurrentFormat(parseJson(serialized));
+    const entries = (upgraded as { readonly entries: unknown }).entries;
+    const decoded = Schema.decodeUnknownEither(Schema.Array(schema))(entries);
+    return Either.match(decoded, {
+      onLeft: (cause) => {
+        throw new TransactionHistoryRestoreError({
+          surface: TRANSACTION_HISTORY_SURFACE,
+          detectedVersion: CURRENT_FORMAT_VERSION,
+          cause,
+        });
+      },
+      onRight: (values) => {
+        const storage = new InMemoryTransactionHistoryStorage<T, Encoded>(schema, merge);
+        values.forEach((entry) => storage.#storage.set(entry.hash, entry));
+        return storage;
+      },
+    });
   }
 
   #upsert(entry: T): Promise<void> {

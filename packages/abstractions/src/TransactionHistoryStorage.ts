@@ -35,9 +35,14 @@ export const FinalizedBlockSchema = Schema.Struct({
 
 export type FinalizedBlock = Schema.Schema.Type<typeof FinalizedBlockSchema>;
 
+/**
+ * A transaction that reached a block. `finalizedBlock` is optional because an entry restored from a history written
+ * before the lifecycle field existed is known to have been finalized, but carries no record of which block it landed
+ * in. No block is invented for those; a reader that needs one fetches it from the indexer by transaction hash.
+ */
 export const FinalizedLifecycleSchema = Schema.Struct({
   status: Schema.Literal('finalized'),
-  finalizedBlock: FinalizedBlockSchema,
+  finalizedBlock: Schema.optional(FinalizedBlockSchema),
 });
 
 export type FinalizedLifecycle = Schema.Schema.Type<typeof FinalizedLifecycleSchema>;
