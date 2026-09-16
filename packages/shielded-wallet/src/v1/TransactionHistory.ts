@@ -233,8 +233,11 @@ export const makeSimulatorTransactionHistoryService = (
         catch: (e) =>
           new TransactionHistoryError({ message: `Failed to get transaction details for ${hash}`, cause: e }),
       }).pipe(
+        // An entry restored from a history written before the lifecycle field existed is finalized but records no
+        // block, and this service has no indexer to ask for one — it backs the simulator, where storage is the only
+        // source. Such an entry cannot be described, so it fails the same way a missing one does.
         Effect.flatMap((entry) =>
-          isFinalized(entry)
+          isFinalized(entry) && entry.lifecycle.finalizedBlock !== undefined
             ? Effect.succeed({
                 hash: entry.hash,
                 block: {
