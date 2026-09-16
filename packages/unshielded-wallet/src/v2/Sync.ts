@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, type Scope, Stream, Schema, pipe, Either, HashMap } from 'effect';
+import { Effect, type Scope, Stream, Schema, pipe, Either, HashMap, Match } from 'effect';
 import { ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import { CoreWallet } from './CoreWallet.js';
 import { UtxoWithMeta } from './UnshieldedState.js';
@@ -21,12 +21,14 @@ import {
 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { UnshieldedTransactions } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { WsSubscriptionClient, ConnectionHelper } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { SyncWalletError, type WalletError } from './WalletError.js';
+import { OutOfOrderSyncUpdateError, SyncWalletError, type WalletError } from './WalletError.js';
 import { WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
   type IndexerSyncUpdate,
+  type ProgressSchema,
+  type UnshieldedUpdate,
   VersionSignalSyncUpdate,
   type WalletSyncUpdate,
   WalletSyncUpdateSchema,
@@ -181,6 +183,169 @@ export const makeDefaultSyncService = (config: DefaultSyncConfiguration): SyncSe
   };
 };
 
+/** A progress frame: how far the source has got with this address. */
+type ProgressUpdate = Schema.Schema.Type<typeof ProgressSchema>;
+
+/**
+ * Folds a version signal: records the chain's version, and nothing else.
+ *
+ * @remarks
+ *   The same recording the transaction path makes through {@link annotateVersion}: no cursor moves, no UTXO changes hands.
+ *   A signal is an observation about the chain, not a piece of it.
+ *
+ *   One situation makes the observation unsafe to record, and it leaves the state exactly as it was. A transaction still
+ *   unapplied below the address's tip means the hand-over would park the cursor in front of history the next variant
+ *   would then apply without ever having seen what led to it — and that transaction carries the version itself, so
+ *   nothing is lost by waiting for it. That is not an error: the next tick asks again.
+ *
+ *   A version at or below the one already recorded needs no guard of its own — `annotateVersion` never goes backwards —
+ *   so a source briefly answering from a lagging replica cannot drag a wallet back over a boundary.
+ * @param state The wallet to record on.
+ * @param signal What the chain said, and how far this address's timeline goes.
+ * @returns The wallet, annotated or untouched.
+ */
+const applyVersionSignal = (state: CoreWallet, signal: VersionSignalSyncUpdate): Either.Either<CoreWallet, never> =>
+  Either.right(
+    BigInt(signal.highestTransactionId) > state.progress.appliedId ? state : annotateVersion(state, signal.version),
+  );
+
+/**
+ * Folds a progress frame: moves the far end of the cursor, and nothing else.
+ *
+ * @remarks
+ *   A progress message reports how far the source has got with this address, not a transaction. The chain version it also
+ *   carries is deliberately not read here: the source splits that off into its own `VersionSignal`, which is the only
+ *   message allowed to annotate, and which alone carries the gate in {@link applyVersionSignal}. Annotating from both
+ *   places would put the gate on one route and not the other.
+ * @param state The wallet to record on.
+ * @param progress The frame.
+ * @returns The wallet with the far end of its cursor moved and marked connected.
+ */
+const applyProgress = (state: CoreWallet, progress: ProgressUpdate): Either.Either<CoreWallet, never> =>
+  Either.right(
+    CoreWallet.updateProgress(state, {
+      highestTransactionId: BigInt(progress.highestTransactionId),
+      isConnected: true,
+    }),
+  );
+
+/**
+ * Where a delivered transaction stands against the cursor and the variant's activation range.
+ *
+ * - `replayed`: below the cursor — history this wallet has already folded.
+ * - `redelivered`: the cursor itself, handed back.
+ * - `deferred`: at or beyond the activation range — the next variant's to apply.
+ * - `applicable`: past the cursor and within range — the one placement that changes the UTXO set.
+ */
+type TransactionPlacement = 'replayed' | 'redelivered' | 'deferred' | 'applicable';
+
+/**
+ * Classifies a delivered transaction; {@link applyTransaction} acts on the answer.
+ *
+ * @remarks
+ *   "Is this past the cursor?" is the only ordering question askable here. The id is the indexer's global transaction id
+ *   filtered to this address, so a wallet is served a strictly increasing but SPARSE subsequence of it — consecutive
+ *   deliveries routinely skip whole runs of ids belonging to other addresses — and demanding contiguity would reject
+ *   every honest stream. What a gap cannot hide is a spend whose create was never folded: `UnshieldedState` refuses a
+ *   spend of a UTXO it holds in neither map, and that refusal, not this classification, is what catches a spend
+ *   delivered ahead of its create. It happens before the cursor moves, so the retry re-fetches the pair in order.
+ *
+ *   Whether the resume cursor the subscription is opened with is inclusive is undocumented, so the transaction it names
+ *   may or may not reappear on a reconnect; calling an equal id `redelivered` makes the fold indifferent either way,
+ *   exactly as the shielded and dust wallets treat their own boundary event.
+ * @param state The wallet the transaction was delivered to.
+ * @param update The delivered transaction.
+ * @param activeRange The half-open protocol version range the running variant owns.
+ * @returns The placement.
+ */
+const placeTransaction = (
+  state: CoreWallet,
+  update: UnshieldedUpdate,
+  activeRange: ProtocolVersion.ProtocolVersion.Range,
+): TransactionPlacement => {
+  const received = BigInt(update.transaction.id);
+  const cursor = state.progress.appliedId;
+  return received < cursor
+    ? 'replayed'
+    : received === cursor
+      ? 'redelivered'
+      : isBeyondActiveRange(update.transaction.protocolVersion, activeRange)
+        ? 'deferred'
+        : 'applicable';
+};
+
+/**
+ * Folds an applicable transaction: the UTXO changes, then the cursor, the history record and the version.
+ *
+ * @remarks
+ *   The history is written only once the fold has succeeded, so a rejected transaction leaves no trace there either.
+ * @param state The wallet to fold into.
+ * @param update The delivered transaction.
+ * @param getContext Where the transaction history lives.
+ * @returns The folded wallet, or the fold's refusal.
+ */
+const foldTransaction = (
+  state: CoreWallet,
+  update: UnshieldedUpdate,
+  getContext: () => DefaultSyncContext,
+): Either.Either<CoreWallet, WalletError> => {
+  const payload = { createdUtxos: update.createdUtxos, spentUtxos: update.spentUtxos, status: update.status };
+  const folded =
+    update.status === 'FAILURE' ? CoreWallet.applyFailedUpdate(state, payload) : CoreWallet.applyUpdate(state, payload);
+
+  return folded.pipe(
+    Either.map((wallet) => {
+      const advanced = CoreWallet.updateProgress(wallet, { appliedId: BigInt(update.transaction.id) });
+      Effect.runFork(getContext().transactionHistoryService.put(update));
+      return annotateVersion(advanced, update.transaction.protocolVersion);
+    }),
+  );
+};
+
+/**
+ * Folds a delivered transaction according to its {@link TransactionPlacement}.
+ *
+ * @remarks
+ *   - `replayed` is refused with {@link OutOfOrderSyncUpdateError} and nothing is applied: folding a create twice resurrects
+ *       a UTXO some later transaction has since spent; folding a spend twice removes one some later transaction
+ *       re-created. The state is handed back untouched so the retry can re-fetch in order.
+ *   - `redelivered` is a no-op in the strongest sense — the same state comes back: no UTXO change, no cursor movement, no
+ *       version annotation, no transaction-history write. All of that was done the first time it arrived.
+ *   - `deferred` is the hand-over point. The transaction belongs to the next variant, so NOTHING about it is applied; only
+ *       the version is recorded, which is what makes the runtime migrate. Because the cursor did not move, the next
+ *       variant re-fetches this very transaction and applies it exactly once.
+ *   - `applicable` is folded by {@link foldTransaction}.
+ *
+ * @param state The wallet the transaction was delivered to.
+ * @param update The delivered transaction.
+ * @param activeRange The half-open protocol version range the running variant owns.
+ * @param getContext Where the transaction history lives.
+ * @returns The next wallet, or the refusal.
+ */
+const applyTransaction = (
+  state: CoreWallet,
+  update: UnshieldedUpdate,
+  activeRange: ProtocolVersion.ProtocolVersion.Range,
+  getContext: () => DefaultSyncContext,
+): Either.Either<CoreWallet, WalletError> =>
+  Match.value(placeTransaction(state, update, activeRange)).pipe(
+    Match.when('replayed', () =>
+      Either.left(
+        new OutOfOrderSyncUpdateError({
+          message:
+            `Sync source delivered transaction ${update.transaction.id}, below the applied cursor ` +
+            `${state.progress.appliedId}; the state is left untouched so the retry can re-fetch in order`,
+          expected: state.progress.appliedId,
+          received: BigInt(update.transaction.id),
+        }),
+      ),
+    ),
+    Match.when('redelivered', () => Either.right(state)),
+    Match.when('deferred', () => Either.right(annotateVersion(state, update.transaction.protocolVersion))),
+    Match.when('applicable', () => foldTransaction(state, update, getContext)),
+    Match.exhaustive,
+  );
+
 export const makeDefaultSyncCapability = (
   _config: DefaultSyncConfiguration,
   getContext: () => DefaultSyncContext,
@@ -190,68 +355,14 @@ export const makeDefaultSyncCapability = (
       state: CoreWallet,
       update: WalletSyncUpdate,
       activeRange: ProtocolVersion.ProtocolVersion.Range,
-    ): Either.Either<CoreWallet, WalletError> => {
-      if (update.type === 'VersionSignal') {
-        // The same recording the transaction path makes through `annotateVersion`, and nothing else: no cursor moves,
-        // no UTXO changes hands. A signal is an observation about the chain, not a piece of it.
-        //
-        // One situation makes the observation unsafe to record, and it leaves the state exactly as it was. A
-        // transaction still unapplied below the address's tip means the hand-over would park the cursor in front of
-        // history the next variant would then apply without ever having seen what led to it — and that transaction
-        // carries the version itself, so nothing is lost by waiting for it. That is not an error: the next tick asks
-        // again.
-        //
-        // A version at or below the one already recorded needs no guard of its own — `annotateVersion` never goes
-        // backwards — so a source briefly answering from a lagging replica cannot drag a wallet back over a boundary.
-        return Either.right(
-          BigInt(update.highestTransactionId) > state.progress.appliedId
-            ? state
-            : annotateVersion(state, update.version),
-        );
-      } else if (update.type === 'UnshieldedTransactionsProgress') {
-        // A progress message reports how far the source has got with this address, not a transaction, so it moves the
-        // far end of the cursor and nothing else. The chain version it also carries is deliberately not read here: the
-        // source splits that off into its own `VersionSignal`, which is the only message allowed to annotate, and
-        // which alone carries the gate above. Annotating from both places would put the gate on one route and not the
-        // other.
-        return Either.right(
-          CoreWallet.updateProgress(state, {
-            highestTransactionId: BigInt(update.highestTransactionId),
-            isConnected: true,
-          }),
-        );
-      } else if (isBeyondActiveRange(update.transaction.protocolVersion, activeRange)) {
-        // The hand-over point. This transaction belongs to the next variant, so NOTHING about it is applied: no UTXO
-        // change, no cursor movement, no transaction-history write. Only the version is recorded, which is what makes
-        // the runtime migrate. Because the cursor did not move, the next variant re-fetches this very transaction from
-        // it and applies it exactly once.
-        return Either.right(annotateVersion(state, update.transaction.protocolVersion));
-      } else {
-        const updatePayload = {
-          createdUtxos: update.createdUtxos,
-          spentUtxos: update.spentUtxos,
-          status: update.status,
-        };
-
-        const stateAfterApplyingUpdate =
-          update.status === 'FAILURE'
-            ? CoreWallet.applyFailedUpdate(state, updatePayload)
-            : CoreWallet.applyUpdate(state, updatePayload);
-
-        return stateAfterApplyingUpdate.pipe(
-          Either.map((wallet) => {
-            const stateAfterUpdatingProgress = CoreWallet.updateProgress(wallet, {
-              appliedId: BigInt(update.transaction.id),
-            });
-
-            const { transactionHistoryService } = getContext();
-            Effect.runFork(transactionHistoryService.put(update));
-
-            return annotateVersion(stateAfterUpdatingProgress, update.transaction.protocolVersion);
-          }),
-        );
-      }
-    },
+    ): Either.Either<CoreWallet, WalletError> =>
+      Match.value(update).pipe(
+        Match.discriminatorsExhaustive('type')({
+          VersionSignal: (signal) => applyVersionSignal(state, signal),
+          UnshieldedTransactionsProgress: (progress) => applyProgress(state, progress),
+          UnshieldedTransaction: (transaction) => applyTransaction(state, transaction, activeRange, getContext),
+        }),
+      ),
   };
 };
 
