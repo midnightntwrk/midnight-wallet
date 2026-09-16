@@ -247,25 +247,29 @@ export const makeSimulatorTransactionHistoryService = (
         catch: (e) =>
           new TransactionHistoryError({ message: `Failed to get transaction details for ${hash}`, cause: e }),
       }).pipe(
-        // An entry restored from a history written before the lifecycle field existed is finalized but records no
-        // block, and this service has no indexer to ask for one — it backs the simulator, where storage is the only
-        // source. Such an entry cannot be described, so it fails the same way a missing one does.
+        // Two distinct failures, reported distinctly. Storage may never have heard of the transaction; or it holds a
+        // finalized entry restored from a history written before the lifecycle field existed, which records no block.
+        // This service backs the simulator, where storage is the only source, so neither case can be repaired here.
         Effect.flatMap((entry) =>
-          isFinalized(entry) && entry.lifecycle.finalizedBlock !== undefined
-            ? Effect.succeed({
-                hash: entry.hash,
-                block: {
-                  hash: entry.lifecycle.finalizedBlock.hash,
-                  height: entry.lifecycle.finalizedBlock.height,
-                  timestamp: entry.lifecycle.finalizedBlock.timestamp.getTime(),
-                },
-                status: entry.status ?? 'SUCCESS',
-                identifiers: entry.identifiers,
-                fees: entry.fees ?? null,
-              })
-            : Effect.fail(
-                new TransactionHistoryError({ message: `No transaction found in storage for hash: ${hash}` }),
-              ),
+          !isFinalized(entry)
+            ? Effect.fail(new TransactionHistoryError({ message: `No transaction found in storage for hash: ${hash}` }))
+            : entry.lifecycle.finalizedBlock === undefined
+              ? Effect.fail(
+                  new TransactionHistoryError({
+                    message: `Transaction ${hash} is finalized but its history entry records no block (restored from a pre-lifecycle history)`,
+                  }),
+                )
+              : Effect.succeed({
+                  hash: entry.hash,
+                  block: {
+                    hash: entry.lifecycle.finalizedBlock.hash,
+                    height: entry.lifecycle.finalizedBlock.height,
+                    timestamp: entry.lifecycle.finalizedBlock.timestamp.getTime(),
+                  },
+                  status: entry.status ?? 'SUCCESS',
+                  identifiers: entry.identifiers,
+                  fees: entry.fees ?? null,
+                }),
         ),
       ),
   };
