@@ -1,0 +1,98 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  PendingTransactions,
+  finalizedTransactionTrait,
+} from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { Serialization as DustSerialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
+import { Serialization as ShieldedSerialization } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { Serialization as UnshieldedSerialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { Either } from 'effect';
+import { fixturesFor, type Fixture, type Surface } from './fixtures.js';
+
+const orThrow = <T>(what: string, result: Either.Either<T, unknown>): T => {
+  if (Either.isLeft(result)) throw new Error(`${what} did not restore: ${String(result.left)}`);
+  return result.right;
+};
+
+const shielded = ShieldedSerialization.makeDefaultV1SerializationCapability();
+const unshielded = UnshieldedSerialization.makeDefaultV1SerializationCapability();
+const dust = DustSerialization.makeDefaultV1SerializationCapability();
+
+/**
+ * Restore a stored payload with the current code and write it straight back out, per surface.
+ *
+ * Used by the drift test to compare against the recorded baseline, and by the same test in capture mode to record a new
+ * one. One implementation for both, so the thing being recorded and the thing being checked can never diverge.
+ */
+const rewriters: Record<Surface, (serialized: string) => Promise<string> | string> = {
+  shielded: (s) => shielded.serialize(orThrow('shielded', shielded.deserialize(null, s))),
+  unshielded: (s) => unshielded.serialize(orThrow('unshielded', unshielded.deserialize(s))),
+  dust: (s) => dust.serialize(orThrow('dust', dust.deserialize(null, s))),
+  'tx-history': (s) => InMemoryTransactionHistoryStorage.restore(s, WalletEntrySchema, mergeWalletEntries).serialize(),
+  'pending-transactions': (s) =>
+    PendingTransactions.serialize(
+      orThrow('pending-transactions', PendingTransactions.deserialize(s, finalizedTransactionTrait)),
+      finalizedTransactionTrait,
+    ),
+};
+
+/**
+ * Restore a payload with the current code and serialize it again.
+ *
+ * @param surface - The persisted surface the payload belongs to.
+ * @param serialized - The stored payload.
+ * @returns What the current code writes for that payload.
+ */
+export const rewriteWithCurrentCode = (surface: Surface, serialized: string): Promise<string> | string =>
+  rewriters[surface](serialized);
+
+/** A fixture origin is `facade-<version>` with an optional `-<variant>` suffix, e.g. `facade-4.1.0-deep`. */
+const parseOrigin = (origin: string): { readonly version: readonly number[]; readonly variant: string } => {
+  const match = /^facade-(\d+)\.(\d+)\.(\d+)(?:-(.+))?$/.exec(origin);
+  if (match === null) return { version: [0, 0, 0], variant: '' };
+  return { version: [Number(match[1]), Number(match[2]), Number(match[3])], variant: match[4] ?? '' };
+};
+
+/** A baseline filename is `<surface>.json` or `<surface>-<variant>.json`. */
+const variantOfBaseline = (surface: Surface, file: string): string =>
+  file.replace(/\.json$/, '') === surface ? '' : file.replace(/\.json$/, '').slice(surface.length + 1);
+
+/**
+ * The frozen payload a baseline is captured from: the newest fixture for the same surface and variant.
+ *
+ * Capturing from real stored data rather than building a wallet keeps the capture deterministic and needs no chain, no
+ * network and no devnet.
+ *
+ * @param surface - The persisted surface.
+ * @param baselineFile - The baseline filename, e.g. `shielded-deep.json`.
+ * @returns The newest frozen fixture matching that surface and variant.
+ * @throws When no frozen fixture matches, which means the baseline has nothing to be captured from.
+ */
+export const sourceForBaseline = (surface: Surface, baselineFile: string): Fixture => {
+  const wanted = variantOfBaseline(surface, baselineFile);
+  const candidates = fixturesFor(surface)
+    .filter((fixture) => parseOrigin(fixture.origin).variant === wanted)
+    .sort((a, b) => {
+      const [left, right] = [parseOrigin(a.origin).version, parseOrigin(b.origin).version];
+      const at = left.findIndex((part, index) => part !== (right[index] ?? 0));
+      return at === -1 ? 0 : (left[at] ?? 0) - (right[at] ?? 0);
+    });
+  const newest = candidates[candidates.length - 1];
+  if (newest === undefined) {
+    throw new Error(`no frozen fixture for surface '${surface}' variant '${wanted}' to capture a baseline from`);
+  }
+  return newest;
+};
