@@ -76,6 +76,15 @@ export type CoreWallet = Readonly<{
   progress: SyncProgress.SyncProgress;
   networkId: string;
   coinHashes: CoinHashesMap;
+  /**
+   * The transaction history that a 1.0.0 snapshot embedded, as the hex-encoded proven ledger transactions it was
+   * written with. Carried across a restore and written back out untouched, so upgrading does not destroy it; this SDK
+   * keeps history in its own storage and never reads or adds to this list.
+   *
+   * Absent for every snapshot written since the field was dropped from the schema, and absent means absent — it is not
+   * written back as an empty list, so those snapshots keep the bytes they had.
+   */
+  legacyTxHistory?: readonly string[];
 }>;
 
 export const CoreWallet = {
@@ -124,6 +133,7 @@ export const CoreWallet = {
     syncProgress: SyncProgress.SyncProgressData,
     protocolVersion: bigint,
     networkId: string,
+    legacyTxHistory?: readonly string[],
   ): Either.Either<CoreWallet, WalletError> {
     return CoinHashesMap.assertValid(coinHashes, localState).pipe(
       Either.mapBoth({
@@ -136,6 +146,9 @@ export const CoreWallet = {
           coinHashes,
           progress: SyncProgress.createSyncProgress(syncProgress),
           protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
+          // Spread conditionally: a snapshot that carried no history must not gain the key, so that re-serializing
+          // it produces the bytes it came in with.
+          ...(legacyTxHistory === undefined ? {} : { legacyTxHistory }),
         }),
       }),
     );
