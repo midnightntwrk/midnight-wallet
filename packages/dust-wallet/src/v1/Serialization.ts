@@ -59,7 +59,20 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
   Schema.compose(StateFromUInt8Array),
 );
 
+/**
+ * The format version this build writes into a dust snapshot. It versions the encoded shape of the snapshot and is not
+ * `protocolVersion`, which is the chain's hard-fork number and lives inside it.
+ *
+ * Snapshots written before this field existed carry the same fields under a different name for the same shape, so a
+ * missing `version` reads as this one and no upgrade runs. The field earns its keep on the day the shape does change:
+ * that shape becomes `v2` and a single v1-to-v2 step is written, rather than every reader having to guess.
+ */
+export const SNAPSHOT_FORMAT_VERSION = 'v1';
+
 const SnapshotSchema = Schema.Struct({
+  version: Schema.optionalWith(Schema.Literal(SNAPSHOT_FORMAT_VERSION), {
+    default: () => SNAPSHOT_FORMAT_VERSION,
+  }),
   publicKey: Schema.Struct({
     publicKey: Schema.BigInt,
   }),
@@ -75,6 +88,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
         publicKey: w.publicKey,
         state: w.state,
         protocolVersion: w.protocolVersion,
