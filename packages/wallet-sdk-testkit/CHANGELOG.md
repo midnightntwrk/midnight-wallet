@@ -1,5 +1,25 @@
 # @midnightntwrk/wallet-sdk-testkit
 
+## 1.0.0-beta.4
+
+### Patch Changes
+
+- Updated dependencies [48aaef5]
+- Updated dependencies [83eb454]
+- Updated dependencies [7025e69]
+- Updated dependencies [3ccc26e]
+- Updated dependencies [0bf816a]
+- Updated dependencies [a621abc]
+- Updated dependencies [a12155a]
+- Updated dependencies [59e9260]
+  - @midnightntwrk/wallet-sdk-hd@3.1.0-beta.3
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-facade@5.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-beta.4
+
 ## 1.0.0-beta.3
 
 ### Major Changes

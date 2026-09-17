@@ -1,5 +1,12 @@
 # @midnightntwrk/wallet-sdk-runtime
 
+## 1.1.0-beta.2
+
+### Patch Changes
+
+- Updated dependencies [7025e69]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-beta.2
+
 ## 1.1.0-beta.1
 
 ### Minor Changes
