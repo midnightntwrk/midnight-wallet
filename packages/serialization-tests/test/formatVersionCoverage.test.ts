@@ -10,27 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { TransactionHistoryFormat } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Serialization as DustSerialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
-import { Serialization as ShieldedSerialization } from '@midnightntwrk/wallet-sdk-shielded/v1';
-import { Serialization as UnshieldedSerialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
 import { describe, expect, it } from 'vitest';
-import { SURFACES, baseline, baselineFilesFor, frozenVersionsOf, type Surface } from './fixtures.js';
-
-/**
- * The format version each surface's code says it writes today, read from the code rather than restated here — so this
- * cannot drift from the source it is checking.
- *
- * Pending transactions is the exception: its `'v1'` lives inline in a `Schema.Literal` and the surface is deliberately
- * left alone, so the version is named here instead of exporting a constant from it.
- */
-const currentVersionOf: Record<Surface, string> = {
-  shielded: ShieldedSerialization.SNAPSHOT_FORMAT_VERSION,
-  unshielded: UnshieldedSerialization.SNAPSHOT_FORMAT_VERSION,
-  dust: DustSerialization.SNAPSHOT_FORMAT_VERSION,
-  'tx-history': TransactionHistoryFormat.CURRENT_FORMAT_VERSION,
-  'pending-transactions': 'v1',
-};
+import { SURFACES, baseline, baselineFilesFor, currentVersionOf, frozenVersionsOf, type Surface } from './fixtures.js';
 
 /** `v1`, `v2`, … up to and including the surface's current version. Every one of them must be evidenced. */
 const versionsUpToCurrent = (surface: Surface): readonly string[] => {

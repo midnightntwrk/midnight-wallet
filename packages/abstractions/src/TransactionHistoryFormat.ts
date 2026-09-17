@@ -20,8 +20,15 @@ import { Data, Either } from 'effect';
 export const CURRENT_FORMAT_VERSION = 'v2';
 
 /**
- * The first format: a bare JSON array of entries with no envelope around it. A payload with no `version` field is this
- * one — no payload has ever been written carrying the literal `'v1'`.
+ * The name this codebase gives the first format: a bare JSON array of entries with no envelope around it.
+ *
+ * It is a label for talking about that shape, not a value that appears in a payload. The envelope did not exist when
+ * the first format was written, so the marker is the _absence_ of `version`, and no history has ever been written
+ * carrying the literal `'v1'`. A payload that does declare `'v1'` was not written by any release of this SDK, and is
+ * refused like any other version this build cannot read.
+ *
+ * Used as the `detectedVersion` on a {@link TransactionHistoryRestoreError} raised while reading a bare array, so the
+ * error names the shape the payload actually had.
  */
 export const FIRST_FORMAT_VERSION = 'v1';
 
@@ -170,8 +177,11 @@ export const upgradeToCurrentFormat = (
         new TransactionHistoryRestoreError({
           surface: TRANSACTION_HISTORY_SURFACE,
           detectedVersion: detected.version,
+          // No ordering is claimed between the two versions. A build knows the formats it was written to read and
+          // nothing else; whether an unrecognised label belongs to a later SDK, an abandoned one, or a payload from
+          // somewhere else entirely is not something it can tell from the label.
           cause: new Error(
-            `Transaction history was written in format ${detected.version}, which is newer than this build's ${CURRENT_FORMAT_VERSION}.`,
+            `Transaction history declares format ${detected.version}, which this build cannot read. This build reads ${CURRENT_FORMAT_VERSION}.`,
           ),
         }),
       );
