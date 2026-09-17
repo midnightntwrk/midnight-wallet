@@ -28,7 +28,7 @@ import {
   makeDefaultSyncService,
   makeDefaultSyncCapability,
 } from './Sync.js';
-import { type WalletSyncUpdate } from './SyncSchema.js';
+import { type SyncUpdate } from './SyncSchema.js';
 import {
   type DefaultTransactingConfiguration,
   type DefaultTransactingContext,
@@ -78,7 +78,7 @@ export type V1Variant<TSerialized, TSyncUpdate> = Variant.Variant<
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyV1Variant = V1Variant<any, any>;
-export type DefaultV1Variant = V1Variant<string, WalletSyncUpdate>;
+export type DefaultV1Variant = V1Variant<string, SyncUpdate>;
 
 export type TransactionOf<T extends AnyV1Variant> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -92,9 +92,9 @@ export type SerializedStateOf<T extends AnyV1Variant> =
 
 export type DefaultV1Builder = V1Builder<
   DefaultV1Configuration,
-  RunningV1Variant.Context<string, WalletSyncUpdate>,
+  RunningV1Variant.Context<string, SyncUpdate>,
   string,
-  WalletSyncUpdate
+  SyncUpdate
 >;
 
 export class V1Builder<
@@ -123,7 +123,7 @@ export class V1Builder<
     TConfig & DefaultSyncConfiguration,
     TContext & DefaultSyncContext,
     TSerialized,
-    WalletSyncUpdate
+    SyncUpdate
   > {
     return this.withSync(makeDefaultSyncService, makeDefaultSyncCapability);
   }

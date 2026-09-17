@@ -17,3 +17,4 @@ export {
   mergeUnshieldedSections,
 } from './v1/TransactionHistory.js';
 export * from './KeyStore.js';
+export { type DefaultSyncConfiguration, type NodeClientConnection, resolveNodeEndpoint } from './v1/Sync.js';
