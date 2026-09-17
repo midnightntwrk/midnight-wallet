@@ -1,5 +1,14 @@
 # @midnightntwrk/wallet-sdk-capabilities
 
+## 4.0.0-beta.4
+
+### Patch Changes
+
+- Updated dependencies [7025e69]
+- Updated dependencies [3ccc26e]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-node-client@2.0.0-beta.4
+
 ## 4.0.0-beta.3
 
 ### Major Changes
