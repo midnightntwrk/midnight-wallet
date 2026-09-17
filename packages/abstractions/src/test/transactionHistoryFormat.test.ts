@@ -14,6 +14,8 @@ import { describe, it, expect } from 'vitest';
 import { Either } from 'effect';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
+  CURRENT_FORMAT_VERSION,
+  FIRST_FORMAT_VERSION,
   detectVersion,
   upgradeV1ToV2,
   upgradeToCurrentFormat,
@@ -169,11 +171,23 @@ describe('running a stored payload through every upgrade step', () => {
     expect(String(error.cause)).toContain('no recognisable format');
   });
 
-  it('should refuse a version newer than this build with a message that says so', () => {
+  it('should refuse a version this build does not know, naming it and the version this build writes', () => {
     const result = upgradeToCurrentFormat({ version: 'v9', entries: [] });
 
     const error = EitherOps.getOrThrowRight(result);
     expect(error.detectedVersion).toBe('v9');
-    expect(String(error.cause)).toContain('newer than this build');
+    expect(String(error.cause)).toContain('v9');
+    expect(String(error.cause)).toContain(CURRENT_FORMAT_VERSION);
+  });
+
+  // `v1` is the name this codebase gives the unlabelled first format; it has never been written into a payload. A
+  // payload that declares it is therefore still unreadable — but the refusal must not claim it is newer than the
+  // version this build writes, which is the one thing that is certainly false about it.
+  it('should refuse a payload declaring the first format without claiming it is newer', () => {
+    const result = upgradeToCurrentFormat({ version: FIRST_FORMAT_VERSION, entries: [] });
+
+    const error = EitherOps.getOrThrowRight(result);
+    expect(error.detectedVersion).toBe(FIRST_FORMAT_VERSION);
+    expect(String(error.cause)).not.toContain('newer');
   });
 });

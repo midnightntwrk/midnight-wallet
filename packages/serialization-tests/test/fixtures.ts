@@ -13,6 +13,10 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { TransactionHistoryFormat } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Serialization as DustSerialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { Serialization as ShieldedSerialization } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { Serialization as UnshieldedSerialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
 
 const FIXTURES_DIR = fileURLToPath(new URL('../fixtures', import.meta.url));
 
@@ -33,6 +37,21 @@ export const BASELINE_DIR = '_baseline';
 export const SURFACES = ['shielded', 'unshielded', 'dust', 'tx-history', 'pending-transactions'] as const;
 
 export type Surface = (typeof SURFACES)[number];
+
+/**
+ * The format version each surface's code says it writes today, read from the code rather than restated here — so this
+ * cannot drift from the source it is checking.
+ *
+ * Pending transactions is the exception: its `'v1'` lives inline in a `Schema.Literal` and the surface is deliberately
+ * left alone, so the version is named here instead of exporting a constant from it.
+ */
+export const currentVersionOf: Record<Surface, string> = {
+  shielded: ShieldedSerialization.SNAPSHOT_FORMAT_VERSION,
+  unshielded: UnshieldedSerialization.SNAPSHOT_FORMAT_VERSION,
+  dust: DustSerialization.SNAPSHOT_FORMAT_VERSION,
+  'tx-history': TransactionHistoryFormat.CURRENT_FORMAT_VERSION,
+  'pending-transactions': 'v1',
+};
 
 /**
  * One captured payload.

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, expect, it } from 'vitest';
-import { SURFACES, declaredVersionOf, fixturesFor, type Fixture } from './fixtures.js';
+import { SURFACES, currentVersionOf, declaredVersionOf, fixturesFor, type Fixture } from './fixtures.js';
 import { rewriteWithCurrentCode } from './rewrite.js';
 
 /**
@@ -95,8 +95,10 @@ describe('reading a stored payload and writing it back keeps everything it carri
       expect({ id: fixture.id, lost }).toEqual({ id: fixture.id, lost: [] });
 
       // A payload that arrives at one version and leaves at another has been upgraded, which is the intended
-      // behaviour — but it must be the version this build declares, not some third thing.
-      expect(declaredVersionOf(rewritten)).toMatch(/^v\d+$/);
+      // behaviour — but it must leave at exactly the version this surface's code declares it writes. Matching the
+      // shape `/^v\d+$/` would not hold this: `declaredVersionOf` reports `v1` for a payload carrying no envelope at
+      // all, so a writer that stopped emitting one would still have satisfied it.
+      expect(declaredVersionOf(rewritten)).toBe(currentVersionOf[surface]);
     },
   );
 });

@@ -41,7 +41,18 @@ const mergeBase = (() => {
   }
 })();
 
-const changed = git('diff', '--name-status', `${mergeBase}...HEAD`)
+// Exits 2, like the merge-base failure above and unlike the exit 1 a real violation uses: a git that could not run is
+// not the same answer as a fixture that changed, and CI must not read one as the other.
+const diff = (() => {
+  try {
+    return git('diff', '--name-status', `${mergeBase}...HEAD`);
+  } catch (error) {
+    console.error(`Could not diff ${mergeBase}...HEAD: ${error.message}`);
+    process.exit(2);
+  }
+})();
+
+const changed = diff
   .split('\n')
   .filter((line) => line.length > 0)
   .map((line) => {
