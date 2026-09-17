@@ -78,7 +78,10 @@ export class ProtocolVersionMismatchError extends Data.TaggedError(
   readonly stage: TransactionStage;
 }> {}
 
-/** Raised when a wire envelope cannot be read as a transaction of a version this SDK knows. */
+/**
+ * Raised when bytes cannot be read as a transaction of a version this SDK knows — whether they arrived in a wire
+ * envelope that names their version, or bare, to be read at the version the reader is acting at.
+ */
 export class WireFormatError extends Data.TaggedError(
   '@midnightntwrk/wallet-sdk-abstractions/WalletTransaction/WireFormatError',
 )<{
