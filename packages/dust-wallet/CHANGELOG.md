@@ -1,5 +1,49 @@
 # @midnightntwrk/wallet-sdk-dust-wallet
 
+## 5.0.0
+
+### Major Changes
+
+- ef16433: **BREAKING:** `DustWalletAPI.balanceTransactions` now returns
+  `{ transaction: UnprovenTransaction; blockData: BlockData }` instead of `UnprovenTransaction`. Callers must read the
+  transaction from the `transaction` field; the accompanying `blockData` (hash, height, timestamp, ledger parameters)
+  captured during balancing can be reused downstream to avoid a redundant fetch.
+
+  Also exposes the `BlockData` type from the package's public surface.
+
+### Minor Changes
+
+- e89ab0b: Track transaction lifecycle in transaction history. Submitted transactions are now recorded as pending,
+  transition to finalized once confirmed by the indexer, and to rejected if they are reverted — giving a single,
+  consistent view of in-flight and settled transactions.
+
+### Patch Changes
+
+- ead236e: fix: keep tx-history shielded/dust sections when the indexer lags events (#401)
+
+  When a WS event arrived before the indexer's HTTP endpoint had ingested the tx, `getTransactionDetails` dereferenced
+  an empty result and died with an unretriable `TypeError`, so the shielded/dust section was silently dropped
+  (balances/coins were unaffected). It now fails typed and retries over a bounded, configurable window
+  (`transactionDetailsRetryWindow`, default 2 min); beyond it the loss is logged (`Effect.logError` with the `txHash`)
+  instead of swallowed, and the sync fan-out is capped (`concurrency: 8`). This narrows the race but is not a durability
+  guarantee: if the indexer lags beyond the window the section is still lost (not re-processed), just logged rather than
+  swallowed.
+
+- 1eaad77: Pin internal `@midnightntwrk/wallet-sdk-*` dependencies to exact versions instead of caret ranges. A caret
+  range on a prerelease base (e.g. `^5.0.0-beta.0`) satisfies canary snapshots published on the same `major.minor.patch`
+  (`5.0.0-canary.*`), and since `canary` sorts above `beta`/`alpha`, installing a prerelease pulled canary builds of the
+  sibling packages. Exact pins make published releases resolve to a single coherent set regardless of what snapshots
+  exist on the registry.
+- Updated dependencies [b545c3b]
+- Updated dependencies [44bbcae]
+- Updated dependencies [e89ab0b]
+- Updated dependencies [1eaad77]
+- Updated dependencies [ef16433]
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0
+  - @midnightntwrk/wallet-sdk-capabilities@3.4.0
+  - @midnightntwrk/wallet-sdk-runtime@1.0.6
+
 ## 4.2.0
 
 ### Minor Changes
