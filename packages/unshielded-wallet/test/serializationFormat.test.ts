@@ -14,13 +14,12 @@ import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../src/v1/CoreWallet.js';
+import { createKeystore, PublicKey } from '../src/v1/KeyStore.js';
 import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js';
 
-const publicKey = {
-  publicKey: '0000000000000000000000000000000000000000000000000000000000000001',
-  addressHex: '0000000000000000000000000000000000000000000000000000000000000002',
-  address: 'mn_addr_undeployed1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq',
-};
+// A real, self-consistent key: its address derives from it, which is what the capability asserts on the way back in.
+// A fabricated pair would fail that check and never reach the version handling these tests are about.
+const publicKey = PublicKey.fromKeyStore(createKeystore(Buffer.alloc(32, 3), NetworkId.NetworkId.Undeployed));
 
 describe('V1 unshielded snapshot format version', () => {
   const capability = makeDefaultV1SerializationCapability();
