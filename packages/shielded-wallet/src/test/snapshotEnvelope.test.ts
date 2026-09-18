@@ -31,7 +31,7 @@
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Array as Arr, Order, Schema } from 'effect';
+import { Array as Arr, Either, Order, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet as V1Wallet } from '../v1/CoreWallet.js';
 import { makeDefaultV1SerializationCapability } from '../v1/Serialization.js';
@@ -89,8 +89,8 @@ const v2Wallet = () => V2Wallet.updateProgress(V2Wallet.initEmpty(v9Keys(), netw
  *   contribute no path at all — so deleting it from the schema would leave this pin unchanged.
  */
 const expectedPaths = [
-  // The snapshot's format version. Both variants write it, and write the same one: the version belongs to the shape,
-  // and the shape is what lets either variant read the other's snapshot.
+  // The snapshot's format version. Both variants write it, and write the same one, because the version names the
+  // shape and the two variants write one shape: every field here, plus the two optional ones pinned below.
   'version',
   'coinHashes{}',
   'networkId',
@@ -142,5 +142,35 @@ describe('the shielded snapshot envelope', () => {
     expect(parsed.coinHashes).toEqual({});
     // Opaque on purpose: hex, non-empty, and otherwise the ledger's business.
     expect(parsed.state).toMatch(/^[0-9a-f]+$/);
+  });
+});
+
+/**
+ * The optional fields, which an empty settled wallet does not write and the pin above therefore cannot see.
+ *
+ * @remarks
+ *   `txHistory` is the transaction history a 1.0.0 snapshot embedded. It is read back and written out untouched by both
+ *   variants, so a wallet restored from such a snapshot keeps it whichever side of `forks.v9` it is saved on.
+ *   `coinHashesPending` is written by the V2 variant alone and only between a cross-ledger migration and its first sync
+ *   update; no V1 wallet is ever in that state, so its absence from V1 is not a drift between the twins.
+ */
+describe('the shielded snapshot envelope’s optional fields', () => {
+  const embedded = ['00aa11bb22cc', '33dd44ee55ff'];
+  const withEmbeddedHistory = (serialized: string): string =>
+    JSON.stringify({ ...(JSON.parse(serialized) as Record<string, unknown>), txHistory: embedded });
+
+  it('writes the embedded transaction history under the same name on both variants', () => {
+    const v1 = makeDefaultV1SerializationCapability();
+    const v2 = makeDefaultV2SerializationCapability();
+    const v1Restored = Either.getOrThrow(v1.deserialize(null, withEmbeddedHistory(v1.serialize(v1Wallet()))));
+    const v2Restored = Either.getOrThrow(v2.deserialize(null, withEmbeddedHistory(v2.serialize(v2Wallet()))));
+
+    const v1Snapshot: unknown = JSON.parse(v1.serialize(v1Restored));
+    const v2Snapshot: unknown = JSON.parse(v2.serialize(v2Restored));
+
+    expect(sorted(keyPaths(v1Snapshot))).toEqual(sorted([...expectedPaths, 'txHistory[]']));
+    expect(sorted(keyPaths(v2Snapshot))).toEqual(sorted([...expectedPaths, 'txHistory[]']));
+    expect(v1Snapshot).toMatchObject({ txHistory: embedded });
+    expect(v2Snapshot).toMatchObject({ txHistory: embedded });
   });
 });

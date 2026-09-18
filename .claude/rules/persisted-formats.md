@@ -4,6 +4,8 @@ paths:
   - 'packages/abstractions/src/TransactionHistoryStorage.ts'
   - 'packages/abstractions/src/InMemoryTransactionHistoryStorage.ts'
   - 'packages/*/src/v1/Serialization.ts'
+  - 'packages/*/src/v2/Serialization.ts'
+  - 'packages/*/src/SnapshotFormat.ts'
   - 'packages/capabilities/src/pendingTransactions/**'
   - 'packages/serialization-tests/**'
 ---
@@ -15,11 +17,15 @@ it was written, by a version we no longer ship.
 
 | Surface | Written by | Format version today |
 | --- | --- | --- |
-| Shielded snapshot | `shielded-wallet/src/v1/Serialization.ts` | `v1` |
-| Unshielded snapshot | `unshielded-wallet/src/v1/Serialization.ts` | `v1` |
-| Dust snapshot | `dust-wallet/src/v1/Serialization.ts` | `v1` |
+| Shielded snapshot | `shielded-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v1` (both) |
+| Unshielded snapshot | `unshielded-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v1` (V1), `v2` (V2) |
+| Dust snapshot | `dust-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v1` (both) |
 | Transaction history | `abstractions/src/InMemoryTransactionHistoryStorage.ts` | `v2` |
 | Pending transactions | `capabilities/src/pendingTransactions/pendingTransactions.ts` | `v1` |
+
+The three snapshot surfaces have two writers each — the V1 variant on ledger-v8 and the V2 variant on ledger-v9 — and
+each package keeps its version constants, and any upgrade step, in a ledger-free `src/SnapshotFormat.ts` that both
+twins import. A change to either twin's writer is a change to a persisted format.
 
 Full reasoning: ADR [0008](../../docs/decisions/0008-persisted-format-versioning.md). Glossary: `docs/Design.md`.
 
@@ -35,7 +41,7 @@ Full reasoning: ADR [0008](../../docs/decisions/0008-persisted-format-versioning
 **Bump the version** when a required field is added, or a field is removed, renamed, or changes type. Then, in the same
 pull request:
 
-1. Add the new version to the surface's version constant.
+1. Add the new version to the surface's version constants in the package's `src/SnapshotFormat.ts`.
 2. Add **one** upgrade step, `vN` → `vN+1`. Steps chain and never skip.
 3. Add a fixture folder for the version being left behind, if it does not already have one. Fixtures are produced by
    running the real published release, never written by hand: `packages/serialization-tests/fixture-generator/README.md`.

@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { DefaultForkSchedule, finalizedTransactionTraits } from '@midnightntwrk/wallet-sdk-facade';
@@ -61,10 +60,12 @@ describe('pending transactions written by published releases', () => {
       expect(Either.isRight(result)).toBe(true);
       if (Either.isRight(result)) {
         // Through the trait, not off the handle: a restored transaction is a version-stamped handle, and reading its
-        // identifiers is exactly what the trait the payload was read with is for. The registry has one entry here, so
-        // selecting the oldest supported version is the only trait there is to find.
-        const trait = Option.getOrThrow(ProtocolVersion.select(traits, ProtocolVersion.MinSupportedVersion));
-        const identifiers = PendingTransactions.all(result.right).map((tx) => [...trait.ids(tx)]);
+        // identifiers is exactly what the trait it was read with is for. The registry has a ledger-v8 and a ledger-v9
+        // epoch, so each item is read with the trait of the epoch it was stamped in — for these ledger-v8 fixtures,
+        // which carry no stamp, that is the oldest one, and a ledger-v9 fixture would route itself to the other.
+        const identifiers = result.right.all.map((item) => [
+          ...Option.getOrThrow(PendingTransactions.traitForVersion(traits, item.protocolVersion)).ids(item.tx),
+        ]);
         expect(identifiers).toEqual(fixture.expected['identifiers']);
       }
     });

@@ -60,6 +60,14 @@ runtime already uses it for moving live wallet state across a hard fork. These a
 one new fixture folder. An optional field added → no bump; re-record the drift baseline. The internals of a ledger blob
 are the ledger's concern, not a format version of ours.
 
+**Worked example: the unshielded snapshot on the V2 variant.** The V1 variant, on ledger-v8, stores the verifying key as
+a bare string, implicitly a schnorr key. The V2 variant, on ledger-v9, stores it as `{ tag, value }`, because that
+ledger signs with more than one scheme. That is a retyped field, so the V2 writer writes `version: 'v2'`, and one step —
+`upgradeSnapshotV1ToV2` in `unshielded-wallet/src/SnapshotFormat.ts` — wraps a bare string as
+`{ tag: 'schnorr', value }` on the JSON before the schema runs. The V1 writer still writes `v1`, and never meets a `v2`
+payload: the wallet layer routes a snapshot to the variant that owns its `protocolVersion`. The two variants are two
+writers of one surface, which is why the gate below runs every check per writer.
+
 **Failure is loud.** A payload that cannot be read raises a tagged error carrying the surface, the version detected and
 the cause. It is never swallowed into an empty store.
 
@@ -70,7 +78,7 @@ format version they are in:
 
 ```
 fixtures/<surface>/<formatVersion>/<origin>.json    frozen, never edited
-fixtures/_baseline/<surface>.json                   what this build writes, re-recorded on purpose
+fixtures/_baseline/<writer>/<surface>.json          what each variant writes today, re-recorded on purpose
 ```
 
 Four checks, all of which fire in the pull request that does the work:
@@ -109,9 +117,10 @@ nothing can be forgotten at release time.
 - Five more frozen folders to carry, and a baseline that must be re-recorded whenever output legitimately changes.
 - A fixture can only ever be captured while its version is still current. A version superseded before anyone captured it
   cannot be evidenced afterwards — hence the coverage check, which makes that impossible to reach by accident.
-- The corpus only covers releases up to the point this landed. Older payloads were captured by installing published
-  packages from npm; that generator is not part of the repository, and recovering an uncaptured old format would mean
-  resurrecting it.
+- The corpus only covers releases that someone has captured. Payloads are captured by installing the published packages
+  from npm and driving them; that generator ships at `packages/serialization-tests/fixture-generator/`, whose README
+  says how to add a release. A format that was superseded before anyone captured it can still not be recovered, which is
+  what the coverage check exists to prevent.
 
 ## Pros and Cons of the Options
 
