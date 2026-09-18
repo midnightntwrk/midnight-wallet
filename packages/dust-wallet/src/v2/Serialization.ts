@@ -14,6 +14,7 @@ import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
+import { SNAPSHOT_FORMAT_VERSION } from '../v1/Serialization.js';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
@@ -59,7 +60,22 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
   Schema.compose(StateFromUInt8Array),
 );
 
+/**
+ * The `version` field of a dust snapshot, as this variant writes it.
+ *
+ * The version belongs to the snapshot's shape, not to the variant that wrote it: both variants write the same shape so
+ * that either can read the other's snapshot, which is why the constant is the one the V1 variant declares rather than a
+ * second one that could drift from it.
+ */
+const SnapshotVersionSchema = Schema.Literal(SNAPSHOT_FORMAT_VERSION).annotations({
+  message: (issue) =>
+    `Refusing a dust snapshot written in format version ${JSON.stringify(issue.actual)}: this build reads ${SNAPSHOT_FORMAT_VERSION} and does not downgrade.`,
+});
+
 const SnapshotSchema = Schema.Struct({
+  version: Schema.optionalWith(SnapshotVersionSchema, {
+    default: () => SNAPSHOT_FORMAT_VERSION,
+  }),
   publicKey: Schema.Struct({
     publicKey: Schema.BigInt,
   }),
@@ -75,6 +91,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
         publicKey: w.publicKey,
         state: w.state,
         protocolVersion: w.protocolVersion,

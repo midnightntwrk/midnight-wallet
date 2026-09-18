@@ -89,6 +89,9 @@ const v2Wallet = () => V2Wallet.updateProgress(V2Wallet.initEmpty(v9Keys(), netw
  *   contribute no path at all — so deleting it from the schema would leave this pin unchanged.
  */
 const expectedPaths = [
+  // The snapshot's format version. Both variants write it, and write the same one: the version belongs to the shape,
+  // and the shape is what lets either variant read the other's snapshot.
+  'version',
   'coinHashes{}',
   'networkId',
   'offset',
