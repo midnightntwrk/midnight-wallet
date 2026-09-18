@@ -37,7 +37,8 @@ pull request:
 
 1. Add the new version to the surface's version constant.
 2. Add **one** upgrade step, `vN` → `vN+1`. Steps chain and never skip.
-3. Add a fixture folder for the version being left behind, if it does not already have one.
+3. Add a fixture folder for the version being left behind, if it does not already have one. Fixtures are produced by
+   running the real published release, never written by hand: `packages/serialization-tests/fixture-generator/README.md`.
 4. Re-record the drift baseline: `yarn capture`.
 
 **Do not bump** when adding an optional field. Re-record the baseline and commit the diff.
