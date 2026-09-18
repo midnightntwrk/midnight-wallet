@@ -13,7 +13,8 @@
  * limitations under the License.
  */
 
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { Array as Arr, DateTime, Duration } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { v8FinalizedTransactionTrait, v9FinalizedTransactionTrait } from '../src/transaction.js';
@@ -22,23 +23,45 @@ import { v8FinalizedTransactionTrait, v9FinalizedTransactionTrait } from '../src
  * Both ledger versions' traits read a transaction the same way — identifiers, a TTL, offers, dust spends — against
  * different ledger classes. `hasTTLExpired` touches none of those classes, so one structural stub exercises both, and
  * running every case against each is what stops a fix landing on one and not the other.
+ *
+ * Each trait reads the dust grace period off its own ledger's initial parameters, so the period is paired with the
+ * trait here rather than read once: if the two ledgers ever disagree, the boundary each case probes must move with it.
  */
 const traits = [
-  ['v8', v8FinalizedTransactionTrait],
-  ['v9', v9FinalizedTransactionTrait],
+  ['v8', v8FinalizedTransactionTrait, ledgerV8.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds],
+  ['v9', v9FinalizedTransactionTrait, ledgerV9.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds],
 ] as const;
 
-const dustGracePeriod = Duration.seconds(
-  Number(ledger.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds),
-);
-
 const creationTime = DateTime.unsafeMake('2026-01-01T00:00:00.000Z');
-/** The first instant at which a transaction carrying only the dust grace period has outlived it. */
-const justAfterGracePeriod = DateTime.addDuration(creationTime, Duration.sum(dustGracePeriod, Duration.seconds(1)));
-/** An intent deadline comfortably beyond the dust grace period, so the grace period is always the earlier one. */
-const intentTTLBeyondGracePeriod = DateTime.toDate(
-  DateTime.addDuration(creationTime, Duration.sum(dustGracePeriod, Duration.hours(1))),
-);
+
+/** The two instants every case is probed at, derived from one ledger's dust grace period. */
+const boundariesFor = (dustGracePeriodSeconds: bigint) => {
+  const dustGracePeriod = Duration.seconds(Number(dustGracePeriodSeconds));
+  return {
+    /** The first instant at which a transaction carrying only the dust grace period has outlived it. */
+    justAfterGracePeriod: DateTime.addDuration(creationTime, Duration.sum(dustGracePeriod, Duration.seconds(1))),
+    /** An intent deadline comfortably beyond the dust grace period, so the grace period is always the earlier one. */
+    intentTTLBeyondGracePeriod: DateTime.toDate(
+      DateTime.addDuration(creationTime, Duration.sum(dustGracePeriod, Duration.hours(1))),
+    ),
+  };
+};
+
+/**
+ * Asks one trait whether the stub has expired.
+ *
+ * Each trait's `hasTTLExpired` is typed against its own ledger's `FinalizedTransaction`, so calling either with the
+ * shared stub needs the parameter widened back to the structural value it actually reads.
+ */
+const hasTTLExpired = (trait: (typeof traits)[number][1], tx: unknown, now: DateTime.Utc): boolean =>
+  // Type cast required because: the two traits' parameter types are distinct nominal classes, so indexing the tuple
+  // yields a union whose call signature demands their intersection — a type no value can have. `hasTTLExpired` reads
+  // only `intents`, `guaranteedOffer` and `fallibleOffer`, which are identical across both.
+  (trait.hasTTLExpired as (tx: unknown, creationTime: DateTime.Utc, now: DateTime.Utc) => boolean)(
+    tx,
+    creationTime,
+    now,
+  );
 
 type StubIntent = Readonly<{
   ttl: Date;
@@ -56,7 +79,7 @@ type StubParts = Readonly<{
  * whether it carries shielded offers. A real `ledger.FinalizedTransaction` can only be produced by proving, which a
  * unit test must not do.
  */
-const stubTransaction = <T,>(parts: StubParts): T => {
+const stubTransaction = (parts: StubParts): unknown => {
   const intents = new Map(
     Arr.map(parts.intents, (intent, index) => [
       index,
@@ -75,13 +98,15 @@ const stubTransaction = <T,>(parts: StubParts): T => {
     guaranteedOffer: parts.hasGuaranteedOffer ? {} : undefined,
     fallibleOffer,
   };
-  // Type cast required because: `hasTTLExpired` reads only `intents`, `guaranteedOffer` and `fallibleOffer`, and each
-  // ledger's `Transaction` has a private constructor, so a structural stub is the only way to reach either from a unit
-  // test. The same stub serves both versions because none of the three fields differ between them.
-  return stub as T;
+  // Returned as `unknown` on purpose: each ledger's `Transaction` has a private constructor, so a structural stub is
+  // the only way to reach `hasTTLExpired` from a unit test, and the widening happens once, at the call site that knows
+  // which trait is being asked.
+  return stub;
 };
 
-describe.each(traits)('%s finalizedTransactionTrait', (_label, trait) => {
+describe.each(traits)('%s finalizedTransactionTrait', (_label, trait, dustGracePeriodSeconds) => {
+  const { justAfterGracePeriod, intentTTLBeyondGracePeriod } = boundariesFor(dustGracePeriodSeconds);
+
   /**
    * The dust grace period is a backstop for transactions whose expiry the intent deadlines do not already describe, so
    * it applies only to a transaction that carries shielded offers or dust spends. A transaction with none of those and
@@ -91,59 +116,59 @@ describe.each(traits)('%s finalizedTransactionTrait', (_label, trait) => {
    */
   describe('hasTTLExpired', () => {
     it('does not expire a transaction with no shielded offers and no dust spends before its intent deadline', () => {
-      const tx = stubTransaction<Parameters<typeof trait.hasTTLExpired>[0]>({
+      const tx = stubTransaction({
         intents: [{ ttl: intentTTLBeyondGracePeriod, dustSpends: 0 }],
         hasGuaranteedOffer: false,
         fallibleOfferSegments: 0,
       });
 
-      expect(trait.hasTTLExpired(tx, creationTime, justAfterGracePeriod)).toBe(false);
+      expect(hasTTLExpired(trait, tx, justAfterGracePeriod)).toBe(false);
     });
 
     it('does not expire a transaction with no intents, no shielded offers and no dust spends', () => {
-      const tx = stubTransaction<Parameters<typeof trait.hasTTLExpired>[0]>({ intents: [], hasGuaranteedOffer: false, fallibleOfferSegments: 0 });
+      const tx = stubTransaction({ intents: [], hasGuaranteedOffer: false, fallibleOfferSegments: 0 });
 
-      expect(trait.hasTTLExpired(tx, creationTime, justAfterGracePeriod)).toBe(false);
+      expect(hasTTLExpired(trait, tx, justAfterGracePeriod)).toBe(false);
     });
 
     it('expires a transaction with a guaranteed offer once the dust grace period has passed', () => {
-      const tx = stubTransaction<Parameters<typeof trait.hasTTLExpired>[0]>({
+      const tx = stubTransaction({
         intents: [{ ttl: intentTTLBeyondGracePeriod, dustSpends: 0 }],
         hasGuaranteedOffer: true,
         fallibleOfferSegments: 0,
       });
 
-      expect(trait.hasTTLExpired(tx, creationTime, justAfterGracePeriod)).toBe(true);
+      expect(hasTTLExpired(trait, tx, justAfterGracePeriod)).toBe(true);
     });
 
     it('expires a transaction with a fallible offer once the dust grace period has passed', () => {
-      const tx = stubTransaction<Parameters<typeof trait.hasTTLExpired>[0]>({
+      const tx = stubTransaction({
         intents: [{ ttl: intentTTLBeyondGracePeriod, dustSpends: 0 }],
         hasGuaranteedOffer: false,
         fallibleOfferSegments: 1,
       });
 
-      expect(trait.hasTTLExpired(tx, creationTime, justAfterGracePeriod)).toBe(true);
+      expect(hasTTLExpired(trait, tx, justAfterGracePeriod)).toBe(true);
     });
 
     it('expires a transaction with dust spends once the dust grace period has passed', () => {
-      const tx = stubTransaction<Parameters<typeof trait.hasTTLExpired>[0]>({
+      const tx = stubTransaction({
         intents: [{ ttl: intentTTLBeyondGracePeriod, dustSpends: 1 }],
         hasGuaranteedOffer: false,
         fallibleOfferSegments: 0,
       });
 
-      expect(trait.hasTTLExpired(tx, creationTime, justAfterGracePeriod)).toBe(true);
+      expect(hasTTLExpired(trait, tx, justAfterGracePeriod)).toBe(true);
     });
 
     it('expires a transaction whose intent deadline has passed, with no shielded offers and no dust spends', () => {
-      const tx = stubTransaction<Parameters<typeof trait.hasTTLExpired>[0]>({
+      const tx = stubTransaction({
         intents: [{ ttl: DateTime.toDate(creationTime), dustSpends: 0 }],
         hasGuaranteedOffer: false,
         fallibleOfferSegments: 0,
       });
 
-      expect(trait.hasTTLExpired(tx, creationTime, justAfterGracePeriod)).toBe(true);
+      expect(hasTTLExpired(trait, tx, justAfterGracePeriod)).toBe(true);
     });
   });
 });
