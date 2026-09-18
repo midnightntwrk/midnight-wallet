@@ -22,6 +22,60 @@ import { logger } from './logger.js';
 /** Default dust-balance threshold to wait for: 7 * 10^14. */
 export const DEFAULT_DUST_BALANCE_THRESHOLD = 7n * 10n ** 14n;
 
+/** How long a condition must hold before a settling waiter accepts it. */
+const DEFAULT_SETTLE_MS = 10_000;
+
+/** How long a settling waiter waits for its condition before failing rather than running to the test timeout. */
+const DEFAULT_SETTLE_TIMEOUT_MS = 180_000;
+
+/**
+ * Resolves with the wallet's current state once `predicate` has held continuously for `settleMs`.
+ *
+ * A settle window is needed because conditions like `pendingCoins.length === 0` are also the _resting_ state before a
+ * transaction is submitted: a waiter that resolved on the first matching emission would hand back the stale
+ * pre-transaction state.
+ *
+ * The window has to be applied to the predicate rather than to the source. Debouncing the source waits for the wallet
+ * to stop emitting altogether, which never happens while a sub-wallet syncs in the background — a Dust wallet syncing
+ * from projections emits about every 5 seconds indefinitely — so the predicate is never evaluated and the wait runs to
+ * the test timeout while logging that its condition is already satisfied.
+ *
+ * `distinctUntilChanged` is load-bearing: without it, `switchMap` would cancel and restart the timer on every emission
+ * and the timer would never elapse, reproducing the same starvation.
+ *
+ * The matching value is carried through the pipeline rather than re-read from `source` once the window elapses, because
+ * `source` must only be subscribed once. The facade's `state()` replays its current value on subscribe, but a
+ * sub-wallet's `state` does not: a second subscription there receives nothing until the next change, so on an
+ * already-settled wallet it would never produce a value and the wait would hang. The state returned is therefore the
+ * one from the moment the condition began to hold — callers that need the very latest should follow with their own
+ * read.
+ */
+export const waitForStableState = <T>(
+  source: rx.Observable<T>,
+  predicate: (value: T) => boolean,
+  description: string,
+  settleMs: number = DEFAULT_SETTLE_MS,
+  timeoutMs: number = DEFAULT_SETTLE_TIMEOUT_MS,
+): Promise<T> =>
+  rx.firstValueFrom(
+    source.pipe(
+      rx.map((value) => ({ value, holds: predicate(value) })),
+      rx.distinctUntilChanged((a, b) => a.holds === b.holds),
+      rx.switchMap(({ value, holds }) => (holds ? rx.timer(settleMs).pipe(rx.map(() => value)) : rx.NEVER)),
+      rx.take(1),
+      rx.timeout({
+        first: timeoutMs,
+        with: () =>
+          rx.throwError(
+            () =>
+              new Error(
+                `${description}: condition did not hold for ${settleMs}ms within ${timeoutMs}ms. The condition is genuinely unmet — this is not a missed observation window.`,
+              ),
+          ),
+      }),
+    ),
+  );
+
 export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
   rx.firstValueFrom(
     wallet.state.pipe(
@@ -60,24 +114,19 @@ export const waitForFacadePending = (wallet: WalletFacade) =>
   );
 
 export const waitForFacadePendingClear = (wallet: WalletFacade) =>
-  rx.firstValueFrom(
+  waitForStableState(
     wallet.state().pipe(
       rx.tap((state) => {
-        const shieldedPending = state.shielded.pendingCoins.length;
-        logger.info(`Shielded wallet pending coins: ${shieldedPending}, waiting for pending coins to clear...`);
-        const unshieldedPending = state.unshielded.pendingCoins.length;
-        logger.info(`Unshielded wallet pending coins: ${unshieldedPending}, waiting for pending coins to clear...`);
-        const dustPending = state.dust.pendingCoins.length;
-        logger.info(`Dust wallet pending coins: ${dustPending}, waiting for pending coins to clear...`);
+        logger.info(
+          `Pending coins — shielded: ${state.shielded.pendingCoins.length}, unshielded: ${state.unshielded.pendingCoins.length}, dust: ${state.dust.pendingCoins.length}; waiting for all to clear...`,
+        );
       }),
-      rx.debounceTime(10_000),
-      rx.filter(
-        (state) =>
-          state.shielded.pendingCoins.length == 0 &&
-          state.unshielded.pendingCoins.length == 0 &&
-          state.dust.pendingCoins.length == 0,
-      ),
     ),
+    (state) =>
+      state.shielded.pendingCoins.length === 0 &&
+      state.unshielded.pendingCoins.length === 0 &&
+      state.dust.pendingCoins.length === 0,
+    'waitForFacadePendingClear',
   );
 
 export const waitForDustBalance = (wallet: WalletFacade, threshold: bigint = DEFAULT_DUST_BALANCE_THRESHOLD) =>
@@ -92,33 +141,27 @@ export const waitForDustBalance = (wallet: WalletFacade, threshold: bigint = DEF
   );
 
 export const waitForFinalizedShieldedBalance = (wallet: ShieldedWalletAPI) =>
-  rx.firstValueFrom(
+  waitForStableState(
     wallet.state.pipe(
       rx.tap((state) => {
-        const pending = state.pendingCoins.length;
-        logger.info(`Wallet pending coins: ${pending}, waiting for pending coins cleared...`);
+        logger.info(`Wallet pending coins: ${state.pendingCoins.length}, waiting for pending coins cleared...`);
       }),
-      // `pendingCoins.length === 0` is also the resting condition, so without a settle window `firstValueFrom` resolves
-      // on the pre-transaction emission. Debounce until the state stops changing so we capture the settled post-tx
-      // state rather than the stale one.
-      rx.debounceTime(10_000),
-      rx.filter((state) => state.pendingCoins.length === 0),
     ),
+    (state) => state.pendingCoins.length === 0,
+    'waitForFinalizedShieldedBalance',
   );
 
 export const waitForUnshieldedCoinUpdate = (wallet: WalletFacade, initialNumAvailableCoins: number) =>
-  rx.firstValueFrom(
+  waitForStableState(
     wallet.state().pipe(
       rx.tap((state) => {
-        const currentNumAvailableCoins = state.unshielded.availableCoins.length;
         logger.info(
-          `Unshielded available coins: ${currentNumAvailableCoins}, waiting for more than ${initialNumAvailableCoins}...synced = ${state.isSynced}`,
+          `Unshielded available coins: ${state.unshielded.availableCoins.length}, waiting for more than ${initialNumAvailableCoins}...synced = ${state.isSynced}`,
         );
       }),
-      rx.debounceTime(10_000),
-      rx.filter((s) => s.isSynced),
-      rx.filter((s) => s.unshielded.availableCoins.length > initialNumAvailableCoins),
     ),
+    (state) => state.isSynced && state.unshielded.availableCoins.length > initialNumAvailableCoins,
+    'waitForUnshieldedCoinUpdate',
   );
 
 export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalizedTx: ledger.FinalizedTransaction) =>

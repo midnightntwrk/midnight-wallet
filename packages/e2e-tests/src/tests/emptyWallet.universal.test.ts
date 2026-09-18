@@ -26,7 +26,8 @@ import {
   UnshieldedWallet,
   type UnshieldedWalletClass,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet, type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import type { DustWalletAPI } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { type DustWalletFactory } from '@midnightntwrk/wallet-sdk-testkit/core';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import { logger } from './logger.js';
 import { DustAddress, UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
@@ -41,11 +42,11 @@ describe('Fresh wallet with empty state', () => {
   const timeout = 120_000;
 
   let Wallet: ShieldedWalletClass;
-  let Dust: DustWalletClass;
+  let Dust: ReturnType<DustWalletFactory>;
   let Unshielded: UnshieldedWalletClass;
   let shieldedWallet: ShieldedWallet;
   let unshieldedWallet: UnshieldedWallet;
-  let dustWallet: DustWallet;
+  let dustWallet: DustWalletAPI;
   let wallet: utils.WalletInit;
   let networkId: NetworkId.NetworkId;
   let fixture: TestContainersFixture;
@@ -61,7 +62,9 @@ describe('Fresh wallet with empty state', () => {
       networkId,
     );
 
-    Dust = DustWallet({ ...walletConfig, ...fixture.getDustWalletConfig() });
+    // Same sync model as `initWalletWithSeed` builds below, so the serialize/restore test stays within one model — see
+    // the equivalent note in `smoke.undeployed.test.ts`.
+    Dust = utils.dustWalletFromEnv()({ ...walletConfig, ...fixture.getDustWalletConfig() });
     Wallet = ShieldedWallet(walletConfig);
     Unshielded = UnshieldedWallet({
       ...walletConfig,
