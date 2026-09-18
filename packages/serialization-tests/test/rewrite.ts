@@ -11,16 +11,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import {
-  PendingTransactions,
-  finalizedTransactionTrait,
-} from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { Serialization as DustSerialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
-import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
+import {
+  DefaultForkSchedule,
+  WalletEntrySchema,
+  finalizedTransactionTraits,
+  mergeWalletEntries,
+} from '@midnightntwrk/wallet-sdk-facade';
 import { Serialization as ShieldedSerialization } from '@midnightntwrk/wallet-sdk-shielded/v1';
 import { Serialization as UnshieldedSerialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { fixturesFor, type Fixture, type Surface } from './fixtures.js';
+
+/**
+ * The registry the wallet itself reads pending transactions with, built from the fork schedule the facade presets, so a
+ * payload is rewritten here exactly as it would be by a wallet an application hands it back to.
+ */
+const pendingTxTraits = finalizedTransactionTraits(DefaultForkSchedule.v9);
 
 const shielded = ShieldedSerialization.makeDefaultV1SerializationCapability();
 const unshielded = UnshieldedSerialization.makeDefaultV1SerializationCapability();
@@ -42,8 +50,8 @@ const rewriters: Record<Surface, (serialized: string) => Promise<string> | strin
     ).serialize(),
   'pending-transactions': (s) =>
     PendingTransactions.serialize(
-      EitherOps.getOrThrowLeft(PendingTransactions.deserialize(s, finalizedTransactionTrait)),
-      finalizedTransactionTrait,
+      EitherOps.getOrThrowLeft(PendingTransactions.deserialize(s, pendingTxTraits)),
+      pendingTxTraits,
     ),
 };
 
