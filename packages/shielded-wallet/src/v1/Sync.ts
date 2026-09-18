@@ -13,6 +13,7 @@
 
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import {
+  Array as Arr,
   Chunk,
   Duration,
   Effect,
@@ -35,7 +36,7 @@ import {
   HttpQueryClient,
   WsSubscriptionClient,
 } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { SyncWalletError, type WalletError } from './WalletError.js';
+import { OutOfOrderSyncUpdateError, SyncWalletError, type WalletError } from './WalletError.js';
 import { WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -113,6 +114,45 @@ export const splitAtVersionBoundary = <T>(
         : Option.some(ProtocolVersion.ProtocolVersion(BigInt(versionOf(signalling)))),
   };
 };
+
+/**
+ * Checks that freshly delivered events arrive in strictly ascending id order.
+ *
+ * @remarks
+ *   Order is all that can be checked, never contiguity: zswap events share one id sequence with dust and contract events
+ *   in the indexer, so gaps in a zswap stream are normal. A skipped commitment-inserting event is caught by the
+ *   ledger's own insertion check instead. An empty batch is trivially ordered.
+ * @param fresh The events left after the cursor filter, in source order.
+ * @param appliedIndex The highest event id already applied; the first fresh id must exceed it.
+ * @returns The batch unchanged, or the first id that fails to exceed its predecessor as an
+ *   {@link OutOfOrderSyncUpdateError}.
+ */
+const expectAscending = <T extends { readonly id: number }>(
+  fresh: readonly T[],
+  appliedIndex: bigint,
+): Either.Either<readonly T[], OutOfOrderSyncUpdateError> =>
+  pipe(
+    Arr.zipWith(
+      fresh,
+      Arr.prepend(
+        Arr.map(fresh, (item) => BigInt(item.id)),
+        appliedIndex,
+      ),
+      (item, previous) => ({ item, previous }),
+    ),
+    Arr.findFirst(({ item, previous }) => BigInt(item.id) <= previous),
+    Option.match({
+      onNone: () => Either.right(fresh),
+      onSome: ({ item, previous }) =>
+        Either.left(
+          new OutOfOrderSyncUpdateError({
+            message: `Zswap event ${item.id} delivered at or below its predecessor ${previous}; batch refused, applied index stays at ${appliedIndex}`,
+            expected: previous,
+            received: BigInt(item.id),
+          }),
+        ),
+    }),
+  );
 
 /** Records a batch's observed protocol version on the state, monotonically. A batch that observed none is a no-op. */
 export const annotateVersion = (
@@ -628,8 +668,16 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
       const lastUpdate = wrappedUpdate.updates.at(-1)!;
       const highestRelevantWalletIndex = BigInt(lastUpdate.maxId);
 
+      // Refuse the whole batch: applying the sound prefix would move the cursor and hide the fault behind
+      // `isConnected: true`. State and cursor stay untouched, so the retry re-fetches the same range; a transient
+      // reorder heals, a persistent one fails visibly.
+      //
+      // `SyncCapability.applyUpdate` has no typed error channel, so throwing preserves its public tuple-returning API;
+      // `RunningV1Variant` catches this at the capability boundary. See #572 for the planned `Either`-based API.
+      const orderedUpdates = Either.getOrThrowWith(expectAscending(freshUpdates, appliedIndex), identity);
+
       const { applied, observedVersion } = splitAtVersionBoundary(
-        freshUpdates,
+        orderedUpdates,
         (update) => update.protocolVersion,
         activeRange,
       );
