@@ -90,7 +90,16 @@ const v2Wallet = () =>
   });
 
 /** The envelope both variants are contracted to write. */
-const expectedPaths = ['networkId', 'offset', 'protocolVersion', 'publicKey.publicKey', 'state'];
+const expectedPaths = [
+  // The snapshot's format version. Both variants write it, and write the same one: the version belongs to the shape,
+  // and the shape is what lets either variant read the other's snapshot.
+  'version',
+  'networkId',
+  'offset',
+  'protocolVersion',
+  'publicKey.publicKey',
+  'state',
+];
 
 describe('the dust snapshot envelope', () => {
   it('is the pinned shape on the V1 variant', () => {

@@ -14,6 +14,9 @@ import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import { WalletError } from './WalletError.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { CoreWallet } from './CoreWallet.js';
+import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+// Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.
+export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
@@ -63,8 +66,26 @@ const StateFromUInt8Array = (): Schema.Schema<ledger.ZswapLocalState, Uint8Array
 const HexedState = (): Schema.Schema<ledger.ZswapLocalState, string> =>
   pipe(Schema.Uint8ArrayFromHex, Schema.compose(StateFromUInt8Array()));
 
+/**
+ * The `version` field of a shielded snapshot. A reader never downgrades: meeting a version it does not know, it refuses
+ * the payload and names both the surface it was reading and the version it found, so the failure is actionable without
+ * the reader having to parse a schema tree.
+ *
+ * The version names the snapshot's shape, not the variant that wrote it, and the constant lives in
+ * `../SnapshotFormat.ts` so the twins cannot drift apart. Both variants write this shape — the V2 variant adds only
+ * optional fields to it, which is not a new version. A V1 reader never meets a V2 snapshot anyway: `../Restore.ts`
+ * routes each snapshot to the variant that owns its `protocolVersion`.
+ */
+const SnapshotVersionSchema = Schema.Literal(SNAPSHOT_FORMAT_VERSION).annotations({
+  message: (issue) =>
+    `Refusing a shielded snapshot written in format version ${JSON.stringify(issue.actual)}: this build reads ${SNAPSHOT_FORMAT_VERSION} and does not downgrade.`,
+});
+
 export const makeDefaultV2SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   const SnapshotSchema = Schema.Struct({
+    version: Schema.optionalWith(SnapshotVersionSchema, {
+      default: () => SNAPSHOT_FORMAT_VERSION,
+    }),
     publicKeys: Schema.Struct({
       coinPublicKey: Schema.String,
       encryptionPublicKey: Schema.String,
@@ -82,12 +103,16 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
     // `CoreWallet.coinHashesPending`). Optional twice over — a wallet that is not mid-crossing has nothing to declare,
     // and snapshots written before the field existed must keep decoding unchanged.
     coinHashesPending: Schema.optional(Schema.Literal(true)),
+    // The transaction history a 1.0.0 snapshot embedded. Read back and written out untouched, never added to; absent
+    // for every snapshot written since, and kept absent for them. See `CoreWallet.legacyTxHistory`.
+    txHistory: Schema.optional(Schema.Array(Schema.String)),
   });
 
   type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
         publicKeys: w.publicKeys,
         state: w.state,
         protocolVersion: w.protocolVersion,
@@ -95,6 +120,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         offset: w.progress?.appliedIndex,
         coinHashes: w.coinHashes,
         ...(w.coinHashesPending !== undefined ? { coinHashesPending: w.coinHashesPending } : {}),
+        txHistory: w.legacyTxHistory,
       });
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
@@ -124,6 +150,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
                   progress,
                   snapshot.protocolVersion,
                   snapshot.networkId,
+                  snapshot.txHistory,
                 ),
               )
             : CoreWallet.restoreWithCoinHashes(
@@ -133,6 +160,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
                 progress,
                 snapshot.protocolVersion,
                 snapshot.networkId,
+                snapshot.txHistory,
               );
         }),
       );

@@ -63,8 +63,26 @@ const StateFromUInt8Array = (): Schema.Schema<ledger.ZswapLocalState, Uint8Array
 const HexedState = (): Schema.Schema<ledger.ZswapLocalState, string> =>
   pipe(Schema.Uint8ArrayFromHex, Schema.compose(StateFromUInt8Array()));
 
+// The format version lives beside the twins, not in either of them, so the V2 variant can read it without loading
+// ledger-v8. Re-exported here because the version is part of this variant's serialization surface.
+export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+
+/**
+ * The `version` field of a shielded snapshot. A reader never downgrades: meeting a version it does not know, it refuses
+ * the payload and names both the surface it was reading and the version it found, so the failure is actionable without
+ * the reader having to parse a schema tree.
+ */
+const SnapshotVersionSchema = Schema.Literal(SNAPSHOT_FORMAT_VERSION).annotations({
+  message: (issue) =>
+    `Refusing a shielded snapshot written in format version ${JSON.stringify(issue.actual)}: this build reads ${SNAPSHOT_FORMAT_VERSION} and does not downgrade.`,
+});
+
 export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   const SnapshotSchema = Schema.Struct({
+    version: Schema.optionalWith(SnapshotVersionSchema, {
+      default: () => SNAPSHOT_FORMAT_VERSION,
+    }),
     publicKeys: Schema.Struct({
       coinPublicKey: Schema.String,
       encryptionPublicKey: Schema.String,
@@ -77,18 +95,25 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
       key: Schema.String,
       value: Schema.Struct({ nullifier: Schema.String, commitment: Schema.String }),
     }),
+    // 1.0.0 embedded the transaction history here, as hex-encoded proven ledger transactions. The field was dropped
+    // from this schema when history moved to its own storage, and because Effect Schema ignores keys it does not
+    // know, those snapshots restored without complaint and lost the history on the next write. Declaring it optional
+    // carries it back out untouched. Optional, not defaulted: a snapshot written without it keeps its exact bytes.
+    txHistory: Schema.optional(Schema.Array(Schema.String)),
   });
 
   type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
         publicKeys: w.publicKeys,
         state: w.state,
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
         offset: w.progress?.appliedIndex,
         coinHashes: w.coinHashes,
+        txHistory: w.legacyTxHistory,
       });
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
@@ -112,6 +137,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
             },
             snapshot.protocolVersion,
             snapshot.networkId,
+            snapshot.txHistory,
           ),
         ),
       );

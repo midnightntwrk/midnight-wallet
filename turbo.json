@@ -219,6 +219,10 @@
     },
     "verify": {
       "dependsOn": ["verify:check", "verify:test", "verify:integration"]
+    },
+    "capture": {
+      "dependsOn": ["^dist"],
+      "cache": false
     }
   }
 }

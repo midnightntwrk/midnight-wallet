@@ -38,6 +38,7 @@ import {
   makeCrossLedgerMigration,
   makeEmptyWalletMigration,
 } from '../Migration.js';
+import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const seed = Buffer.alloc(32, 7);
@@ -155,6 +156,31 @@ describe('the cross-ledger migration', () => {
     const wallet = await crossed();
 
     expect(wallet.protocolVersion).toBe(forkVersion);
+  });
+
+  it('carries the transaction history a 1.0.0 snapshot embedded, so the crossing is not where it gets lost', async () => {
+    // A wallet restored from a 1.0.0 snapshot holds that snapshot's `txHistory` untouched, to write it back out on the
+    // next save. The previous variant hands it over with everything else; if this side dropped it, the first save
+    // after the crossing would lose it silently — the exact failure keeping the field was meant to end.
+    const embedded = ['00aa11bb22cc', '33dd44ee55ff'];
+    const previous: PreviousLedgerWallet & { readonly legacyTxHistory: readonly string[] } = {
+      ...previousWallet(),
+      legacyTxHistory: embedded,
+    };
+
+    const wallet = await crossed(previous);
+
+    expect(wallet).toMatchObject({ legacyTxHistory: embedded });
+    expect(JSON.parse(makeDefaultV2SerializationCapability().serialize(wallet))).toMatchObject({
+      txHistory: embedded,
+    });
+  });
+
+  it('does not invent a transaction history for a wallet that never carried one', async () => {
+    const wallet = await crossed();
+
+    expect('legacyTxHistory' in wallet).toBe(false);
+    expect('txHistory' in (JSON.parse(makeDefaultV2SerializationCapability().serialize(wallet)) as object)).toBe(false);
   });
 
   it('brings the whole local state across: coins at their indices, and the height the tree had reached', async () => {

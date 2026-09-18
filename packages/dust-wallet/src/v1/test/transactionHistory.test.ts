@@ -10,15 +10,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  type TransactionHistoryStorage,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { TransactionHistoryDetail, type TransactionHistoryDetailQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { ClientError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Cause, Clock, Duration, Effect, Exit, Fiber, Option, Ref, TestClock, TestContext } from 'effect';
 import { describe, expect, it } from 'vitest';
 import {
   makeDefaultTransactionHistoryService,
+  makeSimulatorTransactionHistoryService,
   DustTransactionHistoryEntrySchema,
   type DefaultTransactionHistoryConfiguration,
+  type DustHistoryStorage,
 } from '../TransactionHistory.js';
 import { TransactionHistoryError } from '../WalletError.js';
 
@@ -173,6 +178,75 @@ describe('makeDefaultTransactionHistoryService.getTransactionDetails (dust)', ()
       if (Option.isSome(failure)) {
         expect(failure.value).toBeInstanceOf(TransactionHistoryError);
       }
+    }
+  });
+});
+
+/**
+ * Read-only storage stub. The simulator service reads through `get` only, so the writer side is never reached; a
+ * rejected promise there turns an unexpected write into a visible test failure.
+ */
+const storageReturning = (
+  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash | undefined,
+): DustHistoryStorage => ({
+  get: () => Promise.resolve(entry),
+  getAll: () => Promise.resolve(entry === undefined ? [] : [entry]),
+  serialize: () => Promise.resolve('[]'),
+  gotPending: () => Promise.reject(new Error('the simulator read path must not write')),
+  gotFinalized: () => Promise.reject(new Error('the simulator read path must not write')),
+  gotRejected: () => Promise.reject(new Error('the simulator read path must not write')),
+});
+
+const blocklessFinalizedEntry: TransactionHistoryStorage.TransactionHistoryEntryWithHash = {
+  hash,
+  identifiers: ['identifier-1'],
+  status: 'SUCCESS',
+  lifecycle: { status: 'finalized' },
+};
+
+const blockFinalizedEntry: TransactionHistoryStorage.TransactionHistoryEntryWithHash = {
+  ...blocklessFinalizedEntry,
+  lifecycle: {
+    status: 'finalized',
+    finalizedBlock: { hash: 'block-hash', height: 42, timestamp: new Date(1_700_000_000) },
+  },
+};
+
+const simulatorDetails = (
+  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash | undefined,
+): Promise<Exit.Exit<{ readonly hash: string }, TransactionHistoryError>> =>
+  Effect.runPromiseExit(
+    makeSimulatorTransactionHistoryService(
+      { ...config, txHistoryStorage: storageReturning(entry) },
+      () => undefined,
+    ).getTransactionDetails(hash),
+  );
+
+const failureMessageOf = <A>(exit: Exit.Exit<A, TransactionHistoryError>): string | undefined =>
+  Exit.isFailure(exit)
+    ? Option.getOrUndefined(Option.map(Cause.failureOption(exit.cause), (error) => error.message))
+    : undefined;
+
+describe('makeSimulatorTransactionHistoryService.getTransactionDetails (dust)', () => {
+  it('reports a blockless finalized entry differently from a missing one', async () => {
+    const missing = failureMessageOf(await simulatorDetails(undefined));
+    const blockless = failureMessageOf(await simulatorDetails(blocklessFinalizedEntry));
+
+    // Two different facts: storage has never heard of the tx, versus storage knows it was finalized but the block it
+    // landed in was not recorded. Collapsing them into one message sends a caller looking for the wrong problem.
+    expect(missing).toBe(`No transaction found in storage for hash: ${hash}`);
+    expect(blockless).toBe(
+      `Transaction ${hash} is finalized but its history entry records no block (restored from a pre-lifecycle history)`,
+    );
+    expect(blockless).not.toBe(missing);
+  });
+
+  it('returns the details when the finalized entry does record a block', async () => {
+    const exit = await simulatorDetails(blockFinalizedEntry);
+
+    expect(Exit.isSuccess(exit)).toBe(true);
+    if (Exit.isSuccess(exit)) {
+      expect(exit.value.hash).toBe(hash);
     }
   });
 });

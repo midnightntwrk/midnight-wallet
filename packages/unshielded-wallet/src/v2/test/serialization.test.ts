@@ -193,3 +193,63 @@ describe('default v2 serialization capability', () => {
     }
   });
 });
+
+describe('V2 unshielded snapshot format version', () => {
+  const capability = makeDefaultV2SerializationCapability();
+
+  const snapshotOf = (wallet: CoreWallet): Record<string, unknown> =>
+    JSON.parse(capability.serialize(wallet)) as Record<string, unknown>;
+
+  it('should stamp v2 into every snapshot it writes, because the tagged key is a retyped field', () => {
+    expect(snapshotOf(makeWallet(schnorrPK))).toMatchObject({ version: 'v2' });
+    expect(snapshotOf(makeWallet(ecdsaPK))).toMatchObject({
+      version: 'v2',
+      publicKey: { publicKey: { tag: 'ecdsa', value: ecdsaPK.publicKey.value } },
+    });
+  });
+
+  it('should read a v1 snapshot — a bare-string key — by upgrading it in one step', () => {
+    const v1 = JSON.stringify({
+      ...snapshotOf(makeWallet(schnorrPK)),
+      version: 'v1',
+      publicKey: { publicKey: schnorrPK.publicKey.value, addressHex: schnorrPK.addressHex, address: schnorrPK.address },
+    });
+
+    const restored = capability.deserialize(v1);
+
+    expect(Either.isRight(restored)).toBe(true);
+    if (Either.isRight(restored)) {
+      expect(restored.right.publicKey).toEqual(schnorrPK);
+      expect(snapshotOf(restored.right)).toMatchObject({ version: 'v2' });
+    }
+  });
+
+  it('should read a snapshot with no version and a tagged key, as the pre-release builds wrote them', () => {
+    const { version: _version, ...unversioned } = snapshotOf(makeWallet(ecdsaPK));
+
+    const restored = capability.deserialize(JSON.stringify(unversioned));
+
+    expect(Either.isRight(restored)).toBe(true);
+    if (Either.isRight(restored)) {
+      expect(restored.right.publicKey).toEqual(ecdsaPK);
+    }
+  });
+
+  it('should read a snapshot labelled v1 whose key already carries its tag', () => {
+    // The step fills in what is missing and never rewrites what is there; a tagged key under an old label decodes.
+    const mislabelled = JSON.stringify({ ...snapshotOf(makeWallet(ecdsaPK)), version: 'v1' });
+
+    expect(Either.isRight(capability.deserialize(mislabelled))).toBe(true);
+  });
+
+  it('should refuse a snapshot whose version this build does not know, and say which', () => {
+    const fromANewerSdk = JSON.stringify({ ...snapshotOf(makeWallet(schnorrPK)), version: 'v3' });
+
+    const restored = capability.deserialize(fromANewerSdk);
+    const failure = Either.isLeft(restored) ? restored.left.message : 'the snapshot was restored';
+
+    expect(failure).toContain(
+      'Refusing an unshielded snapshot written in format version "v3": this build reads v2 and does not downgrade.',
+    );
+  });
+});

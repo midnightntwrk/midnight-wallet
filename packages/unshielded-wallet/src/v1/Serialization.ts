@@ -60,6 +60,22 @@ export type DefaultSerializationConfiguration = {
   networkId: NetworkId.NetworkId;
 };
 
+// The format versions live beside the twins, not in either of them, so the V2 variant can read them without loading
+// ledger-v8. This variant writes the first one, and re-exports it under the name every writer uses for the version it
+// writes, because that is part of its serialization surface.
+export { V1_SNAPSHOT_FORMAT_VERSION as SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import { V1_SNAPSHOT_FORMAT_VERSION as SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+
+/**
+ * The `version` field of an unshielded snapshot. A reader never downgrades: meeting a version it does not know, it
+ * refuses the payload and names both the surface it was reading and the version it found, so the failure is actionable
+ * without the reader having to parse a schema tree.
+ */
+const SnapshotVersionSchema = Schema.Literal(SNAPSHOT_FORMAT_VERSION).annotations({
+  message: (issue) =>
+    `Refusing an unshielded snapshot written in format version ${JSON.stringify(issue.actual)}: this build reads ${SNAPSHOT_FORMAT_VERSION} and does not downgrade.`,
+});
+
 export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, string> => {
   const UtxoWithMetaSchema = Schema.Struct({
     utxo: Schema.Struct({
@@ -76,6 +92,9 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
   });
 
   const SnapshotSchema = Schema.Struct({
+    version: Schema.optionalWith(SnapshotVersionSchema, {
+      default: () => SNAPSHOT_FORMAT_VERSION,
+    }),
     publicKey: Schema.Struct({
       publicKey: Schema.String,
       addressHex: Schema.String,
@@ -94,6 +113,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
         publicKey: w.publicKey,
         state: UnshieldedState.toArrays(w.state),
         protocolVersion: w.protocolVersion,
