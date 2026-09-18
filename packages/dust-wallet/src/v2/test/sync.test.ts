@@ -10,8 +10,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { DustSecretKey, dustFirstNonce, dustNullifier, LedgerParameters } from '@midnightntwrk/ledger-v9';
+import {
+  DustLocalState,
+  DustSecretKey,
+  dustFirstNonce,
+  dustNullifier,
+  LedgerParameters,
+} from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { BlockHash, DustLedgerEvents, DustNullifierTransactions } from '@midnightntwrk/wallet-sdk-indexer-client';
 import type {
   BlockHashQuery,
@@ -20,19 +27,25 @@ import type {
   DustLedgerEventsSubscriptionVariables,
   DustNullifierTransactionsSubscriptionVariables,
 } from '@midnightntwrk/wallet-sdk-indexer-client';
-import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { QueryClient, SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Cause, Chunk, Effect, Exit, Option, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { CoreWallet } from '../CoreWallet.js';
+import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import {
   createDustUtxoUpdates,
+  doEventlessSync,
+  type IndexerSyncService,
   makeDefaultSyncService,
   makeEventLessSyncCapability,
   makeIndexerSyncService,
   nullifierPhaseProgress,
 } from '../Sync.js';
 import {
+  type BlockData,
+  type CollapsedMerkleTree,
+  type DustGenerationsSubscription,
+  DustGenerationsSyncUpdate,
   type NullifierRegularTransaction,
   type DustSpendProcessedEvent,
   DustUtxoMap,
@@ -47,6 +60,11 @@ const networkId = NetworkId.NetworkId.Undeployed;
  * always asserted.
  */
 const fullSpan = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion);
+/**
+ * The version a ledger-v9 block reports itself at. Nothing on the projections path reads it, but `BlockData` carries
+ * it.
+ */
+const V9_NATIVE = 2_000_000;
 const dustParameters = LedgerParameters.initialParameters().dust;
 const seedHex = '0000000000000000000000000000000000000000000000000000000000000001';
 
@@ -483,5 +501,417 @@ describe('nullifierPhaseProgress', () => {
 
   it('never exceeds the phase ceiling', () => {
     expect(nullifierPhaseProgress(600n, 5, 2, 100)).toBe(500);
+  });
+});
+
+describe('V2 projections cNight generation discovery', () => {
+  // A Dust wallet backed only by cNight, coming from multiple registrations and UTXOs, is the shape mainnet
+  // actually has. In the projections model that case lands entirely on `DustGenerationsSyncUpdate.create`, the
+  // counterpart of the spec's `apply_system_transaction` (docs/spec/Specification.md): a cNight registration
+  // becomes an own generation plus the first Dust output of its chain, and a deregistration carries the dtime for
+  // the generation it backs. Nothing exercised this function before, so registration fan-out was fully unpinned.
+  type GenerationItem = Extract<DustGenerationsSubscription, { __typename: 'DustGenerationsItem' }>;
+  type DtimeUpdateItem = Extract<DustGenerationsSubscription, { __typename: 'DustGenerationDtimeUpdateItem' }>;
+
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const publicKey = PublicKey.fromSecretKey(secretKey);
+  const ownAddress = new DustAddress(publicKey.publicKey).hexString;
+  const foreignAddress = new DustAddress(
+    DustSecretKey.fromSeed(Buffer.from(seedHex.slice(0, -1) + '2', 'hex')).publicKey,
+  ).hexString;
+
+  const NIGHT_A = '11'.repeat(32);
+  const NIGHT_B = '22'.repeat(32);
+  const NIGHT_C = '33'.repeat(32);
+
+  // One cNight registration as the indexer projects it. A distinct backingNight per registration is what makes each
+  // generation — and therefore each first-in-chain nullifier — distinct.
+  const registration = (
+    generationMtIndex: number,
+    backingNight: string,
+    overrides: Partial<GenerationItem> = {},
+  ): GenerationItem => ({
+    __typename: 'DustGenerationsItem',
+    commitmentMtIndex: 1000 + generationMtIndex,
+    generationMtIndex,
+    owner: ownAddress,
+    value: '250',
+    initialValue: '5000',
+    backingNight,
+    ctime: new Date(1_700_000_000_000),
+    transactionId: 40 + generationMtIndex,
+    transactionHash: 'aa'.repeat(32),
+    collapsedMerkleTree: null,
+    ...overrides,
+  });
+
+  const dtimeUpdate = (generationMtIndex: number, nightUtxoHash: string, newDtime: Date): DtimeUpdateItem => ({
+    __typename: 'DustGenerationDtimeUpdateItem',
+    generationMtIndex,
+    nightUtxoHash,
+    newDtime,
+    // The insertion path crosses the subscription boundary undecoded — whether this ledger version can read it is
+    // the applying capability's question, not this function's — so `create` treats it as an opaque passthrough. A
+    // distinct sentinel per generation is enough to prove it is handed through unchanged; that these bytes are not
+    // a readable path is exactly what `lazyDecode.test.ts` covers.
+    treeInsertionPath: generationMtIndex.toString(16).padStart(2, '0').repeat(8),
+  });
+
+  // Deliberately out of generation-index order: the indexer gives no ordering guarantee.
+  const threeRegistrations = [registration(9, NIGHT_C), registration(3, NIGHT_A), registration(5, NIGHT_B)];
+  // A fresh wallet's generating tree is empty, so firstFree - 1 is -1 and every index is new.
+  const FRESH_WALLET = -1n;
+
+  it('turns each cNight registration into the first Dust output of its own chain, ordered by generation index', () => {
+    const { newGenerations } = DustGenerationsSyncUpdate.create(threeRegistrations, secretKey, publicKey, FRESH_WALLET);
+
+    expect(newGenerations.map((g) => g.generationMtIndex)).toEqual([3, 5, 9]);
+    expect(newGenerations.map((g) => g.qdo.backingNight)).toEqual([NIGHT_A, NIGHT_B, NIGHT_C]);
+    // Spec `apply_system_transaction`: a registration yields the *first* output of the chain — seq 0, nonce derived
+    // from the backing Night UTxO.
+    expect(newGenerations.map((g) => g.qdo.seq)).toEqual([0, 0, 0]);
+    // commitmentMtIndex is where that first Dust output sits in the commitments tree.
+    expect(newGenerations.map((g) => g.qdo.mtIndex)).toEqual([1003n, 1005n, 1009n]);
+    newGenerations.forEach((g) => {
+      expect(g.qdo.nonce).toEqual(dustFirstNonce(g.qdo.backingNight, publicKey.publicKey));
+      expect(g.qdo.owner).toEqual(publicKey.publicKey);
+      expect(g.qdo.initialValue).toBe(5000n);
+      expect(g.genInfo.value).toBe(250n);
+      expect(g.genInfo.nonce).toBe(g.qdo.backingNight);
+      // A live registration has no dtime — the backing cNight has not been deregistered.
+      expect(g.genInfo.dtime).toBeUndefined();
+    });
+  });
+
+  it('derives a distinct nullifier per registration so one query round covers every chain', () => {
+    const { newGenerations } = DustGenerationsSyncUpdate.create(threeRegistrations, secretKey, publicKey, FRESH_WALLET);
+
+    newGenerations.forEach((g) => {
+      expect(g.dustNullifier).toEqual(dustNullifier(g.qdo, secretKey));
+    });
+    // Multiple registrations are the mainnet shape. If they collapsed onto one nullifier the resolution phase would
+    // silently follow a single chain and under-report the wallet's Dust.
+    expect(new Set(newGenerations.map((g) => g.dustNullifier)).size).toBe(3);
+  });
+
+  it("ignores registrations belonging to another wallet's Dust address", () => {
+    const updates = [...threeRegistrations, registration(11, '44'.repeat(32), { owner: foreignAddress })];
+
+    const { newGenerations } = DustGenerationsSyncUpdate.create(updates, secretKey, publicKey, FRESH_WALLET);
+
+    expect(newGenerations.map((g) => g.generationMtIndex)).toEqual([3, 5, 9]);
+  });
+
+  it('skips registrations already covered by the restored generation tree', () => {
+    // firstFree - 1 == 5 means generation 5 is already in the local tree; only strictly greater indices are new.
+    const { newGenerations } = DustGenerationsSyncUpdate.create(threeRegistrations, secretKey, publicKey, 5n);
+
+    expect(newGenerations.map((g) => g.generationMtIndex)).toEqual([9]);
+  });
+
+  it('extracts deregistration dtime updates in index order without mistaking them for new generations', () => {
+    const later = dtimeUpdate(9, NIGHT_C, new Date(1_800_000_000_000));
+    const earlier = dtimeUpdate(3, NIGHT_A, new Date(1_750_000_000_000));
+
+    const { newGenerations, generationDtimeUpdates } = DustGenerationsSyncUpdate.create(
+      [...threeRegistrations, later, earlier],
+      secretKey,
+      publicKey,
+      FRESH_WALLET,
+    );
+
+    // Deregistrations must not create generations...
+    expect(newGenerations.map((g) => g.generationMtIndex)).toEqual([3, 5, 9]);
+    // ...they are surfaced separately and sorted, so the wallet can stamp dtime on the generation each one backs.
+    expect(generationDtimeUpdates.map((u) => u.generationMtIndex)).toEqual([3, 9]);
+    expect(generationDtimeUpdates.map((u) => u.nightUtxoHash)).toEqual([NIGHT_A, NIGHT_C]);
+    expect(generationDtimeUpdates.map((u) => u.newDtime)).toEqual([
+      new Date(1_750_000_000_000),
+      new Date(1_800_000_000_000),
+    ]);
+    // The GraphQL discriminator is stripped, and the insertion path is handed through untouched.
+    expect(generationDtimeUpdates.every((u) => !('__typename' in u))).toBe(true);
+    expect(generationDtimeUpdates[0].treeInsertionPath).toBe(earlier.treeInsertionPath);
+  });
+
+  it('ignores progress items while preserving every raw update for the tree rebuild', () => {
+    const progress: DustGenerationsSubscription = {
+      __typename: 'DustGenerationsProgress',
+      highestIndex: 9,
+      collapsedMerkleTree: null,
+    };
+    const updates = [...threeRegistrations, progress];
+
+    const result = DustGenerationsSyncUpdate.create(updates, secretKey, publicKey, FRESH_WALLET);
+
+    expect(result.newGenerations).toHaveLength(3);
+    expect(result.generationDtimeUpdates).toHaveLength(0);
+    // The capability replays rawUpdates to rebuild the generations Merkle tree, so nothing may be dropped here.
+    expect(result.rawUpdates).toEqual(updates);
+  });
+});
+
+describe('V2 projections progress monotonicity', () => {
+  // Sync progress is reported as a single figure that advances as the sync proceeds; a progress figure that goes
+  // *backwards* is a defect regardless of the weighting chosen. This drives the real `doEventlessSync` (previously
+  // untested end-to-end) with a wallet that already holds a Dust UTxO — i.e. the restored case, which is the only
+  // shape where the two `appliedIndex` formulas disagree.
+  //
+  //   report 1 = lastSyncedGenerationIndex + lastSyncedCommitmentIndex + nullifiers.size * maxCommitmentTreeIndex
+  //   report 2 = maxGeneratingTreeIndex
+  //
+  // Report 2 drops both the commitment term and the nullifier term. A fresh wallet hides this (its report 1 is
+  // negative), which is why every existing test misses it.
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const backingNight = 'ab'.repeat(32);
+  // The local commitment tree is already filled to this height, and the block reports the same end index. That
+  // equality is deliberate: it makes the commitment phase short-circuit without a single indexer call, so the sync
+  // runs to completion. Emissions cannot be observed past a producer failure — they are buffered, and the failure
+  // discards the buffer — so the run has to succeed for the reported sequence to be visible at all.
+  const COMMITMENT_END_INDEX = 8;
+  const GENERATION_END_INDEX = 4;
+
+  const latestBlock: BlockData = {
+    height: 100,
+    hash: 'ab'.repeat(32),
+    protocolVersion: V9_NATIVE,
+    ledgerParameters: LedgerParameters.initialParameters(),
+    timestamp: new Date(3_000_000),
+    zswapEndIndex: 0,
+    dustCommitmentEndIndex: COMMITMENT_END_INDEX,
+    dustGenerationEndIndex: GENERATION_END_INDEX,
+    dustCommitmentMerkleTreeRoot: '',
+    dustGenerationMerkleTreeRoot: '',
+  };
+
+  const notCalled = (name: string) => (): never => {
+    throw new Error(`${name} must not be called in this scenario`);
+  };
+
+  const qdoFor = (night: string, mtIndex: bigint) => ({
+    initialValue: 1_000_000_000n,
+    owner: secretKey.publicKey,
+    nonce: dustFirstNonce(night, secretKey.publicKey),
+    seq: 0,
+    ctime: new Date(1_000_000),
+    backingNight: night,
+    mtIndex,
+  });
+
+  /**
+   * A wallet as it looks after a restore: its commitment tree is already populated (with other people's commitments,
+   * inserted linearly as the ledger requires) and it tracks one Dust UTXO of its own, so `state.nullifiers` is
+   * non-empty. Both are what make the two progress formulas disagree.
+   */
+  const restoredWallet = () => {
+    const withCommitments = Array.from({ length: COMMITMENT_END_INDEX }).reduce<DustLocalState>(
+      (acc, _, i) =>
+        acc.insertCommitment(BigInt(i), qdoFor(i.toString(16).padStart(2, '0').repeat(32), BigInt(i)), false),
+      new DustLocalState(dustParameters),
+    );
+    const own = qdoFor(backingNight, 4n);
+    return CoreWallet.init(withCommitments.addUtxo(dustNullifier(own, secretKey), own), secretKey, networkId);
+  };
+
+  /** Runs one full projections sync against the stubs and returns every appliedIndex it reported, in order. */
+  const reportedAppliedIndexes = async (): Promise<number[]> => {
+    const state = restoredWallet();
+
+    const indexerSyncService: IndexerSyncService = {
+      blockData: () => Effect.succeed(latestBlock),
+      // No new generations and no spends, so the sync walks straight through to the end.
+      subscribeDustGenerations: () => Stream.empty,
+      subscribeDustNullifierTransactions: () => Stream.empty,
+      // Never reached: the commitment phase short-circuits because the local tree is already filled to the
+      // block's end index. A call here means that short-circuit broke and this is no longer the scenario above.
+      dustCommitmentMerkleTreeUpdate: notCalled('dustCommitmentMerkleTreeUpdate'),
+      connectionLayer: notCalled('connectionLayer'),
+      subscribeWallet: notCalled('subscribeWallet'),
+      queryClient: notCalled('queryClient'),
+    };
+
+    return doEventlessSync(state, secretKey, 7, indexerSyncService).pipe(
+      Stream.filterMap((update) =>
+        update._tag === 'ProgressUpdate' && update.appliedIndex !== undefined
+          ? Option.some(update.appliedIndex)
+          : Option.none(),
+      ),
+      Stream.runCollect,
+      Effect.map(Chunk.toArray),
+      Effect.provideService(QueryClient, { query: notCalled('QueryClient.query') }),
+      Effect.provideService(SubscriptionClient, {
+        subscribe: notCalled('SubscriptionClient.subscribe'),
+        subscribeWithBackpressure: notCalled('SubscriptionClient.subscribeWithBackpressure'),
+      }),
+      Effect.scoped,
+      Effect.runPromise,
+    );
+  };
+
+  it('reports progress four times on a wallet that already tracks a Dust UTXO', async () => {
+    const state = restoredWallet();
+    expect(state.state.nullifiers.size).toBe(1);
+    expect(state.state.commitmentTreeFirstFree).toBe(BigInt(COMMITMENT_END_INDEX));
+
+    // This pins the scenario itself. The known-defect test below is expected to throw, and *any* throw satisfies
+    // it — including the sync quietly reporting nothing at all — so the report count is asserted here instead,
+    // where a broken harness still surfaces as a real failure.
+    expect(await reportedAppliedIndexes()).toHaveLength(4);
+  });
+
+  // KNOWN DEFECT, deliberately left failing. `.fails` inverts the expectation so runs stay green while the defect
+  // is outstanding, without weakening the assertion below.
+  //
+  // The four reports are computed on three different bases, and the first one over-counts: it credits the
+  // already-synced commitment tree, while the two that follow do not count the commitment tree at all. So the
+  // opening report can exceed a later one, and progress visibly jumps backwards. Note this cannot be repaired by
+  // adjusting the second report alone — report 1 already exceeds report 3 — so all four need a common basis.
+  //
+  // Fixing it makes this test *pass*, which makes `.fails` report a failure. That is the intended signal to delete
+  // `.fails` and keep it as an ordinary regression guard.
+  it.fails('never reports an appliedIndex lower than one it already reported', async () => {
+    const appliedIndexes = await reportedAppliedIndexes();
+
+    const regressions = appliedIndexes.flatMap((value, i) =>
+      i > 0 && value < appliedIndexes[i - 1] ? [{ step: i, from: appliedIndexes[i - 1], to: value }] : [],
+    );
+    expect(regressions).toEqual([]);
+  });
+});
+
+describe('V2 projections indexer request shape', () => {
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const ownAddress = new DustAddress(PublicKey.fromSecretKey(secretKey).publicKey).hexString;
+
+  const blockWith = (dustCommitmentEndIndex: number, dustGenerationEndIndex = 4): BlockData => ({
+    height: 100,
+    hash: 'ab'.repeat(32),
+    protocolVersion: V9_NATIVE,
+    ledgerParameters: LedgerParameters.initialParameters(),
+    timestamp: new Date(3_000_000),
+    zswapEndIndex: 0,
+    dustCommitmentEndIndex,
+    dustGenerationEndIndex,
+    dustCommitmentMerkleTreeRoot: '',
+    dustGenerationMerkleTreeRoot: '',
+  });
+
+  const notCalled = (name: string) => (): never => {
+    throw new Error(`${name} must not be called`);
+  };
+
+  // The collapsed update crosses the subscription boundary undecoded, and the sync forwards it into `StateUpdate`
+  // without reading it, so a range-derived sentinel is all this needs.
+  const collapsedFor = (startIndex: number, endIndex: number): CollapsedMerkleTree => ({
+    startIndex,
+    endIndex,
+    update: `${startIndex.toString(16).padStart(4, '0')}${endIndex.toString(16).padStart(4, '0')}`,
+    protocolVersion: 1,
+  });
+
+  const registration = (
+    generationMtIndex: number,
+    commitmentMtIndex: number,
+    backingNight: string,
+  ): DustGenerationsSubscription => ({
+    __typename: 'DustGenerationsItem',
+    commitmentMtIndex,
+    generationMtIndex,
+    owner: ownAddress,
+    value: '250',
+    initialValue: '5000',
+    backingNight,
+    ctime: new Date(1_700_000_000_000),
+    transactionId: 1,
+    transactionHash: 'aa'.repeat(32),
+    collapsedMerkleTree: null,
+  });
+
+  type Recorded = {
+    blockData: number;
+    generations: number;
+    nullifierQueries: { nullifierCount: number; prefixLength: number }[];
+    commitmentRanges: { start: number; end: number }[];
+  };
+
+  const runSync = async (
+    latestBlock: BlockData,
+    anonymityLevel: number,
+    generations: DustGenerationsSubscription[] = [],
+  ): Promise<Recorded> => {
+    const recorded: Recorded = { blockData: 0, generations: 0, nullifierQueries: [], commitmentRanges: [] };
+
+    const indexerSyncService: IndexerSyncService = {
+      blockData: () => {
+        recorded.blockData += 1;
+        return Effect.succeed(latestBlock);
+      },
+      subscribeDustGenerations: () => {
+        recorded.generations += 1;
+        return Stream.fromIterable(generations);
+      },
+      subscribeDustNullifierTransactions: (nullifiers, _height, prefixLength) => {
+        recorded.nullifierQueries.push({ nullifierCount: nullifiers.length, prefixLength });
+        return Stream.empty;
+      },
+      dustCommitmentMerkleTreeUpdate: (start, end) => {
+        recorded.commitmentRanges.push({ start, end });
+        return Effect.succeed(collapsedFor(start, end));
+      },
+      connectionLayer: notCalled('connectionLayer'),
+      subscribeWallet: notCalled('subscribeWallet'),
+      queryClient: notCalled('queryClient'),
+    };
+
+    await doEventlessSync(
+      CoreWallet.initEmpty(dustParameters, secretKey, networkId),
+      secretKey,
+      anonymityLevel,
+      indexerSyncService,
+    ).pipe(
+      Stream.runDrain,
+      Effect.provideService(QueryClient, { query: notCalled('QueryClient.query') }),
+      Effect.provideService(SubscriptionClient, {
+        subscribe: notCalled('SubscriptionClient.subscribe'),
+        subscribeWithBackpressure: notCalled('SubscriptionClient.subscribeWithBackpressure'),
+      }),
+      Effect.scoped,
+      Effect.runPromise,
+    );
+
+    return recorded;
+  };
+
+  it('short-circuits an empty wallet to one block query, one generations subscription and one commitment update', async () => {
+    const recorded = await runSync(blockWith(4096), 7);
+
+    expect(recorded.blockData).toBe(1);
+    expect(recorded.generations).toBe(1);
+    // Nothing to chase: an empty wallet has no nullifiers, so the resolution phase must not reach the indexer.
+    expect(recorded.nullifierQueries).toEqual([]);
+    expect(recorded.commitmentRanges).toEqual([{ start: 0, end: 4095 }]);
+  });
+
+  it.each([
+    [0, 6],
+    [8, 4],
+    [24, 2],
+  ])('sends a nullifier prefix of %i anonymity level as %i hex chars', async (anonymityLevel, expectedPrefixLength) => {
+    const recorded = await runSync(blockWith(2 ** 24 + 1), anonymityLevel, [registration(0, 5, '11'.repeat(32))]);
+
+    expect(recorded.nullifierQueries).toEqual([{ nullifierCount: 1, prefixLength: expectedPrefixLength }]);
+  });
+
+  it("leaves the wallet's own commitment indexes out of the collapsed-update ranges", async () => {
+    const recorded = await runSync(blockWith(12), 7, [
+      registration(0, 5, '11'.repeat(32)),
+      registration(1, 9, '22'.repeat(32)),
+    ]);
+
+    expect(recorded.commitmentRanges).toEqual([
+      { start: 0, end: 4 },
+      { start: 6, end: 8 },
+      { start: 10, end: 11 },
+    ]);
   });
 });
