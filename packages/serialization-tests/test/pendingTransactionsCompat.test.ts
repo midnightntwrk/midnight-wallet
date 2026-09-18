@@ -12,17 +12,18 @@
 // limitations under the License.
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Either } from 'effect';
+import { Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { finalizedTransactionTraits } from '@midnightntwrk/wallet-sdk-facade';
+import { DefaultForkSchedule, finalizedTransactionTraits } from '@midnightntwrk/wallet-sdk-facade';
 import { fixturesFor } from './fixtures.js';
 
 /**
- * Every fixture here predates the v9 fork, so the registry is built with the fork set to the oldest version this build
- * supports: one epoch, read by the ledger version that wrote these payloads. Reading them through a registry split at a
- * later fork would route them to a trait whose deserializer refuses their bytes.
+ * The registry the wallet itself reads pending transactions with, built from the fork schedule the facade presets.
+ * Every fixture here was written before the v9 fork and carries no protocol-version stamp, so the registry's oldest
+ * trait — ledger-v8's — is the one that reads it, exactly as it would for a stored payload an application hands back.
+ * Building a one-epoch registry instead would route the bytes to ledger-v9, whose deserializer refuses them.
  */
-const traits = finalizedTransactionTraits(ProtocolVersion.MinSupportedVersion);
+const traits = finalizedTransactionTraits(DefaultForkSchedule.v9);
 
 const fixtures = fixturesFor('pending-transactions');
 
@@ -59,7 +60,11 @@ describe('pending transactions written by published releases', () => {
 
       expect(Either.isRight(result)).toBe(true);
       if (Either.isRight(result)) {
-        const identifiers = PendingTransactions.all(result.right).map((tx) => [...tx.identifiers()]);
+        // Through the trait, not off the handle: a restored transaction is a version-stamped handle, and reading its
+        // identifiers is exactly what the trait the payload was read with is for. The registry has one entry here, so
+        // selecting the oldest supported version is the only trait there is to find.
+        const trait = Option.getOrThrow(ProtocolVersion.select(traits, ProtocolVersion.MinSupportedVersion));
+        const identifiers = PendingTransactions.all(result.right).map((tx) => [...trait.ids(tx)]);
         expect(identifiers).toEqual(fixture.expected['identifiers']);
       }
     });
