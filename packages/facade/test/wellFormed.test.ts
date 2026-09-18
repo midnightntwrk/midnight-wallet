@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Simulator, immediateBlockProducer } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
@@ -28,16 +28,21 @@ const NETWORK_ID = NetworkId.NetworkId.Undeployed;
 const SEED = '0000000000000000000000000000000000000000000000000000000000000001';
 
 // A finalized transaction with a TTL in the past fails the non-configurable TTL structural check.
-const expiredFinalizedTx = (): ledger.FinalizedTransaction =>
-  ledger.Transaction.fromParts(NETWORK_ID, undefined, undefined, ledger.Intent.new(new Date(0))).mockProve();
+const sealed = <TStage extends WalletTransaction.Stage>(stage: TStage, tx: { serialize: () => Uint8Array }) =>
+  WalletTransaction.adopt(stage, tx, ProtocolVersion.MinSupportedVersion);
+
+const expiredFinalizedTx = () =>
+  sealed(
+    'Finalized',
+    ledger.Transaction.fromParts(NETWORK_ID, undefined, undefined, ledger.Intent.new(new Date(0))).mockProve(),
+  );
 
 // Transactions built for a different network violate the non-configurable network-ID structural check.
 // The facade is initialised with NETWORK_ID ('undeployed'); these transactions use 'mainnet'.
-const wrongNetworkUnprovenTx = (): ledger.UnprovenTransaction =>
-  ledger.Transaction.fromParts(NetworkId.NetworkId.MainNet);
+const wrongNetworkUnprovenTx = () => sealed('Unproven', ledger.Transaction.fromParts(NetworkId.NetworkId.MainNet));
 
-const wrongNetworkFinalizedTx = (): ledger.FinalizedTransaction =>
-  ledger.Transaction.fromParts(NetworkId.NetworkId.MainNet).mockProve();
+const wrongNetworkFinalizedTx = () =>
+  sealed('Finalized', ledger.Transaction.fromParts(NetworkId.NetworkId.MainNet).mockProve());
 
 const setupFacade = (): Effect.Effect<
   WalletFacade,
@@ -58,7 +63,7 @@ describe('WalletFacade.validateTransaction', () => {
   it('does not throw for a well-formed UnprovenTransaction', () =>
     Effect.gen(function* () {
       const facade = yield* setupFacade();
-      const wellFormedTx = ledger.Transaction.fromParts(NETWORK_ID);
+      const wellFormedTx = sealed('Unproven', ledger.Transaction.fromParts(NETWORK_ID));
       yield* Effect.promise(() =>
         expect(
           facade.validateTransaction(wellFormedTx, {
@@ -92,7 +97,11 @@ describe('WalletFacade.validateTransaction', () => {
     Effect.gen(function* () {
       const facade = yield* setupFacade();
       const provingService = createSimulatorProvingService();
-      const unboundTx = yield* Effect.promise(() => provingService.prove(wrongNetworkUnprovenTx()));
+      const unboundTx = yield* Effect.promise(() =>
+        provingService
+          .prove(ledger.Transaction.fromParts(NetworkId.NetworkId.MainNet))
+          .then((tx) => sealed('Unbound', tx)),
+      );
       yield* Effect.promise(() =>
         expect(facade.validateTransaction(unboundTx, { flags: FULL_STRICTNESS })).rejects.toThrow(WellFormedError),
       );

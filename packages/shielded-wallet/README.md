@@ -25,18 +25,22 @@ while maintaining verifiability. It provides:
 
 ```typescript
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { TransactionHistory } from '@midnightntwrk/wallet-sdk-shielded/v2';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { randomBytes } from 'node:crypto';
 
 // Configuration for the wallet
 const configuration = {
   networkId: 'preview',
-  provingServerUrl: new URL('http://localhost:6300'),
-  relayURL: new URL('ws://localhost:9944'),
   indexerClientConnection: {
-    indexerHttpUrl: 'http://localhost:8088/api/v3/graphql',
-    indexerWsUrl: 'ws://localhost:8088/api/v3/graphql/ws',
+    indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+    indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
   },
+  txHistoryStorage: new InMemoryTransactionHistoryStorage(TransactionHistory.ShieldedTransactionHistoryEntrySchema),
+  // Where this chain hands over to ledger-v9: the schedule of a chain born on ledger-v9, as a 2.x node runs. The
+  // final mainnet fork constant is not yet fixed, so a chain that hands over elsewhere states `{ v9: ... }` here.
+  forks: ProtocolVersion.V9NativeForkSchedule,
 };
 
 // Create secret keys from a shielded seed
@@ -117,7 +121,8 @@ While still proving:
 
 - `ShieldedWallet` - Main wallet class
 - `ShieldedWalletState` - Wallet state type
-- Version 1 exports via `@midnightntwrk/wallet-sdk-shielded/v1`
+- V2 (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-shielded/v2`
+- V1 (ledger-v8) variant internals via `@midnightntwrk/wallet-sdk-shielded/v1`
 
 ## License
 

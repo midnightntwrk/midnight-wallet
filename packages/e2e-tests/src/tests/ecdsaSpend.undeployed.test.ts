@@ -79,11 +79,9 @@ describe('ECDSA unshielded spend (undeployed)', () => {
       },
     ];
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
-    const fundingRecipe = await funded.wallet.transferTransaction(
-      outputs,
-      { shieldedSecretKeys: funded.shieldedSecretKeys, dustSecretKey: funded.dustSecretKey },
-      { ttl: new Date(Date.now() + 30 * 60 * 1000) },
-    );
+    const fundingRecipe = await funded.wallet.transferTransaction(outputs, {
+      ttl: new Date(Date.now() + 30 * 60 * 1000),
+    });
     const signedFunding = await funded.wallet.signRecipe(fundingRecipe, funded.unshieldedKeystore.signDataAsync);
     await funded.wallet.submitTransaction(await funded.wallet.finalizeRecipe(signedFunding));
 
@@ -139,7 +137,6 @@ describe('ECDSA unshielded spend (undeployed)', () => {
             ],
           },
         ],
-        { shieldedSecretKeys: ecdsa.shieldedSecretKeys, dustSecretKey: ecdsa.dustSecretKey },
         { ttl: new Date(Date.now() + 30 * 60 * 1000) },
       );
       const signed = await ecdsa.wallet.signRecipe(spendRecipe, ecdsa.unshieldedKeystore.signDataAsync);
@@ -187,7 +184,6 @@ describe('ECDSA unshielded spend (undeployed)', () => {
             ],
           },
         ],
-        { shieldedSecretKeys: ecdsa.shieldedSecretKeys, dustSecretKey: ecdsa.dustSecretKey },
         { ttl: new Date(Date.now() + 30 * 60 * 1000) },
       );
 

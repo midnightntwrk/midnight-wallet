@@ -10,35 +10,77 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { type DustParameters, LedgerParameters } from '@midnightntwrk/ledger-v9';
+import { makeIndexerChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import {
-  CustomDustWallet,
+  asV8DustParameters,
+  CustomForkingDustWallet,
   type DefaultDustConfiguration,
   DustWallet,
-  type DustWalletClass,
+  type DustWalletAPI,
   makeEventLessSyncCapability,
   makeEventLessSyncService,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { Migration, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 
-/** The factory shape {@link provideWallet} and the scenarios accept for the dust sub-wallet. */
-export type DustWalletFactory = (config: DefaultDustConfiguration) => DustWalletClass;
+/**
+ * The factory shape {@link provideWallet} and the scenarios accept for the dust sub-wallet.
+ *
+ * Structural rather than `DustWalletClass`, so a **single-variant** composition is acceptable too. The projections
+ * fast-sync is a ledger-v9 capability — it rests on `DustLocalState` members no ledger-v8 has — so a two-variant wallet
+ * boots on the V1 variant, replays every event, and reaches projections only after migrating. On a chain that runs
+ * ledger-v9 from its first block, a V2-only composition is the shortest way to exercise it. A start resolving
+ * asynchronously is accepted for the same reason: a wallet spanning a boundary may ask the chain where it is before it
+ * picks a variant.
+ */
+export type DustWalletFactory = (config: DefaultDustConfiguration) => {
+  startWithSeed(seed: Uint8Array, dustParameters?: DustParameters): DustWalletAPI | Promise<DustWalletAPI>;
+  /** Also required, because `provideWallet` restores a snapshot into whatever composition it was given. */
+  restore(serializedState: string): DustWalletAPI;
+};
 
 /**
  * A dust sub-wallet that syncs from indexer projections instead of the event stream.
  *
- * The sync service is swapped in at build time, so a wallet built without this factory gets the event-based sync no
- * matter what else it configures.
+ * The shipped `DustWallet` with exactly one substitution — the V2 variant's sync service. The V1 variant keeps the
+ * event stream, because the projections sync is a ledger-v9 capability: it rests on `DustLocalState` members no
+ * ledger-v8 has. On a chain that runs ledger-v9 from its first block the V1 variant never applies, so a wallet built
+ * this way reaches the projections sync immediately.
  *
  * The projections sync synchronizes in finite passes rather than over a live subscription, but background
  * synchronization re-runs those passes on an interval, so this factory can be used on its own and the usual state
  * waiters behave as they do for the event-based sync. Pair it with `manualSync` — see
  * {@link manualProjectionsDustSyncOptions} — only when a caller wants to decide when each pass happens.
+ *
+ * **Both variants are registered, so a wallet built this way transacts.** A single-variant composition would answer for
+ * the whole protocol timeline and therefore report the minimum supported version; because a facade acts at the lowest
+ * version its three sub-wallets report, such a sub-wallet holds the facade below the ledger-v9 boundary and the facade
+ * then refuses the shielded wallet's ledger-v9 transaction, the two sides of a boundary being unmergeable. Registering
+ * both variants leaves the version to the chain, which is what lets the healthcheck scenarios pay fees and transfer
+ * while syncing their Dust from projections.
  */
-export const eventLessDustWallet: DustWalletFactory = (config) =>
-  CustomDustWallet(
-    config,
-    new V1Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
+export const eventLessDustWallet: DustWalletFactory = (config) => {
+  const dustParameters = config.dustParameters ?? LedgerParameters.initialParameters().dust;
+  return CustomForkingDustWallet(
+    { ...config, chainVersionProbe: config.chainVersionProbe ?? makeIndexerChainVersionProbe(config) },
+    {
+      builder: new V1Builder().withDefaults(),
+      // The one field that cannot be shared: `dustParameters` is a WASM object of whichever ledger module produced it,
+      // so the V1 variant is handed the ledger-v8 rebuild of the same rates rather than the object itself.
+      configuration: { ...config, dustParameters: asV8DustParameters(dustParameters) },
+    },
+    {
+      builder: new V2Builder()
+        .withDefaults()
+        .withSync(makeEventLessSyncService, makeEventLessSyncCapability)
+        // Restated because `withSync` drops it: the seed-to-key derivation a start from a seed needs.
+        .withStartAuxDefaults()
+        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters })),
+      configuration: config,
+    },
   );
+};
 
 /**
  * The event-stream dust sub-wallet, with the long-lived subscription.
@@ -144,9 +186,12 @@ export const projectionsDustSyncOptions: {
  * The projections dust sync with background synchronization switched off, so the caller decides when each pass runs.
  *
  * Use this when a test needs passes to happen at known points — asserting on the state a specific pass produced, for
- * instance. A caller that spreads this in must drive `facade.doSync(dustSecretKey)` itself, after start and again after
+ * instance. A caller that spreads this in must drive `facade.doSync(seeds)` itself, after start and again after
  * anything that changes dust state; waiting on `waitForSyncedState()` alone will block, because with `manualSync`
  * nothing advances the dust wallet until `doSync` runs.
+ *
+ * For a test that just wants the wallet to keep up on its own, spread {@link projectionsDustSyncOptions} instead and let
+ * background synchronization run the passes.
  */
 export const manualProjectionsDustSyncOptions: {
   readonly dustWallet: DustWalletFactory;

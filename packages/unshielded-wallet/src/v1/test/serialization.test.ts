@@ -10,186 +10,96 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { describe, expect, it } from 'vitest';
-import { Either } from 'effect';
+//
+// Deserialization is a trust boundary: a snapshot is whatever was handed back to us. The ledger-v9 variant checks
+// there that a snapshot's address really derives from its verifying key, and reports a mismatch as the cross-scheme
+// mix it is. Only the SCHEME LABELLING of that error is v9-only — ledger-v8 has a single signature scheme — so the v8
+// variant makes the same assertion and reports it as an ordinary wallet error.
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { makeDefaultV1SerializationCapability } from '../Serialization.js';
+import { Either } from 'effect';
+import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
-import { UnshieldedState } from '../UnshieldedState.js';
-import { createKeystore, PublicKey } from '../../KeyStore.js';
-import { OtherWalletError, SchemeMismatchError } from '../WalletError.js';
-import { generateMockUtxoWithMeta } from './testUtils.js';
+import { createKeystore, PublicKey } from '../KeyStore.js';
+import { makeDefaultV1SerializationCapability } from '../Serialization.js';
+import { UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
+import { OtherWalletError } from '../WalletError.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
-// Real, scheme-consistent public keys (key encoding matches its tag, and the
-// address derives from the key) so deserialization's scheme-consistency guards
-// accept them. Both come from the same scalar to keep the fixtures compact.
-const secret = Buffer.alloc(32, 3);
-const schnorrPK = PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret }, networkId));
-const ecdsaPK = PublicKey.fromKeyStore(createKeystore({ kind: 'ecdsa', secret }, networkId));
+// Two real, self-consistent keys: each address derives from its own key, so only deliberate splicing can break the
+// consistency the capability asserts.
+const ownPK = PublicKey.fromKeyStore(createKeystore(Buffer.alloc(32, 3), networkId));
+const foreignPK = PublicKey.fromKeyStore(createKeystore(Buffer.alloc(32, 7), networkId));
 
-// Type cast required because: JSON.parse returns `any`; the tests assert on the raw wire format of the snapshot
-const parseSnapshot = (serialized: string): { publicKey: { publicKey: unknown } } =>
-  JSON.parse(serialized) as { publicKey: { publicKey: unknown } };
+const utxoOf = (owner: ledger.UserAddress, intentHash: string, outputNo: number): UtxoWithMeta =>
+  new UtxoWithMeta({
+    utxo: { value: 42n, owner, type: ledger.nativeToken().raw, intentHash, outputNo },
+    meta: { ctime: new Date(0), registeredForDustGeneration: false },
+  });
 
-const makeWallet = (publicKey: PublicKey): CoreWallet =>
+const walletOf = (publicKey: PublicKey): CoreWallet =>
   CoreWallet.restore(
     UnshieldedState.restore(
-      [generateMockUtxoWithMeta({ owner: publicKey.addressHex, intentHash: 'intent-available', outputNo: 0 })],
-      [generateMockUtxoWithMeta({ owner: publicKey.addressHex, intentHash: 'intent-pending', outputNo: 1 })],
+      [utxoOf(publicKey.addressHex, 'intent-available', 0)],
+      [utxoOf(publicKey.addressHex, 'intent-pending', 1)],
     ),
     publicKey,
     { highestTransactionId: 5n, appliedId: 5n },
     ProtocolVersion.MinSupportedVersion,
-    'undeployed',
+    networkId,
   );
+
+const snapshotWithPublicKey = (publicKey: PublicKey['publicKey'], addressHex: string, address: string): string =>
+  JSON.stringify({
+    publicKey: { publicKey, addressHex, address },
+    state: { availableUtxos: [], pendingUtxos: [] },
+    protocolVersion: '0',
+    appliedId: '5',
+    networkId: 'undeployed',
+  });
 
 describe('default v1 serialization capability', () => {
   const capability = makeDefaultV1SerializationCapability();
 
-  it('serializes the verifying key with its tag and round-trips a schnorr key', () => {
-    const wallet = makeWallet(schnorrPK);
+  it('round-trips a wallet whose address derives from its key', () => {
+    const wallet = walletOf(ownPK);
 
-    const serialized = capability.serialize(wallet);
-    const rawSnapshot = parseSnapshot(serialized);
-
-    expect(rawSnapshot.publicKey.publicKey).toEqual({ tag: 'schnorr', value: schnorrPK.publicKey.value });
-
-    const restored = capability.deserialize(serialized);
+    const restored = capability.deserialize(capability.serialize(wallet));
 
     expect(Either.isRight(restored)).toBe(true);
     if (Either.isRight(restored)) {
-      expect(restored.right.publicKey).toEqual(schnorrPK);
-      expect(UnshieldedState.toArrays(restored.right.state)).toEqual(UnshieldedState.toArrays(wallet.state));
-      expect(restored.right.networkId).toBe(wallet.networkId);
-      expect(restored.right.protocolVersion).toBe(wallet.protocolVersion);
+      expect(restored.right.publicKey).toEqual(ownPK);
+      expect(restored.right.progress.appliedId).toBe(5n);
+      expect(restored.right.networkId).toBe(networkId);
     }
   });
 
-  it('round-trips an ecdsa key preserving the tag', () => {
-    const wallet = makeWallet(ecdsaPK);
-
-    const serialized = capability.serialize(wallet);
-    const rawSnapshot = parseSnapshot(serialized);
-
-    expect(rawSnapshot.publicKey.publicKey).toEqual({ tag: 'ecdsa', value: ecdsaPK.publicKey.value });
-
-    const restored = capability.deserialize(serialized);
-
-    expect(Either.isRight(restored)).toBe(true);
-    if (Either.isRight(restored)) {
-      expect(restored.right.publicKey.publicKey).toEqual({ tag: 'ecdsa', value: ecdsaPK.publicKey.value });
-    }
-  });
-
-  it('deserializes a legacy snapshot with a plain-string key as schnorr', () => {
-    const legacySnapshot = JSON.stringify({
-      publicKey: {
-        publicKey: schnorrPK.publicKey.value,
-        addressHex: schnorrPK.addressHex,
-        address: schnorrPK.address,
-      },
-      state: {
-        availableUtxos: [
-          {
-            utxo: {
-              value: '100',
-              owner: schnorrPK.addressHex,
-              type: 'type1',
-              intentHash: 'intent-available',
-              outputNo: 0,
-            },
-            meta: {
-              ctime: '2026-01-01T00:00:00.000Z',
-              registeredForDustGeneration: true,
-            },
-          },
-        ],
-        pendingUtxos: [],
-      },
-      protocolVersion: '0',
-      appliedId: '5',
-      networkId: 'undeployed',
-    });
-
-    const restored = capability.deserialize(legacySnapshot);
-
-    expect(Either.isRight(restored)).toBe(true);
-    if (Either.isRight(restored)) {
-      expect(restored.right.publicKey.publicKey).toEqual({ tag: 'schnorr', value: schnorrPK.publicKey.value });
-      expect(UnshieldedState.toArrays(restored.right.state).availableUtxos).toHaveLength(1);
-    }
-  });
-
-  it('rejects a snapshot with an unknown signature kind', () => {
-    const tampered = JSON.stringify({
-      publicKey: {
-        publicKey: { tag: 'ed25519', value: schnorrPK.publicKey.value },
-        addressHex: schnorrPK.addressHex,
-        address: schnorrPK.address,
-      },
-      state: { availableUtxos: [], pendingUtxos: [] },
-      protocolVersion: '0',
-      appliedId: '5',
-      networkId: 'undeployed',
-    });
-
-    const restored = capability.deserialize(tampered);
-
-    expect(Either.isLeft(restored)).toBe(true);
-    if (Either.isLeft(restored)) {
-      expect(restored.left).toBeInstanceOf(OtherWalletError);
-    }
-  });
-
-  // Deserialization is a trust boundary: a relabelled or spliced snapshot must
-  // be rejected, not silently accepted (#402 AC #4 — ECDSA-MM-09 / MM-01/02).
-  // A key whose encoding length does not match its scheme tag cannot be decoded
-  // by the ledger key decoder, so assertKeyAddressConsistency fails closed with
-  // an OtherWalletError rather than letting the wasm trap escape.
-  it('rejects an ecdsa-tagged key carrying a schnorr-length value (ECDSA-MM-09)', () => {
-    const tampered = JSON.stringify({
-      publicKey: {
-        // ecdsa keys are 33-byte SEC1 (66 hex); this 32-byte (64 hex) value is a schnorr key relabelled as ecdsa
-        publicKey: { tag: 'ecdsa', value: schnorrPK.publicKey.value },
-        addressHex: schnorrPK.addressHex,
-        address: schnorrPK.address,
-      },
-      state: { availableUtxos: [], pendingUtxos: [] },
-      protocolVersion: '0',
-      appliedId: '5',
-      networkId: 'undeployed',
-    });
-
-    const restored = capability.deserialize(tampered);
-
-    expect(Either.isLeft(restored)).toBe(true);
-    if (Either.isLeft(restored)) {
-      expect(restored.left).toBeInstanceOf(OtherWalletError);
-    }
-  });
-
-  it('rejects a snapshot whose address does not derive from its key (ECDSA-MM-01/02)', () => {
-    const spliced = JSON.stringify({
-      publicKey: {
-        // a valid schnorr key, but bundled with the ecdsa key's address
-        publicKey: { tag: 'schnorr', value: schnorrPK.publicKey.value },
-        addressHex: ecdsaPK.addressHex,
-        address: ecdsaPK.address,
-      },
-      state: { availableUtxos: [], pendingUtxos: [] },
-      protocolVersion: '0',
-      appliedId: '5',
-      networkId: 'undeployed',
-    });
+  it('rejects a snapshot whose address does not derive from its key', () => {
+    // A valid verifying key bundled with somebody else's address. Nothing in the schema can catch this: both fields
+    // are well-formed strings, and only deriving one from the other shows they do not belong together.
+    const spliced = snapshotWithPublicKey(ownPK.publicKey, foreignPK.addressHex, foreignPK.address);
 
     const restored = capability.deserialize(spliced);
 
     expect(Either.isLeft(restored)).toBe(true);
     if (Either.isLeft(restored)) {
-      expect(restored.left).toBeInstanceOf(SchemeMismatchError);
-      expect((restored.left as SchemeMismatchError).at).toBe('construction');
+      expect(restored.left).toBeInstanceOf(OtherWalletError);
+      expect(restored.left.message).toContain('does not match its verifying key');
+    }
+  });
+
+  it('rejects a snapshot whose verifying key cannot be decoded, without letting the ledger throw escape', () => {
+    // The key decoder lives in wasm and traps on a malformed key. On a trust boundary that must fail closed as a
+    // typed Left, never as an exception thrown out of `deserialize`.
+    const malformed = snapshotWithPublicKey('not-a-key', ownPK.addressHex, ownPK.address);
+
+    const restored = capability.deserialize(malformed);
+
+    expect(Either.isLeft(restored)).toBe(true);
+    if (Either.isLeft(restored)) {
+      expect(restored.left).toBeInstanceOf(OtherWalletError);
+      expect(restored.left.message).toContain('could not be decoded');
     }
   });
 });

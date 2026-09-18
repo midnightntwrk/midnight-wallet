@@ -27,7 +27,8 @@ import {
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { type DustWalletFactory } from '@midnightntwrk/wallet-sdk-testkit/core';
+import { carried } from './helpers/transactions.js';
 
 /** Smoke tests */
 
@@ -43,20 +44,18 @@ describe('Smoke tests', () => {
   let fixture: TestContainersFixture;
   let funded: utils.WalletInit;
   let receiver: utils.WalletInit;
-  let Dust: DustWalletClass;
+  let Dust: ReturnType<DustWalletFactory>;
 
   beforeEach(async () => {
     fixture = getFixture();
-    // Built with the same sync model `initWalletWithSeed` uses below, so the serialize/restore test round-trips within
-    // one model. A dust snapshot carries one progress value whose meaning differs between the two — an event cursor to
-    // the event-stream sync, a composite metric to the projections sync — so restoring across models resumes from a
+    // One factory for all three wallets, because the serialize/restore test below must round-trip within one sync
+    // model: a dust snapshot carries one progress value whose meaning differs between the two — an event cursor to the
+    // event-stream sync, a composite metric to the projections sync — so restoring across models resumes from a
     // position that is not a cursor at all and the wallet never reports synced.
-    Dust = utils.dustWalletFromEnv()({
-      ...fixture.getWalletConfig(),
-      ...fixture.getDustWalletConfig(),
-    });
-    funded = await utils.initWalletWithSeed(seedFunded, fixture);
-    receiver = await utils.initWalletWithSeed(seed, fixture);
+    const dustWallet = utils.dustWalletFromEnv();
+    Dust = dustWallet({ ...fixture.getWalletConfig(), ...fixture.getDustWalletConfig() });
+    funded = await utils.initWalletWithSeed(seedFunded, fixture, 'schnorr', { dustWallet });
+    receiver = await utils.initWalletWithSeed(seed, fixture, 'schnorr', { dustWallet });
     logger.info('Two wallets started');
   });
 
@@ -122,21 +121,14 @@ describe('Smoke tests', () => {
           ],
         },
       ];
-      const txRecipe = await funded.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 30 * 60 * 1000),
-        },
-      );
+      const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      });
       const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, unshieldedFundedKeyStore.signDataAsync);
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
-      const txHash = finalizedTx.transactionHash();
+      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
 
       const pendingState = await utils.waitForFacadePending(funded.wallet);
       expect(pendingState.shielded.totalCoins.length).toBe(7);
@@ -260,13 +252,15 @@ describe('Smoke tests', () => {
         { kind: 'schnorr', secret: utils.getUnshieldedSeed(seedFunded) },
         fixture.getNetworkId(),
       );
-      const initialWallet = UnshieldedWallet({
+      const initialWallet = await UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage: unshieldedTxHistoryStorage,
+        // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+        forks: fixture.getWalletConfig().forks,
       }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
       await initialWallet.start();
       logger.info(`Waiting to sync...`);
@@ -291,6 +285,8 @@ describe('Smoke tests', () => {
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage: restoredTxHistoryStorage,
+        // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+        forks: fixture.getWalletConfig().forks,
       }).restore(serializedState);
 
       await restoredWallet.start();

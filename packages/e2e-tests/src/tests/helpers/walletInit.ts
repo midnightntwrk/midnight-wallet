@@ -16,6 +16,7 @@ import { existsSync } from 'node:fs';
 import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
 import * as ledger from '@midnightntwrk/ledger-v9';
+import { type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import {
   InMemoryTransactionHistoryStorage,
   type TransactionHistoryStorage,
@@ -35,13 +36,15 @@ import {
   type DustWalletFactory,
   dustWalletFromEnv,
 } from '@midnightntwrk/wallet-sdk-testkit/core';
-import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { type DefaultDustConfiguration } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { Roles } from '@midnightntwrk/wallet-sdk-hd';
 import { type TestContainersFixture } from '../test-fixture.js';
 import { logger } from '../logger.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed } from './seeds.js';
 
 export type WalletInit = {
+  /** The three per-wallet seeds, which is what the facade is started and stepped with. */
+  seeds: WalletSeeds;
   wallet: WalletFacade;
   shieldedSecretKeys: ledger.ZswapSecretKeys;
   dustSecretKey: ledger.DustSecretKey;
@@ -96,13 +99,15 @@ const restoreUnshieldedWallet = async (
     const serialized = await readIfExists(path);
     if (serialized) {
       const keyStore = createKeystore({ kind: 'schnorr', secret: getUnshieldedSeed(seed) }, fixture.getNetworkId());
-      const wallet = UnshieldedWallet({
+      const wallet = await UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage,
+        // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+        forks: fixture.getWalletConfig().forks,
       }).startWithPublicKey(PublicKey.fromKeyStore(keyStore));
       logger.info(`Restored unshielded wallet from ${path}`);
       return wallet;
@@ -116,7 +121,7 @@ const restoreUnshieldedWallet = async (
 
 const restoreDustWallet = async (
   path: string,
-  walletConfig: DefaultV1Configuration,
+  walletConfig: DefaultDustConfiguration,
   readIfExists: (path: string) => Promise<string | undefined>,
   dustWallet: DustWalletFactory,
 ) => {
@@ -166,6 +171,11 @@ export const provideWallet = async (
     exit(1);
   }
 
+  const seeds: WalletSeeds = {
+    shielded: getShieldedSeed(seed),
+    unshielded: getUnshieldedSeed(seed),
+    dust: getDustSeed(seed),
+  };
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
   const unshieldedKeystore = createKeystore(
@@ -208,7 +218,7 @@ export const provideWallet = async (
       unshielded: () => restoredUnshielded,
       dust: () => restoredDust,
     });
-    await restoredWallet.start(shieldedSecretKeys, dustSecretKey, customWallets.manualSync ?? false);
+    await restoredWallet.start(seeds, { manualSync: customWallets.manualSync ?? false });
     // check if wallet is syncing correctly
     await waitForSyncProgress(restoredWallet);
     const restoredWalletState = await rx.firstValueFrom(restoredWallet.state());
@@ -221,7 +231,7 @@ export const provideWallet = async (
       return initWalletWithSeed(seed, fixture, 'schnorr', resolvedWallets);
     } else {
       logger.info('Successfully restored wallet facade.');
-      return { wallet: restoredWallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore, dustSyncModel };
+      return { wallet: restoredWallet, shieldedSecretKeys, dustSecretKey, seeds, unshieldedKeystore, dustSyncModel };
     }
   }
 };
@@ -285,6 +295,11 @@ export type CustomWallets = {
    * Replaces the dust sub-wallet factory. Defaults to whatever `DUST_SYNC` selects (the event-based sync when unset) —
    * see `dustWalletFromEnv` — so a lane can be switched between sync models by configuration while a test that needs a
    * specific model pins it here.
+   *
+   * @remarks
+   *   `DustWalletFactory` is typed by what a start actually owes the facade rather than by `DustWalletClass`, so a
+   *   single-variant composition is acceptable here — which is how the projections fast-sync is reached directly on a
+   *   chain that runs ledger-v9 from its first block. See the type's own documentation in the testkit.
    */
   dustWallet?: DustWalletFactory;
   manualSync?: boolean;
@@ -299,6 +314,11 @@ export const initWalletWithSeed = async (
   customWallets: CustomWallets = {},
 ): Promise<WalletInit> => {
   const walletConfig = fixture.getWalletConfig();
+  const seeds: WalletSeeds = {
+    shielded: getShieldedSeed(seed),
+    unshielded: getUnshieldedSeed(seed),
+    dust: getDustSeed(seed),
+  };
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
   const unshieldedKeystore = createKeystore(
@@ -320,14 +340,14 @@ export const initWalletWithSeed = async (
     },
     shielded: (config) => ShieldedWallet(config).startWithSeed(getShieldedSeed(seed)),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
-    dust: (config) =>
-      dustWalletClass(config).startWithSeed(getDustSeed(seed), ledger.LedgerParameters.initialParameters().dust),
+    dust: (config) => dustWalletClass(config).startWithSeed(getDustSeed(seed)),
   });
-  await facade.start(shieldedSecretKeys, dustSecretKey, manualSync);
+  await facade.start(seeds, { manualSync });
   return {
     wallet: facade,
     shieldedSecretKeys,
     dustSecretKey,
+    seeds,
     unshieldedKeystore,
     dustSyncModel: dustSyncModelOf(dustWalletClass),
   };

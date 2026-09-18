@@ -291,7 +291,17 @@ describe('mergeWalletEntries does not lose information', () => {
   });
 });
 
-describe('mergeWalletEntries records lifecycle transitions (incoming wins)', () => {
+describe('mergeWalletEntries records lifecycle transitions', () => {
+  it('preserves finalized inclusion over a late rejection', () => {
+    const existing = baseEntry('tx1');
+    const incoming: WalletEntry = {
+      hash: 'tx1',
+      identifiers: [],
+      lifecycle: { status: 'rejected', rejectedAt: new Date(), reason: 'orphaned-by-protocol-upgrade' },
+    };
+    expect(mergeWalletEntries(existing, incoming).lifecycle).toEqual(existing.lifecycle);
+    expect(mergeWalletEntries(incoming, existing).lifecycle).toEqual(existing.lifecycle);
+  });
   it('should transition a pending entry to finalized when its finalized counterpart arrives', () => {
     const existing = pendingEntry('tx1');
     const incoming = baseEntry('tx1'); // finalized
@@ -301,9 +311,7 @@ describe('mergeWalletEntries records lifecycle transitions (incoming wins)', () 
     expect(merged.lifecycle.status).toBe('finalized');
   });
 
-  it('should let the incoming lifecycle win unconditionally (even pending over an existing finalized)', () => {
-    // The rule is purely "incoming wins" — it does not rank lifecycles. This documents that raw behaviour; in practice
-    // a finalized entry is never re-written as pending.
+  it('preserves the existing behavior of explicitly writing pending over finalized', () => {
     const existing = baseEntry('tx1'); // finalized
     const incoming = pendingEntry('tx1');
 

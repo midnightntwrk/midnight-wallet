@@ -16,7 +16,7 @@ import {
   type DustNonce,
   type DustPublicKey,
   type Utxo,
-} from '@midnightntwrk/ledger-v9';
+} from '@midnight-ntwrk/ledger-v8';
 
 export type Dust = {
   initialValue: bigint;

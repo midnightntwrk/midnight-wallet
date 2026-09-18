@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -120,8 +120,13 @@ describe('splitNightUtxosForDustRegistration', () => {
   // The real splitNightUtxos sorts by `dust.generatedNow` descending and takes the first as
   // the guaranteed slot; the rest go to fallible. The tests below pick generatedNow values
   // explicitly so the guaranteed-vs-fallible split is predictable.
+  //
+  // What a UTxO may contribute to `feePayment` is the ledger's `generationless_fee_availability`: only Night the
+  // chain holds no dust generation for earns the retroactive dust a registration can spend on its own fee. Which
+  // Night that is, is the indexer's `registeredForDustGeneration` reading, carried on the UTxO — the indexer scopes
+  // it to the current dust epoch, so it is the wallet's single source of truth for it.
 
-  it('registration: feePayment equals generatedNow of the guaranteed UTxO when it is unregistered', () => {
+  it('registration: feePayment equals generatedNow of the guaranteed UTxO when it is flagged unregistered', () => {
     const guaranteed = makeUtxoWithDust(0, 1_000n, 200n, false); // highest dust → guaranteed
     const fallible = makeUtxoWithDust(1, 1_000n, 100n, false);
 
@@ -132,7 +137,10 @@ describe('splitNightUtxosForDustRegistration', () => {
     expect(result.fallibleUtxos).toEqual([fallible]);
   });
 
-  it('registration: feePayment is 0n when the guaranteed UTxO is already registered', () => {
+  it('registration: feePayment is 0n when the guaranteed UTxO is flagged registered, whatever dust the wallet holds', () => {
+    // The capability is handed no wallet state at all, so nothing here backs this UTxO with a dust coin: the flag
+    // alone excludes it from the fee allowance. Claiming retroactive dust for Night the chain already generates for
+    // is an overspend the node rejects.
     const guaranteed = makeUtxoWithDust(0, 1_000n, 200n, true); // already registered → excluded from fee
     const fallible = makeUtxoWithDust(1, 1_000n, 100n, false);
 

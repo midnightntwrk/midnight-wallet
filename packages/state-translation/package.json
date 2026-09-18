@@ -1,0 +1,43 @@
+{
+  "name": "@midnightntwrk/wallet-sdk-state-translation",
+  "description": "Wallet-side access to the ledger's v8-to-v9 ledger state translation. Test and migration tooling; not published.",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "author": "Midnight Foundation",
+  "license": "Apache-2.0",
+  "files": [
+    "dist/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/midnightntwrk/midnight-wallet.git",
+    "directory": "packages/state-translation"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build:wasm": "./scripts/build-wasm.sh",
+    "verify:wasm": "node ./scripts/verify-wasm.mjs",
+    "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
+    "test": "vitest run",
+    "test:unit": "vitest run --project unit --passWithNoTests",
+    "test:integration": "vitest run --project integration --passWithNoTests",
+    "lint": "eslint --max-warnings 0",
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "dist": "tsc -b ./tsconfig.build.json",
+    "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp"
+  },
+  "devDependencies": {
+    "@midnight-ntwrk/ledger-v8": "^8.1.0",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.4"
+  }
+}

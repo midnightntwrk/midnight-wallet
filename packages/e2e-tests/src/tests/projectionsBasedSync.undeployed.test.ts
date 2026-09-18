@@ -12,7 +12,6 @@
 // limitations under the License.
 import { describe, test, expect } from 'vitest';
 import * as rx from 'rxjs';
-import { Array as Arr } from 'effect';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import * as utils from './utils.js';
@@ -20,6 +19,8 @@ import { logger } from './logger.js';
 import { type CombinedTokenTransfer, type FacadeState, type UtxoWithMeta } from '@midnightntwrk/wallet-sdk-facade';
 import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
+import { carried } from './helpers/transactions.js';
+import { dustStatesEqual, rootsEqual, sameItems, stringifyWithBigInts } from './helpers/dustComparison.js';
 
 /** @group undeployed */
 
@@ -54,26 +55,6 @@ describe('Projections-based synchronisation model', () => {
     await receiver.wallet.stop();
   }, 20_000);
 
-  const stringifyWithBigInts = (value: unknown) =>
-    JSON.stringify(value, (_, v: unknown) => (typeof v === 'bigint' ? v.toString() : v));
-
-  const sameItems = <T>(left: readonly T[], right: readonly T[], equal: (leftItem: T, rightItem: T) => boolean) =>
-    left.length === right.length &&
-    Arr.differenceWith<T>(equal)(left, right).length === 0 &&
-    Arr.differenceWith<T>(equal)(right, left).length === 0;
-
-  const rootsEqual = (state1: ledger.DustLocalState, state2: ledger.DustLocalState) =>
-    state1.commitmentTreeRoot() === state2.commitmentTreeRoot() &&
-    state1.generatingTreeRoot() === state2.generatingTreeRoot();
-
-  const dustStatesEqual = (state1: ledger.DustLocalState, state2: ledger.DustLocalState) =>
-    rootsEqual(state1, state2) &&
-    sameItems<ledger.QualifiedDustOutput>(
-      state1.utxos,
-      state2.utxos,
-      (utxo1, utxo2) => stringifyWithBigInts(utxo1) === stringifyWithBigInts(utxo2),
-    );
-
   const unshieldedCoinsEqual = (coins1: readonly UtxoWithMeta[], coins2: readonly UtxoWithMeta[]) =>
     sameItems(
       coins1,
@@ -104,8 +85,8 @@ describe('Projections-based synchronisation model', () => {
     const receiverStateEventsSynced = await receiverEventsSynced.wallet.waitForSyncedState();
 
     // Projections-based sync
-    await funded.wallet.doSync(funded.dustSecretKey);
-    await receiver.wallet.doSync(receiver.dustSecretKey);
+    await funded.wallet.doSync(funded.seeds);
+    await receiver.wallet.doSync(receiver.seeds);
 
     const fundedState = await funded.wallet.waitForSyncedState();
     const receiverState = await receiver.wallet.waitForSyncedState();
@@ -166,21 +147,27 @@ describe('Projections-based synchronisation model', () => {
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
 
-    await funded.wallet.doSync(funded.dustSecretKey);
-    await receiver.wallet.doSync(receiver.dustSecretKey);
+    await funded.wallet.doSync(funded.seeds);
+    await receiver.wallet.doSync(receiver.seeds);
+
+    // Built on the event-based twin rather than on the projections wallet, and the same goes for the
+    // registration below. A projections wallet's dust sub-wallet is a `CustomDustWallet`: a single-variant
+    // composition, whose one variant answers for the whole protocol timeline. It therefore reports the minimum
+    // supported version and stamps everything it builds at that version. A facade acts at the lowest version
+    // its three sub-wallets report, so such a sub-wallet holds the facade below the ledger-v9 boundary for
+    // good — and the facade then refuses the shielded wallet's ledger-v9 transaction, because the two sides of
+    // a boundary cannot be merged. Transacting belongs to the fork-aware event-based wallet; what this suite
+    // is about is whether the projections wallet then *sees* the result, which is asserted below unchanged.
+    await fundedEventsSynced.wallet.waitForSyncedState();
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const txRecipe = await funded.wallet.transferTransaction(
-      outputsToCreate,
-      {
-        shieldedSecretKeys: funded.shieldedSecretKeys,
-        dustSecretKey: funded.dustSecretKey,
-      },
-      { ttl },
+    const txRecipe = await fundedEventsSynced.wallet.transferTransaction(outputsToCreate, { ttl });
+    const signedTxRecipe = await fundedEventsSynced.wallet.signRecipe(
+      txRecipe,
+      fundedEventsSynced.unshieldedKeystore.signDataAsync,
     );
-    const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
-    const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
-    const txId = await funded.wallet.submitTransaction(finalizedTx);
+    const finalizedTx = await fundedEventsSynced.wallet.finalizeRecipe(signedTxRecipe);
+    const txId = await fundedEventsSynced.wallet.submitTransaction(finalizedTx);
     logger.info('Transaction id: ' + txId);
     logger.info('Waiting for finalized balance...');
 
@@ -196,7 +183,12 @@ describe('Projections-based synchronisation model', () => {
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
     await syncAndVerify();
 
-    const nightUtxos = receiverStateAfterTransfer.unshielded.availableCoins.filter(
+    // Read from the wallet that will build and sign the registration, so the recipe is built against the state
+    // that owns it. `syncAndVerify` above has already asserted that both sync models see the same unshielded
+    // coins, so this is the same set the projections wallet holds — and the sum below is checked against the
+    // projections wallet's balance, which keeps that cross-model agreement asserted rather than assumed.
+    const receiverEventsState = await receiverEventsSynced.wallet.waitForSyncedState();
+    const nightUtxos = receiverEventsState.unshielded.availableCoins.filter(
       (coin) => coin.meta.registeredForDustGeneration === false,
     );
     if (nightUtxos.length === 0) {
@@ -208,30 +200,33 @@ describe('Projections-based synchronisation model', () => {
     logger.info(`utxo length: ${nightUtxos.length}`);
 
     // Step 2: Register night UTXOs for Dust generation
-    const { fee: estimatedRegistrationFee } = await receiver.wallet.estimateRegistration(nightUtxos);
+    const { fee: estimatedRegistrationFee } = await receiverEventsSynced.wallet.estimateRegistration(nightUtxos);
     logger.info(`Estimated registration fee: ${estimatedRegistrationFee} stroke; waiting for generation to cover it`);
-    await receiver.wallet.waitForGeneratedDust(nightUtxos, estimatedRegistrationFee);
+    await receiverEventsSynced.wallet.waitForGeneratedDust(nightUtxos, estimatedRegistrationFee);
 
-    const dustRegistrationRecipe = await receiver.wallet.registerNightUtxosForDustGeneration(
+    const dustRegistrationRecipe = await receiverEventsSynced.wallet.registerNightUtxosForDustGeneration(
       nightUtxos,
-      receiver.unshieldedKeystore.getPublicKey(),
-      receiver.unshieldedKeystore.signDataAsync,
+      receiverEventsSynced.unshieldedKeystore.getPublicKey(),
+      receiverEventsSynced.unshieldedKeystore.signDataAsync,
     );
 
-    const finalizedDustTx = await receiver.wallet.finalizeRecipe(dustRegistrationRecipe);
-    const dustRegistrationTxid = await receiver.wallet.submitTransaction(finalizedDustTx);
+    const finalizedDustTx = await receiverEventsSynced.wallet.finalizeRecipe(dustRegistrationRecipe);
+    const dustRegistrationTxid = await receiverEventsSynced.wallet.submitTransaction(finalizedDustTx);
     logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
-    await receiver.wallet.doSync(receiver.dustSecretKey);
 
-    const receiverStateAfterRegistration = await utils.waitForStateAfterDustRegistration(
-      receiver.wallet,
+    // Waited for on the event-based twin, which converges under its own background sync. The projections
+    // wallet's dust sub-wallet runs with `manualSync`, so it advances only inside a `doSync` call — waiting on
+    // it for a state it has not been stepped to would block until the timeout rather than fail. Stepping it and
+    // then comparing the two models, which is what `syncAndVerify` does below, is how this suite establishes
+    // that the projections sync saw the registration.
+    const registrationSettled = await utils.waitForStateAfterDustRegistration(
+      receiverEventsSynced.wallet,
       finalizedDustTx,
     );
     logger.info('Registered for Dust generation');
-    const nightBalanceAfterRegistration = receiverStateAfterRegistration.unshielded.balances[unshieldedTokenRaw];
-    expect(nightBalanceAfterRegistration).toBe(finalUnshieldedBalance);
+    expect(registrationSettled.unshielded.balances[unshieldedTokenRaw]).toBe(finalUnshieldedBalance);
 
     return await syncAndVerify();
   };
@@ -251,16 +246,12 @@ describe('Projections-based synchronisation model', () => {
           outputs: [{ type: shieldedTokenRaw, amount: outputValue, receiverAddress }],
         },
       ],
-      {
-        shieldedSecretKeys: fundedEventsSynced.shieldedSecretKeys,
-        dustSecretKey: fundedEventsSynced.dustSecretKey,
-      },
       { ttl: new Date(Date.now() + 30 * 60 * 1000) },
     );
     const finalizedTx = await fundedEventsSynced.wallet.finalizeRecipe(txRecipe);
     await fundedEventsSynced.wallet.submitTransaction(finalizedTx);
 
-    const txHash = finalizedTx.transactionHash();
+    const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
     await utils.waitForTxInHistory(txHash, fundedEventsSynced.wallet, {
       ready: (entry) => entry.shielded !== undefined && entry.dust !== undefined,
     });
@@ -288,7 +279,7 @@ describe('Projections-based synchronisation model', () => {
         expect(dustSpends).toBeGreaterThanOrEqual(expectedSpendCount);
       }
 
-      await funded.wallet.doSync(funded.dustSecretKey);
+      await funded.wallet.doSync(funded.seeds);
 
       const eventsState = await fundedEventsSynced.wallet.waitForSyncedState();
       const projectionsState = await funded.wallet.waitForSyncedState();
@@ -303,7 +294,7 @@ describe('Projections-based synchronisation model', () => {
       // receiver starts on a fresh blockchain with no prior UTXOs — the projection snapshot is
       // empty, so the sync should be purely a roundtrip to the indexer with no heavy computation.
       const start = Date.now();
-      await receiver.wallet.doSync(receiver.dustSecretKey);
+      await receiver.wallet.doSync(receiver.seeds);
       const elapsedMs = Date.now() - start;
 
       const state = await receiver.wallet.waitForSyncedState();
@@ -319,7 +310,7 @@ describe('Projections-based synchronisation model', () => {
     'Incremental projections-based sync after new blocks is near-instant',
     async () => {
       // Establish a clean baseline state for receiver (empty wallet).
-      await receiver.wallet.doSync(receiver.dustSecretKey);
+      await receiver.wallet.doSync(receiver.seeds);
       await receiver.wallet.waitForSyncedState();
 
       // Advance the chain without involving the receiver wallet.
@@ -329,7 +320,7 @@ describe('Projections-based synchronisation model', () => {
       await utils.waitForBlockAdvancement(fixture.getIndexerUri());
 
       const start = Date.now();
-      await receiver.wallet.doSync(receiver.dustSecretKey);
+      await receiver.wallet.doSync(receiver.seeds);
       const elapsedMs = Date.now() - start;
 
       const state = await receiver.wallet.waitForSyncedState();
@@ -379,7 +370,7 @@ describe('Projections-based synchronisation model', () => {
       // neither needs a registration flow nor cares what the tests before it did to the chain. Registering the
       // receiver's Night UTxOs is a one-shot resource — the test above consumes it — so a second registration here
       // would depend on execution order.
-      await funded.wallet.doSync(funded.dustSecretKey);
+      await funded.wallet.doSync(funded.seeds);
       const stateBeforeSnapshot = await funded.wallet.waitForSyncedState();
       const dustUtxosBeforeSnapshot = stateBeforeSnapshot.dust.state.state.utxos.length;
       expect(dustUtxosBeforeSnapshot).toBeGreaterThan(0);
@@ -397,14 +388,23 @@ describe('Projections-based synchronisation model', () => {
         // the first `doSync` its Dust state is exactly what came off disk — a non-zero baseline proves the snapshot
         // was actually used.
         const restoredBeforeSync = await rx.firstValueFrom(restored.wallet.state());
-        expect(restoredBeforeSync.dust.state.state.utxos.length).toBe(dustUtxosBeforeSnapshot);
-        expect(restoredBeforeSync.dust.state.state.commitmentTreeFirstFree).toBeGreaterThan(0n);
-        expect(restoredBeforeSync.dust.state.state.generatingTreeFirstFree).toBeGreaterThan(0n);
+        const restoredDustState = restoredBeforeSync.dust.state.state;
+        expect(restoredDustState.utxos.length).toBe(dustUtxosBeforeSnapshot);
+
+        // The two cursors the resumed pass keys off are ledger-v9 members — no published ledger-v8 exposes the
+        // generating or commitment tree's first free index — so reading them means naming the ledger version the
+        // state came from. This suite's chain runs ledger-v9 from its first block, so a state that is anything else
+        // is a broken harness rather than a failing assertion.
+        if (!(restoredDustState instanceof ledger.DustLocalState)) {
+          throw new Error('Expected the restored wallet to hold a ledger-v9 dust state');
+        }
+        expect(restoredDustState.commitmentTreeFirstFree).toBeGreaterThan(0n);
+        expect(restoredDustState.generatingTreeFirstFree).toBeGreaterThan(0n);
 
         // Advance the chain so the resumed pass has a real delta to apply rather than short-circuiting on an
         // unchanged tip.
         await utils.waitForBlockAdvancement(fixture.getIndexerUri());
-        await restored.wallet.doSync(restored.dustSecretKey);
+        await restored.wallet.doSync(restored.seeds);
 
         const restoredState = await restored.wallet.waitForSyncedState();
         const eventsState = await fundedEventsSynced.wallet.waitForSyncedState();

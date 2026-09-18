@@ -20,6 +20,7 @@ import {
   type RangeConfig,
   type RangeMultiplierConfig,
 } from '../testing/variants.js';
+
 import { describe, it } from 'vitest';
 
 describe('WalletBuilder', () => {
@@ -68,6 +69,71 @@ describe('WalletBuilder', () => {
               VariantBuilder.VersionedVariantBuilder<NumericRangeMultiplierBuilder>,
             ]
           >
+        >
+      >;
+    });
+  });
+
+  describe('inferring configuration type with self-configured variants', () => {
+    it('leaves a self-configured variant out of the intersection entirely', () => {
+      // Nothing is left to ask for, which is the same answer as for a wallet with no variants at all.
+      type _1 = Expect<
+        Equal<
+          WalletBuilder.FullConfiguration<[VariantBuilder.SelfConfiguredVariantBuilder<NumericRangeBuilder>]>,
+          unknown
+        >
+      >;
+    });
+
+    it('keeps only the configuration of variants that carry none of their own', () => {
+      type _1 = Expect<
+        Equal<
+          WalletBuilder.FullConfiguration<
+            [
+              VariantBuilder.SelfConfiguredVariantBuilder<NumericRangeBuilder>,
+              VariantBuilder.VersionedVariantBuilder<NumericRangeMultiplierBuilder>,
+            ]
+          >,
+          RangeMultiplierConfig
+        >
+      >;
+      type _2 = Expect<
+        Equal<
+          WalletBuilder.FullConfiguration<
+            [
+              VariantBuilder.VersionedVariantBuilder<NumericRangeBuilder>,
+              VariantBuilder.SelfConfiguredVariantBuilder<NumericRangeMultiplierBuilder>,
+            ]
+          >,
+          RangeConfig
+        >
+      >;
+    });
+
+    it('asks for no build parameters when every variant is self-configured', () => {
+      type _1 = Expect<
+        Equal<
+          WalletBuilder.BuildArguments<
+            [
+              VariantBuilder.SelfConfiguredVariantBuilder<NumericRangeBuilder>,
+              VariantBuilder.SelfConfiguredVariantBuilder<NumericRangeMultiplierBuilder>,
+            ]
+          >,
+          []
+        >
+      >;
+    });
+
+    it('asks only for what the remaining variants need', () => {
+      type _1 = Expect<
+        Equal<
+          WalletBuilder.BuildArguments<
+            [
+              VariantBuilder.SelfConfiguredVariantBuilder<NumericRangeMultiplierBuilder>,
+              VariantBuilder.VersionedVariantBuilder<NumericRangeBuilder>,
+            ]
+          >,
+          [RangeConfig]
         >
       >;
     });

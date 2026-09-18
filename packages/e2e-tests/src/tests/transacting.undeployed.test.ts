@@ -26,15 +26,15 @@ import { WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import { type Variant, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import {
   type CoinsAndBalances,
-  type DefaultRunningV1,
-  type DefaultV1Configuration,
-  type DefaultV1Variant,
+  type DefaultRunningV2,
+  type DefaultV2Configuration,
+  type DefaultV2Variant,
   type Keys,
-  V1Builder,
+  V2Builder,
   CoreWallet,
-  V1Tag,
+  V2Tag,
   type Transacting,
-} from '@midnightntwrk/wallet-sdk-shielded/v1';
+} from '@midnightntwrk/wallet-sdk-shielded/v2';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { Effect, pipe } from 'effect';
 import * as fc from 'fast-check';
@@ -45,10 +45,11 @@ import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntw
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
 import {
-  makeDefaultProvingServiceEffect,
+  makeV9ServerProvingServiceEffect,
+  singleVersionProvingServiceEffect,
   type DefaultProvingConfiguration,
-  type ProvingServiceEffect,
-  type UnboundTransaction,
+  type VersionedProvingServiceEffect,
+  type V9UnboundTransaction,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -75,7 +76,10 @@ const shieldedTokenType = ledger.shieldedToken().raw;
  */
 describe.skip('Wallet transacting', () => {
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultV1Configuration & Submission.DefaultSubmissionConfiguration & DefaultProvingConfiguration;
+  let configuration: DefaultV2Configuration & Submission.DefaultSubmissionConfiguration & DefaultProvingConfiguration;
+  // Named separately from the configuration it also goes into: this suite builds a single ledger-v9 wallet, so it
+  // wants one ledger-v9 backend for every version rather than a boundary-aware registry.
+  let provingServerUrl: URL;
 
   beforeEach(async () => {
     const environmentId = randomUUID();
@@ -94,13 +98,14 @@ describe.skip('Wallet transacting', () => {
 
     startedEnvironment = await environment.up();
 
+    provingServerUrl = new URL(
+      `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
+    );
     configuration = {
       indexerClientConnection: {
         indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
       },
-      provingServerUrl: new URL(
-        `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
-      ),
+      provingServerUrl,
       relayURL: new URL(
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
@@ -113,7 +118,7 @@ describe.skip('Wallet transacting', () => {
     await startedEnvironment?.down();
   });
 
-  let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<DefaultV1Variant>], DefaultV1Configuration>;
+  let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<DefaultV2Variant>], DefaultV2Configuration>;
   type Wallet = WalletLike.WalletOf<typeof Wallet>;
   let walletKeys: ledger.ZswapSecretKeys;
   let wallet2Keys: ledger.ZswapSecretKeys;
@@ -122,7 +127,7 @@ describe.skip('Wallet transacting', () => {
   let coinsAndBalances: CoinsAndBalances.CoinsAndBalancesCapability<CoreWallet>;
   let keys: Keys.KeysCapability<CoreWallet>;
   let submissionService: Submission.SubmissionServiceEffect<ledger.FinalizedTransaction>;
-  let provingService: ProvingServiceEffect<UnboundTransaction>;
+  let provingService: VersionedProvingServiceEffect<V9UnboundTransaction>;
 
   const getShieldedAddress = (state: CoreWallet | ledger.ZswapSecretKeys): ShieldedAddress => {
     return state instanceof ledger.ZswapSecretKeys
@@ -162,12 +167,12 @@ describe.skip('Wallet transacting', () => {
 
   beforeEach(async () => {
     submissionService = Submission.makeDefaultSubmissionServiceEffect<ledger.FinalizedTransaction>(configuration);
-    provingService = makeDefaultProvingServiceEffect(configuration);
+    provingService = singleVersionProvingServiceEffect(makeV9ServerProvingServiceEffect({ provingServerUrl }));
     Wallet = WalletBuilder.init()
-      .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
+      .withVariant(ProtocolVersion.MinSupportedVersion, new V2Builder().withDefaults())
       .build(configuration);
-    coinsAndBalances = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
-    keys = Wallet.allVariantsRecord()[V1Tag].variant.keys;
+    coinsAndBalances = Wallet.allVariantsRecord()[V2Tag].variant.coinsAndBalances;
+    keys = Wallet.allVariantsRecord()[V2Tag].variant.keys;
     walletKeys = ledger.ZswapSecretKeys.fromSeed(
       getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000001'),
     );
@@ -177,8 +182,8 @@ describe.skip('Wallet transacting', () => {
     );
     wallet2 = Wallet.startFirst(Wallet, CoreWallet.initEmpty(wallet2Keys, Wallet.configuration.networkId));
 
-    await wallet.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(walletKeys) }).pipe(Effect.runPromise);
-    await wallet2.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(wallet2Keys) }).pipe(Effect.runPromise);
+    await wallet.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground(walletKeys) }).pipe(Effect.runPromise);
+    await wallet2.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground(wallet2Keys) }).pipe(Effect.runPromise);
   });
 
   afterEach(async () => {
@@ -207,7 +212,7 @@ describe.skip('Wallet transacting', () => {
 
     const result = await wallet.runtime
       .dispatch({
-        [V1Tag]: (v1: DefaultRunningV1) => {
+        [V2Tag]: (v2: DefaultRunningV2) => {
           const transferOutputs = rawOutputs.map(({ amount, type, receiverAddress }): TokenTransfer => {
             return {
               amount,
@@ -215,8 +220,8 @@ describe.skip('Wallet transacting', () => {
               receiverAddress: getShieldedAddress(receiverAddress),
             };
           });
-          return v1.transferTransaction(walletKeys, transferOutputs).pipe(
-            Effect.flatMap((unprovenTx) => provingService.prove(unprovenTx)),
+          return v2.transferTransaction(walletKeys, transferOutputs).pipe(
+            Effect.flatMap((unprovenTx) => provingService.prove(unprovenTx, ProtocolVersion.MinSupportedVersion)),
             Effect.map((tx) => tx.bind()),
             Effect.flatMap((tx) =>
               Effect.all({
@@ -254,8 +259,8 @@ describe.skip('Wallet transacting', () => {
 
     await wallet.runtime
       .dispatch({
-        [V1Tag]: (v1) =>
-          v1
+        [V2Tag]: (v2) =>
+          v2
             .transferTransaction(walletKeys, [
               {
                 type: ledger.shieldedToken().raw,
@@ -264,7 +269,7 @@ describe.skip('Wallet transacting', () => {
               },
             ])
             .pipe(
-              Effect.flatMap((unprovenTx) => provingService.prove(unprovenTx)),
+              Effect.flatMap((unprovenTx) => provingService.prove(unprovenTx, ProtocolVersion.MinSupportedVersion)),
               Effect.map((tx) => tx.bind()),
               Effect.flatMap((tx) => submissionService.submitTransaction(tx, 'Finalized')),
             ),
@@ -292,20 +297,20 @@ describe.skip('Wallet transacting', () => {
 
     const finalTx = await wallet.runtime
       .dispatch({
-        [V1Tag]: (v1) =>
+        [V2Tag]: (v2) =>
           pipe(
-            v1.initSwap(walletKeys, swapParams.inputs, swapParams.outputs),
-            Effect.andThen((unprovenTx) => provingService.prove(unprovenTx)),
+            v2.initSwap(walletKeys, swapParams.inputs, swapParams.outputs),
+            Effect.andThen((unprovenTx) => provingService.prove(unprovenTx, ProtocolVersion.MinSupportedVersion)),
             Effect.map((tx) => tx.bind()),
           ),
       })
       .pipe(
         Effect.andThen((tx) => {
           return wallet2.runtime.dispatch({
-            [V1Tag]: (v1) =>
+            [V2Tag]: (v2) =>
               pipe(
-                v1.balanceTransaction(wallet2Keys, tx),
-                Effect.andThen((unprovenTx) => provingService.prove(unprovenTx!)),
+                v2.balanceTransaction(wallet2Keys, tx),
+                Effect.andThen((unprovenTx) => provingService.prove(unprovenTx!, ProtocolVersion.MinSupportedVersion)),
                 Effect.map((tx) => tx.bind()),
                 Effect.tap((tx) => submissionService.submitTransaction(tx, 'Finalized')),
               ),

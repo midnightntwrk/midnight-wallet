@@ -19,8 +19,8 @@
 // async signer, so the happy path drives the HSM THROUGH the real `SigningService`, and availability/auth failures
 // surface as a typed SignError wrapping the device error. Signatures are checked with an independent @noble oracle.
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { WalletError } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
-import { TransactionOps } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { WalletError } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
+import { TransactionOps } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
 import { Cause, Effect, Either, Exit, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { FakeHsm, HsmAuthError, HsmUnavailableError, verifyEcdsaWithOracle } from './helpers/ecdsaSigners.js';

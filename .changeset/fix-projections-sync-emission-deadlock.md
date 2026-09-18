@@ -5,7 +5,7 @@
 fix(dust-wallet): stop the projections sync deadlocking on wallets with a spend history
 
 A projections-based ("event-less") sync pass emitted one update per resolved Dust spend on top of five fixed ones,
-and `doEventlessSync` built its stream with the default `Stream.asyncEffect` buffer, which is bounded at 16. Because
+and the V2 variant's `doEventlessSync` built its stream with the default `Stream.asyncEffect` buffer, which is bounded at 16. Because
 the entire pass runs inside the register effect, Effect does not begin draining the stream until that effect returns
 — so every update of a pass had to fit in the buffer at once. The update that overflowed it suspended waiting for
 capacity that no running consumer could free, and the pass deadlocked.
@@ -16,4 +16,5 @@ wallet whose deepest Dust chain exceeded roughly ten spends was affected, which 
 short-lived local chain — those wallets are all far below the threshold.
 
 The stream is now created with an unbounded buffer, so a pass is no longer capped by how much Dust the wallet has
-spent.
+spent. The V1 variant has no counterpart to fix: the projections fast-sync rests on `DustLocalState` members that
+exist only in ledger-v9.

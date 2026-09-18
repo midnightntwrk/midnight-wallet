@@ -23,6 +23,7 @@ describe('BlockHash query', () => {
       block: {
         height: 1_000,
         hash: 'SOME_HASH',
+        protocolVersion: 2_000_000,
         ledgerParameters: '0x0',
         timestamp: 1,
         zswapEndIndex: 1,
@@ -36,6 +37,7 @@ describe('BlockHash query', () => {
       block: expect.objectContaining({
         height: block.block.height,
         hash: block.block.hash,
+        protocolVersion: block.block.protocolVersion,
         ledgerParameters: block.block.ledgerParameters,
         timestamp: block.block.timestamp,
         dustCommitmentMerkleTreeRoot: block.block.dustCommitmentMerkleTreeRoot,

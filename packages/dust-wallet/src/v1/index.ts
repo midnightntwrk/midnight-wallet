@@ -10,10 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+// The V1 variant: this wallet on `@midnight-ntwrk/ledger-v8`, run below `forks.v9`. Its twin is `../v2`.
 export * from './CoreWallet.js';
-export * from '../DustWallet.js';
+export * from '../DustWalletAPI.js';
+export * from '../SingleVariantDustWallet.js';
 export * as Keys from './Keys.js';
-export * as Simulator from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+export * as Migration from './Migration.js';
+export { V8 as Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 export * as SyncService from './Sync.js';
 export * as Transacting from './Transacting.js';
 export * from './RunningV1Variant.js';

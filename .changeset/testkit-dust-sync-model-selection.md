@@ -52,3 +52,18 @@ constant into a test that waits on the state stream would block, which is a trap
 
 Also fixes `provideWallet`'s "unable to sync restored wallet" fallback, which rebuilt on the default dust sync instead
 of the requested one, silently dropping the caller's choice of model on that path.
+
+## The projections factory is a two-variant wallet
+
+`eventLessDustWallet` registers both variants — the event stream below `forks.v9`, projections from it — rather than
+being a single-variant composition. A single-variant dust wallet answers for the whole protocol timeline and therefore
+reports the minimum supported version; because a facade acts at the lowest version its three sub-wallets report, such a
+sub-wallet holds the facade below the ledger-v9 boundary, and `transferTransaction` then fails with
+`ProtocolVersionMismatchError` on a transaction the shielded wallet built at ledger-v9.
+
+That is why the healthcheck scenarios can default to projections at all: they pay fees and transfer. On a chain that
+runs ledger-v9 from its first block the V1 variant never applies, so the projections sync is still reached immediately.
+
+A dust snapshot written by the previous single-variant composition declares protocol version 0 and is routed to the
+ledger-v8 variant on restore, whose deserializer refuses it; the wallet rebuilds from scratch rather than resuming from
+a snapshot the other model wrote.

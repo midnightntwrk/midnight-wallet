@@ -27,7 +27,7 @@ import {
   Signing,
   Transacting,
   UnshieldedState,
-} from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either } from 'effect';
 

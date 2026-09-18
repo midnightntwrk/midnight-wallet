@@ -10,27 +10,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   type DefaultSubmissionConfiguration,
   makeDefaultSubmissionService,
   type SubmissionService,
 } from '@midnightntwrk/wallet-sdk-capabilities';
 import {
+  type AnyVersionUnboundTransaction,
+  type AnyVersionUnprovenTransaction,
   type DefaultProvingConfiguration,
-  makeDefaultProvingService,
-  type ProvingService,
-  type UnboundTransaction,
+  makeDefaultVersionedProvingService,
+  type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import {
   type DefaultDustConfiguration,
   type DustWalletAPI,
   type DustWalletState,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
-import {
-  type AnyTransaction,
-  type CoinsAndBalances as DustCoinsAndBalances,
-} from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { type CoinsAndBalances as DustCoinsAndBalances } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
   type DefaultShieldedConfiguration,
   type ShieldedWalletAPI,
@@ -52,9 +50,31 @@ import { DustSectionSchema, mergeDustSections } from '@midnightntwrk/wallet-sdk-
 import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Array as Arr, pipe, Schema } from 'effect';
-import { TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import { combineLatest, map, type Observable, firstValueFrom, type Subscription, concatMap } from 'rxjs';
+import { Array as Arr, type DateTime, Either, Option, pipe, Schema } from 'effect';
+import {
+  type AnyTx,
+  type FinalizedTx,
+  ProtocolVersion,
+  type ProtocolVersionMismatchError,
+  TransactionHistoryStorage,
+  type UnboundTx,
+  type UnprovenTx,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import { type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
+import * as Signatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
+import {
+  BehaviorSubject,
+  combineLatest,
+  concatMap,
+  distinctUntilChanged,
+  firstValueFrom,
+  map,
+  type Observable,
+  type Subscription,
+  tap,
+} from 'rxjs';
 import {
   type DefaultPendingTransactionsServiceConfiguration,
   PendingTransactions,
@@ -62,17 +82,29 @@ import {
   PendingTransactionsServiceImpl,
 } from '@midnightntwrk/wallet-sdk-capabilities';
 import {
+  type AnyLedgerParameters,
+  type AnyVersionValidatableTransaction,
   type BlockData,
   type BlockDataFetcher,
   makeDefaultBlockDataFetcher,
-  makeDefaultValidationService,
+  makeDefaultVersionedValidationService,
   type ValidateTxOptions,
   ValidationFetchError,
-  type ValidationService,
+  type VersionedValidationService,
   WellFormedError,
   type WellFormedStrictnessFlags,
 } from '@midnightntwrk/wallet-sdk-capabilities/validation';
-import { finalizedTransactionTrait, txHistoryHash } from './transaction.js';
+import { finalizedTransactionTraits, txHistoryHash } from './transaction.js';
+
+/**
+ * Why the wallet gave up on a transaction, for the history entry.
+ *
+ * @remarks
+ *   A chain rejection speaks for itself through the entry's status; an orphaned transaction has no chain verdict at all,
+ *   so the entry is the only place the reason can be recorded.
+ */
+const rejectionReason = (result: PendingTransactions.TransactionResult): string | undefined =>
+  result.status === 'ORPHANED_BY_FORK' ? 'orphaned-by-protocol-upgrade' : undefined;
 import {
   type DustAddress,
   type ShieldedAddress,
@@ -111,7 +143,7 @@ export const isFinalizedWalletEntry = (entry: WalletEntry): entry is FinalizedWa
  *   wallet has set the value, later writes are no-ops for these fields. This is correct because the value is the same
  *   across all wallets (it's a property of the on-chain tx, not the wallet's view of it).
  * - **`identifiers`** — unioned (each wallet may surface a different identifier subset).
- * - **`lifecycle`** — incoming wins (this is how `pending → finalized` transitions are recorded).
+ * - **`lifecycle`** — incoming wins, except that a late rejection cannot overwrite recorded on-chain inclusion.
  * - **Wallet sections** (`shielded`, `unshielded`, `dust`) — combined via per-section merge when both sides have them;
  *   otherwise whichever side is present is used.
  */
@@ -146,8 +178,10 @@ export function mergeWalletEntries(existing: WalletEntry, incoming: WalletEntry)
     status: existing.status ?? incoming.status,
     timestamp: existing.timestamp ?? incoming.timestamp,
     fees: existing.fees ?? incoming.fees,
-    // lifecycle: incoming wins — this is how pending → finalized/rejected transitions are recorded
-    lifecycle: incoming.lifecycle,
+    lifecycle:
+      existing.lifecycle.status === 'finalized' && incoming.lifecycle.status === 'rejected'
+        ? existing.lifecycle
+        : incoming.lifecycle,
     ...(shielded !== undefined ? { shielded } : {}),
     ...(unshielded !== undefined ? { unshielded } : {}),
     ...(dust !== undefined ? { dust } : {}),
@@ -155,12 +189,59 @@ export function mergeWalletEntries(existing: WalletEntry, incoming: WalletEntry)
 }
 
 /**
+ * What the facade itself does to a transaction, stated structurally rather than by ledger version.
+ *
+ * @remarks
+ *   The facade merges, binds and reads identifiers off transactions, and both ledger versions do all of that with the
+ *   same member names — the types are nominally distinct only because of what is _inside_ them. So once the handle's
+ *   stamp has settled which epoch a transaction belongs to, one code path serves both, and the epoch check is the whole
+ *   of the guarantee. Naming either ledger version's class here instead would be naming the thing that breaks when the
+ *   chain moves on.
+ *
+ *   Deliberately the minimum: every member below is one the facade actually calls. Nothing here can mix epochs, because
+ *   the only way to obtain one of these is to unwrap a handle within a single epoch's range.
+ */
+type Carried = Readonly<{
+  identifiers: () => readonly string[];
+  transactionHash: () => unknown;
+  serialize: () => Uint8Array;
+}>;
+
+/** An intent as the facade reads it, for finding and signing a dust registration. */
+type CarriedIntent = Readonly<{
+  dustActions?: Readonly<{ registrations?: readonly unknown[] }> | undefined;
+  signatureData: (segment: number) => Uint8Array;
+}>;
+
+/** An unproven transaction the facade can merge with another of the same epoch, and inspect for a registration. */
+type CarriedUnproven = Carried &
+  Readonly<{
+    merge: (other: CarriedUnproven) => CarriedUnproven;
+    mockProve: () => CarriedUnbound;
+    intents?: Readonly<{ get: (segment: number) => CarriedIntent | undefined }> | undefined;
+  }>;
+
+/** A proven transaction that has not yet been bound to its own contents. */
+type CarriedUnbound = Carried & Readonly<{ bind: () => CarriedFinalized }>;
+
+/** A finalized transaction, which the facade merges with the balancing transaction it finalized alongside it. */
+type CarriedFinalized = Carried & Readonly<{ merge: (other: CarriedFinalized) => CarriedFinalized }>;
+
+/**
+ * Every transaction shape the facade will take from a caller.
+ *
+ * @remarks
+ *   Now a handle: what an application carries between facade calls is sealed together with the protocol version it was
+ *   built at, so it can be routed rather than guessed about. The name is kept because it is what these signatures have
+ *   always been stated in terms of.
+ */
+export type AnyTransaction = AnyTx;
+
+/**
  * Storage key for a tx we're about to submit (record as pending). The hash comes from {@link txHistoryHash}, which the
  * revert side uses too — so a tx keyed here while pending resolves to the same key when later confirmed or reverted.
  */
-const submitTxHistoryKey = (
-  tx: ledger.FinalizedTransaction,
-): { readonly hash: string; readonly identifiers: readonly string[] } => ({
+const submitTxHistoryKey = (tx: Carried): { readonly hash: string; readonly identifiers: readonly string[] } => ({
   hash: txHistoryHash(tx),
   identifiers: tx.identifiers(),
 });
@@ -171,11 +252,39 @@ const submitTxHistoryKey = (
  * all (nothing to revert).
  */
 const revertTxHistoryKey = (
-  tx: AnyTransaction,
+  tx: Carried,
 ): { readonly hash: string; readonly identifiers: readonly string[] } | undefined => {
   const identifiers = tx.identifiers();
   if (identifiers.length === 0) return undefined;
   return { hash: txHistoryHash(tx), identifiers };
+};
+
+/**
+ * The ledger operations the facade performs for itself rather than through a wallet, per protocol epoch.
+ *
+ * @remarks
+ *   One place only: estimating what a dust registration will cost needs a signature over a transaction nobody will
+ *   submit, and a signature comes from a ledger version's own primitives. Everything the facade hands back is in the
+ *   ledger-v9's shape — a scheme and its bytes — so the ledger-v8 entry lifts what its ledger version writes as bare
+ *   hex.
+ */
+type EpochAuthoring = Readonly<{
+  sampleSigningKey: () => unknown;
+  signatureVerifyingKey: (signingKey: never) => ledgerV9.SignatureVerifyingKey;
+  signData: (signingKey: never, data: Uint8Array) => ledgerV9.Signature;
+}>;
+
+const v9Authoring: EpochAuthoring = {
+  sampleSigningKey: () => ledgerV9.sampleSigningKey(),
+  signatureVerifyingKey: (signingKey: never) => ledgerV9.signatureVerifyingKey(signingKey),
+  signData: (signingKey: never, data: Uint8Array) => ledgerV9.signData(signingKey, data),
+};
+
+const v8Authoring: EpochAuthoring = {
+  sampleSigningKey: () => ledgerV8.sampleSigningKey(),
+  signatureVerifyingKey: (signingKey: never) =>
+    Signatures.liftSignatureVerifyingKey(ledgerV8.signatureVerifyingKey(signingKey)),
+  signData: (signingKey: never, data: Uint8Array) => Signatures.liftSignature(ledgerV8.signData(signingKey, data)),
 };
 
 type TokenKind = 'dust' | 'shielded' | 'unshielded';
@@ -199,24 +308,30 @@ const TokenKindsToBalance = new (class {
 
 export type FinalizedTransactionRecipe = {
   type: 'FINALIZED_TRANSACTION';
-  originalTransaction: ledger.FinalizedTransaction;
-  balancingTransaction: ledger.UnprovenTransaction;
-  blockData?: BlockData;
+  /** The protocol version this recipe was built for, and so the version its parts have to be proved at. */
+  protocolVersion: ProtocolVersion.ProtocolVersion;
+  originalTransaction: FinalizedTx;
+  balancingTransaction: UnprovenTx;
+  blockData?: BlockData<AnyLedgerParameters>;
 };
 
 export type UnboundTransactionRecipe = {
   type: 'UNBOUND_TRANSACTION';
-  baseTransaction: UnboundTransaction;
+  /** The protocol version this recipe was built for, and so the version its parts have to be proved at. */
+  protocolVersion: ProtocolVersion.ProtocolVersion;
+  baseTransaction: UnboundTx;
   // balancingTransaction is optional because if the user decides to balance only the unshielded part,
   // it occurs "in place" so the baseTransaction is modified
-  balancingTransaction?: ledger.UnprovenTransaction | undefined;
-  blockData?: BlockData;
+  balancingTransaction?: UnprovenTx | undefined;
+  blockData?: BlockData<AnyLedgerParameters>;
 };
 
 export type UnprovenTransactionRecipe = {
   type: 'UNPROVEN_TRANSACTION';
-  transaction: ledger.UnprovenTransaction;
-  blockData?: BlockData;
+  /** The protocol version this recipe was built for, and so the version its parts have to be proved at. */
+  protocolVersion: ProtocolVersion.ProtocolVersion;
+  transaction: UnprovenTx;
+  blockData?: BlockData<AnyLedgerParameters>;
 };
 
 export type BalancingRecipe = FinalizedTransactionRecipe | UnboundTransactionRecipe | UnprovenTransactionRecipe;
@@ -231,7 +346,7 @@ export const BalancingRecipe = {
       ['FINALIZED_TRANSACTION', 'UNBOUND_TRANSACTION', 'UNPROVEN_TRANSACTION'].includes(value.type)
     );
   },
-  getTransactions: (recipe: BalancingRecipe): readonly AnyTransaction[] => {
+  getTransactions: (recipe: BalancingRecipe): readonly AnyTx[] => {
     switch (recipe.type) {
       case 'FINALIZED_TRANSACTION': {
         return [recipe.originalTransaction, recipe.balancingTransaction];
@@ -248,7 +363,7 @@ export const BalancingRecipe = {
 };
 
 export interface TokenTransfer<AddressType extends ShieldedAddress | UnshieldedAddress> {
-  type: ledger.RawTokenType;
+  type: ledgerV9.RawTokenType;
   receiverAddress: AddressType;
   amount: bigint;
 }
@@ -266,8 +381,8 @@ export type UnshieldedTokenTransfer = {
 export type CombinedTokenTransfer = ShieldedTokenTransfer | UnshieldedTokenTransfer;
 
 export type CombinedSwapInputs = {
-  shielded?: Record<ledger.RawTokenType, bigint>;
-  unshielded?: Record<ledger.RawTokenType, bigint>;
+  shielded?: Record<ledgerV9.RawTokenType, bigint>;
+  unshielded?: Record<ledgerV9.RawTokenType, bigint>;
 };
 
 export type CombinedSwapOutputs = CombinedTokenTransfer;
@@ -275,18 +390,253 @@ export type CombinedSwapOutputs = CombinedTokenTransfer;
 export type TransactionIdentifier = string;
 
 export type UtxoWithMeta = {
-  utxo: ledger.Utxo;
+  utxo: ledgerV9.Utxo;
   meta: {
     ctime: Date;
     registeredForDustGeneration: boolean;
   };
 };
 
+/** The protocol version each of the three wallets has reached. */
+export type WalletProtocolVersions = Readonly<{
+  shielded: ProtocolVersion.ProtocolVersion;
+  unshielded: ProtocolVersion.ProtocolVersion;
+  dust: ProtocolVersion.ProtocolVersion;
+}>;
+
+/**
+ * The lowest of the protocol versions the three wallets have reached.
+ *
+ * @remarks
+ *   The three wallets follow the same chain but not in lock-step: each recognises a protocol version change when its own
+ *   synchronization reaches it, so around a fork they disagree for a while. A transaction spans all three, so the one
+ *   still behind is what bounds the facade as a whole — the highest version every wallet is known to be at.
+ * @param versions The version each wallet has reached.
+ * @returns The lowest of the three.
+ */
+export const lowestProtocolVersion = (versions: WalletProtocolVersions): ProtocolVersion.ProtocolVersion =>
+  [versions.shielded, versions.unshielded, versions.dust].reduce((lowest, candidate) =>
+    candidate < lowest ? candidate : lowest,
+  );
+
+/**
+ * One ledger version's key objects per side of a protocol boundary.
+ *
+ * @remarks
+ *   The escape hatch for a caller that holds key objects rather than a seed. Both sides are required: key objects belong
+ *   to one ledger version's runtime and neither can be derived from the other, so a facade given one side alone would
+ *   hold wallets that cannot read half the chain. That is the shape seeds exist to avoid, and a product with one side
+ *   optional would reintroduce it.
+ */
+export type FacadeKeysByEpoch = Readonly<{
+  /** The ledger-v8's key objects. */
+  v8: Readonly<{ shielded: ledgerV8.ZswapSecretKeys; dust: ledgerV8.DustSecretKey }>;
+  /** The ledger-v9's key objects. */
+  v9: Readonly<{ shielded: ledgerV9.ZswapSecretKeys; dust: ledgerV9.DustSecretKey }>;
+}>;
+
+/** What the facade will start its wallets from: seeds, or both ledger versions' key objects. */
+export type FacadeStartMaterial = WalletSeeds | FacadeKeysByEpoch;
+
+/** How the wallets are started. */
+export type FacadeStartOptions = Readonly<{
+  /**
+   * Leaves the dust wallet unstarted in the background, to be driven a step at a time with `doSync`.
+   *
+   * @remarks
+   *   Requires a dust wallet built with the projections sync service; see `makeEventLessSyncService`.
+   */
+  manualSync?: boolean;
+}>;
+
+/**
+ * The ledger-v9 key objects the wallets' own `start` takes, from whichever material the caller supplied.
+ *
+ * @remarks
+ *   Only the ledger-v9 side is needed here: a wallet built from seeds or from both versions' keys already holds what its
+ *   V1 variant needs, retained when it was built. What `start` supplies is the side the wallet's own API speaks.
+ */
+const v9KeysOf = (
+  material: FacadeStartMaterial,
+): Readonly<{ shielded: ledgerV9.ZswapSecretKeys; dust: ledgerV9.DustSecretKey }> =>
+  'v9' in material
+    ? material.v9
+    : {
+        shielded: ledgerV9.ZswapSecretKeys.fromSeed(material.shielded),
+        dust: ledgerV9.DustSecretKey.fromSeed(material.dust),
+      };
+
+/** Which of the three wallets a reading is about. */
+export type WalletKind = keyof WalletProtocolVersions;
+
+/**
+ * Whether the three wallets agree about which side of a protocol boundary the chain is on.
+ *
+ * @remarks
+ *   `Settled` is the ordinary state, and says which protocol version the facade is acting at. `Crossing` is the window
+ *   around a fork during which the wallets disagree: each one learns of the change when its own synchronization reaches
+ *   it, so for a while some have crossed and some have not. Nothing the facade builds during that window can span the
+ *   boundary, so it stays bound to the version the laggards are still on — which is what `from` reports, and what
+ *   `activeProtocolVersion` answers.
+ *
+ *   A difference in version _within_ one epoch is not a crossing: two versions on the same side of the boundary are the
+ *   same ledger version, and a wallet lagging there is ordinary synchronization.
+ */
+export type ProtocolPhase =
+  | Readonly<{ _tag: 'Settled'; version: ProtocolVersion.ProtocolVersion }>
+  | Readonly<{
+      _tag: 'Crossing';
+      /** The version the facade is still bound to: the epoch the wallets that have not crossed are in. */
+      from: ProtocolVersion.ProtocolVersion;
+      /** The version the wallets that have crossed have reached. */
+      to: ProtocolVersion.ProtocolVersion;
+      /** The wallets still on the near side, in a fixed order, so an application can say what it is waiting for. */
+      behind: readonly WalletKind[];
+    }>;
+
+/** The three wallets in a fixed order, so {@link protocolPhaseOf} reports them the same way every time. */
+const walletKinds = ['shielded', 'unshielded', 'dust'] as const satisfies readonly WalletKind[];
+
+/**
+ * Reads whether the wallets are settled on one side of a protocol boundary, or still crossing it.
+ *
+ * @remarks
+ *   Derived entirely from the version each wallet has reported and where the boundary lies — the same two facts every
+ *   other version-routing decision in the SDK is made from, so this reading cannot disagree with them.
+ * @param versions The version each wallet has reached.
+ * @param forkVersion The version at which the chain hands over to the next ledger version.
+ * @returns The reading. See {@link ProtocolPhase}.
+ */
+export const protocolPhaseOf = (
+  versions: WalletProtocolVersions,
+  forkVersion: ProtocolVersion.ProtocolVersion,
+): ProtocolPhase => {
+  const reported = walletKinds.map((kind) => [kind, versions[kind]] as const);
+  const from = lowestProtocolVersion(versions);
+  const epoch = ProtocolVersion.epochOf(from, forkVersion);
+  const crossed = reported.filter(([, version]) => !ProtocolVersion.withinRange(version, epoch));
+
+  if (crossed.length === 0) return { _tag: 'Settled', version: from };
+
+  return {
+    _tag: 'Crossing',
+    from,
+    to: crossed.reduce((highest, [, version]) => (version > highest ? version : highest), crossed[0][1]),
+    behind: reported.filter(([, version]) => ProtocolVersion.withinRange(version, epoch)).map(([kind]) => kind),
+  };
+};
+
+/**
+ * What has become of a transaction the wallet submitted.
+ *
+ * @remarks
+ *   Tagged rather than a status string, and deliberately: `Orphaned` and `Rejected` are different facts about the world
+ *   and the difference matters to what an application should do next. A rejection is the chain's verdict — the node saw
+ *   the transaction and refused it. An orphaned transaction has no verdict at all and never will: its bytes were
+ *   authored under a protocol version the chain has moved past, and nothing can include them afterwards. The wallet has
+ *   already unbooked its coins and recorded the rejection either way; what differs is what an application can tell a
+ *   user, and whether re-submitting the same bytes could ever help.
+ */
+export type PendingStatus =
+  | Readonly<{ _tag: 'Submitted' }>
+  | Readonly<{ _tag: 'Confirmed'; segments: readonly Readonly<{ id: number; success: boolean }>[] }>
+  | Readonly<{ _tag: 'Rejected'; segments: readonly Readonly<{ id: number; success: boolean }>[] }>
+  | Readonly<{
+      _tag: 'Orphaned';
+      /** The protocol version the transaction was authored for. */
+      authoredFor: ProtocolVersion.ProtocolVersion;
+      /** The protocol version the chain had reached when the wallet gave up on it. */
+      chainNow: ProtocolVersion.ProtocolVersion;
+    }>;
+
+/** A transaction the wallet has submitted and the chain has not finished answering for. */
+export type PendingTransaction = Readonly<{
+  /** The transaction itself, as the handle an application carries. */
+  transaction: FinalizedTx;
+  /** When the wallet recorded it as pending. */
+  submittedAt: DateTime.Utc;
+  /**
+   * The protocol version it was authored for, when the wallet had observed one.
+   *
+   * @remarks
+   *   `Option.none()` means the wallet never learned which version it was authored against. Such a transaction is never
+   *   orphaned — an unobserved version is not evidence of anything.
+   */
+  authoredFor: Option.Option<ProtocolVersion.ProtocolVersion>;
+  /** What has become of it. See {@link PendingStatus}. */
+  status: PendingStatus;
+}>;
+
+/** Reads what has become of a transaction from the verdict the pending set holds, if it holds one. */
+const pendingStatusOf = (result: PendingTransactions.TransactionResult | undefined): PendingStatus => {
+  if (result === undefined) return { _tag: 'Submitted' };
+  switch (result.status) {
+    case 'SUCCESS':
+      return { _tag: 'Confirmed', segments: result.segments };
+    case 'FAILURE':
+    case 'PARTIAL_SUCCESS':
+      // A transaction only some of whose segments succeeded is still not a transaction that happened as submitted.
+      return { _tag: 'Rejected', segments: result.segments };
+    case 'ORPHANED_BY_FORK':
+      return { _tag: 'Orphaned', authoredFor: result.authoredFor, chainNow: result.chainNow };
+  }
+};
+
+/**
+ * The pending transactions as an application reads them.
+ *
+ * @remarks
+ *   A projection over the pending set the services keep, not a second copy of it: the facts are the same, stated as a
+ *   list of transactions with a status each rather than as the bag the machinery works in.
+ * @param pending The pending set.
+ * @returns One entry per transaction, in the order the wallet recorded them.
+ */
+export const pendingTransactionsOf = (
+  pending: PendingTransactions.PendingTransactions<FinalizedTx>,
+): readonly PendingTransaction[] =>
+  pending.all.map((item) => ({
+    transaction: item.tx,
+    submittedAt: item.creationTime,
+    authoredFor: item.protocolVersion,
+    status: pendingStatusOf('result' in item ? item.result : undefined),
+  }));
+
 export class FacadeState {
   public readonly shielded: ShieldedWalletState;
   public readonly unshielded: UnshieldedWalletState;
   public readonly dust: DustWalletState;
-  public readonly pending: PendingTransactions.PendingTransactions<ledger.FinalizedTransaction>;
+  public readonly pending: readonly PendingTransaction[];
+
+  /** The protocol version each of the three wallets has reached. */
+  public get protocolVersion(): WalletProtocolVersions {
+    return {
+      shielded: this.shielded.protocolVersion,
+      unshielded: this.unshielded.protocolVersion,
+      dust: this.dust.protocolVersion,
+    };
+  }
+
+  /**
+   * The protocol version the facade as a whole can act at: the lowest the three wallets have reached.
+   *
+   * @remarks
+   *   Around a protocol boundary the three wallets cross at slightly different moments, and a transaction needs all
+   *   three. This is the version every one of them is known to understand.
+   */
+  public get activeProtocolVersion(): ProtocolVersion.ProtocolVersion {
+    return lowestProtocolVersion(this.protocolVersion);
+  }
+
+  /**
+   * Whether the three wallets are settled on one side of the protocol boundary, or still crossing it.
+   *
+   * @remarks
+   *   Additive, and the reading `protocolVersion` alone cannot give: three versions that differ tell an application
+   *   nothing about whether the difference matters. See {@link ProtocolPhase}.
+   */
+  public get protocol(): ProtocolPhase {
+    return protocolPhaseOf(this.protocolVersion, this.#forkVersion);
+  }
 
   public get isSynced(): boolean {
     return (
@@ -296,16 +646,21 @@ export class FacadeState {
     );
   }
 
+  /** Where the chain hands over from one ledger version to the next, which is what {@link protocol} is read against. */
+  readonly #forkVersion: ProtocolVersion.ProtocolVersion;
+
   constructor(
     shielded: ShieldedWalletState,
     unshielded: UnshieldedWalletState,
     dust: DustWalletState,
-    pending: PendingTransactions.PendingTransactions<ledger.FinalizedTransaction>,
+    pending: PendingTransactions.PendingTransactions<FinalizedTx>,
+    forkVersion: ProtocolVersion.ProtocolVersion = ProtocolVersion.MinSupportedVersion,
   ) {
     this.shielded = shielded;
     this.unshielded = unshielded;
     this.dust = dust;
-    this.pending = pending;
+    this.pending = pendingTransactionsOf(pending);
+    this.#forkVersion = forkVersion;
   }
 }
 
@@ -352,12 +707,54 @@ export type FetchTermsAndConditionsConfiguration = {
   };
 };
 
-export type DefaultConfiguration = DefaultUnshieldedConfiguration &
+/**
+ * The fork schedule the facade presets when a configuration names none: {@link ProtocolVersion.V9NativeForkSchedule},
+ * ledger-v9 from the version a 2.x node reports.
+ *
+ * @remarks
+ *   Where a chain forks is a fact about the chain, which is why each wallet package requires `forks` and presets nothing.
+ *   The facade is the one place a preset decides nothing the SDK has not already decided: every chain the 2.x node line
+ *   runs hands over at this version, so an application copying the constant into its configuration only restates it. A
+ *   chain that hands over elsewhere states its own `forks`, which wins.
+ */
+export const DefaultForkSchedule: ProtocolVersion.ForkSchedule = ProtocolVersion.V9NativeForkSchedule;
+
+/** What the three wallets and the default services are built from, as the wallet packages take it. */
+type WalletsConfiguration = DefaultUnshieldedConfiguration &
   DefaultShieldedConfiguration &
   DefaultDustConfiguration &
   DefaultSubmissionConfiguration &
   DefaultPendingTransactionsServiceConfiguration &
-  Partial<DefaultProvingConfiguration>;
+  DefaultProvingConfiguration;
+
+/**
+ * The configuration {@link WalletFacade.init} takes: what the three wallets and the default services are built from.
+ *
+ * @remarks
+ *   The one difference from the wallets' own configurations is that `forks` may be left out — see
+ *   {@link DefaultForkSchedule} for what is then preset, and {@link ResolvedConfiguration} for what a factory is handed.
+ */
+export type DefaultConfiguration = Omit<WalletsConfiguration, 'forks'> & {
+  /**
+   * Where each ledger version begins on this chain — see {@link ProtocolVersion.ForkSchedule}. Left out, the facade
+   * presets {@link DefaultForkSchedule}.
+   */
+  forks?: ProtocolVersion.ForkSchedule;
+};
+
+/**
+ * A {@link DefaultConfiguration} with what the facade presets filled in: `forks` is always present, the schedule the
+ * configuration named or {@link DefaultForkSchedule}.
+ *
+ * @remarks
+ *   What every factory in {@link InitParams} is handed, so that a wallet can be built from it directly: the wallet
+ *   packages require `forks`, and this is what lets `shielded: (config) => ShieldedWallet(config)` compile. Code
+ *   outside a factory gets the same from {@link WalletFacade.resolveConfiguration}.
+ * @typeParam TConfig The configuration as given, which may extend {@link DefaultConfiguration} with settings of its own.
+ */
+export type ResolvedConfiguration<TConfig extends DefaultConfiguration = DefaultConfiguration> = TConfig & {
+  forks: ProtocolVersion.ForkSchedule;
+};
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -365,30 +762,32 @@ type MaybePromise<T> = T | Promise<T>;
  * Parameters object for {@link WalletFacade.init}. It features configuration and bunch of initializers for the wallets
  * and services, all of them are in a form of a function that takes the configuration and returns proper implementation,
  * either synchronously or wrapped in a Promise. Services are optional to provide ({@link WalletFacade.init} will provide
- * default implementations), but all 3 wallets: shielded, unshielded and Dust one need to be present
+ * default implementations), but all 3 wallets: shielded, unshielded and Dust one need to be present.
  */
 export type InitParams<TConfig extends DefaultConfiguration> = {
   configuration: TConfig;
   /** Optional factory for the clock abstraction. Defaults to system clock (`() => new Date()`). */
-  clock?: (config: TConfig) => MaybePromise<Clock.Clock>;
-  submissionService?: (config: TConfig) => MaybePromise<SubmissionService<ledger.FinalizedTransaction>>;
+  clock?: (config: ResolvedConfiguration<TConfig>) => MaybePromise<Clock.Clock>;
+  submissionService?: (config: ResolvedConfiguration<TConfig>) => MaybePromise<SubmissionService<FinalizedTx>>;
   pendingTransactionsService?: (
-    config: TConfig,
-  ) => MaybePromise<PendingTransactionsService<ledger.FinalizedTransaction>>;
-  provingService?: (config: TConfig) => MaybePromise<ProvingService<UnboundTransaction>>;
+    config: ResolvedConfiguration<TConfig>,
+  ) => MaybePromise<PendingTransactionsService<FinalizedTx>>;
+  provingService?: (
+    config: ResolvedConfiguration<TConfig>,
+  ) => MaybePromise<VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>>;
   /**
    * Optional factory for the block-data fetcher used by validation. Defaults to an HTTP indexer-backed fetcher built
    * from `configuration.indexerClientConnection`. Override for simulator-based tests with
    * `makeSimulatorBlockDataFetcher(simulator)` from `@midnightntwrk/wallet-sdk-capabilities/validation`.
    */
-  fetchBlockData?: (config: TConfig) => MaybePromise<BlockDataFetcher>;
+  fetchBlockData?: (config: ResolvedConfiguration<TConfig>) => MaybePromise<BlockDataFetcher>;
   validationService?: (
-    config: TConfig,
+    config: ResolvedConfiguration<TConfig>,
     deps: { fetchBlockData: BlockDataFetcher; clock: Clock.Clock },
-  ) => MaybePromise<ValidationService>;
-  shielded: (config: TConfig) => MaybePromise<ShieldedWalletAPI>;
-  unshielded: (config: TConfig) => MaybePromise<UnshieldedWalletAPI>;
-  dust: (config: TConfig) => MaybePromise<DustWalletAPI>;
+  ) => MaybePromise<VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>>;
+  shielded: (config: ResolvedConfiguration<TConfig>) => MaybePromise<ShieldedWalletAPI>;
+  unshielded: (config: ResolvedConfiguration<TConfig>) => MaybePromise<UnshieldedWalletAPI>;
+  dust: (config: ResolvedConfiguration<TConfig>) => MaybePromise<DustWalletAPI>;
 };
 
 // `BlockData` is not re-exported from the facade to avoid a name collision with the
@@ -397,7 +796,7 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
 export {
   type BlockDataFetcher,
   type ValidateTxOptions,
-  type ValidationService,
+  type VersionedValidationService,
   ValidationFetchError,
   WellFormedError,
   type WellFormedStrictnessFlags,
@@ -406,31 +805,61 @@ export {
 export class WalletFacade {
   private static makeDefaultSubmissionService<TConfig extends DefaultSubmissionConfiguration>(
     config: TConfig,
-  ): SubmissionService<ledger.FinalizedTransaction> {
-    return makeDefaultSubmissionService<ledger.FinalizedTransaction>(config);
+  ): SubmissionService<FinalizedTx> {
+    // A handle serializes itself, which is all submission needs of a transaction — and the one thing every ledger
+    // version's transaction does identically.
+    return makeDefaultSubmissionService<FinalizedTx>(config);
   }
 
-  private static makeDefaultPendingTransactionsService<TConfig extends DefaultPendingTransactionsServiceConfiguration>(
-    config: TConfig,
-  ): Promise<PendingTransactionsServiceImpl<ledger.FinalizedTransaction>> {
-    return PendingTransactionsServiceImpl.init<ledger.FinalizedTransaction>({
+  private static makeDefaultPendingTransactionsService<
+    TConfig extends DefaultPendingTransactionsServiceConfiguration & { forks: ProtocolVersion.ForkSchedule },
+  >(config: TConfig): Promise<PendingTransactionsServiceImpl<FinalizedTx>> {
+    return PendingTransactionsServiceImpl.init<FinalizedTx>({
       configuration: config,
-      txTrait: finalizedTransactionTrait,
+      txTraits: finalizedTransactionTraits(config.forks.v9),
     });
   }
 
-  private static makeDefaultProvingService<TConfig extends Partial<DefaultProvingConfiguration>>(
-    config: TConfig,
-  ): ProvingService<UnboundTransaction> {
-    if (config.provingServerUrl) {
-      return makeDefaultProvingService({
-        provingServerUrl: config.provingServerUrl,
-      });
-    } else {
-      throw new Error(
-        "Missing required configuration: 'provingServerUrl' must be set in config, or provide a custom provingService in init parameters.",
-      );
-    }
+  /**
+   * Builds the proving service a configuration describes.
+   *
+   * @remarks
+   *   Handed the same fork schedule the wallets are built with, because a proving backend is chosen by the epoch a
+   *   transaction belongs to and the two ends of that question must not be able to compute the boundary differently.
+   */
+  private static makeDefaultProvingService<TConfig extends DefaultConfiguration>(
+    config: ResolvedConfiguration<TConfig>,
+  ): VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction> {
+    return Either.getOrThrowWith(
+      makeDefaultVersionedProvingService(config, config.forks),
+      (error) => new Error(error.message),
+    );
+  }
+
+  /**
+   * Fills in what the facade presets — `forks`, as {@link DefaultForkSchedule} — so that the result is a configuration a
+   * wallet package can be built from.
+   *
+   * @remarks
+   *   {@link WalletFacade.init} does this itself, once and before anything is built, so the wallets, the default services
+   *   and the facade's own boundary cannot be given different schedules, and no factory needs to call it. It is public
+   *   for code outside a factory that needs the configuration the facade will use: an application building a wallet
+   *   package directly, or reading `forks` back to author a transaction for the right ledger version. Resolving twice
+   *   is the same as resolving once, so `init` may be handed the result.
+   * @example
+   *   ```typescript
+   *   const configuration = WalletFacade.resolveConfiguration({ networkId: 'undeployed', ... });
+   *   const facade = await WalletFacade.init({ configuration, shielded: (config) => ShieldedWallet(config), ... });
+   *   const authoredForV9 = protocolVersion >= configuration.forks.v9;
+   *   ```;
+   *
+   * @param configuration The configuration as given, with or without `forks`.
+   * @returns The same configuration with `forks` present: the schedule it named, or {@link DefaultForkSchedule}.
+   */
+  static resolveConfiguration<TConfig extends DefaultConfiguration>(
+    configuration: TConfig,
+  ): ResolvedConfiguration<TConfig> {
+    return { ...configuration, forks: configuration.forks ?? DefaultForkSchedule };
   }
 
   /**
@@ -470,7 +899,9 @@ export class WalletFacade {
    * and initialization of necessary components. Specifically - it requires following fields:
    *
    * - `configuration` - holding a configuration, which needs to extend {@link DefaultConfiguration} - this way allows to
-   *   convey use-case-specific settings in the same way, as the SDK works by default
+   *   convey use-case-specific settings in the same way, as the SDK works by default. `forks` may be left out; every
+   *   factory below is handed a {@link ResolvedConfiguration}, which always has it — what
+   *   {@link WalletFacade.resolveConfiguration} returns
    * - `shielded` - a function taking the configuration and returning shielded wallet (or a promise with such)
    *   implementing {@link ShieldedWalletAPI}
    * - `unshielded` - a function taking the configuration and returning unshielded wallet (or a promise with such)
@@ -479,48 +910,49 @@ export class WalletFacade {
    *   {@link DustWalletAPI} There are some optional services/abstractions to provide, too. If not provided - default
    *   implementations will be used, each of them is initialized by a function taking the configuration and returning
    *   proper implementation (wrapped in a {@link Promise} or not).
-   * - `submissionService` - needs to implement {@link SubmissionService} for a {@link ledger.FinalizedTransaction} to
+   * - `submissionService` - needs to implement {@link SubmissionService} for a {@link ledgerV9.FinalizedTransaction} to
    *   submit transactions to the network, default uses Node RPC connection
    * - `pendingTransactionsService` - needs to implement {@link PendingTransactionsService} for a
-   *   {@link ledger.FinalizedTransaction} to keep track of pending transactions, default uses in-memory implementation
-   * - `provingService` - needs to implement {@link ProvingService} to prove it, default uses proving server
+   *   {@link ledgerV9.FinalizedTransaction} to keep track of pending transactions, default uses in-memory
+   *   implementation
+   * - `provingService` - needs to implement {@link VersionedProvingService} to prove it, default uses proving server
    * - `clock` - needs to implement {@link Clock.Clock} for getting current time, default uses system clock
    */
   static async init<TConfig extends DefaultConfiguration>(initParams: InitParams<TConfig>): Promise<WalletFacade> {
+    const configuration = WalletFacade.resolveConfiguration(initParams.configuration);
     const submissionService = await Promise.resolve(
       initParams.submissionService
-        ? initParams.submissionService(initParams.configuration)
-        : WalletFacade.makeDefaultSubmissionService(initParams.configuration),
+        ? initParams.submissionService(configuration)
+        : WalletFacade.makeDefaultSubmissionService(configuration),
     );
     const pendingTransactionsService = await Promise.resolve(
       initParams.pendingTransactionsService
-        ? initParams.pendingTransactionsService(initParams.configuration)
-        : WalletFacade.makeDefaultPendingTransactionsService(initParams.configuration),
+        ? initParams.pendingTransactionsService(configuration)
+        : WalletFacade.makeDefaultPendingTransactionsService(configuration),
     );
     const provingService = await Promise.resolve(
       initParams.provingService
-        ? initParams.provingService(initParams.configuration)
-        : WalletFacade.makeDefaultProvingService(initParams.configuration),
+        ? initParams.provingService(configuration)
+        : WalletFacade.makeDefaultProvingService(configuration),
     );
-    const shielded = await Promise.resolve(initParams.shielded(initParams.configuration));
-    const unshielded = await Promise.resolve(initParams.unshielded(initParams.configuration));
-    const dust = await Promise.resolve(initParams.dust(initParams.configuration));
-    const clock = await Promise.resolve(
-      initParams.clock ? initParams.clock(initParams.configuration) : Clock.systemClock,
-    );
+    const shielded = await Promise.resolve(initParams.shielded(configuration));
+    const unshielded = await Promise.resolve(initParams.unshielded(configuration));
+    const dust = await Promise.resolve(initParams.dust(configuration));
+    const clock = await Promise.resolve(initParams.clock ? initParams.clock(configuration) : Clock.systemClock);
     const fetchBlockData: BlockDataFetcher = await Promise.resolve(
-      initParams.fetchBlockData
-        ? initParams.fetchBlockData(initParams.configuration)
-        : makeDefaultBlockDataFetcher(initParams.configuration),
+      initParams.fetchBlockData ? initParams.fetchBlockData(configuration) : makeDefaultBlockDataFetcher(configuration),
     );
     const validationService = await Promise.resolve(
       initParams.validationService
-        ? initParams.validationService(initParams.configuration, { fetchBlockData, clock })
-        : makeDefaultValidationService({
-            fetchBlockData,
-            networkId: initParams.configuration.networkId,
-            clock,
-          }),
+        ? initParams.validationService(configuration, { fetchBlockData, clock })
+        : makeDefaultVersionedValidationService(
+            {
+              fetchBlockData,
+              networkId: configuration.networkId,
+              clock,
+            },
+            configuration.forks.v9,
+          ),
     );
     return new WalletFacade(
       shielded,
@@ -530,7 +962,8 @@ export class WalletFacade {
       pendingTransactionsService,
       provingService,
       validationService,
-      initParams.configuration.txHistoryStorage,
+      configuration.txHistoryStorage,
+      configuration.forks.v9,
       clock,
     );
   }
@@ -538,13 +971,25 @@ export class WalletFacade {
   readonly shielded: ShieldedWalletAPI;
   readonly unshielded: UnshieldedWalletAPI;
   readonly dust: DustWalletAPI;
-  readonly submissionService: SubmissionService<ledger.FinalizedTransaction>;
-  readonly pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>;
-  readonly provingService: ProvingService<UnboundTransaction>;
-  readonly validationService: ValidationService;
+  readonly submissionService: SubmissionService<FinalizedTx>;
+  readonly pendingTransactionsService: PendingTransactionsService<FinalizedTx>;
+  readonly provingService: VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>;
+  readonly validationService: VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>;
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
   readonly clock: Clock.Clock;
   #pendingSubscription: Subscription;
+  #protocolVersionSubscription: Subscription;
+  /**
+   * The protocol version the wallets have all reached, as last observed.
+   *
+   * @remarks
+   *   `Option.none()` until the three wallets have each emitted once. A transaction stamped with `none` is never
+   *   orphaned, so an unobserved version costs a transaction nothing but the ability to be given up on early.
+   */
+  #observedProtocolVersion = new BehaviorSubject<Option.Option<ProtocolVersion.ProtocolVersion>>(Option.none());
+
+  /** Where the chain hands over from one ledger version to the next, which is what divides the two epochs. */
+  readonly #forkVersion: ProtocolVersion.ProtocolVersion;
 
   /**
    * Constructor is private on purpose - much of initialization of the facade is potentially asynchronous, and adding
@@ -556,11 +1001,12 @@ export class WalletFacade {
     shieldedWallet: ShieldedWalletAPI,
     unshieldedWallet: UnshieldedWalletAPI,
     dustWallet: DustWalletAPI,
-    submissionService: SubmissionService<ledger.FinalizedTransaction>,
-    pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>,
-    provingService: ProvingService<UnboundTransaction>,
-    validationService: ValidationService,
+    submissionService: SubmissionService<FinalizedTx>,
+    pendingTransactionsService: PendingTransactionsService<FinalizedTx>,
+    provingService: VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>,
+    validationService: VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>,
     txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>,
+    forkVersion: ProtocolVersion.ProtocolVersion,
     clock: Clock.Clock = Clock.systemClock,
   ) {
     this.shielded = shieldedWallet;
@@ -571,14 +1017,105 @@ export class WalletFacade {
     this.provingService = provingService;
     this.validationService = validationService;
     this.#txHistoryStorage = txHistoryStorage;
+    this.#forkVersion = forkVersion;
     this.clock = clock;
     this.#pendingSubscription = this.pendingTransactionsService
       .state()
       .pipe(
-        concatMap((pending) => PendingTransactions.allFailed(pending)),
-        concatMap((item) => this.revert(item.tx)),
+        concatMap((pending) => PendingTransactions.allRejected(pending)),
+        concatMap(async (item) => {
+          if (!(await this.reconcileFinalizedTransaction(item.tx, await this.#txHistoryStorage.getAll()))) {
+            await this.revert(item.tx, rejectionReason(item.result));
+          }
+        }),
       )
       .subscribe();
+    // Deliberately built from the wallets' own states rather than from `state()`: `state()` includes the pending set,
+    // and orphaning writes to it, so feeding that back here would be a cycle.
+    this.#protocolVersionSubscription = combineLatest([this.shielded.state, this.unshielded.state, this.dust.state])
+      .pipe(
+        map(([shieldedState, unshieldedState, dustState]) =>
+          lowestProtocolVersion({
+            shielded: shieldedState.protocolVersion,
+            unshielded: unshieldedState.protocolVersion,
+            dust: dustState.protocolVersion,
+          }),
+        ),
+        distinctUntilChanged(),
+        tap((version) => this.#observedProtocolVersion.next(Option.some(version))),
+        // Nothing fallible belongs here: this chain is the only writer of the observed version, and an orphaned
+        // transaction sync already saw included is reconciled by the pending subscription like any other verdict.
+        concatMap((version) => this.pendingTransactionsService.orphanBeyond(version)),
+      )
+      .subscribe();
+  }
+
+  /**
+   * The protocol version the facade is currently acting at.
+   *
+   * @remarks
+   *   The lowest the three wallets have reached, once they have all reported; the minimum supported version until then,
+   *   which is the epoch a wallet with no history belongs to. It is what a transaction the facade builds is stamped
+   *   with, and what the side of the boundary it accepts transactions from is measured against.
+   */
+  private currentVersion(): ProtocolVersion.ProtocolVersion {
+    return Option.getOrElse(this.#observedProtocolVersion.getValue(), () => ProtocolVersion.MinSupportedVersion);
+  }
+
+  /** The range of protocol versions on the same side of the boundary as a given one. */
+  private epochOf(version: ProtocolVersion.ProtocolVersion): ProtocolVersion.ProtocolVersion.Range {
+    return ProtocolVersion.epochOf(version, this.#forkVersion);
+  }
+
+  /** The range of protocol versions on the facade's current side of the boundary. */
+  private currentEpoch(): ProtocolVersion.ProtocolVersion.Range {
+    return this.epochOf(this.currentVersion());
+  }
+
+  /**
+   * Reads a transaction an application handed in, refusing one built on the other side of the boundary.
+   *
+   * @remarks
+   *   The enforcement point for everything that enters the facade — a transaction the wallets built, or one an
+   *   application authored and sealed with `WalletTransaction.adopt`. Only the current epoch is accepted, because a
+   *   transaction of the other one cannot be merged, proved or submitted alongside anything the facade would build for
+   *   it. Both a stranded ledger-v8 transaction after the crossing and a ledger-v9 transaction offered before it are
+   *   refused here, by name, with the versions written down.
+   * @param handle The handle to read.
+   * @returns The carried transaction.
+   * @throws {@link ProtocolVersionMismatchError} When the transaction was built on the other side of the boundary.
+   */
+  private accept<T>(handle: AnyTx): T {
+    return Either.getOrThrowWith(
+      WalletTransaction.unwrapWithin<T>(handle, this.currentEpoch()),
+      (error: ProtocolVersionMismatchError) => error,
+    );
+  }
+
+  /**
+   * Seals a transaction the facade or a wallet produced, at the version its bytes were fixed by.
+   *
+   * @remarks
+   *   The version is the caller's to state, never read from the facade here, because the two can differ: a crossing can
+   *   land while a transaction is at the prover, and what comes back is still the bytes of the ledger version that made
+   *   them. A caller sealing something it has just built passes the version it is building at; a caller sealing
+   *   something that has travelled through an await passes the version stamped on the handle it started from.
+   * @param stage How far along the building of the transaction the sealed handle is.
+   * @param transaction The transaction to seal.
+   * @param protocolVersion The version the transaction's bytes were fixed by.
+   * @returns The sealed handle.
+   */
+  private seal<TStage extends WalletTransaction.Stage>(
+    stage: TStage,
+    transaction: { serialize: () => Uint8Array },
+    protocolVersion: ProtocolVersion.ProtocolVersion,
+  ): WalletTransaction<TStage> {
+    return WalletTransaction.adopt(stage, transaction, protocolVersion);
+  }
+
+  /** The ledger primitives the facade signs with on its current side of the boundary. */
+  private authoring(): EpochAuthoring {
+    return this.currentVersion() < this.#forkVersion ? v8Authoring : v9Authoring;
   }
 
   private defaultTtl(): Date {
@@ -630,27 +1167,46 @@ export class WalletFacade {
    * @throws {@link WellFormedError} If the transaction fails any enabled check.
    * @throws {@link ValidationFetchError} If the block-data fetch fails.
    */
-  async validateTransaction(
-    tx: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
-    options: ValidateTxOptions,
-  ): Promise<void> {
-    return this.validationService.validateTx(tx, options);
+  async validateTransaction(tx: AnyTx, options: ValidateTxOptions<AnyLedgerParameters>): Promise<void> {
+    // Checked at the version the transaction says it was authored for, and never at the version the chain has since
+    // reached: well-formedness asks whether the ledger that produced these bytes would accept them, and a fork landing
+    // afterwards cannot change that answer. The transaction is read at its own epoch for the same reason.
+    return this.validationService.validateTx(
+      Either.getOrThrowWith(
+        WalletTransaction.unwrapWithin<AnyVersionValidatableTransaction>(
+          tx,
+          ProtocolVersion.epochOf(tx.protocolVersion, this.#forkVersion),
+        ),
+        (error: ProtocolVersionMismatchError) => error,
+      ),
+      tx.protocolVersion,
+      options,
+    );
   }
 
-  private mergeUnprovenTransactions(
-    a: ledger.UnprovenTransaction | undefined,
-    b: ledger.UnprovenTransaction | undefined,
-  ): ledger.UnprovenTransaction | undefined {
-    if (a && b) return a.merge(b);
+  /**
+   * Merges two unproven transactions of the same epoch, or returns whichever there is.
+   *
+   * @remarks
+   *   Both are unwrapped before merging, which is where a pair from different epochs is refused: a merge across the
+   *   boundary is not a failure to compute, it is unrepresentable, and saying so is the whole point of the stamp.
+   */
+  private mergeUnprovenTransactions(a: UnprovenTx | undefined, b: UnprovenTx | undefined): UnprovenTx | undefined {
+    if (a && b)
+      return this.seal(
+        'Unproven',
+        this.accept<CarriedUnproven>(a).merge(this.accept<CarriedUnproven>(b)),
+        this.currentVersion(),
+      );
     return a ?? b;
   }
 
   private async createDustActionTransaction(
     action: { type: 'registration'; dustReceiverAddress: DustAddress } | { type: 'deregistration' },
     nightUtxos: readonly UtxoWithMeta[],
-    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    nightVerifyingKey: ledgerV9.SignatureVerifyingKey,
     signDustRegistration: SignSegment,
-  ): Promise<ledger.UnprovenTransaction> {
+  ): Promise<UnprovenTx> {
     const ttl = this.defaultTtl();
     const now = this.clock.now();
     const isRegistration = action.type === 'registration';
@@ -696,7 +1252,7 @@ export class WalletFacade {
 
     // Step 3 — Dust attaches its DustActions onto the intent the unshielded wallet just built.
     // If this fails we must unbook the UTxOs so the caller can retry.
-    let txWithDustActions: ledger.UnprovenTransaction;
+    let txWithDustActions: UnprovenTx;
     try {
       txWithDustActions = await this.dust.attachDustRegistration(
         txWithOffers,
@@ -715,6 +1271,11 @@ export class WalletFacade {
     // on-chain with BalanceCheckOverspend. Skip for re-registration (all guaranteed UTxOs already
     // registered) since `feePayment` is 0 by design and the caller is expected to balance the fee
     // externally via `balanceUnprovenTransaction({ tokenKindsToBalance: ['dust'] })`.
+    //
+    // `registeredForDustGeneration` is the indexer's answer as of the chain's current dust epoch, so it is the one
+    // authority on which of the two a registration is. Night carried across the v8 -> v9 fork arrives with it set to
+    // `false` — the fork wipes dust generation state and the unshielded crossing carries the flag accordingly — so a
+    // re-registration on ledger-v9 is correctly treated as first-time.
     const hasUnregisteredGuaranteed = split.guaranteedUtxos.some((u) => !u.utxo.registeredForDustGeneration);
     if (isRegistration && hasUnregisteredGuaranteed) {
       const fee = await this.dust.calculateFee([txWithDustActions]);
@@ -731,7 +1292,7 @@ export class WalletFacade {
     // offers and the dust registration. Signing failures also need to release the booking.
     try {
       const signedRecipe = await this.signRecipe(
-        { type: 'UNPROVEN_TRANSACTION', transaction: txWithDustActions },
+        { type: 'UNPROVEN_TRANSACTION', protocolVersion: this.currentVersion(), transaction: txWithDustActions },
         signDustRegistration,
       );
       if (signedRecipe.type !== 'UNPROVEN_TRANSACTION') {
@@ -753,7 +1314,7 @@ export class WalletFacade {
     ]).pipe(
       map(
         ([shieldedState, unshieldedState, dustState, pending]) =>
-          new FacadeState(shieldedState, unshieldedState, dustState, pending),
+          new FacadeState(shieldedState, unshieldedState, dustState, pending, this.#forkVersion),
       ),
     );
   }
@@ -766,7 +1327,7 @@ export class WalletFacade {
       firstValueFrom(this.pendingTransactionsService.state()),
     ]);
 
-    return new FacadeState(shieldedState, unshieldedState, dustState, pending);
+    return new FacadeState(shieldedState, unshieldedState, dustState, pending, this.#forkVersion);
   }
 
   /**
@@ -779,13 +1340,14 @@ export class WalletFacade {
    * @returns The transaction identifier.
    * @throws {@link WellFormedError} — call {@link validateTransaction} first to get this error early.
    */
-  async submitTransaction(tx: ledger.FinalizedTransaction): Promise<TransactionIdentifier> {
-    const identifiers = tx.identifiers();
+  async submitTransaction(tx: FinalizedTx): Promise<TransactionIdentifier> {
+    const carried = this.accept<Carried>(tx);
+    const identifiers = carried.identifiers();
     try {
-      await this.pendingTransactionsService.addPendingTransaction(tx);
+      await this.pendingTransactionsService.addPendingTransaction(tx, this.#observedProtocolVersion.getValue());
       // Insert before awaiting submission so the entry exists while the tx is in flight — the per-wallet sync
       // handlers' gotFinalized call clears the pending entry on confirmation.
-      const key = submitTxHistoryKey(tx);
+      const key = submitTxHistoryKey(carried);
       await this.#txHistoryStorage.gotPending({ ...key, submittedAt: this.clock.now() });
       await this.submissionService.submitTransaction(tx, 'Finalized');
 
@@ -809,17 +1371,12 @@ export class WalletFacade {
    * @returns A {@link FinalizedTransactionRecipe} containing the original and balancing transactions.
    */
   async balanceFinalizedTransaction(
-    tx: ledger.FinalizedTransaction,
-    secretKeys: {
-      shieldedSecretKeys: ledger.ZswapSecretKeys;
-      dustSecretKey: ledger.DustSecretKey;
-    },
+    tx: FinalizedTx,
     options: {
       ttl: Date;
       tokenKindsToBalance?: TokenKindsToBalance;
     },
   ): Promise<FinalizedTransactionRecipe> {
-    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, tokenKindsToBalance = 'all' } = options;
 
     const { shouldBalanceDust, shouldBalanceShielded, shouldBalanceUnshielded } =
@@ -830,16 +1387,14 @@ export class WalletFacade {
       ? await this.unshielded.balanceFinalizedTransaction(tx)
       : undefined;
 
-    const shieldedBalancingTx = shouldBalanceShielded
-      ? await this.shielded.balanceTransaction(shieldedSecretKeys, tx)
-      : undefined;
+    const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
 
     // Step 2: Merge unshielded and shielded balancing
     const mergedBalancingTx = this.mergeUnprovenTransactions(shieldedBalancingTx, unshieldedBalancingTx);
 
     // Step 3: Conditionally add dust/fee balancing
     const dustResult = shouldBalanceDust
-      ? await this.dust.balanceTransactions(dustSecretKey, mergedBalancingTx ? [tx, mergedBalancingTx] : [tx], ttl)
+      ? await this.dust.balanceTransactions(mergedBalancingTx ? [tx, mergedBalancingTx] : [tx], ttl)
       : undefined;
     const feeBalancingTx = dustResult?.transaction;
 
@@ -852,6 +1407,7 @@ export class WalletFacade {
 
     return {
       type: 'FINALIZED_TRANSACTION',
+      protocolVersion: this.currentVersion(),
       originalTransaction: tx,
       balancingTransaction: balancingTx,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
@@ -871,26 +1427,19 @@ export class WalletFacade {
    * @returns An {@link UnboundTransactionRecipe} containing the base and optional balancing transactions.
    */
   async balanceUnboundTransaction(
-    tx: UnboundTransaction,
-    secretKeys: {
-      shieldedSecretKeys: ledger.ZswapSecretKeys;
-      dustSecretKey: ledger.DustSecretKey;
-    },
+    tx: UnboundTx,
     options: {
       ttl: Date;
       tokenKindsToBalance?: TokenKindsToBalance;
     },
   ): Promise<UnboundTransactionRecipe> {
-    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, tokenKindsToBalance = 'all' } = options;
 
     const { shouldBalanceDust, shouldBalanceShielded, shouldBalanceUnshielded } =
       TokenKindsToBalance.toFlags(tokenKindsToBalance);
 
     // Step 1: Run unshielded and shielded balancing
-    const shieldedBalancingTx = shouldBalanceShielded
-      ? await this.shielded.balanceTransaction(shieldedSecretKeys, tx)
-      : undefined;
+    const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
 
     // For unbound transactions, unshielded balancing happens in place not with a balancing transaction
     const balancedUnshieldedTx = shouldBalanceUnshielded
@@ -902,11 +1451,7 @@ export class WalletFacade {
 
     // Step 3: Conditionally add dust/fee balancing
     const dustResult = shouldBalanceDust
-      ? await this.dust.balanceTransactions(
-          dustSecretKey,
-          shieldedBalancingTx ? [baseTx, shieldedBalancingTx] : [baseTx],
-          ttl,
-        )
+      ? await this.dust.balanceTransactions(shieldedBalancingTx ? [baseTx, shieldedBalancingTx] : [baseTx], ttl)
       : undefined;
     const feeBalancingTransaction = dustResult?.transaction;
 
@@ -920,6 +1465,7 @@ export class WalletFacade {
 
     return {
       type: 'UNBOUND_TRANSACTION',
+      protocolVersion: this.currentVersion(),
       baseTransaction: baseTx,
       balancingTransaction: balancingTransaction ?? undefined,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
@@ -939,26 +1485,19 @@ export class WalletFacade {
    * @returns An {@link UnprovenTransactionRecipe} containing the balanced transaction.
    */
   async balanceUnprovenTransaction(
-    tx: ledger.UnprovenTransaction,
-    secretKeys: {
-      shieldedSecretKeys: ledger.ZswapSecretKeys;
-      dustSecretKey: ledger.DustSecretKey;
-    },
+    tx: UnprovenTx,
     options: {
       ttl: Date;
       tokenKindsToBalance?: TokenKindsToBalance;
     },
   ): Promise<UnprovenTransactionRecipe> {
-    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, tokenKindsToBalance = 'all' } = options;
 
     const { shouldBalanceDust, shouldBalanceShielded, shouldBalanceUnshielded } =
       TokenKindsToBalance.toFlags(tokenKindsToBalance);
 
     // Step 1: Run unshielded and shielded balancing
-    const shieldedBalancingTx = shouldBalanceShielded
-      ? await this.shielded.balanceTransaction(shieldedSecretKeys, tx)
-      : undefined;
+    const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
 
     // For unproven transactions, unshielded balancing happens in place
     const balancedUnshieldedTx = shouldBalanceUnshielded
@@ -972,9 +1511,7 @@ export class WalletFacade {
     const mergedTx = this.mergeUnprovenTransactions(baseTx, shieldedBalancingTx)!;
 
     // Step 4: Conditionally add dust/fee balancing
-    const dustResult = shouldBalanceDust
-      ? await this.dust.balanceTransactions(dustSecretKey, [mergedTx], ttl)
-      : undefined;
+    const dustResult = shouldBalanceDust ? await this.dust.balanceTransactions([mergedTx], ttl) : undefined;
     const feeBalancingTx = dustResult?.transaction;
 
     // Step 5: Merge fee balancing if present
@@ -982,25 +1519,38 @@ export class WalletFacade {
 
     return {
       type: 'UNPROVEN_TRANSACTION',
+      protocolVersion: this.currentVersion(),
       transaction: balancedTx,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
   }
 
-  async finalizeRecipe(recipe: BalancingRecipe): Promise<ledger.FinalizedTransaction> {
+  async finalizeRecipe(recipe: BalancingRecipe): Promise<FinalizedTx> {
     return Promise.resolve(recipe)
-      .then(async (recipe) => {
+      .then(async (recipe): Promise<FinalizedTx> => {
         switch (recipe.type) {
           case 'FINALIZED_TRANSACTION': {
             const finalizedBalancing = await this.finalizeTransaction(recipe.balancingTransaction);
-            return recipe.originalTransaction.merge(finalizedBalancing);
+            return this.seal(
+              'Finalized',
+              this.accept<CarriedFinalized>(recipe.originalTransaction).merge(
+                this.accept<CarriedFinalized>(finalizedBalancing),
+              ),
+              recipe.originalTransaction.protocolVersion,
+            );
           }
           case 'UNBOUND_TRANSACTION': {
             const finalizedBalancingTx = recipe.balancingTransaction
               ? await this.finalizeTransaction(recipe.balancingTransaction)
               : undefined;
-            const finalizedTransaction = recipe.baseTransaction.bind();
-            return finalizedBalancingTx ? finalizedTransaction.merge(finalizedBalancingTx) : finalizedTransaction;
+            const finalizedTransaction = this.accept<CarriedUnbound>(recipe.baseTransaction).bind();
+            return this.seal(
+              'Finalized',
+              finalizedBalancingTx
+                ? finalizedTransaction.merge(this.accept<CarriedFinalized>(finalizedBalancingTx))
+                : finalizedTransaction,
+              recipe.baseTransaction.protocolVersion,
+            );
           }
           case 'UNPROVEN_TRANSACTION': {
             return await this.finalizeTransaction(recipe.transaction);
@@ -1008,7 +1558,10 @@ export class WalletFacade {
         }
       })
       .then(async (finalizedTx) => {
-        await this.pendingTransactionsService.addPendingTransaction(finalizedTx);
+        await this.pendingTransactionsService.addPendingTransaction(
+          finalizedTx,
+          Option.some(finalizedTx.protocolVersion),
+        );
         return finalizedTx;
       });
   }
@@ -1020,6 +1573,7 @@ export class WalletFacade {
         const withDustSig = await this.#signDustRegistrationIfPresent(signedBalancingTx, signSegment);
         return {
           type: 'FINALIZED_TRANSACTION',
+          protocolVersion: recipe.protocolVersion,
           originalTransaction: recipe.originalTransaction,
           balancingTransaction: withDustSig,
           ...(recipe.blockData ? { blockData: recipe.blockData } : {}),
@@ -1034,6 +1588,7 @@ export class WalletFacade {
         const signedBaseTx = await this.signUnboundTransaction(recipe.baseTransaction, signSegment);
         return {
           type: 'UNBOUND_TRANSACTION',
+          protocolVersion: recipe.protocolVersion,
           baseTransaction: signedBaseTx,
           balancingTransaction: signedBalancingTx,
           ...(recipe.blockData ? { blockData: recipe.blockData } : {}),
@@ -1044,6 +1599,7 @@ export class WalletFacade {
         const withDustSig = await this.#signDustRegistrationIfPresent(signedTx, signSegment);
         return {
           type: 'UNPROVEN_TRANSACTION',
+          protocolVersion: recipe.protocolVersion,
           transaction: withDustSig,
           ...(recipe.blockData ? { blockData: recipe.blockData } : {}),
         };
@@ -1051,11 +1607,8 @@ export class WalletFacade {
     }
   }
 
-  async #signDustRegistrationIfPresent(
-    tx: ledger.UnprovenTransaction,
-    signSegment: SignSegment,
-  ): Promise<ledger.UnprovenTransaction> {
-    const intent = tx.intents?.get(1);
+  async #signDustRegistrationIfPresent(tx: UnprovenTx, signSegment: SignSegment): Promise<UnprovenTx> {
+    const intent = this.accept<CarriedUnproven>(tx).intents?.get(1);
     const registrations = intent?.dustActions?.registrations ?? [];
     if (!intent || registrations.length === 0) {
       return tx;
@@ -1064,22 +1617,48 @@ export class WalletFacade {
     return await this.dust.addDustRegistrationSignature(tx, signature);
   }
 
-  async signUnprovenTransaction(
-    tx: ledger.UnprovenTransaction,
-    signSegment: SignSegment,
-  ): Promise<ledger.UnprovenTransaction> {
+  async signUnprovenTransaction(tx: UnprovenTx, signSegment: SignSegment): Promise<UnprovenTx> {
     return await this.unshielded.signUnprovenTransaction(tx, signSegment);
   }
 
-  async signUnboundTransaction(tx: UnboundTransaction, signSegment: SignSegment): Promise<UnboundTransaction> {
+  async signUnboundTransaction(tx: UnboundTx, signSegment: SignSegment): Promise<UnboundTx> {
     return await this.unshielded.signUnboundTransaction(tx, signSegment);
   }
 
-  async finalizeTransaction(tx: ledger.UnprovenTransaction): Promise<ledger.FinalizedTransaction> {
+  /**
+   * Proves and binds an unproven transaction, and records it as pending.
+   *
+   * @remarks
+   *   Proved at the version stamped on the transaction itself, which is the version that fixed its bytes, and sealed at
+   *   that same version: proving is a long await, so the wallets can move under it, and neither the prover a
+   *   transaction is routed to nor the stamp it comes back with may be decided by where they have moved to.
+   *
+   *   Where they have moved to decides one thing only, and it is decided again once the proof is back: a crossing while
+   *   the transaction was in flight leaves it belonging to an epoch the wallets have left, and no chain they are on can
+   *   include it. Such a transaction is refused rather than sealed, and nothing is recorded as pending for it — a
+   *   pending entry would only wait out a TTL for an inclusion that cannot happen — while the reservations it made in
+   *   the three wallets are given back like those of any other failure here.
+   * @param tx The unproven transaction.
+   * @returns The finalized transaction, stamped with the version it was authored at.
+   * @throws {@link ProtocolVersionMismatchError} When the wallets left the transaction's epoch while it was being
+   *   proved, or were never in it.
+   */
+  async finalizeTransaction(tx: UnprovenTx): Promise<FinalizedTx> {
     try {
-      const unboundTx = await this.provingService.prove(tx);
-      const finalizedTx = unboundTx.bind();
-      await this.pendingTransactionsService.addPendingTransaction(finalizedTx);
+      // Named as the prover's input rather than its output: the router hands the transaction to the prover registered
+      // for the version it was authored at, and what comes back is that ledger version's unbound transaction.
+      const unboundTx = await this.provingService.prove(
+        this.accept<ledgerV9.UnprovenTransaction>(tx),
+        tx.protocolVersion,
+      );
+      // Read again on the far side of the proof: the epoch is the one thing about the transaction that a crossing
+      // during proving can change, and this is where it is caught.
+      this.accept<CarriedUnproven>(tx);
+      const finalizedTx = this.seal('Finalized', (unboundTx as unknown as CarriedUnbound).bind(), tx.protocolVersion);
+      await this.pendingTransactionsService.addPendingTransaction(
+        finalizedTx,
+        Option.some(finalizedTx.protocolVersion),
+      );
       return finalizedTx;
     } catch (error) {
       await Promise.allSettled([
@@ -1092,35 +1671,29 @@ export class WalletFacade {
   }
 
   /** Estimates the fee for the given transaction only. This lacks the fees of the balancing transaction. */
-  async calculateTransactionFee(tx: AnyTransaction): Promise<bigint> {
+  async calculateTransactionFee(tx: AnyTx): Promise<bigint> {
     return await this.dust.calculateFee([tx]);
   }
 
   /** Calculates the total fee for the given transaction plus the fee of the balancing transaction. */
   async estimateTransactionFee(
-    tx: AnyTransaction,
-    secretKey: ledger.DustSecretKey,
+    tx: AnyTx,
     options?: {
       ttl?: Date;
       currentTime?: Date;
     },
   ): Promise<bigint> {
     const ttl = options?.ttl ?? this.defaultTtl();
-    return await this.dust.estimateFee(secretKey, [tx], ttl, options?.currentTime);
+    return await this.dust.estimateFee([tx], ttl, options?.currentTime);
   }
 
   async transferTransaction(
     outputs: CombinedTokenTransfer[],
-    secretKeys: {
-      shieldedSecretKeys: ledger.ZswapSecretKeys;
-      dustSecretKey: ledger.DustSecretKey;
-    },
     options: {
       ttl: Date;
       payFees?: boolean;
     },
   ): Promise<UnprovenTransactionRecipe> {
-    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, payFees = true } = options;
 
     const unshieldedOutputs = outputs
@@ -1134,9 +1707,7 @@ export class WalletFacade {
     }
 
     const shieldedTx =
-      shieldedOutputs.length > 0
-        ? await this.shielded.transferTransaction(shieldedSecretKeys, shieldedOutputs)
-        : undefined;
+      shieldedOutputs.length > 0 ? await this.shielded.transferTransaction(shieldedOutputs) : undefined;
 
     const unshieldedTx =
       unshieldedOutputs.length > 0 ? await this.unshielded.transferTransaction(unshieldedOutputs, ttl) : undefined;
@@ -1144,13 +1715,14 @@ export class WalletFacade {
     const mergedTxs = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx)!;
 
     // Add fee payment
-    const dustResult = payFees ? await this.dust.balanceTransactions(dustSecretKey, [mergedTxs], ttl) : undefined;
+    const dustResult = payFees ? await this.dust.balanceTransactions([mergedTxs], ttl) : undefined;
     const feeBalancingTx = dustResult?.transaction;
 
     const finalTx = this.mergeUnprovenTransactions(mergedTxs, feeBalancingTx)!;
 
     return {
       type: 'UNPROVEN_TRANSACTION',
+      protocolVersion: this.currentVersion(),
       transaction: finalTx,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
@@ -1177,11 +1749,14 @@ export class WalletFacade {
         registeredForDustGeneration: meta.registeredForDustGeneration,
       })),
       (utxosWithMeta) => dustState.estimateDustGeneration(utxosWithMeta, now),
-      (estimatedUtxos) => dustState.capabilities.coinsAndBalances.splitNightUtxos(estimatedUtxos),
+      (estimatedUtxos) => dustState.splitNightUtxos(estimatedUtxos),
       (split) => split.guaranteed,
     );
-    const fakeSigningKey = ledger.sampleSigningKey();
-    const fakeVerifyingKey = ledger.signatureVerifyingKey(fakeSigningKey);
+    const authoring = this.authoring();
+    // Type cast required because: a signing key belongs to one ledger version's runtime and the two are nominally
+    // distinct, so the epoch's own primitives are the only things that may touch it; it never leaves this block.
+    const fakeSigningKey = authoring.sampleSigningKey() as never;
+    const fakeVerifyingKey = authoring.signatureVerifyingKey(fakeSigningKey);
 
     // Use the legacy dust-only construction path here so estimation does NOT book real UTxOs in the
     // unshielded wallet state. (The race-fix path in createDustActionTransaction books on purpose;
@@ -1198,15 +1773,18 @@ export class WalletFacade {
       fakeVerifyingKey,
       dustState.address,
     );
-    const intent = fakeUnsignedTx.intents?.get(1);
+    const intent = this.accept<CarriedUnproven>(fakeUnsignedTx).intents?.get(1);
     if (!intent) {
       throw Error('Dust generation transaction is missing intent segment 1.');
     }
-    const signatureData = intent.signatureData(1);
-    const signature = ledger.signData(fakeSigningKey, signatureData);
+    const signature = authoring.signData(fakeSigningKey, intent.signatureData(1));
     const fakeSignedTx = await this.dust.addDustGenerationSignature(fakeUnsignedTx, signature);
 
-    const finalizedFakeTx = fakeSignedTx.mockProve().bind();
+    const finalizedFakeTx = this.seal(
+      'Finalized',
+      this.accept<CarriedUnproven>(fakeSignedTx).mockProve().bind(),
+      this.currentVersion(),
+    );
 
     const fee = await this.calculateTransactionFee(finalizedFakeTx);
 
@@ -1219,16 +1797,11 @@ export class WalletFacade {
   async initSwap(
     desiredInputs: CombinedSwapInputs,
     desiredOutputs: CombinedSwapOutputs[],
-    secretKeys: {
-      shieldedSecretKeys: ledger.ZswapSecretKeys;
-      dustSecretKey: ledger.DustSecretKey;
-    },
     options: {
       ttl: Date;
       payFees?: boolean;
     },
   ): Promise<UnprovenTransactionRecipe> {
-    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, payFees = false } = options;
 
     const { shielded: shieldedInputs, unshielded: unshieldedInputs } = desiredInputs;
@@ -1250,15 +1823,14 @@ export class WalletFacade {
       throw Error('At least one shielded or unshielded swap is required.');
     }
 
-    const shieldedTx =
-      hasShieldedPart && shieldedInputs !== undefined
-        ? await this.shielded.initSwap(shieldedSecretKeys, shieldedInputs, shieldedOutputs)
-        : undefined;
+    // Build each leg if the swap involves that token kind, even when it has outputs but no inputs.
+    const shieldedTx = hasShieldedPart
+      ? await this.shielded.initSwap(shieldedInputs ?? {}, shieldedOutputs)
+      : undefined;
 
-    const unshieldedTx =
-      hasUnshieldedPart && unshieldedInputs !== undefined
-        ? await this.unshielded.initSwap(unshieldedInputs, unshieldedOutputs, ttl)
-        : undefined;
+    const unshieldedTx = hasUnshieldedPart
+      ? await this.unshielded.initSwap(unshieldedInputs ?? {}, unshieldedOutputs, ttl)
+      : undefined;
 
     const combinedTx = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx);
 
@@ -1266,13 +1838,14 @@ export class WalletFacade {
       throw Error('Unexpected transaction state.');
     }
 
-    const dustResult = payFees ? await this.dust.balanceTransactions(dustSecretKey, [combinedTx], ttl) : undefined;
+    const dustResult = payFees ? await this.dust.balanceTransactions([combinedTx], ttl) : undefined;
     const feeBalancingTx = dustResult?.transaction;
 
     const finalTx = this.mergeUnprovenTransactions(combinedTx, feeBalancingTx)!;
 
     return {
       type: 'UNPROVEN_TRANSACTION',
+      protocolVersion: this.currentVersion(),
       transaction: finalTx,
       ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
@@ -1280,7 +1853,7 @@ export class WalletFacade {
 
   async registerNightUtxosForDustGeneration(
     nightUtxos: readonly UtxoWithMeta[],
-    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    nightVerifyingKey: ledgerV9.SignatureVerifyingKey,
     signDustRegistration: SignSegment,
     dustReceiverAddress?: DustAddress,
   ): Promise<UnprovenTransactionRecipe> {
@@ -1299,6 +1872,7 @@ export class WalletFacade {
 
     return {
       type: 'UNPROVEN_TRANSACTION',
+      protocolVersion: this.currentVersion(),
       transaction: dustRegistrationTx,
     };
   }
@@ -1332,7 +1906,7 @@ export class WalletFacade {
 
   async deregisterFromDustGeneration(
     nightUtxos: UtxoWithMeta[],
-    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    nightVerifyingKey: ledgerV9.SignatureVerifyingKey,
     signDustRegistration: SignSegment,
   ): Promise<UnprovenTransactionRecipe> {
     const dustDeregistrationTx = await this.createDustActionTransaction(
@@ -1343,29 +1917,79 @@ export class WalletFacade {
     );
     return {
       type: 'UNPROVEN_TRANSACTION',
+      protocolVersion: this.currentVersion(),
       transaction: dustDeregistrationTx,
     };
   }
 
-  async revert(txOrRecipe: AnyTransaction | BalancingRecipe): Promise<void> {
+  async revert(txOrRecipe: AnyTx | BalancingRecipe, reason?: string): Promise<void> {
     // avoid instanceof check
     const transactionsToRevert = BalancingRecipe.isRecipe(txOrRecipe)
       ? BalancingRecipe.getTransactions(txOrRecipe)
       : [txOrRecipe];
 
-    await Promise.all(transactionsToRevert.map((tx) => this.revertTransaction(tx)));
+    await Promise.all(transactionsToRevert.map((tx) => this.revertTransaction(tx, reason)));
   }
 
-  async revertTransaction(tx: AnyTransaction): Promise<void> {
+  /**
+   * The finalized entry recording `tx`, if sync has written one, even under the hash aggregation gave it on-chain. A
+   * transaction whose stamp no epoch can read has no entry, rather than an error, so a verdict on it still resolves.
+   */
+  private finalizedEntryFor(tx: AnyTx, history: readonly WalletEntry[]): FinalizedWalletEntry | undefined {
+    return Option.match(
+      Either.getRight(WalletTransaction.unwrapWithin<Carried>(tx, this.epochOf(tx.protocolVersion))),
+      {
+        onNone: () => undefined,
+        onSome: (carried) => {
+          const key = submitTxHistoryKey(carried);
+          return history.find(
+            (entry): entry is FinalizedWalletEntry =>
+              isFinalizedWalletEntry(entry) && TransactionHistoryStorage.coversTransaction(entry, key),
+          );
+        },
+      },
+    );
+  }
+
+  /** Sync can record inclusion before the independent pending-status poller observes it. */
+  private async reconcileFinalizedTransaction(tx: FinalizedTx, history: readonly WalletEntry[]): Promise<boolean> {
+    const entry = this.finalizedEntryFor(tx, history);
+    if (entry === undefined) return false;
+    // Included failures still need their unexecuted coin reservations released.
+    if (entry.status === 'FAILURE' || entry.status === 'PARTIAL_SUCCESS') {
+      await this.revertTransaction(tx);
+    } else {
+      await this.pendingTransactionsService.clear(tx);
+    }
+    return true;
+  }
+
+  async revertTransaction(tx: AnyTx, reason?: string): Promise<void> {
     await Promise.all([
       this.shielded.revertTransaction(tx),
       this.unshielded.revertTransaction(tx),
       this.dust.revertTransaction(tx),
     ]).then(async () => {
-      await this.pendingTransactionsService.clear(tx as unknown as ledger.FinalizedTransaction);
-      const key = revertTxHistoryKey(tx);
+      // Reverting is total over the stages: a transaction at any of them may have booked coins, and the pending set
+      // recognises only the finalized ones. Narrowing rather than casting is what says so.
+      await this.pendingTransactionsService.clear(tx as FinalizedTx);
+      // Read at the epoch the transaction was built for, not the one the facade now acts at. A verdict on a
+      // transaction submitted before a protocol boundary can only arrive after it — a chain rejection, a TTL run out,
+      // or the wallet giving up on bytes that can never be included — and by then the facade has crossed. The pending
+      // entry that verdict has to land on was written by this same session before the crossing, and it is the only
+      // record an application has that the transaction will never be included; keying it against the current epoch
+      // would leave it saying `pending` for the rest of the session. The stamp is what chooses the reader, which is
+      // what the stamp is for.
+      const key = Option.match(
+        Either.getRight(WalletTransaction.unwrapWithin<Carried>(tx, this.epochOf(tx.protocolVersion))),
+        { onNone: () => undefined, onSome: revertTxHistoryKey },
+      );
       if (key !== undefined) {
-        await this.#txHistoryStorage.gotRejected({ ...key, rejectedAt: this.clock.now() });
+        await this.#txHistoryStorage.gotRejected({
+          ...key,
+          rejectedAt: this.clock.now(),
+          ...(reason !== undefined ? { reason } : {}),
+        });
       }
     });
   }
@@ -1373,21 +1997,32 @@ export class WalletFacade {
   /**
    * Starts the wallets and their background synchronization.
    *
-   * @param shieldedSecretKeys - Secret keys for the shielded wallet
-   * @param dustSecretKey - Secret key for the dust wallet
-   * @param manualSync - When true, the dust wallet is not started in the background; drive it explicitly with
+   * @remarks
+   *   Seeds, not key objects. A seed is the only key material that crosses a protocol boundary — every ledger version
+   *   derives its own keys from the same seed and arrives at the same identity — so a wallet started from seeds can
+   *   follow the chain across a fork, and one started from key objects of a single ledger version cannot. Derive them
+   *   once with `WalletSeeds.fromMasterSeed` and hand them over.
+   *
+   *   {@link FacadeKeysByEpoch} is the escape hatch for a caller that will not part with a seed. It requires **both**
+   *   ledger versions' key objects, because a wallet holding one side could not read the other side of the chain, and
+   *   it costs the caller an import of both ledger packages and the same derivation performed twice. A seed costs
+   *   neither.
+   * @example
+   *   ```typescript
+   *   await facade.start(WalletSeeds.fromMasterSeed(masterSeed));
+   *   ```;
+   *
+   * @param material The three wallets' seeds, or both ledger versions' key objects.
+   * @param options `manualSync` leaves the dust wallet unstarted in the background; drive it explicitly with
    *   {@link doSync} instead (requires a dust wallet built with the projections sync service, see
-   *   `makeEventLessSyncService`)
+   *   `makeEventLessSyncService`).
    */
-  async start(
-    shieldedSecretKeys: ledger.ZswapSecretKeys,
-    dustSecretKey: ledger.DustSecretKey,
-    manualSync: boolean = false,
-  ): Promise<void> {
+  async start(material: FacadeStartMaterial, options: FacadeStartOptions = {}): Promise<void> {
+    const keys = v9KeysOf(material);
     await Promise.all([
-      this.shielded.start(shieldedSecretKeys),
+      this.shielded.start(keys.shielded),
       this.unshielded.start(),
-      !manualSync ? this.dust.start(dustSecretKey) : undefined,
+      !options.manualSync ? this.dust.start(keys.dust) : undefined,
       this.pendingTransactionsService.start(),
     ]);
   }
@@ -1396,10 +2031,10 @@ export class WalletFacade {
    * Runs a single dust synchronization pass and resolves when it completes. Only the dust wallet supports manual sync;
    * the shielded and unshielded wallets keep syncing in the background via {@link start}.
    *
-   * @param dustSecretKey - Secret key for the dust wallet
+   * @param material The same material {@link start} was given.
    */
-  async doSync(dustSecretKey: ledger.DustSecretKey): Promise<void> {
-    await this.dust.stepSync(dustSecretKey);
+  async doSync(material: FacadeStartMaterial): Promise<void> {
+    await this.dust.stepSync(v9KeysOf(material).dust);
   }
 
   async stop(): Promise<void> {
@@ -1410,6 +2045,7 @@ export class WalletFacade {
       this.submissionService.close(),
       this.pendingTransactionsService.stop(),
       Promise.resolve(this.#pendingSubscription?.unsubscribe()),
+      Promise.resolve(this.#protocolVersionSubscription?.unsubscribe()),
     ]);
   }
 

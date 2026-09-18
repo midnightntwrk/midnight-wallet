@@ -19,7 +19,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import * as fc from 'fast-check';
 import { Record } from 'effect';
 
-import { type Transacting } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { type Transacting } from '@midnightntwrk/wallet-sdk-shielded/v2';
 type TokenTransfer = Transacting.TokenTransfer;
 
 export const recipientArbitrary = fc

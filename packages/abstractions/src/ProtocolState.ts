@@ -14,25 +14,37 @@ import { Equivalence } from 'effect';
 import type * as ProtocolVersion from './ProtocolVersion.js';
 
 /**
- * A type that associates some state with a given version of the Midnight protocol.
+ * A type that associates some state with a given version of the Midnight protocol, and with the variant that produced
+ * it.
  *
+ * @remarks
+ *   `variantTag` is the tag of the wallet variant the emission came from. The runtime knows it at the moment it publishes
+ *   a state, so it hands it over rather than leaving readers to infer the producing implementation from `version` —
+ *   which would mean re-deriving activation ranges, and casting, on every emission. It travels with the state so that
+ *   selecting the capabilities that understand a state is a lookup by tag.
  * @typeParam TState The type of state.
+ * @typeParam TVariantTag The tag, or union of tags, of the variants that can produce this state.
  */
-export type ProtocolState<TState> = Readonly<{ version: ProtocolVersion.ProtocolVersion; state: TState }>;
+export type ProtocolState<TState, TVariantTag extends string | symbol = string | symbol> = Readonly<{
+  version: ProtocolVersion.ProtocolVersion;
+  variantTag: TVariantTag;
+  state: TState;
+}>;
 
 export const state = <TState>(ps: ProtocolState<TState>): TState => ps.state;
 
 /**
  * Derives an {@link Equivalence.Equivalence} for {@link ProtocolState} values from an equivalence of the underlying
- * state. Versions are compared strictly.
+ * state. Versions and producing variant tags are compared strictly.
  *
  * @param stateEquivalence The equivalence used to compare the `state` field.
  * @returns An equivalence over `ProtocolState<TState>`.
  */
-export const getEquivalence = <TState>(
+export const getEquivalence = <TState, TVariantTag extends string | symbol = string | symbol>(
   stateEquivalence: Equivalence.Equivalence<TState>,
-): Equivalence.Equivalence<ProtocolState<TState>> =>
+): Equivalence.Equivalence<ProtocolState<TState, TVariantTag>> =>
   Equivalence.struct({
     version: Equivalence.strict(),
+    variantTag: Equivalence.strict<TVariantTag>(),
     state: stateEquivalence,
   });

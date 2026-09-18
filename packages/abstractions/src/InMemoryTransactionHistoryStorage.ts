@@ -19,6 +19,7 @@ import {
   type FinalizedEntryInput,
   type RejectedEntryInput,
   type SerializedTransactionHistory,
+  coversTransaction,
 } from './TransactionHistoryStorage.js';
 
 /**
@@ -61,10 +62,11 @@ export class InMemoryTransactionHistoryStorage<
     const { finalizedBlock, ...rest } = input;
     const entry = { ...rest, lifecycle: { status: 'finalized', finalizedBlock } } as unknown as T;
     await this.#upsert(entry);
-    this.#clearPendingByIdentifiers(entry.identifiers, entry.hash);
+    this.#clearUnfinalizedCoveredBy(entry);
   }
 
   async gotRejected(input: RejectedEntryInput<T>): Promise<void> {
+    if (this.#inclusionRecorded(input)) return;
     const { rejectedAt, reason, ...rest } = input;
     const lifecycle =
       reason !== undefined
@@ -112,18 +114,21 @@ export class InMemoryTransactionHistoryStorage<
     return Promise.resolve();
   }
 
-  #clearPendingByIdentifiers(identifiers: readonly string[], newHash: TransactionHash): void {
-    if (identifiers.length === 0) return;
-    const provided = new Set<string>(identifiers);
-    const match = [...this.#storage.values()].find(
-      (entry) =>
-        entry.identifiers.length > 0 &&
-        entry.identifiers.every((id) => provided.has(id)) &&
-        entry.lifecycle.status === 'pending' &&
-        entry.hash !== newHash,
+  /** Checked synchronously with the write that follows, so a verdict racing sync cannot supersede inclusion. */
+  #inclusionRecorded(key: Pick<T, 'hash' | 'identifiers'>): boolean {
+    return [...this.#storage.values()].some(
+      (entry) => entry.lifecycle.status === 'finalized' && coversTransaction(entry, key),
     );
-    if (match) {
-      this.#storage.delete(match.hash);
-    }
+  }
+
+  #clearUnfinalizedCoveredBy(finalized: T): void {
+    [...this.#storage.values()]
+      .filter(
+        (entry) =>
+          entry.lifecycle.status !== 'finalized' &&
+          entry.hash !== finalized.hash &&
+          coversTransaction(finalized, entry),
+      )
+      .forEach((entry) => this.#storage.delete(entry.hash));
   }
 }

@@ -10,9 +10,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+export * from './ShieldedWalletAPI.js';
+export * from './SingleVariantShieldedWallet.js';
 export * from './ShieldedWallet.js';
+export * as Restore from './Restore.js';
 export {
   type ShieldedTransactionHistoryEntry,
   ShieldedSectionSchema,
   mergeShieldedSections,
-} from './v1/TransactionHistory.js';
+} from './v2/TransactionHistory.js';

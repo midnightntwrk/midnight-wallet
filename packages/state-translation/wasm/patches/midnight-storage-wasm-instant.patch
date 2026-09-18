@@ -1,0 +1,24 @@
+--- a/src/state_translation.rs
++++ b/src/state_translation.rs
+@@ -26,7 +26,12 @@
+ use std::io;
+ use std::marker::PhantomData;
+ use std::sync::atomic::AtomicU64;
++// `std::time::Instant` is unimplemented on wasm32-unknown-unknown and traps when called. `web-time` is a drop-in
++// replacement backed by `performance.now()` there, and a re-export of `std::time` everywhere else.
++#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+ use std::time::Instant;
++#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
++use web_time::Instant;
+ 
+ pub type RawNode<D> = ArenaKey<<D as DB>::Hasher>;
+ 
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -174,3 +174,6 @@
+ 
+ [dev-dependencies.rayon]
+ version = "^1.10.0"
++
++[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
++web-time = "^1.1.0"

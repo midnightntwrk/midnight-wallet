@@ -19,8 +19,8 @@
 // transfer end-to-end — and assert the orchestration semantics (threshold, timeout, concurrency) surface correctly.
 // The assembled signatures are verified with an independent @noble oracle and the ledger, so nothing is self-attested.
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { WalletError } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
-import { TransactionOps } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { WalletError } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
+import { TransactionOps } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
 import { Cause, Effect, Either, Exit, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import {
