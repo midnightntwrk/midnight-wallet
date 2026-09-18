@@ -14,7 +14,12 @@ same dependency tree.
 
 Rarely, and never in CI. The fixtures are a record of what shipped; they change only when:
 
-- a **new release train** is published and needs a fixture folder (`.claude/rules/persisted-formats.md`), or
+- a **new release train** is published and needs a fixture folder (`.claude/rules/persisted-formats.md`),
+- a **format version is bumped** and the version being left behind has no frozen folder yet. The fixture must come from
+  the last _published_ release that wrote the old shape, generated before the bump ships; once nothing published writes
+  that shape any more, it can no longer be captured, which is what the coverage test guards. A bump that leaves a
+  version with an existing folder — as the unshielded `v1 → v2` step did, `v1` having been frozen from every release up
+  to 4.1.0 — needs no new fixture, only a recaptured baseline, or
 - an existing fixture turns out to be **unrepresentative** of what a real wallet writes, as the unshielded ones once
   were: they carried a placeholder key and address that no wallet could have produced, which a reader that checks the
   address against the key refuses.
