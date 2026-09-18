@@ -15,6 +15,7 @@ import { type SignatureKind } from '@midnightntwrk/ledger-v9';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { assertKeyAddressConsistency } from '../SchemeConsistency.js';
 import { CoreWallet } from './CoreWallet.js';
+import { SNAPSHOT_FORMAT_VERSION } from '../v1/Serialization.js';
 import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { UnshieldedState } from './UnshieldedState.js';
 
@@ -26,6 +27,18 @@ export type SerializationCapability<TWallet, TSerialized> = {
 export type DefaultSerializationConfiguration = {
   networkId: NetworkId.NetworkId;
 };
+
+/**
+ * The `version` field of an unshielded snapshot, as this variant writes it.
+ *
+ * The version belongs to the snapshot's shape, not to the variant that wrote it: both variants write the same shape so
+ * that either can read the other's snapshot, which is why the constant is the one the V1 variant declares rather than a
+ * second one that could drift from it.
+ */
+const SnapshotVersionSchema = Schema.Literal(SNAPSHOT_FORMAT_VERSION).annotations({
+  message: (issue) =>
+    `Refusing an unshielded snapshot written in format version ${JSON.stringify(issue.actual)}: this build reads ${SNAPSHOT_FORMAT_VERSION} and does not downgrade.`,
+});
 
 export const makeDefaultV2SerializationCapability = (): SerializationCapability<CoreWallet, string> => {
   // Annotated with the ledger type so this fails to typecheck if SignatureKind gains or loses members
@@ -62,6 +75,9 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
   });
 
   const SnapshotSchema = Schema.Struct({
+    version: Schema.optionalWith(SnapshotVersionSchema, {
+      default: () => SNAPSHOT_FORMAT_VERSION,
+    }),
     publicKey: Schema.Struct({
       // Tagged form first so encoding always writes the tag; the legacy member only matches string inputs on decode
       publicKey: Schema.Union(SignatureVerifyingKeySchema, LegacySignatureVerifyingKeySchema),
@@ -81,6 +97,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
         publicKey: w.publicKey,
         state: UnshieldedState.toArrays(w.state),
         protocolVersion: w.protocolVersion,

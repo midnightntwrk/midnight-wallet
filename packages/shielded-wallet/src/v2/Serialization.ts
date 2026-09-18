@@ -14,6 +14,7 @@ import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import { WalletError } from './WalletError.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { CoreWallet } from './CoreWallet.js';
+import { SNAPSHOT_FORMAT_VERSION } from '../v1/Serialization.js';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
@@ -63,8 +64,23 @@ const StateFromUInt8Array = (): Schema.Schema<ledger.ZswapLocalState, Uint8Array
 const HexedState = (): Schema.Schema<ledger.ZswapLocalState, string> =>
   pipe(Schema.Uint8ArrayFromHex, Schema.compose(StateFromUInt8Array()));
 
+/**
+ * The `version` field of a shielded snapshot, as this variant writes it.
+ *
+ * The version belongs to the snapshot's shape, not to the variant that wrote it: both variants write the same shape so
+ * that either can read the other's snapshot, which is why the constant is the one the V1 variant declares rather than a
+ * second one that could drift from it.
+ */
+const SnapshotVersionSchema = Schema.Literal(SNAPSHOT_FORMAT_VERSION).annotations({
+  message: (issue) =>
+    `Refusing a shielded snapshot written in format version ${JSON.stringify(issue.actual)}: this build reads ${SNAPSHOT_FORMAT_VERSION} and does not downgrade.`,
+});
+
 export const makeDefaultV2SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   const SnapshotSchema = Schema.Struct({
+    version: Schema.optionalWith(SnapshotVersionSchema, {
+      default: () => SNAPSHOT_FORMAT_VERSION,
+    }),
     publicKeys: Schema.Struct({
       coinPublicKey: Schema.String,
       encryptionPublicKey: Schema.String,
@@ -88,6 +104,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
         publicKeys: w.publicKeys,
         state: w.state,
         protocolVersion: w.protocolVersion,
