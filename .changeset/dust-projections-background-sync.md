@@ -1,0 +1,31 @@
+---
+'@midnightntwrk/wallet-sdk-dust-wallet': major
+'@midnightntwrk/wallet-sdk-testkit': patch
+---
+
+feat(dust-wallet)!: make the projections sync work under background synchronization
+
+The projections ("event-less") sync synchronizes in finite passes — each pass ends its own stream — where the
+event-based service holds a long-lived subscription. Background synchronization reads the wallet state once and runs
+`updates` once, and its retry only re-runs a pass on failure, not on completion. A wallet built with the projections
+sync and started in the background therefore converged once and then never observed anything again, silently. The
+only usable shape was `manualSync` plus an explicit `facade.doSync()` at every point that would otherwise wait for
+the background sync to catch up.
+
+**Breaking:** every `SyncService` now states how often background synchronization runs its `updates`, as a required
+`backgroundRepeat` of `BackgroundRepeat.Once()` — the answer for a long-lived subscription, which is every service
+the SDK ships bar one — or `BackgroundRepeat.WithDelay({ delay })`. A custom sync service must add the field. It is
+stated rather than inferred because only the service knows whether its `updates` is finite.
+
+The projections service is `WithDelay`, configurable as `backgroundSyncInterval` (milliseconds, default 5000) on the
+dust wallet's sync configuration. Because a repeated pass is re-run from the top, each one re-reads the wallet state
+and resumes from what the previous one applied. Passes cannot overlap at any interval: a pass that cannot take the
+sync lock yields to the one already running and waits for the next interval. An idle pass costs a single block query,
+because both the generation subscription and the commitment load short-circuit on an unchanged tip.
+
+`facade.doSync()` is unchanged — it still runs exactly one pass and returns.
+
+`BackgroundRepeat` is declared in both twins, since both variants' background synchronization reads it, but only the
+ledger-v9 twin's projections service is `WithDelay` — the finite-pass projections sync remains a ledger-v9
+capability. The testkit's `eventLessDustWallet` documentation is corrected accordingly: it no longer tells callers the
+sync is one-shot and must be driven by hand.
