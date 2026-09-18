@@ -14,19 +14,33 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TransactionHistoryFormat } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Serialization as DustSerialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
-import { Serialization as ShieldedSerialization } from '@midnightntwrk/wallet-sdk-shielded/v1';
-import { Serialization as UnshieldedSerialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { Serialization as DustV1Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { Serialization as DustV2Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { Serialization as ShieldedV1Serialization } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { Serialization as ShieldedV2Serialization } from '@midnightntwrk/wallet-sdk-shielded/v2';
+import { Serialization as UnshieldedV1Serialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { Serialization as UnshieldedV2Serialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
 
 const FIXTURES_DIR = fileURLToPath(new URL('../fixtures', import.meta.url));
 
 /**
- * Where the drift baseline lives: what the current code writes, for every surface.
+ * Where the drift baselines live: what the current code writes, for every surface, one folder per writer.
  *
- * It is rewritten whenever the current output changes, so it carries no compatibility promise and is never a frozen
- * fixture. The leading underscore keeps it out of the surface listing.
+ * They are rewritten whenever the current output changes, so they carry no compatibility promise and are never frozen
+ * fixtures. The leading underscore keeps the folder out of the surface listing.
  */
 export const BASELINE_DIR = '_baseline';
+
+/**
+ * The two wallet variants that write snapshots: V1 on ledger-v8 below `forks.v9`, V2 on ledger-v9 from it.
+ *
+ * Both are real writers of the same surfaces, and a change to either is a change to a persisted format, so the gate
+ * runs every check against each. The transaction-history and pending-transaction surfaces have one writer apiece,
+ * outside the twins; they are listed under both so that every check has one shape of case to iterate.
+ */
+export const WRITERS = ['v1', 'v2'] as const;
+
+export type Writer = (typeof WRITERS)[number];
 
 /**
  * The five persisted surfaces — the strings the SDK hands an application to store and hand back later.
@@ -39,18 +53,29 @@ export const SURFACES = ['shielded', 'unshielded', 'dust', 'tx-history', 'pendin
 export type Surface = (typeof SURFACES)[number];
 
 /**
- * The format version each surface's code says it writes today, read from the code rather than restated here — so this
- * cannot drift from the source it is checking.
+ * The format version each writer's code says it writes today, per surface, read from the code rather than restated here
+ * — so this cannot drift from the source it is checking.
  *
- * Pending transactions is the exception: its `'v1'` lives inline in a `Schema.Literal` and the surface is deliberately
- * left alone, so the version is named here instead of exporting a constant from it.
+ * The two variants may write different versions of one surface: the V2 unshielded writer is on `v2`, because its
+ * verifying key carries a tag the V1 writer's bare string does not. Pending transactions is the one exception to
+ * reading from code: its `'v1'` lives inline in a `Schema.Literal` and the surface is deliberately left alone, so the
+ * version is named here instead of exporting a constant from it.
  */
-export const currentVersionOf: Record<Surface, string> = {
-  shielded: ShieldedSerialization.SNAPSHOT_FORMAT_VERSION,
-  unshielded: UnshieldedSerialization.SNAPSHOT_FORMAT_VERSION,
-  dust: DustSerialization.SNAPSHOT_FORMAT_VERSION,
-  'tx-history': TransactionHistoryFormat.CURRENT_FORMAT_VERSION,
-  'pending-transactions': 'v1',
+export const currentVersionOf: Record<Writer, Record<Surface, string>> = {
+  v1: {
+    shielded: ShieldedV1Serialization.SNAPSHOT_FORMAT_VERSION,
+    unshielded: UnshieldedV1Serialization.SNAPSHOT_FORMAT_VERSION,
+    dust: DustV1Serialization.SNAPSHOT_FORMAT_VERSION,
+    'tx-history': TransactionHistoryFormat.CURRENT_FORMAT_VERSION,
+    'pending-transactions': 'v1',
+  },
+  v2: {
+    shielded: ShieldedV2Serialization.SNAPSHOT_FORMAT_VERSION,
+    unshielded: UnshieldedV2Serialization.SNAPSHOT_FORMAT_VERSION,
+    dust: DustV2Serialization.SNAPSHOT_FORMAT_VERSION,
+    'tx-history': TransactionHistoryFormat.CURRENT_FORMAT_VERSION,
+    'pending-transactions': 'v1',
+  },
 };
 
 /**
@@ -125,15 +150,21 @@ export const fixturesFor = (surface: Surface): readonly Fixture[] =>
   );
 
 /**
- * The drift baseline file names for a surface — one per variant, so a surface with several shapes keeps them all.
+ * The drift baseline file names for a writer and surface — one per fixture variant, so a surface with several shapes
+ * keeps them all.
  *
+ * @param writer - The variant whose output the baseline records.
  * @param surface - The persisted surface.
- * @returns The baseline filenames, e.g. `['shielded-deep.json', 'shielded.json']`.
+ * @returns The baseline filenames, e.g. `['shielded-deep.json', 'shielded.json']`; empty when none was captured.
  */
-export const baselineFilesFor = (surface: Surface): readonly string[] =>
-  readdirSync(join(FIXTURES_DIR, BASELINE_DIR))
-    .filter((file) => file === `${surface}.json` || file.startsWith(`${surface}-`))
-    .sort();
+export const baselineFilesFor = (writer: Writer, surface: Surface): readonly string[] => {
+  const dir = join(FIXTURES_DIR, BASELINE_DIR, writer);
+  return existsSync(dir)
+    ? readdirSync(dir)
+        .filter((file) => file === `${surface}.json` || file.startsWith(`${surface}-`))
+        .sort()
+    : [];
+};
 
 /**
  * The format version a payload is in, read from the payload itself.
@@ -166,14 +197,18 @@ export const declaredVersionOf = (serialized: string): string => {
  * It is not a compatibility fixture and carries no promise — it exists so that a change to what this build _writes_
  * cannot pass unnoticed.
  *
+ * @param writer - The variant whose output the baseline records.
  * @param file - The baseline filename, from {@link baselineFilesFor}.
  * @returns The baseline payload and the format version it declares.
  * @throws When the baseline is missing, which means it was never captured.
  */
-export const baseline = (file: string): { readonly serialized: string; readonly formatVersion: string } => {
-  const path = join(FIXTURES_DIR, BASELINE_DIR, file);
+export const baseline = (
+  writer: Writer,
+  file: string,
+): { readonly serialized: string; readonly formatVersion: string } => {
+  const path = join(FIXTURES_DIR, BASELINE_DIR, writer, file);
   if (!existsSync(path)) {
-    throw new Error(`no drift baseline '${file}'. Capture one with: yarn capture`);
+    throw new Error(`no drift baseline '${writer}/${file}'. Capture one with: yarn capture`);
   }
   const raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
   const serialized = raw['serialized'] as string;

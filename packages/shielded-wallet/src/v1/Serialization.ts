@@ -63,15 +63,10 @@ const StateFromUInt8Array = (): Schema.Schema<ledger.ZswapLocalState, Uint8Array
 const HexedState = (): Schema.Schema<ledger.ZswapLocalState, string> =>
   pipe(Schema.Uint8ArrayFromHex, Schema.compose(StateFromUInt8Array()));
 
-/**
- * The format version this build writes into a shielded snapshot. It versions the encoded shape of the snapshot and is
- * not `protocolVersion`, which is the chain's hard-fork number and lives inside it.
- *
- * Snapshots written before this field existed carry the same fields under a different name for the same shape, so a
- * missing `version` reads as this one and no upgrade runs. The field earns its keep on the day the shape does change:
- * that shape becomes `v2` and a single v1-to-v2 step is written, rather than every reader having to guess.
- */
-export const SNAPSHOT_FORMAT_VERSION = 'v1';
+// The format version lives beside the twins, not in either of them, so the V2 variant can read it without loading
+// ledger-v8. Re-exported here because the version is part of this variant's serialization surface.
+export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 
 /**
  * The `version` field of a shielded snapshot. A reader never downgrades: meeting a version it does not know, it refuses

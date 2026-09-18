@@ -10,8 +10,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { SURFACES, currentVersionOf, declaredVersionOf, fixturesFor, type Fixture } from './fixtures.js';
+import {
+  SURFACES,
+  WRITERS,
+  currentVersionOf,
+  declaredVersionOf,
+  fixturesFor,
+  type Fixture,
+  type Surface,
+  type Writer,
+} from './fixtures.js';
 import { rewriteWithCurrentCode } from './rewrite.js';
 
 /**
@@ -73,32 +83,61 @@ const contentOf = (payload: unknown): unknown => {
  * allowed — it is a breaking change, which means a new format version, and the new version's fixtures anchor this check
  * afresh.
  */
+/** A snapshot's fields as read off the JSON, for the content checks that key paths alone cannot make. */
+const SnapshotFields = Schema.Struct({
+  publicKey: Schema.optional(Schema.Struct({ publicKey: Schema.Unknown, address: Schema.optional(Schema.String) })),
+  txHistory: Schema.optional(Schema.Array(Schema.String)),
+});
+const fieldsOf = Schema.decodeUnknownSync(SnapshotFields, { onExcessProperty: 'ignore' });
+
 describe('reading a stored payload and writing it back keeps everything it carried', () => {
-  const cases = SURFACES.flatMap((surface) => fixturesFor(surface).map((fixture) => ({ surface, fixture })));
+  const cases = WRITERS.flatMap((writer) =>
+    SURFACES.flatMap((surface) =>
+      fixturesFor(surface).map((fixture) => ({ writer, surface, fixture, id: `${writer} ← ${fixture.id}` })),
+    ),
+  );
 
   it('should have fixtures to check', () => {
     expect(cases.length).toBeGreaterThan(0);
   });
 
-  // One rewrite per fixture, checked twice: rewriting is the expensive part, and both questions are about the same
-  // written-back payload.
-  it.each(cases.map(({ surface, fixture }) => ({ surface, fixture, id: fixture.id })))(
+  // One rewrite per writer and fixture, checked several times over: rewriting is the expensive part, and every question
+  // is about the same written-back payload. Both writers read every frozen fixture, because a build that registers only
+  // the V2 variant still has to open what a V1 wallet stored.
+  it.each(cases)(
     '$id',
-    async ({ surface, fixture }: { surface: (typeof SURFACES)[number]; fixture: Fixture }) => {
-      const rewritten = await rewriteWithCurrentCode(surface, fixture.serialized);
+    async ({ writer, surface, fixture }: { writer: Writer; surface: Surface; fixture: Fixture }) => {
+      const rewritten = await rewriteWithCurrentCode(writer, surface, fixture.serialized);
+      const stored: unknown = JSON.parse(fixture.serialized);
+      const written: unknown = JSON.parse(rewritten);
 
-      const before = uniqueSorted(keyPaths(contentOf(JSON.parse(fixture.serialized))));
-      const after = uniqueSorted(keyPaths(contentOf(JSON.parse(rewritten))));
+      const before = uniqueSorted(keyPaths(contentOf(stored)));
+      const after = uniqueSorted(keyPaths(contentOf(written)));
 
       const lost = before.filter((path) => !after.includes(path));
 
       expect({ id: fixture.id, lost }).toEqual({ id: fixture.id, lost: [] });
 
       // A payload that arrives at one version and leaves at another has been upgraded, which is the intended
-      // behaviour — but it must leave at exactly the version this surface's code declares it writes. Matching the
+      // behaviour — but it must leave at exactly the version this writer's code declares it writes. Matching the
       // shape `/^v\d+$/` would not hold this: `declaredVersionOf` reports `v1` for a payload carrying no envelope at
       // all, so a writer that stopped emitting one would still have satisfied it.
-      expect(declaredVersionOf(rewritten)).toBe(currentVersionOf[surface]);
+      expect(declaredVersionOf(rewritten)).toBe(currentVersionOf[writer][surface]);
+
+      // Key paths say a field is still there; these say it still holds what it held. The embedded shielded history is
+      // the field that was once lost this way, so its presence is checked in both directions — carried when the fixture
+      // had one, and not invented when it did not. An unshielded key that was a bare string must come back as the same
+      // string inside its tag, at the same address: an upgrade step that re-derived or defaulted either would pass the
+      // path check and still have lost the identity.
+      if (surface === 'shielded') {
+        expect(fieldsOf(written).txHistory).toEqual(fieldsOf(stored).txHistory);
+      }
+      if (surface === 'unshielded') {
+        // The V1 writer keeps the bare string and the V2 writer tags it; read both through the tag so one assertion holds.
+        const tagged = (key: unknown): unknown => (typeof key === 'string' ? { tag: 'schnorr', value: key } : key);
+        expect(tagged(fieldsOf(written).publicKey?.publicKey)).toEqual(tagged(fieldsOf(stored).publicKey?.publicKey));
+        expect(fieldsOf(written).publicKey?.address).toEqual(fieldsOf(stored).publicKey?.address);
+      }
     },
   );
 });

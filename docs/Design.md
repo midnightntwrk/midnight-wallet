@@ -400,8 +400,9 @@ not a format version and cannot serve as one.
 a time and never skip, so each step only has to know the version immediately before it. Distinct from **variant
 migration**, the runtime's existing term for moving live wallet state across a hard fork (`migrateToNextVariant`).
 
-**Drift baseline** — a recording of what the current build writes, kept under `fixtures/_baseline/`. It carries no
-compatibility promise; it exists so that a change to what we _write_ cannot pass unnoticed.
+**Drift baseline** — a recording of what the current build writes, kept under `fixtures/_baseline/<writer>/`, one folder
+per wallet variant because both variants write the snapshot surfaces. It carries no compatibility promise; it exists so
+that a change to what we _write_ cannot pass unnoticed.
 
 **Compatibility promise** — every format version shipped in a stable release loads in every later stable release. There
 is no downgrade: a reader meeting a version it does not know refuses the payload and names the version it found. A

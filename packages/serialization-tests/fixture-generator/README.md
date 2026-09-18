@@ -63,3 +63,6 @@ alias per package to `package.json` (and a ledger `override` if the train pins o
 | `generate.mjs`    | Per-surface generators, the `TRAINS` table, the `ONLY` filter, self-checks.             |
 | `chainDriver.mjs` | Event replay through a train's own ledger, so snapshots hold what a synced wallet held. |
 | `probe.mjs`       | Dev helper that dumps each train's API surface. Not needed once fixtures exist.         |
+
+This generator is what ADR 0008 (`docs/decisions/0008-persisted-format-versioning.md`) means by "captured from a
+published release"; the frozen corpus under `../fixtures/` is its output.

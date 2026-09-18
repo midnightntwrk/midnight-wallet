@@ -14,7 +14,7 @@
 // What an unshielded snapshot carries besides its key.
 //
 // The serialization tests next door are about identity: which key encodings are accepted, that an address must derive
-// from its key, that a legacy bare-string key reads as schnorr. Their fixture already holds a UTXO on each side of the
+// from its key, that a `v1` bare-string key is upgraded to a schnorr-tagged one. Their fixture already holds a UTXO on each side of the
 // available/pending split — but nothing asserts that either survives the round trip, so the money the snapshot exists
 // to carry is the one thing not checked.
 //

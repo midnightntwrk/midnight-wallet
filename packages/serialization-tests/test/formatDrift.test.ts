@@ -10,11 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BASELINE_DIR, SURFACES, baseline, baselineFilesFor } from './fixtures.js';
+import { BASELINE_DIR, SURFACES, WRITERS, baseline, baselineFilesFor, type Writer } from './fixtures.js';
 import { rewriteWithCurrentCode, sourceForBaseline } from './rewrite.js';
 
 const FIXTURES_DIR = fileURLToPath(new URL('../fixtures', import.meta.url));
@@ -22,8 +22,24 @@ const FIXTURES_DIR = fileURLToPath(new URL('../fixtures', import.meta.url));
 /** Capture mode rewrites the baselines instead of asserting against them. See the package README. */
 const CAPTURING = process.env['CAPTURE_BASELINE'] === '1';
 
-const cases = SURFACES.flatMap((surface) =>
-  baselineFilesFor(surface).map((file) => ({ surface, file, name: file.replace(/\.json$/, '') })),
+/**
+ * One case per writer and baseline file. A writer with no baselines yet is given the other writer's file names, so the
+ * first capture for it has something to record; after that its own folder is the list.
+ */
+const baselineNamesFor = (writer: Writer, surface: (typeof SURFACES)[number]): readonly string[] => {
+  const own = baselineFilesFor(writer, surface);
+  return own.length > 0 ? own : WRITERS.flatMap((other) => baselineFilesFor(other, surface));
+};
+
+const cases = WRITERS.flatMap((writer) =>
+  SURFACES.flatMap((surface) =>
+    baselineNamesFor(writer, surface).map((file) => ({
+      writer,
+      surface,
+      file,
+      name: `${writer}/${file.replace(/\.json$/, '')}`,
+    })),
+  ),
 );
 
 /**
@@ -44,21 +60,27 @@ const cases = SURFACES.flatMap((surface) =>
  * produced by one code path and cannot drift apart.
  */
 describe('what the current code writes, against the recorded baseline', () => {
-  it.each(cases)('should still write $name exactly as the baseline records it', async ({ surface, file }) => {
+  it.each(cases)('should still write $name exactly as the baseline records it', async ({ writer, surface, file }) => {
     const source = sourceForBaseline(surface, file);
 
-    const rewritten = await rewriteWithCurrentCode(surface, source.serialized);
+    const rewritten = await rewriteWithCurrentCode(writer, surface, source.serialized);
 
     if (CAPTURING) {
-      const path = join(FIXTURES_DIR, BASELINE_DIR, file);
-      const existing = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+      const dir = join(FIXTURES_DIR, BASELINE_DIR, writer);
+      const path = join(dir, file);
+      // A baseline never captured before starts from the source fixture's own record of what it holds, so the file
+      // says where its payload came from the same way an older one does.
+      const existing = existsSync(path)
+        ? (JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>)
+        : { name: source.writtenBy.name, version: source.writtenBy.version, expected: source.expected };
+      mkdirSync(dir, { recursive: true });
       writeFileSync(
         path,
-        `${JSON.stringify({ ...existing, capturedFrom: source.id, serialized: rewritten }, null, 2)}\n`,
+        `${JSON.stringify({ ...existing, writer, capturedFrom: source.id, serialized: rewritten }, null, 2)}\n`,
       );
       return;
     }
 
-    expect(JSON.parse(rewritten)).toEqual(JSON.parse(baseline(file).serialized));
+    expect(JSON.parse(rewritten)).toEqual(JSON.parse(baseline(writer, file).serialized));
   });
 });

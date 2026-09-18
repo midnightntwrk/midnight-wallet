@@ -259,3 +259,120 @@ describe('V2 Wallet serialization', () => {
     );
   });
 });
+
+describe('V2 shielded snapshot format version', () => {
+  const capability = makeDefaultV2SerializationCapability();
+  const keys = ledger.ZswapSecretKeys.fromSeed(
+    Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
+  );
+  const emptyWallet = () => CoreWallet.initEmpty(keys, NetworkId.NetworkId.Undeployed);
+
+  /** A snapshot as written before the format version existed: today's fields, with no `version` among them. */
+  const withoutVersion = (serialized: string): string => {
+    const { version: _version, ...rest } = JSON.parse(serialized) as Record<string, unknown>;
+    return JSON.stringify(rest);
+  };
+
+  it('should stamp the current format version into every snapshot it writes', () => {
+    const written: unknown = JSON.parse(capability.serialize(emptyWallet()));
+
+    expect(written).toMatchObject({ version: 'v1' });
+  });
+
+  it('should read a snapshot that carries no version as the first format', () => {
+    const restored = capability.deserialize(null, withoutVersion(capability.serialize(emptyWallet())));
+
+    expect(Either.isRight(restored)).toBe(true);
+  });
+
+  it('should refuse a snapshot whose version this build does not know', () => {
+    const fromANewerSdk = JSON.stringify({
+      ...(JSON.parse(capability.serialize(emptyWallet())) as Record<string, unknown>),
+      version: 'v2',
+    });
+
+    const restored = capability.deserialize(null, fromANewerSdk);
+
+    expect(Either.isLeft(restored)).toBe(true);
+  });
+
+  it('should name the surface and the version it found when it refuses a snapshot', () => {
+    const fromANewerSdk = JSON.stringify({
+      ...(JSON.parse(capability.serialize(emptyWallet())) as Record<string, unknown>),
+      version: 'v2',
+    });
+
+    const restored = capability.deserialize(null, fromANewerSdk);
+    const failure = Either.isLeft(restored) ? restored.left.message : 'the snapshot was restored';
+
+    expect(failure).toContain(
+      'Refusing a shielded snapshot written in format version "v2": this build reads v1 and does not downgrade.',
+    );
+  });
+});
+
+describe('V2 shielded snapshot carrying an embedded transaction history', () => {
+  const capability = makeDefaultV2SerializationCapability();
+  const keys = ledger.ZswapSecretKeys.fromSeed(
+    Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
+  );
+  const emptyWallet = () => CoreWallet.initEmpty(keys, NetworkId.NetworkId.Undeployed);
+
+  /**
+   * The shielded snapshot written by 1.0.0 embedded the transaction history as `txHistory`, a list of hex-encoded
+   * proven ledger transactions. That field reaches this variant two ways: a wallet restored from such a snapshot below
+   * `forks.v9` carries it across the boundary, and a wallet that already crossed writes it into every snapshot after.
+   * Either way the field must come back out exactly as it went in, because nothing here can rebuild it.
+   */
+  const withEmbeddedHistory = (serialized: string, txHistory: readonly string[]): string => {
+    const { version: _version, ...rest } = JSON.parse(serialized) as Record<string, unknown>;
+    return JSON.stringify({ ...rest, txHistory });
+  };
+
+  const embedded = ['00aa11bb22cc', '33dd44ee55ff'];
+
+  it('should write the embedded history back out exactly as it was read', () => {
+    const restored = pipe(
+      capability.deserialize(null, withEmbeddedHistory(capability.serialize(emptyWallet()), embedded)),
+      EitherOps.getOrThrowLeft,
+    );
+
+    const rewritten: unknown = JSON.parse(capability.serialize(restored));
+
+    expect(rewritten).toMatchObject({ txHistory: embedded });
+  });
+
+  it('should keep the embedded history on a snapshot taken mid-crossing', () => {
+    // The mid-crossing shape takes the other restore path (`restoreWithPendingCoinHashes`); the history must survive
+    // that one too, or a wallet snapshotted between the migration and its first sync update loses it.
+    const midCrossing = CoreWallet.fromPreviousVersion({
+      state: new ledger.ZswapLocalState(),
+      publicKeys: { coinPublicKey: keys.coinPublicKey, encryptionPublicKey: keys.encryptionPublicKey },
+      networkId: NetworkId.NetworkId.Undeployed,
+      protocolVersion: 7n,
+      progress: {
+        appliedIndex: 1n,
+        highestRelevantWalletIndex: 1n,
+        highestIndex: 1n,
+        highestRelevantIndex: 1n,
+        isConnected: false,
+      },
+    });
+
+    const restored = pipe(
+      capability.deserialize(null, withEmbeddedHistory(capability.serialize(midCrossing), embedded)),
+      EitherOps.getOrThrowLeft,
+    );
+
+    expect(restored.coinHashesPending).toBe(true);
+    expect(JSON.parse(capability.serialize(restored))).toMatchObject({ txHistory: embedded });
+  });
+
+  it('should not invent the field for a snapshot that never carried one', () => {
+    const restored = pipe(capability.deserialize(null, capability.serialize(emptyWallet())), EitherOps.getOrThrowLeft);
+
+    const rewritten = JSON.parse(capability.serialize(restored)) as Record<string, unknown>;
+
+    expect('txHistory' in rewritten).toBe(false);
+  });
+});

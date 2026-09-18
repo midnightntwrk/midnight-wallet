@@ -12,17 +12,20 @@
 // limitations under the License.
 import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
-import { Serialization as DustSerialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { Serialization as DustV1Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { Serialization as DustV2Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
   DefaultForkSchedule,
   WalletEntrySchema,
   finalizedTransactionTraits,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
-import { Serialization as ShieldedSerialization } from '@midnightntwrk/wallet-sdk-shielded/v1';
-import { Serialization as UnshieldedSerialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { Serialization as ShieldedV1Serialization } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { Serialization as ShieldedV2Serialization } from '@midnightntwrk/wallet-sdk-shielded/v2';
+import { Serialization as UnshieldedV1Serialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { Serialization as UnshieldedV2Serialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { fixturesFor, type Fixture, type Surface } from './fixtures.js';
+import { fixturesFor, type Fixture, type Surface, type Writer } from './fixtures.js';
 
 /**
  * The registry the wallet itself reads pending transactions with, built from the fork schedule the facade presets, so a
@@ -30,20 +33,10 @@ import { fixturesFor, type Fixture, type Surface } from './fixtures.js';
  */
 const pendingTxTraits = finalizedTransactionTraits(DefaultForkSchedule.v9);
 
-const shielded = ShieldedSerialization.makeDefaultV1SerializationCapability();
-const unshielded = UnshieldedSerialization.makeDefaultV1SerializationCapability();
-const dust = DustSerialization.makeDefaultV1SerializationCapability();
+type Rewriter = (serialized: string) => Promise<string> | string;
 
-/**
- * Restore a stored payload with the current code and write it straight back out, per surface.
- *
- * Used by the drift test to compare against the recorded baseline, and by the same test in capture mode to record a new
- * one. One implementation for both, so the thing being recorded and the thing being checked can never diverge.
- */
-const rewriters: Record<Surface, (serialized: string) => Promise<string> | string> = {
-  shielded: (s) => shielded.serialize(EitherOps.getOrThrowLeft(shielded.deserialize(null, s))),
-  unshielded: (s) => unshielded.serialize(EitherOps.getOrThrowLeft(unshielded.deserialize(s))),
-  dust: (s) => dust.serialize(EitherOps.getOrThrowLeft(dust.deserialize(null, s))),
+/** The surfaces with one writer outside the twins, rewritten the same way whichever variant a case is filed under. */
+const singleWriterRewriters: Pick<Record<Surface, Rewriter>, 'tx-history' | 'pending-transactions'> = {
   'tx-history': (s) =>
     EitherOps.getOrThrowLeft(
       InMemoryTransactionHistoryStorage.restore(s, WalletEntrySchema, mergeWalletEntries),
@@ -55,15 +48,49 @@ const rewriters: Record<Surface, (serialized: string) => Promise<string> | strin
     ),
 };
 
+const shieldedV1 = ShieldedV1Serialization.makeDefaultV1SerializationCapability();
+const shieldedV2 = ShieldedV2Serialization.makeDefaultV2SerializationCapability();
+const unshieldedV1 = UnshieldedV1Serialization.makeDefaultV1SerializationCapability();
+const unshieldedV2 = UnshieldedV2Serialization.makeDefaultV2SerializationCapability();
+const dustV1 = DustV1Serialization.makeDefaultV1SerializationCapability();
+const dustV2 = DustV2Serialization.makeDefaultV2SerializationCapability();
+
+/**
+ * Restore a stored payload with the current code and write it straight back out, per writer and surface.
+ *
+ * Used by the drift test to compare against the recorded baseline, and by the same test in capture mode to record a new
+ * one. One implementation for both, so the thing being recorded and the thing being checked can never diverge. Both
+ * variants are here because both are writers of these surfaces: what the V2 variant writes from `forks.v9` is as much a
+ * persisted format as what the V1 variant writes below it.
+ */
+const rewriters: Record<Writer, Record<Surface, Rewriter>> = {
+  v1: {
+    shielded: (s) => shieldedV1.serialize(EitherOps.getOrThrowLeft(shieldedV1.deserialize(null, s))),
+    unshielded: (s) => unshieldedV1.serialize(EitherOps.getOrThrowLeft(unshieldedV1.deserialize(s))),
+    dust: (s) => dustV1.serialize(EitherOps.getOrThrowLeft(dustV1.deserialize(null, s))),
+    ...singleWriterRewriters,
+  },
+  v2: {
+    shielded: (s) => shieldedV2.serialize(EitherOps.getOrThrowLeft(shieldedV2.deserialize(null, s))),
+    unshielded: (s) => unshieldedV2.serialize(EitherOps.getOrThrowLeft(unshieldedV2.deserialize(s))),
+    dust: (s) => dustV2.serialize(EitherOps.getOrThrowLeft(dustV2.deserialize(null, s))),
+    ...singleWriterRewriters,
+  },
+};
+
 /**
  * Restore a payload with the current code and serialize it again.
  *
+ * @param writer - The variant doing the reading and writing.
  * @param surface - The persisted surface the payload belongs to.
  * @param serialized - The stored payload.
- * @returns What the current code writes for that payload.
+ * @returns What that writer writes for that payload.
  */
-export const rewriteWithCurrentCode = (surface: Surface, serialized: string): Promise<string> | string =>
-  rewriters[surface](serialized);
+export const rewriteWithCurrentCode = (
+  writer: Writer,
+  surface: Surface,
+  serialized: string,
+): Promise<string> | string => rewriters[writer][surface](serialized);
 
 /** A fixture origin is `facade-<version>` with an optional `-<variant>` suffix, e.g. `facade-4.1.0-deep`. */
 const parseOrigin = (origin: string): { readonly version: readonly number[]; readonly variant: string } => {
