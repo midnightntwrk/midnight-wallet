@@ -2362,9 +2362,9 @@ __metadata:
   linkType: soft
 
 "@midnightntwrk/ledger-v9@npm:^1.0.0-rc.2":
-  version: 1.0.0-rc.3
-  resolution: "@midnightntwrk/ledger-v9@npm:1.0.0-rc.3"
-  checksum: 10c0/6fb6a2afa8d058994dc75f7165755106e7e70d2887806af669b0bf1b31e2b197f1d004651b8fba9811cb80d44523f3ce76f6bbb318fde9adf5a13dd244de3106
+  version: 1.0.0-rc.5
+  resolution: "@midnightntwrk/ledger-v9@npm:1.0.0-rc.5"
+  checksum: 10c0/891d8ab048261ef7534fb1566dd19d88012ddaa401c7b441e0653a537b24fbb33e29ef5794b90684f264fbcb422825df583c356cd8170cd463a5b52a5e77bb80
   languageName: node
   linkType: hard
 
