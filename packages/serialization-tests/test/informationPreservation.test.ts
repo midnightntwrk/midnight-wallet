@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import {
   SURFACES,
   WRITERS,
+  isHandedTo,
   currentVersionOf,
   declaredVersionOf,
   fixturesFor,
@@ -93,7 +94,9 @@ const fieldsOf = Schema.decodeUnknownSync(SnapshotFields, { onExcessProperty: 'i
 describe('reading a stored payload and writing it back keeps everything it carried', () => {
   const cases = WRITERS.flatMap((writer) =>
     SURFACES.flatMap((surface) =>
-      fixturesFor(surface).map((fixture) => ({ writer, surface, fixture, id: `${writer} ← ${fixture.id}` })),
+      fixturesFor(surface)
+        .filter((fixture) => isHandedTo(writer, surface, fixture.serialized))
+        .map((fixture) => ({ writer, surface, fixture, id: `${writer} ← ${fixture.id}` })),
     ),
   );
 
@@ -102,8 +105,10 @@ describe('reading a stored payload and writing it back keeps everything it carri
   });
 
   // One rewrite per writer and fixture, checked several times over: rewriting is the expensive part, and every question
-  // is about the same written-back payload. Both writers read every frozen fixture, because a build that registers only
-  // the V2 variant still has to open what a V1 wallet stored.
+  // is about the same written-back payload. The V2 reader takes every frozen fixture, because a build that registers
+  // only the V2 variant still has to open what a V1 wallet stored; the V1 reader takes the ones routing would hand it,
+  // which `isHandedTo` decides. Running the V1 reader over a payload written past the fork would hold it to a shape it
+  // is never given — see that function for why the distinction only starts to matter once a v9 fixture is captured.
   it.each(cases)(
     '$id',
     async ({ writer, surface, fixture }: { writer: Writer; surface: Surface; fixture: Fixture }) => {

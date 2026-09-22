@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, expect, it } from 'vitest';
-import { SURFACES, WRITERS, fixturesFor, type Fixture, type Surface, type Writer } from './fixtures.js';
+import { SURFACES, WRITERS, fixturesFor, isHandedTo, type Fixture, type Surface, type Writer } from './fixtures.js';
 import { rewriteWithCurrentCode } from './rewrite.js';
 
 /**
@@ -92,9 +92,13 @@ const changedPaths = (stored: unknown, written: unknown): readonly string[] => {
   return Object.keys(before).filter((path) => JSON.stringify(before[path]) !== JSON.stringify(after[path]));
 };
 
+// Paired the way routing pairs them: `isHandedTo` leaves out the V1 reader against a payload written past the fork,
+// a combination no build produces.
 const cases = WRITERS.flatMap((writer) =>
   SURFACES.flatMap((surface) =>
-    fixturesFor(surface).map((fixture) => ({ writer, surface, fixture, id: `${writer} ← ${fixture.id}` })),
+    fixturesFor(surface)
+      .filter((fixture) => isHandedTo(writer, surface, fixture.serialized))
+      .map((fixture) => ({ writer, surface, fixture, id: `${writer} ← ${fixture.id}` })),
   ),
 );
 

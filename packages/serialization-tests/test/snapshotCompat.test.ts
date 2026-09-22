@@ -18,7 +18,7 @@ import { Serialization as UnshieldedV1Serialization } from '@midnightntwrk/walle
 import { Serialization as UnshieldedV2Serialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { fixturesFor, type Fixture } from './fixtures.js';
+import { fixturesFor, isHandedTo, type Fixture, type Writer } from './fixtures.js';
 
 /** Restore a snapshot with the current code, reporting why it would not restore rather than a bare `undefined`. */
 const restore = <T>(fixture: Fixture, deserialize: (serialized: string) => Either.Either<T, unknown>): T => {
@@ -39,10 +39,12 @@ const restore = <T>(fixture: Fixture, deserialize: (serialized: string) => Eithe
  */
 const readerOf = <TWallet>(
   reader: string,
+  writer: Writer,
   deserialize: (serialized: string) => Either.Either<TWallet, unknown>,
   serialize: (wallet: TWallet) => string,
 ) => ({
   reader,
+  writer,
   restore: (fixture: Fixture): TWallet => restore(fixture, deserialize),
   /** The snapshot as this writer writes it back, and as it writes it a second time after reading its own output. */
   roundTrip: (fixture: Fixture): { readonly rewritten: string; readonly reread: string } => {
@@ -69,18 +71,24 @@ const shieldedV2 = ShieldedV2Serialization.makeDefaultV2SerializationCapability(
 const shieldedReaders = [
   readerOf(
     'V1',
+    'v1',
     (s) => shieldedV1.deserialize(null, s),
     (w) => shieldedV1.serialize(w),
   ),
   readerOf(
     'V2',
+    'v2',
     (s) => shieldedV2.deserialize(null, s),
     (w) => shieldedV2.serialize(w),
   ),
 ];
 
 describe.each(shieldedReaders)('shielded snapshots written by published releases, read by $reader', (reader) => {
-  const fixtures = fixturesFor('shielded');
+  // Only the payloads routing would hand this reader: see `isHandedTo`. Today that is all of them, because
+  // every frozen payload was written below the fork.
+  const fixtures = fixturesFor('shielded').filter((fixture) =>
+    isHandedTo(reader.writer, 'shielded', fixture.serialized),
+  );
 
   it('should have fixtures to restore', () => {
     expect(fixtures.length).toBeGreaterThan(0);
@@ -111,18 +119,24 @@ const unshieldedV2 = UnshieldedV2Serialization.makeDefaultV2SerializationCapabil
 const unshieldedReaders = [
   readerOf(
     'V1',
+    'v1',
     (s) => unshieldedV1.deserialize(s),
     (w) => unshieldedV1.serialize(w),
   ),
   readerOf(
     'V2',
+    'v2',
     (s) => unshieldedV2.deserialize(s),
     (w) => unshieldedV2.serialize(w),
   ),
 ];
 
 describe.each(unshieldedReaders)('unshielded snapshots written by published releases, read by $reader', (reader) => {
-  const fixtures = fixturesFor('unshielded');
+  // Only the payloads routing would hand this reader: see `isHandedTo`. Today that is all of them, because
+  // every frozen payload was written below the fork.
+  const fixtures = fixturesFor('unshielded').filter((fixture) =>
+    isHandedTo(reader.writer, 'unshielded', fixture.serialized),
+  );
 
   it('should have fixtures to restore', () => {
     expect(fixtures.length).toBeGreaterThan(0);
@@ -151,18 +165,22 @@ const dustV2 = DustV2Serialization.makeDefaultV2SerializationCapability();
 const dustReaders = [
   readerOf(
     'V1',
+    'v1',
     (s) => dustV1.deserialize(null, s),
     (w) => dustV1.serialize(w),
   ),
   readerOf(
     'V2',
+    'v2',
     (s) => dustV2.deserialize(null, s),
     (w) => dustV2.serialize(w),
   ),
 ];
 
 describe.each(dustReaders)('dust snapshots written by published releases, read by $reader', (reader) => {
-  const fixtures = fixturesFor('dust');
+  // Only the payloads routing would hand this reader: see `isHandedTo`. Today that is all of them, because
+  // every frozen payload was written below the fork.
+  const fixtures = fixturesFor('dust').filter((fixture) => isHandedTo(reader.writer, 'dust', fixture.serialized));
 
   it('should have fixtures to restore', () => {
     expect(fixtures.length).toBeGreaterThan(0);

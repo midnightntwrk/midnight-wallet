@@ -100,6 +100,11 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     // know, those snapshots restored without complaint and lost the history on the next write. Declaring it optional
     // carries it back out untouched. Optional, not defaulted: a snapshot written without it keeps its exact bytes.
     txHistory: Schema.optional(Schema.Array(Schema.String)),
+    // The V2 variant's mid-crossing marker. This variant is never in that state and never reads this, but the twins
+    // share one format version, so a V2-written snapshot is this schema's shape too — and a key this schema did not
+    // declare would be ignored on the way in and dropped on the way out, which is exactly how `txHistory` above was
+    // lost. Declared here so it is carried instead. See `CoreWallet.foreignCoinHashesPending`.
+    coinHashesPending: Schema.optional(Schema.Literal(true)),
   });
 
   type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
@@ -114,6 +119,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         offset: w.progress?.appliedIndex,
         coinHashes: w.coinHashes,
         txHistory: w.legacyTxHistory,
+        coinHashesPending: w.foreignCoinHashesPending,
       });
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
@@ -138,6 +144,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
             snapshot.protocolVersion,
             snapshot.networkId,
             snapshot.txHistory,
+            snapshot.coinHashesPending,
           ),
         ),
       );
