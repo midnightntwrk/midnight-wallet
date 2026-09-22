@@ -83,14 +83,15 @@ export const waitForDustBalance = (wallet: WalletFacade) =>
   );
 
 export const waitForFinalizedShieldedBalance = (wallet: ShieldedWalletAPI) =>
-  rx.firstValueFrom(
+  waitForStableState(
     wallet.state.pipe(
       rx.tap((state) => {
         const pending = state.pendingCoins.length;
         logger.info(`Wallet pending coins: ${pending}, waiting for pending coins cleared...`);
       }),
-      rx.filter((state) => state.pendingCoins.length === 0),
     ),
+    (state) => state.pendingCoins.length === 0,
+    'waitForFinalizedShieldedBalance',
   );
 
 export const waitForUnshieldedCoinUpdate = (wallet: WalletFacade, initialNumAvailableCoins: number) =>
