@@ -52,9 +52,10 @@ export interface TokenTransferScenarioDeps {
   /**
    * Selects the dust sync model. Defaults to the event-based wallet with background syncing.
    *
-   * Passing `projectionsDustSyncOptions` is NOT enough on its own: the projections sync is a one-shot snapshot, so the
-   * scenario body must also drive `facade.doSync(dustSecretKey)` at every point it currently relies on background
-   * convergence. These scenarios do not, so they stay on the event-based sync.
+   * `projectionsDustSyncOptions` switches background synchronization off as well, so a scenario body passing it must
+   * drive `facade.doSync(dustSecretKey)` at every point it currently relies on background convergence. These scenarios
+   * do not, so they stay on the event-based sync. For the projections sync with background synchronization left on,
+   * pass `{ dustWallet: eventLessDustWallet }` instead.
    */
   walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }
