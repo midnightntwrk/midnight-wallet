@@ -43,12 +43,14 @@ const DEFAULT_SETTLE_TIMEOUT_MS = 180_000;
  * `distinctUntilChanged` is load-bearing: without it, `switchMap` would cancel and restart the timer on every emission
  * and the timer would never elapse, reproducing the same starvation.
  *
- * The matching value is carried through the pipeline rather than re-read from `source` once the window elapses, because
- * `source` must only be subscribed once. The facade's `state()` replays its current value on subscribe, but a
- * sub-wallet's `state` does not: a second subscription there receives nothing until the next change, so on an
- * already-settled wallet it would never produce a value and the wait would hang. The state returned is therefore the
- * one from the moment the condition began to hold — callers that need the very latest should follow with their own
- * read.
+ * The value is carried through the pipeline rather than re-read from `source` once the window elapses, because `source`
+ * must only be subscribed once. The facade's `state()` replays its current value on subscribe, but a sub-wallet's
+ * `state` does not: a second subscription there receives nothing until the next change, so on an already-settled wallet
+ * it would never produce a value and the wait would hang. `shareReplay` is what reconciles that with returning the
+ * _latest_ matching value rather than the one from the moment the condition began to hold: it multicasts a single
+ * upstream subscription, so the window and the value read at the end of it come from the same one. Returning the
+ * opening value would defeat the point of the window — `pendingCoins.length === 0` is equally true either side of a
+ * balance arriving, so the waiter would hand back the stale pre-transaction state it exists to avoid.
  */
 export const waitForStableState = <T>(
   source: rx.Observable<T>,
@@ -56,12 +58,21 @@ export const waitForStableState = <T>(
   description: string,
   settleMs: number = DEFAULT_SETTLE_MS,
   timeoutMs: number = DEFAULT_SETTLE_TIMEOUT_MS,
-): Promise<T> =>
-  rx.firstValueFrom(
-    source.pipe(
-      rx.map((value) => ({ value, holds: predicate(value) })),
+): Promise<T> => {
+  const observed = source.pipe(
+    rx.map((value) => ({ value, holds: predicate(value) })),
+    rx.shareReplay({ bufferSize: 1, refCount: true }),
+  );
+
+  return rx.firstValueFrom(
+    observed.pipe(
       rx.distinctUntilChanged((a, b) => a.holds === b.holds),
-      rx.switchMap(({ value, holds }) => (holds ? rx.timer(settleMs).pipe(rx.map(() => value)) : rx.NEVER)),
+      rx.switchMap(({ holds }) => (holds ? rx.timer(settleMs) : rx.NEVER)),
+      // The window has elapsed, so take the newest value rather than the one that opened it. That value still satisfies
+      // the predicate: a value that did not would have been a `holds` transition, and `switchMap` would have cancelled
+      // this timer before it could fire.
+      rx.withLatestFrom(observed),
+      rx.map(([, latest]) => latest.value),
       rx.take(1),
       rx.timeout({
         first: timeoutMs,
@@ -75,6 +86,7 @@ export const waitForStableState = <T>(
       }),
     ),
   );
+};
 
 export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
   rx.firstValueFrom(
