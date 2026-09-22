@@ -39,6 +39,7 @@ import {
   makeDefaultSyncService,
   makeEventLessSyncCapability,
   makeIndexerSyncService,
+  nullifierPhaseAppliedIndex,
   nullifierPhaseProgress,
 } from '../Sync.js';
 import {
@@ -490,6 +491,32 @@ describe('V2 projections dust spend resolution', () => {
   });
 });
 
+describe('nullifierPhaseAppliedIndex', () => {
+  const basis = { commitmentWork: 7, creditedNullifierWork: 70 };
+
+  it('sums the generation, commitment and nullifier terms', () => {
+    expect(nullifierPhaseAppliedIndex(basis, 3, 500)).toBe(3 + 7 + 500);
+  });
+
+  it('never falls below the nullifier credit the opening report already gave', () => {
+    // The phase measures itself from zero, so its first readings are behind a wallet that arrived holding dust. The
+    // credit is the true statement there, and reporting the measurement would take progress backwards.
+    expect(nullifierPhaseAppliedIndex(basis, 3, 0)).toBe(3 + 7 + 70);
+    expect(nullifierPhaseAppliedIndex(basis, 3, 69)).toBe(3 + 7 + 70);
+  });
+
+  it('follows the phase measurement once it overtakes the credit', () => {
+    expect(nullifierPhaseAppliedIndex(basis, 3, 71)).toBe(3 + 7 + 71);
+  });
+
+  it('carries the commitment term a wallet arrived with, rather than dropping it', () => {
+    // The term this phase does not touch. Dropping it is what made an already-synced wallet report itself behind.
+    expect(nullifierPhaseAppliedIndex({ ...basis, commitmentWork: 0 }, 3, 500)).toBe(
+      nullifierPhaseAppliedIndex(basis, 3, 500) - 7,
+    );
+  });
+});
+
 describe('nullifierPhaseProgress', () => {
   it('counts settled nullifiers as a full commitment-space scan', () => {
     expect(nullifierPhaseProgress(0n, 5, 0, 100)).toBe(500);
@@ -653,15 +680,15 @@ describe('V2 projections cNight generation discovery', () => {
 
 describe('V2 projections progress monotonicity', () => {
   // Sync progress is reported as a single figure that advances as the sync proceeds; a progress figure that goes
-  // *backwards* is a defect regardless of the weighting chosen. This drives the real `doEventlessSync` (previously
-  // untested end-to-end) with a wallet that already holds a Dust UTxO — i.e. the restored case, which is the only
-  // shape where the two `appliedIndex` formulas disagree.
+  // *backwards* is a defect regardless of the weighting chosen. This drives the real `doEventlessSync` with a wallet
+  // that already holds a Dust UTxO — i.e. the restored case, which is the only shape where a report that drops a term
+  // is visible. A fresh wallet hides it, because its opening report is negative and everything exceeds it.
   //
-  //   report 1 = lastSyncedGenerationIndex + lastSyncedCommitmentIndex + nullifiers.size * maxCommitmentTreeIndex
-  //   report 2 = maxGeneratingTreeIndex
+  // Every report sums the same three terms, against a total on the same basis:
   //
-  // Report 2 drops both the commitment term and the nullifier term. A fresh wallet hides this (its report 1 is
-  // negative), which is why every existing test misses it.
+  //   generation work + commitment work + nullifier work
+  //
+  // What moves between reports is which of the three has reached its full width.
   const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
   const backingNight = 'ab'.repeat(32);
   // The local commitment tree is already filled to this height, and the block reports the same end index. That
@@ -713,12 +740,20 @@ describe('V2 projections progress monotonicity', () => {
     return CoreWallet.init(withCommitments.addUtxo(dustNullifier(own, secretKey), own), secretKey, networkId);
   };
 
+  /**
+   * A chain whose generation tree ends exactly where this wallet's does, so the wallet is already fully synced when the
+   * pass opens. Its commitment tree is filled to the block's end index either way, so every phase short-circuits and
+   * the pass has no work at all to do — which is the shape a background repeat re-runs every interval once a wallet has
+   * caught up.
+   */
+  const settledBlock: BlockData = { ...latestBlock, dustGenerationEndIndex: 0 };
+
   /** Runs one full projections sync against the stubs and returns every appliedIndex it reported, in order. */
-  const reportedAppliedIndexes = async (): Promise<number[]> => {
+  const reportedAppliedIndexes = async (block: BlockData = latestBlock): Promise<number[]> => {
     const state = restoredWallet();
 
     const indexerSyncService: IndexerSyncService = {
-      blockData: () => Effect.succeed(latestBlock),
+      blockData: () => Effect.succeed(block),
       // No new generations and no spends, so the sync walks straight through to the end.
       subscribeDustGenerations: () => Stream.empty,
       subscribeDustNullifierTransactions: () => Stream.empty,
@@ -759,23 +794,28 @@ describe('V2 projections progress monotonicity', () => {
     expect(await reportedAppliedIndexes()).toHaveLength(4);
   });
 
-  // KNOWN DEFECT, deliberately left failing. `.fails` inverts the expectation so runs stay green while the defect
-  // is outstanding, without weakening the assertion below.
-  //
-  // The four reports are computed on three different bases, and the first one over-counts: it credits the
-  // already-synced commitment tree, while the two that follow do not count the commitment tree at all. So the
-  // opening report can exceed a later one, and progress visibly jumps backwards. Note this cannot be repaired by
-  // adjusting the second report alone — report 1 already exceeds report 3 — so all four need a common basis.
-  //
-  // Fixing it makes this test *pass*, which makes `.fails` report a failure. That is the intended signal to delete
-  // `.fails` and keep it as an ordinary regression guard.
-  it.fails('never reports an appliedIndex lower than one it already reported', async () => {
+  // The reports were once computed on three different bases, and the opening one over-counted relative to the rest:
+  // it credited the already-synced commitment tree, while the two that followed did not count it at all. So the
+  // opening report could exceed a later one and progress visibly jumped backwards. It could not be repaired by
+  // adjusting one report — report 1 already exceeded report 3 — so all of them were put on a common basis.
+  it('never reports an appliedIndex lower than one it already reported', async () => {
     const appliedIndexes = await reportedAppliedIndexes();
 
     const regressions = appliedIndexes.flatMap((value, i) =>
       i > 0 && value < appliedIndexes[i - 1] ? [{ step: i, from: appliedIndexes[i - 1], to: value }] : [],
     );
     expect(regressions).toEqual([]);
+  });
+
+  it('holds a fully-synced wallet at complete for the whole pass', async () => {
+    // Background synchronization re-runs this pass every `backgroundSyncInterval`, so a wallet that has caught up
+    // runs it with nothing to do, over and over. `isSynced` is exact equality between the applied and relevant
+    // indexes, so a single report that undercounts takes the whole facade to "not synced" until the pass ends —
+    // every interval, for the life of the wallet, rather than once at start.
+    const appliedIndexes = await reportedAppliedIndexes(settledBlock);
+
+    expect(appliedIndexes).toHaveLength(4);
+    expect(appliedIndexes.filter((value) => value !== appliedIndexes[0])).toEqual([]);
   });
 });
 
