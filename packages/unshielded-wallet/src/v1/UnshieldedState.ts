@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Data, Either, HashMap, Option, pipe } from 'effect';
+import { Array as EArray, Data, Either, HashMap, Option, pipe } from 'effect';
 import { ApplyTransactionError, UtxoNotFoundError } from './WalletError.js';
 
 export interface UtxoMeta {
@@ -40,6 +40,25 @@ export interface UnshieldedState {
 }
 
 const UtxoHash = (utxo: ledger.Utxo): UtxoHash => `${utxo.intentHash}#${utxo.outputNo}`;
+
+/**
+ * The first UTXO an update reports as spent that this state holds in neither map.
+ *
+ * @remarks
+ *   A spend naming a UTXO the wallet has never held is not noise to absorb: it is the only observable sign that the
+ *   source delivered a spend ahead of the create it consumes. Absorbed, the create arrives afterwards and puts an
+ *   already-spent UTXO into the available set, where it will be offered for coin selection and produce a transaction
+ *   the chain rejects. Reported, the fold fails before the caller's cursor moves, and the retry re-fetches the pair in
+ *   order.
+ * @param state The state the update is being folded into.
+ * @param spentUtxos The UTXOs the update reports as spent.
+ * @returns The first entry the state does not know, or `Option.none()` when every spend names a UTXO it holds.
+ */
+const firstUnknownSpend = (state: UnshieldedState, spentUtxos: readonly UtxoWithMeta[]): Option.Option<UtxoWithMeta> =>
+  EArray.findFirst(spentUtxos, (spent) => {
+    const hash = UtxoHash(spent.utxo);
+    return !HashMap.has(state.availableUtxos, hash) && !HashMap.has(state.pendingUtxos, hash);
+  });
 
 export const UnshieldedState = {
   empty: (): UnshieldedState => ({
@@ -98,10 +117,15 @@ export const UnshieldedState = {
   applyUpdate: (
     state: UnshieldedState,
     update: UnshieldedUpdate,
-  ): Either.Either<UnshieldedState, ApplyTransactionError> =>
+  ): Either.Either<UnshieldedState, ApplyTransactionError | UtxoNotFoundError> =>
     Either.gen(function* () {
       if (!['SUCCESS', 'PARTIAL_SUCCESS'].includes(update.status)) {
         return yield* Either.left(new ApplyTransactionError({ message: `Invalid status: ${update.status}` }));
+      }
+
+      const unknownSpend = firstUnknownSpend(state, update.spentUtxos);
+      if (Option.isSome(unknownSpend)) {
+        return yield* Either.left(new UtxoNotFoundError({ utxo: unknownSpend.value.utxo }));
       }
 
       return {
@@ -122,10 +146,15 @@ export const UnshieldedState = {
   applyFailedUpdate: (
     state: UnshieldedState,
     update: UnshieldedUpdate,
-  ): Either.Either<UnshieldedState, ApplyTransactionError> =>
+  ): Either.Either<UnshieldedState, ApplyTransactionError | UtxoNotFoundError> =>
     Either.gen(function* () {
       if (update.status !== 'FAILURE') {
         return yield* Either.left(new ApplyTransactionError({ message: `Invalid status: ${update.status}` }));
+      }
+
+      const unknownSpend = firstUnknownSpend(state, update.spentUtxos);
+      if (Option.isSome(unknownSpend)) {
+        return yield* Either.left(new UtxoNotFoundError({ utxo: unknownSpend.value.utxo }));
       }
 
       return {

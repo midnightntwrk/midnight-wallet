@@ -337,7 +337,8 @@ export class TransactingCapabilityImplementation<
                   feeTokenType: '',
                   coinSelection,
                   createOutput: (coin) => ledger.createShieldedCoinInfo(coin.type, coin.value),
-                  isCoinEqual: (a, b) => a.type === b.type && a.value === b.value,
+                  // Distinct coins can share a type and a value; only the nonce tells them apart.
+                  isCoinEqual: (a, b) => a.nonce === b.nonce,
                 });
                 return this.#prepareOffer(secretKeys, newState, fallibleBalanceRecipe, segment);
               },

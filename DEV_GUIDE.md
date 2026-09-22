@@ -139,6 +139,34 @@ Execute these steps **in order** when the v2 line is ready to replace 1.x as the
 5. **Sanity-check dist-tags** on the registry afterwards: `latest` → 2.x, `v1` → last 1.x, and the `beta` tag points at
    the final pre-release (it is not moved automatically).
 
+## Known Install Warnings
+
+`yarn install` currently ends with `Done with warnings` because of one unresolved peer range. It is expected, and it is
+not a sign of a broken install:
+
+```
+YN0060: graphql is listed by your project with version 17.0.2, which doesn't satisfy
+        what graphql-config (via @graphql-codegen/cli) and other dependencies request
+        (^15.10.1 || ^16.0.0).
+```
+
+`packages/indexer-client` runs **graphql 17** deliberately. The narrow range comes from `graphql-config`, pulled in
+transitively by `@graphql-codegen/cli`, which is a codegen-time devDependency. `graphql-config` has not yet published a
+release that declares graphql 17 support, and its latest version still caps at `^16`.
+
+The skew is cosmetic in practice. Running `yarn workspace @midnightntwrk/wallet-sdk-indexer-client gql:codegen` against
+graphql 17 succeeds and reproduces byte-identical generated output.
+
+Two things that do **not** work, so please do not re-attempt them:
+
+- A `packageExtensions` entry in `.yarnrc.yml` widening the range. Yarn ignores it, because package extensions add
+  missing metadata rather than replace an existing peer range.
+- Bumping `graphql-tag` to 2.12.7, which does declare graphql 17. `graphql-config` alone still caps the combined range
+  at `^16`, so the warning stays.
+
+Clearing it properly needs an upstream `graphql-config` release, or a local `yarn patch`. A patch was judged not worth
+the maintenance cost for a cosmetic warning. Revisit when `graphql-config` ships graphql 17 support.
+
 ---
 
 ## Testing Tiers & CI

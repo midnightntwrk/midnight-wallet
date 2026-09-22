@@ -57,7 +57,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type URLError, WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { OtherWalletError, SyncWalletError, type WalletError } from './WalletError.js';
+import { OtherWalletError, OutOfOrderSyncUpdateError, SyncWalletError, type WalletError } from './WalletError.js';
 import { type Simulator, type SimulatorState, getLastBlock } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from './types/ledger.js';
@@ -551,6 +551,25 @@ export const nullifierPhaseProgress = (
     totalNullifiers * maxCommitmentEndIndex,
   );
 
+/**
+ * The applied index a mid-phase nullifier report carries, on the same basis as every other report in the pass.
+ *
+ * @remarks
+ *   The nullifier term is the larger of two true statements about the same work. {@link nullifierPhaseProgress} measures
+ *   this phase from zero, while the report that opened the phase already credited the nullifiers the wallet arrived
+ *   holding; early in the phase the credit is the further along of the two, and reporting the measurement alone would
+ *   take progress backwards.
+ * @param basis The two terms this phase does not advance: commitment work, and nullifier work already credited.
+ * @param generationWork The generation term, which is complete by the time this phase runs.
+ * @param phaseProgress What {@link nullifierPhaseProgress} has measured so far.
+ * @returns The applied index to report.
+ */
+export const nullifierPhaseAppliedIndex = (
+  basis: { readonly commitmentWork: number; readonly creditedNullifierWork: number },
+  generationWork: number,
+  phaseProgress: number,
+): number => generationWork + basis.commitmentWork + Math.max(basis.creditedNullifierWork, phaseProgress);
+
 const resolveNullifierSpends = (
   initialNullifiers: DustNullifier[],
   initialNewUtxos: DustUtxoMap,
@@ -562,6 +581,11 @@ const resolveNullifierSpends = (
   indexerSyncService: IndexerSyncService,
   anonymityLevel: number,
   ledgerParametersCodecs: LedgerParametersCodec.LedgerParametersCodecs<LedgerParameters>,
+  /**
+   * The two terms of the pass's progress basis this phase does not itself advance, so that the progress it reports is a
+   * sum on the same basis as every other report rather than a figure of its own.
+   */
+  progressBasis: { readonly commitmentWork: number; readonly creditedNullifierWork: number },
   emit: {
     single: (update: DustProjectionsUpdate) => Promise<void>;
   },
@@ -613,8 +637,17 @@ const resolveNullifierSpends = (
               maxCommitmentEndIndex,
             );
 
-            // NOTE: since this process goes after the generation updates, we need to add the generationEndIndex to the progress
-            yield* Effect.promise(() => emit.single(ProgressUpdate({ appliedIndex: progress + generationEndIndex })));
+            // This phase runs after the generation updates, so its term sits on top of a completed generation tree and
+            // the commitment work the wallet already had. `nullifierPhaseProgress` counts this phase from zero, so on
+            // an early iteration it can still be behind the credit report 2 gave for nullifiers the wallet arrived
+            // holding; the larger of the two is the one that is true.
+            yield* Effect.promise(() =>
+              emit.single(
+                ProgressUpdate({
+                  appliedIndex: nullifierPhaseAppliedIndex(progressBasis, generationEndIndex, progress),
+                }),
+              ),
+            );
           }
 
           const { nextUtxos, nextSpentUtxos } = accumulateUtxoUpdates(dustUtxoUpdates, newUtxos, spentUtxos);
@@ -654,12 +687,16 @@ export const doEventlessSync = (
         const lastSyncedGenerationIndex = state.state.generatingTreeFirstFree - 1n;
         const lastSyncedBlockHeight = state.progress.highestIndex;
 
-        const highestInitialIndex =
-          maxGeneratingTreeIndex + maxCommitmentTreeIndex + state.state.nullifiers.size * maxCommitmentTreeIndex;
-        const initialAppliedIndex =
-          Number(lastSyncedGenerationIndex) +
-          Number(lastSyncedCommitmentIndex) +
-          state.state.nullifiers.size * Number(maxCommitmentTreeIndex);
+        // Every report this pass makes is a sum of the same three terms — generation work, commitment work, nullifier
+        // work — against a total on that same basis. A report that leaves one of them out does not read as "less far
+        // along"; it reads as progress going *backwards*, because the terms it drops were already counted. That
+        // matters beyond cosmetics: `isSynced` is exact equality between the applied and relevant indexes, so a
+        // settled wallet whose pass undercounts flips to "not synced" and back on every background repeat.
+        const commitmentWork = Number(lastSyncedCommitmentIndex);
+        const creditedNullifierWork = state.state.nullifiers.size * maxCommitmentTreeIndex;
+
+        const highestInitialIndex = maxGeneratingTreeIndex + maxCommitmentTreeIndex + creditedNullifierWork;
+        const initialAppliedIndex = Number(lastSyncedGenerationIndex) + commitmentWork + creditedNullifierWork;
 
         // What this pass resumed from, in one line. A projections pass is a single snapshot fetch, so when it comes back
         // with less than expected the only question worth asking is where it started — and the three cursors that decide
@@ -700,10 +737,16 @@ export const doEventlessSync = (
         const highestRelevantIndex =
           maxGeneratingTreeIndex + maxCommitmentTreeIndex + allNullifiers.length * maxCommitmentTreeIndex;
 
-        // increase the highestRelevantIndex as our nullifier list got expanded by new generations
-        // appliedIndex now reflects the completed generation tree sync
+        // The generation tree is now synced to the chain's end index, so its term becomes the full
+        // `maxGeneratingTreeIndex`. The commitment and nullifier terms are carried across untouched — this phase did
+        // not undo them. `highestRelevantIndex` rises here because new generations added nullifiers to check.
         yield* Effect.promise(() =>
-          emit.single(ProgressUpdate({ highestRelevantIndex, appliedIndex: maxGeneratingTreeIndex })),
+          emit.single(
+            ProgressUpdate({
+              highestRelevantIndex,
+              appliedIndex: maxGeneratingTreeIndex + commitmentWork + creditedNullifierWork,
+            }),
+          ),
         );
 
         const newUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
@@ -718,12 +761,17 @@ export const doEventlessSync = (
           indexerSyncService,
           anonymityLevel,
           ledgerParametersCodecs,
+          { commitmentWork, creditedNullifierWork },
           emit,
         );
 
+        // Every nullifier has been resolved, so the nullifier term reaches its full width. The commitment phase has
+        // not run yet, so its term is still what the wallet arrived holding.
         yield* Effect.promise(() =>
           emit.single(
-            ProgressUpdate({ appliedIndex: maxGeneratingTreeIndex + allNullifiers.length * maxCommitmentTreeIndex }),
+            ProgressUpdate({
+              appliedIndex: maxGeneratingTreeIndex + commitmentWork + allNullifiers.length * maxCommitmentTreeIndex,
+            }),
           ),
         );
 
@@ -1009,6 +1057,45 @@ const applyVersionSignal = (state: CoreWallet, update: VersionSignalSyncUpdate):
   noChanges(state),
 ];
 
+/**
+ * Checks that freshly delivered events arrive in strictly ascending id order.
+ *
+ * @remarks
+ *   Order is all that can be checked, never contiguity: dust events share one id sequence with zswap and contract events
+ *   in the indexer, so gaps in a dust stream are normal. A skipped commitment-inserting event is caught by the ledger's
+ *   own insertion check instead. An empty batch is trivially ordered.
+ * @param fresh The events left after the cursor filter, in source order.
+ * @param appliedIndex The highest event id already applied; the first fresh id must exceed it.
+ * @returns The batch unchanged, or the first id that fails to exceed its predecessor as an
+ *   {@link OutOfOrderSyncUpdateError}.
+ */
+const expectAscending = <T extends { readonly id: number }>(
+  fresh: readonly T[],
+  appliedIndex: bigint,
+): Either.Either<readonly T[], OutOfOrderSyncUpdateError> =>
+  pipe(
+    Arr.zipWith(
+      fresh,
+      Arr.prepend(
+        Arr.map(fresh, (item) => BigInt(item.id)),
+        appliedIndex,
+      ),
+      (item, previous) => ({ item, previous }),
+    ),
+    Arr.findFirst(({ item, previous }) => BigInt(item.id) <= previous),
+    Option.match({
+      onNone: () => Either.right(fresh),
+      onSome: ({ item, previous }) =>
+        Either.left(
+          new OutOfOrderSyncUpdateError({
+            message: `Dust event ${item.id} delivered at or below its predecessor ${previous}; batch refused, applied index stays at ${appliedIndex}`,
+            expected: previous,
+            received: BigInt(item.id),
+          }),
+        ),
+    }),
+  );
+
 export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
   return {
     applyUpdate(
@@ -1034,8 +1121,16 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
       // tail even when the tail belongs to the next protocol version.
       const highestRelevantWalletIndex = BigInt(updates.at(-1)!.maxId);
 
+      // Refuse the whole batch: applying the sound prefix would move the cursor and hide the fault behind
+      // `isConnected: true`. State and cursor stay untouched, so the retry re-fetches the same range; a transient
+      // reorder heals, a persistent one fails visibly.
+      //
+      // `SyncCapability.applyUpdate` has no typed error channel, so throwing preserves its public tuple-returning API;
+      // `RunningV2Variant` catches this at the capability boundary. See #572 for the planned `Either`-based API.
+      const orderedUpdates = Either.getOrThrowWith(expectAscending(freshUpdates, appliedIndex), identity);
+
       const { applied, observedVersion } = splitAtVersionBoundary(
-        freshUpdates,
+        orderedUpdates,
         (update) => update.protocolVersion,
         activeRange,
       );
