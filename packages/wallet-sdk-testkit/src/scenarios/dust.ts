@@ -20,7 +20,14 @@ import { inspect } from 'node:util';
 import * as rx from 'rxjs';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type WalletTestEnvironment } from '../types.js';
-import { provideWallet, saveState, type WalletInit } from '../wallet.js';
+import {
+  provideWallet,
+  type ProvideWalletOptions,
+  saveState,
+  shouldPersistState,
+  type WalletInit,
+  withProjectionsDefault,
+} from '../wallet.js';
 import { logger } from '../logger.js';
 
 /** Dependencies the dust scenarios need from the consumer. */
@@ -31,12 +38,29 @@ export interface DustScenarioDeps {
   seed: string;
   /** Optional dir to persist/restore wallet state across runs. (Was the `SYNC_CACHE` env var.) */
   syncCacheDir?: string | undefined;
-  /** Per-test timeout in ms. Defaults to the upstream value of 1 hour. */
+  /** Per-test timeout in ms. Defaults to 15 minutes; a longer bound only spends lane time on a wedged wallet. */
   timeout?: number | undefined;
+  /**
+   * Selects the dust sync model. Defaults to the projections sync with background synchronization, so the network being
+   * monitored is exercised against the sync model the wallet ships to users.
+   *
+   * Left unset, the model still follows `DUST_SYNC` when that is configured, so a whole lane can be switched by
+   * environment; projections is only the fallback for when nothing is. Pass `{ dustWallet: eventBasedDustWallet }` to
+   * pin the event-stream sync regardless of the environment — dust snapshots are namespaced per sync model, so there is
+   * no cache to clear when switching. Avoid adding `manualSync` here: these scenarios wait on the state stream rather
+   * than driving passes themselves, so they need background synchronization to be running.
+   */
+  walletOptions?: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined;
 }
 
 /** Registers the dust register/deregister healthchecks under a `describe('Dust tests')` block. */
-export function registerDustHealthchecks({ getEnv, seed, syncCacheDir, timeout = 3_600_000 }: DustScenarioDeps): void {
+export function registerDustHealthchecks({
+  getEnv,
+  seed,
+  syncCacheDir,
+  timeout = 900_000,
+  walletOptions,
+}: DustScenarioDeps): void {
   describe('Dust tests', () => {
     const unshieldedTokenRaw = ledger.unshieldedToken().raw;
     let wallet: WalletInit;
@@ -45,12 +69,18 @@ export function registerDustHealthchecks({ getEnv, seed, syncCacheDir, timeout =
     beforeEach(async () => {
       const env = getEnv();
       filenameWallet = `${seed.substring(0, 7)}-${env.network}.state`;
-      wallet = await provideWallet(env, { seed, syncCacheDir, filename: filenameWallet });
+      wallet = await provideWallet(env, {
+        ...withProjectionsDefault(walletOptions),
+        seed,
+        syncCacheDir,
+        filename: filenameWallet,
+      });
     });
 
-    afterEach(async () => {
-      if (syncCacheDir) {
-        await saveState(wallet.wallet, syncCacheDir, filenameWallet);
+    afterEach(async (context) => {
+      // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
+      if (syncCacheDir && shouldPersistState(context)) {
+        await saveState(wallet, syncCacheDir, filenameWallet);
       }
       await wallet.wallet.stop();
       logger.info('Wallet stopped');

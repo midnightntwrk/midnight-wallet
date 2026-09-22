@@ -19,9 +19,13 @@ import { type UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wall
 import {
   type WalletFacade,
   type WalletEntry,
+  type FinalizedWalletEntry,
   isPendingWalletEntry,
   isFinalizedWalletEntry,
 } from '@midnightntwrk/wallet-sdk-facade';
+// The settling-waiter primitive is single-sourced in the testkit so the two copies of these waiters cannot drift on the
+// subtle part. See its JSDoc for why the settle window is applied to the predicate rather than to the source.
+import { waitForStableState } from '@midnightntwrk/wallet-sdk-testkit';
 import { logger } from '../logger.js';
 import { carried } from './transactions.js';
 import { type FinalizedTx } from '@midnightntwrk/wallet-sdk';
@@ -52,24 +56,19 @@ export const waitForFacadePending = (wallet: WalletFacade) =>
   );
 
 export const waitForFacadePendingClear = (wallet: WalletFacade) =>
-  rx.firstValueFrom(
+  waitForStableState(
     wallet.state().pipe(
       rx.tap((state) => {
-        const shieldedPending = state.shielded.pendingCoins.length;
-        logger.info(`Shielded wallet pending coins: ${shieldedPending}, waiting for pending coins to clear...`);
-        const unshieldedPending = state.unshielded.pendingCoins.length;
-        logger.info(`Unshielded wallet pending coins: ${unshieldedPending}, waiting for pending coins to clear...`);
-        const dustPending = state.dust.pendingCoins.length;
-        logger.info(`Dust wallet pending coins: ${dustPending}, waiting for pending coins to clear...`);
+        logger.info(
+          `Pending coins — shielded: ${state.shielded.pendingCoins.length}, unshielded: ${state.unshielded.pendingCoins.length}, dust: ${state.dust.pendingCoins.length}; waiting for all to clear...`,
+        );
       }),
-      rx.debounceTime(10_000),
-      rx.filter(
-        (state) =>
-          state.shielded.pendingCoins.length == 0 &&
-          state.unshielded.pendingCoins.length == 0 &&
-          state.dust.pendingCoins.length == 0,
-      ),
     ),
+    (state) =>
+      state.shielded.pendingCoins.length === 0 &&
+      state.unshielded.pendingCoins.length === 0 &&
+      state.dust.pendingCoins.length === 0,
+    'waitForFacadePendingClear',
   );
 
 export const waitForDustBalance = (wallet: WalletFacade) =>
@@ -84,29 +83,28 @@ export const waitForDustBalance = (wallet: WalletFacade) =>
   );
 
 export const waitForFinalizedShieldedBalance = (wallet: ShieldedWalletAPI) =>
-  rx.firstValueFrom(
+  waitForStableState(
     wallet.state.pipe(
       rx.tap((state) => {
         const pending = state.pendingCoins.length;
         logger.info(`Wallet pending coins: ${pending}, waiting for pending coins cleared...`);
       }),
-      rx.filter((state) => state.pendingCoins.length === 0),
     ),
+    (state) => state.pendingCoins.length === 0,
+    'waitForFinalizedShieldedBalance',
   );
 
 export const waitForUnshieldedCoinUpdate = (wallet: WalletFacade, initialNumAvailableCoins: number) =>
-  rx.firstValueFrom(
+  waitForStableState(
     wallet.state().pipe(
       rx.tap((state) => {
-        const currentNumAvailableCoins = state.unshielded.availableCoins.length;
         logger.info(
-          `Unshielded available coins: ${currentNumAvailableCoins}, waiting for more than ${initialNumAvailableCoins}... synced = ${state.isSynced}`,
+          `Unshielded available coins: ${state.unshielded.availableCoins.length}, waiting for more than ${initialNumAvailableCoins}... synced = ${state.isSynced}`,
         );
       }),
-      rx.debounceTime(10_000),
-      rx.filter((s) => s.isSynced),
-      rx.filter((s) => s.unshielded.availableCoins.length > initialNumAvailableCoins),
     ),
+    (state) => state.isSynced && state.unshielded.availableCoins.length > initialNumAvailableCoins,
+    'waitForUnshieldedCoinUpdate',
   );
 
 export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalizedTx: FinalizedTx) =>
@@ -291,4 +289,38 @@ export async function waitForTxInHistory(
     );
   }
   return txEntry;
+}
+
+/**
+ * Polls a wallet's transaction history until at least one finalized entry satisfies `matches`, and returns every
+ * finalized entry that does.
+ *
+ * Use this when the transaction of interest has no hash to hand — a freshly built wallet rediscovers history by
+ * syncing, so a test that asserts on what it found cannot name the entry it is waiting for. Reaching a synced state is
+ * not enough on its own: history entries are written by a fan-out that runs alongside the sync rather than as part of
+ * it, so a wallet can report itself synced with its history still empty.
+ *
+ * @param wallet - The wallet whose transaction history is polled.
+ * @param matches - Predicate selecting the entries of interest, applied only to finalized entries.
+ * @param description - Included in the progress logs, so a stalled wait says what it was waiting for.
+ */
+export async function waitForFinalizedTxHistoryEntries(
+  wallet: WalletFacade,
+  matches: (entry: WalletEntry) => boolean,
+  description: string,
+): Promise<readonly FinalizedWalletEntry[]> {
+  return await rx.firstValueFrom(
+    rx.merge(wallet.state().pipe(rx.filter((state) => state.isSynced)), rx.interval(500)).pipe(
+      rx.mergeMap(async () => {
+        const all = await wallet.getAllFromTxHistory();
+        const found = all.filter(isFinalizedWalletEntry).filter(matches);
+        logger.info(
+          `Waiting for ${description} in tx history: ${found.length} match of ${all.length} entries ` +
+            `(${all.filter(isPendingWalletEntry).length} still pending)`,
+        );
+        return found.length > 0 ? found : undefined;
+      }),
+      rx.filter((found): found is FinalizedWalletEntry[] => found !== undefined),
+    ),
+  );
 }
