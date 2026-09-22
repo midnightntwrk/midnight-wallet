@@ -13,7 +13,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TransactionHistoryFormat } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, TransactionHistoryFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Serialization as DustV1Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { Serialization as DustV2Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import { Serialization as ShieldedV1Serialization } from '@midnightntwrk/wallet-sdk-shielded/v1';
@@ -164,6 +164,41 @@ export const baselineFilesFor = (writer: Writer, surface: Surface): readonly str
         .filter((file) => file === `${surface}.json` || file.startsWith(`${surface}-`))
         .sort()
     : [];
+};
+
+/**
+ * Which readers a stored payload could actually be handed.
+ *
+ * The wallet layer routes a snapshot to the variant that owns its `protocolVersion`, so a payload written below
+ * `forks.v9` reaches the V1 reader and one written from it reaches the V2 reader. A build that registers only the V2
+ * variant has nothing else to open anything with, so the V2 reader is additionally handed everything — which is the
+ * reason the checks in this package run per writer in the first place.
+ *
+ * The combination that is left out is the V1 reader against a payload written past the fork. Routing never produces it,
+ * no single-variant build produces it either, and asking for it would hold the V1 reader to a shape it was never going
+ * to meet: for shielded and dust the twins share one format version, so such a payload decodes against the V1 schema
+ * and the V2-only fields on it are simply not V1's to account for. Every frozen payload today was written by a V1-era
+ * release, so nothing is skipped yet; this exists so the first captured ledger-v9 fixture does not turn the
+ * preservation gates red for a question routing forbids.
+ *
+ * The two single-writer surfaces are not routed at all and are read the same way whichever writer a case is filed
+ * under, so they are handed to both.
+ *
+ * @param writer - The variant whose reader is being considered.
+ * @param surface - The persisted surface.
+ * @param serialized - The stored payload.
+ * @returns Whether that reader could be handed that payload.
+ */
+export const isHandedTo = (writer: Writer, surface: Surface, serialized: string): boolean => {
+  if (surface === 'tx-history' || surface === 'pending-transactions') return true;
+  if (writer === 'v2') return true;
+  const payload: unknown = JSON.parse(serialized);
+  const declared =
+    typeof payload === 'object' && payload !== null
+      ? (payload as Record<string, unknown>)['protocolVersion']
+      : undefined;
+  // A payload that declares no protocol version predates the field, so it can only have been written below the fork.
+  return declared === undefined || BigInt(declared as string | number) < ProtocolVersion.V9NativeForkVersion;
 };
 
 /**
