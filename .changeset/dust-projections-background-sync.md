@@ -1,31 +1,39 @@
 ---
 '@midnightntwrk/wallet-sdk-dust-wallet': major
-'@midnightntwrk/wallet-sdk-testkit': patch
+'@midnightntwrk/wallet-sdk-testkit': minor
 ---
 
-feat(dust-wallet)!: make the projections sync work under background synchronization
+feat(dust-wallet)!: run the projections dust sync in the background
 
-The projections ("event-less") sync synchronizes in finite passes — each pass ends its own stream — where the
-event-based service holds a long-lived subscription. Background synchronization reads the wallet state once and runs
-`updates` once, and its retry only re-runs a pass on failure, not on completion. A wallet built with the projections
-sync and started in the background therefore converged once and then never observed anything again, silently. The
-only usable shape was `manualSync` plus an explicit `facade.doSync()` at every point that would otherwise wait for
-the background sync to catch up.
+The projections ("event-less") sync synchronizes in finite passes, where the event-based service holds a long-lived
+subscription — so a wallet built on it converged once and observed nothing further. Background synchronization now
+repeats those passes, each resuming from what the last applied.
 
 **Breaking:** every `SyncService` now states how often background synchronization runs its `updates`, as a required
 `backgroundRepeat` of `BackgroundRepeat.Once()` — the answer for a long-lived subscription, which is every service
-the SDK ships bar one — or `BackgroundRepeat.WithDelay({ delay })`. A custom sync service must add the field. It is
-stated rather than inferred because only the service knows whether its `updates` is finite.
+the SDK ships bar one — or `BackgroundRepeat.WithDelay({ delay })`. A custom sync service must add the field.
 
-The projections service is `WithDelay`, configurable as `backgroundSyncInterval` (milliseconds, default 5000) on the
-dust wallet's sync configuration. Because a repeated pass is re-run from the top, each one re-reads the wallet state
-and resumes from what the previous one applied. Passes cannot overlap at any interval: a pass that cannot take the
-sync lock yields to the one already running and waits for the next interval. An idle pass costs a single block query,
-because both the generation subscription and the commitment load short-circuit on an unchanged tip.
+The projections service is `WithDelay`, configurable as `backgroundSyncInterval` (milliseconds, default 5000). An
+idle pass still re-resolves the wallet's nullifiers, so the interval costs more on a wallet holding Dust than on an
+empty one. `facade.doSync()` is unchanged: one pass, then it returns.
 
-`facade.doSync()` is unchanged — it still runs exactly one pass and returns.
+Repeating a pass exposed four defects, fixed here:
 
-`BackgroundRepeat` is declared in both twins, since both variants' background synchronization reads it, but only the
-ledger-v9 twin's projections service is `WithDelay` — the finite-pass projections sync remains a ledger-v9
-capability. The testkit's `eventLessDustWallet` documentation is corrected accordingly: it no longer tells callers the
-sync is one-shot and must be driven by hand.
+- A pass emitted one update per resolved Dust spend into a buffer bounded at 16 that nothing drains until the pass
+  returns, so a wallet past roughly ten spends deadlocked silently. It is now unbounded.
+- Three of a pass's four progress reports dropped a term the fourth counted, flipping `isSynced` on every repeat for
+  a wallet that had already caught up.
+- Each pass rebuilt the source's indexer clients into the wallet's scope and released none until the wallet stopped.
+  Passes now get their own scope; the tx-history fan-out stays on the wallet's.
+- A second `start()` forked a second poller, since the sync lock is released between passes. A worker-lifetime guard
+  makes it a no-op.
+
+Separately, a failing pass now genuinely backs off at most two minutes, with jitter. Neither bound applied before, so
+the delay doubled without limit into days.
+
+Only the ledger-v9 twin's projections service is `WithDelay`: the finite-pass sync, and the buffer fix it needed,
+remain ledger-v9 capabilities.
+
+The testkit adds `eventLessDustWallet`, `eventBasedDustWallet`, `projectionsDustSyncOptions` and `DustWalletFactory`,
+plus `dustWallet`/`manualSync` options on `provideWallet`, `initWalletWithSeed` and the dust and token-transfer
+scenarios. Purely additive. `eventLessDustWallet` syncs but must not transact — it is single-variant V2.
