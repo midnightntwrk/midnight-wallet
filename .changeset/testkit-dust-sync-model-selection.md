@@ -2,68 +2,30 @@
 '@midnightntwrk/wallet-sdk-testkit': minor
 ---
 
-feat(testkit)!: select the dust sync model by configuration, and keep the two models' snapshots apart
+feat(testkit)!: monitor the projections dust sync by default, selectable by DUST_SYNC
 
-Switching a test lane between the two dust sync models previously meant editing every file that built a wallet, and
-remembering to clear the state cache in one of the two directions. Four changes remove both problems.
+The dust and token-transfer healthcheck scenarios now build their wallets on the projections ("event-less") dust sync,
+so the networks they monitor are exercised against a sync model wallets actually run. **Breaking** for anyone relying
+on those scenarios using the event stream; pass `{ dustWallet: eventBasedDustWallet }` to keep it.
 
-**`DUST_SYNC` selects the model for a whole run.** `dustWalletFromEnv()` is now the default behind the `dustWallet`
-option of `provideWallet` and `initWalletWithSeed`, so `DUST_SYNC=projections` switches every wallet the testkit builds
-while a test that needs a specific model still pins it in code. Unset means the event-based sync, as before. An
-unrecognized value throws rather than falling back — a typo must not report a run as covering one sync model when it
-covered the other. New exports: `DustSyncModel`, `dustWalletFor`, `parseDustSyncModel`, `dustSyncModelFromEnv`,
-`dustWalletFromEnv`.
+`DUST_SYNC` selects the model for a whole run, as `events` or `projections`. An unrecognized value is rejected rather
+than defaulted, because a silent fallback means a typo reports a run as covering one model while it covered the other.
+Unset means `events` for testkit-built wallets and `projections` for those two scenarios. `provideWallet` and
+`initWalletWithSeed` take `dustWallet` and `manualSync` options that pin a model regardless of the environment — which
+is what a test comparing the two models needs, since a control that follows the run is no control at all.
 
-`parseDustSyncModel`, `dustSyncModelFromEnv` and `dustWalletFromEnv` take an optional `fallback` model, applied only when
-`DUST_SYNC` is unset. It lets a caller choose what applies by default **without** taking the choice away from the
-environment — which is how the healthcheck scenarios default to projections while staying switchable. Pinning a model via
-an explicit `dustWallet` does opt that wallet out of `DUST_SYNC`, so it should be reserved for tests that genuinely
-require one model: a pinned wallet is left behind when a lane is switched by environment.
+New exports from the root and `/core`: `eventLessDustWallet`, `eventBasedDustWallet`, `dustWalletFor`,
+`dustWalletFromEnv`, `manualProjectionsDustSyncOptions` and the `DustWalletFactory` type. `eventLessDustWallet` is the
+shipped two-variant dust wallet with the V2 variant's sync service swapped for the projections one, so it reaches the
+projections sync on a chain running ledger-v9 from its first block and still builds transactions.
 
-A test that builds a Dust wallet itself, rather than through these helpers, must resolve it the same way —
-`dustWalletFromEnv()(config)` — or it will disagree with the rest of the run. This matters most for serialize/restore
-tests: state written by one model and restored into the other resumes from a value that is not a cursor in that model,
-and the wallet never reports synced. Snapshot namespacing protects state on disk but not state serialized and restored in
-memory within a test.
+Dust snapshots are namespaced by the model that wrote them. The two disagree on what the single progress value in a
+snapshot means, so restoring one into the other resumes at a wrong position; namespacing degrades a model switch to a
+from-scratch build instead, with no cache-clearing step to remember.
 
-**Dust snapshots are namespaced per sync model.** A snapshot carries one progress value, `appliedIndex`, and the two
-models disagree about what it means: the event-based service treats it as a ledger-event cursor, the projections service
-writes a composite of tree indices and nullifier count. Restoring across models therefore resumed an event subscription
-from a position that is not an event id, and silently skipped events. Dust snapshots now live at
-`dust-<model>-<filename>` (`dustSnapshotPath`), so a model switch finds no snapshot and rebuilds from scratch instead.
-There is no longer a cache to clear by hand in either direction. Shielded and unshielded snapshots are
-model-independent and unchanged.
-
-**Breaking: `saveState` takes the `WalletInit`, not the facade.** It needs the sync model to pick the snapshot
-namespace, and taking both separately would let them disagree:
-
-```diff
-- await saveState(wallet.wallet, syncCacheDir, filename);
-+ await saveState(wallet, syncCacheDir, filename);
-```
-
-`WalletInit` gains a `dustSyncModel` field recording the model the wallet was actually built with, from whichever
-source.
-
-**Breaking: `projectionsDustSyncOptions` no longer implies `manualSync`.** It now selects the projections sync with
-background synchronization — the case almost every caller wants, and the one the name suggests. The previous pairing is
-`manualProjectionsDustSyncOptions`, for a caller that drives each pass with `facade.doSync()`. Spreading the old
-constant into a test that waits on the state stream would block, which is a trap the old name did nothing to signal.
-
-Also fixes `provideWallet`'s "unable to sync restored wallet" fallback, which rebuilt on the default dust sync instead
-of the requested one, silently dropping the caller's choice of model on that path.
-
-## The projections factory is a two-variant wallet
-
-`eventLessDustWallet` registers both variants — the event stream below `forks.v9`, projections from it — rather than
-being a single-variant composition. A single-variant dust wallet answers for the whole protocol timeline and therefore
-reports the minimum supported version; because a facade acts at the lowest version its three sub-wallets report, such a
-sub-wallet holds the facade below the ledger-v9 boundary, and `transferTransaction` then fails with
-`ProtocolVersionMismatchError` on a transaction the shielded wallet built at ledger-v9.
-
-That is why the healthcheck scenarios can default to projections at all: they pay fees and transfer. On a chain that
-runs ledger-v9 from its first block the V1 variant never applies, so the projections sync is still reached immediately.
-
-A dust snapshot written by the previous single-variant composition declares protocol version 0 and is routed to the
-ledger-v8 variant on restore, whose deserializer refuses it; the wallet rebuilds from scratch rather than resuming from
-a snapshot the other model wrote.
+Three fixes to the settling state waiters. They applied their window to the source rather than to the predicate, so a
+wallet syncing in the background — projections emits about every five seconds — starved them until the test timeout
+while logging that the condition was already satisfied. They now also answer with the newest value satisfying the
+predicate rather than the one from when it first held: `pendingCoins.length === 0` is equally true either side of a
+balance arriving, so the old answer could be exactly the stale pre-transaction state the window exists to avoid. And
+the token-transfer healthcheck settles pending coins before asserting on them.
