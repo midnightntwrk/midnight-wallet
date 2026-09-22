@@ -36,4 +36,4 @@ remain ledger-v9 capabilities.
 
 The testkit adds `eventLessDustWallet`, `eventBasedDustWallet`, `projectionsDustSyncOptions` and `DustWalletFactory`,
 plus `dustWallet`/`manualSync` options on `provideWallet`, `initWalletWithSeed` and the dust and token-transfer
-scenarios. Purely additive. `eventLessDustWallet` syncs but must not transact — it is single-variant V2.
+scenarios. Purely additive.

@@ -41,10 +41,22 @@ describe('Projections-based synchronisation model', () => {
 
   beforeEach(async () => {
     fixture = getFixture();
-    fundedEventsSynced = await utils.initWalletWithSeed(seedFunded, fixture);
-    funded = await utils.initWalletWithSeed(seedFunded, fixture, 'schnorr', utils.projectionsDustSyncOptions);
-    receiverEventsSynced = await utils.initWalletWithSeed(seed, fixture);
-    receiver = await utils.initWalletWithSeed(seed, fixture, 'schnorr', utils.projectionsDustSyncOptions);
+    // The reference wallets are the control this suite measures the projections sync against, so their model is pinned
+    // rather than left to the run. Without that, `DUST_SYNC=projections` selects projections for them too and every
+    // parity assertion here compares the projections sync with itself — a shared defect would read as agreement.
+    const eventsSynced = { dustWallet: utils.eventBasedDustWallet };
+    fundedEventsSynced = await utils.initWalletWithSeed(seedFunded, fixture, 'schnorr', eventsSynced);
+    funded = await utils.initWalletWithSeed(seedFunded, fixture, 'schnorr', utils.manualProjectionsDustSyncOptions);
+    receiverEventsSynced = await utils.initWalletWithSeed(seed, fixture, 'schnorr', eventsSynced);
+    receiver = await utils.initWalletWithSeed(seed, fixture, 'schnorr', utils.manualProjectionsDustSyncOptions);
+
+    // Asserted rather than assumed: this is what makes the comparison a comparison, and it is invisible at the call
+    // site once the options are hoisted into a variable.
+    expect(fundedEventsSynced.dustSyncModel).toBe('events');
+    expect(receiverEventsSynced.dustSyncModel).toBe('events');
+    expect(funded.dustSyncModel).toBe('projections');
+    expect(receiver.dustSyncModel).toBe('projections');
+
     logger.info('Two wallets started');
   });
 
@@ -379,8 +391,8 @@ describe('Projections-based synchronisation model', () => {
       // the test keeps it hermetic: an undeployed chain is new each run, so a snapshot left behind by a previous
       // run would describe a different chain.
       const filename = `projections-restore-${seedFunded.substring(0, 7)}.state`;
-      await utils.saveState(funded.wallet, filename);
-      const restored = await utils.provideWallet(filename, seedFunded, fixture, utils.projectionsDustSyncOptions);
+      await utils.saveState(funded, filename);
+      const restored = await utils.provideWallet(filename, seedFunded, fixture, utils.manualProjectionsDustSyncOptions);
 
       try {
         // `provideWallet` silently falls back to building from scratch when a restore fails, which would leave this
