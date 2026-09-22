@@ -41,10 +41,22 @@ describe('Projections-based synchronisation model', () => {
 
   beforeEach(async () => {
     fixture = getFixture();
-    fundedEventsSynced = await utils.initWalletWithSeed(seedFunded, fixture);
+    // The reference wallets are the control this suite measures the projections sync against, so their model is pinned
+    // rather than left to the run. Without that, `DUST_SYNC=projections` selects projections for them too and every
+    // parity assertion here compares the projections sync with itself — a shared defect would read as agreement.
+    const eventsSynced = { dustWallet: utils.eventBasedDustWallet };
+    fundedEventsSynced = await utils.initWalletWithSeed(seedFunded, fixture, 'schnorr', eventsSynced);
     funded = await utils.initWalletWithSeed(seedFunded, fixture, 'schnorr', utils.manualProjectionsDustSyncOptions);
-    receiverEventsSynced = await utils.initWalletWithSeed(seed, fixture);
+    receiverEventsSynced = await utils.initWalletWithSeed(seed, fixture, 'schnorr', eventsSynced);
     receiver = await utils.initWalletWithSeed(seed, fixture, 'schnorr', utils.manualProjectionsDustSyncOptions);
+
+    // Asserted rather than assumed: this is what makes the comparison a comparison, and it is invisible at the call
+    // site once the options are hoisted into a variable.
+    expect(fundedEventsSynced.dustSyncModel).toBe('events');
+    expect(receiverEventsSynced.dustSyncModel).toBe('events');
+    expect(funded.dustSyncModel).toBe('projections');
+    expect(receiver.dustSyncModel).toBe('projections');
+
     logger.info('Two wallets started');
   });
 
