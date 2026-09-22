@@ -23,8 +23,14 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { type NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { type WalletTestEnvironment } from '../types.js';
-import { provideWallet, type ProvideWalletOptions, saveState, shouldPersistState, type WalletInit } from '../wallet.js';
-import { dustWalletFromEnv } from '../dust-sync.js';
+import {
+  provideWallet,
+  type ProvideWalletOptions,
+  saveState,
+  shouldPersistState,
+  type WalletInit,
+  withProjectionsDefault,
+} from '../wallet.js';
 import { tNightAmount } from '../primitives.js';
 import { getShieldedAddress, getUnshieldedAddress } from '../addresses.js';
 import { waitForFacadePendingClear, waitForTxInHistory } from '../state-waiters.js';
@@ -87,7 +93,7 @@ export function useTokenTransferWallets({
   syncCacheDir,
   syncTimeout = 15 * 60 * 1000,
   timeout = 600_000,
-  walletOptions = { dustWallet: dustWalletFromEnv(process.env, 'projections') },
+  walletOptions,
 }: TokenTransferScenarioDeps): TokenTransferWallets {
   const shieldedTokenRaw = ledger.shieldedToken().raw;
 
@@ -105,9 +111,14 @@ export function useTokenTransferWallets({
     filenameWallet = `${fundedSeed.substring(0, 7)}-${env.network}.state`;
     filenameWallet2 = `${secondSeed.substring(0, 7)}-${env.network}.state`;
 
-    wallet = await provideWallet(env, { ...walletOptions, seed: fundedSeed, syncCacheDir, filename: filenameWallet });
+    wallet = await provideWallet(env, {
+      ...withProjectionsDefault(walletOptions),
+      seed: fundedSeed,
+      syncCacheDir,
+      filename: filenameWallet,
+    });
     wallet2 = await provideWallet(env, {
-      ...walletOptions,
+      ...withProjectionsDefault(walletOptions),
       seed: secondSeed,
       syncCacheDir,
       filename: filenameWallet2,

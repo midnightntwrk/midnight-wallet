@@ -175,6 +175,24 @@ const restoreDustWallet = async (
  * If `syncCacheDir`/`filename` are provided, attempts to restore serialized state from disk and verify it syncs;
  * otherwise (or on any restore failure) builds from scratch via {@link initWalletWithSeed}.
  */
+/**
+ * Scenario wallet options with the projections default filled in **per field** rather than wholesale.
+ *
+ * A whole-parameter default is lost the moment a caller passes any `walletOptions` at all: `{ manualSync: true }`
+ * leaves `dustWallet` undefined, {@link provideWallet} falls back to the `events` model, and a scenario silently stops
+ * monitoring the sync model it exists to monitor. Filling the field in only when the caller did not name it keeps
+ * `DUST_SYNC` in charge of the model and the caller's own choices intact.
+ *
+ * @param walletOptions What the caller passed, if anything.
+ * @returns The options to hand {@link provideWallet}.
+ */
+export const withProjectionsDefault = (
+  walletOptions: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined,
+): Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> => ({
+  dustWallet: dustWalletFromEnv(process.env, 'projections'),
+  ...walletOptions,
+});
+
 export const provideWallet = async (env: WalletTestEnvironment, options: ProvideWalletOptions): Promise<WalletInit> => {
   const { seed, syncCacheDir, filename, manualSync } = options;
   // Resolved once, here, so the restore path, the snapshot namespace and every from-scratch fallback below all agree on
