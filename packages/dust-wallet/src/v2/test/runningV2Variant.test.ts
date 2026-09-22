@@ -20,13 +20,16 @@ import {
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   Chunk,
+  Context,
   Deferred,
   Duration,
   Effect,
   Exit,
   Fiber,
+  Layer,
   pipe,
   Ref,
+  Schedule,
   Scope,
   Stream,
   SubscriptionRef,
@@ -38,7 +41,7 @@ import { chooseCoin, makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBa
 import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
 import { StateChange, VersionChangeType } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { RunningV2Variant } from '../RunningV2Variant.js';
+import { RunningV2Variant, syncRetrySchedule } from '../RunningV2Variant.js';
 import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 import { BackgroundRepeat, type ChangesResult, type SyncCapability, type SyncService } from '../Sync.js';
 import { makeDefaultTransactingCapability } from '../Transacting.js';
@@ -455,6 +458,45 @@ describe('RunningV2Variant background sync of a finite updates stream', () => {
       ),
   });
 
+  /** Stands in for a client an indexer layer hands the sync source for the duration of a pass. */
+  class PassResource extends Context.Tag('PassResource')<PassResource, { readonly serial: number }>() {}
+
+  /**
+   * The shape every indexer client layer has: `Layer.effect` over an `acquireRelease`, so the layer declares `Scope` as
+   * an input requirement rather than discharging one of its own, and its finalizer attaches to whichever scope the
+   * stream is ultimately run in. A pass that does not get a scope of its own therefore leaves its client open.
+   */
+  const passResourceLayer = (
+    acquired: Ref.Ref<number>,
+    released: Ref.Ref<number>,
+  ): Layer.Layer<PassResource, never, Scope.Scope> =>
+    Layer.effect(
+      PassResource,
+      Effect.acquireRelease(Ref.updateAndGet(acquired, (n) => n + 1).pipe(Effect.map((serial) => ({ serial }))), () =>
+        Ref.update(released, (n) => n + 1),
+      ),
+    );
+
+  /**
+   * A finite service that holds a scoped resource for the length of each pass, the way the projections service holds
+   * its subscription and query clients. The stream reads the tag so the layer is genuinely built, not elided.
+   */
+  const resourceHoldingSyncServiceOf = (
+    acquired: Ref.Ref<number>,
+    released: Ref.Ref<number>,
+    backgroundRepeat: BackgroundRepeat,
+  ): SyncService<CoreWallet, null, FakeSyncUpdate> => ({
+    ...syncServiceOf([]),
+    backgroundRepeat,
+    updates: () =>
+      pipe(
+        PassResource,
+        Stream.fromEffect,
+        Stream.as(['tx'] as FakeSyncUpdate),
+        Stream.provideSomeLayer(passResourceLayer(acquired, released)),
+      ),
+  });
+
   /** The whole timeline: nothing in this block is about which versions the variant owns. */
   const wholeRange = ProtocolVersion.makeRange(
     ProtocolVersion.MinSupportedVersion,
@@ -544,5 +586,127 @@ describe('RunningV2Variant background sync of a finite updates stream', () => {
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
 
     expect(seen).toEqual([0]);
+  });
+
+  it('releases each pass’s resources as the pass ends, rather than piling them on the variant scope', async () => {
+    // Every repeat rebuilds the source's layers, so a repeat that has no scope of its own hands each pass's clients to
+    // the variant scope, where they stay until the wallet stops. At a five-second interval that is a fresh websocket
+    // and HTTP client every five seconds for the life of the wallet.
+    const counts = await Effect.gen(function* () {
+      const acquiredRef = yield* Ref.make(0);
+      const releasedRef = yield* Ref.make(0);
+      const secretKey = DustSecretKey.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.initEmpty(LedgerParameters.initialParameters().dust, secretKey, networkId),
+      );
+      const scope = yield* Scope.make();
+      const variant = new RunningV2Variant(
+        scope,
+        { stateRef, activationRange: wholeRange },
+        {
+          ...variantContextOf([], { getTransactionDetails: () => Effect.die('unused'), put: () => Effect.void }),
+          syncService: resourceHoldingSyncServiceOf(
+            acquiredRef,
+            releasedRef,
+            BackgroundRepeat.WithDelay({ delay: Duration.seconds(5) }),
+          ),
+          syncCapability: advancingCapability,
+        },
+      );
+
+      yield* variant.startSyncInBackground(null);
+      yield* TestClock.adjust(Duration.seconds(12));
+      const acquired = yield* Ref.get(acquiredRef);
+      const released = yield* Ref.get(releasedRef);
+      yield* Scope.close(scope, Exit.void);
+      return { acquired, released };
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    // Read before the variant scope closes, so a release that only happens at shutdown does not count. Three passes in
+    // twelve seconds at a five-second delay; only a pass still in flight may still be holding anything.
+    expect(counts.acquired).toBe(3);
+    expect(counts.released).toBeGreaterThanOrEqual(counts.acquired - 1);
+  });
+
+  it('ignores a second background start instead of running a second worker', async () => {
+    // The sync lock serialises passes, not workers: it is released at the end of every pass, so it cannot stop a
+    // second `start()` forking a worker of its own that polls alongside the first until the wallet stops.
+    const seen = await Effect.gen(function* () {
+      const seenRef = yield* Ref.make<readonly number[]>([]);
+      const secretKey = DustSecretKey.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.initEmpty(LedgerParameters.initialParameters().dust, secretKey, networkId),
+      );
+      const scope = yield* Scope.make();
+      const variant = new RunningV2Variant(
+        scope,
+        { stateRef, activationRange: wholeRange },
+        {
+          ...variantContextOf([], { getTransactionDetails: () => Effect.die('unused'), put: () => Effect.void }),
+          syncService: finiteSyncServiceOf(seenRef, BackgroundRepeat.WithDelay({ delay: Duration.seconds(5) })),
+          syncCapability: advancingCapability,
+        },
+      );
+
+      // Offset so the two workers' passes cannot coincide and be hidden by the sync lock.
+      yield* variant.startSyncInBackground(null);
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* variant.startSyncInBackground(null);
+      yield* TestClock.adjust(Duration.seconds(11));
+      const result = yield* Ref.get(seenRef);
+      yield* Scope.close(scope, Exit.void);
+      return result;
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    // One worker's three passes over twelve seconds. A second worker adds its own three, offset by a second.
+    expect(seen).toEqual([0, 1, 2]);
+  });
+});
+
+/**
+ * A retry schedule is read far more often than it is measured, and the combinator that looks like it bounds the delay
+ * may not touch it — `Schedule.map` rewrites a schedule's _output_ after the delay has been taken from it, so mapping
+ * an exponential's output leaves the timing exactly as it was. These assert the delays themselves.
+ */
+describe('RunningV2Variant sync retry schedule', () => {
+  /** The delays the schedule actually produces, in milliseconds, over its first `count` retries. */
+  const delaysOf = (count: number): number[] =>
+    Effect.runSync(
+      pipe(
+        Schedule.run(
+          Schedule.delays(syncRetrySchedule),
+          0,
+          Array.from({ length: count }, (_, i) => i),
+        ),
+        Effect.map((delays) => Chunk.toArray(delays).map(Duration.toMillis)),
+      ),
+    );
+
+  const CAP_MILLIS = 120_000;
+
+  it('never backs off further than two minutes', () => {
+    // 20 retries: unbounded doubling from one second reaches ~6 days here, so a wallet that cannot reach the indexer
+    // stops retrying in any useful sense long before this — silently, because the pass fails into the retry rather
+    // than out to the caller.
+    const delays = delaysOf(20);
+
+    expect(Math.max(...delays)).toBeLessThanOrEqual(CAP_MILLIS);
+  });
+
+  it('still backs off exponentially before it reaches the cap', () => {
+    // The cap must not be bought by flattening the schedule: early retries stay close together so a transient
+    // indexer blip is retried promptly.
+    const delays = delaysOf(6);
+
+    expect(delays[0]).toBeLessThan(2_000);
+    expect(delays[5]).toBeGreaterThan(delays[0]);
+    expect(delays[5]).toBeLessThanOrEqual(CAP_MILLIS);
+  });
+
+  it('jitters, so wallets retrying together do not resynchronize on the same instant', () => {
+    // An unjittered schedule is deterministic, so two samplings match exactly — which is what puts a fleet of wallets
+    // back in lockstep on the same instant after a shared outage. Jitter is what breaks that up, and the only
+    // observable difference it makes is that two samplings disagree.
+    expect(delaysOf(20)).not.toEqual(delaysOf(20));
   });
 });
