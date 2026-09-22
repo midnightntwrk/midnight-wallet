@@ -170,18 +170,17 @@ const restoreDustWallet = async (
 };
 
 /**
- * Builds a fully-started {@link WalletFacade} (shielded + unshielded + dust) for the given seed.
- *
- * If `syncCacheDir`/`filename` are provided, attempts to restore serialized state from disk and verify it syncs;
- * otherwise (or on any restore failure) builds from scratch via {@link initWalletWithSeed}.
- */
-/**
  * Scenario wallet options with the projections default filled in **per field** rather than wholesale.
  *
  * A whole-parameter default is lost the moment a caller passes any `walletOptions` at all: `{ manualSync: true }`
  * leaves `dustWallet` undefined, {@link provideWallet} falls back to the `events` model, and a scenario silently stops
- * monitoring the sync model it exists to monitor. Filling the field in only when the caller did not name it keeps
+ * monitoring the sync model it exists to monitor. Filling the field in only when the caller supplied one keeps
  * `DUST_SYNC` in charge of the model and the caller's own choices intact.
+ *
+ * An explicit `dustWallet: undefined` counts as not supplying one, so it is filled in too. The field is declared `|
+ * undefined` precisely so an optional factory can be forwarded under `exactOptionalPropertyTypes`, which means a caller
+ * forwarding an absent one type-checks; taking that as a choice of the `events` model would drop the scenario onto the
+ * sync it exists to stop monitoring, without the caller having named a model at all.
  *
  * @param walletOptions What the caller passed, if anything.
  * @returns The options to hand {@link provideWallet}.
@@ -189,10 +188,16 @@ const restoreDustWallet = async (
 export const withProjectionsDefault = (
   walletOptions: Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> | undefined,
 ): Pick<ProvideWalletOptions, 'dustWallet' | 'manualSync'> => ({
-  dustWallet: dustWalletFromEnv(process.env, 'projections'),
   ...walletOptions,
+  dustWallet: walletOptions?.dustWallet ?? dustWalletFromEnv(process.env, 'projections'),
 });
 
+/**
+ * Builds a fully-started {@link WalletFacade} (shielded + unshielded + dust) for the given seed.
+ *
+ * If `syncCacheDir`/`filename` are provided, attempts to restore serialized state from disk and verify it syncs;
+ * otherwise (or on any restore failure) builds from scratch via {@link initWalletWithSeed}.
+ */
 export const provideWallet = async (env: WalletTestEnvironment, options: ProvideWalletOptions): Promise<WalletInit> => {
   const { seed, syncCacheDir, filename, manualSync } = options;
   // Resolved once, here, so the restore path, the snapshot namespace and every from-scratch fallback below all agree on
