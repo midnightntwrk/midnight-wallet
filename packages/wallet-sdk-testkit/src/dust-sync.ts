@@ -27,12 +27,12 @@ import { Migration, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 /**
  * The factory shape {@link provideWallet} and the scenarios accept for the dust sub-wallet.
  *
- * Structural rather than `DustWalletClass`, so a **single-variant** composition is acceptable too. The projections
- * fast-sync is a ledger-v9 capability — it rests on `DustLocalState` members no ledger-v8 has — so a two-variant wallet
- * boots on the V1 variant, replays every event, and reaches projections only after migrating. On a chain that runs
- * ledger-v9 from its first block, a V2-only composition is the shortest way to exercise it. A start resolving
- * asynchronously is accepted for the same reason: a wallet spanning a boundary may ask the chain where it is before it
- * picks a variant.
+ * Structural rather than `DustWalletClass`, so a single-variant composition is acceptable too — but note that
+ * {@link eventLessDustWallet}, the projections factory this exists for, is **not** one: it is the shipped two-variant
+ * wallet with the V2 variant's sync service swapped, which is what lets it build transactions as well as sync. On a
+ * chain running ledger-v9 from its first block the V1 variant never applies, so it reaches the projections sync
+ * immediately. A start resolving asynchronously is accepted because such a wallet may ask the chain where it is before
+ * it picks a variant.
  */
 export type DustWalletFactory = (config: DefaultDustConfiguration) => {
   startWithSeed(seed: Uint8Array, dustParameters?: DustParameters): DustWalletAPI | Promise<DustWalletAPI>;

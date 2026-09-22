@@ -80,7 +80,7 @@ export const waitForStableState = <T>(
           rx.throwError(
             () =>
               new Error(
-                `${description}: condition did not hold for ${settleMs}ms within ${timeoutMs}ms. The condition is genuinely unmet — this is not a missed observation window.`,
+                `${description}: condition never held continuously for ${settleMs}ms within ${timeoutMs}ms. It may have been met repeatedly and simply never stayed met for that long — a wallet still syncing keeps breaking the window.`,
               ),
           ),
       }),
