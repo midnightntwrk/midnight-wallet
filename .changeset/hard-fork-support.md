@@ -144,7 +144,8 @@ For code that composes wallets or test fixtures by hand.
   `VariantContext.activationRange` and `Runtime.onVariantActivation`. Indexer client: `protocolVersion` on `BlockHash`,
   `DustLedgerEvents`, `DustNullifierTransactions` and the unshielded progress frame, and the id-only subscriptions
   `ZswapEventTip` and `DustLedgerEventTip`. Prover client: `asV8ProvingProvider()` next to `asV9ProvingProvider()`, and
-  `WasmProver.makeDefaultKeyMaterialProvider({ circuits })` to pick the circuit line.
+  `WasmProver.makeV8KeyMaterialProvider()` next to `WasmProver.makeV9KeyMaterialProvider()` for each ledger version's
+  key material.
 - `@midnightntwrk/wallet-sdk` gains the `ledger/v8`, `ledger/v9` and `capabilities/codecs` subpaths, and its root
   exports `Token.night`, `parseTokenType`, `Signing`, and `DustGenerationRates` with `asV8DustParameters` and
   `asV9DustParameters`, so token types, signatures and dust parameters need no ledger import.

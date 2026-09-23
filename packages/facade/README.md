@@ -64,7 +64,7 @@ const configuration = {
   provers: {
     // Below `forks.v9`: a proof server built against ledger-v8.
     v8: { kind: 'server', url: new URL('http://localhost:6301') },
-    // From `forks.v9`: proving in this process, with the published circuits.
+    // From `forks.v9`: proving in this process, with ledger-v9's published key material.
     v9: { kind: 'wasm' },
   },
 };
@@ -77,8 +77,9 @@ below the boundary the wallet never authors for; a transaction stamped there the
 One shorthand remains: `provingServerUrl: url` is one proof server under every key, read only when `provers` is absent.
 The SDK drives it with each ledger version on its own side of `forks.v9`, so the same URL frames its requests correctly
 on both. A proof server, though, is built against one ledger version: no published image serves both, so a chain with
-history below the boundary wants `provers` with a server per side. The in-process prover works on bytes and does serve
-both, under both keys.
+history below the boundary wants `provers` with a server per side. The in-process prover serves both: under each key it
+proves with that ledger version's own key material (ledger-v8's circuits are generation 9, ledger-v9's generation 10),
+read from `https://srs.midnight.network/` and checked against the hashes the ledger release declares.
 
 ### Observing Combined State
 

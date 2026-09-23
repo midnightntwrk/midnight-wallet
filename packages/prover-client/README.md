@@ -63,17 +63,26 @@ client.asV8ProvingProvider(); // frames with @midnight-ntwrk/ledger-v8
 ```
 
 `WasmProver` offers both names too, and returns the same provider for each: the in-process prover drives a zkir runtime
-over bytes and never looks at a ledger version.
-
-Its key material is read from a published bucket, one line per circuit generation rather than per ledger:
+over bytes and never looks at a ledger version. Its key material, though, is per ledger version: each ledger version's
+circuits were generated as their own generation, and a node rejects a proof made with another's. Create the prover with
+the key material of the ledger version it proves for:
 
 ```typescript
-WasmProver.makeDefaultKeyMaterialProvider(); // the line both ledger versions accept
-WasmProver.makeDefaultKeyMaterialProvider({ circuits: 8 }); // an explicit override
+WasmProver.makeV9KeyMaterialProvider(); // ledger-v9: circuit generation 10
+WasmProver.makeV8KeyMaterialProvider(); // ledger-v8: circuit generation 9
+WasmProver.makeDefaultKeyMaterialProvider(); // the same as makeV9KeyMaterialProvider()
 ```
 
-The default is what both ledger versions accept today; `circuits` exists so an operator whose bucket says otherwise can
-say so, not because a fork implies a change of line.
+Each reads from `https://srs.midnight.network/`, the host the ledger's own data provider reads, and checks every file
+against the SHA-256 its ledger release declares before handing it back; a file that does not match is refused with
+`KeyMaterialIntegrityError`. To serve the files yourself — a mirror, or your page's own origin, since that host sends no
+CORS headers — pass `{ source }`; the files are checked all the same:
+
+```typescript
+WasmProver.makeV9KeyMaterialProvider({ source: 'https://example.com/midnight-keys/' });
+```
+
+Checking needs Web Crypto (`crypto.subtle`): Node 19 or later, or a browser page served from a secure context.
 
 > This package depends on both ledger runtimes, `@midnight-ntwrk/ledger-v8` and `@midnightntwrk/ledger-v9`. Both are
 > WASM modules, so a direct consumer bundling this package ships both.

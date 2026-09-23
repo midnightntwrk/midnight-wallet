@@ -14,9 +14,10 @@
  * Proving in this process, either side of a protocol boundary.
  *
  * The bundled prover drives a zkir runtime over bytes and never looks at a ledger version, so — unlike a proof server,
- * which is built against one — the same description serves both ledger versions. Naming it under both `v8` and `v9`
- * covers the whole timeline: the SDK drives each side with its own ledger, and where one side ends and the other
- * begins is `forks.v9`, which the facade presets.
+ * which is built against one — the same description serves both ledger versions. Under each key it proves with that
+ * ledger version's own key material, since each version's circuits are a generation of their own. Naming it under both
+ * `v8` and `v9` covers the whole timeline: the SDK drives each side with its own ledger, and where one side ends and the
+ * other begins is `forks.v9`, which the facade presets.
  */
 import {
   WalletSeeds,
@@ -45,8 +46,8 @@ const configuration: DefaultConfiguration = {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
-  // The in-process prover, for every ledger version. `keyMaterialProvider` can be supplied here to point the prover
-  // at key material of your own; left out, it reads the published circuits, which both ledger versions accept.
+  // The in-process prover, for every ledger version. Left out, `keyMaterialProvider` reads each ledger version's own
+  // published key material, checked against the hashes the ledger release declares; supply one to use your own.
   provers: { v8: { kind: 'wasm' }, v9: { kind: 'wasm' } },
   indexerClientConnection: {
     indexerHttpUrl: INDEXER_HTTP_URL,

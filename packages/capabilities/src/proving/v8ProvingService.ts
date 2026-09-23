@@ -97,17 +97,17 @@ export const makeV8ServerProvingServiceEffect = (configuration: ServerProvingCon
  * Proves ledger-v8 transactions in this process.
  *
  * @remarks
- *   The zkir runtime the bundled prover drives is shared by both ledger lines, so there is nothing version-specific about
- *   the proving loop — and the key material ledger-v8 accepts turns out to be the same line the current one uses, which
- *   is why no key-material override is applied here. See the ledger-v8 spike in `prover-client`'s
- *   `v8WasmProver.integration.test.ts` for the evidence.
+ *   The zkir runtime the bundled prover drives is shared by both ledger versions, so there is nothing version-specific
+ *   about the proving loop — but there is about the key material. Ledger-v8's circuits are generation 9 and ledger-v9's
+ *   generation 10, and a node rejects a Dust spend proved with the other version's, so this backend reads ledger-v8's
+ *   own ({@link WasmProver.makeV8KeyMaterialProvider}) unless it is given key material of its own.
  * @param configuration Optional key material override.
  * @returns A backend that proves ledger-v8 transactions in-process.
  */
 export const makeV8WasmProvingServiceEffect = (configuration?: WasmProvingConfiguration): V8ProvingServiceEffect =>
   pipe(
     WasmProver.create({
-      keyMaterialProvider: configuration?.keyMaterialProvider ?? WasmProver.makeDefaultKeyMaterialProvider(),
+      keyMaterialProvider: configuration?.keyMaterialProvider ?? WasmProver.makeV8KeyMaterialProvider(),
     }),
     Effect.map((prover) => prover.asProvingProvider()),
     fromV8ProvingProviderEffect,
