@@ -312,12 +312,21 @@ export const makeV9ServerProvingServiceEffect = (
   );
 };
 
+/**
+ * Proves ledger-v9 transactions in this process.
+ *
+ * @remarks
+ *   The ledger-v9 twin of `makeV8WasmProvingServiceEffect`: the same bundled prover, with ledger-v9's key material —
+ *   circuit generation 10 ({@link WasmProver.makeV9KeyMaterialProvider}) — unless it is given key material of its own.
+ * @param configuration Optional key material override.
+ * @returns A backend that proves ledger-v9 transactions in-process.
+ */
 export const makeV9WasmProvingServiceEffect = (
   configuration?: WasmProvingConfiguration,
 ): ProvingServiceEffect<V9UnboundTransaction> => {
   return pipe(
     WasmProver.create({
-      keyMaterialProvider: configuration?.keyMaterialProvider ?? WasmProver.makeDefaultKeyMaterialProvider(),
+      keyMaterialProvider: configuration?.keyMaterialProvider ?? WasmProver.makeV9KeyMaterialProvider(),
     }),
     Effect.map((prover) => prover.asProvingProvider()),
     fromV9ProvingProviderEffect,

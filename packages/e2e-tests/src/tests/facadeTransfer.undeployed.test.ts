@@ -143,7 +143,9 @@ describe('Wallet Facade Transfer', () => {
     await Promise.all([senderFacade.stop(), receiverFacade.stop()]);
   });
 
-  it('allows to transfer shielded tokens only', async () => {
+  // @smoke: the one PR-lane test that proves a Dust spend in-process and submits it to a node. Nothing short of a node
+  // verifies a Dust spend proof, so this is what notices the in-process prover's key material falling behind the ledger.
+  it('allows to transfer shielded tokens only @smoke', async () => {
     await Promise.all([senderFacade.waitForSyncedState(), receiverFacade.waitForSyncedState()]);
 
     const receiverAddress = await receiverFacade.shielded.getAddress();

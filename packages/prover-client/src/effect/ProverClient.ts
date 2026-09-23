@@ -60,8 +60,8 @@ export declare namespace ProverClient {
      * @remarks
      *   A preimage is produced by the ledger version that built the transaction, and has to be framed and read back by
      *   that same version — so a client serving a ledger-v8 transaction is asked for this provider rather than the
-     *   other. An in-process prover has nothing to distinguish: it works on bytes, and offers the same provider for
-     *   both.
+     *   other. An in-process prover frames nothing: it works on bytes, and offers the same provider for both. What it
+     *   proves for is decided by the key material it was created with, which is per ledger version.
      */
     asV8ProvingProvider(): ledgerV8.ProvingProvider;
   }
