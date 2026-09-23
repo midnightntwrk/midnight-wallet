@@ -4,7 +4,7 @@
 # Output: wasm/pkg/, which is exactly where the loader looks by default. Run from anywhere; paths are resolved relative
 # to this script.
 #
-# Requires a Rust toolchain with the wasm32-unknown-unknown target, wasm-bindgen 0.2.104, and wasm-opt. See ../README.md.
+# Requires a Rust toolchain with the wasm32-unknown-unknown target, wasm-bindgen 0.2.108, and wasm-opt. See ../README.md.
 set -euo pipefail
 
 package_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,7 +17,7 @@ crate_lib=v8_to_v9_state_translation_wasm
 
 # `wasm-bindgen` must match the `wasm-bindgen` crate version pinned in Cargo.toml exactly; it rejects a .wasm produced
 # by any other version, so fail here with a clear reason rather than mid-build.
-required_bindgen=0.2.104
+required_bindgen=0.2.108
 for tool in cargo wasm-bindgen wasm-opt; do
   command -v "$tool" >/dev/null || {
     echo "error: $tool not found on PATH. See $package_dir/README.md for the toolchain." >&2
@@ -35,39 +35,37 @@ have_bindgen="$(wasm-bindgen --version | awk '{print $2}')"
 # Vendor `midnight-storage` with the wasm-safe clock patch.
 #
 # Its metered translation loop calls `std::time::Instant::now()`, which is unimplemented on wasm32-unknown-unknown and
-# traps. Until a release carries the fix, the published source is fetched and patched here, and `Cargo.toml`'s
+# traps. Until a release carries the fix, the source is fetched and patched here, and `Cargo.toml`'s
 # `[patch.crates-io]` points at the result. Delete all of this — the patch, this block, and that `[patch]` entry — once
 # a published `midnight-storage` has it.
 #
-# The version comes from Cargo.lock, so this tracks whatever is actually resolved. If the patch stops applying, the
-# crate has moved and the patch needs regenerating; that is a hard failure rather than a silently unpatched build.
+# The source is the midnight-ledger git tag below rather than crates.io, because the ledger-v9 tag `Cargo.toml` pins
+# needs a `midnight-storage` that is not published there yet. Like the tags there, it is the crate's own release tag,
+# where its dependencies are plain versions that `[patch]` redirects rather than paths into the ledger's checkout. A crate inside the
+# upstream workspace inherits `license` and `repository` from it, so the patch also spells those out; if it stops
+# applying, the crate has moved and the patch needs regenerating — a hard failure rather than a silently unpatched
+# build.
 # ---------------------------------------------------------------------------
+storage_tag=storage-2.0.4-rc.1
 storage_patch="$crate_dir/patches/midnight-storage-wasm-instant.patch"
-storage_version="$(awk '/^name = "midnight-storage"$/ { found = 1; next }
-                        found && /^version = / { gsub(/[",]/, "", $3); print $3; exit }' "$repo_root/Cargo.lock")"
-[ -n "$storage_version" ] || {
-  echo "error: could not read the midnight-storage version from $repo_root/Cargo.lock" >&2
-  exit 1
-}
 
-# The stamp covers the patch as well as the version: editing the patch without the version moving would otherwise keep
-# building from the previously patched tree until `.vendor` was deleted by hand.
+# The stamp covers the patch as well as the tag: editing the patch without the tag moving would otherwise keep building
+# from the previously patched tree until `.vendor` was deleted by hand.
 patch_digest="$({ sha256sum "$storage_patch" 2>/dev/null || shasum -a 256 "$storage_patch"; } | awk '{print $1}')"
 storage_dir="$vendor_dir/midnight-storage"
 stamp="$storage_dir/.patched-version"
-if [ "$(cat "$stamp" 2>/dev/null || true)" != "$storage_version $patch_digest" ]; then
-  echo "vendoring midnight-storage $storage_version with the wasm clock patch"
+if [ "$(cat "$stamp" 2>/dev/null || true)" != "$storage_tag $patch_digest" ]; then
+  echo "vendoring midnight-storage $storage_tag with the wasm clock patch"
   rm -rf "$storage_dir"
-  mkdir -p "$vendor_dir"
-  curl -sSfL "https://static.crates.io/crates/midnight-storage/midnight-storage-${storage_version}.crate" \
-    | tar xz -C "$vendor_dir"
-  mv "$vendor_dir/midnight-storage-${storage_version}" "$storage_dir"
+  mkdir -p "$storage_dir"
+  curl -sSfL "https://codeload.github.com/midnightntwrk/midnight-ledger/tar.gz/refs/tags/${storage_tag}" \
+    | tar xz -C "$storage_dir" --strip-components=2 "midnight-ledger-${storage_tag}/storage"
   patch -p1 -s -d "$storage_dir" <"$storage_patch" || {
-    echo "error: $storage_patch does not apply to midnight-storage $storage_version." >&2
+    echo "error: $storage_patch does not apply to midnight-storage $storage_tag." >&2
     echo "       The crate has moved; regenerate the patch (see ../README.md) or drop it if the fix is now released." >&2
     exit 1
   }
-  echo "$storage_version $patch_digest" >"$stamp"
+  echo "$storage_tag $patch_digest" >"$stamp"
 fi
 
 # The stack protector pulls in OS code that does not exist on wasm — the same reason midnight-ledger's nix build

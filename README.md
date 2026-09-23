@@ -102,11 +102,11 @@ the gate that builds the WASM and verifies it translates.
 ```shell
 brew install rustup binaryen llvm          # or your platform's equivalents
 rustup default stable
-cargo install wasm-bindgen-cli --version 0.2.104 --locked
+cargo install wasm-bindgen-cli --version 0.2.108 --locked
 ```
 
 - The wasm32 target installs itself: [`rust-toolchain.toml`](rust-toolchain.toml) pins the toolchain and lists it.
-- `wasm-bindgen` must be **exactly 0.2.104**, matching the crate pin — the CLI rejects a `.wasm` built by any other
+- `wasm-bindgen` must be **exactly 0.2.108**, matching the crate pin — the CLI rejects a `.wasm` built by any other
   version. Homebrew's is newer, hence `cargo install`.
 - `llvm` is required **on macOS only**: Apple's clang cannot target wasm32, so the crate's C dependencies fail without a
   clang that can. Linux distributions' clang already does.

@@ -152,7 +152,7 @@ For code that composes wallets or test fixtures by hand.
 
 ### Dependencies
 
-- `@midnightntwrk/ledger-v9` `1.0.0-rc.4`. Its dust spend circuit differs from rc.3, so run proof server `9.0.0-rc.7`,
-  the build the rc.4 ledger declares; the `./testing` containers in `@midnightntwrk/wallet-sdk-utilities` default to it.
+- `@midnightntwrk/ledger-v9` `1.0.0-rc.5`. Its dust spend circuit differs from rc.3, so run proof server `9.0.0-rc.7`,
+  the build the rc.5 ledger declares; the `./testing` containers in `@midnightntwrk/wallet-sdk-utilities` default to it.
 - `@midnight-ntwrk/ledger-v8` is a runtime dependency of the capabilities, wallet, facade, prover-client, testkit and
   umbrella packages, so browser bundles load two ledger WASM modules.
