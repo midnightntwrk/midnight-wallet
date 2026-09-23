@@ -164,7 +164,7 @@ describe('Optional Balancing', () => {
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
-      const recipe = await facade.balanceUnprovenTransaction(sealed('Unproven', arbitraryTx), {
+      const recipe = await facade.balanceUnprovenTransaction(sealed(facade, 'Unproven', arbitraryTx), {
         ttl,
         tokenKindsToBalance: ['shielded'],
       });
@@ -187,7 +187,7 @@ describe('Optional Balancing', () => {
       const tx = pipe(createArbitraryShieldedOffer(), (offer) =>
         ledger.Transaction.fromParts(configuration.networkId, offer),
       );
-      const recipe = await facade.balanceUnprovenTransaction(sealed('Unproven', tx), {
+      const recipe = await facade.balanceUnprovenTransaction(sealed(facade, 'Unproven', tx), {
         ttl,
         tokenKindsToBalance: ['shielded'],
       });
@@ -204,7 +204,7 @@ describe('Optional Balancing', () => {
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
 
-      const recipe = await facade.balanceUnprovenTransaction(sealed('Unproven', arbitraryTx), {
+      const recipe = await facade.balanceUnprovenTransaction(sealed(facade, 'Unproven', arbitraryTx), {
         ttl,
         tokenKindsToBalance: ['unshielded'],
       });
@@ -226,7 +226,7 @@ describe('Optional Balancing', () => {
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
 
-      const recipe = await facade.balanceUnprovenTransaction(sealed('Unproven', arbitraryTx), {
+      const recipe = await facade.balanceUnprovenTransaction(sealed(facade, 'Unproven', arbitraryTx), {
         ttl,
         tokenKindsToBalance: ['dust'],
       });
@@ -247,7 +247,7 @@ describe('Optional Balancing', () => {
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
-      const recipe = await facade.balanceUnprovenTransaction(sealed('Unproven', arbitraryTx), { ttl });
+      const recipe = await facade.balanceUnprovenTransaction(sealed(facade, 'Unproven', arbitraryTx), { ttl });
 
       const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.transaction), 0);
 
@@ -270,7 +270,7 @@ describe('Optional Balancing', () => {
       const arbitraryTx = createArbitraryTx(configuration.networkId);
       const unboundTx = await provingService.prove(arbitraryTx);
 
-      const recipe = await facade.balanceUnboundTransaction(sealed('Unbound', unboundTx), {
+      const recipe = await facade.balanceUnboundTransaction(sealed(facade, 'Unbound', unboundTx), {
         ttl,
         tokenKindsToBalance: ['shielded'],
       });
@@ -310,7 +310,7 @@ describe('Optional Balancing', () => {
             ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
           ),
       );
-      const recipe = await facade.balanceUnboundTransaction(sealed('Unbound', tx), {
+      const recipe = await facade.balanceUnboundTransaction(sealed(facade, 'Unbound', tx), {
         ttl,
         tokenKindsToBalance: ['shielded'],
       });
@@ -329,7 +329,7 @@ describe('Optional Balancing', () => {
       const arbitraryTx = createArbitraryTx(configuration.networkId);
       const unboundTx = await provingService.prove(arbitraryTx);
 
-      const recipe = await facade.balanceUnboundTransaction(sealed('Unbound', unboundTx), {
+      const recipe = await facade.balanceUnboundTransaction(sealed(facade, 'Unbound', unboundTx), {
         ttl,
         tokenKindsToBalance: ['unshielded'],
       });
@@ -350,7 +350,7 @@ describe('Optional Balancing', () => {
       const arbitraryTx = createArbitraryTx(configuration.networkId);
       const unboundTx = await provingService.prove(arbitraryTx);
 
-      const recipe = await facade.balanceUnboundTransaction(sealed('Unbound', unboundTx), {
+      const recipe = await facade.balanceUnboundTransaction(sealed(facade, 'Unbound', unboundTx), {
         ttl,
         tokenKindsToBalance: ['dust'],
       });
@@ -382,7 +382,7 @@ describe('Optional Balancing', () => {
       const arbitraryTx = createArbitraryTx(configuration.networkId);
       const unboundTx = await provingService.prove(arbitraryTx);
 
-      const recipe = await facade.balanceUnboundTransaction(sealed('Unbound', unboundTx), { ttl });
+      const recipe = await facade.balanceUnboundTransaction(sealed(facade, 'Unbound', unboundTx), { ttl });
 
       // Verify balancing transaction exists
       expect(recipe.balancingTransaction).toBeDefined();
@@ -421,7 +421,7 @@ describe('Optional Balancing', () => {
       await facade.waitForSyncedState();
 
       // Balance the finalized transaction with only shielded
-      const recipe = await facade.balanceFinalizedTransaction(sealed('Finalized', finalizedTx), {
+      const recipe = await facade.balanceFinalizedTransaction(sealed(facade, 'Finalized', finalizedTx), {
         ttl,
         tokenKindsToBalance: ['shielded'],
       });
@@ -446,7 +446,7 @@ describe('Optional Balancing', () => {
         (offer) => ledger.Transaction.fromParts(configuration.networkId, offer),
         (tx) => tx.mockProve(),
       );
-      const recipe = await facade.balanceFinalizedTransaction(sealed('Finalized', tx), {
+      const recipe = await facade.balanceFinalizedTransaction(sealed(facade, 'Finalized', tx), {
         ttl,
         tokenKindsToBalance: ['shielded'],
       });
@@ -462,7 +462,7 @@ describe('Optional Balancing', () => {
       await facade.waitForSyncedState();
 
       // Balance the finalized transaction with only unshielded
-      const recipe = await facade.balanceFinalizedTransaction(sealed('Finalized', finalizedTx), {
+      const recipe = await facade.balanceFinalizedTransaction(sealed(facade, 'Finalized', finalizedTx), {
         ttl,
         tokenKindsToBalance: ['unshielded'],
       });
@@ -483,7 +483,7 @@ describe('Optional Balancing', () => {
       await facade.waitForSyncedState();
 
       // Balance the finalized transaction with only dust
-      const recipe = await facade.balanceFinalizedTransaction(sealed('Finalized', finalizedTx), {
+      const recipe = await facade.balanceFinalizedTransaction(sealed(facade, 'Finalized', finalizedTx), {
         ttl,
         tokenKindsToBalance: ['dust'],
       });
@@ -504,7 +504,7 @@ describe('Optional Balancing', () => {
       await facade.waitForSyncedState();
 
       // Balance the finalized transaction with all
-      const recipe = await facade.balanceFinalizedTransaction(sealed('Finalized', finalizedTx), { ttl });
+      const recipe = await facade.balanceFinalizedTransaction(sealed(facade, 'Finalized', finalizedTx), { ttl });
 
       const imbalances = getImbalances(carried<ledger.FinalizedTransaction>(recipe.balancingTransaction), 0);
 

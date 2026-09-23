@@ -203,7 +203,7 @@ describe('Token transfer (extended)', () => {
       );
       const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenRaw, outputValue);
       const unprovenTx = ledger.Transaction.fromParts(networkId, offer);
-      const finalizedTx = await sender.wallet.finalizeTransaction(sealed('Unproven', unprovenTx));
+      const finalizedTx = await sender.wallet.finalizeTransaction(sealed(sender.wallet, 'Unproven', unprovenTx));
       await expect(
         Promise.all([sender.wallet.submitTransaction(finalizedTx), sender.wallet.submitTransaction(finalizedTx)]),
       ).rejects.toThrow();

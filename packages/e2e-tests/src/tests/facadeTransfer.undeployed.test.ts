@@ -275,9 +275,12 @@ describe('Wallet Facade Transfer', () => {
 
     const arbitraryTx = ledger.Transaction.fromParts(configuration.networkId, outputOffer);
 
-    const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(sealed('Unproven', arbitraryTx), {
-      ttl: new Date(Date.now() + 30 * 60 * 1000),
-    });
+    const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(
+      sealed(senderFacade, 'Unproven', arbitraryTx),
+      {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      },
+    );
 
     const finalizedArbitraryTx = await senderFacade.finalizeRecipe(balancingTxRecipe);
 
@@ -315,9 +318,12 @@ describe('Wallet Facade Transfer', () => {
 
     const arbitraryTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, undefined, undefined, intent);
 
-    const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(sealed('Unproven', arbitraryTx), {
-      ttl: new Date(Date.now() + 30 * 60 * 1000),
-    });
+    const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(
+      sealed(senderFacade, 'Unproven', arbitraryTx),
+      {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      },
+    );
 
     // Sign the balancing transaction before finalizing
     const signedBalancingTxRecipe = await senderFacade.signRecipe(
