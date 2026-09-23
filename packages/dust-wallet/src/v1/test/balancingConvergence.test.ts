@@ -30,16 +30,13 @@
  *   imbalance, which it reads as a surplus, so nothing is selected and the guard stops the loop. The assertion fails
  *   for exactly that reason today. Change it back to `it` in the same change that fixes the balancing.
  */
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { makeSimulatorProvingServiceEffect } from '@midnightntwrk/wallet-sdk-capabilities/proving';
-import { Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
+import { V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Either, Scope, Stream, SubscriptionRef } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { createUnshieldedKeystore } from '../../../test/UnshieldedKeyStore.js';
 import { getDustSeed } from '../../../test/utils.js';
 import { chooseCoin, type CoinSelection, makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
@@ -48,7 +45,7 @@ import { makeSimulatorSyncCapability, makeSimulatorSyncService } from '../Sync.j
 import { DustTransactionHistoryEntrySchema, makeSimulatorTransactionHistoryService } from '../TransactionHistory.js';
 import { makeSimulatorTransactingCapability, TransactingCapabilityImplementation } from '../Transacting.js';
 import type { UtxoWithMeta } from '../types/index.js';
-import { V2Builder } from '../V2Builder.js';
+import { V1Builder } from '../V1Builder.js';
 
 const NETWORK = 'undeployed';
 const NIGHT = ledger.nativeToken().raw;
@@ -81,12 +78,16 @@ const guardedCoinSelection = (): (() => CoinSelection) => {
 
 /** A wallet holding exactly one Dust coin, generating from a small Night holding in the in-memory simulator. */
 const walletWithOneGeneratingDustCoin = Effect.gen(function* () {
-  const keyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed('00'.repeat(31) + '01') });
-  const dustSecretKey = ledger.DustSecretKey.fromSeed(keyStore.getSecretKey());
+  // Ledger-v8 keys are hex strings, derived here with ledger-v8's own functions rather than the ledger-v9 key store.
+  const seed = getDustSeed('00'.repeat(31) + '01');
+  const signingKey: ledger.SigningKey = Buffer.from(seed).toString('hex');
+  const verifyingKey = ledger.signatureVerifyingKey(signingKey);
+  const address = ledger.addressFromKey(verifyingKey);
+  const dustSecretKey = ledger.DustSecretKey.fromSeed(seed);
   const scope = yield* Scope.Scope;
-  const simulator = yield* Simulator.init({ networkId: NETWORK });
+  const simulator = yield* V8.Simulator.init({ networkId: NETWORK });
 
-  const variant = new V2Builder()
+  const variant = new V1Builder()
     .withTransactionType<ledger.ProofErasedTransaction>()
     .withCoinSelectionDefaults()
     .withTransacting(makeSimulatorTransactingCapability)
@@ -116,16 +117,15 @@ const walletWithOneGeneratingDustCoin = Effect.gen(function* () {
     })
     .pipe(Effect.provideService(Scope.Scope, scope));
   yield* wallet.startSyncInBackground(dustSecretKey);
-  const submission = Submission.makeSimulatorSubmissionService<ledger.ProofErasedTransaction>('InBlock')({ simulator });
   const waitForBlock = (block: bigint) =>
     Stream.runLast(stateRef.changes.pipe(Stream.find((state) => state.progress.appliedIndex >= block + 1n)));
 
-  yield* simulator.rewardNight(keyStore.getPublicKey(), NIGHT_AWARD);
+  yield* simulator.rewardNight(verifyingKey, NIGHT_AWARD);
   yield* waitForBlock(1n);
   yield* simulator.fastForward(SECONDS_BEFORE_REGISTERING);
 
   const rewarded = yield* simulator.getLatestState();
-  const nightUtxos: ReadonlyArray<UtxoWithMeta> = [...rewarded.ledger.utxo.filter(keyStore.getAddress())]
+  const nightUtxos: ReadonlyArray<UtxoWithMeta> = [...rewarded.ledger.utxo.filter(address)]
     .filter((utxo) => utxo.type === NIGHT)
     .map((utxo) => ({
       ...utxo,
@@ -137,14 +137,15 @@ const walletWithOneGeneratingDustCoin = Effect.gen(function* () {
     registeredAt,
     DateOps.addSeconds(registeredAt, 1),
     nightUtxos,
-    keyStore.getPublicKey(),
+    verifyingKey,
     new DustAddress((yield* SubscriptionRef.get(stateRef)).publicKey.publicKey),
   );
   const signed = yield* wallet.addDustGenerationSignature(
     registration,
-    keyStore.signData(registration.intents!.get(1)!.signatureData(1)),
+    ledger.signData(signingKey, registration.intents!.get(1)!.signatureData(1)),
   );
-  yield* submission.submitTransaction(yield* makeSimulatorProvingServiceEffect().prove(signed), 'InBlock');
+  // The simulator proves by erasing proofs; it has no ledger-v8 submission service, so submit to it directly.
+  yield* simulator.submitTransaction(signed.eraseProofs());
   yield* waitForBlock(2n);
 
   const registered = yield* simulator.getLatestState();
@@ -153,7 +154,9 @@ const walletWithOneGeneratingDustCoin = Effect.gen(function* () {
     state: yield* SubscriptionRef.get(stateRef),
     ledgerParameters: registered.ledger.parameters,
     now: DateOps.addSeconds(registered.currentTime, 1),
-    recipient: createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed('00'.repeat(31) + '02') }).getAddress(),
+    recipient: ledger.addressFromKey(
+      ledger.signatureVerifyingKey(Buffer.from(getDustSeed('00'.repeat(31) + '02')).toString('hex')),
+    ),
   };
 });
 
