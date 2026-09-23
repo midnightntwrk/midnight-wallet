@@ -11,5 +11,5 @@
 '@midnightntwrk/wallet-sdk': patch
 ---
 
-chore: upgrade `@midnightntwrk/ledger-v9` to 1.0.0-rc.5 and `@midnight-ntwrk/zkir-v2` to 2.2.0-rc.3 (proof server stays
-at 9.0.0-rc.7, the build ledger-v9 rc.5 declares)
+chore: upgrade `@midnightntwrk/ledger-v9` to 1.0.0-rc.5 (proof server stays at 9.0.0-rc.7, the build ledger-v9 rc.5
+declares)

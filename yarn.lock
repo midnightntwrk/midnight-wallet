@@ -2507,10 +2507,10 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/zkir-v2@npm:2.2.0-rc.3":
-  version: 2.2.0-rc.3
-  resolution: "@midnight-ntwrk/zkir-v2@npm:2.2.0-rc.3::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzkir-v2%2F2.2.0-rc.3%2F52001c19bd7981f0d414cc9f9d8532409077268a"
-  checksum: 10c0/35241b797652d7f7d4655f2a61a0fded1fd42642e3aa624987ab03c7b93a542876689b4011451fda68c590da1d275bea57aa603378eb2c5e8da44dd47982522d
+"@midnight-ntwrk/zkir-v2@npm:^2.1.0":
+  version: 2.1.1
+  resolution: "@midnight-ntwrk/zkir-v2@npm:2.1.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzkir-v2%2F2.1.1%2F972e123ec22057c24355779335e035dc11fc50d6"
+  checksum: 10c0/05b344af8b60e8cfed117bf3cb15373e5a09cb66925d67e035ac91a8fad5cfef2812d0d0d8951f1c8937ad75dfad39ae97f636934377a02368c7b442e724cb9c
   languageName: node
   linkType: hard
 
@@ -2582,7 +2582,7 @@ __metadata:
     "@effect/sql": "npm:0.52.1"
     "@effect/workflow": "npm:0.19.1"
     "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
-    "@midnight-ntwrk/zkir-v2": "npm:2.2.0-rc.3"
+    "@midnight-ntwrk/zkir-v2": "npm:^2.1.0"
     "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.5"
     "@midnightntwrk/wallet-sdk-abstractions": "npm:3.0.0-beta.1"
     "@midnightntwrk/wallet-sdk-indexer-client": "npm:2.0.0-beta.2"
@@ -2750,7 +2750,7 @@ __metadata:
   dependencies:
     "@effect/platform": "npm:^0.97.0"
     "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
-    "@midnight-ntwrk/zkir-v2": "npm:2.2.0-rc.3"
+    "@midnight-ntwrk/zkir-v2": "npm:^2.1.0"
     "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.5"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.2.2-beta.0"
     effect: "npm:^3.19.19"

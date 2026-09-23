@@ -100,9 +100,9 @@ const zswapFiles = {
   'zswap/sign.bzkir': '37ea2094516e145a738126307cf92bd293f7cb524b1ccd49fa6f3225a9ec3a50',
 } as const;
 
-/** Ledger-v9's key material: circuit generation 10, as `midnight-ledger` `ledger-9.1.0.0-rc.4` declares it. */
+/** Ledger-v9's key material: circuit generation 10, as `midnight-ledger` `ledger-9.1.0.0-rc.5` declares it. */
 export const V9KeyMaterial: KeyMaterialDescriptor = {
-  ledgerRelease: { packageName: '@midnightntwrk/ledger-v9', version: '1.0.0-rc.4', tag: 'ledger-9.1.0.0-rc.4' },
+  ledgerRelease: { packageName: '@midnightntwrk/ledger-v9', version: '1.0.0-rc.5', tag: 'ledger-9.1.0.0-rc.5' },
   generation: 10,
   files: {
     ...zswapFiles,
