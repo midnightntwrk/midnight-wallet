@@ -14,29 +14,36 @@ resolver = "2"
 # Both `[patch]` and custom `[profile]` are only honoured in the workspace *root* manifest, which is why they live here
 # rather than beside the crate that needs them.
 
-# The ledger's v9 line is in pre-release and is not on crates.io. Its own workspace redirects these to git tags, and
-# `[patch]` only applies from the top-level manifest — so consuming the translation from outside that workspace means
-# replicating the block. Copied verbatim from midnight-ledger's root Cargo.toml; keep it in step when the tags move.
+# The ledger's v9 line is in pre-release and is not on crates.io, so these point at the newest rc tag of each crate.
+# `[patch]` only applies from the top-level manifest, so consuming the translation from outside the ledger's workspace
+# means replicating it here. Use each crate's own release tag: there its midnight dependencies are plain versions that
+# this block redirects, whereas at the ledger's release tag they are paths into that checkout, which builds a second
+# copy of every shared crate (`midnight-storage` included, bypassing the vendored one) whose types do not line up.
+# `midnight-ledger-static` has no tag of its own and no midnight dependencies, so it comes from the ledger's tag.
+# `midnight-zkir-v3` is only needed by ledger-v9's `test-utilities`, which the translation crate enables.
 [patch.crates-io]
 # TEMPORARY. `midnight-storage`'s metered translation loop calls `std::time::Instant::now()`, which is unimplemented on
 # wasm32-unknown-unknown and traps. `packages/state-translation/scripts/build-wasm.sh` materializes this directory by
-# fetching the published source and applying `patches/midnight-storage-wasm-instant.patch`, so cargo has to be driven
-# through that script — a missing directory is a hard error here, which is the point: the alternative is silently
+# fetching the source at a pinned git tag and applying `patches/midnight-storage-wasm-instant.patch`, so cargo has to be
+# driven through that script — a missing directory is a hard error here, which is the point: the alternative is silently
 # shipping a wasm that traps. Delete this entry, the patch, and the vendoring block in the script once a published
 # release carries the fix.
 midnight-storage = { path = "packages/state-translation/wasm/.vendor/midnight-storage" }
-midnight-base-crypto = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "base-crypto-1.1.0-rc.2" }
+midnight-base-crypto = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "base-crypto-1.1.0-rc.3" }
 midnight-base-crypto-derive = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "base-crypto-derive-1.1.0-rc.2" }
-midnight-ledger-v9 = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "crate-ledger-9.1.0.0-rc.3" }
-midnight-zswap = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "zswap-9.0.0-rc.3" }
-midnight-coin-structure = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "coin-structure-3.0.0-rc.1" }
-midnight-transient-crypto = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "transient-crypto-3.0.0-rc.2" }
+midnight-ledger-v9 = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "crate-ledger-9.1.0.0-rc.5" }
+midnight-ledger-static = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "crate-ledger-9.1.0.0-rc.5" }
+midnight-zswap = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "zswap-9.0.0-rc.5" }
+midnight-coin-structure = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "coin-structure-3.0.0-rc.2" }
+midnight-transient-crypto = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "transient-crypto-3.0.0-rc.3" }
 midnight-transient-crypto-old = { package = "midnight-transient-crypto", git = "https://github.com/midnightntwrk/midnight-ledger", tag = "transient-crypto-2.2.0-rc.1" }
-midnight-onchain-state = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "onchain-state-4.0.0-rc.3" }
-midnight-onchain-vm = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "onchain-vm-4.0.0-rc.2" }
-midnight-onchain-runtime = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "onchain-runtime-4.0.0-rc.2" }
-midnight-zkir = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "zkir-2.2.0-rc.3" }
-midnight-serialize = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "serialize-1.2.0-rc.1" }
+midnight-onchain-state = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "onchain-state-4.0.0-rc.4" }
+midnight-onchain-vm = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "onchain-vm-4.0.0-rc.3" }
+midnight-onchain-runtime = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "onchain-runtime-4.0.0-rc.4" }
+midnight-zkir = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "zkir-2.2.0-rc.4" }
+midnight-zkir-v3 = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "zkir-v3-3.0.0-rc.1" }
+midnight-serialize = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "serialize-1.2.0-rc.2" }
+midnight-storage-core = { git = "https://github.com/midnightntwrk/midnight-ledger", tag = "storage-core-1.2.2-rc.1" }
 
 # Size over speed: this is a one-shot migration tool loaded into a JS runtime, so the artifact's bytes cost more than its
 # cycles. Mirrors midnight-ledger's own `wasm` profile.

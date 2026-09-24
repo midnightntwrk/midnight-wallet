@@ -73,7 +73,7 @@ and `state-translation` do, because their `test:integration` depends on the stat
 task, which builds and verifies the WASM.
 
 Requires `rustup` (the toolchain and wasm32 target come from the root `rust-toolchain.toml`), `wasm-bindgen-cli` at
-**exactly 0.2.104**, `binaryen` for `wasm-opt`, and on macOS Homebrew's `llvm` — Apple's clang cannot target wasm32.
+**exactly 0.2.108**, `binaryen` for `wasm-opt`, and on macOS Homebrew's `llvm` — Apple's clang cannot target wasm32.
 
 The root `Cargo.toml` is the Rust workspace; it holds the `[patch.crates-io]` block and the `wasm` profile, because
 Cargo only honours those in a workspace root. **Do not run `cargo` directly** — the build script materializes a
