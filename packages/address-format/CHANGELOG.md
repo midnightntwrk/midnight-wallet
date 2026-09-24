@@ -1,6 +1,6 @@
 # @midnightntwrk/wallet-sdk-address-format
 
-## 4.0.0-rc.5
+## 4.0.0-rc.0
 
 ### Patch Changes
 

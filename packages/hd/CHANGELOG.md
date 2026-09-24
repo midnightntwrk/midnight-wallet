@@ -1,6 +1,6 @@
 # @midnightntwrk/wallet-sdk-hd
 
-## 3.1.0-rc.4
+## 3.1.0-rc.0
 
 ### Patch Changes
 

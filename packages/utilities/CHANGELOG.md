@@ -1,6 +1,6 @@
 # @midnightntwrk/wallet-sdk-utilities
 
-## 1.2.2-rc.1
+## 1.2.2-rc.0
 
 ### Patch Changes
 

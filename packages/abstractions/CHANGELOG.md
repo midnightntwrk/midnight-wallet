@@ -1,6 +1,6 @@
 # @midnightntwrk/wallet-sdk-abstractions
 
-## 3.0.0-rc.3
+## 3.0.0-rc.0
 
 ### Patch Changes
 
