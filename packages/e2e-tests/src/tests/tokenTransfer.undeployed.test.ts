@@ -665,6 +665,7 @@ describe('Token transfer', () => {
         // Merged by the caller, so the two are opened at the version they were both built at and the result sealed
         // back — a merge is only defined between transactions of one ledger version.
         sealed(
+          receiver3.wallet,
           'Finalized',
           carried<ledger.FinalizedTransaction>(swapCoin1Tx).merge(carried<ledger.FinalizedTransaction>(swapCoin2Tx)),
         ),
@@ -717,7 +718,7 @@ describe('Token transfer', () => {
       );
       const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenRaw, outputValue);
       const unprovenTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
-      const finalizedTx = await funded.wallet.finalizeTransaction(sealed('Unproven', unprovenTx));
+      const finalizedTx = await funded.wallet.finalizeTransaction(sealed(funded.wallet, 'Unproven', unprovenTx));
       const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
       await expect(
         Promise.all([funded.wallet.submitTransaction(finalizedTx), funded.wallet.submitTransaction(finalizedTx)]),
@@ -1003,7 +1004,7 @@ describe('Token transfer', () => {
       );
       const offer = ledger.ZswapOffer.fromOutput(output, tokenTypeHash, outputValueNativeToken);
       const unprovenTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
-      const finalizedTx = await funded.wallet.finalizeTransaction(sealed('Unproven', unprovenTx));
+      const finalizedTx = await funded.wallet.finalizeTransaction(sealed(funded.wallet, 'Unproven', unprovenTx));
 
       await expect(
         Promise.all([funded.wallet.submitTransaction(finalizedTx), funded.wallet.submitTransaction(finalizedTx)]),

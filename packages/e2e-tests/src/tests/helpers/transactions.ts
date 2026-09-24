@@ -19,23 +19,23 @@
  *   then read identifiers and imbalances off what it returns. Neither is what an ordinary application does, which is
  *   why the two directions are named here rather than scattered — an application carries a handle and never opens it.
  */
-import { ProtocolVersion, WalletTransaction, type AnyTx } from '@midnightntwrk/wallet-sdk';
+import { ProtocolVersion, WalletTransaction, type AnyTx, type WalletFacade } from '@midnightntwrk/wallet-sdk';
 import { Either } from 'effect';
 
 /**
- * The protocol version these suites author at.
+ * Seals a transaction a test built for itself, at the version the facade that will use it is acting at.
  *
  * @remarks
- *   The minimum supported version, which is the epoch a wallet with no history is in and the one an undeployed chain
- *   reports. A transaction sealed at any other version is refused by the facade until the wallets have crossed to it.
+ *   The facade is asked rather than told. A fixed version is right on one chain and wrong on the next: a local chain born
+ *   on ledger-v9 reports the fork version from genesis, a live network still below the boundary reports the minimum,
+ *   and a later fork adds a third answer. `adoptTransaction` reads the bytes with the ledger the facade is acting on,
+ *   so a test that built them with the other ledger fails here, by name, instead of being refused further down.
  */
-export const AUTHORED_AT = ProtocolVersion.MinSupportedVersion;
-
-/** Seals a transaction a test built for itself, saying which ledger version built it. */
 export const sealed = <TStage extends WalletTransaction.Stage>(
+  facade: Pick<WalletFacade, 'adoptTransaction'>,
   stage: TStage,
   transaction: { serialize: () => Uint8Array },
-): WalletTransaction<TStage> => WalletTransaction.adopt(stage, transaction, AUTHORED_AT);
+): WalletTransaction<TStage> => facade.adoptTransaction(transaction.serialize(), stage);
 
 /**
  * Reads the transaction a handle carries, at exactly the version it says it was built at.
