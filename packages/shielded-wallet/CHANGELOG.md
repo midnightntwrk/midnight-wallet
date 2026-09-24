@@ -1,5 +1,47 @@
 # @midnightntwrk/wallet-sdk-shielded
 
+## 4.0.0-beta.4
+
+### Patch Changes
+
+- 83eb454: docs(shielded-wallet): replace 'NIGHT' placeholder in examples — NIGHT is unshielded
+
+  The transfer and swap examples used `'NIGHT'` and `'TOKEN_A'` as token types. Both are placeholders the API rejects:
+  `type` feeds `ledger.createShieldedCoinInfo()`, which needs a real shielded token type (raw hex), and NIGHT is an
+  unshielded token that can never appear in a shielded offer. The examples now use `tokenType` / `tokenTypeA` /
+  `tokenTypeB` bindings with a comment saying what to pass.
+
+- a621abc: fix(shielded): keep equal-value coins when balancing a fallible section
+
+  Balancing a fallible section removed every remaining candidate coin that shared a type and a value with the one just
+  selected, because the fallible path passed a value-based `isCoinEqual` predicate to `getBalanceRecipe`. Shielded coins
+  are told apart by their nonce, so a deficit needing several equal-value coins failed with `InsufficientFundsError`
+  even though the wallet held the funds. The fallible path now uses the nonce-based predicate the guaranteed path
+  already used, in both the V1 and V2 variants.
+
+- a12155a: fix(shielded): reject a reordered event batch instead of applying it
+
+  Addresses the Least Authority audit suggestion "Handle Sync Updates Defensively" (25 March 2026) for the shielded
+  wallet's event sync. After dropping the boundary event the inclusive cursor re-delivers, a batch must arrive in
+  strictly ascending id order. A batch with an id at or below its predecessor, or at or below the cursor, is refused
+  whole with the new tagged `OutOfOrderSyncUpdateError` (`Wallet.OutOfOrderSyncUpdate`, carrying `expected` and
+  `received`): nothing in it is applied and the cursor does not move. The running variant logs the error and retries
+  from the same cursor.
+
+  Only order is checked, never contiguity: in the indexer, zswap events share one id sequence with dust and contract
+  events, so gaps in a zswap stream are normal. A skipped commitment-inserting event is still caught by the ledger's own
+  insertion check. Applies to both the V1 and V2 variants.
+
+- ac825c0: chore: upgrade `@midnightntwrk/ledger-v9` to 1.0.0-rc.5 (proof server stays at 9.0.0-rc.7, the build
+  ledger-v9 rc.5 declares)
+- Updated dependencies [7025e69]
+- Updated dependencies [ac825c0]
+- Updated dependencies [12ca8b1]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-runtime@1.1.0-beta.2
+
 ## 4.0.0-beta.3
 
 ### Major Changes

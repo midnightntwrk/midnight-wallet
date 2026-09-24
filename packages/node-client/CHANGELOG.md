@@ -1,5 +1,30 @@
 # @midnightntwrk/wallet-sdk-node-client
 
+## 2.0.0-beta.4
+
+### Patch Changes
+
+- ac825c0: chore: upgrade `@midnightntwrk/ledger-v9` to 1.0.0-rc.5 (proof server stays at 9.0.0-rc.7, the build
+  ledger-v9 rc.5 declares)
+- 3ccc26e: fix(node-client): await the socket close in `make()`, and reference count the shared connection
+
+  `WsProvider.disconnect()` is fire-and-forget: it dispatches the close frame and returns while the socket is still
+  `CLOSING`. `isConnected` only clears once `#onSocketClose` fires, so `PolkadotNodeClient.make()` returned an api whose
+  `isConnected` was stale-`true`. `ensureConnection()` then treated the connection as live, skipped the reconnect, and
+  sent on a dying socket -- the close handshake completed milliseconds later and flushed `submitAndWatchExtrinsic` with
+  a disconnect error, so the transaction never reached the network. Locally the close-ack lands fast enough to hide
+  this; against a remote node it does not. Fixes #327.
+
+  Separately, each operation attached an unconditional `api.disconnect()` finalizer to the shared api, so one operation
+  completing could close the transport another was still using. Connection holds are now reference counted and the
+  socket closes when the last operation finishes; single-operation behaviour is unchanged.
+
+- Updated dependencies [7025e69]
+- Updated dependencies [ac825c0]
+- Updated dependencies [12ca8b1]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-prover-client@2.0.0-beta.4
+
 ## 2.0.0-beta.3
 
 ### Minor Changes
