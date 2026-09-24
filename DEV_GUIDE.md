@@ -114,7 +114,9 @@ How the `v2` line works:
 
 - The `v2` branch is in **Changesets pre-release mode** (`.changeset/pre.json`, tag `rc`) — every release from it is
   versioned `X.Y.Z-rc.N` and published under the `rc` dist-tag, so 1.x keeps owning `latest`. The line started under
-  `beta`; on the switch to `rc` the counter carries on rather than resetting (`2.0.0-beta.4` → `2.0.0-rc.5`).
+  `beta`; on the switch to `rc` the counter carries on rather than resetting (`2.0.0-beta.4` → `2.0.0-rc.5`). Changing
+  the tag alone releases nothing: the PR that switches it must also carry a changeset that `patch`-bumps every published
+  package, or no release PR opens.
 - The branch-local `.changeset/config.json` sets `baseBranch: "v2"`; the automated release PR lives on
   `changeset-release/v2` (`chore: release (v2)`).
 - PRs containing ledger-v9 / 2.x work must target `v2`, not `main`.
