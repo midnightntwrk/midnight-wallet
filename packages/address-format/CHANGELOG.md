@@ -1,5 +1,12 @@
 # @midnightntwrk/wallet-sdk-address-format
 
+## 4.0.0-beta.4
+
+### Patch Changes
+
+- ac825c0: chore: upgrade `@midnightntwrk/ledger-v9` to 1.0.0-rc.5 (proof server stays at 9.0.0-rc.7, the build
+  ledger-v9 rc.5 declares)
+
 ## 4.0.0-beta.3
 
 ### Minor Changes

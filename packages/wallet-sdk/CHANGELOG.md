@@ -1,5 +1,35 @@
 # @midnightntwrk/wallet-sdk
 
+## 2.0.0-beta.4
+
+### Patch Changes
+
+- ac825c0: chore: upgrade `@midnightntwrk/ledger-v9` to 1.0.0-rc.5 (proof server stays at 9.0.0-rc.7, the build
+  ledger-v9 rc.5 declares)
+- Updated dependencies [48aaef5]
+- Updated dependencies [83eb454]
+- Updated dependencies [94c69ec]
+- Updated dependencies [7025e69]
+- Updated dependencies [3ccc26e]
+- Updated dependencies [0bf816a]
+- Updated dependencies [a621abc]
+- Updated dependencies [a12155a]
+- Updated dependencies [59e9260]
+- Updated dependencies [ac825c0]
+- Updated dependencies [3ccc26e]
+- Updated dependencies [12ca8b1]
+  - @midnightntwrk/wallet-sdk-hd@3.1.0-beta.3
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-facade@5.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-prover-client@2.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-node-client@2.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-runtime@1.1.0-beta.2
+
 ## 2.0.0-beta.3
 
 ### Major Changes

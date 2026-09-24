@@ -1,5 +1,103 @@
 # @midnightntwrk/wallet-sdk-testkit
 
+## 1.0.0-beta.4
+
+### Minor Changes
+
+- 94c69ec: feat(dust-wallet)!: run the projections dust sync in the background
+
+  The projections ("event-less") sync synchronizes in finite passes, where the event-based service holds a long-lived
+  subscription — so a wallet built on it converged once and observed nothing further. Background synchronization now
+  repeats those passes, each resuming from what the last applied.
+
+  **Breaking:** every `SyncService` now states how often background synchronization runs its `updates`, as a required
+  `backgroundRepeat` of `BackgroundRepeat.Once()` — the answer for a long-lived subscription, which is every service the
+  SDK ships bar one — or `BackgroundRepeat.WithDelay({ delay })`. A custom sync service must add the field.
+
+  The projections service is `WithDelay`, configurable as `backgroundSyncInterval` (milliseconds, default 5000). An idle
+  pass still re-resolves the wallet's nullifiers, so the interval costs more on a wallet holding Dust than on an empty
+  one. `facade.doSync()` is unchanged: one pass, then it returns.
+
+  Repeating a pass exposed four defects, fixed here:
+
+  - A pass emitted one update per resolved Dust spend into a buffer bounded at 16 that nothing drains until the pass
+    returns, so a wallet past roughly ten spends deadlocked silently. It is now unbounded.
+  - Three of a pass's four progress reports dropped a term the fourth counted, flipping `isSynced` on every repeat for a
+    wallet that had already caught up.
+  - Each pass rebuilt the source's indexer clients into the wallet's scope and released none until the wallet stopped.
+    Passes now get their own scope; the tx-history fan-out stays on the wallet's.
+  - A second `start()` forked a second poller, since the sync lock is released between passes. A worker-lifetime guard
+    makes it a no-op.
+
+  Separately, a failing pass now genuinely backs off at most two minutes, with jitter. Neither bound applied before, so
+  the delay doubled without limit into days.
+
+  Only the ledger-v9 twin's projections service is `WithDelay`: the finite-pass sync, and the buffer fix it needed,
+  remain ledger-v9 capabilities.
+
+  The testkit adds `eventLessDustWallet`, `eventBasedDustWallet`, `projectionsDustSyncOptions` and `DustWalletFactory`,
+  plus `dustWallet`/`manualSync` options on `provideWallet`, `initWalletWithSeed` and the dust and token-transfer
+  scenarios. Purely additive.
+
+- 94c69ec: feat(testkit)!: monitor the projections dust sync by default, selectable by DUST_SYNC
+
+  The dust and token-transfer healthcheck scenarios now build their wallets on the projections ("event-less") dust sync,
+  so the networks they monitor are exercised against a sync model wallets actually run. **Breaking** for anyone relying
+  on those scenarios using the event stream; pass `{ dustWallet: eventBasedDustWallet }` to keep it.
+
+  **Breaking:** `saveState` takes the wallet record rather than the facade, because a snapshot has to be written to the
+  namespace of the model that produced it. Migrate `saveState(wallet, dir, name)` to `saveState(walletInit, dir, name)`,
+  passing what `provideWallet`/`initWalletWithSeed` returned. A stale call fails inside the function, where it is caught
+  and logged rather than thrown — the snapshot is silently never written and every later run rebuilds from scratch.
+
+  `DUST_SYNC` selects the model for a whole run, as `events` or `projections`. An unrecognized value is rejected rather
+  than defaulted, because a silent fallback means a typo reports a run as covering one model while it covered the other.
+  Unset means `events` for testkit-built wallets and `projections` for those two scenarios. `provideWallet` and
+  `initWalletWithSeed` take `dustWallet` and `manualSync` options that pin a model regardless of the environment — which
+  is what a test comparing the two models needs, since a control that follows the run is no control at all.
+
+  New exports from the root and `/core`: `eventLessDustWallet`, `eventBasedDustWallet`, `dustWalletFor`,
+  `dustWalletFromEnv`, `dustSyncModelFromEnv`, `dustSyncModelOf`, `parseDustSyncModel`, `dustSnapshotPath`,
+  `withProjectionsDefault`, `manualProjectionsDustSyncOptions`, `waitForStableState`, `shouldPersistState`,
+  `DUST_SYNC_ENV_VAR`, and the `DustWalletFactory`, `DustSyncModel` and `DustSnapshotModel` types. `eventLessDustWallet`
+  is now the shipped two-variant dust wallet with the V2 variant's sync service swapped for the projections one, so it
+  reaches that sync on a chain running ledger-v9 from its first block and still builds transactions.
+
+  Dust snapshots are namespaced by the model that wrote them: the two disagree on what a snapshot's single progress
+  value means, so restoring one into the other resumes at a wrong position. Namespacing degrades a model switch to a
+  from-scratch build instead.
+
+  The settling state waiters applied their window to the source rather than to the predicate, so a wallet syncing in the
+  background — projections emits about every five seconds — starved them until the test timeout while logging that the
+  condition was already satisfied. They now also answer with the newest value satisfying the predicate rather than the
+  one from when it first held: `pendingCoins.length === 0` is equally true either side of a balance arriving, so the old
+  answer could be the stale pre-transaction state the window exists to avoid. And the token-transfer healthcheck settles
+  pending coins before asserting on them.
+
+### Patch Changes
+
+- ac825c0: chore: upgrade `@midnightntwrk/ledger-v9` to 1.0.0-rc.5 (proof server stays at 9.0.0-rc.7, the build
+  ledger-v9 rc.5 declares)
+- Updated dependencies [48aaef5]
+- Updated dependencies [83eb454]
+- Updated dependencies [94c69ec]
+- Updated dependencies [7025e69]
+- Updated dependencies [3ccc26e]
+- Updated dependencies [0bf816a]
+- Updated dependencies [a621abc]
+- Updated dependencies [a12155a]
+- Updated dependencies [59e9260]
+- Updated dependencies [ac825c0]
+- Updated dependencies [12ca8b1]
+  - @midnightntwrk/wallet-sdk-hd@3.1.0-beta.3
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-beta.2
+  - @midnightntwrk/wallet-sdk-facade@5.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-beta.4
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-beta.4
+
 ## 1.0.0-beta.3
 
 ### Major Changes
