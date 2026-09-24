@@ -1,5 +1,13 @@
 # @midnightntwrk/wallet-sdk-prover-client
 
+## 2.0.0-rc.0
+
+### Patch Changes
+
+- db9102e: chore: cut the first 2.x release candidate — republish the v2 line under the `rc` dist-tag
+- Updated dependencies [db9102e]
+  - @midnightntwrk/wallet-sdk-utilities@1.2.2-rc.0
+
 ## 2.0.0-beta.4
 
 ### Major Changes
