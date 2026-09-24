@@ -1,5 +1,25 @@
 # @midnightntwrk/wallet-sdk
 
+## 2.0.0-rc.5
+
+### Patch Changes
+
+- db9102e: chore: cut the first 2.x release candidate — republish the v2 line under the `rc` dist-tag
+- Updated dependencies [db9102e]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.3
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-rc.5
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-rc.5
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-rc.5
+  - @midnightntwrk/wallet-sdk-facade@5.0.0-rc.5
+  - @midnightntwrk/wallet-sdk-hd@3.1.0-rc.4
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0-rc.3
+  - @midnightntwrk/wallet-sdk-node-client@2.0.0-rc.5
+  - @midnightntwrk/wallet-sdk-prover-client@2.0.0-rc.5
+  - @midnightntwrk/wallet-sdk-runtime@1.1.0-rc.3
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-rc.5
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-rc.5
+  - @midnightntwrk/wallet-sdk-utilities@1.2.2-rc.1
+
 ## 2.0.0-beta.4
 
 ### Patch Changes

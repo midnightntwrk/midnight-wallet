@@ -1,5 +1,11 @@
 # @midnightntwrk/wallet-sdk-abstractions
 
+## 3.0.0-rc.3
+
+### Patch Changes
+
+- db9102e: chore: cut the first 2.x release candidate — republish the v2 line under the `rc` dist-tag
+
 ## 3.0.0-beta.2
 
 ### Patch Changes
