@@ -95,6 +95,8 @@ export type PreviousLedgerWallet = Readonly<{
   protocolVersion: bigint;
   progress: SyncProgress.SyncProgressData;
   state: Readonly<{ serialize: () => Uint8Array }>;
+  /** The transaction history a 1.0.0 snapshot embedded, when the previous wallet was restored from one. */
+  legacyTxHistory?: readonly string[];
 }>;
 
 /**
@@ -144,6 +146,7 @@ export const makeCrossLedgerMigration = (): StateMigration<PreviousLedgerWallet>
           networkId: previousState.networkId,
           protocolVersion: previousState.protocolVersion,
           progress: previousState.progress,
+          ...(previousState.legacyTxHistory === undefined ? {} : { legacyTxHistory: previousState.legacyTxHistory }),
         }),
       ),
       EitherOps.toEffect,

@@ -407,22 +407,42 @@ jobs:
         run: |
           yarn dlx turbo test-undeployed -- -t @smoke
 
+  # Persisted-format gate. The compatibility and drift tests themselves run inside `test-unit` along with every other
+  # unit test; this job exists for the check that needs git history rather than a test runner — a published fixture
+  # records what a shipped SDK actually wrote, so editing one would let a failing compatibility test be "fixed" by
+  # rewriting the evidence. `fetch-depth: 0` is why it is a job of its own: every other job checks out shallow.
+  serialization-formats:
+    name: Serialization Formats
+    needs: [general-checks]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # No toolchain setup and no install: the check is a plain node script over `git diff`, using only the standard
+      # library, so the runner's own node runs it.
+      - name: Check published fixtures are unmodified
+        run: node packages/serialization-tests/check-frozen.mjs origin/${{ github.base_ref || 'main' }}
+
   # Single aggregate gate over all test stages. Produces the "Tests" status check
   # that branch protection requires (the old combined job was also named "Tests"),
   # and stays stable as integration files come and go. `if: always()` so it reports
   # a definitive pass/fail even when a stage fails.
   tests:
     name: Tests
-    needs: [test-unit, integration, e2e-smoke]
+    needs: [test-unit, integration, e2e-smoke, serialization-formats]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate test results
         run: |
-          echo "unit=${{ needs.test-unit.result }} integration=${{ needs.integration.result }} e2e=${{ needs.e2e-smoke.result }}"
+          echo "unit=${{ needs.test-unit.result }} integration=${{ needs.integration.result }} e2e=${{ needs.e2e-smoke.result }} serialization=${{ needs.serialization-formats.result }}"
           if [ "${{ needs.test-unit.result }}" != "success" ] || \
              [ "${{ needs.integration.result }}" != "success" ] || \
-             [ "${{ needs.e2e-smoke.result }}" != "success" ]; then
+             [ "${{ needs.e2e-smoke.result }}" != "success" ] || \
+             [ "${{ needs.serialization-formats.result }}" != "success" ]; then
             echo "::error::One or more test stages did not pass."
             exit 1
           fi

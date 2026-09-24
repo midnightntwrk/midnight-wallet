@@ -1,0 +1,21 @@
+{
+  "train": "facade-2.0.0",
+  "name": "@midnight-ntwrk/wallet-sdk-unshielded-wallet",
+  "version": "2.0.0",
+  "ledgerDep": "@midnight-ntwrk/ledger-v7@^7.0.2",
+  "generatedWith": {
+    "fixedDate": "2026-03-01T12:00:00.000Z"
+  },
+  "snapshotFields": ["publicKey", "state", "protocolVersion", "appliedId", "networkId"],
+  "expected": {
+    "networkId": "undeployed",
+    "nightToken": "0000000000000000000000000000000000000000000000000000000000000000",
+    "customToken": "3333333333333333333333333333333333333333333333333333333333333333",
+    "availableValues": ["1000000", "777"],
+    "pendingValues": ["4200"],
+    "registeredFlags": [true, false],
+    "appliedId": "5",
+    "address": "mn_addr_undeployed106y8fh7e523t6l07mrt97ngssuyd7ak9vnrehvhpylr4hk5ndxkqj590pe"
+  },
+  "serialized": "{\"publicKey\":{\"publicKey\":\"d793631af7aa0e709439dd47fc001acd0b0727670b6670ea528ac83cb0127f4a\",\"addressHex\":\"7e8874dfd9a2a2bd7dfed8d65f4d108708df76c564c79bb2e127c75bda9369ac\",\"address\":\"mn_addr_undeployed106y8fh7e523t6l07mrt97ngssuyd7ak9vnrehvhpylr4hk5ndxkqj590pe\"},\"state\":{\"availableUtxos\":[{\"utxo\":{\"value\":\"1000000\",\"owner\":\"7e8874dfd9a2a2bd7dfed8d65f4d108708df76c564c79bb2e127c75bda9369ac\",\"type\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"intentHash\":\"5555555555555555555555555555555555555555555555555555555555555555\",\"outputNo\":0},\"meta\":{\"ctime\":\"2026-03-01T12:00:00.000Z\",\"registeredForDustGeneration\":true}},{\"utxo\":{\"value\":\"777\",\"owner\":\"7e8874dfd9a2a2bd7dfed8d65f4d108708df76c564c79bb2e127c75bda9369ac\",\"type\":\"3333333333333333333333333333333333333333333333333333333333333333\",\"intentHash\":\"5656565656565656565656565656565656565656565656565656565656565656\",\"outputNo\":1},\"meta\":{\"ctime\":\"2026-03-01T12:00:00.000Z\",\"registeredForDustGeneration\":false}}],\"pendingUtxos\":[{\"utxo\":{\"value\":\"4200\",\"owner\":\"7e8874dfd9a2a2bd7dfed8d65f4d108708df76c564c79bb2e127c75bda9369ac\",\"type\":\"3333333333333333333333333333333333333333333333333333333333333333\",\"intentHash\":\"5757575757575757575757575757575757575757575757575757575757575757\",\"outputNo\":0},\"meta\":{\"ctime\":\"2026-03-01T12:00:00.000Z\",\"registeredForDustGeneration\":false}}]},\"protocolVersion\":\"1\",\"appliedId\":\"5\",\"networkId\":\"undeployed\"}"
+}

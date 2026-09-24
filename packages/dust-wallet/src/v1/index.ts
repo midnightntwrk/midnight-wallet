@@ -24,5 +24,6 @@ export * from './RunningV1Variant.js';
 export * from './V1Builder.js';
 export * from './types/index.js';
 export * as CoinsAndBalances from './CoinsAndBalances.js';
+export * as Serialization from './Serialization.js';
 export * as TransactionHistory from './TransactionHistory.js';
 export * as WalletError from './WalletError.js';
