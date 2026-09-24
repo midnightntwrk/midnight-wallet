@@ -1,6 +1,6 @@
 {
   "mode": "pre",
-  "tag": "beta",
+  "tag": "rc",
   "initialVersions": {
     "@midnight-ntwrk/wallet-test-website": "1.0.0-beta.0",
     "@midnightntwrk/wallet-sdk-abstractions": "2.1.0",
