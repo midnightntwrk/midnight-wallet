@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
+import { SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
@@ -64,20 +65,8 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
 export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 
-/**
- * The `version` field of a dust snapshot. A reader never downgrades: meeting a version it does not know, it refuses the
- * payload and names both the surface it was reading and the version it found, so the failure is actionable without the
- * reader having to parse a schema tree.
- */
-const SnapshotVersionSchema = Schema.Literal(SNAPSHOT_FORMAT_VERSION).annotations({
-  message: (issue) =>
-    `Refusing a dust snapshot written in format version ${JSON.stringify(issue.actual)}: this build reads ${SNAPSHOT_FORMAT_VERSION} and does not downgrade.`,
-});
-
 const SnapshotSchema = Schema.Struct({
-  version: Schema.optionalWith(SnapshotVersionSchema, {
-    default: () => SNAPSHOT_FORMAT_VERSION,
-  }),
+  version: SnapshotFormat.versionField('dust', SNAPSHOT_FORMAT_VERSION),
   publicKey: Schema.Struct({
     publicKey: Schema.BigInt,
   }),

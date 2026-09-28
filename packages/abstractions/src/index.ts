@@ -23,3 +23,4 @@ export * from './InMemoryTransactionHistoryStorage.js';
 export * from './NoOpTransactionHistoryStorage.js';
 export * as TransactionHistoryStorage from './TransactionHistoryStorage.js';
 export * as TransactionHistoryFormat from './TransactionHistoryFormat.js';
+export * as SnapshotFormat from './SnapshotFormat.js';

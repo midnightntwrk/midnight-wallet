@@ -15,7 +15,7 @@ import { addressFromKey } from '@midnight-ntwrk/ledger-v8';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 import { type PublicKey } from './KeyStore.js';
-import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { UnshieldedState } from './UnshieldedState.js';
 
 export type SerializationCapability<TWallet, TSerialized> = {
@@ -66,16 +66,6 @@ export type DefaultSerializationConfiguration = {
 export { V1_SNAPSHOT_FORMAT_VERSION as SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 import { V1_SNAPSHOT_FORMAT_VERSION as SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 
-/**
- * The `version` field of an unshielded snapshot. A reader never downgrades: meeting a version it does not know, it
- * refuses the payload and names both the surface it was reading and the version it found, so the failure is actionable
- * without the reader having to parse a schema tree.
- */
-const SnapshotVersionSchema = Schema.Literal(SNAPSHOT_FORMAT_VERSION).annotations({
-  message: (issue) =>
-    `Refusing an unshielded snapshot written in format version ${JSON.stringify(issue.actual)}: this build reads ${SNAPSHOT_FORMAT_VERSION} and does not downgrade.`,
-});
-
 export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, string> => {
   const UtxoWithMetaSchema = Schema.Struct({
     utxo: Schema.Struct({
@@ -92,9 +82,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
   });
 
   const SnapshotSchema = Schema.Struct({
-    version: Schema.optionalWith(SnapshotVersionSchema, {
-      default: () => SNAPSHOT_FORMAT_VERSION,
-    }),
+    version: SnapshotFormat.versionField('unshielded', SNAPSHOT_FORMAT_VERSION),
     publicKey: Schema.Struct({
       publicKey: Schema.String,
       addressHex: Schema.String,

@@ -17,7 +17,7 @@ import { CoreWallet } from './CoreWallet.js';
 import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 // Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.
 export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
-import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
@@ -66,26 +66,13 @@ const StateFromUInt8Array = (): Schema.Schema<ledger.ZswapLocalState, Uint8Array
 const HexedState = (): Schema.Schema<ledger.ZswapLocalState, string> =>
   pipe(Schema.Uint8ArrayFromHex, Schema.compose(StateFromUInt8Array()));
 
-/**
- * The `version` field of a shielded snapshot. A reader never downgrades: meeting a version it does not know, it refuses
- * the payload and names both the surface it was reading and the version it found, so the failure is actionable without
- * the reader having to parse a schema tree.
- *
- * The version names the snapshot's shape, not the variant that wrote it, and the constant lives in
- * `../SnapshotFormat.ts` so the twins cannot drift apart. Both variants write this shape — the V2 variant adds only
- * optional fields to it, which is not a new version. A V1 reader never meets a V2 snapshot anyway: `../Restore.ts`
- * routes each snapshot to the variant that owns its `protocolVersion`.
- */
-const SnapshotVersionSchema = Schema.Literal(SNAPSHOT_FORMAT_VERSION).annotations({
-  message: (issue) =>
-    `Refusing a shielded snapshot written in format version ${JSON.stringify(issue.actual)}: this build reads ${SNAPSHOT_FORMAT_VERSION} and does not downgrade.`,
-});
-
 export const makeDefaultV2SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   const SnapshotSchema = Schema.Struct({
-    version: Schema.optionalWith(SnapshotVersionSchema, {
-      default: () => SNAPSHOT_FORMAT_VERSION,
-    }),
+    // The version names the snapshot's shape, not the variant that wrote it, and the constant lives in
+    // `../SnapshotFormat.ts` so the twins cannot drift apart. Both variants write this shape — the V2 variant adds
+    // only optional fields to it, which is not a new version. A V1 reader never meets a V2 snapshot anyway:
+    // `../Restore.ts` routes each snapshot to the variant that owns its `protocolVersion`.
+    version: SnapshotFormat.versionField('shielded', SNAPSHOT_FORMAT_VERSION),
     publicKeys: Schema.Struct({
       coinPublicKey: Schema.String,
       encryptionPublicKey: Schema.String,

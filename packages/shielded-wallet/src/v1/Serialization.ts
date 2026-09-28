@@ -14,7 +14,7 @@ import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import { WalletError } from './WalletError.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { CoreWallet } from './CoreWallet.js';
-import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
@@ -68,21 +68,9 @@ const HexedState = (): Schema.Schema<ledger.ZswapLocalState, string> =>
 export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 
-/**
- * The `version` field of a shielded snapshot. A reader never downgrades: meeting a version it does not know, it refuses
- * the payload and names both the surface it was reading and the version it found, so the failure is actionable without
- * the reader having to parse a schema tree.
- */
-const SnapshotVersionSchema = Schema.Literal(SNAPSHOT_FORMAT_VERSION).annotations({
-  message: (issue) =>
-    `Refusing a shielded snapshot written in format version ${JSON.stringify(issue.actual)}: this build reads ${SNAPSHOT_FORMAT_VERSION} and does not downgrade.`,
-});
-
 export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   const SnapshotSchema = Schema.Struct({
-    version: Schema.optionalWith(SnapshotVersionSchema, {
-      default: () => SNAPSHOT_FORMAT_VERSION,
-    }),
+    version: SnapshotFormat.versionField('shielded', SNAPSHOT_FORMAT_VERSION),
     publicKeys: Schema.Struct({
       coinPublicKey: Schema.String,
       encryptionPublicKey: Schema.String,
