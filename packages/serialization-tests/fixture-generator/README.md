@@ -35,6 +35,15 @@ npm ci
 ONLY=unshielded node generate.mjs        # one surface; omit ONLY for all five
 ```
 
+The old releases are `@midnight-ntwrk/*` packages on GitHub Packages, the same private registry the repo's own
+`yarn install` needs a token for, so `npm ci` fails with a 401 until npm has one too. Give it the same GitHub token
+(scope `read:packages`) in `~/.npmrc`:
+
+```
+@midnight-ntwrk:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=<token>
+```
+
 `ONLY` takes a comma-separated subset of `shielded,unshielded,dust,tx-history,pending-transactions`. Regenerate only the
 surface you have a reason to touch — every other fixture is a frozen record and must stay byte-identical.
 
