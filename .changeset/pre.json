@@ -50,6 +50,7 @@
     "fix-401-tx-history-indexer-lag",
     "fix-520-integration-check-names",
     "fix-554-initswap-partial-tx",
+    "fix-774-started-wallet-protocol-version",
     "fix-dust-out-of-order-sync-updates",
     "fix-shielded-fallible-equal-value-coins",
     "fix-shielded-out-of-order-sync-updates",
