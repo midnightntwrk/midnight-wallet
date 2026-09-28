@@ -183,6 +183,9 @@ describe('running a stored payload through every upgrade step', () => {
     expect(error).toBeInstanceOf(TransactionHistoryRestoreError);
     expect(error.detectedVersion).toBe('unrecognised');
     expect(String(error.cause)).toContain('no recognisable format');
+    expect(error.reason).toBe('unrecognised');
+    expect(error.message).toContain('transaction-history');
+    expect(error.message).toContain('no recognisable format');
   });
 
   it('should refuse a version this build does not know, naming it and the version this build writes', () => {
@@ -192,6 +195,13 @@ describe('running a stored payload through every upgrade step', () => {
     expect(error.detectedVersion).toBe('v9');
     expect(String(error.cause)).toContain('v9');
     expect(String(error.cause)).toContain(CURRENT_FORMAT_VERSION);
+    expect(error.reason).toBe('unknown-version');
+    // The message alone, as a log line prints it, says what was being read, which version it declared and what this
+    // build reads. `String(error)` used to be the bare tag.
+    expect(error.message).toContain('transaction-history');
+    expect(error.message).toContain('v9');
+    expect(error.message).toContain(CURRENT_FORMAT_VERSION);
+    expect(String(error)).toContain('v9');
   });
 
   // `v1` is the name this codebase gives the unlabelled bare array; it has never been written into a payload. A

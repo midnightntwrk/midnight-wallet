@@ -321,6 +321,8 @@ describe('InMemoryTransactionHistoryStorage.restore refusals', () => {
 
     expect(Either.isLeft(result)).toBe(true);
     expect(EitherOps.getOrThrowRight(result).detectedVersion).toBe('unrecognised');
+    expect(EitherOps.getOrThrowRight(result).reason).toBe('unparseable');
+    expect(EitherOps.getOrThrowRight(result).message).toContain('transaction-history');
   });
 
   it('should refuse an object payload with no recognisable format rather than restore zero entries', () => {
@@ -341,6 +343,8 @@ describe('InMemoryTransactionHistoryStorage.restore refusals', () => {
     );
 
     expect(EitherOps.getOrThrowRight(result).detectedVersion).toBe('v1');
+    expect(EitherOps.getOrThrowRight(result).reason).toBe('invalid-entries');
+    expect(EitherOps.getOrThrowRight(result).message).toContain('v1');
   });
 
   it('should report v2 when an entry inside a current-format envelope fails the schema', () => {

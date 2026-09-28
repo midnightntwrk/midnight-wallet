@@ -21,6 +21,9 @@ because an upgraded entry records no block; readers that need one fetch it from 
 `Either<InMemoryTransactionHistoryStorage, TransactionHistoryRestoreError>` rather than throwing. A payload that cannot
 be read — unreadable JSON, a shape matching no known format, or a version written by a newer SDK — comes back as a
 `Left` naming the surface and the version the payload was read from, instead of being handed back as an empty store.
+The error also carries a `reason` — `unparseable`, `unrecognised`, `unknown-version` or `invalid-entries` — so an app can
+tell "written by a newer SDK" from "corrupt" without reading the text, and its `message` says all of it, so a log line
+or `String(error)` is enough to act on.
 Callers must handle the `Left`.
 
 `upgradeV1ToV2` now takes a `readonly unknown[]` rather than `unknown`: deciding whether a payload is a bare array is

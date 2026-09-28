@@ -48,19 +48,49 @@ export const UNRECOGNISED_FORMAT_VERSION = 'unrecognised';
 export const TRANSACTION_HISTORY_SURFACE = 'transaction-history';
 
 /**
- * Raised when a stored transaction history cannot be brought up to {@link CURRENT_FORMAT_VERSION} — a version this build
- * does not know (written by a newer SDK), or a payload that fails to decode once upgraded.
+ * Which of the ways a restore can fail a {@link TransactionHistoryRestoreError} reports, so an app can tell "written by
+ * a newer SDK" from "corrupt" without reading the message.
  *
- * Never swallowed into an empty store: losing a user's history silently is worse than failing to open it.
+ * - `unparseable` — the stored string is not JSON.
+ * - `unrecognised` — JSON, but neither a bare array nor an envelope with a string `version`.
+ * - `unknown-version` — an envelope declaring a version this build does not read; most likely a newer SDK wrote it.
+ * - `invalid-entries` — a version this build reads, whose entries fail the entry schema once upgraded.
  */
-export class TransactionHistoryRestoreError extends Data.TaggedError('TransactionHistoryRestoreError')<{
+export type TransactionHistoryRestoreReason = 'unparseable' | 'unrecognised' | 'unknown-version' | 'invalid-entries';
+
+/** What the error was constructed from; the message is derived, not supplied. */
+type TransactionHistoryRestoreFacts = {
   /** The persisted surface that failed, so one error type can serve all of them. */
   readonly surface: string;
+  /** Which way the restore failed. */
+  readonly reason: TransactionHistoryRestoreReason;
   /** The version read from the payload, or {@link V1_FORMAT_VERSION} when it carried no envelope. */
   readonly detectedVersion: string;
   /** The underlying failure — a `ParseError` from the schema, or a thrown value from `JSON.parse`. */
   readonly cause: unknown;
-}> {}
+};
+
+const describeCause = (cause: unknown): string => (cause instanceof Error ? cause.message : String(cause));
+
+/**
+ * Raised when a stored transaction history cannot be brought up to {@link CURRENT_FORMAT_VERSION} — a version this build
+ * does not know (written by a newer SDK), or a payload that fails to decode once upgraded.
+ *
+ * Carries the surface, the version detected, the reason and the cause as fields, and says all four in its `message`, so
+ * a log line or `String(error)` is enough to act on.
+ *
+ * Never swallowed into an empty store: losing a user's history silently is worse than failing to open it.
+ */
+export class TransactionHistoryRestoreError extends Data.TaggedError('TransactionHistoryRestoreError')<
+  TransactionHistoryRestoreFacts & { readonly message: string }
+> {
+  constructor(facts: TransactionHistoryRestoreFacts) {
+    super({
+      ...facts,
+      message: `Could not restore the ${facts.surface} payload (format ${facts.detectedVersion}, ${facts.reason}): ${describeCause(facts.cause)}`,
+    });
+  }
+}
 
 /**
  * The format a stored payload was written in, as a tagged union rather than a bare string, so every caller has to
@@ -185,6 +215,7 @@ export const upgradeToCurrentFormat = (
       return Either.left(
         new TransactionHistoryRestoreError({
           surface: TRANSACTION_HISTORY_SURFACE,
+          reason: 'unknown-version',
           detectedVersion: detected.version,
           // No ordering is claimed between the two versions. A build knows the formats it was written to read and
           // nothing else; whether an unrecognised label belongs to a later SDK, an abandoned one, or a payload from
@@ -198,6 +229,7 @@ export const upgradeToCurrentFormat = (
       return Either.left(
         new TransactionHistoryRestoreError({
           surface: TRANSACTION_HISTORY_SURFACE,
+          reason: 'unrecognised',
           detectedVersion: UNRECOGNISED_FORMAT_VERSION,
           cause: new Error(
             'Transaction history payload has no recognisable format: expected a bare array (v1) or an object with a string `version`.',

@@ -41,6 +41,7 @@ const parseJson = (serialized: string): Either.Either<unknown, TransactionHistor
     catch: (cause) =>
       new TransactionHistoryRestoreError({
         surface: TRANSACTION_HISTORY_SURFACE,
+        reason: 'unparseable',
         detectedVersion: UNRECOGNISED_FORMAT_VERSION,
         cause,
       }),
@@ -162,6 +163,7 @@ export class InMemoryTransactionHistoryStorage<
             (cause) =>
               new TransactionHistoryRestoreError({
                 surface: TRANSACTION_HISTORY_SURFACE,
+                reason: 'invalid-entries',
                 detectedVersion: version,
                 cause,
               }),
