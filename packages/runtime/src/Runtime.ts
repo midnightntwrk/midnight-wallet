@@ -238,7 +238,7 @@ const migrateToNextVariant = <Variants extends Variant.AnyVersionedVariantArray>
   return Effect.gen(function* () {
     const [headVersionedVariant] = migrateArgs.variants;
     if (!headVersionedVariant) {
-      yield* Effect.fail(new WalletRuntimeError({ message: 'No variant to init' }));
+      return yield* new WalletRuntimeError({ message: 'No variant to init' });
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- It seems that TS is defaulting to the constraint provided for a generic type with its inference, which includes any
@@ -266,6 +266,8 @@ const initVariant = <Variants extends Variant.AnyVersionedVariantArray, TTag ext
     const theRest = init.variants.toSpliced(0, index);
 
     //These casts are terrible, but they allow to call the initHeadVariant
+    // No version is passed: the variant is started from a state it already holds, so the version it starts at is the
+    // one that state records, which `initHeadVariant` reads off it.
     return yield* initHeadVariant({
       variants: theRest as Variants,
       state: init.state,
@@ -277,7 +279,28 @@ const initVariant = <Variants extends Variant.AnyVersionedVariantArray, TTag ext
 type InitHeadArgs<Variants extends Variant.AnyVersionedVariantArray> = {
   variants: Variants;
   state: Variant.StateOf<HList.Head<Variants>>;
+  /**
+   * The version the variant takes over at, as named by the version change that activated it. Absent when the variant
+   * starts from a state it already holds, in which case the version that state records is the one it starts at.
+   */
   initProtocolVersion: ProtocolVersion.ProtocolVersion | undefined;
+};
+
+/**
+ * The protocol version a variant starting from `state` reports: the one the state records, never below the variant's
+ * own lower bound.
+ *
+ * @remarks
+ *   Falling back to the lower bound alone was the old behaviour, and it never corrected itself: a variant reports a
+ *   version change only when the version it observes changes, and a restored or probe-stamped state is already at the
+ *   chain's version.
+ */
+const startingVersionOf = (
+  versionedVariant: Variant.AnyVersionedVariant,
+  state: Variant.StateOf<Variant.AnyVersionedVariant>,
+): ProtocolVersion.ProtocolVersion => {
+  const recorded = versionedVariant.variant.protocolVersionOf(state);
+  return recorded > versionedVariant.sinceVersion ? recorded : versionedVariant.sinceVersion;
 };
 // Following pattern from `initVariant` for consistency
 const initHeadVariant = <Variants extends Variant.AnyVersionedVariantArray>(
@@ -286,11 +309,11 @@ const initHeadVariant = <Variants extends Variant.AnyVersionedVariantArray>(
   return Effect.gen(function* () {
     const [anyHeadVersionedVariant, maybeNextVersionedVariant] = init.variants;
     if (!anyHeadVersionedVariant) {
-      yield* Effect.fail(new WalletRuntimeError({ message: 'No variant to init' }));
+      return yield* new WalletRuntimeError({ message: 'No variant to init' });
     }
     const headVersionedVariant = anyHeadVersionedVariant as HList.Head<Variants> & Variant.AnyVersionedVariant;
 
-    const actualInitProtocolVersion = init.initProtocolVersion ?? headVersionedVariant.sinceVersion;
+    const actualInitProtocolVersion = init.initProtocolVersion ?? startingVersionOf(headVersionedVariant, init.state);
     const nextActivationVersion = maybeNextVersionedVariant
       ? maybeNextVersionedVariant.sinceVersion
       : ProtocolVersion.MaxSupportedVersion;

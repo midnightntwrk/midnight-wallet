@@ -262,12 +262,15 @@ describe('a shielded wallet that asks the chain where it is starting', () => {
       // Before sync has been started, before any event exists to learn from: the variant is already the ledger-v9 one.
       // The V1 variant is not where this wallet began and then left — it never ran.
       expect(yield* wallet.activeTag).toBe(V2Tag);
+      // And it reports the version the chain answered, not the one the V2 variant was registered from.
+      expect((yield* wallet.currentState).version).toBe(v9Version);
 
       yield* wallet.start;
 
       const synced = yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
       expect(coinValues(synced.state)).toEqual([...walletValues]);
       expect(synced.version).toBeGreaterThanOrEqual(forkVersion);
+      expect(synced.version).toBe(v9Version);
 
       // Nothing was migrated, because nothing was left behind. This is the whole point: the hand-over below is a cost
       // paid only by a wallet that could not ask.
@@ -297,6 +300,8 @@ describe('a shielded wallet that asks the chain where it is starting', () => {
       const synced = yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
       expect(coinValues(synced.state)).toEqual([...walletValues]);
       expect(synced.state.protocolVersion).toBeLessThan(forkVersion);
+      // Reported at the version the chain answered, which synchronizing at that same version never has cause to change.
+      expect(synced.version).toBe(v8Version);
 
       expect(yield* wallet.activeTag).toBe(V1Tag);
       expect(yield* wallet.migration).toStrictEqual(Option.none());
@@ -627,6 +632,8 @@ describe('a shielded wallet on a chain that has shown it no events', () => {
       // variant holding it is the one the chain is on.
       expect(yield* failureOf(wallet.shielded.balanceTransaction(v9Transaction()))).toStrictEqual(Option.none());
       expect(yield* wallet.activeTag).toBe(V2Tag);
+      // With nothing synchronized to learn from, the answer is the only source of the version it reports.
+      expect((yield* wallet.currentState).version).toBe(v9Version);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 

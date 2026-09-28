@@ -226,6 +226,8 @@ describe('an unshielded wallet that asks the chain where it is starting', () => 
       // Before sync has been started, before any message exists to learn from: the variant is already the ledger-v9
       // one. The V1 variant is not where this wallet began and then left — it never ran.
       expect(yield* wallet.activeTag).toBe(V2Tag);
+      // And it reports the version the chain answered, not the one the V2 variant was registered from.
+      expect((yield* wallet.currentState).version).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
 
       const settled = yield* Effect.fork(
         wallet.awaitState((state) => state.state.progress.appliedId === 2n).pipe(Effect.orDie),
@@ -235,6 +237,7 @@ describe('an unshielded wallet that asks the chain where it is starting', () => 
       const final = yield* Fiber.join(settled);
       expect(valuesOf(utxosOf(final.state))).toEqual([100n, 200n]);
       expect(final.state.protocolVersion).toBeGreaterThanOrEqual(forkVersion);
+      expect(final.version).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
 
       // Nothing was carried, because nothing was left behind. This is what the hand-over below costs a wallet that
       // could not ask.
@@ -252,6 +255,8 @@ describe('an unshielded wallet that asks the chain where it is starting', () => 
       const settled = yield* wallet.currentState;
       expect(valuesOf(utxosOf(settled.state))).toEqual([100n, 200n]);
       expect(settled.state.protocolVersion).toBeLessThan(forkVersion);
+      // Reported at the version the chain answered, which synchronizing at that same version never has cause to change.
+      expect(settled.version).toBe(ProtocolVersion.ProtocolVersion(BigInt(v8Version)));
       expect(yield* wallet.activeTag).toBe(V1Tag);
       expect(yield* wallet.migration).toStrictEqual(Option.none());
     }).pipe(Effect.scoped, Effect.runPromise));
@@ -576,5 +581,7 @@ describe('an unshielded wallet on a chain that has shown it no messages', () => 
         Option.none(),
       );
       expect(yield* wallet.activeTag).toBe(V2Tag);
+      // With nothing synchronized to learn from, the answer is the only source of the version it reports.
+      expect((yield* wallet.currentState).version).toBe(ProtocolVersion.ProtocolVersion(BigInt(v9Version)));
     }).pipe(Effect.scoped, Effect.runPromise));
 });

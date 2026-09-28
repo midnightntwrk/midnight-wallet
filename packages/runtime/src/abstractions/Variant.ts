@@ -69,6 +69,25 @@ export type Variant<
    *   this signature said so — instead of turning it into a defect that tears the runtime down with no diagnosis.
    */
   migrateState(previousState: TPreviousState): Effect<TState, WalletRuntimeError>;
+
+  /**
+   * Reads the protocol version a state of this variant records: the version of the chain it was synchronized to, or
+   * stamped with when the wallet was started from an answer the chain gave.
+   *
+   * @remarks
+   *   The runtime reports this version when it starts a variant from an existing state, whether that is a restored
+   *   snapshot or a fresh state the wallet stamped from the chain's answer. A variant reports a version change only
+   *   when the version it observes changes, and a restored state is already at the chain's version, so nothing else
+   *   would ever correct the version the runtime starts at.
+   *
+   *   The runtime never reports a version below the variant's activation range, so a variant whose state keeps no version
+   *   of its own answers {@link ProtocolVersion.MinSupportedVersion} and starts at the lower bound of that range.
+   *
+   *   A variant taking over at a version change is not read this way: the change names the version it takes over at.
+   * @param state A state this variant produced, by starting, deserializing or migrating.
+   * @returns The protocol version the state records.
+   */
+  protocolVersionOf(state: TState): ProtocolVersion.ProtocolVersion;
 };
 
 export type RunningVariant<TTag extends symbol | string, TState> = Poly.WithTag<TTag> & {

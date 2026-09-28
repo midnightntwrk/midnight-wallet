@@ -250,6 +250,8 @@ describe('a dust wallet that asks the chain where it is starting', () => {
       const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
       expect(yield* wallet.activeTag).toBe(V2Tag);
       expect(synced.state.protocolVersion).toBeGreaterThanOrEqual(forkVersion);
+      // Reported at the version the chain answered, not the one the V2 variant was registered from.
+      expect(synced.version).toBe(v9Version);
       expect(balanceAt(synced.state, chain.syncTime)).toBeGreaterThan(0n);
 
       expect(yield* wallet.migration).toStrictEqual(Option.none());
@@ -265,6 +267,8 @@ describe('a dust wallet that asks the chain where it is starting', () => {
       const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
       expect(balanceAt(synced.state, chain.syncTime)).toBeGreaterThan(0n);
       expect(synced.state.protocolVersion).toBeLessThan(forkVersion);
+      // Reported at the version the chain answered, which synchronizing at that same version never has cause to change.
+      expect(synced.version).toBe(v8Version);
 
       expect(yield* wallet.activeTag).toBe(V1Tag);
       expect(yield* wallet.migration).toStrictEqual(Option.none());
@@ -494,6 +498,8 @@ describe('a dust wallet on a chain that has shown it no events', () => {
       // variant holding it is the one the chain is on.
       expect(yield* failureOf(wallet.dust.calculateFee([v9Transaction()]))).toStrictEqual(Option.none());
       expect(yield* wallet.activeTag).toBe(V2Tag);
+      // With nothing synchronized to learn from, the answer is the only source of the version it reports.
+      expect((yield* wallet.currentState).version).toBe(v9Version);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
