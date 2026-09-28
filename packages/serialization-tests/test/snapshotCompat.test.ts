@@ -177,6 +177,21 @@ const dustReaders = [
   ),
 ];
 
+/**
+ * The Night backing each dust UTXO, read through the state's own generation info, which is the only place the ledger
+ * exposes it. Structural over the state so that both ledgers' `DustLocalState`, whose UTXO types differ, fit.
+ */
+const backingNightOf = <TUtxo>(state: {
+  readonly utxos: readonly TUtxo[];
+  generationInfo(utxo: TUtxo): { readonly value: bigint } | undefined;
+}): readonly string[] => state.utxos.map((utxo) => String(state.generationInfo(utxo)?.value));
+
+/** Per reader, beside the readers rather than on them so the list above keeps one element type. */
+const backingNightBy: Record<string, (fixture: Fixture) => readonly string[]> = {
+  V1: (fixture) => backingNightOf(restore(fixture, (s) => dustV1.deserialize(null, s)).state),
+  V2: (fixture) => backingNightOf(restore(fixture, (s) => dustV2.deserialize(null, s)).state),
+};
+
 describe.each(dustReaders)('dust snapshots written by published releases, read by $reader', (reader) => {
   // Only the payloads routing would hand this reader: see `isHandedTo`. Today that is all of them, because
   // every frozen payload was written below the fork.
@@ -190,6 +205,12 @@ describe.each(dustReaders)('dust snapshots written by published releases, read b
     it('should restore onto the network and public key it was written with', () => {
       expectRecorded(fixture, 'networkId', () => reader.restore(fixture).networkId);
       expectRecorded(fixture, 'publicKey', () => String(reader.restore(fixture).publicKey.publicKey));
+    });
+
+    it('should restore every dust UTXO and the Night that backs it', () => {
+      expectRecorded(fixture, 'dustUtxoCount', () => reader.restore(fixture).state.utxos.length);
+      // One UTXO per frozen dust fixture, so its backing value is the whole list.
+      expectRecorded(fixture, 'backingNightValue', () => backingNightBy[reader.reader]?.(fixture).join(','));
     });
 
     it('should survive a round trip through the current writer', () => {

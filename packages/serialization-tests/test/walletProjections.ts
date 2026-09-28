@@ -76,8 +76,8 @@ export const asStrings = (values: Iterable<bigint>): readonly string[] => [...va
  * The one thing a frozen fixture records that no wallet API exposes.
  *
  * `backingNightValue` is the value of the Night UTxO backing a Dust generation, which lives inside the ledger's
- * `DustLocalState` and is not projected onto the wallet state. It is asserted at the capability level; naming it here
- * keeps the omission deliberate and visible rather than silent.
+ * `DustLocalState` and is not projected onto the wallet state. `snapshotCompat.test.ts` asserts it through each reader;
+ * naming it here keeps the omission deliberate and visible rather than silent.
  */
 const NOT_REACHABLE_THROUGH_THE_WALLET: ReadonlySet<string> = new Set(['backingNightValue']);
 
