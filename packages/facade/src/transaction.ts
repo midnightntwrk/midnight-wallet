@@ -48,20 +48,26 @@ export const txHistoryHash = (tx: { transactionHash: () => unknown; serialize: (
   }
 };
 
-export const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV9.FinalizedTransaction> = {
-  areAllTxIdsIncluded(tx: ledgerV9.FinalizedTransaction, txIds: readonly string[]): boolean {
-    const txIdsSet = HashSet.fromIterable(tx.identifiers());
-    const expectedIdSet = HashSet.fromIterable(txIds);
-    return HashSet.isSubset(txIdsSet, expectedIdSet);
-  },
-  deserialize(serialized: Uint8Array): ledgerV9.FinalizedTransaction {
-    return ledgerV9.Transaction.deserialize('signature', 'proof', 'binding', serialized);
-  },
-  firstId(tx: ledgerV9.FinalizedTransaction): string {
-    return tx.identifiers()[0];
-  },
-  hasTTLExpired(tx: ledgerV9.FinalizedTransaction, creationTime: DateTime.Utc, now: DateTime.Utc): boolean {
-    const defaultShieldedGracePeriod = ledgerV9.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds;
+/** What the TTL rule reads off a finalized transaction; the same on ledger-v8 and ledger-v9, so both traits share it. */
+type TTLBearingTransaction = {
+  readonly intents:
+    | ReadonlyMap<
+        number,
+        { readonly ttl: Date; readonly dustActions?: { readonly spends: readonly unknown[] } | undefined }
+      >
+    | undefined;
+  readonly guaranteedOffer: unknown;
+  readonly fallibleOffer: { readonly size: number } | undefined;
+};
+
+/**
+ * The one TTL rule, closed over the ledger whose grace period it reads: a transaction has expired once the earliest of
+ * its intent TTLs has passed, or, when it spends dust or carries shielded offers, once the dust grace period after its
+ * creation has. A transaction with none of those has no deadline and never expires by TTL.
+ */
+const hasTTLExpiredUnder =
+  (dustGracePeriodSeconds: () => bigint) =>
+  (tx: TTLBearingTransaction, creationTime: DateTime.Utc, now: DateTime.Utc): boolean => {
     const intentTTLs = pipe(
       tx.intents?.values().toArray() ?? [],
       Arr.map((i) => i.ttl),
@@ -75,7 +81,7 @@ export const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<l
     const hasShieldedOffers = tx.guaranteedOffer != null || (tx.fallibleOffer?.size ?? 0) > 0;
     const maybeShieldedTTL: readonly DateTime.Utc[] =
       hasDustPayments || hasShieldedOffers
-        ? pipe(creationTime, DateTime.addDuration(Duration.seconds(Number(defaultShieldedGracePeriod))), Arr.of)
+        ? pipe(creationTime, DateTime.addDuration(Duration.seconds(Number(dustGracePeriodSeconds()))), Arr.of)
         : Arr.empty();
 
     return pipe(
@@ -90,7 +96,21 @@ export const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<l
         onSome: (finalTTL: DateTime.Utc) => DateTime.distance(finalTTL, now) > 0,
       }),
     );
+  };
+
+export const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV9.FinalizedTransaction> = {
+  areAllTxIdsIncluded(tx: ledgerV9.FinalizedTransaction, txIds: readonly string[]): boolean {
+    const txIdsSet = HashSet.fromIterable(tx.identifiers());
+    const expectedIdSet = HashSet.fromIterable(txIds);
+    return HashSet.isSubset(txIdsSet, expectedIdSet);
   },
+  deserialize(serialized: Uint8Array): ledgerV9.FinalizedTransaction {
+    return ledgerV9.Transaction.deserialize('signature', 'proof', 'binding', serialized);
+  },
+  firstId(tx: ledgerV9.FinalizedTransaction): string {
+    return tx.identifiers()[0];
+  },
+  hasTTLExpired: hasTTLExpiredUnder(() => ledgerV9.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds),
   ids(tx: ledgerV9.FinalizedTransaction): readonly string[] {
     return tx.identifiers();
   },
@@ -127,37 +147,7 @@ export const v8FinalizedTransactionTrait: PendingTransactions.TransactionTrait<l
   firstId(tx) {
     return tx.identifiers()[0];
   },
-  hasTTLExpired(tx, creationTime, now) {
-    const defaultShieldedGracePeriod = ledgerV8.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds;
-    const intentTTLs = pipe(
-      tx.intents?.values().toArray() ?? [],
-      Arr.map((i) => i.ttl),
-      Arr.filterMap(DateTime.make),
-    );
-    const hasDustPayments = pipe(
-      tx.intents?.values().toArray() ?? [],
-      Arr.flatMap((i) => i.dustActions?.spends ?? []),
-      Arr.isNonEmptyArray,
-    );
-    const hasShieldedOffers = tx.guaranteedOffer != null || (tx.fallibleOffer?.size ?? 0) > 0;
-    const maybeShieldedTTL: readonly DateTime.Utc[] =
-      hasDustPayments || hasShieldedOffers
-        ? pipe(creationTime, DateTime.addDuration(Duration.seconds(Number(defaultShieldedGracePeriod))), Arr.of)
-        : Arr.empty();
-
-    return pipe(
-      intentTTLs,
-      Arr.appendAll(maybeShieldedTTL),
-      (arr: readonly DateTime.Utc[]): Option.Option<DateTime.Utc> =>
-        Arr.isNonEmptyReadonlyArray(arr)
-          ? Option.some(Arr.min(arr, Order.mapInput(Order.Date, DateTime.toDate)))
-          : Option.none(),
-      Option.match({
-        onNone: () => false,
-        onSome: (finalTTL: DateTime.Utc) => DateTime.distance(finalTTL, now) > 0,
-      }),
-    );
-  },
+  hasTTLExpired: hasTTLExpiredUnder(() => ledgerV8.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds),
   ids(tx) {
     return tx.identifiers();
   },
