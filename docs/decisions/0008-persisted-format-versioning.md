@@ -68,8 +68,11 @@ ledger signs with more than one scheme. That is a retyped field, so the V2 write
 payload: the wallet layer routes a snapshot to the variant that owns its `protocolVersion`. The two variants are two
 writers of one surface, which is why the gate below runs every check per writer.
 
-**Failure is loud.** A payload that cannot be read raises a tagged error carrying the surface, the version detected and
-the cause. It is never swallowed into an empty store.
+**Failure is loud.** A payload that cannot be read is refused, never swallowed into an empty store. The transaction
+history refuses with a tagged error carrying the surface, the version detected, the reason and the cause
+(`TransactionHistoryRestoreError`). The three snapshot surfaces do not yet: they refuse with the wallet's generic error,
+with the version only in its message, so an application cannot tell "written by a newer SDK" from "corrupt" without
+reading the text. Bringing them to the same tagged error is tracked as follow-up work.
 
 ### How it is enforced
 
