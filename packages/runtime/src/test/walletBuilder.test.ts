@@ -252,6 +252,114 @@ describe('Wallet Builder', () => {
     });
   });
 
+  describe('reporting the protocol version of the state it starts from', () => {
+    // A state that records the protocol version it was written at, as every wallet state does. Both variants share the
+    // type, so one helper builds a state for either.
+    type Stamped = Readonly<{ protocolVersion: ProtocolVersion.ProtocolVersion; value: number }>;
+    const Lower = 'lower' as const;
+    const Upper = 'upper' as const;
+
+    const stampedAt = (version: bigint, value = 0): Stamped => ({
+      protocolVersion: ProtocolVersion.ProtocolVersion(version),
+      value,
+    });
+    const readsStamp = { protocolVersionOf: (state: Stamped) => state.protocolVersion };
+
+    // Neither variant starts at the lowest supported version, so a start that fell back to a variant's lower bound
+    // cannot pass by coincidence.
+    const walletOverStampedStates = () =>
+      WalletBuilder.init()
+        .withVariant(
+          ProtocolVersion.ProtocolVersion(10n),
+          new InterceptingVariantBuilder<typeof Lower, Stamped>(Lower, readsStamp),
+        )
+        .withVariant(
+          ProtocolVersion.ProtocolVersion(100n),
+          new InterceptingVariantBuilder<typeof Upper, Stamped>(Upper, readsStamp),
+        )
+        .build();
+
+    it('starts a resolved variant at the version its state records, not the one the variant was registered from', async () => {
+      const Wallet = walletOverStampedStates();
+      const resolved = Wallet.variantFor(ProtocolVersion.ProtocolVersion(120n)).pipe(Option.getOrThrow);
+
+      const wallet = Wallet.startAtVariant(Wallet, resolved, stampedAt(120n));
+
+      expect(await rx.firstValueFrom(wallet.rawState)).toEqual({
+        version: ProtocolVersion.ProtocolVersion(120n),
+        variantTag: Upper,
+        state: stampedAt(120n),
+      });
+      await wallet.stop();
+    });
+
+    it('starts the head variant at the version its state records', async () => {
+      const Wallet = walletOverStampedStates();
+
+      const wallet = Wallet.startFirst(Wallet, stampedAt(42n));
+
+      expect(await rx.firstValueFrom(wallet.rawState)).toEqual({
+        version: ProtocolVersion.ProtocolVersion(42n),
+        variantTag: Lower,
+        state: stampedAt(42n),
+      });
+      await wallet.stop();
+    });
+
+    it('starts a variant addressed by its tag at the version its state records', async () => {
+      const Wallet = walletOverStampedStates();
+
+      const wallet = Wallet.start(Wallet, Upper, stampedAt(150n));
+
+      expect(await rx.firstValueFrom(wallet.rawState)).toEqual({
+        version: ProtocolVersion.ProtocolVersion(150n),
+        variantTag: Upper,
+        state: stampedAt(150n),
+      });
+      await wallet.stop();
+    });
+
+    it('goes on reporting that version on the states the variant emits after it started', async () => {
+      // The first emission is not the only place the starting version is read: the variant's own stream is annotated
+      // from it too, until the variant reports a version change. A start that fixed only the first emission would
+      // fall back to the lower bound here.
+      const Wallet = walletOverStampedStates();
+      const resolved = Wallet.variantFor(ProtocolVersion.ProtocolVersion(120n)).pipe(Option.getOrThrow);
+      const wallet = Wallet.startAtVariant(Wallet, resolved, stampedAt(120n));
+      await rx.firstValueFrom(wallet.rawState);
+
+      await wallet.runtime
+        .dispatch({
+          [Lower]: () => Effect.void,
+          [Upper]: (variant) => variant.emit(StateChange.State({ state: stampedAt(120n, 1) })),
+        })
+        .pipe(Effect.runPromise);
+
+      expect(await rx.firstValueFrom(wallet.rawState.pipe(rx.filter(({ state }) => state.value === 1)))).toEqual({
+        version: ProtocolVersion.ProtocolVersion(120n),
+        variantTag: Upper,
+        state: stampedAt(120n, 1),
+      });
+      await wallet.stop();
+    });
+
+    it('starts a state that records a version below the variant range at the lower bound of that range', async () => {
+      // A variant never runs below the version it was registered from, so a start never reports one either. A state
+      // that carries no version of its own, and so reads as the lowest supported one, starts where it always did.
+      const Wallet = walletOverStampedStates();
+      const resolved = Wallet.variantFor(ProtocolVersion.ProtocolVersion(120n)).pipe(Option.getOrThrow);
+
+      const wallet = Wallet.startAtVariant(Wallet, resolved, stampedAt(50n));
+
+      expect(await rx.firstValueFrom(wallet.rawState)).toEqual({
+        version: ProtocolVersion.ProtocolVersion(100n),
+        variantTag: Upper,
+        state: stampedAt(50n),
+      });
+      await wallet.stop();
+    });
+  });
+
   describe('protocol version ordering', () => {
     it('should reject adding a variant with the same protocol version as the previous one', () => {
       const version = ProtocolVersion.ProtocolVersion(10n);

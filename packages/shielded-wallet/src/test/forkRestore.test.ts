@@ -209,7 +209,8 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       expect(yield* runningTag(restored)).toBe(V1Tag);
 
       const state = yield* restoredState(restored);
-      expect(state.protocolVersion).toBeLessThan(forkVersion);
+      // Not merely on the right side of the boundary: at the version the snapshot recorded, which is where the chain was.
+      expect(state.protocolVersion).toBe(Option.getOrThrow(peekProtocolVersion(snapshot)));
       expect(coinValues(state.state)).toEqual([...walletValues]);
       expect(state.state.publicKeys).toStrictEqual(synced.state.publicKeys);
     }).pipe(Effect.scoped, Effect.runPromise));
@@ -244,7 +245,8 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       expect(yield* runningTag(restored)).toBe(V2Tag);
 
       const state = yield* restoredState(restored);
-      expect(state.protocolVersion).toBeGreaterThanOrEqual(forkVersion);
+      // Not merely on the right side of the boundary: at the version the snapshot recorded, which is where the chain was.
+      expect(state.protocolVersion).toBe(Option.getOrThrow(peekProtocolVersion(snapshot)));
       expect(coinValues(state.state)).toEqual([...walletValues]);
       expect(state.state.publicKeys).toStrictEqual(synced.state.publicKeys);
     }).pipe(Effect.scoped, Effect.runPromise));

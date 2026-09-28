@@ -10,6 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   StateChange,
   type Variant,
@@ -170,6 +171,11 @@ export type InterceptingRunningVariant<TTag extends string | symbol, TState> = V
 export type InterceptingVariantOptions<TState> = {
   /** Replaces the default identity migration, e.g. to simulate a failing state migration. */
   migrateState?: (previousState: TState) => Effect.Effect<TState, WalletRuntimeError>;
+  /**
+   * Reads the protocol version a state carries, for a state type that records one. Without it the variant answers
+   * {@link ProtocolVersion.MinSupportedVersion}, which is what a state carrying no version of its own amounts to.
+   */
+  protocolVersionOf?: (state: TState) => ProtocolVersion.ProtocolVersion;
 };
 export class InterceptingVariant<TTag extends string | symbol, TState> implements Variant.Variant<
   TTag,
@@ -190,6 +196,11 @@ export class InterceptingVariant<TTag extends string | symbol, TState> implement
   migrateState(previousState: TState): Effect.Effect<TState, WalletRuntimeError> {
     const override = this.#options.migrateState;
     return override === undefined ? Effect.succeed(previousState) : override(previousState);
+  }
+
+  protocolVersionOf(state: TState): ProtocolVersion.ProtocolVersion {
+    const override = this.#options.protocolVersionOf;
+    return override === undefined ? ProtocolVersion.MinSupportedVersion : override(state);
   }
 
   start(
