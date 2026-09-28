@@ -54,12 +54,19 @@ const surface = async (alias, files) => {
   }
 };
 
+// The aliases are the generator's own: version-named per package (`sh-3.0.2`, not a train label), declared in
+// package.json. Reading them from there keeps this in step with `generate.mjs` without importing it, which would
+// run the generator.
+const ownPkg = JSON.parse(readFileSync(path.join(HERE, 'package.json'), 'utf8'));
+const aliasesOf = (wallet) =>
+  Object.keys(ownPkg.dependencies ?? {})
+    .filter((alias) => alias.startsWith(`${wallet}-`))
+    .filter((alias) => !process.argv[3] || alias === `${wallet}-${process.argv[3]}`);
 const wallets = process.argv[2] ? [process.argv[2]] : ['sh', 'un', 'du'];
-const trains = process.argv[3] ? [process.argv[3]] : ['t1', 't2', 't3', 't4', 't6'];
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   for (const w of wallets) {
-    for (const t of trains) {
-      await surface(`${w}-${t}`, ['v1/Serialization.js', 'v1/CoreWallet.js', 'v1/UnshieldedState.js', 'v1/Keys.js']);
+    for (const alias of aliasesOf(w)) {
+      await surface(alias, ['v1/Serialization.js', 'v1/CoreWallet.js', 'v1/UnshieldedState.js', 'v1/Keys.js']);
     }
   }
 }
