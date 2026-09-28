@@ -25,7 +25,7 @@ import {
   type DefaultTransactionHistoryConfiguration,
   type DustHistoryStorage,
 } from '../TransactionHistory.js';
-import { TransactionHistoryError } from '../WalletError.js';
+import { BlocklessFinalizedEntryError, TransactionHistoryError } from '../WalletError.js';
 
 const hash = 'c0a46613b653a5c6f14a369f3799cdb122a57c3ec83a9f1358717fa8a2221204';
 
@@ -214,7 +214,7 @@ const blockFinalizedEntry: TransactionHistoryStorage.TransactionHistoryEntryWith
 
 const simulatorDetails = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash | undefined,
-): Promise<Exit.Exit<{ readonly hash: string }, TransactionHistoryError>> =>
+): Promise<Exit.Exit<{ readonly hash: string }, TransactionHistoryError | BlocklessFinalizedEntryError>> =>
   Effect.runPromiseExit(
     makeSimulatorTransactionHistoryService(
       { ...config, txHistoryStorage: storageReturning(entry) },
@@ -222,10 +222,11 @@ const simulatorDetails = (
     ).getTransactionDetails(hash),
   );
 
-const failureMessageOf = <A>(exit: Exit.Exit<A, TransactionHistoryError>): string | undefined =>
-  Exit.isFailure(exit)
-    ? Option.getOrUndefined(Option.map(Cause.failureOption(exit.cause), (error) => error.message))
-    : undefined;
+const failureOf = <A, E>(exit: Exit.Exit<A, E>): E | undefined =>
+  Exit.isFailure(exit) ? Option.getOrUndefined(Cause.failureOption(exit.cause)) : undefined;
+
+const failureMessageOf = <A>(exit: Exit.Exit<A, { readonly message: string }>): string | undefined =>
+  failureOf(exit)?.message;
 
 describe('makeSimulatorTransactionHistoryService.getTransactionDetails (dust)', () => {
   it('reports a blockless finalized entry differently from a missing one', async () => {
@@ -239,6 +240,11 @@ describe('makeSimulatorTransactionHistoryService.getTransactionDetails (dust)', 
       `Transaction ${hash} is finalized but its history entry records no block (restored from a pre-lifecycle history)`,
     );
     expect(blockless).not.toBe(missing);
+
+    // And two different tags, so a caller that can fetch the block by hash matches on the tag rather than the text.
+    expect(failureOf(await simulatorDetails(undefined))).toBeInstanceOf(TransactionHistoryError);
+    expect(failureOf(await simulatorDetails(blocklessFinalizedEntry))).toBeInstanceOf(BlocklessFinalizedEntryError);
+    expect(failureOf(await simulatorDetails(blocklessFinalizedEntry))).toMatchObject({ hash });
   });
 
   it('returns the details when the finalized entry does record a block', async () => {
