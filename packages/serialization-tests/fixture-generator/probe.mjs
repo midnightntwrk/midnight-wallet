@@ -15,10 +15,10 @@
 // can be written against facts instead of guesses. Not needed after fixtures exist.
 import { createRequire } from 'node:module';
 import { readFileSync, existsSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const pkgDir = (alias) => path.join(HERE, 'node_modules', alias);
 
 // Resolve a dependency exactly as the aliased package itself would (nested vs hoisted node_modules).

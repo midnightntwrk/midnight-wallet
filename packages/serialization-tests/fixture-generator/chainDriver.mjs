@@ -31,10 +31,10 @@
 // stored serialized; every consumer deserializes fresh copies via `eventsOf`.
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const fill = (b) => new Uint8Array(32).fill(b);
 
 export const SEEDS = {

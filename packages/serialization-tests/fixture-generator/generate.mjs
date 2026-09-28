@@ -36,7 +36,7 @@
 //                            cross the ledger v7→v8 boundary
 import { createRequire } from 'node:module';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import {
   ledgerFor,
@@ -52,7 +52,7 @@ import {
   CUSTOM_UNSHIELDED_VALUE,
 } from './chainDriver.mjs';
 
-const HERE = path.dirname(new URL(import.meta.url).pathname);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURES = path.join(HERE, '..', 'fixtures');
 
 const loadDist = (alias, file) => import(pathToFileURL(path.join(HERE, 'node_modules', alias, 'dist', file)));
