@@ -18,6 +18,14 @@ import { fixturesFor } from './fixtures.js';
 
 const fixtures = fixturesFor('tx-history');
 
+/** A fee as a payload holds it: a value, an explicit `null`, or no `fees` at all. `?? null` would fold the last two. */
+const feeAsStored = (entry: Record<string, unknown>): { readonly fee: string | null } | 'absent' => {
+  const fee = entry['fees'];
+  if (fee === undefined) return 'absent';
+  if (fee === null) return { fee: null };
+  return { fee: typeof fee === 'bigint' || typeof fee === 'string' ? fee.toString() : JSON.stringify(fee) };
+};
+
 describe('transaction histories written by published releases', () => {
   it('should have a fixture to restore', () => {
     expect(fixtures.length).toBeGreaterThan(0);
@@ -42,13 +50,15 @@ describe('transaction histories written by published releases', () => {
       expect(entries.map((entry) => entry.status)).toEqual(fixture.expected['statuses']);
     });
 
-    it('should preserve the fees of every entry', async () => {
+    it('should preserve the fees of every entry, telling an explicit null from a fee it never recorded', async () => {
       const entries = await restore().getAll();
+      const written = JSON.parse(fixture.serialized) as readonly Record<string, unknown>[];
 
       const asWritten = (fixture.expected['fees'] as readonly (string | null)[]).map((fee) =>
         fee === null ? null : BigInt(fee),
       );
       expect(entries.map((entry) => entry.fees ?? null)).toEqual(asWritten);
+      expect(entries.map(feeAsStored)).toEqual(written.map(feeAsStored));
     });
 
     it('should keep the identifiers it has and default the ones it never had to empty', async () => {
