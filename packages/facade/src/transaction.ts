@@ -62,8 +62,10 @@ type TTLBearingTransaction = {
 
 /**
  * The one TTL rule, closed over the ledger whose grace period it reads: a transaction has expired once the earliest of
- * its intent TTLs has passed, or, when it spends dust or carries shielded offers, once the dust grace period after its
- * creation has. A transaction with none of those has no deadline and never expires by TTL.
+ * its intent TTLs has passed, or, when it spends dust, carries shielded offers, or carries no intent at all, once the
+ * dust grace period after its creation has. The grace period is the wallet's own backstop rather than a ledger rule; it
+ * is what lets a rewards or bridge claim, which has no intents and no offers and which the indexer never reports a
+ * status for, leave the pending set at all.
  */
 const hasTTLExpiredUnder =
   (dustGracePeriodSeconds: () => bigint) =>
@@ -79,8 +81,9 @@ const hasTTLExpiredUnder =
       Arr.isNonEmptyArray,
     );
     const hasShieldedOffers = tx.guaranteedOffer != null || (tx.fallibleOffer?.size ?? 0) > 0;
+    const hasNoDeadlineOfItsOwn = Arr.isEmptyReadonlyArray(intentTTLs);
     const maybeShieldedTTL: readonly DateTime.Utc[] =
-      hasDustPayments || hasShieldedOffers
+      hasDustPayments || hasShieldedOffers || hasNoDeadlineOfItsOwn
         ? pipe(creationTime, DateTime.addDuration(Duration.seconds(Number(dustGracePeriodSeconds()))), Arr.of)
         : Arr.empty();
 

@@ -108,11 +108,10 @@ describe.each(traits)('%s finalizedTransactionTrait', (_label, trait, dustGraceP
   const { justAfterGracePeriod, intentTTLBeyondGracePeriod } = boundariesFor(dustGracePeriodSeconds);
 
   /**
-   * The dust grace period is a backstop for transactions whose expiry the intent deadlines do not already describe, so
-   * it applies only to a transaction that carries shielded offers or dust spends. A transaction with none of those and
-   * no intents has nothing to expire against and is deliberately never reaped — the case is asserted below. Every real
-   * transaction carries an intent, and `Intent.ttl` is required, so a transaction with no deadline at all is not a
-   * shape the chain produces.
+   * The dust grace period is the wallet's own backstop, not a ledger rule: it bounds a transaction whose expiry the
+   * intent deadlines do not already describe — one carrying shielded offers or dust spends, and one carrying no intent
+   * at all. A rewards or bridge claim built by `Transaction.fromRewards` has no intents and no offers, and the indexer
+   * never reports a status for it, so the backstop is the only way it ever leaves the pending set.
    */
   describe('hasTTLExpired', () => {
     it('does not expire a transaction with no shielded offers and no dust spends before its intent deadline', () => {
@@ -125,10 +124,11 @@ describe.each(traits)('%s finalizedTransactionTrait', (_label, trait, dustGraceP
       expect(hasTTLExpired(trait, tx, justAfterGracePeriod)).toBe(false);
     });
 
-    it('does not expire a transaction with no intents, no shielded offers and no dust spends', () => {
+    it('expires a transaction with no intents, no shielded offers and no dust spends once the dust grace period has passed', () => {
       const tx = stubTransaction({ intents: [], hasGuaranteedOffer: false, fallibleOfferSegments: 0 });
 
-      expect(hasTTLExpired(trait, tx, justAfterGracePeriod)).toBe(false);
+      expect(hasTTLExpired(trait, tx, creationTime)).toBe(false);
+      expect(hasTTLExpired(trait, tx, justAfterGracePeriod)).toBe(true);
     });
 
     it('expires a transaction with a guaranteed offer once the dust grace period has passed', () => {
