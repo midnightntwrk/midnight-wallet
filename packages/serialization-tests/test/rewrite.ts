@@ -37,10 +37,7 @@ type Rewriter = (serialized: string) => Promise<string> | string;
 
 /** The surfaces with one writer outside the twins, rewritten the same way whichever variant a case is filed under. */
 const singleWriterRewriters: Pick<Record<Surface, Rewriter>, 'tx-history' | 'pending-transactions'> = {
-  'tx-history': (s) =>
-    EitherOps.getOrThrowLeft(
-      InMemoryTransactionHistoryStorage.restore(s, WalletEntrySchema, mergeWalletEntries),
-    ).serialize(),
+  'tx-history': (s) => InMemoryTransactionHistoryStorage.restore(s, WalletEntrySchema, mergeWalletEntries).serialize(),
   'pending-transactions': (s) =>
     PendingTransactions.serialize(
       EitherOps.getOrThrowLeft(PendingTransactions.deserialize(s, pendingTxTraits)),

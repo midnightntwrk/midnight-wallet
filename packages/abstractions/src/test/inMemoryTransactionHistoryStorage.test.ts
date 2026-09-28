@@ -276,8 +276,10 @@ describe('InMemoryTransactionHistoryStorage serialize / restore', () => {
     await storage.gotRejected(rejectedInput('rejected-tx', ['id-r'], rejectedAt, 'TTL expired'));
 
     const serialized = await storage.serialize();
-    const restored = EitherOps.getOrThrowLeft(
-      InMemoryTransactionHistoryStorage.restore(serialized, TransactionHistoryEntryCommonSchema, mergeEntries),
+    const restored = InMemoryTransactionHistoryStorage.restore(
+      serialized,
+      TransactionHistoryEntryCommonSchema,
+      mergeEntries,
     );
 
     expect(await restored.get('pending-tx')).toEqual(await storage.get('pending-tx'));
@@ -308,16 +310,14 @@ describe('extendEntrySchema', () => {
     expect(result?.extra).toEqual({ note: 'hello' }); // extension field preserved
 
     // The extension field survives a serialize/restore cycle too.
-    const restored = EitherOps.getOrThrowLeft(
-      InMemoryTransactionHistoryStorage.restore(await storage.serialize(), ExtendedSchema, merge),
-    );
+    const restored = InMemoryTransactionHistoryStorage.restore(await storage.serialize(), ExtendedSchema, merge);
     expect(await restored.get('tx')).toEqual(result);
   });
 });
 
 describe('InMemoryTransactionHistoryStorage.restore refusals', () => {
   it('should refuse a payload that is not readable JSON', () => {
-    const result = InMemoryTransactionHistoryStorage.restore('not json', TransactionHistoryEntryCommonSchema);
+    const result = InMemoryTransactionHistoryStorage.tryRestore('not json', TransactionHistoryEntryCommonSchema);
 
     expect(Either.isLeft(result)).toBe(true);
     expect(EitherOps.getOrThrowRight(result).detectedVersion).toBe('unrecognised');
@@ -326,7 +326,7 @@ describe('InMemoryTransactionHistoryStorage.restore refusals', () => {
   });
 
   it('should refuse an object payload with no recognisable format rather than restore zero entries', () => {
-    const result = InMemoryTransactionHistoryStorage.restore('{}', TransactionHistoryEntryCommonSchema);
+    const result = InMemoryTransactionHistoryStorage.tryRestore('{}', TransactionHistoryEntryCommonSchema);
 
     expect(Either.isLeft(result)).toBe(true);
     expect(EitherOps.getOrThrowRight(result)).toBeInstanceOf(TransactionHistoryRestoreError);
@@ -337,7 +337,7 @@ describe('InMemoryTransactionHistoryStorage.restore refusals', () => {
     // version this build writes would point a reader at a payload that was never on disk.
     const firstFormatWithABadEntry = JSON.stringify([{ hash: '0xaaa', identifiers: 'not-an-array' }]);
 
-    const result = InMemoryTransactionHistoryStorage.restore(
+    const result = InMemoryTransactionHistoryStorage.tryRestore(
       firstFormatWithABadEntry,
       TransactionHistoryEntryCommonSchema,
     );
@@ -353,11 +353,27 @@ describe('InMemoryTransactionHistoryStorage.restore refusals', () => {
       entries: [{ hash: '0xaaa', identifiers: 'not-an-array' }],
     });
 
-    const result = InMemoryTransactionHistoryStorage.restore(
+    const result = InMemoryTransactionHistoryStorage.tryRestore(
       currentFormatWithABadEntry,
       TransactionHistoryEntryCommonSchema,
     );
 
     expect(EitherOps.getOrThrowRight(result).detectedVersion).toBe('v2');
+  });
+
+  it('should throw from restore exactly the error tryRestore reports, so a caller of either learns the same thing', () => {
+    const reported = EitherOps.getOrThrowRight(
+      InMemoryTransactionHistoryStorage.tryRestore(
+        '{"version":"v9","entries":[]}',
+        TransactionHistoryEntryCommonSchema,
+      ),
+    );
+
+    expect(() =>
+      InMemoryTransactionHistoryStorage.restore('{"version":"v9","entries":[]}', TransactionHistoryEntryCommonSchema),
+    ).toThrow(TransactionHistoryRestoreError);
+    expect(() =>
+      InMemoryTransactionHistoryStorage.restore('{"version":"v9","entries":[]}', TransactionHistoryEntryCommonSchema),
+    ).toThrow(reported.message);
   });
 });

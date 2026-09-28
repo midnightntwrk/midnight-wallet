@@ -34,9 +34,7 @@ const noEnvelopeLifecycleMissing = readFileSync(
 );
 
 const restoreLifecycleMissing = () =>
-  EitherOps.getOrThrowLeft(
-    InMemoryTransactionHistoryStorage.restore(noEnvelopeLifecycleMissing, WalletEntrySchema, mergeWalletEntries),
-  );
+  InMemoryTransactionHistoryStorage.restore(noEnvelopeLifecycleMissing, WalletEntrySchema, mergeWalletEntries);
 
 describe('restoring a history with no version envelope, whose entries have no lifecycle', () => {
   it('should restore every entry, in the order it was written', async () => {
@@ -181,12 +179,10 @@ describe('writing the version envelope', () => {
   it('should read back its own v2 output with every entry unchanged', async () => {
     const before = await restoreLifecycleMissing().getAll();
 
-    const roundTripped = await EitherOps.getOrThrowLeft(
-      InMemoryTransactionHistoryStorage.restore(
-        await restoreLifecycleMissing().serialize(),
-        WalletEntrySchema,
-        mergeWalletEntries,
-      ),
+    const roundTripped = await InMemoryTransactionHistoryStorage.restore(
+      await restoreLifecycleMissing().serialize(),
+      WalletEntrySchema,
+      mergeWalletEntries,
     ).getAll();
 
     expect(roundTripped).toEqual(before);
@@ -217,8 +213,10 @@ const noEnvelopeLifecyclePresent = JSON.stringify([
 
 describe('restoring a history with no version envelope, whose entries already have a lifecycle', () => {
   it('should leave that lifecycle exactly as written, block and all', async () => {
-    const entries = await EitherOps.getOrThrowLeft(
-      InMemoryTransactionHistoryStorage.restore(noEnvelopeLifecyclePresent, WalletEntrySchema, mergeWalletEntries),
+    const entries = await InMemoryTransactionHistoryStorage.restore(
+      noEnvelopeLifecyclePresent,
+      WalletEntrySchema,
+      mergeWalletEntries,
     ).getAll();
 
     expect(entries).toHaveLength(1);
@@ -241,7 +239,7 @@ const writtenByANewerSdk = JSON.stringify({
 /** The error `restore` refused with. Fails the test if it returned a store instead of refusing the payload. */
 const refusalFromRestoring = (serialized: string): unknown =>
   EitherOps.getOrThrowRight(
-    InMemoryTransactionHistoryStorage.restore(serialized, WalletEntrySchema, mergeWalletEntries),
+    InMemoryTransactionHistoryStorage.tryRestore(serialized, WalletEntrySchema, mergeWalletEntries),
   );
 
 describe('restoring a history whose version this build does not know', () => {

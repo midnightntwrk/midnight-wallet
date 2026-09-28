@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, it, expect } from 'vitest';
-import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { NoOpTransactionHistoryStorage } from '../NoOpTransactionHistoryStorage.js';
 import { InMemoryTransactionHistoryStorage } from '../InMemoryTransactionHistoryStorage.js';
 import { CURRENT_FORMAT_VERSION, detectVersion } from '../TransactionHistoryFormat.js';
@@ -33,9 +32,7 @@ describe('NoOpTransactionHistoryStorage serialize', () => {
   it('should write a payload a real storage can restore', async () => {
     const serialized = await new NoOpTransactionHistoryStorage().serialize();
 
-    const restored = EitherOps.getOrThrowLeft(
-      InMemoryTransactionHistoryStorage.restore(serialized, TransactionHistoryEntryCommonSchema),
-    );
+    const restored = InMemoryTransactionHistoryStorage.restore(serialized, TransactionHistoryEntryCommonSchema);
 
     expect(await restored.getAll()).toEqual([]);
   });

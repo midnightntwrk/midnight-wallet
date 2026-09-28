@@ -1,5 +1,5 @@
 ---
-'@midnightntwrk/wallet-sdk-abstractions': major
+'@midnightntwrk/wallet-sdk-abstractions': minor
 ---
 
 Read transaction histories written before the lifecycle field existed, and write a versioned envelope.
@@ -17,14 +17,13 @@ just failed once it ran.
 Histories are now written as `{ version: 'v2', entries }`. `finalizedBlock` on a `finalized` lifecycle is optional,
 because an upgraded entry records no block; readers that need one fetch it from the indexer by transaction hash.
 
-`InMemoryTransactionHistoryStorage.restore` now returns an
-`Either<InMemoryTransactionHistoryStorage, TransactionHistoryRestoreError>` rather than throwing. A payload that cannot
-be read — unreadable JSON, a shape matching no known format, or a version written by a newer SDK — comes back as a
-`Left` naming the surface and the version the payload was read from, instead of being handed back as an empty store.
-The error also carries a `reason` — `unparseable`, `unrecognised`, `unknown-version` or `invalid-entries` — so an app can
-tell "written by a newer SDK" from "corrupt" without reading the text, and its `message` says all of it, so a log line
-or `String(error)` is enough to act on.
-Callers must handle the `Left`.
+A payload `InMemoryTransactionHistoryStorage.restore` cannot read — unreadable JSON, a shape matching no known format,
+or a version written by a newer SDK — is now refused with a `TransactionHistoryRestoreError` instead of being handed
+back as an empty store. The error names the surface and the version the payload was read from, carries a `reason` —
+`unparseable`, `unrecognised`, `unknown-version` or `invalid-entries` — so an app can tell "written by a newer SDK"
+from "corrupt" without reading the text, and its `message` says all of it, so a log line or `String(error)` is enough
+to act on. `restore` throws it; the new `tryRestore` returns it as a `Left`, the same pairing every wallet's `restore`
+and `tryRestore` have.
 
 `upgradeV1ToV2` now takes a `readonly unknown[]` rather than `unknown`: deciding whether a payload is a bare array is
 `detectVersion`'s job, and accepting anything else here is what used to let a non-array become an empty store.

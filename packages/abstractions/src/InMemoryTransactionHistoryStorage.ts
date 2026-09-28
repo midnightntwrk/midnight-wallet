@@ -134,23 +134,49 @@ export class InMemoryTransactionHistoryStorage<
    * A payload is brought up to the current format before the entry schema sees it, so a history written by an older SDK
    * opens without the caller doing anything. A payload that cannot be read is refused with a
    * {@link TransactionHistoryRestoreError} rather than handed back as an empty storage — losing a history silently is
-   * worse than failing to open it.
+   * worse than failing to open it. This is {@link tryRestore} with the refusal thrown, the same pairing every wallet's
+   * `restore` and `tryRestore` have.
    *
    * @example
    *   ```ts
    *   const restored = InMemoryTransactionHistoryStorage.restore(saved, WalletEntrySchema, mergeWalletEntries);
+   *   ```;
+   *
+   * @param serialized - The stored payload.
+   * @param schema - The full entry schema, including any wallet-specific sections.
+   * @param merge - How an incoming write combines with an existing entry under the same hash.
+   * @returns A storage holding every entry in the payload.
+   * @throws TransactionHistoryRestoreError when the payload is not readable JSON, was written in a format version this
+   *   build does not know, or does not decode against `schema` once upgraded. The error names the version the payload
+   *   was actually read from, not the one this build writes, and says why in its `reason` and `message`.
+   */
+  static restore<T extends TransactionHistoryEntryCommon, Encoded>(
+    serialized: SerializedTransactionHistory,
+    schema: Schema.Schema<T, Encoded>,
+    merge?: (existing: T, incoming: T) => T,
+  ): InMemoryTransactionHistoryStorage<T, Encoded> {
+    return Either.getOrThrowWith(
+      InMemoryTransactionHistoryStorage.tryRestore(serialized, schema, merge),
+      (error) => error,
+    );
+  }
+
+  /**
+   * {@link restore}, reporting a refusal as a `Left` rather than throwing it.
+   *
+   * @example
+   *   ```ts
+   *   const restored = InMemoryTransactionHistoryStorage.tryRestore(saved, WalletEntrySchema, mergeWalletEntries);
    *   // Either.Either<InMemoryTransactionHistoryStorage<WalletEntry>, TransactionHistoryRestoreError>
    *   ```;
    *
    * @param serialized - The stored payload.
    * @param schema - The full entry schema, including any wallet-specific sections.
    * @param merge - How an incoming write combines with an existing entry under the same hash.
-   * @returns A storage holding every entry in the payload, or a `Left` carrying a {@link TransactionHistoryRestoreError}
-   *   when the payload is not readable JSON, was written in a format version this build does not know, or does not
-   *   decode against `schema` once upgraded. The error names the version the payload was actually read from, not the
-   *   one this build writes.
+   * @returns A storage holding every entry in the payload, or a `Left` carrying the
+   *   {@link TransactionHistoryRestoreError} that {@link restore} would throw.
    */
-  static restore<T extends TransactionHistoryEntryCommon, Encoded>(
+  static tryRestore<T extends TransactionHistoryEntryCommon, Encoded>(
     serialized: SerializedTransactionHistory,
     schema: Schema.Schema<T, Encoded>,
     merge?: (existing: T, incoming: T) => T,

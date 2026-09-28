@@ -29,7 +29,6 @@ import * as rx from 'rxjs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed } from './utils.js';
 import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
@@ -150,8 +149,10 @@ describe('Wallet serialization and restoration', () => {
       const serializedState = await wallet.serializeState();
       await wallet.stop();
 
-      const restoredTxHistoryStorage = EitherOps.getOrThrowLeft(
-        InMemoryTransactionHistoryStorage.restore(serializedTxHistory, WalletEntrySchema, mergeWalletEntries),
+      const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
+        serializedTxHistory,
+        WalletEntrySchema,
+        mergeWalletEntries,
       );
       const restoredWallet = ShieldedWallet({
         ...shieldedConfiguration,
@@ -190,8 +191,10 @@ describe('Wallet serialization and restoration', () => {
       const serializedState = await initialWallet.serializeState();
       await initialWallet.stop();
 
-      const restoredTxHistoryStorage = EitherOps.getOrThrowLeft(
-        InMemoryTransactionHistoryStorage.restore(serializedTxHistory, WalletEntrySchema, mergeWalletEntries),
+      const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
+        serializedTxHistory,
+        WalletEntrySchema,
+        mergeWalletEntries,
       );
       const restoredWallet = UnshieldedWallet({
         ...unshieldedConfiguration,
