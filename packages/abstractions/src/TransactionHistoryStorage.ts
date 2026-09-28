@@ -39,6 +39,12 @@ export type FinalizedBlock = Schema.Schema.Type<typeof FinalizedBlockSchema>;
  * A transaction that reached a block. `finalizedBlock` is optional because an entry restored from a history written
  * before the lifecycle field existed is known to have been finalized, but carries no record of which block it landed
  * in. No block is invented for those; a reader that needs one fetches it from the indexer by transaction hash.
+ *
+ * The optionality is a property of the format, not of that one path: the schema accepts a blockless finalized entry
+ * from any writer and cannot tell an upgraded one from one a caller wrote that way, so `FinalizedEntryInput` requires
+ * the block at the type level to keep the SDK's own writes whole. Nothing backfills a blockless entry afterwards either
+ * — every sync resumes after the position the snapshot recorded, so the block that would fill it is never replayed. An
+ * entry restored without a block stays without one for the life of the history.
  */
 export const FinalizedLifecycleSchema = Schema.Struct({
   status: Schema.Literal('finalized'),
