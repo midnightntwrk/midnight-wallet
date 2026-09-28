@@ -403,6 +403,10 @@ export class V1Builder<
         );
       },
 
+      // The version the state was left at: where the chain was when a snapshot was written, or what the chain answered
+      // when a fresh state was stamped from it. The runtime starts at this version rather than the variant's lower bound.
+      protocolVersionOf: (state: CoreWallet) => state.protocolVersion,
+
       deserializeState: (serialized: TSerialized): Either.Either<CoreWallet, WalletError> => {
         return v1Context.serializationCapability.deserialize(serialized);
       },

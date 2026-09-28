@@ -526,6 +526,7 @@ describe('Wallet Builder', () => {
         migrateState(previousState: number) {
           return Effect.succeed(previousState + 1);
         },
+        protocolVersionOf: () => ProtocolVersion.MinSupportedVersion,
       }),
     };
 
@@ -607,6 +608,7 @@ describe('Wallet Builder', () => {
           migrateState() {
             return Effect.succeed(0);
           },
+          protocolVersionOf: () => ProtocolVersion.MinSupportedVersion,
         };
       },
     };

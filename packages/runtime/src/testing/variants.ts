@@ -85,6 +85,11 @@ export class NumericRange implements Variant.Variant<
   migrateState(): Effect.Effect<number> {
     return Effect.succeed(0);
   }
+
+  /** A number records no protocol version, so it answers the lowest one and starts at the variant's lower bound. */
+  protocolVersionOf(): ProtocolVersion.ProtocolVersion {
+    return ProtocolVersion.MinSupportedVersion;
+  }
 }
 
 export class NumericRangeBuilder implements VariantBuilder.VariantBuilder<NumericRange, RangeConfig> {
@@ -152,6 +157,11 @@ export class NumericRangeMultiplier implements Variant.Variant<
 
   migrateState(state: number): Effect.Effect<number> {
     return Effect.succeed(state + 1);
+  }
+
+  /** A number records no protocol version, so it answers the lowest one and starts at the variant's lower bound. */
+  protocolVersionOf(): ProtocolVersion.ProtocolVersion {
+    return ProtocolVersion.MinSupportedVersion;
   }
 }
 
