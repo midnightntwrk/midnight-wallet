@@ -32,3 +32,8 @@ upgraded entries alongside the version they were read from.
 
 `NoOpTransactionHistoryStorage.serialize` now writes `{ version: 'v2', entries: [] }` rather than the bare `[]`, which
 would have announced the first format.
+
+The door is one-way. A history saved by this release cannot be opened by abstractions 2.1.0, and not only because of the
+envelope: 2.1.0 also required `protocolVersion` and `status` on every entry, both optional now, so unwrapping the
+envelope is not a downgrade path either. Downgrading an application after it has saved a history means losing that
+history, and 2.1.0 fails loudly on it rather than opening an empty one.

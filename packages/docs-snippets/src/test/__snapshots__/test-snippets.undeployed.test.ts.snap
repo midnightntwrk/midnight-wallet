@@ -1472,3 +1472,14 @@ dust:
 ",
 ]
 `;
+
+exports[`Snippet outputs > without network > should output the correct result for 'transaction-history-persistence' 1`] = `
+[
+  "restored entries [ 'c0a46613b653a5c6f14a369f3799cdb122a57c3ec83a9f1358717fa8a2221204' ]
+tryRestore succeeded true
+older history entries 1
+refused unknown-version v9
+Could not restore the transaction-history payload (format v9, unknown-version): Transaction history declares format v9, which this build cannot read. This build reads v2.
+",
+]
+`;

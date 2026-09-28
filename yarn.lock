@@ -2573,6 +2573,7 @@ __metadata:
     prettier: "npm:3.8.4"
     typescript: "npm:5.9.3"
     vitest: "npm:4.1.9"
+    wallet-sdk-abstractions-2.1.0: "npm:@midnightntwrk/wallet-sdk-abstractions@2.1.0"
   languageName: unknown
   linkType: soft
 
@@ -11195,6 +11196,15 @@ __metadata:
   version: 1.1.2
   resolution: "vm-browserify@npm:1.1.2"
   checksum: 10c0/0cc1af6e0d880deb58bc974921320c187f9e0a94f25570fca6b1bd64e798ce454ab87dfd797551b1b0cc1849307421aae0193cedf5f06bdb5680476780ee344b
+  languageName: node
+  linkType: hard
+
+"wallet-sdk-abstractions-2.1.0@npm:@midnightntwrk/wallet-sdk-abstractions@2.1.0":
+  version: 2.1.0
+  resolution: "@midnightntwrk/wallet-sdk-abstractions@npm:2.1.0"
+  dependencies:
+    effect: "npm:^3.19.19"
+  checksum: 10c0/c3fc87b9662176dc49b1072dbcdb2aaf1fe1a1091bbe7281a45fc899da8b57e515997203dd824efa0be6611af6ac3b5e379c17c820f48b633caf305261c3ef20
   languageName: node
   linkType: hard
 
