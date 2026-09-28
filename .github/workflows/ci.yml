@@ -423,8 +423,20 @@ jobs:
 
       # No toolchain setup and no install: the check is a plain node script over `git diff`, using only the standard
       # library, so the runner's own node runs it.
+      #
+      # The base is the branch a pull request targets or, on a push, the tip the push moved away from: against the
+      # branch's own tip the diff is empty and the gate blind. The copy of the script that runs is the base's, not the
+      # branch's, so a branch cannot loosen the gate it is checked by.
       - name: Check published fixtures are unmodified
-        run: node packages/serialization-tests/check-frozen.mjs origin/${{ github.base_ref || 'main' }}
+        env:
+          BASE:
+            ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before ||
+            'HEAD~1' }}
+        run: |
+          SCRIPT=packages/serialization-tests/check-frozen.mjs
+          # A base that predates the script has no copy to run, so the branch's own runs until it lands there.
+          git show "$BASE:$SCRIPT" > "$RUNNER_TEMP/check-frozen.mjs" 2>/dev/null || cp "$SCRIPT" "$RUNNER_TEMP/check-frozen.mjs"
+          node "$RUNNER_TEMP/check-frozen.mjs" "$BASE"
 
   # Single aggregate gate over all test stages. Produces the "Tests" status check
   # that branch protection requires (the old combined job was also named "Tests"),

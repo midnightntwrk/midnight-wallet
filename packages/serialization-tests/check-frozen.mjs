@@ -30,11 +30,11 @@ import { execFileSync } from 'node:child_process';
 const BASE = process.argv[2] ?? 'origin/main';
 const FROZEN = /^packages\/serialization-tests\/fixtures\/(?!_baseline\/)/;
 
-const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
+const git = (...args) => execFileSync('git', args, { encoding: 'utf8' });
 
 const mergeBase = (() => {
   try {
-    return git('merge-base', BASE, 'HEAD');
+    return git('merge-base', BASE, 'HEAD').trim();
   } catch {
     console.error(`Could not find a merge base with ${BASE}. Fetch it first, or pass a different base ref.`);
     process.exit(2);
@@ -43,24 +43,32 @@ const mergeBase = (() => {
 
 // Exits 2, like the merge-base failure above and unlike the exit 1 a real violation uses: a git that could not run is
 // not the same answer as a fixture that changed, and CI must not read one as the other.
+//
+// NUL-separated (`-z`) so every path arrives as it is. Without it git quotes a path holding a non-ASCII byte or a
+// quote mark, and a regex anchored on the plain path never sees it.
 const diff = (() => {
   try {
-    return git('diff', '--name-status', `${mergeBase}...HEAD`);
+    return git('diff', '--name-status', '-z', `${mergeBase}...HEAD`);
   } catch (error) {
     console.error(`Could not diff ${mergeBase}...HEAD: ${error.message}`);
     process.exit(2);
   }
 })();
 
+// A rename or copy reports two paths, source then destination. Both matter: moving a frozen fixture out of the corpus
+// loses the record just as surely as editing it.
 const changed = diff
-  .split('\n')
-  .filter((line) => line.length > 0)
-  .map((line) => {
-    const [status, ...paths] = line.split('\t');
-    // A rename or copy reports two paths, source then destination. Both matter: moving a frozen fixture out of the
-    // corpus loses the record just as surely as editing it.
-    return { status: status[0], paths };
-  });
+  .split('\0')
+  .filter((field) => field.length > 0)
+  .reduce(
+    ({ entries, pending }, field) =>
+      pending === undefined
+        ? { entries, pending: { status: field[0], paths: [], needed: /^[RC]/.test(field) ? 2 : 1 } }
+        : pending.paths.length + 1 < pending.needed
+          ? { entries, pending: { ...pending, paths: [...pending.paths, field] } }
+          : { entries: [...entries, { status: pending.status, paths: [...pending.paths, field] }], pending: undefined },
+    { entries: [], pending: undefined },
+  ).entries;
 
 // An added file under a new release folder is how a fixture corpus grows; anything else is a change to the record.
 const violations = changed.filter(({ status, paths }) => status !== 'A' && paths.some((path) => FROZEN.test(path)));
