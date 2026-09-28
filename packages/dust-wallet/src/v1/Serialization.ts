@@ -67,6 +67,7 @@ import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 
 const SnapshotSchema = Schema.Struct({
   version: SnapshotFormat.versionField('dust', SNAPSHOT_FORMAT_VERSION),
+  writtenBy: SnapshotFormat.writtenByField(),
   publicKey: Schema.Struct({
     publicKey: Schema.BigInt,
   }),
@@ -83,6 +84,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
         version: SNAPSHOT_FORMAT_VERSION,
+        writtenBy: SnapshotFormat.V1_SNAPSHOT_WRITER,
         publicKey: w.publicKey,
         state: w.state,
         protocolVersion: w.protocolVersion,

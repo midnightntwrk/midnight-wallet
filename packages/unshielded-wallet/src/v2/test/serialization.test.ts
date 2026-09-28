@@ -208,6 +208,10 @@ describe('V2 unshielded snapshot format version', () => {
     });
   });
 
+  it('should name itself as the writer of every snapshot it writes', () => {
+    expect(snapshotOf(makeWallet(schnorrPK))).toMatchObject({ writtenBy: 'v2' });
+  });
+
   it('should read a v1 snapshot — a bare-string key — by upgrading it in one step', () => {
     const v1 = JSON.stringify({
       ...snapshotOf(makeWallet(schnorrPK)),

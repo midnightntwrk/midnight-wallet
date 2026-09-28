@@ -12,7 +12,13 @@
 // limitations under the License.
 import { Either, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { versionField } from '../SnapshotFormat.js';
+import {
+  SNAPSHOT_WRITERS,
+  V1_SNAPSHOT_WRITER,
+  V2_SNAPSHOT_WRITER,
+  versionField,
+  writtenByField,
+} from '../SnapshotFormat.js';
 
 const decode = <A, I>(schema: Schema.Schema<A, I>, value: unknown) => Schema.decodeUnknownEither(schema)(value);
 
@@ -41,5 +47,25 @@ describe('the version field of a snapshot', () => {
     const refused = decode(Unshielded, { version: 'v3' });
 
     expect(String(Either.isLeft(refused) ? refused.left.message : '')).toContain('Refusing an unshielded snapshot');
+  });
+});
+
+describe('the writtenBy field of a snapshot', () => {
+  const Snapshot = Schema.Struct({ writtenBy: writtenByField() });
+
+  it('names the two variants by their ordinals', () => {
+    expect(SNAPSHOT_WRITERS).toEqual(['v1', 'v2']);
+    expect(V1_SNAPSHOT_WRITER).toBe('v1');
+    expect(V2_SNAPSHOT_WRITER).toBe('v2');
+  });
+
+  it('accepts either writer and a snapshot that names none', () => {
+    expect(decode(Snapshot, { writtenBy: 'v1' })).toEqual(Either.right({ writtenBy: 'v1' }));
+    expect(decode(Snapshot, { writtenBy: 'v2' })).toEqual(Either.right({ writtenBy: 'v2' }));
+    expect(decode(Snapshot, {})).toEqual(Either.right({}));
+  });
+
+  it('refuses a writer it does not know', () => {
+    expect(Either.isLeft(decode(Snapshot, { writtenBy: 'v3' }))).toBe(true);
   });
 });

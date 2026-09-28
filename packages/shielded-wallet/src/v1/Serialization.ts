@@ -71,6 +71,7 @@ import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   const SnapshotSchema = Schema.Struct({
     version: SnapshotFormat.versionField('shielded', SNAPSHOT_FORMAT_VERSION),
+    writtenBy: SnapshotFormat.writtenByField(),
     publicKeys: Schema.Struct({
       coinPublicKey: Schema.String,
       encryptionPublicKey: Schema.String,
@@ -100,6 +101,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
         version: SNAPSHOT_FORMAT_VERSION,
+        writtenBy: SnapshotFormat.V1_SNAPSHOT_WRITER,
         publicKeys: w.publicKeys,
         state: w.state,
         protocolVersion: w.protocolVersion,

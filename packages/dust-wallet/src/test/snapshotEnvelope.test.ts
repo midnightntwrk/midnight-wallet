@@ -94,6 +94,9 @@ const expectedPaths = [
   // The snapshot's format version. Both variants write it, and write the same one: the version belongs to the shape,
   // and the shape is what lets either variant read the other's snapshot.
   'version',
+  // Which variant wrote the snapshot. Each stamps itself, so a snapshot goes home to its writer on restore whatever
+  // chain version it carries.
+  'writtenBy',
   'networkId',
   'offset',
   'protocolVersion',
@@ -140,5 +143,12 @@ describe('the dust snapshot envelope', () => {
     expect(parsed.networkId).toBe(networkId);
     // Opaque on purpose: hex, non-empty, and otherwise the ledger's business.
     expect(parsed.state).toMatch(/^[0-9a-f]+$/);
+  });
+});
+
+describe('the dust snapshot envelope’s writer', () => {
+  it('is stamped by each variant with its own ordinal', () => {
+    expect(JSON.parse(makeDefaultV1SerializationCapability().serialize(v1Wallet()))).toMatchObject({ writtenBy: 'v1' });
+    expect(JSON.parse(makeDefaultV2SerializationCapability().serialize(v2Wallet()))).toMatchObject({ writtenBy: 'v2' });
   });
 });

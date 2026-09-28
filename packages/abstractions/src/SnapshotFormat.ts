@@ -48,3 +48,34 @@ export const versionField = <const V extends string>(
     }),
     { default: () => version },
   );
+
+/**
+ * The variants that write wallet snapshots, by the ordinal each carries in its name: the V1 variant on ledger-v8 and
+ * the V2 variant on ledger-v9.
+ */
+export const SNAPSHOT_WRITERS = ['v1', 'v2'] as const;
+
+/** Which variant wrote a snapshot. */
+export type SnapshotWriter = (typeof SNAPSHOT_WRITERS)[number];
+
+/** The V1 variant, as it names itself in a snapshot it writes. */
+export const V1_SNAPSHOT_WRITER: SnapshotWriter = 'v1';
+
+/** The V2 variant, as it names itself in a snapshot it writes. */
+export const V2_SNAPSHOT_WRITER: SnapshotWriter = 'v2';
+
+/**
+ * The `writtenBy` field of a wallet snapshot: which variant wrote it.
+ *
+ * A format version names a snapshot's shape, and the `protocolVersion` inside it names the chain's version when it was
+ * written. Neither says who wrote it, and the wallet layer needs that to route a snapshot home: a V1 wallet that has
+ * seen the chain reach `forks.v9` annotates that version before the runtime hands it over, so a snapshot it writes in
+ * that window carries a version the V2 variant owns. Read as a V2 snapshot it would skip the cross-ledger migration;
+ * routed to the variant that wrote it, it crosses like any other.
+ *
+ * Optional, because every snapshot written before the field existed lacks it, and those keep routing by version.
+ *
+ * @returns An optional property signature over the known writers.
+ */
+export const writtenByField = (): Schema.optional<Schema.Literal<['v1', 'v2']>> =>
+  Schema.optional(Schema.Literal(...SNAPSHOT_WRITERS));

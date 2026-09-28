@@ -92,6 +92,9 @@ const expectedPaths = [
   // The snapshot's format version. Both variants write it, and write the same one, because the version names the
   // shape and the two variants write one shape: every field here, plus the two optional ones pinned below.
   'version',
+  // Which variant wrote the snapshot. Each stamps itself, so a snapshot goes home to its writer on restore whatever
+  // chain version it carries.
+  'writtenBy',
   'coinHashes{}',
   'networkId',
   'offset',
@@ -172,5 +175,12 @@ describe('the shielded snapshot envelope’s optional fields', () => {
     expect(sorted(keyPaths(v2Snapshot))).toEqual(sorted([...expectedPaths, 'txHistory[]']));
     expect(v1Snapshot).toMatchObject({ txHistory: embedded });
     expect(v2Snapshot).toMatchObject({ txHistory: embedded });
+  });
+});
+
+describe('the shielded snapshot envelope’s writer', () => {
+  it('is stamped by each variant with its own ordinal', () => {
+    expect(JSON.parse(makeDefaultV1SerializationCapability().serialize(v1Wallet()))).toMatchObject({ writtenBy: 'v1' });
+    expect(JSON.parse(makeDefaultV2SerializationCapability().serialize(v2Wallet()))).toMatchObject({ writtenBy: 'v2' });
   });
 });

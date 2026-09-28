@@ -73,6 +73,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
     // only optional fields to it, which is not a new version. A V1 reader never meets a V2 snapshot anyway:
     // `../Restore.ts` routes each snapshot to the variant that owns its `protocolVersion`.
     version: SnapshotFormat.versionField('shielded', SNAPSHOT_FORMAT_VERSION),
+    writtenBy: SnapshotFormat.writtenByField(),
     publicKeys: Schema.Struct({
       coinPublicKey: Schema.String,
       encryptionPublicKey: Schema.String,
@@ -100,6 +101,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
         version: SNAPSHOT_FORMAT_VERSION,
+        writtenBy: SnapshotFormat.V2_SNAPSHOT_WRITER,
         publicKeys: w.publicKeys,
         state: w.state,
         protocolVersion: w.protocolVersion,

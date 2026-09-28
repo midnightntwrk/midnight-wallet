@@ -68,6 +68,14 @@ ledger signs with more than one scheme. That is a retyped field, so the V2 write
 payload: the wallet layer routes a snapshot to the variant that owns its `protocolVersion`. The two variants are two
 writers of one surface, which is why the gate below runs every check per writer.
 
+**A snapshot names its writer.** A format version names a payload's shape, and the `protocolVersion` inside names the
+chain's version when it was written; neither says which variant wrote it, and the wallet layer needs that to route a
+snapshot home. The V1 variant annotates the version it sees on chain, so a snapshot it writes after the chain reaches
+`forks.v9` but before the hand-over carries a version the V2 variant owns; routed by version alone it would open on V2
+as a format upgrade and skip the cross-ledger migration. So every snapshot also carries `writtenBy`, an optional field
+that does not change the format version, and a snapshot goes to the variant that wrote it when that variant is
+registered, and by version otherwise — which is what every snapshot written before the field does.
+
 **Failure is loud.** A payload that cannot be read is refused, never swallowed into an empty store. The transaction
 history refuses with a tagged error carrying the surface, the version detected, the reason and the cause
 (`TransactionHistoryRestoreError`). The three snapshot surfaces do not yet: they refuse with the wallet's generic error,

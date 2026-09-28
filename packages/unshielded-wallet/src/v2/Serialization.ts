@@ -60,6 +60,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
     // drift). The V1 variant never meets a `v2` snapshot: `../Restore.ts` routes each snapshot to the variant that
     // owns its `protocolVersion`.
     version: SnapshotFormat.versionField('unshielded', SNAPSHOT_FORMAT_VERSION),
+    writtenBy: SnapshotFormat.writtenByField(),
     publicKey: Schema.Struct({
       // Tagged only: the bare-string key of a `v1` snapshot is tagged by the upgrade step before this schema runs.
       publicKey: SignatureVerifyingKeySchema,
@@ -80,6 +81,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
         version: SNAPSHOT_FORMAT_VERSION,
+        writtenBy: SnapshotFormat.V2_SNAPSHOT_WRITER,
         publicKey: w.publicKey,
         state: UnshieldedState.toArrays(w.state),
         protocolVersion: w.protocolVersion,

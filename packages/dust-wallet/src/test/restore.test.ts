@@ -19,19 +19,25 @@ import { peekProtocolVersion, peekWriter, UnsupportedSnapshotVersionError, varia
 const envelope = (protocolVersion: string, writtenBy?: SnapshotFormat.SnapshotWriter): string =>
   JSON.stringify({
     ...(writtenBy === undefined ? {} : { writtenBy }),
-    publicKeys: { coinPublicKey: 'aa', encryptionPublicKey: 'bb' },
+    publicKey: { publicKey: '12345' },
     state: 'deadbeef',
     protocolVersion,
+    offset: '3',
     networkId: 'undeployed',
-    coinHashes: {},
   });
 
-/** The same envelope as written before snapshots declared a version at all. */
+/**
+ * The same envelope as written before snapshots declared a version at all.
+ *
+ * @remarks
+ *   Dust snapshots have carried `protocolVersion` for as long as they have existed, so this is a defensive case rather
+ *   than an observed one — but the routing must not depend on that being true of every snapshot an application still
+ *   holds, and the fallback is what keeps it from depending on it.
+ */
 const legacyEnvelope = JSON.stringify({
-  publicKeys: { coinPublicKey: 'aa', encryptionPublicKey: 'bb' },
+  publicKey: { publicKey: '12345' },
   state: 'deadbeef',
   networkId: 'undeployed',
-  coinHashes: {},
 });
 
 const v1 = { name: 'V1 variant' };
@@ -106,7 +112,7 @@ describe('variantForSnapshot', () => {
 
     const error = routed.pipe(Either.flip, Either.getOrThrow);
     expect(error).toBeInstanceOf(UnsupportedSnapshotVersionError);
-    expect(error._tag).toBe('@midnightntwrk/wallet-sdk-shielded/Restore/UnsupportedSnapshotVersionError');
+    expect(error._tag).toBe('@midnightntwrk/wallet-sdk-dust-wallet/Restore/UnsupportedSnapshotVersionError');
     expect(error.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(4000n));
   });
 });

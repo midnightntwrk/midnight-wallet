@@ -83,6 +83,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
 
   const SnapshotSchema = Schema.Struct({
     version: SnapshotFormat.versionField('unshielded', SNAPSHOT_FORMAT_VERSION),
+    writtenBy: SnapshotFormat.writtenByField(),
     publicKey: Schema.Struct({
       publicKey: Schema.String,
       addressHex: Schema.String,
@@ -102,6 +103,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
         version: SNAPSHOT_FORMAT_VERSION,
+        writtenBy: SnapshotFormat.V1_SNAPSHOT_WRITER,
         publicKey: w.publicKey,
         state: UnshieldedState.toArrays(w.state),
         protocolVersion: w.protocolVersion,

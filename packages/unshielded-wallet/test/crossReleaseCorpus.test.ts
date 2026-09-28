@@ -57,6 +57,8 @@ describe('an unshielded snapshot written by the last ledger-v8 release', () => {
       fixture('unshielded-funded'),
       (version) => (version < ProtocolVersion.V9NativeForkVersion ? Option.some('V1' as const) : Option.none()),
       'V2' as const,
+      // The corpus predates snapshots naming their writer, so the version alone routes it.
+      () => Option.none(),
     );
     expect(chosen).toStrictEqual(Either.right('V1'));
   });

@@ -37,6 +37,10 @@ describe('V1 unshielded snapshot format version', () => {
     expect(written).toMatchObject({ version: 'v1' });
   });
 
+  it('should name itself as the writer of every snapshot it writes', () => {
+    expect(JSON.parse(capability.serialize(emptyWallet()))).toMatchObject({ writtenBy: 'v1' });
+  });
+
   it('should read a snapshot that carries no version as the first format', () => {
     const restored = capability.deserialize(withoutVersion(capability.serialize(emptyWallet())));
 

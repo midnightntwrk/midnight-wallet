@@ -35,6 +35,7 @@ import {
   type UnprovenTx,
   WalletSeed,
   WalletTransaction,
+  SnapshotFormat,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ShieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import {
@@ -527,6 +528,26 @@ export function CustomForkingShieldedWallet<
       return wallet;
     }
 
+    /**
+     * The registered variant a snapshot names as its writer, if that variant is registered.
+     *
+     * @remarks
+     *   Snapshots name their writer by the ordinal in the variant's name, and each variant registers under its tag; this
+     *   is the one place the two are paired, so routing can send a snapshot home whatever version it carries.
+     * @param writer The writer a snapshot names.
+     * @returns That variant, or none when this composition does not register it.
+     */
+    static variantWrittenBy(
+      writer: SnapshotFormat.SnapshotWriter,
+    ): ReturnType<typeof ForkingShieldedWalletImplementation.variantFor> {
+      const tag = writer === SnapshotFormat.V1_SNAPSHOT_WRITER ? V1Tag : V2Tag;
+      return Option.fromNullable(
+        ForkingShieldedWalletImplementation.allVariants().find(
+          (variant) => Variant.getVersionedVariantTag(variant) === tag,
+        ),
+      );
+    }
+
     static tryRestore(
       serializedState: string,
     ): Either.Either<ForkingShieldedWalletImplementation, ShieldedRestoreError> {
@@ -535,6 +556,7 @@ export function CustomForkingShieldedWallet<
         serializedState,
         (version) => ForkingShieldedWalletImplementation.variantFor(version),
         headVariant,
+        (writer) => ForkingShieldedWalletImplementation.variantWrittenBy(writer),
       ).pipe(
         // Stated with its result type because the resolved variant is either of the two, so its deserializer is
         // either of theirs: what comes back is a state of whichever one wrote the snapshot, which is what

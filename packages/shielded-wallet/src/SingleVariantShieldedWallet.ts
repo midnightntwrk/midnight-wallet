@@ -168,6 +168,8 @@ export function CustomShieldedWallet<
               serializedState,
               (version) => CustomShieldedWalletImplementation.variantFor(version),
               headVariant,
+              // A custom composition registers one variant, so there is no other writer to route to.
+              () => Option.none(),
             )
           : Either.right(headVariant);
 

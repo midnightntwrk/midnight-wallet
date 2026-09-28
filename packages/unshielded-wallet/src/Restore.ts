@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Data, Either, Option, Schema } from 'effect';
 
 /**
@@ -32,13 +32,14 @@ export class UnsupportedSnapshotVersionError extends Data.TaggedError(
  * The envelope the peek reads.
  *
  * @remarks
- *   Deliberately the smallest possible description of a snapshot: one optional field, every other ignored. It has to read
- *   snapshots written by _any_ variant, including ones whose full schema this build does not have, so it must not
+ *   Deliberately the smallest possible description of a snapshot: two optional fields, every other ignored. It has to
+ *   read snapshots written by _any_ variant, including ones whose full schema this build does not have, so it must not
  *   assert anything it does not need. Everything it cannot make sense of is reported as "no version declared", leaving
  *   the real diagnosis to the deserializer that eventually reads the whole thing.
  */
 const EnvelopeSchema = Schema.Struct({
   protocolVersion: Schema.optional(ProtocolVersion.ProtocolVersionSchema),
+  writtenBy: SnapshotFormat.writtenByField(),
 });
 
 /**
@@ -53,32 +54,56 @@ export const peekProtocolVersion = (serialized: string): Option.Option<ProtocolV
   );
 
 /**
+ * Reads which variant wrote a serialized unshielded wallet snapshot, when it says.
+ *
+ * @param serialized The serialized wallet state.
+ * @returns The writer, or `Option.none()` when the snapshot predates the field or cannot be read at all.
+ */
+export const peekWriter = (serialized: string): Option.Option<SnapshotFormat.SnapshotWriter> =>
+  Schema.decodeUnknownOption(Schema.parseJson(EnvelopeSchema))(serialized).pipe(
+    Option.flatMap((envelope) => Option.fromNullable(envelope.writtenBy)),
+  );
+
+/**
  * Chooses the variant that should read a serialized unshielded wallet snapshot.
  *
  * @remarks
- *   A snapshot that declares no version predates snapshots declaring one, and can only have been written by the variant
- *   that shipped before the question arose — the head variant. The same fallback covers an envelope this function
- *   cannot read at all: refusing it here would replace the deserializer's precise error with a vaguer one.
+ *   The variant that wrote a snapshot is the one to read it, when the snapshot says which and that variant is registered:
+ *   a V1 wallet that has seen the chain reach `forks.v9` annotates that version before the runtime hands it over, so a
+ *   snapshot it writes in that window carries a version the V2 variant owns. Read as a V2 snapshot it would skip the
+ *   cross-ledger migration; restored on the V1 variant, that variant announces the out-of-range version on its first
+ *   observation and the runtime migrates it, exactly as for a live crossing.
+ *
+ *   Otherwise the version decides. A snapshot that declares no version predates snapshots declaring one, and can only
+ *   have been written by the variant that shipped before the question arose — the head variant. The same fallback
+ *   covers an envelope this function cannot read at all: refusing it here would replace the deserializer's precise
+ *   error with a vaguer one.
  * @param serialized The serialized wallet state.
  * @param variantFor Resolves the variant registered for a protocol version.
  * @param headVariant The variant a snapshot with no declared version is restored into.
- * @returns The variant to restore with, or {@link UnsupportedSnapshotVersionError} when the declared version is one no
- *   registered variant owns.
+ * @param variantWrittenBy Resolves the registered variant that a snapshot names as its writer, if it is registered.
+ * @returns The variant to restore with, or {@link UnsupportedSnapshotVersionError} when the writer is not registered and
+ *   the declared version is one no registered variant owns.
  */
 export const variantForSnapshot = <TVariant>(
   serialized: string,
   variantFor: (version: ProtocolVersion.ProtocolVersion) => Option.Option<TVariant>,
   headVariant: TVariant,
+  variantWrittenBy: (writer: SnapshotFormat.SnapshotWriter) => Option.Option<TVariant>,
 ): Either.Either<TVariant, UnsupportedSnapshotVersionError> =>
-  Option.match(peekProtocolVersion(serialized), {
-    onNone: () => Either.right(headVariant),
-    onSome: (protocolVersion) =>
-      Either.fromOption(
-        variantFor(protocolVersion),
-        () =>
-          new UnsupportedSnapshotVersionError({
-            message: `No registered variant reads unshielded wallet snapshots of protocol version ${protocolVersion}.`,
-            protocolVersion,
-          }),
-      ),
+  Option.match(Option.flatMap(peekWriter(serialized), variantWrittenBy), {
+    onSome: (variant) => Either.right(variant),
+    onNone: () =>
+      Option.match(peekProtocolVersion(serialized), {
+        onNone: () => Either.right(headVariant),
+        onSome: (protocolVersion) =>
+          Either.fromOption(
+            variantFor(protocolVersion),
+            () =>
+              new UnsupportedSnapshotVersionError({
+                message: `No registered variant reads unshielded wallet snapshots of protocol version ${protocolVersion}.`,
+                protocolVersion,
+              }),
+          ),
+      }),
   });
