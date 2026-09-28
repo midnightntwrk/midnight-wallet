@@ -69,12 +69,15 @@ describe('an unshielded wallet restored from a snapshot it cannot read', () => {
     expect(Either.isLeft(UnshieldedWallet(configuration).tryRestore(unreadable))).toBe(true);
   });
 
-  it('refuses exactly the snapshots restore refuses, and keeps the reason restore discards', () => {
+  it('throws exactly the reason tryRestore reports, for exactly the snapshots tryRestore refuses', () => {
+    // `restore` is `tryRestore` with the Left thrown rather than discarded, so an app that only calls `restore` still
+    // learns the surface and the version from the exception, as the `@throws` on `restore` promises.
     for (const snapshot of [fromTheFuture, unreadable]) {
       expect(() => UnshieldedWallet(configuration).restore(snapshot)).toThrow();
       expect(Either.isLeft(UnshieldedWallet(configuration).tryRestore(snapshot))).toBe(true);
     }
 
+    expect(() => UnshieldedWallet(configuration).restore(fromTheFuture)).toThrow(UnsupportedSnapshotVersionError);
     expect(
       UnshieldedWallet(configuration).tryRestore(fromTheFuture).pipe(Either.flip, Either.getOrThrow),
     ).toBeInstanceOf(UnsupportedSnapshotVersionError);

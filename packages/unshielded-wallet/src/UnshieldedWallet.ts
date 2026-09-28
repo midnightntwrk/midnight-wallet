@@ -458,7 +458,7 @@ export function CustomForkingUnshieldedWallet<
     }
 
     static restore(serializedState: string): ForkingUnshieldedWalletImplementation {
-      return Either.getOrThrow(ForkingUnshieldedWalletImplementation.tryRestore(serializedState));
+      return Either.getOrThrowWith(ForkingUnshieldedWalletImplementation.tryRestore(serializedState), (error) => error);
     }
 
     readonly state: rx.Observable<UnshieldedWalletState<string>>;

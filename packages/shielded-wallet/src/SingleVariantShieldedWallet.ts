@@ -171,8 +171,10 @@ export function CustomShieldedWallet<
             )
           : Either.right(headVariant);
 
-      const variant = routed.pipe(Either.getOrThrow);
-      const deserialized = variant.variant.deserializeState(serializedState).pipe(Either.getOrThrow);
+      const variant = routed.pipe(Either.getOrThrowWith((error) => error));
+      const deserialized = variant.variant
+        .deserializeState(serializedState)
+        .pipe(Either.getOrThrowWith((error) => error));
 
       return CustomShieldedWalletImplementation.startAtVariant(
         CustomShieldedWalletImplementation,

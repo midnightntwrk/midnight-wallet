@@ -123,7 +123,7 @@ export function CustomUnshieldedWallet<
     static restore(serializedState: TSerialized): CustomUnshieldedWalletImplementation {
       const deserialized: CoreWallet = CustomUnshieldedWalletImplementation.allVariantsRecord()
         [V2Tag].variant.deserializeState(serializedState)
-        .pipe(Either.getOrThrow);
+        .pipe(Either.getOrThrowWith((error) => error));
       return CustomUnshieldedWalletImplementation.startFirst(CustomUnshieldedWalletImplementation, deserialized);
     }
 

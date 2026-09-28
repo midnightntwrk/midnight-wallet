@@ -553,7 +553,7 @@ export function CustomForkingShieldedWallet<
     }
 
     static restore(serializedState: string): ForkingShieldedWalletImplementation {
-      return Either.getOrThrow(ForkingShieldedWalletImplementation.tryRestore(serializedState));
+      return Either.getOrThrowWith(ForkingShieldedWalletImplementation.tryRestore(serializedState), (error) => error);
     }
 
     readonly state: rx.Observable<ShieldedWalletState<string>>;

@@ -18,3 +18,8 @@ than partly read.
 
 `Serialization` is also exported from `@midnightntwrk/wallet-sdk-dust-wallet/v1`, matching the shielded and unshielded
 packages, which already exported it.
+
+A refused snapshot now reaches the caller with its reason. `restore` on each wallet throws the same tagged error
+`tryRestore` reports — `UnsupportedSnapshotVersionError` for a version this build does not know, the wallet error for
+bytes it cannot read — where it used to throw a bare `getOrThrow called on a Left` with no cause. The single-variant
+wallets do the same.

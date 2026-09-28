@@ -160,7 +160,7 @@ export function CustomDustWallet<
     static restore(serializedState: TSerialized): CustomDustWalletImplementation {
       const deserialized: CoreWallet = CustomDustWalletImplementation.allVariantsRecord()
         [V2Tag].variant.deserializeState(serializedState)
-        .pipe(Either.getOrThrow);
+        .pipe(Either.getOrThrowWith((error) => error));
       return CustomDustWalletImplementation.startFirst(CustomDustWalletImplementation, deserialized);
     }
 

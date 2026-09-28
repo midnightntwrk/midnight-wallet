@@ -76,24 +76,15 @@ describe('a shielded wallet restored from a snapshot it cannot read', () => {
     expect(Either.isLeft(restored)).toBe(true);
   });
 
-  it('refuses exactly the snapshots restore refuses, and keeps the reason restore discards', () => {
-    // The two cannot disagree about which snapshots are readable, because `restore` is `tryRestore` with the reason
-    // thrown away. And thrown away is literally what happens: the exception carries none of it, which is the whole
-    // reason for the additive shape.
+  it('throws exactly the reason tryRestore reports, for exactly the snapshots tryRestore refuses', () => {
+    // `restore` is `tryRestore` with the Left thrown rather than discarded, so an app that only calls `restore` still
+    // learns the surface and the version from the exception, as the `@throws` on `restore` promises.
     for (const snapshot of [fromTheFuture, unreadable]) {
       expect(() => ShieldedWallet(configuration).restore(snapshot)).toThrow();
       expect(Either.isLeft(ShieldedWallet(configuration).tryRestore(snapshot))).toBe(true);
     }
 
-    const thrown = (() => {
-      try {
-        return ShieldedWallet(configuration).restore(fromTheFuture);
-      } catch (error) {
-        return error;
-      }
-    })();
-
-    expect(thrown).not.toBeInstanceOf(UnsupportedSnapshotVersionError);
+    expect(() => ShieldedWallet(configuration).restore(fromTheFuture)).toThrow(UnsupportedSnapshotVersionError);
     expect(ShieldedWallet(configuration).tryRestore(fromTheFuture).pipe(Either.flip, Either.getOrThrow)).toBeInstanceOf(
       UnsupportedSnapshotVersionError,
     );

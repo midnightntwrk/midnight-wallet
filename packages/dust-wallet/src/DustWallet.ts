@@ -635,7 +635,7 @@ export function CustomForkingDustWallet<
     }
 
     static restore(serializedState: string): ForkingDustWalletImplementation {
-      return Either.getOrThrow(ForkingDustWalletImplementation.tryRestore(serializedState));
+      return Either.getOrThrowWith(ForkingDustWalletImplementation.tryRestore(serializedState), (error) => error);
     }
 
     readonly state: rx.Observable<DustWalletState<string>>;
