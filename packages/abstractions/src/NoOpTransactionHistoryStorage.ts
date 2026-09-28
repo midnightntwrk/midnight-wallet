@@ -45,9 +45,9 @@ export class NoOpTransactionHistoryStorage<
   }
 
   /**
-   * An empty history in the current format. Writing the bare `'[]'` would announce the first format, so a payload this
-   * storage produced would be run back through the v1 upgrade on restore — a no-op storage must still write something
-   * the rest of the SDK reads the same way every other storage's output is read.
+   * An empty history in the current format. Writing the bare `'[]'` would announce `v1`, so a payload this storage
+   * produced would be run back through the v1 upgrade on restore — a no-op storage must still write something the rest
+   * of the SDK reads the same way every other storage's output is read.
    */
   serialize(): Promise<SerializedTransactionHistory> {
     return Promise.resolve(JSON.stringify({ version: CURRENT_FORMAT_VERSION, entries: [] }));

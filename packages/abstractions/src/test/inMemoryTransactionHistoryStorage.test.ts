@@ -331,7 +331,7 @@ describe('InMemoryTransactionHistoryStorage.restore refusals', () => {
   });
 
   it('should report the version the payload was read from when an entry fails the schema', () => {
-    // A bare array is the first format, so a decode failure inside it has to be reported against `v1` — naming the
+    // A bare array is `v1`, so a decode failure inside it has to be reported against `v1` — naming the
     // version this build writes would point a reader at a payload that was never on disk.
     const firstFormatWithABadEntry = JSON.stringify([{ hash: '0xaaa', identifiers: 'not-an-array' }]);
 

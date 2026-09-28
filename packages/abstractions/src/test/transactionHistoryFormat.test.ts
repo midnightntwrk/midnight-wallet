@@ -15,7 +15,8 @@ import { Either } from 'effect';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
   CURRENT_FORMAT_VERSION,
-  FIRST_FORMAT_VERSION,
+  V1_FORMAT_VERSION,
+  V2_FORMAT_VERSION,
   detectVersion,
   upgradeV1ToV2,
   upgradeToCurrentFormat,
@@ -23,17 +24,30 @@ import {
 } from '../TransactionHistoryFormat.js';
 
 /**
- * The first format: a bare array, no envelope. Entries carry no `lifecycle`, because the field did not exist when this
- * shape was written. Kept minimal on purpose — the step works on encoded JSON before any entry schema runs, so the
- * wallet sections a real payload also carries are beside the point here.
+ * Format `v1`: a bare array, no envelope. Entries carry no `lifecycle`, because the field did not exist when this shape
+ * was written. Kept minimal on purpose — the step works on encoded JSON before any entry schema runs, so the wallet
+ * sections a real payload also carries are beside the point here.
  */
 const firstFormat = [
   { hash: '0xaaa', protocolVersion: 1, status: 'SUCCESS', identifiers: ['identifier-1'], fees: '1234' },
   { hash: '0xbbb', protocolVersion: 1, status: 'FAILURE' },
 ];
 
+describe('the transaction-history format versions', () => {
+  // A bump moves `CURRENT_FORMAT_VERSION` to `v3`. The `v1 → v2` step and the `v2` detection are frozen, so both must
+  // still say `v2` by name; if either read the current version, a bare-array history would be labelled `v3` while
+  // still `v2`-shaped, and the `v2 → v3` step would never run on it.
+  it('should name the formats v1 and v2, make v2 current, and have the first step stamp v2 by name', () => {
+    expect(V1_FORMAT_VERSION).toBe('v1');
+    expect(V2_FORMAT_VERSION).toBe('v2');
+    expect(CURRENT_FORMAT_VERSION).toBe(V2_FORMAT_VERSION);
+    expect(upgradeV1ToV2([]).version).toBe('v2');
+    expect(detectVersion({ version: 'v2', entries: [] })._tag).toBe('v2');
+  });
+});
+
 describe('detecting the format a payload was written in', () => {
-  it('should report a bare array as the first format and hand back its entries', () => {
+  it('should report a bare array as v1 and hand back its entries', () => {
     const detected = detectVersion(firstFormat);
 
     expect(detected._tag).toBe('v1');
@@ -125,7 +139,7 @@ describe('the v1 to v2 upgrade step', () => {
 });
 
 describe('running a stored payload through every upgrade step', () => {
-  it('should bring the first format all the way to the current one', () => {
+  it('should bring v1 all the way to the current one', () => {
     expect(EitherOps.getOrThrowLeft(upgradeToCurrentFormat(firstFormat))).toEqual({
       version: 'v1',
       entries: [
@@ -180,14 +194,14 @@ describe('running a stored payload through every upgrade step', () => {
     expect(String(error.cause)).toContain(CURRENT_FORMAT_VERSION);
   });
 
-  // `v1` is the name this codebase gives the unlabelled first format; it has never been written into a payload. A
+  // `v1` is the name this codebase gives the unlabelled bare array; it has never been written into a payload. A
   // payload that declares it is therefore still unreadable — but the refusal must not claim it is newer than the
   // version this build writes, which is the one thing that is certainly false about it.
-  it('should refuse a payload declaring the first format without claiming it is newer', () => {
-    const result = upgradeToCurrentFormat({ version: FIRST_FORMAT_VERSION, entries: [] });
+  it('should refuse a payload declaring v1 without claiming it is newer', () => {
+    const result = upgradeToCurrentFormat({ version: V1_FORMAT_VERSION, entries: [] });
 
     const error = EitherOps.getOrThrowRight(result);
-    expect(error.detectedVersion).toBe(FIRST_FORMAT_VERSION);
+    expect(error.detectedVersion).toBe(V1_FORMAT_VERSION);
     expect(String(error.cause)).not.toContain('newer');
   });
 });

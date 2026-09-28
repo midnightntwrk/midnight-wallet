@@ -59,7 +59,9 @@ Ledger blob internals are the ledger's concern, not a format version of ours.
   has already touched, and it is the rule that stops an upgrade destroying data that was already correct.
 - **Never invent a value that was not recorded.** Synthesise only what is knowable. If a reader needs something the old
   format never stored, it fetches it — or fails — at the point of use.
-- Once released, a step is **frozen**. Write it once; a later change means another version, not an edit.
+- Once released, a step is **frozen**. Write it once; a later change means another version, not an edit. That includes
+  the version it stamps: name it by its own constant (`V2_SNAPSHOT_FORMAT_VERSION`), never by the current one, or the
+  next bump relabels old payloads as current and the step after it never runs on them.
 
 ## Never
 

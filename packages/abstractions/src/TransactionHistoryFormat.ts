@@ -13,24 +13,33 @@
 import { Data, Either } from 'effect';
 
 /**
- * The format version this build writes. Every persisted surface carries one, as `{ version: 'vN', ... }`; it is the
+ * Format `v2`: entries inside a `{ version, entries }` envelope, each carrying a `lifecycle`.
+ *
+ * This is the version {@link upgradeV1ToV2} stamps and {@link detectVersion} recognises, and it is frozen: a later bump
+ * adds a version and a step of its own and leaves this one as it is.
+ */
+export const V2_FORMAT_VERSION = 'v2';
+
+/**
+ * The format version this build writes: the constant a bump moves, which the upgrade steps never read because each
+ * stamps the version it upgrades to. Every persisted surface carries one, as `{ version: 'vN', ... }`; it is the
  * version of the encoded shape and has nothing to do with `protocolVersion`, which is the chain's hard-fork number and
  * lives inside the payload.
  */
-export const CURRENT_FORMAT_VERSION = 'v2';
+export const CURRENT_FORMAT_VERSION = V2_FORMAT_VERSION;
 
 /**
- * The name this codebase gives the first format: a bare JSON array of entries with no envelope around it.
+ * The name this codebase gives format `v1`: a bare JSON array of entries with no envelope around it.
  *
  * It is a label for talking about that shape, not a value that appears in a payload. The envelope did not exist when
- * the first format was written, so the marker is the _absence_ of `version`, and no history has ever been written
- * carrying the literal `'v1'`. A payload that does declare `'v1'` was not written by any release of this SDK, and is
- * refused like any other version this build cannot read.
+ * `v1` was written, so the marker is the _absence_ of `version`, and no history has ever been written carrying the
+ * literal `'v1'`. A payload that does declare `'v1'` was not written by any release of this SDK, and is refused like
+ * any other version this build cannot read.
  *
  * Used as the `detectedVersion` on a {@link TransactionHistoryRestoreError} raised while reading a bare array, so the
  * error names the shape the payload actually had.
  */
-export const FIRST_FORMAT_VERSION = 'v1';
+export const V1_FORMAT_VERSION = 'v1';
 
 /** The `detectedVersion` reported for a payload that matches no format this build can name. */
 export const UNRECOGNISED_FORMAT_VERSION = 'unrecognised';
@@ -47,7 +56,7 @@ export const TRANSACTION_HISTORY_SURFACE = 'transaction-history';
 export class TransactionHistoryRestoreError extends Data.TaggedError('TransactionHistoryRestoreError')<{
   /** The persisted surface that failed, so one error type can serve all of them. */
   readonly surface: string;
-  /** The version read from the payload, or {@link FIRST_FORMAT_VERSION} when it carried no envelope. */
+  /** The version read from the payload, or {@link V1_FORMAT_VERSION} when it carried no envelope. */
   readonly detectedVersion: string;
   /** The underlying failure — a `ParseError` from the schema, or a thrown value from `JSON.parse`. */
   readonly cause: unknown;
@@ -90,17 +99,17 @@ const isJsonObject = (value: unknown): value is Record<string, unknown> =>
  * Bring one encoded entry up to `v2`: give it a `lifecycle` and an `identifiers` list if it has none, and leave every
  * other field, including a `lifecycle` it already carries, exactly as it was.
  *
- * `finalized` is the only honest lifecycle for an entry written in the first format. The sole writer back then ran from
- * the sync path, after the indexer had returned the transaction inside a block; there was no pending-entry writer, so
- * no entry could have been anything else. `status` is untouched — a `FAILURE` still reached a block, it just failed
- * once it ran. No `finalizedBlock` is invented: the block is fetched from the indexer when a reader actually needs it.
+ * `finalized` is the only honest lifecycle for an entry written in `v1`. The sole writer back then ran from the sync
+ * path, after the indexer had returned the transaction inside a block; there was no pending-entry writer, so no entry
+ * could have been anything else. `status` is untouched — a `FAILURE` still reached a block, it just failed once it ran.
+ * No `finalizedBlock` is invented: the block is fetched from the indexer when a reader actually needs it.
  */
 const upgradeEntryToV2 = (entry: unknown): unknown =>
   isJsonObject(entry) ? { identifiers: [], lifecycle: { status: 'finalized' }, ...entry } : entry;
 
 /**
- * Read the format version a payload was written with. A bare array is the first format — the envelope did not exist
- * when it was written, so its absence is the marker.
+ * Read the format version a payload was written with. A bare array is `v1` — the envelope did not exist when it was
+ * written, so its absence is the marker.
  *
  * Exported because it is the one place that knows how a stored payload announces its shape; anything that needs to ask
  * that question should ask here rather than re-derive it.
@@ -113,12 +122,12 @@ export const detectVersion = (payload: unknown): DetectedFormat =>
     ? { _tag: 'v1', entries: payload }
     : !isJsonObject(payload) || typeof payload['version'] !== 'string'
       ? { _tag: 'unrecognised' }
-      : payload['version'] === CURRENT_FORMAT_VERSION
+      : payload['version'] === V2_FORMAT_VERSION
         ? { _tag: 'v2', entries: payload['entries'] }
         : { _tag: 'unknown', version: payload['version'] };
 
 /**
- * Upgrade one encoded transaction-history payload from the first format to `v2`.
+ * Upgrade one encoded transaction-history payload from `v1` to `v2`.
  *
  * Operates on the parsed JSON before any entry schema runs, so wallet packages that extend the entry shape need no
  * changes of their own. Pure: it neither reads nor writes anything outside its argument.
@@ -126,9 +135,9 @@ export const detectVersion = (payload: unknown): DetectedFormat =>
  * The rule is fill in what is missing, never overwrite what is there — an entry that already carries a `lifecycle`
  * keeps it. That is what makes the step safe to apply to a payload it has already touched.
  *
- * The parameter is an array, not `unknown`: a payload that is not a bare array is not in the first format at all, and
- * deciding that is {@link detectVersion}'s job. Accepting anything here would let a non-array turn into an empty store,
- * which is the one outcome this whole path exists to prevent.
+ * The parameter is an array, not `unknown`: a payload that is not a bare array is not in `v1` at all, and deciding that
+ * is {@link detectVersion}'s job. Accepting anything here would let a non-array turn into an empty store, which is the
+ * one outcome this whole path exists to prevent.
  *
  * @example
  *   ```ts
@@ -136,13 +145,13 @@ export const detectVersion = (payload: unknown): DetectedFormat =>
  *   // { version: 'v2', entries: [{ hash: '0xabc', status: 'SUCCESS', identifiers: [], lifecycle: { status: 'finalized' } }] }
  *   ```;
  *
- * @param payload - The entries of a stored history written in the first format: a bare array.
+ * @param payload - The entries of a stored history written in `v1`: a bare array.
  * @returns The same entries wrapped in a `v2` envelope, each one carrying a `lifecycle`.
  */
 export const upgradeV1ToV2 = (
   payload: readonly unknown[],
 ): { readonly version: string; readonly entries: readonly unknown[] } => ({
-  version: CURRENT_FORMAT_VERSION,
+  version: V2_FORMAT_VERSION,
   entries: payload.map(upgradeEntryToV2),
 });
 
@@ -169,7 +178,7 @@ export const upgradeToCurrentFormat = (
   const detected = detectVersion(payload);
   switch (detected._tag) {
     case 'v1':
-      return Either.right({ version: FIRST_FORMAT_VERSION, entries: upgradeV1ToV2(detected.entries).entries });
+      return Either.right({ version: V1_FORMAT_VERSION, entries: upgradeV1ToV2(detected.entries).entries });
     case 'v2':
       return Either.right({ version: CURRENT_FORMAT_VERSION, entries: detected.entries });
     case 'unknown':

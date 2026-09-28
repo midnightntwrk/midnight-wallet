@@ -21,6 +21,7 @@ import {
   SNAPSHOT_FORMAT_VERSION,
   SNAPSHOT_FORMAT_VERSIONS,
   V1_SNAPSHOT_FORMAT_VERSION,
+  V2_SNAPSHOT_FORMAT_VERSION,
   upgradeSnapshotV1ToV2,
 } from '../SnapshotFormat.js';
 
@@ -36,8 +37,16 @@ const v1Snapshot = (overrides: Record<string, unknown> = {}): Record<string, unk
 describe('the unshielded snapshot format versions', () => {
   it('names v1 as what the V1 variant writes and v2 as the current version', () => {
     expect(V1_SNAPSHOT_FORMAT_VERSION).toBe('v1');
+    expect(V2_SNAPSHOT_FORMAT_VERSION).toBe('v2');
     expect(SNAPSHOT_FORMAT_VERSION).toBe('v2');
     expect(SNAPSHOT_FORMAT_VERSIONS).toEqual(['v1', 'v2']);
+  });
+
+  // A bump moves `SNAPSHOT_FORMAT_VERSION` to `v3`. The `v1 → v2` step is frozen, so it must still stamp `v2`; if it
+  // read the current version instead, the `v2 → v3` step keyed on `v2` would never run on an old snapshot.
+  it('has the v1 to v2 step stamp v2 by name, not whatever version is current', () => {
+    expect(SNAPSHOT_FORMAT_VERSIONS.at(-1)).toBe(SNAPSHOT_FORMAT_VERSION);
+    expect(upgradeSnapshotV1ToV2(v1Snapshot())).toMatchObject({ version: V2_SNAPSHOT_FORMAT_VERSION });
   });
 });
 

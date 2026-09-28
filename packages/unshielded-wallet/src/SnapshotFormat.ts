@@ -29,11 +29,18 @@ export const SNAPSHOT_FORMAT_VERSIONS = ['v1', 'v2'] as const;
 export const V1_SNAPSHOT_FORMAT_VERSION = 'v1';
 
 /**
- * The format version the V2 variant writes, and the current version of the surface: the verifying key carries the
- * signature scheme it is for, as `{ tag, value }`, because ledger-v9 signs with more than one. A retyped field is a new
- * format version; {@link upgradeSnapshotV1ToV2} is the one step between the two.
+ * The format version the V2 variant introduced: the verifying key carries the signature scheme it is for, as `{ tag,
+ * value }`, because ledger-v9 signs with more than one. A retyped field is a new format version;
+ * {@link upgradeSnapshotV1ToV2} is the one step between the two, and this is the version it stamps. Frozen: a later bump
+ * adds a version and a step of its own and leaves this one as it is.
  */
-export const SNAPSHOT_FORMAT_VERSION = 'v2';
+export const V2_SNAPSHOT_FORMAT_VERSION = 'v2';
+
+/**
+ * The current format version of the surface, the one the V2 variant writes today. This is the constant a bump moves;
+ * the upgrade steps never read it, because each stamps the version it upgrades to.
+ */
+export const SNAPSHOT_FORMAT_VERSION = V2_SNAPSHOT_FORMAT_VERSION;
 
 /** What the upgrade step looks for: a snapshot object whose key is still the bare string `v1` wrote. */
 const V1KeyedSnapshot = Schema.Struct({
@@ -63,7 +70,7 @@ export const upgradeSnapshotV1ToV2 = (json: unknown): unknown => {
     const { publicKey, ...rest } = json;
     return {
       ...rest,
-      version: SNAPSHOT_FORMAT_VERSION,
+      version: V2_SNAPSHOT_FORMAT_VERSION,
       publicKey: { ...publicKey, publicKey: { tag: 'schnorr', value: publicKey.publicKey } },
     };
   }
@@ -71,6 +78,6 @@ export const upgradeSnapshotV1ToV2 = (json: unknown): unknown => {
   // already what `v2` says, so only the label moves. A label this step does not own is left for the schema.
   const version = json['version'];
   return version === undefined || version === V1_SNAPSHOT_FORMAT_VERSION
-    ? { ...json, version: SNAPSHOT_FORMAT_VERSION }
+    ? { ...json, version: V2_SNAPSHOT_FORMAT_VERSION }
     : json;
 };
