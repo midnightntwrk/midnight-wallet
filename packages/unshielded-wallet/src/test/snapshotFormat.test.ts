@@ -14,8 +14,6 @@
 // The one upgrade step an unshielded snapshot has: `v1`, whose verifying key is a bare string, to `v2`, whose key
 // says which scheme it is for. A pure function on the decoded JSON, run before any schema — so it is tested as one,
 // with no wallet, no ledger and no keys involved.
-//
-// Tier: unit.
 import { describe, expect, it } from 'vitest';
 import {
   SNAPSHOT_FORMAT_VERSION,

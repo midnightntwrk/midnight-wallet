@@ -349,16 +349,11 @@ export const CoreWallet = {
    * @returns `wallet` unchanged if its hashes were never pending, otherwise a copy holding them.
    */
   resolveCoinHashes(wallet: CoreWallet, secretKeys: ledger.ZswapSecretKeys): CoreWallet {
-    return wallet.coinHashesPending === undefined
-      ? wallet
-      : {
-          state: wallet.state,
-          publicKeys: wallet.publicKeys,
-          networkId: wallet.networkId,
-          coinHashes: CoinHashesMap.init(secretKeys, CoinHashesMap.pickAllCoins(wallet.state)),
-          progress: wallet.progress,
-          protocolVersion: wallet.protocolVersion,
-        };
+    if (wallet.coinHashesPending === undefined) return wallet;
+    // Rebuilt by spread rather than from a list of fields, so nothing the wallet carried can be left behind: only the
+    // marker is shed, and the embedded transaction history of a 1.0.0 snapshot survives the first update after crossing.
+    const { coinHashesPending: _pending, ...carried } = wallet;
+    return { ...carried, coinHashes: CoinHashesMap.init(secretKeys, CoinHashesMap.pickAllCoins(wallet.state)) };
   },
 
   applyCollapsedUpdate(wallet: CoreWallet, collapsed: ledger.MerkleTreeCollapsedUpdate): CoreWallet {
