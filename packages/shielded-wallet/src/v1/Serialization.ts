@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
-import { WalletError } from './WalletError.js';
+import { type WalletError } from './WalletError.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
@@ -117,8 +117,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError> => {
       return pipe(
         serialized,
-        Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => WalletError.other(err)),
+        SnapshotFormat.readSnapshot({ surface: 'shielded', reads: [SNAPSHOT_FORMAT_VERSION], schema: SnapshotSchema }),
         Either.flatMap((snapshot: Snapshot) =>
           CoreWallet.restoreWithCoinHashes(
             snapshot.publicKeys,

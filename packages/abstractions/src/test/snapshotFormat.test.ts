@@ -18,6 +18,8 @@ import {
   V2_SNAPSHOT_WRITER,
   versionField,
   writtenByField,
+  readSnapshot,
+  SnapshotRestoreError,
 } from '../SnapshotFormat.js';
 
 const decode = <A, I>(schema: Schema.Schema<A, I>, value: unknown) => Schema.decodeUnknownEither(schema)(value);
@@ -67,5 +69,70 @@ describe('the writtenBy field of a snapshot', () => {
 
   it('refuses a writer it does not know', () => {
     expect(Either.isLeft(decode(Snapshot, { writtenBy: 'v3' }))).toBe(true);
+  });
+});
+
+describe('reading a snapshot', () => {
+  const Snapshot = Schema.Struct({ version: versionField('shielded', 'v1'), payload: Schema.String });
+  const read = readSnapshot({ surface: 'shielded', reads: ['v1'], schema: Snapshot });
+  const refusal = (serialized: string): SnapshotRestoreError =>
+    Either.match(read(serialized), {
+      onLeft: (error) => error,
+      onRight: () => {
+        throw new Error('expected a refusal');
+      },
+    });
+
+  it('reads a snapshot in a version it accepts, and one that declares none as the oldest accepted', () => {
+    expect(read(JSON.stringify({ version: 'v1', payload: 'x' }))).toEqual(
+      Either.right({ version: 'v1', payload: 'x' }),
+    );
+    expect(read(JSON.stringify({ payload: 'x' }))).toEqual(Either.right({ version: 'v1', payload: 'x' }));
+  });
+
+  it('refuses a string that is not JSON as unparseable', () => {
+    const error = refusal('not json');
+
+    expect(error).toBeInstanceOf(SnapshotRestoreError);
+    expect(error).toMatchObject({ surface: 'shielded', reason: 'unparseable', detectedVersion: 'unrecognised' });
+    expect(error.message).toContain('Could not restore the shielded snapshot (format unrecognised, unparseable)');
+  });
+
+  it('refuses a version it does not read as unknown, naming the version found and the one it reads', () => {
+    const error = refusal(JSON.stringify({ version: 'v2', payload: 'x' }));
+
+    expect(error).toMatchObject({ surface: 'shielded', reason: 'unknown-version', detectedVersion: 'v2' });
+    expect(error.message).toContain(
+      'Refusing a shielded snapshot written in format version "v2": this build reads v1 and does not downgrade.',
+    );
+    expect(String(error)).toContain('unknown-version');
+  });
+
+  it('refuses contents that fail the schema as an invalid shape, against the version the snapshot declared', () => {
+    const error = refusal(JSON.stringify({ version: 'v1', payload: 42 }));
+
+    expect(error).toMatchObject({ surface: 'shielded', reason: 'invalid-shape', detectedVersion: 'v1' });
+    expect(error.message).toContain('payload');
+  });
+
+  it('runs the upgrade step on an older accepted version before the schema sees it', () => {
+    const Newer = Schema.Struct({
+      version: versionField('unshielded', 'v2'),
+      key: Schema.Struct({ tag: Schema.String }),
+    });
+    const readNewer = readSnapshot({
+      surface: 'unshielded',
+      reads: ['v1', 'v2'],
+      schema: Newer,
+      upgrade: (json) =>
+        typeof json === 'object' && json !== null && 'key' in json && typeof json.key === 'string'
+          ? { ...json, version: 'v2', key: { tag: json.key } }
+          : json,
+    });
+
+    expect(readNewer(JSON.stringify({ version: 'v1', key: 'schnorr' }))).toEqual(
+      Either.right({ version: 'v2', key: { tag: 'schnorr' } }),
+    );
+    expect(Either.isLeft(readNewer(JSON.stringify({ version: 'v3', key: { tag: 'x' } })))).toBe(true);
   });
 });

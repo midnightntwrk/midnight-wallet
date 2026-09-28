@@ -21,7 +21,12 @@
  *   build has no variant for is an ordinary thing to meet, not an exception. `tryRestore` answers those without
  *   throwing, and `restore` is left exactly as it was.
  */
-import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolVersion,
+  SnapshotFormat,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { UnsupportedSnapshotVersionError } from '../Restore.js';
@@ -74,6 +79,10 @@ describe('a shielded wallet restored from a snapshot it cannot read', () => {
     const restored = ShieldedWallet(configuration).tryRestore(unreadable);
 
     expect(Either.isLeft(restored)).toBe(true);
+    // With the tagged refusal every snapshot surface raises, naming the surface, the version and the reason.
+    const refusal = restored.pipe(Either.flip, Either.getOrThrow);
+    expect(refusal).toBeInstanceOf(SnapshotFormat.SnapshotRestoreError);
+    expect(refusal).toMatchObject({ surface: 'shielded', reason: 'invalid-shape', detectedVersion: 'v1' });
   });
 
   it('throws exactly the reason tryRestore reports, for exactly the snapshots tryRestore refuses', () => {

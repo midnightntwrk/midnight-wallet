@@ -12,7 +12,7 @@
 // limitations under the License.
 import { describe, expect, it } from 'vitest';
 import { Either } from 'effect';
-import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { UnshieldedState } from '../UnshieldedState.js';
@@ -139,7 +139,9 @@ describe('default v2 serialization capability', () => {
 
     expect(Either.isLeft(restored)).toBe(true);
     if (Either.isLeft(restored)) {
-      expect(restored.left).toBeInstanceOf(OtherWalletError);
+      expect(restored.left).toBeInstanceOf(SnapshotFormat.SnapshotRestoreError);
+      // Unlabelled, so read as `v1`, the oldest version this reader accepts.
+      expect(restored.left).toMatchObject({ surface: 'unshielded', reason: 'invalid-shape', detectedVersion: 'v1' });
     }
   });
 

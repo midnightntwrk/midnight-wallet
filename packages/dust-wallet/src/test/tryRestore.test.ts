@@ -16,7 +16,12 @@
  * for why the additive shape exists; the claims are the wallet-layer ones, and they hold identically here.
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolVersion,
+  SnapshotFormat,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { type DefaultDustConfiguration } from '../DustWalletAPI.js';
@@ -68,7 +73,13 @@ describe('a Dust wallet restored from a snapshot it cannot read', () => {
   });
 
   it('reports bytes that are not a wallet state, instead of throwing', () => {
-    expect(Either.isLeft(DustWallet(configuration).tryRestore(unreadable))).toBe(true);
+    const restored = DustWallet(configuration).tryRestore(unreadable);
+
+    expect(Either.isLeft(restored)).toBe(true);
+    // With the tagged refusal every snapshot surface raises, naming the surface, the version and the reason.
+    const refusal = restored.pipe(Either.flip, Either.getOrThrow);
+    expect(refusal).toBeInstanceOf(SnapshotFormat.SnapshotRestoreError);
+    expect(refusal).toMatchObject({ surface: 'dust', reason: 'invalid-shape', detectedVersion: 'v1' });
   });
 
   it('throws exactly the reason tryRestore reports, for exactly the snapshots tryRestore refuses', () => {

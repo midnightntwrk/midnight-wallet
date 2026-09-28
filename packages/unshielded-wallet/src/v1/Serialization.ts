@@ -116,8 +116,11 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     deserialize: (serialized): Either.Either<CoreWallet, WalletError> =>
       pipe(
         serialized,
-        Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => new OtherWalletError(err)),
+        SnapshotFormat.readSnapshot({
+          surface: 'unshielded',
+          reads: [SNAPSHOT_FORMAT_VERSION],
+          schema: SnapshotSchema,
+        }),
         // The schema proves the snapshot's shape; this proves its key and address belong to each other.
         Either.flatMap((snapshot) =>
           pipe(

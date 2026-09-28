@@ -76,11 +76,12 @@ as a format upgrade and skip the cross-ledger migration. So every snapshot also 
 that does not change the format version, and a snapshot goes to the variant that wrote it when that variant is
 registered, and by version otherwise — which is what every snapshot written before the field does.
 
-**Failure is loud.** A payload that cannot be read is refused, never swallowed into an empty store. The transaction
-history refuses with a tagged error carrying the surface, the version detected, the reason and the cause
-(`TransactionHistoryRestoreError`). The three snapshot surfaces do not yet: they refuse with the wallet's generic error,
-with the version only in its message, so an application cannot tell "written by a newer SDK" from "corrupt" without
-reading the text. Bringing them to the same tagged error is tracked as follow-up work.
+**Failure is loud.** A payload that cannot be read is refused, never swallowed into an empty store, and every surface
+refuses the same way: a tagged error carrying the surface, the version detected, the reason and the cause, which says
+all four in its message. The transaction history raises `TransactionHistoryRestoreError`; the three snapshot surfaces
+raise `SnapshotRestoreError`, through one shared reader (`SnapshotFormat.readSnapshot`) so the rule lives in one place.
+The reason — not JSON, a version this build does not read, a shape it cannot decode — is a field, so an application
+tells "written by a newer SDK" from "corrupt" without reading the text.
 
 ### How it is enforced
 

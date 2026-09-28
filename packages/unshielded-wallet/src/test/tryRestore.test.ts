@@ -15,7 +15,12 @@
  * Restoring an unshielded wallet from a snapshot that might not be readable. See the shielded wallet's suite of the
  * same name for why the additive shape exists; the claims are the wallet-layer ones, and they hold identically here.
  */
-import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolVersion,
+  SnapshotFormat,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { UnshieldedWallet } from '../UnshieldedWallet.js';
@@ -66,7 +71,13 @@ describe('an unshielded wallet restored from a snapshot it cannot read', () => {
   });
 
   it('reports bytes that are not a wallet state, instead of throwing', () => {
-    expect(Either.isLeft(UnshieldedWallet(configuration).tryRestore(unreadable))).toBe(true);
+    const restored = UnshieldedWallet(configuration).tryRestore(unreadable);
+
+    expect(Either.isLeft(restored)).toBe(true);
+    // With the tagged refusal every snapshot surface raises, naming the surface, the version and the reason.
+    const refusal = restored.pipe(Either.flip, Either.getOrThrow);
+    expect(refusal).toBeInstanceOf(SnapshotFormat.SnapshotRestoreError);
+    expect(refusal).toMatchObject({ surface: 'unshielded', reason: 'invalid-shape', detectedVersion: 'v1' });
   });
 
   it('throws exactly the reason tryRestore reports, for exactly the snapshots tryRestore refuses', () => {

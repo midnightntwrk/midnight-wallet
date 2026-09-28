@@ -97,12 +97,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError> => {
       return pipe(
         serialized,
-        Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        // The parse detail is carried in the message, not only in the cause: a caller that logs `error.message` must
-        // still learn why the snapshot was refused, including the format version it was written in.
-        Either.mapLeft(
-          (err) => new OtherWalletError({ message: `Error while deserializing snapshot: ${err.message}`, cause: err }),
-        ),
+        SnapshotFormat.readSnapshot({ surface: 'dust', reads: [SNAPSHOT_FORMAT_VERSION], schema: SnapshotSchema }),
         Either.flatMap((snapshot: Snapshot) =>
           Either.try({
             try: () =>

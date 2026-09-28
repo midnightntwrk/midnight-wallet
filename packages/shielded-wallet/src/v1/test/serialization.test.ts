@@ -10,9 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { OtherWalletError } from '../WalletError.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as Arr, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
@@ -151,7 +150,7 @@ describe('V1 Wallet serialization', () => {
 
         expect(Either.isLeft(result)).toBe(true);
         if (Either.isLeft(result)) {
-          expect(result.left instanceof OtherWalletError).toBe(true);
+          expect(result.left).toBeInstanceOf(SnapshotFormat.SnapshotRestoreError);
         }
       }),
     );
@@ -166,7 +165,7 @@ describe('V1 Wallet serialization', () => {
 
         expect(Either.isLeft(result)).toBe(true);
         if (Either.isLeft(result)) {
-          expect(result.left instanceof OtherWalletError).toBe(true);
+          expect(result.left).toBeInstanceOf(SnapshotFormat.SnapshotRestoreError);
         }
       }),
     );

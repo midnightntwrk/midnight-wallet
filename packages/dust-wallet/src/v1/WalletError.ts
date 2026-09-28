@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
+import { type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 export class OtherWalletError extends Data.TaggedError('Wallet.Other')<{
@@ -80,6 +81,7 @@ export class OutOfOrderSyncUpdateError extends Data.TaggedError('Wallet.OutOfOrd
 }> {}
 
 export type WalletError =
+  | SnapshotFormat.SnapshotRestoreError
   | OtherWalletError
   | SyncWalletError
   | TransactingError

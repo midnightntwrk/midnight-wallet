@@ -11,13 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { DustSecretKey, LedgerParameters } from '@midnightntwrk/ledger-v9';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultV2SerializationCapability } from '../Serialization.js';
-import { OtherWalletError } from '../WalletError.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const dustParameters = LedgerParameters.initialParameters().dust;
@@ -36,13 +35,14 @@ describe('V2 dust wallet serialization', () => {
     expect(firstIteration).toEqual(secondIteration);
   });
 
-  it('returns Left with OtherWalletError for input that does not match the snapshot schema', () => {
+  it('returns Left with SnapshotRestoreError for input that does not match the snapshot schema', () => {
     const capability = makeDefaultV2SerializationCapability();
     const result = capability.deserialize(null, '{"not":"a snapshot"}');
 
     expect(Either.isLeft(result)).toBe(true);
     if (Either.isLeft(result)) {
-      expect(result.left instanceof OtherWalletError).toBe(true);
+      expect(result.left).toBeInstanceOf(SnapshotFormat.SnapshotRestoreError);
+      expect(result.left).toMatchObject({ surface: 'dust', reason: 'invalid-shape', detectedVersion: 'v1' });
     }
   });
 });
