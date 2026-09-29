@@ -82,6 +82,7 @@ export const peekWriter = (serialized: string): Option.Option<SnapshotFormat.Sna
  * @param variantFor Resolves the variant registered for a protocol version.
  * @param headVariant The variant a snapshot with no declared version is restored into.
  * @param variantWrittenBy Resolves the registered variant that a snapshot names as its writer, if it is registered.
+ *   Defaults to none, which is the routing every caller had before snapshots named their writer.
  * @returns The variant to restore with, or {@link UnsupportedSnapshotVersionError} when the writer is not registered and
  *   the declared version is one no registered variant owns.
  */
@@ -89,7 +90,7 @@ export const variantForSnapshot = <TVariant>(
   serialized: string,
   variantFor: (version: ProtocolVersion.ProtocolVersion) => Option.Option<TVariant>,
   headVariant: TVariant,
-  variantWrittenBy: (writer: SnapshotFormat.SnapshotWriter) => Option.Option<TVariant>,
+  variantWrittenBy: (writer: SnapshotFormat.SnapshotWriter) => Option.Option<TVariant> = () => Option.none(),
 ): Either.Either<TVariant, UnsupportedSnapshotVersionError> =>
   Option.match(Option.flatMap(peekWriter(serialized), variantWrittenBy), {
     onSome: (variant) => Either.right(variant),

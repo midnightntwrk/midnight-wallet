@@ -1,8 +1,9 @@
 ---
 '@midnightntwrk/wallet-sdk-facade': major
+'@midnightntwrk/wallet-sdk-abstractions': major
 ---
 
-`FinalizedWalletEntry['lifecycle']['finalizedBlock']` is now optional.
+`FinalizedWalletEntry['lifecycle']['finalizedBlock']` is now optional, and so is `finalizedBlock` on the abstractions' `FinalizedLifecycle` type it derives from.
 
 A transaction history saved before the lifecycle field existed is a bare array of entries with no block recorded
 anywhere. Those entries are known to have been finalized — the only writer at the time ran from the sync path, after
