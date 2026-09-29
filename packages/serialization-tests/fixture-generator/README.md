@@ -78,6 +78,15 @@ work; until then, a change to either is a change to a persisted-format record.
 alias per package to `package.json` (and a ledger `override` if the train pins one), add a row to `TRAINS` in
 `generate.mjs`, run `npm install` to refresh the lockfile, then generate.
 
+That is the whole job for a release on the ledger-v8 line, which is every release captured so far. **A release on the
+ledger-v9 line needs generator changes as well**, because the generator was written against the 4.x releases it
+captures: it loads each package's `v1/Serialization.js`, `v1/CoreWallet.js` and `v1/UnshieldedState.js`, writes the
+history through `storage.upsert` and reads it back with the throwing `restore`, and builds the pending set with the
+four-argument `addPendingTransaction`. The first ledger-v9 train (5.0.0 of the facade) has to drive
+`v2/Serialization.js` and the 5.0 APIs — `gotFinalized`, `tryRestore`, the current `addPendingTransaction` — and file
+what it writes under the V2 variant's format versions (`unshielded/v2`, `shielded/v1`, `dust/v1`). The per-writer gates
+are ready for that fixture; the generator is not, and it cannot be until such a release exists to install.
+
 ## Files
 
 | File              | Role                                                                                    |
