@@ -28,7 +28,9 @@
 import { execFileSync } from 'node:child_process';
 
 const BASE = process.argv[2] ?? 'origin/main';
-const FROZEN = /^packages\/serialization-tests\/fixtures\/(?!_baseline\/)/;
+// Both corpora of released output: this package's, minus the drift baseline it re-records on purpose, and the
+// cross-release corpus each wallet package tests against.
+const FROZEN = /^packages\/(serialization-tests\/fixtures\/(?!_baseline\/)|[^/]+\/test\/fixtures\/cross-release\/)/;
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' });
 

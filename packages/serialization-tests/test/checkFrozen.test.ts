@@ -40,6 +40,8 @@ const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '..', 'check-frozen
 const FROZEN_FIXTURE = 'packages/serialization-tests/fixtures/shielded/v1/facade-1.0.0.json';
 const BASELINE = 'packages/serialization-tests/fixtures/_baseline/v1/shielded.json';
 const UNRELATED = 'packages/shielded-wallet/src/v1/Serialization.ts';
+/** A fixture in the other corpus of released output, which the gate guards the same way. */
+const CROSS_RELEASE_FIXTURE = 'packages/shielded-wallet/test/fixtures/cross-release/from-1.2.0/shielded-funded.json';
 
 const repos: string[] = [];
 
@@ -71,6 +73,7 @@ const repoWithACorpus = (): string => {
   write(repo, FROZEN_FIXTURE, '{ "serialized": "what 1.0.0 wrote" }\n');
   write(repo, BASELINE, '{ "serialized": "what this build writes" }\n');
   write(repo, UNRELATED, 'export const unchanged = true;\n');
+  write(repo, CROSS_RELEASE_FIXTURE, '{ "bytes": "what 4.1.0 wrote" }\n');
   git(repo, 'add', '.');
   git(repo, 'commit', '--quiet', '-m', 'the corpus as it stands');
   git(repo, 'checkout', '--quiet', '-b', 'a-branch');
@@ -114,6 +117,17 @@ describe('the frozen-fixture check', () => {
 
     expect(status).toBe(1);
     expect(output).toContain(FROZEN_FIXTURE);
+  });
+
+  it('fails a branch that edits a fixture in the cross-release corpus', () => {
+    const repo = repoWithACorpus();
+    write(repo, CROSS_RELEASE_FIXTURE, '{ "bytes": "something more convenient" }\n');
+    commit(repo, 'make the other failing test pass');
+
+    const { status, output } = runCheck(repo);
+
+    expect(status).toBe(1);
+    expect(output).toContain(CROSS_RELEASE_FIXTURE);
   });
 
   it('fails a branch that deletes a published fixture', () => {

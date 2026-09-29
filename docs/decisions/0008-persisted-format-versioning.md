@@ -9,9 +9,11 @@ The SDK hands an application five strings to store and give back later: the shie
 snapshots, the transaction history, and the pending transactions. Every one of them is a persisted format we do not
 control the lifetime of — an application may hand back a string written a year ago by a version we no longer ship.
 
-Until now only one of the five carried any version marker, and nothing anywhere pinned what a released build actually
-wrote. A field could be added, renamed or made required and every test would stay green, because every test
-round-tripped through the build that was running. The formats were only compatible by accident.
+Until now only one of the five carried any version marker, and only one release was pinned: the cross-release corpus
+(`scripts/cross-release-corpus/`, tested inside each wallet package) freezes the three snapshots the last ledger-v8
+release wrote, and nothing pinned the other two surfaces or any earlier release. A field could be added, renamed or made
+required and every test would stay green, because every test round-tripped through the build that was running. The
+formats were only compatible by accident.
 
 Two breaks had already happened, both found by reading the code rather than by a failing test:
 

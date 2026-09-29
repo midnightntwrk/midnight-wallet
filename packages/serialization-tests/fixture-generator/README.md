@@ -64,6 +64,14 @@ yarn capture                                      # from packages/serialization-
 git diff --stat -- fixtures/_baseline/            # only the regenerated surface's baselines should appear
 ```
 
+## The cross-release corpus
+
+`scripts/cross-release-corpus/` freezes the same idea for one release, facade 4.1.0, tested inside each wallet package
+(`packages/*/test/crossReleaseCorpus.test.ts`). The two overlap on that release and differ in what they record: the
+cross-release corpus notes the ledger it installed (8.1.2), this generator notes the ledger range the package declared
+(`^8.1.0`). Both are frozen by the CI check. Folding the cross-release corpus into this one is tracked as follow-up
+work; until then, a change to either is a change to a persisted-format record.
+
 ## Adding a train
 
 `npm view @midnightntwrk/wallet-sdk-facade@<version> dependencies` gives the package versions the train shipped; add an
