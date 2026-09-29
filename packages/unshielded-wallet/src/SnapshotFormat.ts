@@ -48,7 +48,17 @@ const V1KeyedSnapshot = Schema.Struct({
   publicKey: Schema.Struct({ publicKey: Schema.String }),
 });
 
-const isV1Keyed = Schema.is(V1KeyedSnapshot);
+/**
+ * Whether a decoded snapshot carries the key shape only the V1 variant ever wrote.
+ *
+ * @remarks
+ *   The V2 variant has tagged the verifying key with its scheme since before either variant named itself in a snapshot,
+ *   so a bare-string key is V1's signature. The upgrade step reads it to know what to retag; routing (`../Restore.ts`)
+ *   reads it to send a snapshot that names no writer home to V1.
+ * @param json The snapshot as decoded from its JSON string.
+ * @returns Whether the snapshot is a `v1`-shaped object with a bare-string verifying key.
+ */
+export const isV1Keyed: (json: unknown) => json is typeof V1KeyedSnapshot.Type = Schema.is(V1KeyedSnapshot);
 const isRecord = Schema.is(Schema.Record({ key: Schema.String, value: Schema.Unknown }));
 
 /**

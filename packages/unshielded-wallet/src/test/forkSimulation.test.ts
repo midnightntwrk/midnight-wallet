@@ -449,3 +449,37 @@ describe('an unshielded wallet saved by the V1 variant after its sync annotated 
       expect(state.balances[timelineTokenType]).toBe(totalOf(state.totalCoins));
     }).pipe(Effect.scoped, Effect.runPromise));
 });
+
+/**
+ * The same snapshot as {@link savedAfterTheAnnotation}, written by a V1 build that predates snapshots naming their
+ * writer: today's fields, with no `writtenBy` among them.
+ *
+ * @remarks
+ *   Such snapshots may already be on disk, so the routing cannot rely on the field alone. What it can rely on is the key:
+ *   only the V1 variant ever wrote a bare-string verifying key, so the shape says who wrote it.
+ */
+const savedBeforeTheWriterField = (snapshot: string): string => {
+  const { writtenBy: _writtenBy, ...rest } = JSON.parse(savedAfterTheAnnotation(snapshot)) as Record<string, unknown>;
+  return JSON.stringify(rest);
+};
+
+describe('an unshielded wallet saved by a V1 build that predates the writer field, after its sync annotated the fork version', () => {
+  it('still crosses through the migration, so the transfer it had in flight is released', async () =>
+    Effect.gen(function* () {
+      const inFlight = yield* walletWithATransferInFlight;
+      const snapshot = savedBeforeTheWriterField(inFlight.snapshot);
+      const written = JSON.parse(snapshot) as { publicKey: { publicKey: unknown }; writtenBy?: unknown };
+      expect(written).toMatchObject({ protocolVersion: String(forkVersion) });
+      expect(written).not.toHaveProperty('writtenBy');
+      expect(typeof written.publicKey.publicKey).toBe('string');
+
+      // With no writer named, the version alone would open this on the V2 variant as a format upgrade and skip the
+      // migration. The bare-string key is a shape only the V1 variant wrote, and that is what sends it home.
+      const { crossed } = yield* crossTheFork({ snapshot, timeline, settleAt: 6n });
+      const state = yield* publicState(crossed);
+
+      expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);
+      expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
+      expect(state.balances[timelineTokenType]).toBe(totalOf(state.totalCoins));
+    }).pipe(Effect.scoped, Effect.runPromise));
+});

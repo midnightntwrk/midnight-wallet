@@ -16,6 +16,7 @@ import {
   SNAPSHOT_WRITERS,
   V1_SNAPSHOT_WRITER,
   V2_SNAPSHOT_WRITER,
+  isSnapshotWriter,
   versionField,
   writtenByField,
   readSnapshot,
@@ -67,8 +68,19 @@ describe('the writtenBy field of a snapshot', () => {
     expect(decode(Snapshot, {})).toEqual(Either.right({}));
   });
 
-  it('refuses a writer it does not know', () => {
-    expect(Either.isLeft(decode(Snapshot, { writtenBy: 'v3' }))).toBe(true);
+  // The writer is a routing hint, not part of the shape: a later variant naming itself must not turn a format this
+  // build reads into one it refuses, or adding a variant would be a de-facto format bump for every older reader.
+  it('carries a writer it does not know through, for routing to decide', () => {
+    expect(decode(Snapshot, { writtenBy: 'v3' })).toEqual(Either.right({ writtenBy: 'v3' }));
+  });
+
+  it('tells the writers this build knows apart from any other value', () => {
+    expect(isSnapshotWriter('v1')).toBe(true);
+    expect(isSnapshotWriter('v2')).toBe(true);
+    expect(isSnapshotWriter('v3')).toBe(false);
+    expect(isSnapshotWriter('')).toBe(false);
+    expect(isSnapshotWriter(1)).toBe(false);
+    expect(isSnapshotWriter(undefined)).toBe(false);
   });
 });
 

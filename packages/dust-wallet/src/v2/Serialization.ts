@@ -67,7 +67,8 @@ const SnapshotSchema = Schema.Struct({
   // The version names the snapshot's shape, not the variant that wrote it, and the constant lives in
   // `../SnapshotFormat.ts` so the twins cannot drift apart. Both variants write this shape — the V2 variant adds only
   // optional fields to it, which is not a new version. A V1 reader never meets a V2 snapshot anyway: `../Restore.ts`
-  // routes each snapshot to the variant that owns its `protocolVersion`.
+  // routes each snapshot to the variant it names as its writer, and by the variant that owns its `protocolVersion`
+  // when it names none.
   version: SnapshotFormat.versionField('dust', SNAPSHOT_FORMAT_VERSION),
   writtenBy: SnapshotFormat.writtenByField(),
   publicKey: Schema.Struct({

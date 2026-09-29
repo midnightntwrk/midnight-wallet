@@ -74,6 +74,12 @@ describe('peekProtocolVersion', () => {
     );
   });
 
+  it('still reads the version when the snapshot names a writer it does not know', () => {
+    expect(peekProtocolVersion(JSON.stringify({ protocolVersion: '7', writtenBy: 'v3' }))).toStrictEqual(
+      Option.some(ProtocolVersion.ProtocolVersion(7n)),
+    );
+  });
+
   it('finds nothing in a snapshot written before snapshots declared a version', () => {
     expect(peekProtocolVersion(legacyEnvelope)).toStrictEqual(Option.none());
   });
@@ -150,5 +156,23 @@ describe('variantForSnapshot, for a snapshot that names its writer', () => {
 
   it('routes by version when the snapshot names no writer, which every snapshot written before the field does', () => {
     expect(variantForSnapshot(envelope('100'), registered, v1, neverResolvesWriter)).toStrictEqual(Either.right(v2));
+  });
+
+  // A writer this build does not know is no reason to stop reading the envelope: the version is still there, and it
+  // is the version that says whether any registered variant can read the snapshot. Blinding the peek would send the
+  // snapshot to the head variant, whose deserializer refuses it as malformed instead of naming the version.
+  it('routes by version when the writer it names is unknown, refusing an unowned version by name', () => {
+    const unknownWriterAt = (protocolVersion: string): string => JSON.stringify({ protocolVersion, writtenBy: 'v3' });
+
+    expect(variantForSnapshot(unknownWriterAt('100'), registered, v1, neverResolvesWriter)).toStrictEqual(
+      Either.right(v2),
+    );
+
+    const error = variantForSnapshot(unknownWriterAt('4000'), registered, v1, neverResolvesWriter).pipe(
+      Either.flip,
+      Either.getOrThrow,
+    );
+    expect(error).toBeInstanceOf(UnsupportedSnapshotVersionError);
+    expect(error.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(4000n));
   });
 });

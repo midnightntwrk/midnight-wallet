@@ -57,8 +57,9 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
     // This variant writes `v2`: its verifying key carries the signature scheme, where the V1 variant's is a bare
     // string. A retyped field is a new format version, so a `v1` payload is upgraded in one step before this schema
     // sees it (`upgradeSnapshotV1ToV2` in `../SnapshotFormat.ts`, which also holds both constants so the twins cannot
-    // drift). The V1 variant never meets a `v2` snapshot: `../Restore.ts` routes each snapshot to the variant that
-    // owns its `protocolVersion`.
+    // drift). The V1 variant never meets a `v2` snapshot: `../Restore.ts` routes each snapshot to the variant it
+    // names as its writer — for unshielded, a bare-string key names V1 — and by the variant that owns its
+    // `protocolVersion` when it names none.
     version: SnapshotFormat.versionField('unshielded', SNAPSHOT_FORMAT_VERSION),
     writtenBy: SnapshotFormat.writtenByField(),
     publicKey: Schema.Struct({

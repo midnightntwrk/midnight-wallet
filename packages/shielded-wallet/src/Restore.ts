@@ -34,7 +34,8 @@ export class UnsupportedSnapshotVersionError extends Data.TaggedError(
  * @remarks
  *   Deliberately the smallest possible description of a snapshot: two optional fields, every other ignored. It has to
  *   read snapshots written by _any_ variant, including ones whose full schema this build does not have, so it must not
- *   assert anything it does not need. Everything it cannot make sense of is reported as "no version declared", leaving
+ *   assert anything it does not need — not even that the writer is one it knows, since a name it does not know must not
+ *   blind it to the version beside it. Everything it cannot make sense of is reported as "no version declared", leaving
  *   the real diagnosis to the deserializer that eventually reads the whole thing.
  */
 const EnvelopeSchema = Schema.Struct({
@@ -57,11 +58,13 @@ export const peekProtocolVersion = (serialized: string): Option.Option<ProtocolV
  * Reads which variant wrote a serialized wallet snapshot, when it says.
  *
  * @param serialized The serialized wallet state.
- * @returns The writer, or `Option.none()` when the snapshot predates the field or cannot be read at all.
+ * @returns The writer, or `Option.none()` when the snapshot predates the field, names a writer this build does not
+ *   know, or cannot be read at all.
  */
 export const peekWriter = (serialized: string): Option.Option<SnapshotFormat.SnapshotWriter> =>
   Schema.decodeUnknownOption(Schema.parseJson(EnvelopeSchema))(serialized).pipe(
     Option.flatMap((envelope) => Option.fromNullable(envelope.writtenBy)),
+    Option.filter(SnapshotFormat.isSnapshotWriter),
   );
 
 /**

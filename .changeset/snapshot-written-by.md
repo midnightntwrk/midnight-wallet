@@ -20,4 +20,13 @@ for a live crossing.
 
 A build that registers only the V2 variant has nothing to migrate with, so it goes on reading a V1-written snapshot as
 a format upgrade, as before. `SnapshotFormat.writtenByField` and the writer constants live in
-`@midnightntwrk/wallet-sdk-abstractions` beside `versionField`.
+`@midnightntwrk/wallet-sdk-abstractions` beside `versionField`, with `isSnapshotWriter` to narrow a name to the writers
+a build knows. The field accepts any name, so a later variant naming itself does not turn a format this build reads
+into one it refuses; a name this build does not know routes by version, as no name does.
+
+What this covers for snapshots already on disk differs by surface. An unshielded snapshot written in the fork window
+by a build before this one still goes home, because the bare-string verifying key it carries is a shape only the V1
+variant ever wrote, and routing reads that as the writer when no name is present. Shielded and dust snapshots carry
+nothing in their shape that says who wrote them, so one written in the fork window by a build before this one still
+opens on the V2 variant as a format upgrade, as before; a wallet in that state needs a resync to release stranded
+shielded spends. Snapshots written from this release on name their writer and go home on every surface.

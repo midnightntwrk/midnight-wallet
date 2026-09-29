@@ -31,7 +31,7 @@
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Array as Arr, Order, Schema } from 'effect';
+import { Array as Arr, Either, Order, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet as V1Wallet } from '../v1/CoreWallet.js';
 import { makeDefaultV1SerializationCapability } from '../v1/Serialization.js';
@@ -150,5 +150,17 @@ describe('the dust snapshot envelope’s writer', () => {
   it('is stamped by each variant with its own ordinal', () => {
     expect(JSON.parse(makeDefaultV1SerializationCapability().serialize(v1Wallet()))).toMatchObject({ writtenBy: 'v1' });
     expect(JSON.parse(makeDefaultV2SerializationCapability().serialize(v2Wallet()))).toMatchObject({ writtenBy: 'v2' });
+  });
+
+  // The writer is a routing hint, not part of the shape. A later variant that keeps this format names itself in the
+  // field, and this build has promised to keep reading this format: refusing on the name would break that promise.
+  it('is read past when it names a variant this build does not know, since the format is still one it reads', () => {
+    const capability = makeDefaultV2SerializationCapability();
+    const fromALaterVariant = JSON.stringify({
+      ...(JSON.parse(capability.serialize(v2Wallet())) as Record<string, unknown>),
+      writtenBy: 'v3',
+    });
+
+    expect(Either.isRight(capability.deserialize(null, fromALaterVariant))).toBe(true);
   });
 });

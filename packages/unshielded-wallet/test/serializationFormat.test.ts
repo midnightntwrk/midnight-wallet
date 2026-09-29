@@ -16,6 +16,9 @@ import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../src/v1/CoreWallet.js';
 import { createKeystore, PublicKey } from '../src/v1/KeyStore.js';
 import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js';
+import { createKeystore as createV2Keystore, PublicKey as V2PublicKey } from '../src/KeyStore.js';
+import { CoreWallet as V2CoreWallet } from '../src/v2/CoreWallet.js';
+import { makeDefaultV2SerializationCapability } from '../src/v2/Serialization.js';
 
 // A real, self-consistent key: its address derives from it, which is what the capability asserts on the way back in.
 // A fabricated pair would fail that check and never reach the version handling these tests are about.
@@ -79,5 +82,24 @@ describe('V1 unshielded snapshot format version', () => {
     const second = Either.isRight(restored) ? capability.serialize(restored.right) : 'did not restore';
 
     expect(second).toEqual(first);
+  });
+});
+
+describe('V2 unshielded snapshot format version', () => {
+  const capability = makeDefaultV2SerializationCapability();
+  const v2PublicKey = V2PublicKey.fromKeyStore(
+    createV2Keystore({ kind: 'schnorr', secret: Buffer.alloc(32, 3) }, NetworkId.NetworkId.Undeployed),
+  );
+  const emptyWallet = () => V2CoreWallet.init(v2PublicKey, NetworkId.NetworkId.Undeployed);
+
+  // The writer is a routing hint, not part of the shape. A later variant that keeps this format names itself in the
+  // field, and this build has promised to keep reading this format: refusing on the name would break that promise.
+  it('should read a snapshot naming a writer this build does not know, since the format is still one it reads', () => {
+    const fromALaterVariant = JSON.stringify({
+      ...(JSON.parse(capability.serialize(emptyWallet())) as Record<string, unknown>),
+      writtenBy: 'v3',
+    });
+
+    expect(Either.isRight(capability.deserialize(fromALaterVariant))).toBe(true);
   });
 });

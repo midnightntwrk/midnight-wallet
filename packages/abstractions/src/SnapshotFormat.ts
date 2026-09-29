@@ -65,6 +65,20 @@ export const V1_SNAPSHOT_WRITER: SnapshotWriter = 'v1';
 export const V2_SNAPSHOT_WRITER: SnapshotWriter = 'v2';
 
 /**
+ * Whether a value names a variant this build knows as a snapshot writer.
+ *
+ * @remarks
+ *   This is where the known writers are narrowed, and the only place: {@link writtenByField} accepts any name so that a
+ *   later variant's snapshot still reads, and routing uses this guard to decide whether the name is one it can send the
+ *   snapshot home to. A name it does not know is treated as no name at all, and the version routes the snapshot.
+ * @param value The value found under `writtenBy`, or anything else.
+ * @returns Whether the value is one of {@link SNAPSHOT_WRITERS}.
+ */
+export const isSnapshotWriter: (value: unknown) => value is SnapshotWriter = Schema.is(
+  Schema.Literal(...SNAPSHOT_WRITERS),
+);
+
+/**
  * The `writtenBy` field of a wallet snapshot: which variant wrote it.
  *
  * A format version names a snapshot's shape, and the `protocolVersion` inside it names the chain's version when it was
@@ -73,12 +87,14 @@ export const V2_SNAPSHOT_WRITER: SnapshotWriter = 'v2';
  * that window carries a version the V2 variant owns. Read as a V2 snapshot it would skip the cross-ledger migration;
  * routed to the variant that wrote it, it crosses like any other.
  *
- * Optional, because every snapshot written before the field existed lacks it, and those keep routing by version.
+ * Optional, because every snapshot written before the field existed lacks it, and those keep routing by version. Any
+ * string, not only the writers this build knows, because the writer is a routing hint and not part of the shape: a
+ * later variant that keeps a format this build reads names itself here, and refusing on the name would turn "add a
+ * variant" into a format bump for every older reader. Routing narrows the name with {@link isSnapshotWriter}.
  *
- * @returns An optional property signature over the known writers.
+ * @returns An optional property signature over the writer's name.
  */
-export const writtenByField = (): Schema.optional<Schema.Literal<['v1', 'v2']>> =>
-  Schema.optional(Schema.Literal(...SNAPSHOT_WRITERS));
+export const writtenByField = (): Schema.optional<typeof Schema.String> => Schema.optional(Schema.String);
 
 /**
  * Which of the ways a snapshot restore can fail a {@link SnapshotRestoreError} reports, so an application can tell

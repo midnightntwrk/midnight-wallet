@@ -12,6 +12,7 @@
 // limitations under the License.
 import { ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Data, Either, Option, Schema } from 'effect';
+import { isV1Keyed } from './SnapshotFormat.js';
 
 /**
  * Raised when a snapshot declares a protocol version that no registered variant is able to read.
@@ -34,13 +35,17 @@ export class UnsupportedSnapshotVersionError extends Data.TaggedError(
  * @remarks
  *   Deliberately the smallest possible description of a snapshot: two optional fields, every other ignored. It has to
  *   read snapshots written by _any_ variant, including ones whose full schema this build does not have, so it must not
- *   assert anything it does not need. Everything it cannot make sense of is reported as "no version declared", leaving
+ *   assert anything it does not need — not even that the writer is one it knows, since a name it does not know must not
+ *   blind it to the version beside it. Everything it cannot make sense of is reported as "no version declared", leaving
  *   the real diagnosis to the deserializer that eventually reads the whole thing.
  */
 const EnvelopeSchema = Schema.Struct({
   protocolVersion: Schema.optional(ProtocolVersion.ProtocolVersionSchema),
   writtenBy: SnapshotFormat.writtenByField(),
 });
+
+const parseJson = Schema.decodeUnknownOption(Schema.parseJson(Schema.Unknown));
+const decodeEnvelope = Schema.decodeUnknownOption(EnvelopeSchema);
 
 /**
  * Reads the protocol version a serialized unshielded wallet snapshot declares.
@@ -49,19 +54,36 @@ const EnvelopeSchema = Schema.Struct({
  * @returns The declared version, or `Option.none()` when the snapshot declares none or cannot be read at all.
  */
 export const peekProtocolVersion = (serialized: string): Option.Option<ProtocolVersion.ProtocolVersion> =>
-  Schema.decodeUnknownOption(Schema.parseJson(EnvelopeSchema))(serialized).pipe(
+  parseJson(serialized).pipe(
+    Option.flatMap(decodeEnvelope),
     Option.flatMap((envelope) => Option.fromNullable(envelope.protocolVersion)),
   );
 
 /**
- * Reads which variant wrote a serialized unshielded wallet snapshot, when it says.
+ * Reads which variant wrote a serialized unshielded wallet snapshot.
  *
+ * @remarks
+ *   The writer the snapshot names wins, when it names one this build knows. Failing that, the shape of the verifying key
+ *   says: only the V1 variant ever wrote it as a bare string, because ledger-v8 signs with one scheme, while the V2
+ *   variant has tagged it with its scheme since before either variant named itself. So a snapshot that names no writer
+ *   but carries a bare-string key was written by V1, and can be sent home although it predates the field — which is
+ *   what lets a V1 snapshot saved in the fork window by an older build still cross through the migration.
+ *
+ *   This inference is unshielded's alone. Shielded and dust snapshots carry nothing in their shape that says which
+ *   variant wrote them, so their `peekWriter` stops at the name, and this file deliberately differs from theirs here.
  * @param serialized The serialized wallet state.
- * @returns The writer, or `Option.none()` when the snapshot predates the field or cannot be read at all.
+ * @returns The writer, or `Option.none()` when the snapshot neither names a writer this build knows nor carries the key
+ *   shape only V1 wrote, or cannot be read at all.
  */
 export const peekWriter = (serialized: string): Option.Option<SnapshotFormat.SnapshotWriter> =>
-  Schema.decodeUnknownOption(Schema.parseJson(EnvelopeSchema))(serialized).pipe(
-    Option.flatMap((envelope) => Option.fromNullable(envelope.writtenBy)),
+  parseJson(serialized).pipe(
+    Option.flatMap((json) =>
+      decodeEnvelope(json).pipe(
+        Option.flatMap((envelope) => Option.fromNullable(envelope.writtenBy)),
+        Option.filter(SnapshotFormat.isSnapshotWriter),
+        Option.orElse(() => (isV1Keyed(json) ? Option.some(SnapshotFormat.V1_SNAPSHOT_WRITER) : Option.none())),
+      ),
+    ),
   );
 
 /**
@@ -72,7 +94,9 @@ export const peekWriter = (serialized: string): Option.Option<SnapshotFormat.Sna
  *   a V1 wallet that has seen the chain reach `forks.v9` annotates that version before the runtime hands it over, so a
  *   snapshot it writes in that window carries a version the V2 variant owns. Read as a V2 snapshot it would skip the
  *   cross-ledger migration; restored on the V1 variant, that variant announces the out-of-range version on its first
- *   observation and the runtime migrates it, exactly as for a live crossing.
+ *   observation and the runtime migrates it, exactly as for a live crossing. For unshielded, "says which" includes a
+ *   snapshot that names no writer but carries the bare-string key only V1 wrote ({@link peekWriter}), so such a snapshot
+ *   from a build that predates the field goes home too.
  *
  *   Otherwise the version decides. A snapshot that declares no version predates snapshots declaring one, and can only
  *   have been written by the variant that shipped before the question arose — the head variant. The same fallback
