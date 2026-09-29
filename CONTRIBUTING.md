@@ -5,7 +5,8 @@ of a blockchain focused on data privacy.
 
 ## Developer Certificate of Origin (DCO)
 
-All contributions must include a sign-off in every commit message, certifying that you have the right to submit the code under the project license. This is done by adding a `Signed-off-by` trailer using `git commit -s`:
+All contributions must include a sign-off in every commit message, certifying that you have the right to submit the code
+under the project license. This is done by adding a `Signed-off-by` trailer using `git commit -s`:
 
 ```
 git commit -s -m "feat: your commit message"
