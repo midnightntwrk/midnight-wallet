@@ -272,6 +272,22 @@ const projectionsTwinDustWallet = (configuration: DefaultDustConfiguration) => {
   );
 };
 
+/**
+ * The protocol versions a facade reports when all three of its wallets are where a chain running `specVersion` is.
+ *
+ * @remarks
+ *   The node's runtime spec version is the protocol version the indexer reports blocks under, so it is the chain's own
+ *   answer to what a wallet synchronized to it should say, read independently of the wallet. Asserting it exactly,
+ *   rather than which side of `forks.v9` a version is on, is what tells a wallet that follows the chain from one that
+ *   reports its variant's lower bound: the range checks hold for both.
+ * @param specVersion A spec version read from the node.
+ * @returns The same version for each of the three wallets.
+ */
+const everyWalletAt = (specVersion: number) => {
+  const version = ProtocolVersion.ProtocolVersion(BigInt(specVersion));
+  return { shielded: version, unshielded: version, dust: version };
+};
+
 const hasCrossed = (state: FacadeState | undefined): boolean =>
   state !== undefined &&
   state.protocol._tag === 'Settled' &&
@@ -440,6 +456,12 @@ describe.sequential('Hard fork crossing @fork', () => {
     const specVersion = await fixture.specVersionAtHead();
     expect(specVersion).toBe(V8_SPEC_VERSION);
 
+    // The shipped wallets ask the chain which version it starts under before they start, and every one of them is
+    // stamped with the answer. Each must go on to report that answer, not the bottom of the V1 variant's range, which
+    // is below every version a ledger-v8 chain has ever run and would still pass the range check above.
+    expect(v8State.protocolVersion).toEqual(everyWalletAt(specVersion));
+    expect(v8State.activeProtocolVersion).toBe(everyWalletAt(specVersion).shielded);
+
     expect(v8State.unshielded.balances[NIGHT]).toBeGreaterThan(0n);
     expect(Object.keys(v8State.shielded.balances).length).toBeGreaterThan(0);
   });
@@ -463,6 +485,9 @@ describe.sequential('Hard fork crossing @fork', () => {
       );
 
       expect(twinState.protocolVersion.dust).toBeLessThan(ProtocolVersion.V9NativeForkVersion);
+      // The twin's shielded and unshielded wallets start from the chain's answer, its Dust wallet asks nothing and
+      // learns the version from the first event it reads. Synchronized, all three must agree with the chain.
+      expect(twinState.protocolVersion).toEqual(everyWalletAt(V8_SPEC_VERSION));
       expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
       expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
     },
@@ -500,6 +525,8 @@ describe.sequential('Hard fork crossing @fork', () => {
           { ttl: new Date(Date.now() + TTL_MS) },
         ),
       );
+      // A recipe is stamped with the version the facade acts at, which is the chain's, not the V1 variant's lower bound.
+      expect(recipe.protocolVersion).toBe(everyWalletAt(V8_SPEC_VERSION).shielded);
       const signed = await wallet.signRecipe(recipe, unshieldedKeystore.signDataAsync);
       const finalizedTx = await wallet.finalizeRecipe(signed);
 
@@ -547,6 +574,9 @@ describe.sequential('Hard fork crossing @fork', () => {
 
     expect(v9State.protocol._tag).toBe('Settled');
     expect(v9State.activeProtocolVersion).toBeGreaterThanOrEqual(ProtocolVersion.V9NativeForkVersion);
+    // The version the new runtime reports, which need not be `forks.v9` itself: the V2 variants activate from that
+    // boundary, and a chain may cross it at any version at or above it.
+    expect(v9State.protocolVersion).toEqual(everyWalletAt(enactment.newSpecVersion));
     expect(v9State.isSynced).toBe(true);
 
     // The wallets do not cross together: each learns of the change when its own synchronization
@@ -925,6 +955,14 @@ describe.sequential('Hard fork crossing @fork', () => {
         unshielded: (config) => UnshieldedWallet(config).restore(snapshot.unshielded),
         dust: (config) => DustWallet(config).restore(snapshot.dust),
       });
+      // Read before the restored wallet has synchronized anything, so what it reports can only come from the snapshot:
+      // each wallet recorded the chain's version when it was serialized, and starts at that version rather than at the
+      // lower bound of the V2 variant's range. Nothing the wallet later reads would correct a wrong start, because the
+      // version it reads is the one it already holds.
+      const atRestore = await rx.firstValueFrom(restored.state());
+      expect(atRestore.protocolVersion).toEqual(atSnapshot.protocolVersion);
+      expect(atRestore.protocolVersion).toEqual(everyWalletAt(enactment.newSpecVersion));
+
       await restored.start(seeds);
 
       const resumed = await stateWhere(
@@ -939,6 +977,27 @@ describe.sequential('Hard fork crossing @fork', () => {
       expect(resumed.activeProtocolVersion).toBeGreaterThanOrEqual(ProtocolVersion.V9NativeForkVersion);
       expect(resumed.unshielded.balances).toEqual(live.unshielded.balances);
       expect(resumed.shielded.balances).toEqual(live.shielded.balances);
+      expect(resumed.protocolVersion).toEqual(live.protocolVersion);
+      expect(resumed.activeProtocolVersion).toBe(live.activeProtocolVersion);
+
+      // What the restored wallet builds is stamped with the version it acts at. The recipe is only built, never
+      // submitted, so the live wallet's coins are untouched.
+      const recipe = await restored.transferTransaction(
+        [
+          {
+            type: 'unshielded',
+            outputs: [
+              {
+                type: ledgerV9.nativeToken().raw,
+                amount: TRANSFER_AMOUNT,
+                receiverAddress: await receiver!.wallet.unshielded.getAddress(),
+              },
+            ],
+          },
+        ],
+        { ttl: new Date(Date.now() + TTL_MS) },
+      );
+      expect(recipe.protocolVersion).toBe(live.activeProtocolVersion);
     },
     SPEND_TIMEOUT_MS + CROSSING_TIMEOUT_MS,
   );
