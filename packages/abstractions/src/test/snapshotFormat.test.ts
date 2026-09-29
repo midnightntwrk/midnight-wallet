@@ -147,4 +147,42 @@ describe('reading a snapshot', () => {
     );
     expect(Either.isLeft(readNewer(JSON.stringify({ version: 'v3', key: { tag: 'x' } })))).toBe(true);
   });
+
+  it('refuses a non-string version as unknown, naming what it found', () => {
+    const error = refusal(JSON.stringify({ version: 2, payload: 'x' }));
+
+    expect(error).toMatchObject({ surface: 'shielded', reason: 'unknown-version', detectedVersion: '2' });
+  });
+
+  it('refuses JSON that is not an object as unrecognised', () => {
+    expect(refusal('[]')).toMatchObject({
+      surface: 'shielded',
+      reason: 'unrecognised',
+      detectedVersion: 'unrecognised',
+    });
+    expect(refusal('null')).toMatchObject({
+      surface: 'shielded',
+      reason: 'unrecognised',
+      detectedVersion: 'unrecognised',
+    });
+  });
+
+  it('does not run the upgrade step on the current version', () => {
+    const Newer = Schema.Struct({
+      version: versionField('unshielded', 'v2'),
+      key: Schema.Struct({ tag: Schema.String }),
+    });
+    const readNewer = readSnapshot({
+      surface: 'unshielded',
+      reads: ['v1', 'v2'],
+      schema: Newer,
+      upgrade: () => {
+        throw new Error('the upgrade step ran on a snapshot already in the current version');
+      },
+    });
+
+    expect(readNewer(JSON.stringify({ version: 'v2', key: { tag: 'schnorr' } }))).toEqual(
+      Either.right({ version: 'v2', key: { tag: 'schnorr' } }),
+    );
+  });
 });

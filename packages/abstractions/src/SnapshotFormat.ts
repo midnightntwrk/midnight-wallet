@@ -59,10 +59,10 @@ export const SNAPSHOT_WRITERS = ['v1', 'v2'] as const;
 export type SnapshotWriter = (typeof SNAPSHOT_WRITERS)[number];
 
 /** The V1 variant, as it names itself in a snapshot it writes. */
-export const V1_SNAPSHOT_WRITER: SnapshotWriter = 'v1';
+export const V1_SNAPSHOT_WRITER = 'v1' satisfies SnapshotWriter;
 
 /** The V2 variant, as it names itself in a snapshot it writes. */
-export const V2_SNAPSHOT_WRITER: SnapshotWriter = 'v2';
+export const V2_SNAPSHOT_WRITER = 'v2' satisfies SnapshotWriter;
 
 /**
  * Whether a value names a variant this build knows as a snapshot writer.
@@ -101,11 +101,12 @@ export const writtenByField = (): Schema.optional<typeof Schema.String> => Schem
  * "written by a newer SDK" from "corrupt" without reading the message.
  *
  * - `unparseable` — the stored string is not JSON.
+ * - `unrecognised` — JSON, but not an object, so not a snapshot of any version.
  * - `unknown-version` — the snapshot declares a format version this reader does not read; most likely a newer SDK wrote
- *   it, and a reader never downgrades.
+ *   it, and a reader never downgrades. A `version` that is not even a string is reported here too, named as found.
  * - `invalid-shape` — a version this reader reads, whose contents fail the snapshot schema once upgraded.
  */
-export type SnapshotRestoreReason = 'unparseable' | 'unknown-version' | 'invalid-shape';
+export type SnapshotRestoreReason = 'unparseable' | 'unrecognised' | 'unknown-version' | 'invalid-shape';
 
 /** What the error was constructed from; the message is derived, not supplied. */
 type SnapshotRestoreFacts = {
@@ -128,9 +129,9 @@ const describeCause = (cause: unknown): string => (cause instanceof Error ? caus
  * a log line or `String(error)` is enough to act on. The counterpart of the transaction history's
  * `TransactionHistoryRestoreError`, so every persisted surface refuses the same way.
  */
-export class SnapshotRestoreError extends Data.TaggedError('SnapshotRestoreError')<
-  SnapshotRestoreFacts & { readonly message: string }
-> {
+export class SnapshotRestoreError extends Data.TaggedError(
+  '@midnightntwrk/wallet-sdk-abstractions/SnapshotFormat/SnapshotRestoreError',
+)<SnapshotRestoreFacts & { readonly message: string }> {
   constructor(facts: SnapshotRestoreFacts) {
     super({
       ...facts,
@@ -145,9 +146,13 @@ const isRecord = Schema.is(Schema.Record({ key: Schema.String, value: Schema.Unk
  * Reads a serialized snapshot into its decoded shape, refusing with a {@link SnapshotRestoreError} that says why.
  *
  * The one reader every snapshot surface goes through: it parses the JSON, checks the format version the payload
- * declares against the versions this reader accepts, runs the upgrade step if there is one, and decodes the schema. A
- * snapshot that declares no version is read as the oldest accepted one, because every surface's first labelled shape is
- * the shape it always had.
+ * declares against the versions this reader accepts, runs the upgrade step when the payload is in an older accepted
+ * version, and decodes the schema. A snapshot that declares no version is read as the oldest accepted one, because
+ * every surface's first labelled shape is the shape it always had.
+ *
+ * The refusal names what was actually found: JSON that is not an object is `unrecognised`, a `version` that is present
+ * but not a string is reported as an unknown version by its JSON text, and only a string version this reader accepts
+ * reaches the schema. Nothing is silently read as the oldest version except a payload that declares none.
  *
  * @example
  *   ```ts
@@ -157,7 +162,8 @@ const isRecord = Schema.is(Schema.Record({ key: Schema.String, value: Schema.Unk
  *
  * @param options - `surface` names the snapshot for the refusal; `reads` lists the versions this reader accepts, oldest
  *   first; `schema` is the shape of the newest of them; `upgrade`, when given, is the pure step that brings an older
- *   accepted version's JSON to that shape before the schema runs.
+ *   accepted version's JSON to that shape before the schema runs. It is not run on a payload already in the newest
+ *   version, so the reader does not lean on the step being idempotent.
  * @returns A reader from the stored string to the decoded snapshot, or the refusal.
  */
 export const readSnapshot =
@@ -171,30 +177,49 @@ export const readSnapshot =
     const { surface, reads, schema } = options;
     const upgrade = options.upgrade ?? ((json: unknown): unknown => json);
     const current = reads[reads.length - 1] ?? reads[0];
+    const unknownVersion = (detectedVersion: string): SnapshotRestoreError =>
+      new SnapshotRestoreError({
+        surface,
+        reason: 'unknown-version',
+        detectedVersion,
+        cause: new Error(
+          `Refusing ${article(surface)} ${surface} snapshot written in format version ${JSON.stringify(detectedVersion)}: this build reads ${current} and does not downgrade.`,
+        ),
+      });
+    const decodeAs = (declared: string, json: Record<string, unknown>): Either.Either<A, SnapshotRestoreError> =>
+      Schema.decodeUnknownEither(schema)(declared === current ? json : upgrade(json)).pipe(
+        Either.mapLeft(
+          (cause) => new SnapshotRestoreError({ surface, reason: 'invalid-shape', detectedVersion: declared, cause }),
+        ),
+      );
     return Either.try({
       try: () => JSON.parse(serialized) as unknown,
       catch: (cause) =>
         new SnapshotRestoreError({ surface, reason: 'unparseable', detectedVersion: 'unrecognised', cause }),
     }).pipe(
-      Either.flatMap((json) => {
-        const declared = isRecord(json) && typeof json['version'] === 'string' ? json['version'] : reads[0];
-        return reads.includes(declared)
-          ? Schema.decodeUnknownEither(schema)(upgrade(json)).pipe(
-              Either.mapLeft(
-                (cause) =>
-                  new SnapshotRestoreError({ surface, reason: 'invalid-shape', detectedVersion: declared, cause }),
-              ),
-            )
+      Either.flatMap((json) =>
+        isRecord(json)
+          ? Either.right(json)
           : Either.left(
               new SnapshotRestoreError({
                 surface,
-                reason: 'unknown-version',
-                detectedVersion: declared,
+                reason: 'unrecognised',
+                detectedVersion: 'unrecognised',
                 cause: new Error(
-                  `Refusing ${article(surface)} ${surface} snapshot written in format version ${JSON.stringify(declared)}: this build reads ${current} and does not downgrade.`,
+                  `Expected ${article(surface)} ${surface} snapshot object, found ${JSON.stringify(json)}.`,
                 ),
               }),
-            );
+            ),
+      ),
+      Either.flatMap((json) => {
+        const version = json['version'];
+        return version === undefined
+          ? decodeAs(reads[0], json)
+          : typeof version !== 'string'
+            ? Either.left(unknownVersion(JSON.stringify(version)))
+            : reads.includes(version)
+              ? decodeAs(version, json)
+              : Either.left(unknownVersion(version));
       }),
     );
   };

@@ -81,9 +81,9 @@ const describeCause = (cause: unknown): string => (cause instanceof Error ? caus
  *
  * Never swallowed into an empty store: losing a user's history silently is worse than failing to open it.
  */
-export class TransactionHistoryRestoreError extends Data.TaggedError('TransactionHistoryRestoreError')<
-  TransactionHistoryRestoreFacts & { readonly message: string }
-> {
+export class TransactionHistoryRestoreError extends Data.TaggedError(
+  '@midnightntwrk/wallet-sdk-abstractions/TransactionHistoryFormat/TransactionHistoryRestoreError',
+)<TransactionHistoryRestoreFacts & { readonly message: string }> {
   constructor(facts: TransactionHistoryRestoreFacts) {
     super({
       ...facts,

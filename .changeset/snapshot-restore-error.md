@@ -14,7 +14,8 @@ without parsing that text. Every snapshot surface now refuses with `SnapshotRest
 that says all of it. It reaches `tryRestore` as the `Left` and `restore` as the thrown error, beside the existing
 `UnsupportedSnapshotVersionError` for a protocol version no variant owns, and it is a member of each variant's
 `WalletError` union. This is a breaking change for a caller that matched on the old `Wallet.Other` tag for an
-unreadable snapshot: that case now carries the `SnapshotRestoreError` tag instead.
+unreadable snapshot: that case now carries the
+`@midnightntwrk/wallet-sdk-abstractions/SnapshotFormat/SnapshotRestoreError` tag instead.
 
 The deserializers read through one shared `SnapshotFormat.readSnapshot` in `@midnightntwrk/wallet-sdk-abstractions`,
 which parses, checks the declared format version against what the reader accepts, runs the upgrade step if there is

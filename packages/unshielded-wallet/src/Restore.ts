@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Data, Either, Option, Schema } from 'effect';
+import { type ProtocolVersion, SnapshotFormat, SnapshotRouting } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Data, type Either, Option } from 'effect';
 import { isV1Keyed } from './SnapshotFormat.js';
 
 /**
@@ -30,22 +30,20 @@ export class UnsupportedSnapshotVersionError extends Data.TaggedError(
 }> {}
 
 /**
- * The envelope the peek reads.
+ * Names the writer of an unshielded snapshot from its shape, when the snapshot names none this build knows.
  *
  * @remarks
- *   Deliberately the smallest possible description of a snapshot: two optional fields, every other ignored. It has to
- *   read snapshots written by _any_ variant, including ones whose full schema this build does not have, so it must not
- *   assert anything it does not need — not even that the writer is one it knows, since a name it does not know must not
- *   blind it to the version beside it. Everything it cannot make sense of is reported as "no version declared", leaving
- *   the real diagnosis to the deserializer that eventually reads the whole thing.
+ *   Only the V1 variant ever wrote the verifying key as a bare string, because ledger-v8 signs with one scheme; the V2
+ *   variant has tagged it with its scheme since before either variant named itself. So a bare-string key is V1's
+ *   signature, and it is what lets a V1 snapshot saved in the fork window by a build that predates the writer field
+ *   still be sent home and cross through the migration. Unshielded is the one surface with such a shape: shielded and
+ *   dust snapshots carry nothing that says who wrote them, and their `Restore.ts` passes no hook.
  */
-const EnvelopeSchema = Schema.Struct({
-  protocolVersion: Schema.optional(ProtocolVersion.ProtocolVersionSchema),
-  writtenBy: SnapshotFormat.writtenByField(),
-});
+const writerFromKeyShape: SnapshotRouting.InferWriter = (json) =>
+  isV1Keyed(json) ? Option.some(SnapshotFormat.V1_SNAPSHOT_WRITER) : Option.none();
 
-const parseJson = Schema.decodeUnknownOption(Schema.parseJson(Schema.Unknown));
-const decodeEnvelope = Schema.decodeUnknownOption(EnvelopeSchema);
+const readEnvelope = (serialized: string): SnapshotRouting.SnapshotEnvelope =>
+  SnapshotRouting.readEnvelope(serialized, writerFromKeyShape);
 
 /**
  * Reads the protocol version a serialized unshielded wallet snapshot declares.
@@ -54,54 +52,31 @@ const decodeEnvelope = Schema.decodeUnknownOption(EnvelopeSchema);
  * @returns The declared version, or `Option.none()` when the snapshot declares none or cannot be read at all.
  */
 export const peekProtocolVersion = (serialized: string): Option.Option<ProtocolVersion.ProtocolVersion> =>
-  parseJson(serialized).pipe(
-    Option.flatMap(decodeEnvelope),
-    Option.flatMap((envelope) => Option.fromNullable(envelope.protocolVersion)),
-  );
+  readEnvelope(serialized).protocolVersion;
 
 /**
  * Reads which variant wrote a serialized unshielded wallet snapshot.
  *
  * @remarks
- *   The writer the snapshot names wins, when it names one this build knows. Failing that, the shape of the verifying key
- *   says: only the V1 variant ever wrote it as a bare string, because ledger-v8 signs with one scheme, while the V2
- *   variant has tagged it with its scheme since before either variant named itself. So a snapshot that names no writer
- *   but carries a bare-string key was written by V1, and can be sent home although it predates the field — which is
- *   what lets a V1 snapshot saved in the fork window by an older build still cross through the migration.
- *
- *   This inference is unshielded's alone. Shielded and dust snapshots carry nothing in their shape that says which
- *   variant wrote them, so their `peekWriter` stops at the name, and this file deliberately differs from theirs here.
+ *   The writer the snapshot names wins, when it names one this build knows. When it names none this build knows — no name
+ *   at all, or a name from a variant this build does not have, which routing treats alike — the shape of the verifying
+ *   key answers instead ({@link writerFromKeyShape}).
  * @param serialized The serialized wallet state.
  * @returns The writer, or `Option.none()` when the snapshot neither names a writer this build knows nor carries the key
  *   shape only V1 wrote, or cannot be read at all.
  */
 export const peekWriter = (serialized: string): Option.Option<SnapshotFormat.SnapshotWriter> =>
-  parseJson(serialized).pipe(
-    Option.flatMap((json) =>
-      decodeEnvelope(json).pipe(
-        Option.flatMap((envelope) => Option.fromNullable(envelope.writtenBy)),
-        Option.filter(SnapshotFormat.isSnapshotWriter),
-        Option.orElse(() => (isV1Keyed(json) ? Option.some(SnapshotFormat.V1_SNAPSHOT_WRITER) : Option.none())),
-      ),
-    ),
-  );
+  readEnvelope(serialized).writer;
 
 /**
  * Chooses the variant that should read a serialized unshielded wallet snapshot.
  *
  * @remarks
- *   The variant that wrote a snapshot is the one to read it, when the snapshot says which and that variant is registered:
- *   a V1 wallet that has seen the chain reach `forks.v9` annotates that version before the runtime hands it over, so a
- *   snapshot it writes in that window carries a version the V2 variant owns. Read as a V2 snapshot it would skip the
- *   cross-ledger migration; restored on the V1 variant, that variant announces the out-of-range version on its first
- *   observation and the runtime migrates it, exactly as for a live crossing. For unshielded, "says which" includes a
- *   snapshot that names no writer but carries the bare-string key only V1 wrote ({@link peekWriter}), so such a snapshot
- *   from a build that predates the field goes home too.
- *
- *   Otherwise the version decides. A snapshot that declares no version predates snapshots declaring one, and can only
- *   have been written by the variant that shipped before the question arose — the head variant. The same fallback
- *   covers an envelope this function cannot read at all: refusing it here would replace the deserializer's precise
- *   error with a vaguer one.
+ *   The rule is {@link SnapshotRouting.routeSnapshot}'s: the variant that wrote the snapshot when it says which and that
+ *   variant is registered, otherwise the variant that owns the declared version, otherwise the head variant. For
+ *   unshielded, "says which" includes a snapshot that names no known writer but carries the bare-string key only V1
+ *   wrote, so such a snapshot from a build that predates the field goes home too. The envelope is read once here, not
+ *   once per question.
  * @param serialized The serialized wallet state.
  * @param variantFor Resolves the variant registered for a protocol version.
  * @param headVariant The variant a snapshot with no declared version is restored into.
@@ -116,19 +91,14 @@ export const variantForSnapshot = <TVariant>(
   headVariant: TVariant,
   variantWrittenBy: (writer: SnapshotFormat.SnapshotWriter) => Option.Option<TVariant> = () => Option.none(),
 ): Either.Either<TVariant, UnsupportedSnapshotVersionError> =>
-  Option.match(Option.flatMap(peekWriter(serialized), variantWrittenBy), {
-    onSome: (variant) => Either.right(variant),
-    onNone: () =>
-      Option.match(peekProtocolVersion(serialized), {
-        onNone: () => Either.right(headVariant),
-        onSome: (protocolVersion) =>
-          Either.fromOption(
-            variantFor(protocolVersion),
-            () =>
-              new UnsupportedSnapshotVersionError({
-                message: `No registered variant reads unshielded wallet snapshots of protocol version ${protocolVersion}.`,
-                protocolVersion,
-              }),
-          ),
+  SnapshotRouting.routeSnapshot({
+    envelope: readEnvelope(serialized),
+    variantFor,
+    headVariant,
+    variantWrittenBy,
+    unsupported: (protocolVersion) =>
+      new UnsupportedSnapshotVersionError({
+        message: `No registered variant reads unshielded wallet snapshots of protocol version ${protocolVersion}.`,
+        protocolVersion,
       }),
   });

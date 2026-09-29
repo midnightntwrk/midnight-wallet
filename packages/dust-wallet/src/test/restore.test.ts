@@ -175,4 +175,22 @@ describe('variantForSnapshot, for a snapshot that names its writer', () => {
     expect(error).toBeInstanceOf(UnsupportedSnapshotVersionError);
     expect(error.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(4000n));
   });
+
+  // The envelope must not assert anything about the writer at all: a value that is not even a string is as much "no
+  // writer" as an unknown name, and the version beside it still has to be read.
+  it('routes by version when writtenBy is not a string', () => {
+    const malformedWriterAt = (protocolVersion: string, writtenBy: unknown): string =>
+      JSON.stringify({ protocolVersion, writtenBy });
+
+    expect(variantForSnapshot(malformedWriterAt('100', 7), registered, v1, neverResolvesWriter)).toStrictEqual(
+      Either.right(v2),
+    );
+
+    const error = variantForSnapshot(malformedWriterAt('4000', null), registered, v1, neverResolvesWriter).pipe(
+      Either.flip,
+      Either.getOrThrow,
+    );
+    expect(error).toBeInstanceOf(UnsupportedSnapshotVersionError);
+    expect(error.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(4000n));
+  });
 });

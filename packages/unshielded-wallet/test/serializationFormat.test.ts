@@ -100,6 +100,9 @@ describe('V2 unshielded snapshot format version', () => {
       writtenBy: 'v3',
     });
 
-    expect(Either.isRight(capability.deserialize(fromALaterVariant))).toBe(true);
+    // The relabelled snapshot restores to the very wallet the untouched one does: same key, state, cursor and version,
+    // with the writer re-stamped by this variant on the way back out.
+    const restored = Either.getOrThrow(capability.deserialize(fromALaterVariant));
+    expect(capability.serialize(restored)).toEqual(capability.serialize(emptyWallet()));
   });
 });

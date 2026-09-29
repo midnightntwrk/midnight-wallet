@@ -107,10 +107,12 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         state: w.state,
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
-        offset: w.progress?.appliedIndex,
         coinHashes: w.coinHashes,
+        // Optional fields are spread in only when present, so the snapshot object never carries an `undefined` key:
+        // the bytes must not depend on `JSON.stringify` dropping one.
+        ...(w.progress?.appliedIndex !== undefined ? { offset: w.progress.appliedIndex } : {}),
+        ...(w.legacyTxHistory !== undefined ? { txHistory: w.legacyTxHistory } : {}),
         ...(w.coinHashesPending !== undefined ? { coinHashesPending: w.coinHashesPending } : {}),
-        txHistory: w.legacyTxHistory,
       });
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);

@@ -426,12 +426,13 @@ jobs:
       #
       # The base is the branch a pull request targets or, on a push, the tip the push moved away from: against the
       # branch's own tip the diff is empty and the gate blind. The copy of the script that runs is the base's, not the
-      # branch's, so a branch cannot loosen the gate it is checked by.
+      # branch's, so a branch cannot loosen the gate it is checked by. A force-push or a branch creation reports an
+      # all-zeros `before`, which names no commit, so it falls through to `HEAD~1`.
       - name: Check published fixtures are unmodified
         env:
           BASE:
-            ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before ||
-            'HEAD~1' }}
+            ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || (github.event.before !=
+            '0000000000000000000000000000000000000000' && github.event.before) || 'HEAD~1' }}
         run: |
           SCRIPT=packages/serialization-tests/check-frozen.mjs
           # A base that predates the script has no copy to run, so the branch's own runs until it lands there.

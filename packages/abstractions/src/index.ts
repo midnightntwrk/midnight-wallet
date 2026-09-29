@@ -24,3 +24,4 @@ export * from './NoOpTransactionHistoryStorage.js';
 export * as TransactionHistoryStorage from './TransactionHistoryStorage.js';
 export * as TransactionHistoryFormat from './TransactionHistoryFormat.js';
 export * as SnapshotFormat from './SnapshotFormat.js';
+export * as SnapshotRouting from './SnapshotRouting.js';

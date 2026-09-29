@@ -51,7 +51,7 @@ import {
   type WalletRuntimeError,
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
-import { Duration, Effect, Either, Option, Ref, type Scope, pipe } from 'effect';
+import { Duration, Effect, Either, Match, Option, Ref, type Scope, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
 import {
@@ -540,7 +540,13 @@ export function CustomForkingShieldedWallet<
     static variantWrittenBy(
       writer: SnapshotFormat.SnapshotWriter,
     ): ReturnType<typeof ForkingShieldedWalletImplementation.variantFor> {
-      const tag = writer === SnapshotFormat.V1_SNAPSHOT_WRITER ? V1Tag : V2Tag;
+      // Exhaustive on purpose: a writer added to `SNAPSHOT_WRITERS` must fail here at compile time, never fall
+      // through to a variant that did not write the snapshot.
+      const tag = Match.value(writer).pipe(
+        Match.when(SnapshotFormat.V1_SNAPSHOT_WRITER, () => V1Tag),
+        Match.when(SnapshotFormat.V2_SNAPSHOT_WRITER, () => V2Tag),
+        Match.exhaustive,
+      );
       return Option.fromNullable(
         ForkingShieldedWalletImplementation.allVariants().find(
           (variant) => Variant.getVersionedVariantTag(variant) === tag,

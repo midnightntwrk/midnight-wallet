@@ -245,7 +245,7 @@ const refusalFromRestoring = (serialized: string): unknown =>
 describe('restoring a history whose version this build does not know', () => {
   it('should refuse the payload with a restore error naming the version it found', () => {
     expect(refusalFromRestoring(writtenByANewerSdk)).toMatchObject({
-      _tag: 'TransactionHistoryRestoreError',
+      _tag: '@midnightntwrk/wallet-sdk-abstractions/TransactionHistoryFormat/TransactionHistoryRestoreError',
       detectedVersion: 'v3',
     });
   });
