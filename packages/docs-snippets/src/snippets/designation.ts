@@ -74,6 +74,14 @@ await wallet
     unshieldedKeystore.getPublicKey(),
     unshieldedKeystore.signDataAsync,
   )
+  .catch((error: unknown) => {
+    // Had the dust fallen short of the fee after all, the registration rejects with a typed error: match it on its
+    // tag to read how far short it is and when generation will cover it, then wait and retry.
+    if (error instanceof Error && '_tag' in error && error._tag === 'Wallet.InsufficientDustForFee') {
+      console.log('Registration fee not covered yet:', error.message);
+    }
+    throw error;
+  })
   .then((recipe) => wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => wallet.submitTransaction(finalizedTransaction));
 

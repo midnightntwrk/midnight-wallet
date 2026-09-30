@@ -32,7 +32,7 @@ import {
   type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
-import { OtherWalletError, type WalletError } from './WalletError.js';
+import { InsufficientDustForFeeError, OtherWalletError, type WalletError } from './WalletError.js';
 import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
   type WalletRuntimeError,
@@ -385,6 +385,36 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         isRegistration,
       );
     });
+  }
+
+  /**
+   * Fails when the dust a first-time registration over `nightUtxos` may claim for its own fee is below `fee`.
+   *
+   * @param currentTime The time to read generation at; the same one the registration's split was made at.
+   * @param nightUtxos The Night UTxOs the registration carries.
+   * @param fee The registration's fee, in Specks.
+   * @returns Succeeds when the fee is covered now; fails with {@link InsufficientDustForFeeError} otherwise.
+   */
+  ensureFeeCoverage(
+    currentTime: Date,
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    fee: bigint,
+  ): Effect.Effect<void, WalletError> {
+    const coins = this.#v1Context.coinsAndBalancesCapability;
+    return SubscriptionRef.get(this.#context.stateRef).pipe(
+      Effect.flatMap((currentState) => {
+        const estimate = coins.feeCoverageEstimate(currentState, nightUtxos, fee, currentTime);
+        if (estimate._tag === 'Reachable' && estimate.seconds === 0n) {
+          return Effect.void;
+        }
+        const claimableFeePayment = pipe(
+          coins.estimateDustGeneration(currentState, nightUtxos, currentTime),
+          Arr.filter((utxo) => !utxo.utxo.registeredForDustGeneration),
+          Arr.reduce(0n, (max, utxo) => (utxo.dust.generatedNow > max ? utxo.dust.generatedNow : max)),
+        );
+        return Effect.fail(InsufficientDustForFeeError.of({ claimableFeePayment, fee, estimate }));
+      }),
+    );
   }
 
   attachDustRegistration(

@@ -55,6 +55,7 @@ import {
   type DustWalletAPI,
   DustWalletState,
 } from './DustWalletAPI.js';
+import { runPromiseThrowingFailure } from './PromiseBoundary.js';
 import { CoreWallet } from './v2/CoreWallet.js';
 import { type RunningV2Variant, V2Tag } from './v2/RunningV2Variant.js';
 import { type WalletSyncUpdate } from './v2/SyncSchema.js';
@@ -389,8 +390,12 @@ export function CustomDustWallet<
         .pipe(Effect.runPromise);
     }
 
-    ensureFeeCoverage(_currentTime: Date, _nightUtxos: ReadonlyArray<UtxoWithMeta>, _fee: bigint): Promise<void> {
-      return Promise.resolve();
+    ensureFeeCoverage(currentTime: Date, nightUtxos: ReadonlyArray<UtxoWithMeta>, fee: bigint): Promise<void> {
+      return runPromiseThrowingFailure(
+        this.runtime.dispatch({
+          [V2Tag]: (v2) => v2.ensureFeeCoverage(currentTime, nightUtxos, fee),
+        }),
+      );
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<DustWalletState<TSerialized>> {
