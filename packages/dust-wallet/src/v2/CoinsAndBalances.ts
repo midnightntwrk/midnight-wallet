@@ -79,6 +79,20 @@ export type CoinsAndBalancesCapability<TState> = {
     currentTime: Date,
   ): ReadonlyArray<UtxoWithFullDustDetails>;
 
+  /**
+   * Estimate when the dust a first-time registration may claim for its own fee will reach `fee`.
+   *
+   * @remarks
+   *   Reads the same projection as {@link estimateDustGeneration}, over the UTxOs not yet registered for Dust generation:
+   *   each grows at its `rate` up to its `maxCap`, and the estimate is the earliest whole second at which any one of
+   *   them reaches the fee. Only one UTxO fills the registration's guaranteed slot, so amounts are never summed across
+   *   UTxOs.
+   * @param state Current state of the wallet
+   * @param nightUtxos The Night UTxOs the registration would carry
+   * @param fee The fee to cover, in Specks
+   * @param currentTime The time to estimate from
+   * @returns When the fee is covered, or why it never will be
+   */
   feeCoverageEstimate(
     state: TState,
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
@@ -88,6 +102,9 @@ export type CoinsAndBalancesCapability<TState> = {
 };
 
 const FAKE_NONCE: ledger.DustInitialNonce = '0'.repeat(64);
+
+/** `numerator / denominator` rounded up, for a positive `denominator`. */
+const ceilDiv = (numerator: bigint, denominator: bigint): bigint => (numerator + denominator - 1n) / denominator;
 
 export type DefaultCoinsAndBalancesContext = {
   keysCapability: KeysCapability<CoreWallet>;
@@ -211,11 +228,35 @@ export const makeDefaultCoinsAndBalancesCapability = (
   };
 
   const feeCoverageEstimate = (
-    _state: CoreWallet,
-    _nightUtxos: ReadonlyArray<UtxoWithMeta>,
-    _fee: bigint,
-    _currentTime: Date,
-  ): FeeCoverageEstimate => ({ _tag: 'Unreachable', reason: 'NoGeneration' });
+    state: CoreWallet,
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    fee: bigint,
+    currentTime: Date,
+  ): FeeCoverageEstimate => {
+    const claimable = pipe(
+      estimateDustGeneration(state, nightUtxos, currentTime),
+      Arr.filter((estimate) => !estimate.utxo.registeredForDustGeneration),
+    );
+    if (Arr.some(claimable, (estimate) => estimate.dust.generatedNow >= fee)) {
+      return { _tag: 'Reachable', seconds: 0n, at: currentTime };
+    }
+    const generating = Arr.filter(claimable, (estimate) => estimate.dust.rate > 0n);
+    return pipe(
+      generating,
+      Arr.filter((estimate) => estimate.dust.maxCap >= fee),
+      Arr.map((estimate) => ceilDiv(fee - estimate.dust.generatedNow, estimate.dust.rate)),
+      Arr.match({
+        onEmpty: (): FeeCoverageEstimate => ({
+          _tag: 'Unreachable',
+          reason: Arr.isEmptyReadonlyArray(generating) ? 'NoGeneration' : 'ExceedsCap',
+        }),
+        onNonEmpty: (candidates): FeeCoverageEstimate => {
+          const seconds = Arr.min(candidates, Order.bigint);
+          return { _tag: 'Reachable', seconds, at: DateOps.addSeconds(currentTime, seconds) };
+        },
+      }),
+    );
+  };
 
   return {
     getWalletBalance,
