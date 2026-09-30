@@ -1939,13 +1939,14 @@ export class WalletFacade {
    *   the Night UTxOs booked for the transaction are released before the call rejects, so it can be retried as is.
    * @example
    *   ```ts
-   *   const recipe = await wallet
-   *     .registerNightUtxosForDustGeneration(nightUtxos, verifyingKey, signData)
-   *     .catch(async (error: unknown) => {
-   *       if (!(error instanceof Error && '_tag' in error && error._tag === 'Wallet.InsufficientDustForFee')) throw error;
-   *       await wallet.waitForGeneratedDust(nightUtxos, (await wallet.estimateRegistration(nightUtxos)).fee);
-   *       return wallet.registerNightUtxosForDustGeneration(nightUtxos, verifyingKey, signData);
-   *     });
+   *   const register = () => wallet.registerNightUtxosForDustGeneration(nightUtxos, verifyingKey, signData);
+   *   const recipe = await register().catch(async (error: unknown) => {
+   *     // An unreachable fee will not be covered by waiting, so only a reachable one is waited out.
+   *     if (!isInsufficientDustForFeeError(error) || error.estimate._tag !== 'Reachable') throw error;
+   *     const timeoutMs = Number(error.estimate.seconds) * 1000 + 60_000;
+   *     await wallet.waitForGeneratedDust(nightUtxos, error.fee, { timeoutMs });
+   *     return register();
+   *   });
    *   ```;
    *
    * @param nightUtxos - The Night UTxOs to register. Must be non-empty.
@@ -1954,9 +1955,10 @@ export class WalletFacade {
    * @param dustReceiverAddress - Where the generated dust goes. Defaults to this wallet's own dust address.
    * @returns The unproven registration transaction, signed.
    * @throws Error if `nightUtxos` is empty.
-   * @throws InsufficientDustForFeeError (`_tag` `'Wallet.InsufficientDustForFee'`) when the generated dust does not yet
-   *   cover the fee. It carries `claimableFeePayment`, `fee`, `shortfall` and an `estimate` of when it will; wait with
-   *   {@link waitForGeneratedDust} and retry.
+   * @throws InsufficientDustForFeeError (`_tag` `'Wallet.InsufficientDustForFee'`, recognised by
+   *   `isInsufficientDustForFeeError` from `@midnightntwrk/wallet-sdk`) when the generated dust does not yet cover the
+   *   fee. It carries `claimableFeePayment`, `fee`, `shortfall` and an `estimate` of when it will; when it is
+   *   reachable, wait with {@link waitForGeneratedDust} for at least that long and retry.
    */
   async registerNightUtxosForDustGeneration(
     nightUtxos: readonly UtxoWithMeta[],

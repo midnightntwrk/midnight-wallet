@@ -88,10 +88,17 @@ export class OutOfOrderSyncUpdateError extends Data.TaggedError('Wallet.OutOfOrd
  *   some unregistered UTxO covers the fee; `seconds` is `0n` when one already does. `Unreachable` says no such second
  *   exists: `NoGeneration` when no unregistered UTxO generates any dust, `ExceedsCap` when some do but the fee is above
  *   the most any of them can ever hold.
+ * @example
+ *   ```ts
+ *   const deadline = estimate._tag === 'Reachable' ? estimate.at : undefined; // undefined: waiting will not help
+ *   ```;
  */
 export type FeeCoverageEstimate =
   | { readonly _tag: 'Reachable'; readonly seconds: bigint; readonly at: Date }
   | { readonly _tag: 'Unreachable'; readonly reason: 'NoGeneration' | 'ExceedsCap' };
+
+/** A deadline for `waitForGeneratedDust` that sees an estimate of `seconds` out, with a minute to spare. */
+const waitTimeoutMs = (seconds: bigint): bigint => seconds * 1000n + 60_000n;
 
 const UNREACHABLE_REASONS: Record<Extract<FeeCoverageEstimate, { _tag: 'Unreachable' }>['reason'], string> = {
   NoGeneration: 'none of the unregistered Night UTxOs generates dust',
@@ -136,7 +143,7 @@ export class InsufficientDustForFeeError extends Data.TaggedError('Wallet.Insuff
     const outlook =
       reading.estimate._tag === 'Reachable'
         ? `Generated dust should cover it in about ${reading.estimate.seconds} s (at ${reading.estimate.at.toISOString()}). ` +
-          `Use WalletFacade.waitForGeneratedDust(utxos, ${reading.fee}) before retrying.`
+          `Use WalletFacade.waitForGeneratedDust(utxos, ${reading.fee}, { timeoutMs: ${waitTimeoutMs(reading.estimate.seconds)} }) before retrying.`
         : `It never will: ${UNREACHABLE_REASONS[reading.estimate.reason]}.`;
     return new InsufficientDustForFeeError({
       ...reading,

@@ -317,25 +317,28 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
   ): Promise<void>;
 
   /**
-   * Checks that a first-time registration over `nightUtxos` can pay its own `fee` out of the dust they have generated.
+   * Checks that the fee payment a first-time registration carries covers the registration's own `fee`.
    *
    * @remarks
-   *   Reads the same claimable fee payment {@link DustWalletAPI.waitForGeneratedDust} waits on. Unlike the other methods
-   *   here, a failure rejects with the typed error itself rather than a fiber wrapper, so a caller can read its
-   *   fields.
+   *   Judges `feePayment`, the payment the transaction was built with, since that is what reaches the chain; the dust
+   *   state is read only to estimate when generation over `nightUtxos` will cover the fee, from the same projection
+   *   {@link DustWalletAPI.waitForGeneratedDust} waits on. Unlike the other methods here, a failure rejects with the
+   *   typed error itself rather than a fiber wrapper, so a caller can read its fields; recognise it with
+   *   `isInsufficientDustForFeeError`.
    * @example
    *   ```ts
-   *   await dust.ensureFeeCoverage(now, nightUtxos, fee).catch((error: unknown) => {
-   *     if (error instanceof Error && '_tag' in error && error._tag === 'Wallet.InsufficientDustForFee') console.warn(error.message);
+   *   await dust.ensureFeeCoverage(now, nightUtxos, split.feePayment, fee).catch((error: unknown) => {
+   *     if (isInsufficientDustForFeeError(error)) console.warn(error.message);
    *     throw error;
    *   });
    *   ```;
    *
-   * @param currentTime - The time to read generation at; use the one the registration's split was made at.
+   * @param currentTime - The time to estimate from; use the one the registration's split was made at.
    * @param nightUtxos - The Night UTxOs the registration carries.
+   * @param feePayment - The fee payment attached to the registration, in Specks.
    * @param fee - The registration's fee, in Specks.
-   * @returns A promise that resolves when the fee is covered now.
-   * @throws InsufficientDustForFeeError (`_tag` `'Wallet.InsufficientDustForFee'`) when it is not, carrying the
+   * @returns A promise that resolves when `feePayment` covers `fee`.
+   * @throws InsufficientDustForFeeError (`_tag` `'Wallet.InsufficientDustForFee'`) when it does not, carrying the
    *   shortfall and an estimate of when generation will cover it.
    */
   ensureFeeCoverage(

@@ -87,6 +87,12 @@ export type CoinsAndBalancesCapability<TState> = {
    *   each grows at its `rate` up to its `maxCap`, and the estimate is the earliest whole second at which any one of
    *   them reaches the fee. Only one UTxO fills the registration's guaranteed slot, so amounts are never summed across
    *   UTxOs.
+   * @example
+   *   ```ts
+   *   const estimate = coinsAndBalances.feeCoverageEstimate(state, nightUtxos, fee, new Date());
+   *   if (estimate._tag === 'Reachable') console.log(`fee covered in ${estimate.seconds} s`);
+   *   ```
+   *
    * @param state Current state of the wallet
    * @param nightUtxos The Night UTxOs the registration would carry
    * @param fee The fee to cover, in Specks
@@ -105,6 +111,10 @@ const FAKE_NONCE: ledger.DustInitialNonce = '0'.repeat(64);
 
 /** `numerator / denominator` rounded up, for a positive `denominator`. */
 const ceilDiv = (numerator: bigint, denominator: bigint): bigint => (numerator + denominator - 1n) / denominator;
+
+/** Whole seconds, rounded up, from `from` until `time`; `0n` once `time` has passed. */
+const secondsUntil = (time: Date, from: Date): bigint =>
+  time > from ? ceilDiv(BigInt(time.getTime() - from.getTime()), 1000n) : 0n;
 
 export type DefaultCoinsAndBalancesContext = {
   keysCapability: KeysCapability<CoreWallet>;
@@ -237,14 +247,19 @@ export const makeDefaultCoinsAndBalancesCapability = (
       estimateDustGeneration(state, nightUtxos, currentTime),
       Arr.filter((estimate) => !estimate.utxo.registeredForDustGeneration),
     );
-    if (Arr.some(claimable, (estimate) => estimate.dust.generatedNow >= fee)) {
+    if (fee <= 0n || Arr.some(claimable, (estimate) => estimate.dust.generatedNow >= fee)) {
       return { _tag: 'Reachable', seconds: 0n, at: currentTime };
     }
     const generating = Arr.filter(claimable, (estimate) => estimate.dust.rate > 0n);
     return pipe(
       generating,
       Arr.filter((estimate) => estimate.dust.maxCap >= fee),
-      Arr.map((estimate) => ceilDiv(fee - estimate.dust.generatedNow, estimate.dust.rate)),
+      // A UTxO whose creation time is still ahead of the clock generates nothing until then.
+      Arr.map(
+        (estimate) =>
+          secondsUntil(estimate.utxo.ctime, currentTime) +
+          ceilDiv(fee - estimate.dust.generatedNow, estimate.dust.rate),
+      ),
       Arr.match({
         onEmpty: (): FeeCoverageEstimate => ({
           _tag: 'Unreachable',

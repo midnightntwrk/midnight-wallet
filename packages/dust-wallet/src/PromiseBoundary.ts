@@ -19,12 +19,12 @@ import { Cause, Effect, Exit, Option } from 'effect';
  * @remarks
  *   `E extends Error` is what makes that rejection legitimate rather than a thrown bare value, and every failure on this
  *   surface is a `Data.TaggedError`, which is one. A defect or interruption has no typed failure to hand over, so it is
- *   rejected with its pretty-printed cause.
+ *   rejected with its pretty-printed cause, keeping what was thrown as the `cause`.
  */
 export const runPromiseThrowingFailure = async <A, E extends Error>(effect: Effect.Effect<A, E>): Promise<A> => {
   const exit = await Effect.runPromiseExit(effect);
   if (Exit.isSuccess(exit)) return exit.value;
   const failure = Cause.failureOption(exit.cause);
   if (Option.isSome(failure)) throw failure.value;
-  throw new Error(Cause.pretty(exit.cause));
+  throw new Error(Cause.pretty(exit.cause), { cause: Cause.squash(exit.cause) });
 };
