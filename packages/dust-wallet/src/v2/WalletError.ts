@@ -144,7 +144,7 @@ export class InsufficientDustForFeeError extends Data.TaggedError('Wallet.Insuff
       reading.estimate._tag === 'Reachable'
         ? `Generated dust should cover it in about ${reading.estimate.seconds} s (at ${reading.estimate.at.toISOString()}). ` +
           `Use WalletFacade.waitForGeneratedDust(utxos, ${reading.fee}, { timeoutMs: ${waitTimeoutMs(reading.estimate.seconds)} }) before retrying.`
-        : `It never will: ${UNREACHABLE_REASONS[reading.estimate.reason]}.`;
+        : `It never will: ${UNREACHABLE_REASONS[reading.estimate.reason]}, so waitForGeneratedDust will not help.`;
     return new InsufficientDustForFeeError({
       ...reading,
       shortfall: reading.fee - reading.claimableFeePayment,
