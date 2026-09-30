@@ -446,6 +446,76 @@ describe('a dust wallet starting on a chain that has not forked', () => {
 });
 
 /**
+ * Whether a first-time registration can pay its own fee, asked of whichever variant is running.
+ *
+ * @remarks
+ *   The check is the one failure of the wallet's promise surface that reaches callers as the error itself rather than the
+ *   fiber wrapper around it: a registration flow reads the shortfall and the estimate off it to decide how long to
+ *   wait, so the fields must survive the promise boundary on both sides of the fork.
+ */
+describe('a dust wallet checking whether a registration can pay its own fee', () => {
+  const onChainAt = [
+    { variant: 'V1', version: v8Version, tag: V1Tag },
+    { variant: 'V2', version: v9Version, tag: V2Tag },
+  ] as const;
+
+  const syncedWalletAt = (version: ProtocolVersion.ProtocolVersion) =>
+    Effect.gen(function* () {
+      const chain = yield* Effect.promise(() => buildDustChain());
+      const wallet = yield* walletOnChainAt(chain, version, chainReporting(version));
+      yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
+      return wallet;
+    });
+
+  it.each(onChainAt)(
+    'rejects on the $variant variant with the typed error, not a wrapper around it',
+    async ({ version, tag }) =>
+      Effect.gen(function* () {
+        const wallet = yield* syncedWalletAt(version);
+        expect(yield* wallet.activeTag).toBe(tag);
+        const now = new Date();
+        // Created this instant, so it has generated nothing yet but will.
+        const fresh = { ...nightUtxo(ledgerV9.signatureVerifyingKey(signingKey())), ctime: now };
+        const fee = 1_000_000n;
+
+        const rejection = yield* Effect.promise(() =>
+          wallet.dust.ensureFeeCoverage(now, [fresh], fee).then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
+        );
+
+        expect(rejection).toBeInstanceOf(Error);
+        expect(Runtime.isFiberFailure(rejection)).toBe(false);
+        expect(rejection).toMatchObject({
+          _tag: 'Wallet.InsufficientDustForFee',
+          claimableFeePayment: 0n,
+          fee,
+          shortfall: fee,
+          estimate: { _tag: 'Reachable' },
+        });
+      }).pipe(Effect.scoped, Effect.runPromise),
+  );
+
+  it.each(onChainAt)('resolves on the $variant variant when the fee is already covered', async ({ version, tag }) =>
+    Effect.gen(function* () {
+      const wallet = yield* syncedWalletAt(version);
+      expect(yield* wallet.activeTag).toBe(tag);
+      const now = new Date();
+      // An hour old, so it has generated far more than a one-Speck fee.
+      const aged = {
+        ...nightUtxo(ledgerV9.signatureVerifyingKey(signingKey())),
+        ctime: new Date(now.getTime() - 3_600_000),
+      };
+
+      const outcome = yield* failureOf(wallet.dust.ensureFeeCoverage(now, [aged], 1n));
+
+      expect(outcome).toStrictEqual(Option.none());
+    }).pipe(Effect.scoped, Effect.runPromise),
+  );
+});
+
+/**
  * A dust wallet on a chain past the boundary that has shown it nothing.
  *
  * @remarks

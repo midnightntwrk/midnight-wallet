@@ -316,6 +316,8 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
     opts?: { timeoutMs?: number },
   ): Promise<void>;
 
+  ensureFeeCoverage(currentTime: Date, nightUtxos: ReadonlyArray<UtxoWithMeta>, fee: bigint): Promise<void>;
+
   revertTransaction(transaction: AnyTx): Promise<void>;
 
   getAddress(): Promise<DustAddress>;

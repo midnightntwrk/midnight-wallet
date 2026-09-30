@@ -1051,6 +1051,10 @@ export function CustomForkingDustWallet<
         .pipe(Effect.runPromise);
     }
 
+    ensureFeeCoverage(_currentTime: Date, _nightUtxos: ReadonlyArray<UtxoWithMeta>, _fee: bigint): Promise<void> {
+      return Promise.resolve();
+    }
+
     waitForSyncedState(allowedGap: bigint = 0n): Promise<DustWalletState<string>> {
       return rx.firstValueFrom(
         this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
