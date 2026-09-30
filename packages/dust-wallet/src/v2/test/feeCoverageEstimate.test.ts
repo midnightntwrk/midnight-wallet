@@ -213,5 +213,7 @@ describe('InsufficientDustForFeeError', () => {
 
     expect(error.message).toContain('Insufficient generated dust to cover registration fee (have 0, need 25).');
     expect(error.message).toContain('never');
+    // Still names the wait, as every rejection does, but says it cannot help here.
+    expect(error.message).toContain('so waitForGeneratedDust will not help');
   });
 });
