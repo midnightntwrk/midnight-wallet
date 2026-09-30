@@ -27,6 +27,7 @@
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { isInsufficientDustForFeeError } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect } from 'effect';
 import * as rx from 'rxjs';
@@ -74,19 +75,6 @@ const flaggedRegistered = (coin: UtxoWithMeta): UtxoWithMeta => ({
   meta: { ...coin.meta, registeredForDustGeneration: true },
 });
 
-/** The fail-fast's rejection, read by its tag as a caller of either variant would read it. */
-const isInsufficientDustForFee = (
-  thrown: unknown,
-): thrown is {
-  readonly _tag: 'Wallet.InsufficientDustForFee';
-  readonly message: string;
-  readonly claimableFeePayment: bigint;
-  readonly fee: bigint;
-  readonly shortfall: bigint;
-  readonly estimate: { readonly _tag: 'Reachable' | 'Unreachable' };
-} =>
-  typeof thrown === 'object' && thrown !== null && '_tag' in thrown && thrown._tag === 'Wallet.InsufficientDustForFee';
-
 describe("Dust registration fail-fast follows the indexer's registeredForDustGeneration flag", () => {
   it('fires for Night flagged unregistered whose accrued dust is below the fee, and releases the booking', async () => {
     return Effect.gen(function* () {
@@ -124,7 +112,7 @@ describe("Dust registration fail-fast follows the indexer's registeredForDustGen
           ),
       );
 
-      if (!isInsufficientDustForFee(rejection)) {
+      if (!isInsufficientDustForFeeError(rejection)) {
         return expect.fail(`expected Wallet.InsufficientDustForFee, got ${String(rejection)}`);
       }
       expect(rejection.claimableFeePayment).toBe(0n);

@@ -91,6 +91,26 @@ describe('feeCoverageEstimate', () => {
     expect(feeCoverageEstimate(wallet, utxos, fee, NOW)).toEqual({ _tag: 'Reachable', seconds: 0n, at: NOW });
   });
 
+  it('counts a fee of nothing as covered, whatever the UTxOs', () => {
+    const covered = { _tag: 'Reachable', seconds: 0n, at: NOW };
+
+    expect(feeCoverageEstimate(wallet, [], 0n, NOW)).toEqual(covered);
+    expect(feeCoverageEstimate(wallet, [nightUtxo(0, { registeredForDustGeneration: true })], 0n, NOW)).toEqual(
+      covered,
+    );
+  });
+
+  it('waits out a creation time still ahead of the clock before generation starts', () => {
+    // The indexer's block time can run ahead of the wallet's clock; nothing generates until the UTxO exists.
+    const utxos = [nightUtxo(0, { ctime: new Date(NOW.getTime() + 20_000) })];
+    const fee = 100_000_000_000_000_000n;
+
+    const estimate = reachable(feeCoverageEstimate(wallet, utxos, fee, NOW));
+
+    expect(claimableFeePayment(state, utxos, estimate.at) >= fee).toBe(true);
+    expect(claimableFeePayment(state, utxos, oneSecondBefore(estimate.at)) < fee).toBe(true);
+  });
+
   it('follows whichever UTxO reaches the fee first, not the one leading now', () => {
     // `older` leads now on age; `younger` holds ten times the Night, so generates ten times faster and overtakes it.
     const older = nightUtxo(0, { value: 1_000_000_000n, ctime: secondsBefore(3600) });
@@ -170,7 +190,7 @@ describe('InsufficientDustForFeeError', () => {
     expect(error.estimate).toEqual({ _tag: 'Reachable', seconds: 90n, at });
   });
 
-  it('keeps the message callers already match on, points at the wait, and states when the fee is covered', () => {
+  it('keeps the message callers already match on, points at a wait long enough to see the estimate out, and states when the fee is covered', () => {
     const error = InsufficientDustForFeeError.of({
       claimableFeePayment: 10n,
       fee: 25n,
@@ -178,7 +198,8 @@ describe('InsufficientDustForFeeError', () => {
     });
 
     expect(error.message).toContain('Insufficient generated dust to cover registration fee (have 10, need 25).');
-    expect(error.message).toContain('WalletFacade.waitForGeneratedDust(utxos, 25)');
+    // The wait's default deadline is five minutes; the advice carries one covering the estimate plus a minute's margin.
+    expect(error.message).toContain('WalletFacade.waitForGeneratedDust(utxos, 25, { timeoutMs: 150000 })');
     expect(error.message).toContain('90 s');
     expect(error.message).toContain(at.toISOString());
   });

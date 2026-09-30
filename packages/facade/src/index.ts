@@ -1361,7 +1361,7 @@ export class WalletFacade {
     if (isRegistration && hasUnregisteredGuaranteed) {
       const fee = await this.dust.calculateFee([txWithDustActions]);
       try {
-        await this.dust.ensureFeeCoverage(now, nightUtxosWithMeta, fee);
+        await this.dust.ensureFeeCoverage(now, nightUtxosWithMeta, split.feePayment, fee);
       } catch (error) {
         await this.unshielded.revertTransaction(txWithOffers);
         throw error;

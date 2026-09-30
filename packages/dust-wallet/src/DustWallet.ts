@@ -1052,11 +1052,16 @@ export function CustomForkingDustWallet<
         .pipe(Effect.runPromise);
     }
 
-    ensureFeeCoverage(currentTime: Date, nightUtxos: ReadonlyArray<UtxoWithMeta>, fee: bigint): Promise<void> {
+    ensureFeeCoverage(
+      currentTime: Date,
+      nightUtxos: ReadonlyArray<UtxoWithMeta>,
+      feePayment: bigint,
+      fee: bigint,
+    ): Promise<void> {
       return runPromiseThrowingFailure(
         this.runtime.dispatch<void, WalletError | V1WalletError>({
-          [V1Tag]: (v1) => v1.ensureFeeCoverage(currentTime, nightUtxos, fee),
-          [V2Tag]: (v2) => v2.ensureFeeCoverage(currentTime, nightUtxos, fee),
+          [V1Tag]: (v1) => v1.ensureFeeCoverage(currentTime, nightUtxos, feePayment, fee),
+          [V2Tag]: (v2) => v2.ensureFeeCoverage(currentTime, nightUtxos, feePayment, fee),
         }),
       );
     }

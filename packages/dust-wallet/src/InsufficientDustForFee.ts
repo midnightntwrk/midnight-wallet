@@ -10,10 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './DustWalletAPI.js';
-export * from './SingleVariantDustWallet.js';
-export * from './DustWallet.js';
-export { UnsupportedSnapshotVersionError, peekProtocolVersion } from './Restore.js';
-export { isInsufficientDustForFeeError } from './InsufficientDustForFee.js';
-export * from './v2/Sync.js';
-export { type DustTransactionHistoryEntry, DustSectionSchema, mergeDustSections } from './v2/TransactionHistory.js';
+import { type InsufficientDustForFeeError as V1InsufficientDustForFeeError } from './v1/WalletError.js';
+import { type InsufficientDustForFeeError as V2InsufficientDustForFeeError } from './v2/WalletError.js';
+
+export const isInsufficientDustForFeeError = (
+  _error: unknown,
+): _error is V1InsufficientDustForFeeError | V2InsufficientDustForFeeError => false;

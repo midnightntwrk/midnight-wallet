@@ -338,7 +338,12 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
    * @throws InsufficientDustForFeeError (`_tag` `'Wallet.InsufficientDustForFee'`) when it is not, carrying the
    *   shortfall and an estimate of when generation will cover it.
    */
-  ensureFeeCoverage(currentTime: Date, nightUtxos: ReadonlyArray<UtxoWithMeta>, fee: bigint): Promise<void>;
+  ensureFeeCoverage(
+    currentTime: Date,
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    feePayment: bigint,
+    fee: bigint,
+  ): Promise<void>;
 
   revertTransaction(transaction: AnyTx): Promise<void>;
 

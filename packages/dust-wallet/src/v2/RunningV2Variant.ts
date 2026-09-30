@@ -387,6 +387,7 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   ensureFeeCoverage(
     currentTime: Date,
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    _feePayment: bigint,
     fee: bigint,
   ): Effect.Effect<void, WalletError> {
     const coins = this.#v2Context.coinsAndBalancesCapability;

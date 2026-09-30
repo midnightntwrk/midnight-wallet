@@ -479,7 +479,7 @@ describe('a dust wallet checking whether a registration can pay its own fee', ()
         const fee = 1_000_000n;
 
         const rejection = yield* Effect.promise(() =>
-          wallet.dust.ensureFeeCoverage(now, [fresh], fee).then(
+          wallet.dust.ensureFeeCoverage(now, [fresh], 0n, fee).then(
             () => undefined,
             (error: unknown) => error,
           ),
@@ -508,10 +508,40 @@ describe('a dust wallet checking whether a registration can pay its own fee', ()
         ctime: new Date(now.getTime() - 3_600_000),
       };
 
-      const outcome = yield* failureOf(wallet.dust.ensureFeeCoverage(now, [aged], 1n));
+      const outcome = yield* failureOf(wallet.dust.ensureFeeCoverage(now, [aged], 1n, 1n));
 
       expect(outcome).toStrictEqual(Option.none());
     }).pipe(Effect.scoped, Effect.runPromise),
+  );
+
+  it.each(onChainAt)(
+    'judges the fee payment the transaction carries, not a fresh reading, on the $variant variant',
+    async ({ version, tag }) =>
+      Effect.gen(function* () {
+        // The state says an aged UTxO covers a one-Speck fee, but the transaction was built with no fee payment at
+        // all: what reaches the chain is the payment attached, so that is what must cover the fee.
+        const wallet = yield* syncedWalletAt(version);
+        expect(yield* wallet.activeTag).toBe(tag);
+        const now = new Date();
+        const aged = {
+          ...nightUtxo(ledgerV9.signatureVerifyingKey(signingKey())),
+          ctime: new Date(now.getTime() - 3_600_000),
+        };
+
+        const rejection = yield* Effect.promise(() =>
+          wallet.dust.ensureFeeCoverage(now, [aged], 0n, 1n).then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
+        );
+
+        expect(rejection).toMatchObject({
+          _tag: 'Wallet.InsufficientDustForFee',
+          claimableFeePayment: 0n,
+          fee: 1n,
+          shortfall: 1n,
+        });
+      }).pipe(Effect.scoped, Effect.runPromise),
   );
 });
 
