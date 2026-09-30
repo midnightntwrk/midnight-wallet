@@ -468,6 +468,8 @@ export function CustomForkingUnshieldedWallet<
         (version) => ForkingUnshieldedWalletImplementation.variantFor(version),
         headVariant,
         (writer) => ForkingUnshieldedWalletImplementation.variantWrittenBy(writer),
+        // Each variant's activation as registered here, so a writer never takes a snapshot from below its own range.
+        (variant) => variant.sinceVersion,
       ).pipe(
         // Stated with its result type because the resolved variant is either of the two, so its deserializer is
         // either of theirs: what comes back is a state of whichever one wrote the snapshot, which is what

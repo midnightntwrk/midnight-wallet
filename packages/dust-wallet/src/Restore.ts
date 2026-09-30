@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type ProtocolVersion, type SnapshotFormat, SnapshotRouting } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, type SnapshotFormat, SnapshotRouting } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Data, type Either, Option } from 'effect';
 
 /**
@@ -62,6 +62,10 @@ export const peekWriter = (serialized: string): Option.Option<SnapshotFormat.Sna
  * @param headVariant The variant a snapshot with no declared version is restored into.
  * @param variantWrittenBy Resolves the registered variant that a snapshot names as its writer, if it is registered.
  *   Defaults to none, which is the routing every caller had before snapshots named their writer.
+ * @param activationOf The protocol version a registered variant starts answering for, as the wallet registered it. The
+ *   writer takes a snapshot only from that version upwards; below it the version routes, since the runtime cannot hand
+ *   over backwards. Defaults to the minimum version, which lets the writer take any snapshot, for compositions that
+ *   pass no writer resolver either.
  * @returns The variant to restore with, or {@link UnsupportedSnapshotVersionError} when the writer is not registered and
  *   the declared version is one no registered variant owns.
  */
@@ -70,8 +74,10 @@ export const variantForSnapshot = <TVariant>(
   variantFor: (version: ProtocolVersion.ProtocolVersion) => Option.Option<TVariant>,
   headVariant: TVariant,
   variantWrittenBy: (writer: SnapshotFormat.SnapshotWriter) => Option.Option<TVariant> = () => Option.none(),
+  activationOf: (variant: TVariant) => ProtocolVersion.ProtocolVersion = () => ProtocolVersion.MinSupportedVersion,
 ): Either.Either<TVariant, UnsupportedSnapshotVersionError> =>
   SnapshotRouting.routeSnapshot({
+    activationOf,
     envelope: SnapshotRouting.readEnvelope(serialized),
     variantFor,
     headVariant,

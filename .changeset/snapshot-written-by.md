@@ -18,6 +18,11 @@ migration: the UTXOs booked for a ledger-v8 transaction stayed pending forever, 
 it, the V1 variant announces the out-of-range version on its first observation and the runtime migrates it, exactly as
 for a live crossing.
 
+The writer takes its snapshot only from the version it activates at upwards. Below that the version routes, as before
+this change, because the runtime only hands a wallet forwards: a V2-written snapshot that never synced records
+version 0, and it now starts on the V1 variant like a wallet with no history instead of dying after a successful
+restore.
+
 A build that registers only the V2 variant has nothing to migrate with, so it goes on reading a V1-written snapshot as
 a format upgrade, as before. `SnapshotFormat.writtenByField` and the writer constants live in
 `@midnightntwrk/wallet-sdk-abstractions` beside `versionField`, with `isSnapshotWriter` to narrow a name to the writers

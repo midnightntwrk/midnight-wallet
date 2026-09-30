@@ -65,11 +65,15 @@ export const readEnvelope = (serialized: string, inferWriter: InferWriter = noIn
  * Chooses the variant that should read a snapshot, from what {@link readEnvelope} found on it.
  *
  * @remarks
- *   The variant that wrote a snapshot is the one to read it, when the envelope says which and that variant is registered:
- *   a V1 wallet that has seen the chain reach `forks.v9` annotates that version before the runtime hands it over, so a
- *   snapshot it writes in that window carries a version the V2 variant owns. Read as a V2 snapshot it would skip the
- *   cross-ledger migration; restored on the V1 variant, that variant announces the out-of-range version on its first
- *   observation and the runtime migrates it, exactly as for a live crossing.
+ *   The variant that wrote a snapshot is the one to read it, when the envelope says which, that variant is registered,
+ *   and the declared version is not below the one that variant activates at. The forward case is what the rule exists
+ *   for: a V1 wallet that has seen the chain reach `forks.v9` annotates that version before the runtime hands it over,
+ *   so a snapshot it writes in that window carries a version the V2 variant owns. Read as a V2 snapshot it would skip
+ *   the cross-ledger migration; restored on the V1 variant, that variant announces the out-of-range version on its
+ *   first observation and the runtime migrates it, exactly as for a live crossing. The backward case is excluded
+ *   because the runtime only hands over forwards: a writer started below its activation would announce a version no
+ *   later variant owns, and the wallet would die after a successful restore. A V2-written snapshot that never synced
+ *   records version 0, so it routes by version and starts where a wallet with no history starts.
  *
  *   Otherwise the version decides. A snapshot that declares no version predates snapshots declaring one, and can only
  *   have been written by the variant that shipped before the question arose — the head variant. The same fallback
@@ -80,6 +84,8 @@ export const readEnvelope = (serialized: string, inferWriter: InferWriter = noIn
  * @param params.variantFor Resolves the variant registered for a protocol version.
  * @param params.headVariant The variant a snapshot with no declared version is restored into.
  * @param params.variantWrittenBy Resolves the registered variant that a snapshot names as its writer, if registered.
+ * @param params.activationOf The protocol version a registered variant starts answering for, as the wallet registered
+ *   it; the writer takes a snapshot only from that version upwards.
  * @param params.unsupported Builds the caller's error for a version no registered variant owns.
  * @returns The variant to restore with, or the caller's error when the writer is not registered and the declared
  *   version is one no registered variant owns.
@@ -89,14 +95,24 @@ export const routeSnapshot = <TVariant, E>(params: {
   readonly variantFor: (version: ProtocolVersion) => Option.Option<TVariant>;
   readonly headVariant: TVariant;
   readonly variantWrittenBy: (writer: SnapshotWriter) => Option.Option<TVariant>;
+  readonly activationOf: (variant: TVariant) => ProtocolVersion;
   readonly unsupported: (version: ProtocolVersion) => E;
-}): Either.Either<TVariant, E> =>
-  Option.match(Option.flatMap(params.envelope.writer, params.variantWrittenBy), {
+}): Either.Either<TVariant, E> => {
+  const { envelope, activationOf } = params;
+  // The writer can take a version at or past where it starts: its own, or a later one it will announce and hand over
+  // forwards. It cannot take one below, because the runtime only hands over forwards.
+  const writerCanStartAt = (writer: TVariant): boolean =>
+    Option.match(envelope.protocolVersion, {
+      onNone: () => true,
+      onSome: (protocolVersion) => protocolVersion >= activationOf(writer),
+    });
+  return Option.match(Option.flatMap(envelope.writer, params.variantWrittenBy).pipe(Option.filter(writerCanStartAt)), {
     onSome: (variant) => Either.right(variant),
     onNone: () =>
-      Option.match(params.envelope.protocolVersion, {
+      Option.match(envelope.protocolVersion, {
         onNone: () => Either.right(params.headVariant),
         onSome: (protocolVersion) =>
           Either.fromOption(params.variantFor(protocolVersion), () => params.unsupported(protocolVersion)),
       }),
   });
+};

@@ -48,7 +48,9 @@ import { Cause, Effect, Option, Runtime, type Scope, Stream, pipe } from 'effect
 import { describe, expect, it } from 'vitest';
 import { peekProtocolVersion } from '../Restore.js';
 import { V1Tag } from '../v1/index.js';
+import { CoreWallet as V2CoreWallet } from '../v2/CoreWallet.js';
 import { V2Tag } from '../v2/index.js';
+import { makeDefaultV2SerializationCapability } from '../v2/Serialization.js';
 import { type ForkWallet, type ForkedState, makeForkWallet } from './forkHarness.js';
 import {
   type MintedCoin,
@@ -354,5 +356,51 @@ describe('a shielded wallet restored from a snapshot written at or past the boun
       const advanced = yield* restoredStates(restored, (state) => totalValue(state.state) === walletTotal + 500n);
       expect(coinValues(advanced.state)).toEqual([...walletValues, 500n]);
       expect(yield* runningTag(restored)).toBe(V2Tag);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/**
+ * A snapshot the V2 variant wrote before it ever synced, as a single-variant V2 wallet does: the empty state of the
+ * seed's ledger-v9 keys, recording protocol version 0 and naming V2 as its writer.
+ */
+const neverSyncedV2Snapshot = (): string =>
+  makeDefaultV2SerializationCapability().serialize(
+    V2CoreWallet.initEmpty(ledgerV9.ZswapSecretKeys.fromSeed(seed), networkId),
+  );
+
+describe('a shielded wallet restored from a snapshot the V2 variant wrote before it ever synced', () => {
+  // Reported on the pull request: routed to its writer, the snapshot restored and then the wallet died, because V2
+  // started below the version it activates at, announced a hand-over, and the runtime found no variant after V2. The
+  // version says the chain has not reached the boundary, and V1 can read the empty state, so it starts where a wallet
+  // with no history starts and crosses later like any other.
+  it('starts on the V1 variant like a wallet with no history, instead of dying on a backwards hand-over', async () =>
+    Effect.gen(function* () {
+      const coins = crossingCoins();
+      const fork = yield* ForkSimulator.init({
+        networkId,
+        forkBlock,
+        forkVersion,
+        v8Version: v8Version,
+        v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
+        v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        translator: translationStub({ networkId, coins }),
+      });
+      const host = yield* makeForkWallet({ v8: fork.v8, v9: fork.awaitV9(), networkId, forkVersion, seed });
+      yield* Effect.addFinalizer(() => host.stop);
+
+      const snapshot = neverSyncedV2Snapshot();
+      expect(JSON.parse(snapshot)).toMatchObject({ protocolVersion: '0', writtenBy: 'v2' });
+
+      const restored = host.walletClass.restore(snapshot);
+      yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
+      yield* Effect.promise(() => restored.startWithKeys({ v8: host.keys.v8, v9: host.keys.v9 }));
+
+      expect(yield* runningTag(restored)).toBe(V1Tag);
+
+      // Alive and reading the chain, on the side of the boundary the version put it.
+      yield* fork.v8.submitTransaction(v8Payment(networkId, coins[0]));
+      const synced = yield* restoredStates(restored, (state) => totalValue(state.state) === walletValues[0]);
+      expect(synced.state.protocolVersion).toBeLessThan(forkVersion);
+      expect(yield* runningTag(restored)).toBe(V1Tag);
     }).pipe(Effect.scoped, Effect.runPromise));
 });

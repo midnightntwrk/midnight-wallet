@@ -87,6 +87,8 @@ describe('routing a snapshot envelope to a variant', () => {
   /** Ledger-v8 below 100, ledger-v9 from 100, nothing from 1000. */
   const variantFor = (v: ProtocolVersion): Option.Option<Variant> =>
     v >= 1000n ? Option.none() : Option.some(v >= 100n ? v2 : v1);
+  /** Where each variant starts answering, as the wallet registered them: V1 from the minimum, V2 from 100. */
+  const activationOf = (variant: Variant): ProtocolVersion => (variant === v2 ? version(100n) : version(0n));
   const bothRegistered = (writer: SnapshotWriter): Option.Option<Variant> => Option.some(writer === 'v1' ? v1 : v2);
   const onlyV2Registered = (writer: SnapshotWriter): Option.Option<Variant> =>
     writer === 'v2' ? Option.some(v2) : Option.none();
@@ -103,25 +105,65 @@ describe('routing a snapshot envelope to a variant', () => {
     writer,
   });
 
-  it('routes to the variant that wrote it when that variant is registered, whatever version it declares', () => {
+  it('routes to the variant that wrote it when that variant is registered and the version is not below where it starts', () => {
+    // The fork window: V1 wrote it after annotating a version V2 owns. V1 takes it and hands over forwards.
     expect(
       routeSnapshot({
         envelope: at(Option.some(version(100n)), Option.some('v1')),
         variantFor: neverByVersion,
         headVariant: v1,
         variantWrittenBy: bothRegistered,
+        activationOf,
+        unsupported,
+      }),
+    ).toStrictEqual(Either.right(v1));
+    // The writer's own range, and a version past every registered range: the last variant's range is open-ended.
+    expect(
+      routeSnapshot({
+        envelope: at(Option.some(version(100n)), Option.some('v2')),
+        variantFor: neverByVersion,
+        headVariant: v1,
+        variantWrittenBy: bothRegistered,
+        activationOf,
+        unsupported,
+      }),
+    ).toStrictEqual(Either.right(v2));
+    expect(
+      routeSnapshot({
+        envelope: at(Option.some(version(4000n)), Option.some('v2')),
+        variantFor: neverByVersion,
+        headVariant: v1,
+        variantWrittenBy: bothRegistered,
+        activationOf,
+        unsupported,
+      }),
+    ).toStrictEqual(Either.right(v2));
+  });
+
+  // The runtime only hands a wallet forwards, so a writer started below the version it activates at would announce a
+  // version no later variant owns and the wallet would die after a successful restore. Such a snapshot routes by
+  // version instead: a V2-written snapshot that never synced (version 0) starts where a wallet with no history starts.
+  it('routes by version when the declared version is below where the writer starts, since the writer cannot hand over backwards', () => {
+    expect(
+      routeSnapshot({
+        envelope: at(Option.some(version(0n)), Option.some('v2')),
+        variantFor,
+        headVariant: v1,
+        variantWrittenBy: bothRegistered,
+        activationOf,
         unsupported,
       }),
     ).toStrictEqual(Either.right(v1));
     expect(
       routeSnapshot({
         envelope: at(Option.some(version(99n)), Option.some('v2')),
-        variantFor: neverByVersion,
+        variantFor,
         headVariant: v1,
         variantWrittenBy: bothRegistered,
+        activationOf,
         unsupported,
       }),
-    ).toStrictEqual(Either.right(v2));
+    ).toStrictEqual(Either.right(v1));
   });
 
   it('routes by version when the writer is not registered, or when none is named', () => {
@@ -131,6 +173,7 @@ describe('routing a snapshot envelope to a variant', () => {
         variantFor,
         headVariant: v1,
         variantWrittenBy: onlyV2Registered,
+        activationOf,
         unsupported,
       }),
     ).toStrictEqual(Either.right(v2));
@@ -140,18 +183,30 @@ describe('routing a snapshot envelope to a variant', () => {
         variantFor,
         headVariant: v2,
         variantWrittenBy: neverByWriter,
+        activationOf,
         unsupported,
       }),
     ).toStrictEqual(Either.right(v1));
   });
 
-  it('falls back to the head variant when no version is declared', () => {
+  it('routes to the writer when no version is declared, and to the head variant when neither is', () => {
+    expect(
+      routeSnapshot({
+        envelope: at(Option.none(), Option.some('v2')),
+        variantFor: neverByVersion,
+        headVariant: v1,
+        variantWrittenBy: bothRegistered,
+        activationOf,
+        unsupported,
+      }),
+    ).toStrictEqual(Either.right(v2));
     expect(
       routeSnapshot({
         envelope: at(Option.none(), Option.none()),
         variantFor: neverByVersion,
         headVariant: v2,
         variantWrittenBy: neverByWriter,
+        activationOf,
         unsupported,
       }),
     ).toStrictEqual(Either.right(v2));
@@ -164,6 +219,7 @@ describe('routing a snapshot envelope to a variant', () => {
         variantFor,
         headVariant: v1,
         variantWrittenBy: neverByWriter,
+        activationOf,
         unsupported,
       }),
     ).toStrictEqual(Either.left({ unsupported: version(4000n) }));

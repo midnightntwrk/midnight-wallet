@@ -57,6 +57,10 @@ const neverResolvesWriter = (): Option.Option<typeof v1> => {
   throw new Error('A snapshot that names no writer must not be routed by writer');
 };
 
+/** Where each stand-in variant starts answering, as the wallet registers them: V1 from the minimum, V2 from 100. */
+const activation = (variant: typeof v1): ProtocolVersion.ProtocolVersion =>
+  ProtocolVersion.ProtocolVersion(variant === v2 ? 100n : 0n);
+
 describe('peekProtocolVersion', () => {
   it('reads the version a snapshot declares, ignoring every other field', () => {
     expect(peekProtocolVersion(envelope('100'))).toStrictEqual(Option.some(ProtocolVersion.ProtocolVersion(100n)));
@@ -138,9 +142,25 @@ describe('variantForSnapshot, for a snapshot that names its writer', () => {
   // The case the field exists for: the V1 variant saw the chain reach the fork and annotated the version before the
   // runtime handed it over, so the snapshot carries a version the V2 variant owns. It goes home to V1 all the same,
   // whose first observation announces the version and lets the runtime migrate it.
-  it('routes to the variant that wrote it, whatever version it declares', () => {
-    expect(variantForSnapshot(envelope('100', 'v1'), registered, v1, registeredWriter)).toStrictEqual(Either.right(v1));
-    expect(variantForSnapshot(envelope('99', 'v2'), registered, v1, registeredWriter)).toStrictEqual(Either.right(v2));
+  it('routes to the variant that wrote it when the version is not below where that variant starts', () => {
+    expect(variantForSnapshot(envelope('100', 'v1'), registered, v1, registeredWriter, activation)).toStrictEqual(
+      Either.right(v1),
+    );
+    expect(variantForSnapshot(envelope('4000', 'v2'), registered, v1, registeredWriter, activation)).toStrictEqual(
+      Either.right(v2),
+    );
+  });
+
+  // The runtime only hands a wallet forwards. A writer started below the version it activates at would announce a
+  // version no later variant owns, and the wallet would die after a successful restore. Such a snapshot routes by
+  // version instead: a V2-written snapshot that never synced (version 0) starts where a wallet with no history starts.
+  it('routes by version when the declared version is below where the writer starts', () => {
+    expect(variantForSnapshot(envelope('0', 'v2'), registered, v1, registeredWriter, activation)).toStrictEqual(
+      Either.right(v1),
+    );
+    expect(variantForSnapshot(envelope('99', 'v2'), registered, v1, registeredWriter, activation)).toStrictEqual(
+      Either.right(v1),
+    );
   });
 
   it('routes by version when the writer it names is not registered, as a build with only the V2 variant does', () => {
