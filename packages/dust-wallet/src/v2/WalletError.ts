@@ -80,6 +80,26 @@ export class OutOfOrderSyncUpdateError extends Data.TaggedError('Wallet.OutOfOrd
   readonly received: bigint;
 }> {}
 
+export type FeeCoverageEstimate =
+  | { readonly _tag: 'Reachable'; readonly seconds: bigint; readonly at: Date }
+  | { readonly _tag: 'Unreachable'; readonly reason: 'NoGeneration' | 'ExceedsCap' };
+
+export class InsufficientDustForFeeError extends Data.TaggedError('Wallet.InsufficientDustForFee')<{
+  readonly message: string;
+  readonly claimableFeePayment: bigint;
+  readonly fee: bigint;
+  readonly shortfall: bigint;
+  readonly estimate: FeeCoverageEstimate;
+}> {
+  static of(reading: {
+    readonly claimableFeePayment: bigint;
+    readonly fee: bigint;
+    readonly estimate: FeeCoverageEstimate;
+  }): InsufficientDustForFeeError {
+    return new InsufficientDustForFeeError({ ...reading, shortfall: 0n, message: '' });
+  }
+}
+
 export type WalletError =
   | SnapshotFormat.SnapshotRestoreError
   | OtherWalletError
@@ -88,4 +108,5 @@ export type WalletError =
   | InsufficientFundsError
   | TransactionHistoryError
   | OutOfOrderSyncUpdateError
+  | InsufficientDustForFeeError
   | LedgerOps.LedgerError;

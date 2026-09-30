@@ -16,6 +16,7 @@ import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { pipe, Array as Arr, Order } from 'effect';
 import { type CoreWallet } from './CoreWallet.js';
 import { type KeysCapability } from './Keys.js';
+import { type FeeCoverageEstimate } from './WalletError.js';
 import {
   type DustGenerationDetails,
   type DustGenerationInfo,
@@ -77,6 +78,13 @@ export type CoinsAndBalancesCapability<TState> = {
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     currentTime: Date,
   ): ReadonlyArray<UtxoWithFullDustDetails>;
+
+  feeCoverageEstimate(
+    state: TState,
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    fee: bigint,
+    currentTime: Date,
+  ): FeeCoverageEstimate;
 };
 
 const FAKE_NONCE: ledger.DustInitialNonce = '0'.repeat(64);
@@ -202,6 +210,13 @@ export const makeDefaultCoinsAndBalancesCapability = (
     return { guaranteed, fallible };
   };
 
+  const feeCoverageEstimate = (
+    _state: CoreWallet,
+    _nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    _fee: bigint,
+    _currentTime: Date,
+  ): FeeCoverageEstimate => ({ _tag: 'Unreachable', reason: 'NoGeneration' });
+
   return {
     getWalletBalance,
     getAvailableCoins,
@@ -211,5 +226,6 @@ export const makeDefaultCoinsAndBalancesCapability = (
     getGenerationInfo,
     estimateDustGeneration,
     splitNightUtxos,
+    feeCoverageEstimate,
   };
 };
