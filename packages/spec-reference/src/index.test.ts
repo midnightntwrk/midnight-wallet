@@ -23,9 +23,11 @@ import {
   UnshieldedAddress,
 } from './address-format-reference.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger9 from '@midnightntwrk/ledger-v9';
 import {
   coinKeys,
   dustKeys,
+  ecdsaKeyPairFromUniformBytes,
   encryptionSecretKey,
   unshieldedKeyPairFromUniformBytes,
 } from './key-derivation-reference.js';
@@ -169,7 +171,12 @@ const sesk = (seed: Buffer) => {
 
 const unshieldedAddr = (seed: Buffer) => {
   const keys = unshieldedKeyPairFromUniformBytes(seed);
-  return keys.publicKey != null ? new UnshieldedAddress(crypto.hash('sha-256', keys.publicKey, 'buffer')) : null;
+  return keys.publicKey != null ? UnshieldedAddress.fromSchnorrPublicKey(keys.publicKey) : null;
+};
+
+const ecdsaAddr = (seed: Buffer) => {
+  const keys = ecdsaKeyPairFromUniformBytes(seed);
+  return keys.publicKey != null ? UnshieldedAddress.fromEcdsaPublicKey(keys.publicKey) : null;
 };
 
 const dustAddr = (seed: Buffer) => {
@@ -180,6 +187,24 @@ const dustAddr = (seed: Buffer) => {
 const dustAddrLedger = (seed: Buffer) => {
   const dustSk = ledger.DustSecretKey.fromSeed(seed);
   return new DustAddress(dustSk.publicKey);
+};
+
+const schnorrAddrLedger = (seed: Buffer): UnshieldedAddress | null => {
+  const keys = unshieldedKeyPairFromUniformBytes(seed);
+  if (keys.secretKey == null) return null;
+  const sk = ledger9.signingKeyFromBip340(keys.secretKey);
+  const vk = ledger9.signatureVerifyingKey(sk);
+  const addr = ledger9.addressFromKey(vk);
+  return new UnshieldedAddress(Buffer.from(ledger9.encodeUserAddress(addr)));
+};
+
+const ecdsaAddrLedger = (seed: Buffer): UnshieldedAddress | null => {
+  const keys = ecdsaKeyPairFromUniformBytes(seed);
+  if (keys.secretKey == null) return null;
+  const sk: ledger9.SigningKey = { tag: 'ecdsa', value: keys.secretKey.toString('hex') };
+  const vk = ledger9.signatureVerifyingKey(sk);
+  const addr = ledger9.addressFromKey(vk);
+  return new UnshieldedAddress(Buffer.from(ledger9.encodeUserAddress(addr)));
 };
 
 const seeds = generateSeeds(initial(), 1_000);
@@ -216,6 +241,18 @@ test('Shielded encryption secret key parity #2', () =>
 
 test('Dust key parity', () => testParity({ implSpec: dustAddr, implLedger: dustAddrLedger })(seeds));
 
+test('Schnorr unshielded address parity', () =>
+  testParity({
+    implSpec: unshieldedAddr as (s: Buffer) => UnshieldedAddress,
+    implLedger: schnorrAddrLedger as (s: Buffer) => UnshieldedAddress,
+  })(seeds.filter((s) => unshieldedKeyPairFromUniformBytes(s).secretKey !== null)));
+
+test('ECDSA unshielded address parity', () =>
+  testParity({
+    implSpec: ecdsaAddr as (s: Buffer) => UnshieldedAddress,
+    implLedger: ecdsaAddrLedger as (s: Buffer) => UnshieldedAddress,
+  })(seeds.filter((s) => ecdsaKeyPairFromUniformBytes(s).secretKey !== null)));
+
 test('Shielded address spec roundtrip', () => testRoundtrip(saddrSpec)(seeds));
 test('Shielded address zswap roundtrip', () => testRoundtrip(saddrZswap)(seeds));
 test('Shielded coin public key spec roundtrip', () => testRoundtrip(scpkSpec)(seeds));
@@ -241,3 +278,7 @@ test('Unshielded address wrong network', () => testWrongNetwork(unshieldedAddr)(
 test('Dust address roundtrip', () => testRoundtrip(dustAddr)(seeds));
 test('Dust address wrong network', () => testWrongNetwork(dustAddr)(seeds));
 test('Dust address wrong credential', () => testWrongCredentialType(dustAddr)(seeds));
+
+test('ECDSA unshielded address roundtrip', () => testRoundtrip(ecdsaAddr)(seeds));
+test('ECDSA unshielded address wrong credential type', () => testWrongCredentialType(ecdsaAddr)(seeds));
+test('ECDSA unshielded address wrong network', () => testWrongNetwork(ecdsaAddr)(seeds));
