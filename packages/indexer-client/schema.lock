@@ -3,5 +3,5 @@
 # To change where the schema is fetched from, edit schema.config.yml (repo/path), not this file.
 #   yarn schema:sync --filter=@midnightntwrk/wallet-sdk-indexer-client -- --tag <version>
 
-tag: v4.3.2
-sha256: ee13e3f7d73c50934c2bff8771afb4f87a4a91e01567f6595b39af6c142f5bef
+tag: v4.4.0-rc.1
+sha256: 6c3058d26bcfd8d77cba59e54af73595d8cf888ea0187d6dd72a42f75f62ea20
