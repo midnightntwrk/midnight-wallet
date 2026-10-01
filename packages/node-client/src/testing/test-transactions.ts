@@ -210,7 +210,7 @@ export const generateTestTransactions = (
         pipe(
           stream,
           (s) => s.pipe(tar.extract()),
-          (s) => Stream.fromAsyncIterable<tar.Entry, Error>(s, (error) => error as Error),
+          (s) => Stream.fromAsyncIterable(s, (error) => error as Error),
           Stream.tapBoth({
             onSuccess: (entry) => Effect.log('entry after extract', entry),
             onFailure: (error) => Effect.log(error),
@@ -220,7 +220,8 @@ export const generateTestTransactions = (
             onFailure: (error) => Effect.log(error),
           }),
           Stream.mapEffect((entry) =>
-            Stream.fromAsyncIterable<Buffer, Error>(entry, (error) => error as Error).pipe(
+            Stream.fromAsyncIterable(entry, (error) => error as Error).pipe(
+              Stream.mapEffect(Schema.decodeUnknown(Uint8ArraySchema)),
               Stream.tapBoth({
                 onSuccess: (chunk) => Effect.log('chunk', chunk),
                 onFailure: (error) => Effect.log(error),
