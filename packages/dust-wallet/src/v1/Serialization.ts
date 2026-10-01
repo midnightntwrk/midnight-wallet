@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
+import { SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
@@ -59,7 +60,14 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
   Schema.compose(StateFromUInt8Array),
 );
 
+// The format version lives beside the twins, not in either of them, so the V2 variant can read it without loading
+// ledger-v8. Re-exported here because the version is part of this variant's serialization surface.
+export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+
 const SnapshotSchema = Schema.Struct({
+  version: SnapshotFormat.versionField('dust', SNAPSHOT_FORMAT_VERSION),
+  writtenBy: SnapshotFormat.writtenByField(),
   publicKey: Schema.Struct({
     publicKey: Schema.BigInt,
   }),
@@ -75,6 +83,8 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
+        writtenBy: SnapshotFormat.V1_SNAPSHOT_WRITER,
         publicKey: w.publicKey,
         state: w.state,
         protocolVersion: w.protocolVersion,
@@ -87,8 +97,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError> => {
       return pipe(
         serialized,
-        Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => new OtherWalletError({ message: 'Error while deserializing snapshot', cause: err })),
+        SnapshotFormat.readSnapshot({ surface: 'dust', reads: [SNAPSHOT_FORMAT_VERSION], schema: SnapshotSchema }),
         Either.flatMap((snapshot: Snapshot) =>
           Either.try({
             try: () =>

@@ -417,3 +417,69 @@ describe('an unshielded wallet crossing the boundary with a transfer still in fl
       expect(valuesOf(utxosOf(state.state))).toEqual([changeAmount, 444n]);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
+
+/**
+ * The same in-flight wallet, saved a moment later than {@link walletWithATransferInFlight}: after its sync saw the
+ * boundary and annotated the fork version onto the state, but before the runtime acted on the announcement.
+ *
+ * @remarks
+ *   Produced by editing the snapshot rather than by racing the runtime, because the runtime hands over on the very
+ *   emission that follows the annotation, so a test cannot reliably catch the window from outside. The edit is exactly
+ *   what the V1 sync's `annotateVersion` does to the state — the version field and nothing else — so the snapshot is
+ *   one the V1 variant writes, carrying a version the V2 variant owns.
+ */
+const savedAfterTheAnnotation = (snapshot: string): string =>
+  JSON.stringify({ ...(JSON.parse(snapshot) as Record<string, unknown>), protocolVersion: String(forkVersion) });
+
+describe('an unshielded wallet saved by the V1 variant after its sync annotated the fork version', () => {
+  it('still crosses through the migration, so the transfer it had in flight is released', async () =>
+    Effect.gen(function* () {
+      const inFlight = yield* walletWithATransferInFlight;
+      const snapshot = savedAfterTheAnnotation(inFlight.snapshot);
+      expect(JSON.parse(snapshot)).toMatchObject({ protocolVersion: String(forkVersion) });
+
+      // Routed by the version alone this would open on the V2 variant as a format upgrade, skipping the migration, and
+      // the booking would never be released. Routed by the variant that wrote it, the V1 variant announces the
+      // out-of-range version on its first observation and the runtime migrates it, exactly as for a live crossing.
+      const { crossed } = yield* crossTheFork({ snapshot, timeline, settleAt: 6n });
+      const state = yield* publicState(crossed);
+
+      expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);
+      expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
+      expect(state.balances[timelineTokenType]).toBe(totalOf(state.totalCoins));
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/**
+ * The same snapshot as {@link savedAfterTheAnnotation}, written by a V1 build that predates snapshots naming their
+ * writer: today's fields, with no `writtenBy` among them.
+ *
+ * @remarks
+ *   Such snapshots may already be on disk, so the routing cannot rely on the field alone. What it can rely on is the key:
+ *   only the V1 variant ever wrote a bare-string verifying key, so the shape says who wrote it.
+ */
+const savedBeforeTheWriterField = (snapshot: string): string => {
+  const { writtenBy: _writtenBy, ...rest } = JSON.parse(savedAfterTheAnnotation(snapshot)) as Record<string, unknown>;
+  return JSON.stringify(rest);
+};
+
+describe('an unshielded wallet saved by a V1 build that predates the writer field, after its sync annotated the fork version', () => {
+  it('still crosses through the migration, so the transfer it had in flight is released', async () =>
+    Effect.gen(function* () {
+      const inFlight = yield* walletWithATransferInFlight;
+      const snapshot = savedBeforeTheWriterField(inFlight.snapshot);
+      const written = JSON.parse(snapshot) as { publicKey: { publicKey: unknown }; writtenBy?: unknown };
+      expect(written).toMatchObject({ protocolVersion: String(forkVersion) });
+      expect(written).not.toHaveProperty('writtenBy');
+      expect(typeof written.publicKey.publicKey).toBe('string');
+
+      // With no writer named, the version alone would open this on the V2 variant as a format upgrade and skip the
+      // migration. The bare-string key is a shape only the V1 variant wrote, and that is what sends it home.
+      const { crossed } = yield* crossTheFork({ snapshot, timeline, settleAt: 6n });
+      const state = yield* publicState(crossed);
+
+      expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);
+      expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
+      expect(state.balances[timelineTokenType]).toBe(totalOf(state.totalCoins));
+    }).pipe(Effect.scoped, Effect.runPromise));
+});

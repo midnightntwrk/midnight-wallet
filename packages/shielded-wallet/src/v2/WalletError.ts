@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
+import { type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 
@@ -37,6 +38,7 @@ export const WalletError = {
   },
 };
 export type WalletError =
+  | SnapshotFormat.SnapshotRestoreError
   | OtherWalletError
   | InsufficientFundsError
   | SubmissionError
@@ -87,6 +89,25 @@ export class TransactingError extends Data.TaggedError('Wallet.Transacting')<{
 export class TransactionHistoryError extends Data.TaggedError('Wallet.TransactionHistory')<{
   message: string;
   cause?: unknown;
+}> {}
+
+/**
+ * A finalized history entry that records no block, met where a block is needed.
+ *
+ * @remarks
+ *   Only an entry restored from a history written before the lifecycle field existed looks like this: it is known to have
+ *   been finalized, but the block it landed in was never recorded, and none is invented. It is its own error rather
+ *   than a message on {@link TransactionHistoryError} so that a caller which can fetch the block by hash matches on the
+ *   tag.
+ * @example
+ *   ```ts
+ *   if (error._tag === 'Wallet.BlocklessFinalizedEntry') fetchBlockFor(error.hash);
+ *   ```;
+ */
+export class BlocklessFinalizedEntryError extends Data.TaggedError('Wallet.BlocklessFinalizedEntry')<{
+  readonly message: string;
+  /** The transaction whose history entry records no block. */
+  readonly hash: string;
 }> {}
 
 /**

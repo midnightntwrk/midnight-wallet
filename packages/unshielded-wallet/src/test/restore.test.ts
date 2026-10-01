@@ -10,15 +10,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { peekProtocolVersion, UnsupportedSnapshotVersionError, variantForSnapshot } from '../Restore.js';
+import { peekProtocolVersion, peekWriter, UnsupportedSnapshotVersionError, variantForSnapshot } from '../Restore.js';
 
 /** A snapshot envelope carrying a declared protocol version, plus the fields the peek must ignore. */
-const envelope = (protocolVersion: string): string =>
+const envelope = (protocolVersion: string, writtenBy?: SnapshotFormat.SnapshotWriter): string =>
   JSON.stringify({
+    ...(writtenBy === undefined ? {} : { writtenBy }),
     publicKey: { publicKey: { tag: 'schnorr', value: 'aa' }, addressHex: 'bb', address: 'mn_addr1...' },
+    state: { availableUtxos: [], pendingUtxos: [] },
+    protocolVersion,
+    appliedId: '3',
+    networkId: 'undeployed',
+  });
+
+/**
+ * The envelope as the V1 variant writes it: the verifying key a bare string, because ledger-v8 knows one scheme.
+ *
+ * @remarks
+ *   Written with no writer by default, which is what every V1 build before the field did. The V2 variant has always
+ *   tagged the key, so the bare string alone says which variant wrote the snapshot.
+ */
+const bareKeyedEnvelope = (protocolVersion: string, writtenBy?: SnapshotFormat.SnapshotWriter): string =>
+  JSON.stringify({
+    ...(writtenBy === undefined ? {} : { writtenBy }),
+    publicKey: { publicKey: 'aa', addressHex: 'bb', address: 'mn_addr1...' },
     state: { availableUtxos: [], pendingUtxos: [] },
     protocolVersion,
     appliedId: '3',
@@ -50,6 +68,22 @@ const neverResolves = (): Option.Option<typeof v1> => {
   throw new Error('A snapshot that declares no version must not be routed by version');
 };
 
+/** Stands in for `BaseWalletClass.variantWrittenBy` in a build registering both variants. */
+const registeredWriter = (writer: SnapshotFormat.SnapshotWriter): Option.Option<typeof v1> =>
+  Option.some(writer === 'v1' ? v1 : v2);
+
+/** The same, in a build that registers only the V2 variant. */
+const onlyV2Registered = (writer: SnapshotFormat.SnapshotWriter): Option.Option<typeof v1> =>
+  writer === 'v2' ? Option.some(v2) : Option.none();
+
+const neverResolvesWriter = (): Option.Option<typeof v1> => {
+  throw new Error('A snapshot that names no writer must not be routed by writer');
+};
+
+/** Where each stand-in variant starts answering, as the wallet registers them: V1 from the minimum, V2 from 100. */
+const activation = (variant: typeof v1): ProtocolVersion.ProtocolVersion =>
+  ProtocolVersion.ProtocolVersion(variant === v2 ? 100n : 0n);
+
 describe('peekProtocolVersion', () => {
   it('reads the version a snapshot declares, ignoring every other field', () => {
     expect(peekProtocolVersion(envelope('100'))).toStrictEqual(Option.some(ProtocolVersion.ProtocolVersion(100n)));
@@ -57,6 +91,12 @@ describe('peekProtocolVersion', () => {
 
   it('reads a version from an envelope carrying nothing else', () => {
     expect(peekProtocolVersion(JSON.stringify({ protocolVersion: '7' }))).toStrictEqual(
+      Option.some(ProtocolVersion.ProtocolVersion(7n)),
+    );
+  });
+
+  it('still reads the version when the snapshot names a writer it does not know', () => {
+    expect(peekProtocolVersion(JSON.stringify({ protocolVersion: '7', writtenBy: 'v3' }))).toStrictEqual(
       Option.some(ProtocolVersion.ProtocolVersion(7n)),
     );
   });
@@ -80,24 +120,151 @@ describe('peekProtocolVersion', () => {
 
 describe('variantForSnapshot', () => {
   it('routes a snapshot to the variant that owns the version it declares', () => {
-    expect(variantForSnapshot(envelope('100'), registered, v1)).toStrictEqual(Either.right(v2));
-    expect(variantForSnapshot(envelope('99'), registered, v1)).toStrictEqual(Either.right(v1));
+    expect(variantForSnapshot(envelope('100'), registered, v1, neverResolvesWriter)).toStrictEqual(Either.right(v2));
+    expect(variantForSnapshot(envelope('99'), registered, v1, neverResolvesWriter)).toStrictEqual(Either.right(v1));
   });
 
-  it('falls back to the head variant for a snapshot that declares no version', () => {
-    expect(variantForSnapshot(legacyEnvelope, neverResolves, v1)).toStrictEqual(Either.right(v1));
+  it('falls back to the head variant for a snapshot that declares no version and carries no key to infer from', () => {
+    const bare = JSON.stringify({ state: { availableUtxos: [], pendingUtxos: [] }, networkId: 'undeployed' });
+
+    expect(variantForSnapshot(bare, neverResolves, v1, neverResolvesWriter)).toStrictEqual(Either.right(v1));
   });
 
   it('falls back to the head variant for an envelope it cannot read, leaving the real error to deserialization', () => {
-    expect(variantForSnapshot('not json at all', neverResolves, v1)).toStrictEqual(Either.right(v1));
+    expect(variantForSnapshot('not json at all', neverResolves, v1, neverResolvesWriter)).toStrictEqual(
+      Either.right(v1),
+    );
   });
 
   it('reports a version no registered variant owns, naming it', () => {
-    const routed = variantForSnapshot(envelope('4000'), registered, v1);
+    const routed = variantForSnapshot(envelope('4000'), registered, v1, neverResolvesWriter);
 
     const error = routed.pipe(Either.flip, Either.getOrThrow);
     expect(error).toBeInstanceOf(UnsupportedSnapshotVersionError);
     expect(error._tag).toBe('@midnightntwrk/wallet-sdk-unshielded-wallet/Restore/UnsupportedSnapshotVersionError');
+    expect(error.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(4000n));
+  });
+});
+
+describe('peekWriter', () => {
+  it('reads which variant a snapshot names as its writer', () => {
+    expect(peekWriter(envelope('100', 'v1'))).toStrictEqual(Option.some('v1'));
+    expect(peekWriter(envelope('100', 'v2'))).toStrictEqual(Option.some('v2'));
+  });
+
+  it('finds nothing in a snapshot written before snapshots named their writer', () => {
+    expect(peekWriter(envelope('100'))).toStrictEqual(Option.none());
+  });
+
+  it('finds nothing, rather than throwing, when the writer named is not one it knows', () => {
+    expect(peekWriter(JSON.stringify({ protocolVersion: '7', writtenBy: 'v3' }))).toStrictEqual(Option.none());
+    expect(peekWriter('not json at all')).toStrictEqual(Option.none());
+  });
+
+  // Only the V1 variant ever wrote a bare-string verifying key: the V2 variant tags every key with its scheme, and did
+  // so before either variant named itself. So a snapshot that names no writer but carries a bare key was written by
+  // V1, and can be sent home even though it predates the field. Shielded and dust have no such shape to read.
+  it('infers the V1 variant from a bare-string key when the snapshot names no writer', () => {
+    expect(peekWriter(bareKeyedEnvelope('100'))).toStrictEqual(Option.some('v1'));
+    expect(peekWriter(legacyEnvelope)).toStrictEqual(Option.some('v1'));
+  });
+
+  it('does not infer a writer from a tagged key', () => {
+    expect(peekWriter(envelope('100'))).toStrictEqual(Option.none());
+    expect(peekWriter(JSON.stringify({ publicKey: { publicKey: { tag: 'ecdsa', value: 'aa' } } }))).toStrictEqual(
+      Option.none(),
+    );
+  });
+
+  it('lets a declared writer win over the key shape', () => {
+    expect(peekWriter(bareKeyedEnvelope('100', 'v2'))).toStrictEqual(Option.some('v2'));
+  });
+});
+
+describe('variantForSnapshot, for a snapshot that names its writer', () => {
+  // The case the field exists for: the V1 variant saw the chain reach the fork and annotated the version before the
+  // runtime handed it over, so the snapshot carries a version the V2 variant owns. It goes home to V1 all the same,
+  // whose first observation announces the version and lets the runtime migrate it.
+  it('routes to the variant that wrote it when the version is not below where that variant starts', () => {
+    expect(variantForSnapshot(envelope('100', 'v1'), registered, v1, registeredWriter, activation)).toStrictEqual(
+      Either.right(v1),
+    );
+    expect(variantForSnapshot(envelope('4000', 'v2'), registered, v1, registeredWriter, activation)).toStrictEqual(
+      Either.right(v2),
+    );
+  });
+
+  // The runtime only hands a wallet forwards. A writer started below the version it activates at would announce a
+  // version no later variant owns, and the wallet would die after a successful restore. Such a snapshot routes by
+  // version instead: a V2-written snapshot that never synced (version 0) starts where a wallet with no history starts.
+  it('routes by version when the declared version is below where the writer starts', () => {
+    expect(variantForSnapshot(envelope('0', 'v2'), registered, v1, registeredWriter, activation)).toStrictEqual(
+      Either.right(v1),
+    );
+    expect(variantForSnapshot(envelope('99', 'v2'), registered, v1, registeredWriter, activation)).toStrictEqual(
+      Either.right(v1),
+    );
+  });
+
+  it('routes by version when the writer it names is not registered, as a build with only the V2 variant does', () => {
+    expect(variantForSnapshot(envelope('100', 'v1'), registered, v1, onlyV2Registered)).toStrictEqual(Either.right(v2));
+    expect(variantForSnapshot(envelope('99', 'v1'), registered, v1, onlyV2Registered)).toStrictEqual(Either.right(v1));
+  });
+
+  it('routes by version when the snapshot names no writer, which every snapshot written before the field does', () => {
+    expect(variantForSnapshot(envelope('100'), registered, v1, neverResolvesWriter)).toStrictEqual(Either.right(v2));
+  });
+
+  // A writer this build does not know is no reason to stop reading the envelope: the version is still there, and it
+  // is the version that says whether any registered variant can read the snapshot. Blinding the peek would send the
+  // snapshot to the head variant, whose deserializer refuses it as malformed instead of naming the version.
+  it('routes by version when the writer it names is unknown, refusing an unowned version by name', () => {
+    const unknownWriterAt = (protocolVersion: string): string => JSON.stringify({ protocolVersion, writtenBy: 'v3' });
+
+    expect(variantForSnapshot(unknownWriterAt('100'), registered, v1, neverResolvesWriter)).toStrictEqual(
+      Either.right(v2),
+    );
+
+    const error = variantForSnapshot(unknownWriterAt('4000'), registered, v1, neverResolvesWriter).pipe(
+      Either.flip,
+      Either.getOrThrow,
+    );
+    expect(error).toBeInstanceOf(UnsupportedSnapshotVersionError);
+    expect(error.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(4000n));
+  });
+
+  // The same fork-window snapshot as above, written by a V1 build that predates the writer field: the bare key says
+  // who wrote it, so it still goes home to V1 rather than opening on V2 as a format upgrade and skipping the migration.
+  it('routes a bare-keyed snapshot naming no writer to the V1 variant, whatever version it declares', () => {
+    expect(variantForSnapshot(bareKeyedEnvelope('100'), registered, v1, registeredWriter)).toStrictEqual(
+      Either.right(v1),
+    );
+    expect(variantForSnapshot(bareKeyedEnvelope('4000'), registered, v1, registeredWriter)).toStrictEqual(
+      Either.right(v1),
+    );
+  });
+
+  it('routes a bare-keyed snapshot naming no writer by version when the V1 variant is not registered', () => {
+    expect(variantForSnapshot(bareKeyedEnvelope('100'), registered, v1, onlyV2Registered)).toStrictEqual(
+      Either.right(v2),
+    );
+  });
+
+  // The envelope must not assert anything about the writer at all: a value that is not even a string is as much "no
+  // writer" as an unknown name, and the version beside it still has to be read.
+  it('routes by version when writtenBy is not a string', () => {
+    const malformedWriterAt = (protocolVersion: string, writtenBy: unknown): string =>
+      JSON.stringify({ protocolVersion, writtenBy });
+
+    expect(variantForSnapshot(malformedWriterAt('100', 7), registered, v1, neverResolvesWriter)).toStrictEqual(
+      Either.right(v2),
+    );
+
+    const error = variantForSnapshot(malformedWriterAt('4000', null), registered, v1, neverResolvesWriter).pipe(
+      Either.flip,
+      Either.getOrThrow,
+    );
+    expect(error).toBeInstanceOf(UnsupportedSnapshotVersionError);
     expect(error.protocolVersion).toBe(ProtocolVersion.ProtocolVersion(4000n));
   });
 });

@@ -1,0 +1,95 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/*
+ * Refuse any change to a fixture captured from a published release.
+ *
+ * Those files are the only record of what a shipped SDK actually wrote. If one can be edited, every compatibility test
+ * above it can be made to pass by editing the evidence instead of fixing the code — which is exactly the failure this
+ * whole package exists to prevent. A fixture is therefore append-only: new release folders may be added, existing ones
+ * never touched.
+ *
+ * The drift baseline (_baseline) is deliberately exempt. It records what the current code writes and is meant
+ * to be recaptured.
+ *
+ *     node check-frozen.mjs [baseRef]        # default base: origin/main
+ */
+
+import { execFileSync } from 'node:child_process';
+
+const BASE = process.argv[2] ?? 'origin/main';
+// Both corpora of released output: this package's, minus the drift baseline it re-records on purpose, and the
+// cross-release corpus each wallet package tests against.
+const FROZEN = /^packages\/(serialization-tests\/fixtures\/(?!_baseline\/)|[^/]+\/test\/fixtures\/cross-release\/)/;
+
+const git = (...args) => execFileSync('git', args, { encoding: 'utf8' });
+
+const mergeBase = (() => {
+  try {
+    return git('merge-base', BASE, 'HEAD').trim();
+  } catch {
+    console.error(`Could not find a merge base with ${BASE}. Fetch it first, or pass a different base ref.`);
+    process.exit(2);
+  }
+})();
+
+// Exits 2, like the merge-base failure above and unlike the exit 1 a real violation uses: a git that could not run is
+// not the same answer as a fixture that changed, and CI must not read one as the other.
+//
+// NUL-separated (`-z`) so every path arrives as it is. Without it git quotes a path holding a non-ASCII byte or a
+// quote mark, and a regex anchored on the plain path never sees it.
+const diff = (() => {
+  try {
+    return git('diff', '--name-status', '-z', `${mergeBase}...HEAD`);
+  } catch (error) {
+    console.error(`Could not diff ${mergeBase}...HEAD: ${error.message}`);
+    process.exit(2);
+  }
+})();
+
+// A rename or copy reports two paths, source then destination. Both matter: moving a frozen fixture out of the corpus
+// loses the record just as surely as editing it.
+const changed = diff
+  .split('\0')
+  .filter((field) => field.length > 0)
+  .reduce(
+    ({ entries, pending }, field) =>
+      pending === undefined
+        ? { entries, pending: { status: field[0], paths: [], needed: /^[RC]/.test(field) ? 2 : 1 } }
+        : pending.paths.length + 1 < pending.needed
+          ? { entries, pending: { ...pending, paths: [...pending.paths, field] } }
+          : { entries: [...entries, { status: pending.status, paths: [...pending.paths, field] }], pending: undefined },
+    { entries: [], pending: undefined },
+  ).entries;
+
+// An added file under a new release folder is how a fixture corpus grows; anything else is a change to the record.
+const violations = changed.filter(({ status, paths }) => status !== 'A' && paths.some((path) => FROZEN.test(path)));
+
+if (violations.length === 0) {
+  console.log(`No published fixture was modified (compared against ${BASE}).`);
+  process.exit(0);
+}
+
+const LABELS = { D: 'deleted', R: 'moved', C: 'copied' };
+
+console.error('Published fixtures are frozen, but this branch changes them:\n');
+for (const { status, paths } of violations) {
+  console.error(`  ${(LABELS[status] ?? 'modified').padEnd(8)}  ${paths.join(' -> ')}`);
+}
+console.error(`
+Each of these records what a published release actually wrote, so it is the evidence the compatibility tests check
+against. If a test fails, fix the code — editing the fixture makes the test pass and the bug ship.
+
+If a payload was genuinely captured wrongly, say so explicitly in the pull request and have someone confirm it before
+overriding this check.`);
+process.exit(1);

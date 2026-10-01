@@ -31,7 +31,7 @@
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Array as Arr, Order, Schema } from 'effect';
+import { Array as Arr, Either, Order, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet as V1Wallet } from '../v1/CoreWallet.js';
 import { makeDefaultV1SerializationCapability } from '../v1/Serialization.js';
@@ -90,7 +90,19 @@ const v2Wallet = () =>
   });
 
 /** The envelope both variants are contracted to write. */
-const expectedPaths = ['networkId', 'offset', 'protocolVersion', 'publicKey.publicKey', 'state'];
+const expectedPaths = [
+  // The snapshot's format version. Both variants write it, and write the same one: the version belongs to the shape,
+  // and the shape is what lets either variant read the other's snapshot.
+  'version',
+  // Which variant wrote the snapshot. Each stamps itself, so a snapshot goes home to its writer on restore whatever
+  // chain version it carries.
+  'writtenBy',
+  'networkId',
+  'offset',
+  'protocolVersion',
+  'publicKey.publicKey',
+  'state',
+];
 
 describe('the dust snapshot envelope', () => {
   it('is the pinned shape on the V1 variant', () => {
@@ -131,5 +143,27 @@ describe('the dust snapshot envelope', () => {
     expect(parsed.networkId).toBe(networkId);
     // Opaque on purpose: hex, non-empty, and otherwise the ledger's business.
     expect(parsed.state).toMatch(/^[0-9a-f]+$/);
+  });
+});
+
+describe('the dust snapshot envelope’s writer', () => {
+  it('is stamped by each variant with its own ordinal', () => {
+    expect(JSON.parse(makeDefaultV1SerializationCapability().serialize(v1Wallet()))).toMatchObject({ writtenBy: 'v1' });
+    expect(JSON.parse(makeDefaultV2SerializationCapability().serialize(v2Wallet()))).toMatchObject({ writtenBy: 'v2' });
+  });
+
+  // The writer is a routing hint, not part of the shape. A later variant that keeps this format names itself in the
+  // field, and this build has promised to keep reading this format: refusing on the name would break that promise.
+  it('is read past when it names a variant this build does not know, since the format is still one it reads', () => {
+    const capability = makeDefaultV2SerializationCapability();
+    const fromALaterVariant = JSON.stringify({
+      ...(JSON.parse(capability.serialize(v2Wallet())) as Record<string, unknown>),
+      writtenBy: 'v3',
+    });
+
+    // The relabelled snapshot restores to the very wallet the untouched one does: same state, key, cursor and version,
+    // with the writer re-stamped by this variant on the way back out.
+    const restored = Either.getOrThrow(capability.deserialize(null, fromALaterVariant));
+    expect(capability.serialize(restored)).toEqual(capability.serialize(v2Wallet()));
   });
 });

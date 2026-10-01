@@ -12,10 +12,13 @@
 // limitations under the License.
 import { Either, pipe, Schema } from 'effect';
 import { type SignatureKind } from '@midnightntwrk/ledger-v9';
-import { OtherWalletError, type WalletError } from './WalletError.js';
+import { type WalletError } from './WalletError.js';
 import { assertKeyAddressConsistency } from '../SchemeConsistency.js';
 import { CoreWallet } from './CoreWallet.js';
-import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { SNAPSHOT_FORMAT_VERSION, V1_SNAPSHOT_FORMAT_VERSION, upgradeSnapshotV1ToV2 } from '../SnapshotFormat.js';
+// Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.
+export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import { type NetworkId, ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { UnshieldedState } from './UnshieldedState.js';
 
 export type SerializationCapability<TWallet, TSerialized> = {
@@ -36,17 +39,6 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
     value: Schema.String,
   });
 
-  // Legacy (ledger-v8) snapshots stored the verifying key as a plain string, which was implicitly schnorr
-  const LegacySignatureVerifyingKeySchema = Schema.transform(
-    Schema.String,
-    Schema.typeSchema(SignatureVerifyingKeySchema),
-    {
-      strict: true,
-      decode: (value) => ({ tag: 'schnorr' as const, value }),
-      encode: ({ value }) => value,
-    },
-  );
-
   const UtxoWithMetaSchema = Schema.Struct({
     utxo: Schema.Struct({
       value: Schema.BigInt,
@@ -62,9 +54,17 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
   });
 
   const SnapshotSchema = Schema.Struct({
+    // This variant writes `v2`: its verifying key carries the signature scheme, where the V1 variant's is a bare
+    // string. A retyped field is a new format version, so a `v1` payload is upgraded in one step before this schema
+    // sees it (`upgradeSnapshotV1ToV2` in `../SnapshotFormat.ts`, which also holds both constants so the twins cannot
+    // drift). The V1 variant never meets a `v2` snapshot: `../Restore.ts` routes each snapshot to the variant it
+    // names as its writer — for unshielded, a bare-string key names V1 — and by the variant that owns its
+    // `protocolVersion` when it names none.
+    version: SnapshotFormat.versionField('unshielded', SNAPSHOT_FORMAT_VERSION),
+    writtenBy: SnapshotFormat.writtenByField(),
     publicKey: Schema.Struct({
-      // Tagged form first so encoding always writes the tag; the legacy member only matches string inputs on decode
-      publicKey: Schema.Union(SignatureVerifyingKeySchema, LegacySignatureVerifyingKeySchema),
+      // Tagged only: the bare-string key of a `v1` snapshot is tagged by the upgrade step before this schema runs.
+      publicKey: SignatureVerifyingKeySchema,
       addressHex: Schema.String,
       address: Schema.String,
     }),
@@ -81,6 +81,8 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
+        writtenBy: SnapshotFormat.V2_SNAPSHOT_WRITER,
         publicKey: w.publicKey,
         state: UnshieldedState.toArrays(w.state),
         protocolVersion: w.protocolVersion,
@@ -93,12 +95,18 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
     deserialize: (serialized): Either.Either<CoreWallet, WalletError> =>
       pipe(
         serialized,
-        Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => new OtherWalletError(err)),
+        // Parse, upgrade, then decode: the upgrade step is a pure function on the JSON and runs before any schema, so
+        // the schema describes exactly one shape and a `v1` payload arrives at it already in `v2`.
+        SnapshotFormat.readSnapshot({
+          surface: 'unshielded',
+          reads: [V1_SNAPSHOT_FORMAT_VERSION, SNAPSHOT_FORMAT_VERSION],
+          schema: SnapshotSchema,
+          upgrade: upgradeSnapshotV1ToV2,
+        }),
         // Enforce scheme consistency at the deserialization trust boundary: the
         // stored address must derive from the stored verifying key. This rejects
         // relabelled or spliced snapshots — a key whose encoding does not match
-        // its scheme tag fails to decode (OtherWalletError), and a key/address
+        // its scheme tag fails to decode (SnapshotRestoreError), and a key/address
         // scheme mismatch is reported as a SchemeMismatchError.
         Either.flatMap((snapshot) =>
           pipe(

@@ -88,6 +88,7 @@
     "test": "turbo run test",
     "test:unit": "turbo run test:unit",
     "test:integration": "turbo run test:integration",
+    "capture": "turbo run capture",
     "dist": "turbo run dist",
     "schema:sync": "turbo run schema:sync",
     "watch": "turbo watch dist",

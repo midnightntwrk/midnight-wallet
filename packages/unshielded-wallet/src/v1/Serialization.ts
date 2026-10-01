@@ -15,7 +15,7 @@ import { addressFromKey } from '@midnight-ntwrk/ledger-v8';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 import { type PublicKey } from './KeyStore.js';
-import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { UnshieldedState } from './UnshieldedState.js';
 
 export type SerializationCapability<TWallet, TSerialized> = {
@@ -60,6 +60,12 @@ export type DefaultSerializationConfiguration = {
   networkId: NetworkId.NetworkId;
 };
 
+// The format versions live beside the twins, not in either of them, so the V2 variant can read them without loading
+// ledger-v8. This variant writes the first one, and re-exports it under the name every writer uses for the version it
+// writes, because that is part of its serialization surface.
+export { V1_SNAPSHOT_FORMAT_VERSION as SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import { V1_SNAPSHOT_FORMAT_VERSION as SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+
 export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, string> => {
   const UtxoWithMetaSchema = Schema.Struct({
     utxo: Schema.Struct({
@@ -76,6 +82,8 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
   });
 
   const SnapshotSchema = Schema.Struct({
+    version: SnapshotFormat.versionField('unshielded', SNAPSHOT_FORMAT_VERSION),
+    writtenBy: SnapshotFormat.writtenByField(),
     publicKey: Schema.Struct({
       publicKey: Schema.String,
       addressHex: Schema.String,
@@ -94,6 +102,8 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
+        writtenBy: SnapshotFormat.V1_SNAPSHOT_WRITER,
         publicKey: w.publicKey,
         state: UnshieldedState.toArrays(w.state),
         protocolVersion: w.protocolVersion,
@@ -106,8 +116,11 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     deserialize: (serialized): Either.Either<CoreWallet, WalletError> =>
       pipe(
         serialized,
-        Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => new OtherWalletError(err)),
+        SnapshotFormat.readSnapshot({
+          surface: 'unshielded',
+          reads: [SNAPSHOT_FORMAT_VERSION],
+          schema: SnapshotSchema,
+        }),
         // The schema proves the snapshot's shape; this proves its key and address belong to each other.
         Either.flatMap((snapshot) =>
           pipe(

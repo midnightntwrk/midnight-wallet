@@ -44,7 +44,7 @@ import {
   genesisStrictness,
   immediateBlockProducer,
 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { Deferred, Effect, Option, Stream, pipe } from 'effect';
+import { Deferred, Effect, Option, Schedule, Stream, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { peekProtocolVersion } from '../Restore.js';
@@ -325,5 +325,69 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       const advanced = yield* restoredStates(restored, (state) => totalValue(state.state) === walletTotal + 500n);
       expect(coinIndices(advanced.state)).toEqual([...crossingIndices, treeSizeAtCrossing]);
       expect(advanced.state.progress.appliedIndex).toBe(block.number + 1n);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('restores a snapshot the V1 variant wrote after annotating the fork version onto V1, and crosses on start', async () =>
+    Effect.gen(function* () {
+      const coins = chainCoins();
+      const fork = yield* ForkSimulator.init({
+        networkId,
+        forkBlock,
+        forkVersion: v9Version,
+        v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
+        v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        translator: translationStub({ networkId, coins }),
+      });
+      const answering = yield* Deferred.make<Simulator>();
+
+      const wallet = yield* makeForkWallet({
+        v8: fork.v8,
+        v9: Deferred.await(answering),
+        networkId,
+        forkVersion,
+        seed,
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      yield* wallet.start;
+
+      yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
+        discard: true,
+      });
+      const synced = yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+      expect(synced.state.protocolVersion).toBeLessThan(forkVersion);
+
+      // The window this case is about: the V1 sync has seen the chain reach the boundary and annotated that version
+      // onto its state, and the runtime has not yet handed over. A snapshot taken now is V1 bytes stamped with a version
+      // the V2 variant owns. Routing must send it to V1, the variant that wrote it: read by V2 as a mere format upgrade,
+      // it would skip the cross-ledger migration and load ledger-v8 state as if it were ledger-v9.
+      const written = yield* Effect.promise(() => wallet.shielded.serializeState());
+      const snapshot = JSON.stringify({
+        // Type cast required because: JSON.parse returns `any`, and the envelope is only ever spread back unchanged.
+        ...(JSON.parse(written) as Record<string, unknown>),
+        protocolVersion: String(forkVersion),
+      });
+      expect(Option.getOrThrow(peekProtocolVersion(snapshot))).toBe(forkVersion);
+
+      const v9 = yield* fork.advanceToFork();
+      yield* Deferred.succeed(answering, v9);
+
+      const restored = wallet.walletClass.restore(snapshot);
+      yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
+      yield* Effect.promise(() => restored.start(ledgerV9.ZswapSecretKeys.fromSeed(seed)));
+
+      yield* pipe(
+        runningTag(restored),
+        Effect.repeat({ until: (tag) => tag === V2Tag, schedule: Schedule.spaced('10 millis') }),
+      );
+
+      const crossed = yield* restoredStates(
+        restored,
+        (state) => !awaitingCoinHashes(state.state) && totalValue(state.state) === walletTotal,
+      );
+      expect(crossed.version).toBeGreaterThanOrEqual(forkVersion);
+      expect(coinValues(crossed.state)).toEqual([...walletValues]);
+      expect(totalValue(crossed.state)).toBe(walletTotal);
+      expect(crossed.state.publicKeys).toStrictEqual(synced.state.publicKeys);
     }).pipe(Effect.scoped, Effect.runPromise));
 });

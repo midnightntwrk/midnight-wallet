@@ -35,9 +35,20 @@ export const FinalizedBlockSchema = Schema.Struct({
 
 export type FinalizedBlock = Schema.Schema.Type<typeof FinalizedBlockSchema>;
 
+/**
+ * A transaction that reached a block. `finalizedBlock` is optional because an entry restored from a history written
+ * before the lifecycle field existed is known to have been finalized, but carries no record of which block it landed
+ * in. No block is invented for those; a reader that needs one fetches it from the indexer by transaction hash.
+ *
+ * The optionality is a property of the format, not of that one path: the schema accepts a blockless finalized entry
+ * from any writer and cannot tell an upgraded one from one a caller wrote that way, so `FinalizedEntryInput` requires
+ * the block at the type level to keep the SDK's own writes whole. Nothing backfills a blockless entry afterwards either
+ * — every sync resumes after the position the snapshot recorded, so the block that would fill it is never replayed. An
+ * entry restored without a block stays without one for the life of the history.
+ */
 export const FinalizedLifecycleSchema = Schema.Struct({
   status: Schema.Literal('finalized'),
-  finalizedBlock: FinalizedBlockSchema,
+  finalizedBlock: Schema.optional(FinalizedBlockSchema),
 });
 
 export type FinalizedLifecycle = Schema.Schema.Type<typeof FinalizedLifecycleSchema>;
@@ -159,6 +170,11 @@ export type PendingEntryInput<T extends TransactionHistoryEntryCommon = Transact
  * Input for `gotFinalized` — the entry minus its `lifecycle` field, which the storage attaches itself. Carries
  * `finalizedBlock` directly so callers don't construct the lifecycle object. `T` is the entry shape including any
  * wallet-specific extensions (e.g. `shielded`, `dust`).
+ *
+ * `finalizedBlock` is required here even though it is optional on {@link FinalizedLifecycleSchema}: the SDK always knows
+ * the block when it writes a finalized entry, because the only writer runs from the sync path after the indexer
+ * returned the transaction inside one. The sole source of a blockless finalized entry is the v1-to-v2 upgrade of a
+ * history written before the lifecycle field existed, which invents no block it cannot prove.
  */
 export type FinalizedEntryInput<T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon> = Omit<
   T,

@@ -11,9 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
+import { type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 
 export type WalletError =
+  | SnapshotFormat.SnapshotRestoreError
   | OtherWalletError
   | InsufficientFundsError
   | AddressError

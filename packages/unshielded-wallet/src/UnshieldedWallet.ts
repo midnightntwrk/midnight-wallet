@@ -43,6 +43,7 @@ import {
   type UnboundTx,
   type UnprovenTx,
   WalletTransaction,
+  SnapshotFormat,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import {
@@ -53,7 +54,7 @@ import * as Signatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import { Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
-import { Duration, Effect, Either, Option, Ref, type Scope, pipe } from 'effect';
+import { Duration, Effect, Either, Match, Option, Ref, type Scope, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { type PublicKey } from './KeyStore.js';
 import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
@@ -432,6 +433,32 @@ export function CustomForkingUnshieldedWallet<
       });
     }
 
+    /**
+     * The registered variant a snapshot names as its writer, if that variant is registered.
+     *
+     * @remarks
+     *   Snapshots name their writer by the ordinal in the variant's name, and each variant registers under its tag; this
+     *   is the one place the two are paired, so routing can send a snapshot home whatever version it carries.
+     * @param writer The writer a snapshot names.
+     * @returns That variant, or none when this composition does not register it.
+     */
+    static variantWrittenBy(
+      writer: SnapshotFormat.SnapshotWriter,
+    ): ReturnType<typeof ForkingUnshieldedWalletImplementation.variantFor> {
+      // Exhaustive on purpose: a writer added to `SNAPSHOT_WRITERS` must fail here at compile time, never fall
+      // through to a variant that did not write the snapshot.
+      const tag = Match.value(writer).pipe(
+        Match.when(SnapshotFormat.V1_SNAPSHOT_WRITER, () => V1Tag),
+        Match.when(SnapshotFormat.V2_SNAPSHOT_WRITER, () => V2Tag),
+        Match.exhaustive,
+      );
+      return Option.fromNullable(
+        ForkingUnshieldedWalletImplementation.allVariants().find(
+          (variant) => Variant.getVersionedVariantTag(variant) === tag,
+        ),
+      );
+    }
+
     static tryRestore(
       serializedState: string,
     ): Either.Either<ForkingUnshieldedWalletImplementation, UnshieldedRestoreError> {
@@ -440,6 +467,9 @@ export function CustomForkingUnshieldedWallet<
         serializedState,
         (version) => ForkingUnshieldedWalletImplementation.variantFor(version),
         headVariant,
+        (writer) => ForkingUnshieldedWalletImplementation.variantWrittenBy(writer),
+        // Each variant's activation as registered here, so a writer never takes a snapshot from below its own range.
+        (variant) => variant.sinceVersion,
       ).pipe(
         // Stated with its result type because the resolved variant is either of the two, so its deserializer is
         // either of theirs: what comes back is a state of whichever one wrote the snapshot, which is what
@@ -458,7 +488,7 @@ export function CustomForkingUnshieldedWallet<
     }
 
     static restore(serializedState: string): ForkingUnshieldedWalletImplementation {
-      return Either.getOrThrow(ForkingUnshieldedWalletImplementation.tryRestore(serializedState));
+      return Either.getOrThrowWith(ForkingUnshieldedWalletImplementation.tryRestore(serializedState), (error) => error);
     }
 
     readonly state: rx.Observable<UnshieldedWalletState<string>>;

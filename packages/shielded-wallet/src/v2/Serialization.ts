@@ -11,10 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
-import { WalletError } from './WalletError.js';
+import { type WalletError } from './WalletError.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { CoreWallet } from './CoreWallet.js';
-import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+// Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.
+export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import { type NetworkId, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
@@ -65,6 +68,13 @@ const HexedState = (): Schema.Schema<ledger.ZswapLocalState, string> =>
 
 export const makeDefaultV2SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   const SnapshotSchema = Schema.Struct({
+    // The version names the snapshot's shape, not the variant that wrote it, and the constant lives in
+    // `../SnapshotFormat.ts` so the twins cannot drift apart. Both variants write this shape — the V2 variant adds
+    // only optional fields to it, which is not a new version. A V1 reader never meets a V2 snapshot anyway:
+    // `../Restore.ts` routes each snapshot to the variant it names as its writer, and by the variant that owns its
+    // `protocolVersion` when it names none.
+    version: SnapshotFormat.versionField('shielded', SNAPSHOT_FORMAT_VERSION),
+    writtenBy: SnapshotFormat.writtenByField(),
     publicKeys: Schema.Struct({
       coinPublicKey: Schema.String,
       encryptionPublicKey: Schema.String,
@@ -82,18 +92,26 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
     // `CoreWallet.coinHashesPending`). Optional twice over — a wallet that is not mid-crossing has nothing to declare,
     // and snapshots written before the field existed must keep decoding unchanged.
     coinHashesPending: Schema.optional(Schema.Literal(true)),
+    // The transaction history a 1.0.0 snapshot embedded. Read back and written out untouched, never added to; absent
+    // for every snapshot written since, and kept absent for them. See `CoreWallet.legacyTxHistory`.
+    txHistory: Schema.optional(Schema.Array(Schema.String)),
   });
 
   type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
+        writtenBy: SnapshotFormat.V2_SNAPSHOT_WRITER,
         publicKeys: w.publicKeys,
         state: w.state,
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
-        offset: w.progress?.appliedIndex,
         coinHashes: w.coinHashes,
+        // Optional fields are spread in only when present, so the snapshot object never carries an `undefined` key:
+        // the bytes must not depend on `JSON.stringify` dropping one.
+        ...(w.progress?.appliedIndex !== undefined ? { offset: w.progress.appliedIndex } : {}),
+        ...(w.legacyTxHistory !== undefined ? { txHistory: w.legacyTxHistory } : {}),
         ...(w.coinHashesPending !== undefined ? { coinHashesPending: w.coinHashesPending } : {}),
       });
 
@@ -102,8 +120,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
     deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError> => {
       return pipe(
         serialized,
-        Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => WalletError.other(err)),
+        SnapshotFormat.readSnapshot({ surface: 'shielded', reads: [SNAPSHOT_FORMAT_VERSION], schema: SnapshotSchema }),
         Either.flatMap((snapshot: Snapshot) => {
           const progress = {
             appliedIndex: snapshot.offset ?? 0n,
@@ -124,6 +141,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
                   progress,
                   snapshot.protocolVersion,
                   snapshot.networkId,
+                  snapshot.txHistory,
                 ),
               )
             : CoreWallet.restoreWithCoinHashes(
@@ -133,6 +151,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
                 progress,
                 snapshot.protocolVersion,
                 snapshot.networkId,
+                snapshot.txHistory,
               );
         }),
       );

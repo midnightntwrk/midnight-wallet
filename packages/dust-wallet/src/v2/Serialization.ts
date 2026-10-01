@@ -11,9 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
+import { SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
+import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+// Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.
+export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
@@ -60,6 +64,13 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
 );
 
 const SnapshotSchema = Schema.Struct({
+  // The version names the snapshot's shape, not the variant that wrote it, and the constant lives in
+  // `../SnapshotFormat.ts` so the twins cannot drift apart. Both variants write this shape — the V2 variant adds only
+  // optional fields to it, which is not a new version. A V1 reader never meets a V2 snapshot anyway: `../Restore.ts`
+  // routes each snapshot to the variant it names as its writer, and by the variant that owns its `protocolVersion`
+  // when it names none.
+  version: SnapshotFormat.versionField('dust', SNAPSHOT_FORMAT_VERSION),
+  writtenBy: SnapshotFormat.writtenByField(),
   publicKey: Schema.Struct({
     publicKey: Schema.BigInt,
   }),
@@ -75,6 +86,8 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
+        writtenBy: SnapshotFormat.V2_SNAPSHOT_WRITER,
         publicKey: w.publicKey,
         state: w.state,
         protocolVersion: w.protocolVersion,
@@ -87,8 +100,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
     deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError> => {
       return pipe(
         serialized,
-        Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => new OtherWalletError({ message: 'Error while deserializing snapshot', cause: err })),
+        SnapshotFormat.readSnapshot({ surface: 'dust', reads: [SNAPSHOT_FORMAT_VERSION], schema: SnapshotSchema }),
         Either.flatMap((snapshot: Snapshot) =>
           Either.try({
             try: () =>

@@ -29,9 +29,10 @@
  */
 
 import { LedgerParameters as V8LedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { DustSecretKey as V9SecretKey } from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import { Deferred, Effect, Option, Queue, type Scope, Stream, pipe } from 'effect';
+import { Deferred, Effect, Option, Queue, Schedule, type Scope, Stream, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { peekProtocolVersion } from '../Restore.js';
@@ -156,5 +157,67 @@ describe('a dust wallet restoring a snapshot through the class it was started fr
       expect(dustCount(state.state)).toBe(DUST_EVENT_COUNT);
       expect(balanceAt(state.state, chain.syncTime)).toBe(balanceAt(synced.state, chain.syncTime));
       expect(state.state.publicKey.publicKey).toBe(synced.state.publicKey.publicKey);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('restores a snapshot the V1 variant wrote after annotating the fork version onto V1, and crosses on start', async () =>
+    Effect.gen(function* () {
+      const chain = yield* Effect.promise(() => buildDustChain());
+      const wire = yield* Queue.unbounded<readonly TimelineEvent[]>();
+      const replayed = yield* Deferred.make<readonly TimelineEvent[]>();
+
+      const wallet = yield* makeForkWallet({
+        v8: Stream.fromQueue(wire),
+        replayed: Deferred.await(replayed),
+        networkId,
+        forkVersion,
+        seed: dustSeed(),
+        dustParameters,
+        syncTime: chain.syncTime,
+      });
+      yield* Effect.addFinalizer(() => wallet.stop);
+      yield* wallet.start;
+      yield* Queue.offer(wire, numberedFrom(chain.eventBytes, 1, Number(v8Version)));
+
+      const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+      expect(synced.state.protocolVersion).toBeLessThan(forkVersion);
+
+      // The window this case is about: the V1 sync has seen the chain reach the boundary and annotated that version
+      // onto its state, and the runtime has not yet handed over. A snapshot taken now is V1 bytes stamped with a version
+      // the V2 variant owns. Routing must send it to V1, the variant that wrote it: read by V2 as a mere format upgrade,
+      // it would skip the cross-ledger migration and keep ledger-v8 dust that the replay is about to deliver again.
+      const written = yield* Effect.promise(() => wallet.dust.serializeState());
+      const snapshot = JSON.stringify({
+        // Type cast required because: JSON.parse returns `any`, and the envelope is only ever spread back unchanged.
+        ...(JSON.parse(written) as Record<string, unknown>),
+        protocolVersion: String(forkVersion),
+      });
+      expect(Option.getOrThrow(peekProtocolVersion(snapshot))).toBe(forkVersion);
+
+      // The chain past the fork: the indexer's replay, numbered on from the boundary and reported at the v9 version.
+      const boundaryId = DUST_EVENT_COUNT + 1;
+      yield* Deferred.succeed(replayed, numberedFrom(chain.eventBytes, boundaryId, Number(v9Version)));
+
+      const restored = wallet.walletClass.restore(snapshot);
+      yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
+      yield* Effect.promise(() => restored.start(V9SecretKey.fromSeed(dustSeed())));
+
+      yield* pipe(
+        runningTag(restored),
+        Effect.repeat({ until: (tag) => tag === V2Tag, schedule: Schedule.spaced('10 millis') }),
+      );
+
+      const crossed = yield* pipe(
+        restored.runtime.stateChanges,
+        Stream.filter((state) => dustCount(state.state) === DUST_EVENT_COUNT),
+        Stream.take(1),
+        Stream.runHead,
+        Effect.map(Option.getOrThrow),
+      );
+      expect(crossed.version).toBeGreaterThanOrEqual(forkVersion);
+      // Read from the replay, not carried: the cursor ends where the replay does.
+      expect(crossed.state.progress.appliedIndex).toBe(BigInt(boundaryId + DUST_EVENT_COUNT - 1));
+      expect(balanceAt(crossed.state, chain.syncTime)).toBe(balanceAt(synced.state, chain.syncTime));
+      expect(crossed.state.publicKey.publicKey).toBe(synced.state.publicKey.publicKey);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
