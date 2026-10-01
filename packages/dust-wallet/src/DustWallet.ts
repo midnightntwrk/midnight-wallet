@@ -61,6 +61,7 @@ import {
   type DustWalletAPI,
   DustWalletState,
 } from './DustWalletAPI.js';
+import { runPromiseThrowingFailure } from './PromiseBoundary.js';
 import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import { CoreWallet as V1CoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
 import { type WalletSyncUpdate as V1SyncUpdate } from './v1/Sync.js';
@@ -1049,6 +1050,20 @@ export function CustomForkingDustWallet<
             }),
         })
         .pipe(Effect.runPromise);
+    }
+
+    ensureFeeCoverage(
+      currentTime: Date,
+      nightUtxos: ReadonlyArray<UtxoWithMeta>,
+      feePayment: bigint,
+      fee: bigint,
+    ): Promise<void> {
+      return runPromiseThrowingFailure(
+        this.runtime.dispatch<void, WalletError | V1WalletError>({
+          [V1Tag]: (v1) => v1.ensureFeeCoverage(currentTime, nightUtxos, feePayment, fee),
+          [V2Tag]: (v2) => v2.ensureFeeCoverage(currentTime, nightUtxos, feePayment, fee),
+        }),
+      );
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<DustWalletState<string>> {

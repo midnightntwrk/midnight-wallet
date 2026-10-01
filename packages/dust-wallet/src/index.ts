@@ -14,5 +14,6 @@ export * from './DustWalletAPI.js';
 export * from './SingleVariantDustWallet.js';
 export * from './DustWallet.js';
 export { UnsupportedSnapshotVersionError, peekProtocolVersion } from './Restore.js';
+export { isInsufficientDustForFeeError } from './InsufficientDustForFee.js';
 export * from './v2/Sync.js';
 export { type DustTransactionHistoryEntry, DustSectionSchema, mergeDustSections } from './v2/TransactionHistory.js';

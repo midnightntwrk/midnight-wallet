@@ -32,7 +32,7 @@ import {
   type UnprovenTransaction,
 } from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
-import { OtherWalletError, type WalletError } from './WalletError.js';
+import { InsufficientDustForFeeError, OtherWalletError, type WalletError } from './WalletError.js';
 import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
   type WalletRuntimeError,
@@ -374,6 +374,50 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         isRegistration,
       );
     });
+  }
+
+  /**
+   * Fails when the fee payment a first-time registration carries is below the registration's fee.
+   *
+   * @remarks
+   *   Judges the payment the transaction was built with, since that is what reaches the chain; the dust state is read
+   *   only to estimate when generation will cover the fee.
+   * @example
+   *   ```ts
+   *   await Effect.runPromise(variant.ensureFeeCoverage(now, nightUtxos, split.feePayment, fee));
+   *   ```;
+   *
+   * @param currentTime The time to estimate from; the same one the registration's split was made at.
+   * @param nightUtxos The Night UTxOs the registration carries.
+   * @param feePayment The fee payment attached to the registration, in Specks.
+   * @param fee The registration's fee, in Specks.
+   * @returns Succeeds when `feePayment` covers `fee`; fails with {@link InsufficientDustForFeeError} otherwise.
+   */
+  ensureFeeCoverage(
+    currentTime: Date,
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    feePayment: bigint,
+    fee: bigint,
+  ): Effect.Effect<void, WalletError> {
+    if (feePayment >= fee) {
+      return Effect.void;
+    }
+    return SubscriptionRef.get(this.#context.stateRef).pipe(
+      Effect.flatMap((currentState) =>
+        Effect.fail(
+          InsufficientDustForFeeError.of({
+            claimableFeePayment: feePayment,
+            fee,
+            estimate: this.#v2Context.coinsAndBalancesCapability.feeCoverageEstimate(
+              currentState,
+              nightUtxos,
+              fee,
+              currentTime,
+            ),
+          }),
+        ),
+      ),
+    );
   }
 
   attachDustRegistration(

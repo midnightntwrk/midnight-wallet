@@ -14,7 +14,7 @@
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';
-import { generateRandomSeed, Token } from '@midnightntwrk/wallet-sdk';
+import { generateRandomSeed, isInsufficientDustForFeeError, Token } from '@midnightntwrk/wallet-sdk';
 
 const sender = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
@@ -74,6 +74,14 @@ await wallet
     unshieldedKeystore.getPublicKey(),
     unshieldedKeystore.signDataAsync,
   )
+  .catch((error: unknown) => {
+    // Had the dust fallen short of the fee after all, the registration rejects with a typed error: recognise it with the
+    // guard to read how far short it is and when generation will cover it, then wait and retry.
+    if (isInsufficientDustForFeeError(error)) {
+      console.log('Registration fee not covered yet:', error.message);
+    }
+    throw error;
+  })
   .then((recipe) => wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => wallet.submitTransaction(finalizedTransaction));
 

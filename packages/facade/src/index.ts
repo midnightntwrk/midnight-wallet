@@ -1298,15 +1298,12 @@ export class WalletFacade {
 
     // Step 1 — Dust decides which Night UTxO belongs in the guaranteed slot (the one whose dust
     // generation can pay the fee) and computes the fee-payment allowance.
-    const split = await this.dust.splitNightUtxosForDustRegistration(
-      now,
-      nightUtxos.map(({ utxo, meta }) => ({
-        ...utxo,
-        ctime: meta.ctime,
-        registeredForDustGeneration: meta.registeredForDustGeneration,
-      })),
-      isRegistration,
-    );
+    const nightUtxosWithMeta = nightUtxos.map(({ utxo, meta }) => ({
+      ...utxo,
+      ctime: meta.ctime,
+      registeredForDustGeneration: meta.registeredForDustGeneration,
+    }));
+    const split = await this.dust.splitNightUtxosForDustRegistration(now, nightUtxosWithMeta, isRegistration);
 
     const toUnshieldedUtxoWithMeta = (u: DustCoinsAndBalances.UtxoWithFullDustDetails): UtxoWithMeta => ({
       utxo: {
@@ -1363,12 +1360,11 @@ export class WalletFacade {
     const hasUnregisteredGuaranteed = split.guaranteedUtxos.some((u) => !u.utxo.registeredForDustGeneration);
     if (isRegistration && hasUnregisteredGuaranteed) {
       const fee = await this.dust.calculateFee([txWithDustActions]);
-      if (split.feePayment < fee) {
+      try {
+        await this.dust.ensureFeeCoverage(now, nightUtxosWithMeta, split.feePayment, fee);
+      } catch (error) {
         await this.unshielded.revertTransaction(txWithOffers);
-        throw Error(
-          `Insufficient generated dust to cover registration fee (have ${split.feePayment}, need ${fee}). ` +
-            `Use WalletFacade.waitForGeneratedDust(utxos, ${fee}) before retrying.`,
-        );
+        throw error;
       }
     }
 
@@ -1935,6 +1931,35 @@ export class WalletFacade {
     };
   }
 
+  /**
+   * Builds and signs a transaction registering `nightUtxos` to generate dust for `dustReceiverAddress`.
+   *
+   * @remarks
+   *   A first-time registration pays its own fee out of the dust its Night has generated so far. When that falls short,
+   *   the Night UTxOs booked for the transaction are released before the call rejects, so it can be retried as is.
+   * @example
+   *   ```ts
+   *   const register = () => wallet.registerNightUtxosForDustGeneration(nightUtxos, verifyingKey, signData);
+   *   const recipe = await register().catch(async (error: unknown) => {
+   *     // An unreachable fee will not be covered by waiting, so only a reachable one is waited out.
+   *     if (!isInsufficientDustForFeeError(error) || error.estimate._tag !== 'Reachable') throw error;
+   *     const timeoutMs = Number(error.estimate.seconds) * 1000 + 60_000;
+   *     await wallet.waitForGeneratedDust(nightUtxos, error.fee, { timeoutMs });
+   *     return register();
+   *   });
+   *   ```;
+   *
+   * @param nightUtxos - The Night UTxOs to register. Must be non-empty.
+   * @param nightVerifyingKey - The verifying key that owns them.
+   * @param signDustRegistration - Signs the registration and the unshielded offers.
+   * @param dustReceiverAddress - Where the generated dust goes. Defaults to this wallet's own dust address.
+   * @returns The unproven registration transaction, signed.
+   * @throws Error if `nightUtxos` is empty.
+   * @throws InsufficientDustForFeeError (`_tag` `'Wallet.InsufficientDustForFee'`, recognised by
+   *   `isInsufficientDustForFeeError` from `@midnightntwrk/wallet-sdk`) when the generated dust does not yet cover the
+   *   fee. It carries `claimableFeePayment`, `fee`, `shortfall` and an `estimate` of when it will; when it is
+   *   reachable, wait with {@link waitForGeneratedDust} for at least that long and retry.
+   */
   async registerNightUtxosForDustGeneration(
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledgerV9.SignatureVerifyingKey,

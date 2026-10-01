@@ -27,6 +27,7 @@
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { isInsufficientDustForFeeError } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect } from 'effect';
 import * as rx from 'rxjs';
@@ -98,15 +99,28 @@ describe("Dust registration fail-fast follows the indexer's registeredForDustGen
       expect(nightUtxos.length).toBeGreaterThan(0);
       const bookedKeys = new Set(nightUtxos.map(utxoKey));
 
-      yield* Effect.promise(() =>
-        expect(
-          facade.registerNightUtxosForDustGeneration(
+      const rejection = yield* Effect.promise(() =>
+        facade
+          .registerNightUtxosForDustGeneration(
             nightUtxos,
             keys.signatureVerifyingKey,
             keys.unshieldedKeystore.signDataAsync,
+          )
+          .then(
+            () => undefined,
+            (error: unknown) => error,
           ),
-        ).rejects.toThrow('Insufficient generated dust to cover registration fee'),
       );
+
+      if (!isInsufficientDustForFeeError(rejection)) {
+        return expect.fail(`expected Wallet.InsufficientDustForFee, got ${String(rejection)}`);
+      }
+      expect(rejection.claimableFeePayment).toBe(0n);
+      expect(rejection.fee > 0n).toBe(true);
+      expect(rejection.shortfall).toBe(rejection.fee);
+      // The Night does generate, so the wallet can say when the fee will be covered.
+      expect(rejection.estimate._tag).toBe('Reachable');
+      expect(rejection.message).toContain('waitForGeneratedDust');
 
       const stateAfter: FacadeState = yield* Effect.promise(() => rx.firstValueFrom(facade.state()));
       const stillAvailable = stateAfter.unshielded.availableCoins.filter((c) => bookedKeys.has(utxoKey(c)));

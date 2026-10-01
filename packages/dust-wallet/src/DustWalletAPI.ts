@@ -316,6 +316,38 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
     opts?: { timeoutMs?: number },
   ): Promise<void>;
 
+  /**
+   * Checks that the fee payment a first-time registration carries covers the registration's own `fee`.
+   *
+   * @remarks
+   *   Judges `feePayment`, the payment the transaction was built with, since that is what reaches the chain; the dust
+   *   state is read only to estimate when generation over `nightUtxos` will cover the fee, from the same projection
+   *   {@link DustWalletAPI.waitForGeneratedDust} waits on. Unlike the other methods here, a failure rejects with the
+   *   typed error itself rather than a fiber wrapper, so a caller can read its fields; recognise it with
+   *   `isInsufficientDustForFeeError`.
+   * @example
+   *   ```ts
+   *   await dust.ensureFeeCoverage(now, nightUtxos, split.feePayment, fee).catch((error: unknown) => {
+   *     if (isInsufficientDustForFeeError(error)) console.warn(error.message);
+   *     throw error;
+   *   });
+   *   ```;
+   *
+   * @param currentTime - The time to estimate from; use the one the registration's split was made at.
+   * @param nightUtxos - The Night UTxOs the registration carries.
+   * @param feePayment - The fee payment attached to the registration, in Specks.
+   * @param fee - The registration's fee, in Specks.
+   * @returns A promise that resolves when `feePayment` covers `fee`.
+   * @throws InsufficientDustForFeeError (`_tag` `'Wallet.InsufficientDustForFee'`) when it does not, carrying the
+   *   shortfall and an estimate of when generation will cover it.
+   */
+  ensureFeeCoverage(
+    currentTime: Date,
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    feePayment: bigint,
+    fee: bigint,
+  ): Promise<void>;
+
   revertTransaction(transaction: AnyTx): Promise<void>;
 
   getAddress(): Promise<DustAddress>;
