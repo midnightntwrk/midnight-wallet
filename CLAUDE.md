@@ -37,8 +37,16 @@ examples:** `packages/docs-snippets` — always check there first when implement
   footer.
 - **Never commit, push, or create/edit PRs, issues, or comments unattended** — show the user the diff and the exact
   message/content first, and wait for explicit approval.
-- Issues and PRs use the `.github/` templates, every section filled. Link issues with plain references (`#123`) —
-  **never** closing keywords (`Closes`/`Fixes`/`Resolves`); issues are closed manually after QA.
+- Issues and PRs use the `.github/` templates, every section filled. For PRs that means
+  `.github/PULL_REQUEST_TEMPLATE.md` — the root file GitHub applies automatically — not
+  `.github/PULL_REQUEST_TEMPLATE/pull_request_template.md`, which is reachable only via `?template=`.
+- Link issues with plain references (`#123`) — **never** closing keywords (`Closes`/`Fixes`/`Resolves`); issues are
+  closed manually after QA, so an auto-close on merge would close them before QA has seen the change. State the issue in
+  the PR body's **Related Issue** section (`none — <reason>` when there isn't one). A plain reference cross-links the
+  issue's timeline but does **not** fill GitHub's "Development" panel: that link is the same feature as auto-close and
+  cannot be created from the CLI, so ask the author to add it from the PR sidebar if it is wanted.
+- After opening a PR or an issue, say what is left for the user to do by hand: add it to the **Development** panel, and
+  apply any labels the repo expects — `component:*`, `status:*`, `fixversion:*`, `epic:*`. Nothing infers those.
 
 ## Build Commands
 
