@@ -29,7 +29,7 @@ import {
   type UnboundTransactionBalanceResult,
   type UnprovenTransactionBalanceResult,
 } from './Transacting.js';
-import { type UtxoWithMeta } from './UnshieldedState.js';
+import { type UtxoHash, type UtxoWithMeta } from './UnshieldedState.js';
 import { type UnboundTransaction } from './TransactionOps.js';
 import { type WalletError } from './WalletError.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
@@ -240,6 +240,18 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     return SubscriptionRef.updateEffect(this.#context.stateRef, (state) => {
       return pipe(this.#v1Context.transactingCapability.revertTransaction(state, transaction), EitherOps.toEffect);
     });
+  }
+
+  revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Effect.Effect<void, WalletError> {
+    return SubscriptionRef.update(this.#context.stateRef, (state) =>
+      this.#v1Context.transactingCapability.revertUtxos(state, utxoIds),
+    );
+  }
+
+  releaseRestoredPending(coveredIds: ReadonlyArray<UtxoHash>): Effect.Effect<void, WalletError> {
+    return SubscriptionRef.update(this.#context.stateRef, (state) =>
+      this.#v1Context.transactingCapability.releaseRestoredPending(state, coveredIds),
+    );
   }
 
   serializeState(state: CoreWallet): TSerialized {

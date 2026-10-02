@@ -23,7 +23,7 @@ import { WsSubscriptionClient, ConnectionHelper } from '@midnightntwrk/wallet-sd
 import { SyncWalletError, type WalletError } from './WalletError.js';
 import { WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
-import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { Clock, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type WalletSyncUpdate, WalletSyncUpdateSchema } from './SyncSchema.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 
@@ -43,6 +43,11 @@ export type IndexerClientConnection = {
 
 export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
+  /**
+   * The clock the booking sweep expires against. Defaults to system time; inject one to pin the expiry boundary in a
+   * test, or to follow a simulated chain.
+   */
+  clock?: Clock.Clock;
 };
 
 export type DefaultSyncContext = {
@@ -101,17 +106,37 @@ export const makeDefaultSyncService = (config: DefaultSyncConfiguration): SyncSe
 };
 
 export const makeDefaultSyncCapability = (
-  _config: DefaultSyncConfiguration,
+  config: DefaultSyncConfiguration,
   getContext: () => DefaultSyncContext,
 ): SyncCapability<CoreWallet, WalletSyncUpdate> => {
+  const clock = config.clock ?? Clock.systemClock;
+
+  /**
+   * Releases bookings nothing else will: a transaction abandoned between balancing and submission leaves one behind,
+   * and past its TTL the ledger would reject that transaction anyway.
+   *
+   * Only once the wallet has caught up with the chain. While a replay from an earlier cursor is still running, a coin
+   * can be booked here and already spent on chain by a transaction the replay has not delivered yet; releasing it then
+   * offers a coin that is gone, and over-reports the balance until the spend arrives. Applying the update first and
+   * judging on the result is what lets the update that reaches the tip sweep straight away, rather than waiting for
+   * whatever arrives next on a chain that may now be quiet.
+   *
+   * This path follows the chain, so the expiry it compares against is wall time; the simulator path uses simulator time
+   * instead.
+   */
+  const sweepIfCaughtUp = (wallet: CoreWallet): CoreWallet =>
+    wallet.progress.isStrictlyComplete() ? CoreWallet.expirePending(wallet, clock.now()) : wallet;
+
   return {
     applyUpdate: (state: CoreWallet, update: WalletSyncUpdate): Either.Either<CoreWallet, WalletError> => {
       if (update.type === 'UnshieldedTransactionsProgress') {
         return Either.right(
-          CoreWallet.updateProgress(state, {
-            highestTransactionId: BigInt(update.highestTransactionId),
-            isConnected: true,
-          }),
+          sweepIfCaughtUp(
+            CoreWallet.updateProgress(state, {
+              highestTransactionId: BigInt(update.highestTransactionId),
+              isConnected: true,
+            }),
+          ),
         );
       } else {
         const updatePayload = {
@@ -134,7 +159,7 @@ export const makeDefaultSyncCapability = (
             const { transactionHistoryService } = getContext();
             Effect.runFork(transactionHistoryService.put(update));
 
-            return stateAfterUpdatingProgress;
+            return sweepIfCaughtUp(stateAfterUpdatingProgress);
           }),
         );
       }
@@ -183,8 +208,13 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
   const utxoKey = (utxo: { intentHash: string; outputNo: number }) => `${utxo.intentHash}#${utxo.outputNo}`;
 
   return {
-    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): Either.Either<CoreWallet, WalletError> => {
+    applyUpdate: (
+      walletBeforeSweep: CoreWallet,
+      update: SimulatorSyncUpdate,
+    ): Either.Either<CoreWallet, WalletError> => {
       const { ledger: ledgerState, currentTime } = update.update;
+      // Simulator time drives the wallet here, so the booking sweep expires against it rather than the wall clock.
+      const state = CoreWallet.expirePending(walletBeforeSweep, currentTime);
       const walletAddress = state.publicKey.addressHex;
       const nativeTokenType = ledger.nativeToken().raw;
 
@@ -213,12 +243,14 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
         .map(([, utxo]) => utxo);
 
       // Spent: in wallet (pending or available) but no longer in simulator
-      const spentUtxos = [
-        ...Array.from(HashMap.entries(state.state.pendingUtxos)),
+      const trackedUtxos: readonly (readonly [string, UtxoWithMeta])[] = [
+        ...Array.from(HashMap.entries(state.state.pendingUtxos)).map(
+          ([hash, pending]) => [hash, pending.utxo] as const,
+        ),
         ...Array.from(HashMap.entries(state.state.availableUtxos)),
-      ]
-        .filter(([hash]) => !simulatorUtxoMap.has(hash))
-        .map(([, utxo]) => utxo);
+      ];
+
+      const spentUtxos = trackedUtxos.filter(([hash]) => !simulatorUtxoMap.has(hash)).map(([, utxo]) => utxo);
 
       const blockNumber = getCurrentBlockNumber(update.update);
       const updateProgress = (wallet: CoreWallet) =>

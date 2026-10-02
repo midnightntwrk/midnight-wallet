@@ -13,7 +13,7 @@
 import { Either, HashMap, Option, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { UnshieldedState, type UnshieldedUpdate, type UtxoWithMeta } from '../UnshieldedState.js';
+import { type PendingUtxo, UnshieldedState, type UnshieldedUpdate, type UtxoWithMeta } from '../UnshieldedState.js';
 import { UtxoNotFoundError } from '../WalletError.js';
 import { generateMockUpdate, generateMockUtxoWithMeta, utxoArb, utxoHash } from './testUtils.js';
 
@@ -22,6 +22,15 @@ const getOrThrow = <E, A>(either: Either.Either<A, E>): A =>
     either,
     Either.getOrThrowWith((e) => new Error(`Unexpected error: ${JSON.stringify(e)}`)),
   );
+
+/** The expiry every booking in these tests is given: the TTL of the transaction it was taken for. */
+const TTL = new Date('2026-01-01T01:00:00.000Z');
+
+/** A pending entry as `restore` expects one: the coin plus the expiry it was booked with. */
+const pendingAt = (utxo: UtxoWithMeta, ttl: Date = TTL): PendingUtxo => ({ utxo, ttl, restored: true });
+
+/** A pending entry as `spend` produces one, booked by the running process. */
+const bookedNow = (utxo: UtxoWithMeta, ttl: Date = TTL): PendingUtxo => ({ utxo, ttl, restored: false });
 
 describe('UnshieldedState', () => {
   describe('applyUpdate', () => {
@@ -112,7 +121,7 @@ describe('UnshieldedState', () => {
             status: 'SUCCESS',
           }),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, u),
+        (s) => UnshieldedState.spend(s, u, TTL),
         getOrThrow,
         (s) => {
           expect(HashMap.has(s.pendingUtxos, utxoHash(u))).toBe(true);
@@ -205,6 +214,45 @@ describe('UnshieldedState', () => {
       expect(Option.getOrNull(HashMap.get(state.availableUtxos, utxoHash(b)))).toEqual(b);
       expect(HashMap.size(state.availableUtxos)).toEqual(2);
     });
+
+    it('does not re-admit a created utxo that is currently pending (replay of the creating tx)', () => {
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-replay', outputNo: 0 });
+      const created: UnshieldedUpdate = { createdUtxos: [u], spentUtxos: [], status: 'SUCCESS' };
+
+      const state = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, created),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, u, TTL),
+        getOrThrow,
+        // A resync from an earlier cursor delivers the creating transaction again while `u` is still booked.
+        (s) => UnshieldedState.applyUpdate(s, created),
+        getOrThrow,
+      );
+
+      expect(HashMap.has(state.availableUtxos, utxoHash(u))).toBe(false);
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual(bookedNow(u));
+      expect(HashMap.size(state.availableUtxos)).toEqual(0);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(1);
+    });
+
+    it('still admits the other created utxos of an update that replays a pending one', () => {
+      const pending = generateMockUtxoWithMeta({ intentHash: 'h-mixed', outputNo: 0 });
+      const fresh = generateMockUtxoWithMeta({ intentHash: 'h-mixed', outputNo: 1 });
+
+      const state = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, { createdUtxos: [pending], spentUtxos: [], status: 'SUCCESS' }),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, pending, TTL),
+        getOrThrow,
+        (s) => UnshieldedState.applyUpdate(s, { createdUtxos: [pending, fresh], spentUtxos: [], status: 'SUCCESS' }),
+        getOrThrow,
+      );
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(fresh)]);
+      expect([...HashMap.keys(state.pendingUtxos)]).toEqual([utxoHash(pending)]);
+    });
   });
 
   describe('applyFailedUpdate', () => {
@@ -222,7 +270,7 @@ describe('UnshieldedState', () => {
         UnshieldedState.empty(),
         (s) => UnshieldedState.applyUpdate(s, update),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, utxoToSpend),
+        (s) => UnshieldedState.spend(s, utxoToSpend, TTL),
         getOrThrow,
         (s) => UnshieldedState.applyFailedUpdate(s, failedUpdate),
         getOrThrow,
@@ -255,7 +303,7 @@ describe('UnshieldedState', () => {
             status: 'SUCCESS',
           }),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, a),
+        (s) => UnshieldedState.spend(s, a, TTL),
         getOrThrow,
         // sanity
         (s) => {
@@ -325,7 +373,7 @@ describe('UnshieldedState', () => {
         UnshieldedState.empty(),
         (s) => UnshieldedState.applyUpdate(s, update),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, update.createdUtxos[0]),
+        (s) => UnshieldedState.spend(s, update.createdUtxos[0], TTL),
         getOrThrow,
       );
 
@@ -340,7 +388,7 @@ describe('UnshieldedState', () => {
         UnshieldedState.empty(),
         (s) => UnshieldedState.applyUpdate(s, update),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, generateMockUtxoWithMeta({ owner: 'owner21', type: 'type12' })),
+        (s) => UnshieldedState.spend(s, generateMockUtxoWithMeta({ owner: 'owner21', type: 'type12' }), TTL),
       );
 
       expect(Either.isLeft(result)).toBe(true);
@@ -357,7 +405,7 @@ describe('UnshieldedState', () => {
         UnshieldedState.empty(),
         (s) => UnshieldedState.applyUpdate(s, update),
         getOrThrow,
-        (s) => UnshieldedState.spendByUtxo(s, update.createdUtxos[0].utxo),
+        (s) => UnshieldedState.spendByUtxo(s, update.createdUtxos[0].utxo, TTL),
         getOrThrow,
       );
 
@@ -368,7 +416,7 @@ describe('UnshieldedState', () => {
     it('should fail to spendByUtxo with UtxoNotFoundError when utxo is not available', () => {
       const ghost = generateMockUtxoWithMeta({ intentHash: 'h-ghost', outputNo: 0 });
 
-      const result = UnshieldedState.spendByUtxo(UnshieldedState.empty(), ghost.utxo);
+      const result = UnshieldedState.spendByUtxo(UnshieldedState.empty(), ghost.utxo, TTL);
 
       expect(Either.isLeft(result)).toBe(true);
       pipe(
@@ -391,7 +439,7 @@ describe('UnshieldedState', () => {
         UnshieldedState.empty(),
         (s) => UnshieldedState.applyUpdate(s, update),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, utxoToSpend),
+        (s) => UnshieldedState.spend(s, utxoToSpend, TTL),
         getOrThrow,
         (s) => UnshieldedState.rollbackSpend(s, utxoToSpend),
         getOrThrow,
@@ -409,7 +457,7 @@ describe('UnshieldedState', () => {
         UnshieldedState.empty(),
         (s) => UnshieldedState.applyUpdate(s, update),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, utxoToSpend),
+        (s) => UnshieldedState.spend(s, utxoToSpend, TTL),
         getOrThrow,
         (s) => UnshieldedState.rollbackSpendByUtxo(s, utxoToSpend.utxo),
         getOrThrow,
@@ -427,7 +475,7 @@ describe('UnshieldedState', () => {
         UnshieldedState.empty(),
         (s) => UnshieldedState.applyUpdate(s, update),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, utxoToSpend),
+        (s) => UnshieldedState.spend(s, utxoToSpend, TTL),
         getOrThrow,
         (s) => UnshieldedState.rollbackSpendByUtxo(s, utxoToSpend.utxo),
         getOrThrow,
@@ -440,13 +488,257 @@ describe('UnshieldedState', () => {
     });
   });
 
+  describe('rollbackSpendByHash', () => {
+    // A reservation records the ids of the coins it books, not the coins themselves, so releasing one has to be
+    // possible from the id alone.
+    const bookedState = (...utxos: readonly UtxoWithMeta[]): UnshieldedState =>
+      utxos.reduce(
+        (state, utxo) =>
+          pipe(
+            UnshieldedState.applyUpdate(state, { createdUtxos: [utxo], spentUtxos: [], status: 'SUCCESS' }),
+            getOrThrow,
+            (s) => UnshieldedState.spend(s, utxo, TTL),
+            getOrThrow,
+          ),
+        UnshieldedState.empty(),
+      );
+
+    it('returns a booked coin to the available side, with its meta intact', () => {
+      const booked = generateMockUtxoWithMeta({ intentHash: 'h-by-hash', outputNo: 0 });
+
+      const state = UnshieldedState.rollbackSpendByHash(bookedState(booked), utxoHash(booked));
+
+      expect(Option.getOrNull(HashMap.get(state.availableUtxos, utxoHash(booked)))).toEqual(booked);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('releases only the coin named by the id', () => {
+      const released = generateMockUtxoWithMeta({ intentHash: 'h-released', outputNo: 0 });
+      const kept = generateMockUtxoWithMeta({ intentHash: 'h-kept', outputNo: 0 });
+
+      const state = UnshieldedState.rollbackSpendByHash(bookedState(released, kept), utxoHash(released));
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(released)]);
+      expect([...HashMap.keys(state.pendingUtxos)]).toEqual([utxoHash(kept)]);
+    });
+
+    it('ignores an id that is not booked, since sync may have cleared it first', () => {
+      const available = generateMockUtxoWithMeta({ intentHash: 'h-not-booked', outputNo: 0 });
+      const seeded = pipe(
+        UnshieldedState.applyUpdate(UnshieldedState.empty(), {
+          createdUtxos: [available],
+          spentUtxos: [],
+          status: 'SUCCESS',
+        }),
+        getOrThrow,
+      );
+
+      const state = UnshieldedState.rollbackSpendByHash(seeded, utxoHash(available));
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(available)]);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('ignores an id this wallet has never seen', () => {
+      const stranger = generateMockUtxoWithMeta({ intentHash: 'h-stranger', outputNo: 0 });
+
+      const state = UnshieldedState.rollbackSpendByHash(UnshieldedState.empty(), utxoHash(stranger));
+
+      expect(HashMap.size(state.availableUtxos)).toEqual(0);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('is safe to repeat, so a release racing with sync cannot fail', () => {
+      const booked = generateMockUtxoWithMeta({ intentHash: 'h-twice', outputNo: 0 });
+
+      const state = pipe(
+        bookedState(booked),
+        (s) => UnshieldedState.rollbackSpendByHash(s, utxoHash(booked)),
+        (s) => UnshieldedState.rollbackSpendByHash(s, utxoHash(booked)),
+      );
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(booked)]);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+  });
+
+  describe('releasing bookings restored from a snapshot', () => {
+    // Once sync has caught up, every transaction the address is party to has been applied, so a coin still booked
+    // was never spent by the process that booked it. Only a durable record of that transaction justifies keeping it.
+    const restoredHolding = (...utxos: readonly UtxoWithMeta[]): UnshieldedState =>
+      UnshieldedState.restore(
+        [],
+        utxos.map((u) => pendingAt(u)),
+      );
+
+    it('returns a restored coin nothing accounts for, rather than waiting out its expiry', () => {
+      const abandoned = generateMockUtxoWithMeta({ intentHash: 'h-abandoned', outputNo: 0 });
+
+      const state = UnshieldedState.releaseRestoredPending(restoredHolding(abandoned), []);
+
+      expect(Option.getOrNull(HashMap.get(state.availableUtxos, utxoHash(abandoned)))).toEqual(abandoned);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('keeps a restored coin something still accounts for', () => {
+      // The wallet cannot see that transaction — it may be sitting with a counterparty — but something else knows.
+      const heldForSwap = generateMockUtxoWithMeta({ intentHash: 'h-swap', outputNo: 0 });
+
+      const state = UnshieldedState.releaseRestoredPending(restoredHolding(heldForSwap), [utxoHash(heldForSwap)]);
+
+      expect(HashMap.has(state.availableUtxos, utxoHash(heldForSwap))).toBe(false);
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(heldForSwap)))).toEqual(pendingAt(heldForSwap));
+    });
+
+    it('releases only the restored coins nothing accounts for', () => {
+      const abandoned = generateMockUtxoWithMeta({ intentHash: 'h-abandoned-2', outputNo: 0 });
+      const held = generateMockUtxoWithMeta({ intentHash: 'h-held', outputNo: 0 });
+
+      const state = UnshieldedState.releaseRestoredPending(restoredHolding(abandoned, held), [utxoHash(held)]);
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(abandoned)]);
+      expect([...HashMap.keys(state.pendingUtxos)]).toEqual([utxoHash(held)]);
+    });
+
+    it('never touches a booking this process took, since its caller may still be proving', () => {
+      const bookedHere = generateMockUtxoWithMeta({ intentHash: 'h-in-flight', outputNo: 0 });
+      const booked = pipe(
+        UnshieldedState.applyUpdate(UnshieldedState.empty(), {
+          createdUtxos: [bookedHere],
+          spentUtxos: [],
+          status: 'SUCCESS',
+        }),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, bookedHere, TTL),
+        getOrThrow,
+      );
+
+      const state = UnshieldedState.releaseRestoredPending(booked, []);
+
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(bookedHere)))).toEqual(bookedNow(bookedHere));
+      expect(HashMap.size(state.availableUtxos)).toEqual(0);
+    });
+
+    it('is a no-op when nothing was restored', () => {
+      expect(UnshieldedState.releaseRestoredPending(UnshieldedState.empty(), [])).toEqual(UnshieldedState.empty());
+    });
+  });
+
+  describe('booking expiry', () => {
+    const seedAvailable = (...utxos: readonly UtxoWithMeta[]): UnshieldedState =>
+      pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, { createdUtxos: utxos, spentUtxos: [], status: 'SUCCESS' }),
+        getOrThrow,
+      );
+
+    it('records the expiry the booking was taken with, alongside the coin', () => {
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-ttl', outputNo: 0 });
+
+      const state = pipe(seedAvailable(u), (s) => UnshieldedState.spend(s, u, TTL), getOrThrow);
+
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual(bookedNow(u));
+    });
+
+    it('records the expiry when booking by ledger utxo', () => {
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-ttl-by-utxo', outputNo: 0 });
+
+      const state = pipe(seedAvailable(u), (s) => UnshieldedState.spendByUtxo(s, u.utxo, TTL), getOrThrow);
+
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual(bookedNow(u));
+    });
+
+    it('releases a booking whose expiry has passed, coin and meta intact', () => {
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-expired', outputNo: 0 });
+
+      const state = pipe(
+        seedAvailable(u),
+        (s) => UnshieldedState.spend(s, u, TTL),
+        getOrThrow,
+        (s) => UnshieldedState.expirePending(s, new Date(TTL.getTime() + 1)),
+      );
+
+      expect(Option.getOrNull(HashMap.get(state.availableUtxos, utxoHash(u)))).toEqual(u);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('keeps a booking at exactly its expiry, since a block stamped with that instant still accepts it', () => {
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-boundary', outputNo: 0 });
+
+      const state = pipe(
+        seedAvailable(u),
+        (s) => UnshieldedState.spend(s, u, TTL),
+        getOrThrow,
+        (s) => UnshieldedState.expirePending(s, TTL),
+      );
+
+      expect(HashMap.has(state.availableUtxos, utxoHash(u))).toBe(false);
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual(bookedNow(u));
+    });
+
+    it('keeps a booking one millisecond before its expiry', () => {
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-not-yet', outputNo: 0 });
+
+      const state = pipe(
+        seedAvailable(u),
+        (s) => UnshieldedState.spend(s, u, TTL),
+        getOrThrow,
+        (s) => UnshieldedState.expirePending(s, new Date(TTL.getTime() - 1)),
+      );
+
+      expect(HashMap.has(state.availableUtxos, utxoHash(u))).toBe(false);
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(u)))).toEqual(bookedNow(u));
+    });
+
+    it('releases only the bookings that have expired', () => {
+      const early = generateMockUtxoWithMeta({ intentHash: 'h-early', outputNo: 0 });
+      const late = generateMockUtxoWithMeta({ intentHash: 'h-late', outputNo: 0 });
+      const earlyTtl = new Date('2026-01-01T00:30:00.000Z');
+      const lateTtl = new Date('2026-01-01T02:00:00.000Z');
+
+      const state = pipe(
+        seedAvailable(early, late),
+        (s) => UnshieldedState.spend(s, early, earlyTtl),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, late, lateTtl),
+        getOrThrow,
+        (s) => UnshieldedState.expirePending(s, new Date('2026-01-01T01:00:00.000Z')),
+      );
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(early)]);
+      expect([...HashMap.keys(state.pendingUtxos)]).toEqual([utxoHash(late)]);
+    });
+
+    it('is a no-op when nothing is booked', () => {
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-none-booked', outputNo: 0 });
+      const seeded = seedAvailable(u);
+
+      const state = UnshieldedState.expirePending(seeded, new Date(TTL.getTime() + 1));
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(u)]);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('releases a booking restored from a snapshot written before bookings carried an expiry', () => {
+      // Such a snapshot decodes with an expiry at the epoch, so the first sweep releases it.
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-legacy', outputNo: 0 });
+
+      const state = pipe(UnshieldedState.restore([], [pendingAt(u, new Date(0))]), (s) =>
+        UnshieldedState.expirePending(s, new Date(TTL.getTime())),
+      );
+
+      expect(HashMap.has(state.availableUtxos, utxoHash(u))).toBe(true);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+  });
+
   describe('restore / toArrays', () => {
     it('should restore state from arrays', () => {
       const utxo1 = generateMockUtxoWithMeta({ owner: 'owner1', type: 'type1' });
       const utxo2 = generateMockUtxoWithMeta({ owner: 'owner2', type: 'type2' });
       const pendingUtxo = generateMockUtxoWithMeta({ owner: 'owner3', type: 'type3' });
 
-      const state = UnshieldedState.restore([utxo1, utxo2], [pendingUtxo]);
+      const state = UnshieldedState.restore([utxo1, utxo2], [pendingAt(pendingUtxo)]);
 
       expect(HashMap.size(state.availableUtxos)).toEqual(2);
       expect(HashMap.size(state.pendingUtxos)).toEqual(1);
@@ -457,10 +749,47 @@ describe('UnshieldedState', () => {
       const utxo2 = generateMockUtxoWithMeta({ owner: 'owner2', type: 'type2' });
       const pendingUtxo = generateMockUtxoWithMeta({ owner: 'owner3', type: 'type3' });
 
-      const arrays = pipe(UnshieldedState.restore([utxo1, utxo2], [pendingUtxo]), UnshieldedState.toArrays);
+      const arrays = pipe(UnshieldedState.restore([utxo1, utxo2], [pendingAt(pendingUtxo)]), UnshieldedState.toArrays);
 
       expect(arrays.availableUtxos.length).toEqual(2);
       expect(arrays.pendingUtxos.length).toEqual(1);
+    });
+
+    it('drops a utxo present in both arrays, keeping the pending side (repairs a corrupted snapshot)', () => {
+      const duplicated = generateMockUtxoWithMeta({ intentHash: 'h-dup', outputNo: 0 });
+      const onlyAvailable = generateMockUtxoWithMeta({ intentHash: 'h-avail', outputNo: 0 });
+
+      const state = UnshieldedState.restore([onlyAvailable, duplicated], [pendingAt(duplicated)]);
+
+      expect([...HashMap.keys(state.availableUtxos)]).toEqual([utxoHash(onlyAvailable)]);
+      expect(Option.getOrNull(HashMap.get(state.pendingUtxos, utxoHash(duplicated)))).toEqual(pendingAt(duplicated));
+      expect(HashMap.size(state.pendingUtxos)).toEqual(1);
+    });
+
+    it('restore always yields disjoint maps, whatever overlap the arrays carry', () => {
+      fc.assert(
+        fc.property(
+          fc.uniqueArray(utxoArb, { maxLength: 6, selector: utxoHash }),
+          fc.array(fc.nat(2), { maxLength: 6 }),
+          (utxos, placements) => {
+            // 0 = available only, 1 = pending only, 2 = both (the shape a corrupted snapshot carries).
+            const available = utxos.filter((_, i) => (placements[i] ?? 0) !== 1);
+            const pending = utxos.filter((_, i) => (placements[i] ?? 0) !== 0);
+
+            const state = UnshieldedState.restore(
+              available,
+              pending.map((u) => pendingAt(u)),
+            );
+
+            const availableKeys = new Set(HashMap.keys(state.availableUtxos));
+            const pendingKeys = [...HashMap.keys(state.pendingUtxos)];
+            expect(pendingKeys.some((k) => availableKeys.has(k))).toBe(false);
+            expect(HashMap.size(state.availableUtxos) + HashMap.size(state.pendingUtxos)).toEqual(utxos.length);
+            expect(pendingKeys.toSorted()).toEqual(pending.map(utxoHash).toSorted());
+          },
+        ),
+        { numRuns: 100 },
+      );
     });
   });
 
@@ -477,7 +806,7 @@ describe('UnshieldedState', () => {
             status: 'SUCCESS',
           }),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, u),
+        (s) => UnshieldedState.spend(s, u, TTL),
         getOrThrow,
         (s) =>
           UnshieldedState.applyUpdate(s, {
@@ -504,7 +833,7 @@ describe('UnshieldedState', () => {
             status: 'SUCCESS',
           }),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, u),
+        (s) => UnshieldedState.spend(s, u, TTL),
         getOrThrow,
         (s) =>
           UnshieldedState.applyFailedUpdate(s, {
@@ -514,7 +843,7 @@ describe('UnshieldedState', () => {
           }),
         getOrThrow,
         // re-spend should succeed
-        (s) => UnshieldedState.spend(s, u),
+        (s) => UnshieldedState.spend(s, u, TTL),
         getOrThrow,
       );
 
@@ -534,11 +863,11 @@ describe('UnshieldedState', () => {
             status: 'SUCCESS',
           }),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, u),
+        (s) => UnshieldedState.spend(s, u, TTL),
         getOrThrow,
         (s) => UnshieldedState.rollbackSpend(s, u),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, u),
+        (s) => UnshieldedState.spend(s, u, TTL),
         getOrThrow,
       );
 
@@ -565,7 +894,7 @@ describe('UnshieldedState', () => {
       );
 
       const after = pipe(
-        UnshieldedState.spend(seeded, b),
+        UnshieldedState.spend(seeded, b, TTL),
         getOrThrow,
         (s) =>
           UnshieldedState.applyFailedUpdate(s, {
@@ -597,9 +926,9 @@ describe('UnshieldedState', () => {
             status: 'SUCCESS',
           }),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, a),
+        (s) => UnshieldedState.spend(s, a, TTL),
         getOrThrow,
-        (s) => UnshieldedState.spend(s, b),
+        (s) => UnshieldedState.spend(s, b, TTL),
         getOrThrow,
         (s) =>
           UnshieldedState.applyUpdate(s, {
@@ -621,7 +950,9 @@ describe('UnshieldedState', () => {
       | { tag: 'spend'; utxo: UtxoWithMeta }
       | { tag: 'rollback'; utxo: UtxoWithMeta }
       | { tag: 'confirm'; utxo: UtxoWithMeta }
-      | { tag: 'fail'; utxo: UtxoWithMeta };
+      | { tag: 'fail'; utxo: UtxoWithMeta }
+      | { tag: 'replay'; utxo: UtxoWithMeta }
+      | { tag: 'expire'; utxo: UtxoWithMeta };
 
     // Apply an operation, ignoring failures (e.g. spending a missing utxo).
     // The point of these invariants is that *valid* operations preserve them;
@@ -630,7 +961,7 @@ describe('UnshieldedState', () => {
       const result: Either.Either<UnshieldedState, unknown> = (() => {
         switch (op.tag) {
           case 'spend':
-            return UnshieldedState.spend(state, op.utxo);
+            return UnshieldedState.spend(state, op.utxo, TTL);
           case 'rollback':
             return UnshieldedState.rollbackSpend(state, op.utxo);
           case 'confirm':
@@ -645,6 +976,16 @@ describe('UnshieldedState', () => {
               spentUtxos: [op.utxo],
               status: 'FAILURE',
             });
+          case 'replay':
+            // The indexer re-delivers the transaction that created the utxo (resync from an earlier cursor).
+            return UnshieldedState.applyUpdate(state, {
+              createdUtxos: [op.utxo],
+              spentUtxos: [],
+              status: 'SUCCESS',
+            });
+          case 'expire':
+            // A sweep past the expiry every booking here was taken with.
+            return Either.right(UnshieldedState.expirePending(state, new Date(TTL.getTime() + 1)));
         }
       })();
       return Either.match(result, {
@@ -657,7 +998,7 @@ describe('UnshieldedState', () => {
       fc.assert(
         fc.property(
           fc.array(utxoArb, { minLength: 1, maxLength: 5 }),
-          fc.array(fc.nat(3), { maxLength: 20 }),
+          fc.array(fc.nat(5), { maxLength: 20 }),
           (utxos, opTags) => {
             // Seed state with all utxos available.
             const initial = pipe(
@@ -681,8 +1022,12 @@ describe('UnshieldedState', () => {
                   return { tag: 'rollback', utxo };
                 case 2:
                   return { tag: 'confirm', utxo };
-                default:
+                case 3:
                   return { tag: 'fail', utxo };
+                case 4:
+                  return { tag: 'replay', utxo };
+                default:
+                  return { tag: 'expire', utxo };
               }
             });
 
@@ -713,7 +1058,7 @@ describe('UnshieldedState', () => {
           );
 
           const roundTripped = pipe(
-            UnshieldedState.spend(seeded, u),
+            UnshieldedState.spend(seeded, u, TTL),
             getOrThrow,
             (s) => UnshieldedState.rollbackSpend(s, u),
             getOrThrow,
@@ -743,7 +1088,7 @@ describe('UnshieldedState', () => {
           );
 
           const roundTripped = pipe(
-            UnshieldedState.spend(seeded, u),
+            UnshieldedState.spend(seeded, u, TTL),
             getOrThrow,
             (s) =>
               UnshieldedState.applyFailedUpdate(s, {
