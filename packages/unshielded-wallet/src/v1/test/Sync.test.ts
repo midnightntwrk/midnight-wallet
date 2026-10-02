@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type SimulatorState, Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, HashMap, Option, pipe, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
@@ -34,6 +34,10 @@ const FAR_FUTURE = new Date('2999-01-01T00:00:00.000Z');
 const keystore = createKeystore(Buffer.from(ledger.sampleSigningKey(), 'hex'), NetworkId.NetworkId.Undeployed);
 const ownerPublicKey = PublicKey.fromKeyStore(keystore);
 
+/**
+ * Connected, with the indexer confirmed level with the node, so only the transaction cursor decides whether the wallet
+ * has caught up.
+ */
 const connected = (
   available: readonly UtxoWithMeta[],
   pending: ReadonlyArray<Omit<PendingUtxo, 'restored'>>,
@@ -47,7 +51,11 @@ const connected = (
       ProtocolVersion.ProtocolVersion(1n),
       NetworkId.NetworkId.Undeployed,
     ),
-    (wallet) => CoreWallet.updateProgress(wallet, { isConnected: true }),
+    (wallet) =>
+      CoreWallet.updateProgress(wallet, {
+        isConnected: true,
+        indexerLiveness: IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n }),
+      }),
   );
 
 /**

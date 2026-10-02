@@ -22,6 +22,7 @@ import {
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { Option } from 'effect';
+import { NEVER } from 'rxjs';
 import * as crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { type DefaultConfiguration, mergeWalletEntries, WalletEntrySchema, WalletFacade } from '../src/index.js';
@@ -75,6 +76,9 @@ describe('indexer liveness wiring through the facade', () => {
           UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(createKeystore(seed, config.networkId))),
         );
         unshielded.start.mockResolvedValue(undefined);
+        // The facade watches this stream for the moment sync reaches the tip; this wallet never gets there.
+        // Type cast required because: `state` is declared read-only on the wallet, and mocking it is the point.
+        (unshielded as unknown as { state: typeof NEVER }).state = NEVER;
         return unshielded;
       },
       dust: (config) => {
