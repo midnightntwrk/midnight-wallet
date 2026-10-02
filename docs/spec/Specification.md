@@ -194,11 +194,14 @@ It is enabled by a construction called _sparse homomorphic commitment_, which is
 
 These functions are carefully selected so that together they provide a really nice properties:
 
+<!-- Prettier >=3.9.9 no longer parses these as math and would wrap inside the formulas. -->
+<!-- prettier-ignore-start -->
 - combining commitments is equal to calculating a commitment for a set being a sum of sets provided to combined
   commitments and randomnesses combined too, that is:
   $commitment(s1, r1) \oplus commitment(s2, r2) = commitment(s1 \cup s2, r1 \circ r2)$
 - commitment for a coin when value is equal 0 is equal to a commitment of an empty set:
   $commitment((0, x), r) = commitment(\emptyset, r)$
+<!-- prettier-ignore-end -->
 
 With such scheme in place one can do the following:
 
