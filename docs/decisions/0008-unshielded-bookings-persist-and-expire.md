@@ -112,7 +112,9 @@ neither leaves mechanism 2 as the only rule, which is where this started.
 ### Negative Consequences
 
 - A pending coin's stored shape gained a field, and `spend` gained a required argument, so this is a breaking change for
-  anyone driving the wallet's state functions directly.
+  anyone driving the wallet's state functions directly. The unshielded wallet API and the pending-transactions service
+  each gained required methods, so a custom implementation of either, including one passed to the facade, must add them:
+  a major release of the unshielded-wallet, capabilities and facade packages.
 - Both stored formats gained an optional member rather than a version: the pending coin its expiry, the
   pending-transactions store its reservations. A snapshot written before this change still loads, and one written after
   it is still readable by an earlier version of the package, which simply does not see the new member.
