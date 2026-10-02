@@ -3,11 +3,11 @@
 '@midnightntwrk/wallet-sdk-facade': major
 '@midnightntwrk/wallet-sdk-unshielded-wallet': major
 '@midnightntwrk/wallet-sdk-node-client': major
-'@midnightntwrk/wallet-sdk-abstractions': major
-'@midnightntwrk/wallet-sdk-capabilities': major
+'@midnightntwrk/wallet-sdk-abstractions': minor
+'@midnightntwrk/wallet-sdk-capabilities': minor
 ---
 
-feat(unshielded-wallet): cross-check the indexer's reported tip against the node's finalized head
+feat(unshielded-wallet)!: cross-check the indexer's reported tip against the node's finalized head
 
 The unshielded wallet no longer takes the indexer's word that it is synced. It polls a node's finalized head (every 30
 seconds by default) and checks that indexer and node name the same block at the newest height both have passed; genesis
@@ -46,10 +46,9 @@ BREAKING CHANGE (`wallet-sdk-node-client`): `NodeClient.Service` gains required 
 `getGenesisHash()` and `getBlockHashAt(height)`; `getBlockHashAt` returns `Option.none` for a height with no block.
 Only implementers are affected.
 
-BREAKING CHANGE (`wallet-sdk-abstractions`): `IndexerLiveness.WrongNetwork` carries
-`{ height, indexerBlockHash, nodeBlockHash }` (hashes are `Option<string>`) instead of two genesis hashes.
-`sameGenesis` is renamed `sameBlockHash`; `evaluateTips` is added beside `evaluate`.
+`wallet-sdk-abstractions` adds `IndexerLiveness`: the verdict type, `evaluate` and `evaluateTips` for comparing an
+indexer against a node, `blocksSyncCompletion`, `equivalent` and `sameBlockHash`.
 
-BREAKING CHANGE (`wallet-sdk-capabilities`): `LivenessReads` replaces `indexerHeight` and `finalizedHeight` with
-`indexerTip` and `finalizedBlock` (height and hash together), and adds `indexerBlockHashAt(height)` and
-`nodeBlockHashAt(height)`. Only callers supplying their own reads are affected.
+`wallet-sdk-capabilities` adds the liveness check: `LivenessServiceImpl`, `LivenessReads` (`indexerTip`,
+`finalizedBlock`, `indexerBlockHashAt`, `nodeBlockHashAt`), `makeDefaultLivenessReads`, `DEFAULT_LIVENESS_CONFIGURATION`
+and `DEFAULT_POLL_INTERVAL`.
