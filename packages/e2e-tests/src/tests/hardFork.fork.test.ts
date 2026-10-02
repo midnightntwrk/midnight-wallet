@@ -98,6 +98,16 @@ const TRANSFER_AMOUNT = 1_000n;
 /** How long a transaction these tests build stays valid. */
 const TTL_MS = 60 * 60 * 1000;
 
+/**
+ * How long the chain is left to produce ledger-v9 blocks with the wallet idle. Long enough for a stall in following the
+ * chain to show — a couple of dozen blocks — and short enough not to dominate a lane that already runs for the better
+ * part of an hour.
+ */
+const QUIET_PERIOD_MS = 2 * 60 * 1000;
+
+/** How long a wallet that is already following the chain is given to report itself synced again. */
+const RESYNC_TIMEOUT_MS = 60 * 1000;
+
 /** A state reading together with the phase sequence observed up to it. */
 type Tracked = Readonly<{ state: FacadeState | undefined; phases: readonly string[] }>;
 
@@ -262,6 +272,32 @@ const projectionsTwinDustWallet = (configuration: DefaultDustConfiguration) => {
   );
 };
 
+/**
+ * The protocol version a wallet synchronized to a chain running `specVersion` reports.
+ *
+ * @remarks
+ *   The node's runtime spec version is the protocol version the indexer reports blocks under, so it is the chain's own
+ *   answer to what a wallet synchronized to it should say, read independently of the wallet. Asserting it exactly,
+ *   rather than which side of `forks.v9` a version is on, is what tells a wallet that follows the chain from one that
+ *   reports its variant's lower bound: the range checks hold for both.
+ * @param specVersion A spec version read from the node.
+ * @returns The protocol version the chain is at.
+ */
+const versionAt = (specVersion: number): ProtocolVersion.ProtocolVersion =>
+  ProtocolVersion.ProtocolVersion(BigInt(specVersion));
+
+/**
+ * The protocol versions a facade reports when all three of its wallets are synchronized to a chain running
+ * `specVersion`.
+ *
+ * @param specVersion A spec version read from the node.
+ * @returns The version {@link versionAt} gives, once for each of the three wallets.
+ */
+const everyWalletAt = (specVersion: number) => {
+  const version = versionAt(specVersion);
+  return { shielded: version, unshielded: version, dust: version };
+};
+
 const hasCrossed = (state: FacadeState | undefined): boolean =>
   state !== undefined &&
   state.protocol._tag === 'Settled' &&
@@ -272,7 +308,9 @@ describe.sequential('Hard fork crossing @fork', () => {
   const getFixture = useForkFixture();
 
   let fixture: ForkFixture;
+  let seeds: WalletSeedsType;
   let wallet: WalletFacade;
+  let restored: WalletFacade | undefined;
   let unshieldedKeystore: UnshieldedKeystore;
   let tracked: rx.Observable<Tracked>;
   let subscription: rx.Subscription;
@@ -311,21 +349,70 @@ describe.sequential('Hard fork crossing @fork', () => {
     return await twin.wallet.waitForSyncedState();
   };
 
+  /**
+   * The facade configuration this file's wallets are built with — afresh each call, so each facade gets its own
+   * transaction history rather than sharing one with the wallet it is being compared against.
+   */
+  const makeConfiguration = () => ({
+    ...fixture.getWalletConfig(),
+    ...fixture.getDustWalletConfig(),
+    // A backend per ledger version wins over the fixture's single `provingServerUrl`, and names both, because that
+    // is what an application crossing the fork actually has to configure: no proof server serves both ledger
+    // versions, so a wallet that spends on each side of the boundary needs one per side.
+    provers: {
+      v8: { kind: 'server', url: new URL(fixture.getV8ProverUri()) },
+      v9: { kind: 'server', url: new URL(fixture.getProverUri()) },
+    } satisfies DefaultConfiguration['provers'],
+  });
+
+  /**
+   * Sends {@link TRANSFER_AMOUNT} of Night to the receiver and waits for the wallet to settle on the result.
+   *
+   * @param label What the transfer is for, which names it in the log and in a timeout.
+   * @returns The wallet's first synced state that reflects the transfer.
+   */
+  const sendNightToReceiver = async (label: string): Promise<FacadeState> => {
+    const before = await wallet.waitForSyncedState();
+    const nightBefore = before.unshielded.balances[NIGHT];
+
+    const recipe = await wallet.transferTransaction(
+      [
+        {
+          type: 'unshielded',
+          outputs: [
+            {
+              type: ledgerV9.nativeToken().raw,
+              amount: TRANSFER_AMOUNT,
+              receiverAddress: await receiver!.wallet.unshielded.getAddress(),
+            },
+          ],
+        },
+      ],
+      { ttl: new Date(Date.now() + TTL_MS) },
+    );
+    const finalizedTx = await wallet.finalizeRecipe(await wallet.signRecipe(recipe, unshieldedKeystore.signDataAsync));
+    const txId = await wallet.submitTransaction(finalizedTx);
+    logger.info(`Night transfer ${label} submitted: ${txId}`);
+
+    await within(
+      `the Night transfer ${label} to be finalized`,
+      SPEND_TIMEOUT_MS,
+      utils.waitForTxInHistory(carried<ledgerV9.FinalizedTransaction>(finalizedTx).transactionHash(), wallet, {
+        ready: (entry: WalletEntry) => entry.unshielded !== undefined,
+      }),
+    );
+    return await stateWhere(
+      `the wallet to settle on the Night transfer ${label}`,
+      wallet,
+      (state) => state.isSynced && state.pending.length === 0 && state.unshielded.balances[NIGHT] !== nightBefore,
+    );
+  };
+
   beforeAll(async () => {
     fixture = getFixture();
 
-    const seeds: WalletSeedsType = WalletSeeds.fromMasterSeed(Buffer.from(FUNDED_SEED, 'hex'));
-    const configuration = {
-      ...fixture.getWalletConfig(),
-      ...fixture.getDustWalletConfig(),
-      // A backend per ledger version wins over the fixture's single `provingServerUrl`, and names both, because that
-      // is what an application crossing the fork actually has to configure: no proof server serves both ledger
-      // versions, so a wallet that spends on each side of the boundary needs one per side.
-      provers: {
-        v8: { kind: 'server', url: new URL(fixture.getV8ProverUri()) },
-        v9: { kind: 'server', url: new URL(fixture.getProverUri()) },
-      } satisfies DefaultConfiguration['provers'],
-    };
+    seeds = WalletSeeds.fromMasterSeed(Buffer.from(FUNDED_SEED, 'hex'));
+    const configuration = makeConfiguration();
     unshieldedKeystore = createKeystore({ kind: 'schnorr', secret: seeds.unshielded }, fixture.getNetworkId());
 
     wallet = await WalletFacade.init({
@@ -363,6 +450,7 @@ describe.sequential('Hard fork crossing @fork', () => {
     subscription?.unsubscribe();
     twinSubscription?.unsubscribe();
     await wallet?.stop();
+    await restored?.stop();
     await twin?.wallet.stop();
     await receiver?.wallet.stop();
     await v8Receiver?.wallet.stop();
@@ -377,6 +465,11 @@ describe.sequential('Hard fork crossing @fork', () => {
 
     const specVersion = await fixture.specVersionAtHead();
     expect(specVersion).toBe(V8_SPEC_VERSION);
+
+    // The shipped wallets ask the chain which version it starts under before they start, and every one of them is
+    // stamped with the answer. Each must go on to report that answer, not the bottom of the V1 variant's range, which
+    // is below every version a ledger-v8 chain has ever run and would still pass the range check above.
+    expect(v8State.protocolVersion).toEqual(everyWalletAt(specVersion));
 
     expect(v8State.unshielded.balances[NIGHT]).toBeGreaterThan(0n);
     expect(Object.keys(v8State.shielded.balances).length).toBeGreaterThan(0);
@@ -438,6 +531,8 @@ describe.sequential('Hard fork crossing @fork', () => {
           { ttl: new Date(Date.now() + TTL_MS) },
         ),
       );
+      // A recipe is stamped with the version the facade acts at, which is the chain's, not the V1 variant's lower bound.
+      expect(recipe.protocolVersion).toBe(versionAt(V8_SPEC_VERSION));
       const signed = await wallet.signRecipe(recipe, unshieldedKeystore.signDataAsync);
       const finalizedTx = await wallet.finalizeRecipe(signed);
 
@@ -485,6 +580,9 @@ describe.sequential('Hard fork crossing @fork', () => {
 
     expect(v9State.protocol._tag).toBe('Settled');
     expect(v9State.activeProtocolVersion).toBeGreaterThanOrEqual(ProtocolVersion.V9NativeForkVersion);
+    // The version the new runtime reports, which need not be `forks.v9` itself: the V2 variants activate from that
+    // boundary, and a chain may cross it at any version at or above it.
+    expect(v9State.protocolVersion).toEqual(everyWalletAt(enactment.newSpecVersion));
     expect(v9State.isSynced).toBe(true);
 
     // The wallets do not cross together: each learns of the change when its own synchronization
@@ -836,5 +934,86 @@ describe.sequential('Hard fork crossing @fork', () => {
       expect(twinState.dust.balance(now)).toBe(eventsState.dust.balance(now));
     },
     DUST_TIMEOUT_MS + 60_000,
+  );
+
+  test(
+    'resumes from a snapshot taken after the v9 fork and follows the chain past it',
+    async () => {
+      // Snapshot a wallet that has crossed and already transacted on ledger-v9, then move the chain on with something
+      // the snapshot cannot know about. A restored wallet that merely deserializes — or that reports itself synced on
+      // the progress it was saved with — still holds the snapshot's balance; only one that resumed following the chain
+      // can hold the live wallet's.
+      const atSnapshot = await wallet.waitForSyncedState();
+      const snapshot = {
+        shielded: await wallet.shielded.serializeState(),
+        unshielded: await wallet.unshielded.serializeState(),
+        dust: await wallet.dust.serializeState(),
+      };
+      logger.info(`SNAPSHOT TAKEN ${summarize(atSnapshot)}`);
+
+      const live = await sendNightToReceiver('after the snapshot');
+      // Precondition: the chain now holds something the snapshot does not, so the comparison below can fail.
+      expect(live.unshielded.balances[NIGHT]).toBe(atSnapshot.unshielded.balances[NIGHT] - TRANSFER_AMOUNT);
+
+      restored = await WalletFacade.init({
+        configuration: makeConfiguration(),
+        shielded: (config) => ShieldedWallet(config).restore(snapshot.shielded),
+        unshielded: (config) => UnshieldedWallet(config).restore(snapshot.unshielded),
+        dust: (config) => DustWallet(config).restore(snapshot.dust),
+      });
+      // Read before the restored wallet has synchronized anything, so what it reports can only come from the snapshot:
+      // each wallet recorded the chain's version when it was serialized, and starts at that version rather than at the
+      // lower bound of the V2 variant's range. Nothing the wallet later reads would correct a wrong start, because the
+      // version it reads is the one it already holds.
+      const atRestore = await rx.firstValueFrom(restored.state());
+      expect(atRestore.protocolVersion).toEqual(atSnapshot.protocolVersion);
+
+      await restored.start(seeds);
+
+      const resumed = await stateWhere(
+        'the restored wallet to sync on ledger-v9',
+        restored,
+        hasCrossed,
+        CROSSING_TIMEOUT_MS,
+      );
+      logger.info(`RESTORED ${summarize(resumed)}`);
+
+      // `hasCrossed` has already required it settled, synced and on ledger-v9; what is left is whether it caught up.
+      expect(resumed.unshielded.balances).toEqual(live.unshielded.balances);
+      expect(resumed.shielded.balances).toEqual(live.shielded.balances);
+      expect(resumed.protocolVersion).toEqual(live.protocolVersion);
+    },
+    SPEND_TIMEOUT_MS + CROSSING_TIMEOUT_MS,
+  );
+
+  test(
+    'stays synced on ledger-v9 while the chain moves on, and sees what arrives afterwards',
+    async () => {
+      // The crossing is proven the moment the wallet settles; this asks whether it goes on following the chain. The
+      // wallet is left idle while ledger-v9 blocks accumulate, then must still be synced, still on the V2 variants with no
+      // further crossing, and must see a transaction that did not exist until after the wait.
+      await rx.firstValueFrom(rx.timer(QUIET_PERIOD_MS));
+
+      const afterQuiet = await within(
+        'the wallet to report itself synced after the quiet period',
+        RESYNC_TIMEOUT_MS,
+        wallet.waitForSyncedState(),
+      );
+      const { phases } = await rx.firstValueFrom(tracked);
+      const settledOnV9 = phases.indexOf(phaseOf(v9State));
+      logger.info(
+        `AFTER QUIET PERIOD ${summarize(afterQuiet)}; phases since the crossing: ${phases.slice(settledOnV9).join('  ->  ')}`,
+      );
+
+      expect(afterQuiet.protocol._tag).toBe('Settled');
+      expect(afterQuiet.activeProtocolVersion).toBeGreaterThanOrEqual(ProtocolVersion.V9NativeForkVersion);
+      expect(settledOnV9).toBeGreaterThanOrEqual(0);
+      expect(phases.slice(settledOnV9 + 1).filter((phase) => phase.startsWith('Crossing'))).toEqual([]);
+
+      const nightBefore = afterQuiet.unshielded.balances[NIGHT];
+      const afterTransfer = await sendNightToReceiver('after the quiet period');
+      expect(afterTransfer.unshielded.balances[NIGHT]).toBe(nightBefore - TRANSFER_AMOUNT);
+    },
+    QUIET_PERIOD_MS + RESYNC_TIMEOUT_MS + SPEND_TIMEOUT_MS,
   );
 });
