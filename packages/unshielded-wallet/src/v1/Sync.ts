@@ -302,9 +302,11 @@ export const makeDefaultSyncCapability = (
   return {
     applyUpdate: (state: CoreWallet, update: SyncUpdate): Either.Either<CoreWallet, WalletError> => {
       if (update.type === 'IndexerLiveness') {
-        // Only the verdict is written. A verdict says nothing about which transactions have been applied, so touching
-        // the sync cursor here would let the liveness check corrupt it.
-        return Either.right(CoreWallet.updateProgress(state, { indexerLiveness: update.verdict }));
+        // Only the verdict is written to progress. A verdict says nothing about which transactions have been applied,
+        // so touching the sync cursor here would let the liveness check corrupt it. The sweep still runs: a verdict
+        // that stops gating can be the update that first makes the wallet complete, and a quiet chain may send
+        // nothing else for a long time.
+        return Either.right(sweepIfCaughtUp(CoreWallet.updateProgress(state, { indexerLiveness: update.verdict })));
       } else if (update.type === 'UnshieldedTransactionsProgress') {
         return Either.right(
           sweepIfCaughtUp(

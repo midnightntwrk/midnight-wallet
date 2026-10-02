@@ -19,7 +19,7 @@ import { createKeystore, PublicKey } from '../../KeyStore.js';
 import { type CoreWallet as CoreWalletType, CoreWallet } from '../CoreWallet.js';
 import { makeDefaultSyncCapability, makeSimulatorSyncCapability } from '../Sync.js';
 import { type PendingUtxo, UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
-import { type UnshieldedTransaction, type WalletSyncUpdate } from '../SyncSchema.js';
+import { type SyncUpdate, type UnshieldedTransaction, type WalletSyncUpdate } from '../SyncSchema.js';
 import { generateMockUtxoWithMeta, utxoHash } from './testUtils.js';
 
 /** Simulator time in the simulator tests, which set it either side of this instant. */
@@ -106,6 +106,8 @@ const progressUpdate = (highestTransactionId: number): WalletSyncUpdate => ({
   type: 'UnshieldedTransactionsProgress',
   highestTransactionId,
 });
+
+const livenessUpdate = (verdict: IndexerLiveness.IndexerLiveness): SyncUpdate => ({ type: 'IndexerLiveness', verdict });
 
 const getOrThrow = <E, A>(either: Either.Either<A, E>): A =>
   pipe(
@@ -243,6 +245,26 @@ describe('Unshielded indexer sync capability', () => {
       );
 
       expect(HashMap.has(after.state.availableUtxos, utxoHash(booked))).toBe(false);
+      expect(HashMap.size(after.state.pendingUtxos)).toEqual(0);
+    });
+
+    it('sweeps on the liveness verdict that completes sync, so a wallet level with a quiet indexer still recovers', () => {
+      // At start-up the indexer's progress reaches the tip in well under a second, while the first liveness verdict
+      // takes seconds to arrive. Until it does, `Unknown` holds completion back and the sweep with it; the verdict is
+      // then the update that makes the wallet complete, and a quiet chain may send nothing else for a long time.
+      const booked = generateMockUtxoWithMeta({ intentHash: 'h-awaiting-verdict', outputNo: 0 });
+      const awaitingVerdict = CoreWallet.updateProgress(walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }]), {
+        indexerLiveness: IndexerLiveness.Unknown(),
+      });
+
+      const after = getOrThrow(
+        capability.applyUpdate(
+          awaitingVerdict,
+          livenessUpdate(IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n })),
+        ),
+      );
+
+      expect(HashMap.has(after.state.availableUtxos, utxoHash(booked))).toBe(true);
       expect(HashMap.size(after.state.pendingUtxos)).toEqual(0);
     });
   });
