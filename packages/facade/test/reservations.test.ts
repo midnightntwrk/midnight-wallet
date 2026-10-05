@@ -247,21 +247,27 @@ describe('Balancing a transaction the caller already put its own coins into', ()
   it('records only the coins the wallet itself booked', () =>
     Effect.gen(function* () {
       const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
+      // Two coins: one the caller's first transaction books, one left for the wallet to book when it balances the
+      // caller's second. With a single coin there would be nothing to book and the comparison below would hold for
+      // an empty record.
       const simulator = yield* Simulator.init({
-        genesisMints: [nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress)],
+        genesisMints: [
+          nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress),
+          nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress),
+        ],
         blockProducer: immediateBlockProducer(),
       });
       const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
       const facade = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config));
 
-      yield* waitForUnshieldedBalance(facade, NIGHT, 1n);
+      yield* waitForUnshieldedBalance(facade, NIGHT, tokenValue(200_000n));
       yield* simulator.fastForward(10_000n);
       const address = yield* Effect.promise(() => facade.unshielded.getAddress());
       const ttl = new Date(Date.now() + 60 * 60 * 1000);
 
-      // A transaction that already spends this wallet's coins, with the booking it was built with given back, so the
-      // coins it names are available again — the state a caller's own transaction arrives in.
-      const recipe = yield* Effect.promise(() =>
+      // A transaction of the caller's own, built through the wallet: the coin it spends is booked and recorded under
+      // this transaction's reservation, which is the state a caller's coin is in when the caller reuses it.
+      yield* Effect.promise(() =>
         facade.transferTransaction(
           [
             {
@@ -272,22 +278,46 @@ describe('Balancing a transaction the caller already put its own coins into', ()
           { ttl, payFees: false },
         ),
       );
-      yield* Effect.promise(() => facade.revert(recipe));
 
       const beforeBalancing: FacadeState = yield* Effect.promise(() => rx.firstValueFrom(facade.state()));
-      const pendingBeforeBalancing = yield* pendingSet(facade);
-      expect(pendingBeforeBalancing.reservations).toEqual([]);
+      const reservationsBefore = (yield* pendingSet(facade)).reservations;
+      expect(beforeBalancing.unshielded.pendingCoins).toHaveLength(1);
+      expect(reservationsBefore).toHaveLength(1);
+      const callersCoin = beforeBalancing.unshielded.pendingCoins[0];
       const pendingBefore = new Set(beforeBalancing.unshielded.pendingCoins.map(utxoKey));
 
+      // The caller's second transaction spends that same coin and pays out more than it holds, so balancing it has to
+      // book a coin of the wallet's own: the balanced result names coins from both sources.
+      const intent = ledger.Intent.new(ttl);
+      intent.fallibleUnshieldedOffer = ledger.UnshieldedOffer.new(
+        [{ ...callersCoin.utxo, owner: keys.signatureVerifyingKey }],
+        [{ owner: keys.userAddress, type: NIGHT, value: callersCoin.utxo.value + tokenValue(1n) }],
+        [],
+      );
+      const callersTransaction = WalletTransaction.adopt(
+        'Unproven',
+        ledger.Transaction.fromParts(NETWORK_ID, undefined, undefined, intent),
+        ProtocolVersion.MinSupportedVersion,
+      );
+
       yield* Effect.promise(() =>
-        facade.balanceUnprovenTransaction(recipe.transaction, { ttl, tokenKindsToBalance: ['unshielded'] }),
+        facade.balanceUnprovenTransaction(callersTransaction, { ttl, tokenKindsToBalance: ['unshielded'] }),
       );
 
       const after: FacadeState = yield* Effect.promise(() => rx.firstValueFrom(facade.state()));
       const newlyBooked = after.unshielded.pendingCoins.map(utxoKey).filter((id) => !pendingBefore.has(id));
-      const pendingAfter = yield* pendingSet(facade);
-      const recorded = pendingAfter.reservations.flatMap((r) => r.inputs.unshielded);
+      const sameSpend = (left: readonly string[], right: readonly string[]): boolean =>
+        left.length === right.length && left.every((id, index) => id === right[index]);
+      const added = (yield* pendingSet(facade)).reservations.filter(
+        (reservation) => !reservationsBefore.some((before) => sameSpend(before.identifiers, reservation.identifiers)),
+      );
+      expect(added).toHaveLength(1);
+      const recorded = added[0].inputs.unshielded;
 
+      // Balancing had to book something, or the comparison below would hold for an empty record.
+      expect(newlyBooked.length).toBeGreaterThan(0);
       expect(recorded.toSorted()).toEqual(newlyBooked.toSorted());
+      // The caller's coin was booked for its first transaction, not by this balancing, so this record leaves it alone.
+      expect(recorded).not.toContain(utxoKey(callersCoin));
     }).pipe(Effect.scoped, Effect.runPromise));
 });
