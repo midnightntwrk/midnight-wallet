@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DateTime, Either, HashSet, Order, Option, pipe, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as PendingTransactions from '../pendingTransactions.js';
@@ -346,5 +347,112 @@ describe('Sweeping when nothing has changed', () => {
 
     expect(swept).not.toBe(state);
     expect(swept.reservations).toEqual([reservation({ expired: true })]);
+  });
+});
+
+describe('Reservations across a two-version trait registry', () => {
+  // A fork-aware wallet registers one trait per ledger version, and a transaction is identified by the trait that
+  // recognises it, never by the version the chain has reached. A reservation records the identifiers that trait reads,
+  // so finding the reservation a transaction stands for must ask the recognising trait too: asking the trait for the
+  // chain's version would read nothing from a ledger-v8 transaction the wallet tracks from `forks.v9`, and leave its
+  // reservation holding coins the transaction already accounts for.
+  type LedgerTx = Readonly<{ ledger: 'v8' | 'v9' | 'v10'; ids: readonly string[] }>;
+
+  /** A trait that reads only its own ledger's transactions, and reads no identifiers from anything else. */
+  const ledgerTrait = (ledger: LedgerTx['ledger']): PendingTransactions.TransactionTrait<LedgerTx> => {
+    const owns = (tx: LedgerTx): boolean => tx.ledger === ledger;
+    return {
+      isTx: (data): data is LedgerTx =>
+        typeof data === 'object' && data !== null && 'ledger' in data && 'ids' in data && data.ledger === ledger,
+      serialize: (tx) => Buffer.from(JSON.stringify(tx), 'utf-8'),
+      deserialize: (bytes) => JSON.parse(Buffer.from(bytes).toString('utf-8')) as LedgerTx,
+      ids: (tx) => (owns(tx) ? tx.ids : []),
+      firstId: (tx) => tx.ids[0],
+      areAllTxIdsIncluded: (tx, ids) => owns(tx) && tx.ids.every((id) => ids.includes(id)),
+      isOneIncludedInOther: (tx, otherTx) =>
+        owns(tx) &&
+        owns(otherTx) &&
+        (tx.ids.every((id) => otherTx.ids.includes(id)) || otherTx.ids.every((id) => tx.ids.includes(id))),
+      hasTTLExpired: () => false,
+    };
+  };
+
+  const V9_FORK = ProtocolVersion.ProtocolVersion(2_000_000n);
+  const V8_VERSION = ProtocolVersion.ProtocolVersion(1_000n);
+  const V9_VERSION = ProtocolVersion.ProtocolVersion(2_000_001n);
+
+  const twoVersionTraits: PendingTransactions.VersionedTransactionTrait<LedgerTx> = Either.getOrThrow(
+    ProtocolVersion.makeRegistryFromActivations([
+      { sinceVersion: ProtocolVersion.MinSupportedVersion, value: ledgerTrait('v8') },
+      { sinceVersion: V9_FORK, value: ledgerTrait('v9') },
+    ]),
+  );
+
+  const empty = PendingTransactions.empty<LedgerTx>();
+  const v8Tx: LedgerTx = { ledger: 'v8', ids: ['v8-id'] };
+  const v9Tx: LedgerTx = { ledger: 'v9', ids: ['v9-id'] };
+
+  it('clears the reservation of a ledger-v8 transaction when that transaction is registered while the chain is from forks.v9', () => {
+    const state = PendingTransactions.addReservation(empty, reservation({ identifiers: v8Tx.ids }));
+
+    const withTx = PendingTransactions.addPendingTransaction(
+      state,
+      v8Tx,
+      CREATED_AT,
+      twoVersionTraits,
+      Option.some(V9_VERSION),
+    );
+
+    expect(withTx.reservations).toEqual([]);
+    expect(withTx.all.map((item) => item.tx)).toEqual([v8Tx]);
+  });
+
+  it('clears the reservation and the tracked ledger-v8 transaction when that transaction is cleared', () => {
+    const state = pipe(
+      PendingTransactions.addPendingTransaction(empty, v8Tx, CREATED_AT, twoVersionTraits, Option.some(V8_VERSION)),
+      (s) => PendingTransactions.addReservation(s, reservation({ identifiers: v8Tx.ids })),
+    );
+
+    const cleared = PendingTransactions.clear(state, v8Tx, twoVersionTraits);
+
+    expect(cleared.reservations).toEqual([]);
+    expect(cleared.all).toEqual([]);
+  });
+
+  it('expires reservations by TTL alone, whichever trait would recognise their transactions', () => {
+    // A reservation past its TTL stands for a transaction the ledger will no longer accept, under either ledger
+    // version, so the sweep has no reason to know which trait reads it.
+    const v8Reservation = reservation({ identifiers: v8Tx.ids, inputs: { unshielded: ['v8-coin#0'] } });
+    const v9Reservation = reservation({ identifiers: v9Tx.ids, inputs: { unshielded: ['v9-coin#0'] } });
+    const state = pipe(PendingTransactions.addReservation(empty, v8Reservation), (s) =>
+      PendingTransactions.addReservation(s, v9Reservation),
+    );
+
+    const swept = PendingTransactions.expireReservations(state, at('2026-01-01T01:00:00.001Z'));
+
+    expect(PendingTransactions.allExpiredReservations(swept)).toEqual([
+      { ...v8Reservation, expired: true },
+      { ...v9Reservation, expired: true },
+    ]);
+  });
+
+  it('keeps a reservation when the transaction registered is one no trait in the registry recognises', () => {
+    // A transaction no registered trait owns has no identifiers the wallet can read, so it cannot be the spend any
+    // reservation stands for — even one whose recorded identifiers it happens to carry. The transaction itself is
+    // still tracked: registering refuses nothing.
+    const unrecognised: LedgerTx = { ledger: 'v10', ids: ['shared-id'] };
+    const held = reservation({ identifiers: ['shared-id'] });
+    const state = PendingTransactions.addReservation(empty, held);
+
+    const withTx = PendingTransactions.addPendingTransaction(
+      state,
+      unrecognised,
+      CREATED_AT,
+      twoVersionTraits,
+      Option.some(V9_VERSION),
+    );
+
+    expect(withTx.reservations).toEqual([held]);
+    expect(withTx.all.map((item) => item.tx)).toEqual([unrecognised]);
   });
 });
