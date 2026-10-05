@@ -212,5 +212,24 @@ describe('unshielded state migration', () => {
       expect(wallet.networkId).toBe(NetworkId.NetworkId.Undeployed);
       expect(wallet.protocolVersion).toBe(7n);
     });
+
+    it('should start the migrated wallet at an Unknown liveness verdict, because a verdict about the previous feed says nothing about this one', async () => {
+      // A liveness verdict compares one indexer feed against the node. The hand-over moves the wallet onto a feed of
+      // another ledger version, so whatever the previous variant concluded about its own feed is no evidence about
+      // this one: a carried `Behind` would hold back a healthy wallet, and a carried `InSync` would vouch for a feed
+      // nobody has checked. The verdict starts again at `Unknown` until this variant's own check reaches one.
+      const base = previousWallet({ available: [], appliedId: 4n, protocolVersion: 7n });
+      const previous: PreviousLedgerWallet = {
+        ...base,
+        progress: {
+          ...base.progress,
+          indexerLiveness: IndexerLiveness.Behind({ indexerHeight: 10n, finalizedHeight: 40n, lag: 30n }),
+        },
+      };
+
+      const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previous));
+
+      expect(wallet.progress.indexerLiveness).toEqual(IndexerLiveness.Unknown());
+    });
   });
 });
