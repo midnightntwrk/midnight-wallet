@@ -1360,27 +1360,32 @@ export class WalletFacade {
     });
   }
 
-  /** The coins currently booked, by id. */
-  async #bookedCoinIds(): Promise<readonly string[]> {
-    return coinIdsOf((await firstValueFrom(this.unshielded.state)).pendingCoins.map((coin) => coin.utxo));
-  }
-
   /**
    * Balances a transaction in place and records only the coins the wallet itself booked doing so.
    *
    * In-place balancing hands back the caller's own transaction with the wallet's inputs added, so the result names
    * coins from two sources: the ones coin selection just took, and any the caller had already put there. Only the first
-   * are this wallet's booking, and they are exactly the ones that moved onto the pending side.
+   * are this wallet's booking, and they are exactly the inputs of this wallet's that the balanced transaction carries
+   * and the caller's did not.
+   *
+   * Read off the two transactions, not off the wallet's published state: the wallet publishes its state on its own
+   * fiber, so a read taken as soon as the balancing call returns can still show the coins as available, and the booking
+   * would go unrecorded.
    */
-  async #balanceInPlaceAndReserve<T extends AnyTx | undefined>(balance: () => Promise<T>, ttl: Date): Promise<T> {
-    const bookedBefore = new Set(await this.#bookedCoinIds());
+  async #balanceInPlaceAndReserve<T extends AnyTx | undefined>(
+    tx: AnyTx,
+    balance: () => Promise<T>,
+    ttl: Date,
+  ): Promise<T> {
+    const { publicKey } = (await firstValueFrom(this.unshielded.state)).state;
+    const inputsBefore = new Set(this.#ownInputIds(tx, publicKey.publicKey));
     const balanced = await balance();
 
     if (balanced === undefined) {
       return balanced;
     }
 
-    const newlyBooked = (await this.#bookedCoinIds()).filter((id) => !bookedBefore.has(id));
+    const newlyBooked = this.#ownInputIds(balanced, publicKey.publicKey).filter((id) => !inputsBefore.has(id));
     await this.#reserveIds(balanced, newlyBooked, ttl);
 
     return balanced;
@@ -1721,7 +1726,7 @@ export class WalletFacade {
 
     // For unbound transactions, unshielded balancing happens in place not with a balancing transaction
     const balancedUnshieldedTx = shouldBalanceUnshielded
-      ? await this.#balanceInPlaceAndReserve(() => this.unshielded.balanceUnboundTransaction(tx), ttl)
+      ? await this.#balanceInPlaceAndReserve(tx, () => this.unshielded.balanceUnboundTransaction(tx), ttl)
       : undefined;
 
     // Step 2: Unbound unshielded tx are balanced in place, use it as base tx if present
@@ -1779,7 +1784,7 @@ export class WalletFacade {
 
     // For unproven transactions, unshielded balancing happens in place
     const balancedUnshieldedTx = shouldBalanceUnshielded
-      ? await this.#balanceInPlaceAndReserve(() => this.unshielded.balanceUnprovenTransaction(tx), ttl)
+      ? await this.#balanceInPlaceAndReserve(tx, () => this.unshielded.balanceUnprovenTransaction(tx), ttl)
       : undefined;
 
     // Step 2: Use the balanced unshielded tx if present, otherwise use the original tx
