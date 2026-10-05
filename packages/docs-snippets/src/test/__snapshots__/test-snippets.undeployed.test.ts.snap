@@ -1482,6 +1482,10 @@ tryRestore succeeded true
 older history entries 1
 refused unknown-version v9
 Could not restore the transaction-history payload (format v9, unknown-version): Transaction history declares format v9, which this build cannot read. This build reads v2.
+",
+]
+`;
+
 exports[`Snippet outputs > without network > should output the correct result for 'indexer-liveness' 1`] = `
 [
   "Unknown — blocks sync completion: true
