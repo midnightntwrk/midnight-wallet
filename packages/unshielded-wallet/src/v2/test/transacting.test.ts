@@ -573,4 +573,47 @@ describe('Unshielded wallet transacting', () => {
       expect(error).toBeInstanceOf(InsufficientFundsError);
     });
   });
+
+  // A booking must expire with the transaction that holds it: a shorter one frees a coin a live transaction still
+  // spends, and a longer one keeps a coin locked after its transaction can no longer be accepted.
+  describe('when booking coins for a transaction it builds', () => {
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    // Whole seconds, so the TTL survives the ledger's intent encoding unchanged and can be compared exactly.
+    const ttl = new Date(Math.ceil(Date.now() / 1000) * 1000 + 1_800_000);
+    const receiverAddress = new UnshieldedAddress(Buffer.alloc(32, 7)).data.toString('hex');
+
+    const bookingTtlsOf = (wallet: CoreWallet): ReadonlyArray<Date> =>
+      Arr.map(UnshieldedState.toArrays(wallet.state).pendingUtxos, (booking) => booking.ttl);
+
+    it('initSwap books its coins with the transaction TTL', () => {
+      const { wallet } = buildWalletWithNightUtxos(2);
+
+      const { newState } = transacting.initSwap(wallet, { [NIGHT]: 500n }, [], ttl).pipe(EitherOps.getOrThrowLeft);
+
+      const bookingTtls = bookingTtlsOf(newState);
+      expect(bookingTtls.length).toBeGreaterThan(0);
+      expect(bookingTtls).toEqual(Arr.map(bookingTtls, () => ttl));
+    });
+
+    it('balanceFinalizedTransaction books its coins with the transaction TTL', () => {
+      const { wallet } = buildWalletWithNightUtxos(2);
+      // An intent owing Night in its guaranteed section: the only section a bound transaction leaves open to balancing.
+      const intent = ledger.Intent.new(ttl);
+      intent.guaranteedUnshieldedOffer = ledger.UnshieldedOffer.new(
+        [],
+        [{ owner: receiverAddress, type: NIGHT, value: 900n }],
+        [],
+      );
+      const finalized = ledger.Transaction.fromParts(config.networkId, undefined, undefined, intent).mockProve();
+
+      const [balancing, newState] = transacting
+        .balanceFinalizedTransaction(wallet, finalized)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const bookingTtls = bookingTtlsOf(newState);
+      expect(balancing).toBeDefined();
+      expect(bookingTtls.length).toBeGreaterThan(0);
+      expect(bookingTtls).toEqual(Arr.map(bookingTtls, () => ttl));
+    });
+  });
 });
