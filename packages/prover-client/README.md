@@ -22,7 +22,7 @@ import { HttpProverClient } from '@midnightntwrk/wallet-sdk-prover-client';
 
 // Initialize the client with the Proof Server URL
 const proverClient = new HttpProverClient({
-  serverUrl: 'http://localhost:6300',
+  url: 'http://localhost:6300',
 });
 
 // Prove an unproven transaction
@@ -41,7 +41,7 @@ const provenTransaction = await proverClient.proveTransaction(unprovenTransactio
 
 ```typescript
 class HttpProverClient {
-  constructor(config: { serverUrl: string });
+  constructor(config: { url: string });
 
   proveTransaction<S extends Signaturish, B extends Bindingish>(
     transaction: Transaction<S, PreProof, B>,
