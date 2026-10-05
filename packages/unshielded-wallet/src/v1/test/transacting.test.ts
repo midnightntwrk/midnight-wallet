@@ -647,6 +647,9 @@ describe('Unshielded wallet transacting', () => {
       const firstIds = inputIdsOf(firstBalanced!);
       const secondIds = inputIdsOf(secondBalanced!);
 
+      // Both balancings must have selected coins, or an empty intersection would prove nothing.
+      expect(firstIds.length).toBeGreaterThan(0);
+      expect(secondIds.length).toBeGreaterThan(0);
       expect(Arr.intersection(firstIds, secondIds)).toEqual([]);
     });
 
@@ -666,6 +669,8 @@ describe('Unshielded wallet transacting', () => {
 
       const spentIds = inputIdsOf(balanced!);
 
+      // Something must have been selected, or a dedupe of nothing would prove nothing.
+      expect(spentIds.length).toBeGreaterThan(0);
       expect(Arr.dedupe(spentIds)).toEqual(spentIds);
     });
 
