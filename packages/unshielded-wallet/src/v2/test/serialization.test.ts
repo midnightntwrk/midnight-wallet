@@ -201,6 +201,43 @@ describe('default v2 serialization capability', () => {
       expect((restored.left as SchemeMismatchError).at).toBe('construction');
     }
   });
+
+  it('round-trips a wallet whose address derives from its key', () => {
+    const wallet = makeWallet(schnorrPK);
+
+    const restored = capability.deserialize(capability.serialize(wallet));
+
+    expect(Either.isRight(restored)).toBe(true);
+    if (Either.isRight(restored)) {
+      expect(restored.right.publicKey).toEqual(schnorrPK);
+      expect(restored.right.progress.appliedId).toBe(5n);
+      expect(restored.right.networkId).toBe(networkId);
+    }
+  });
+
+  it('rejects a snapshot whose verifying key cannot be decoded, without letting the ledger throw escape', () => {
+    // The key decoder lives in wasm and traps on a malformed key. On a trust boundary that must fail closed as a
+    // typed Left, never as an exception thrown out of `deserialize`.
+    const malformed = JSON.stringify({
+      publicKey: {
+        publicKey: { tag: 'schnorr', value: 'not-a-key' },
+        addressHex: schnorrPK.addressHex,
+        address: schnorrPK.address,
+      },
+      state: { availableUtxos: [], pendingUtxos: [] },
+      protocolVersion: '0',
+      appliedId: '5',
+      networkId: 'undeployed',
+    });
+
+    const restored = capability.deserialize(malformed);
+
+    expect(Either.isLeft(restored)).toBe(true);
+    if (Either.isLeft(restored)) {
+      expect(restored.left).toBeInstanceOf(OtherWalletError);
+      expect(restored.left.message).toContain('could not be decoded');
+    }
+  });
 });
 
 describe('V2 unshielded snapshot format version', () => {
