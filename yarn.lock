@@ -380,9 +380,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@cardano-sdk/core@npm:~0.47.0":
-  version: 0.47.0
-  resolution: "@cardano-sdk/core@npm:0.47.0"
+"@cardano-sdk/core@npm:~0.47.1":
+  version: 0.47.1
+  resolution: "@cardano-sdk/core@npm:0.47.1"
   dependencies:
     "@biglup/is-cid": "npm:^1.0.3"
     "@cardano-sdk/crypto": "npm:~0.4.7"
@@ -395,7 +395,7 @@ __metadata:
     ts-custom-error: "npm:^3.2.0"
     ts-log: "npm:^2.2.4"
     web-encoding: "npm:^1.1.5"
-  checksum: 10c0/62761257087db8edadf957f994262135bc37e9fa171151b1540692259db7f1f4f2568608dc3a033d8c929e9360771fed847d4a5637f0fb12ff82442a08837708
+  checksum: 10c0/b88fb99777dda7dac5e0146a93db1c59692d65af77d544b44174817a0a69a2a3d38c498d6e39e56a61dbc376ca78a3e8d3069b873ba175ba72f2f9fe643e23dd
   languageName: node
   linkType: hard
 
@@ -426,27 +426,27 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@cardano-sdk/dapp-connector@npm:~0.13.30":
-  version: 0.13.30
-  resolution: "@cardano-sdk/dapp-connector@npm:0.13.30"
+"@cardano-sdk/dapp-connector@npm:~0.13.31":
+  version: 0.13.31
+  resolution: "@cardano-sdk/dapp-connector@npm:0.13.31"
   dependencies:
-    "@cardano-sdk/core": "npm:~0.47.0"
+    "@cardano-sdk/core": "npm:~0.47.1"
     "@cardano-sdk/crypto": "npm:~0.4.7"
     "@cardano-sdk/util": "npm:~0.17.2"
     ts-custom-error: "npm:^3.2.0"
     ts-log: "npm:^2.2.4"
     webextension-polyfill: "npm:^0.8.0"
-  checksum: 10c0/dd8cd6cf58978efdb488bafdff9a396a2f4c954cb6ba8c4baae07ffdf8564649ab6d59701533f699e870a348d490e1a6df74f929468e4c42af0dea1ac3ac547d
+  checksum: 10c0/df1dd02ac5a74c6389ca223822750a961f92dc1d98411391c61901f4742c2f9dad0a933d0e321b5009baf97a2a00a518a8171fefe9384a59f321b165cd0a2756
   languageName: node
   linkType: hard
 
-"@cardano-sdk/key-management@npm:0.29.18":
-  version: 0.29.18
-  resolution: "@cardano-sdk/key-management@npm:0.29.18"
+"@cardano-sdk/key-management@npm:0.29.19":
+  version: 0.29.19
+  resolution: "@cardano-sdk/key-management@npm:0.29.19"
   dependencies:
-    "@cardano-sdk/core": "npm:~0.47.0"
+    "@cardano-sdk/core": "npm:~0.47.1"
     "@cardano-sdk/crypto": "npm:~0.4.7"
-    "@cardano-sdk/dapp-connector": "npm:~0.13.30"
+    "@cardano-sdk/dapp-connector": "npm:~0.13.31"
     "@cardano-sdk/util": "npm:~0.17.2"
     "@emurgo/cardano-message-signing-nodejs": "npm:^1.0.1"
     bip39: "npm:^3.0.4"
@@ -457,7 +457,7 @@ __metadata:
     rxjs: "npm:^7.4.0"
     ts-custom-error: "npm:^3.2.0"
     ts-log: "npm:^2.2.4"
-  checksum: 10c0/c5aeda632f659b4a7b154c618adc1b43f5c63b5a8e90689fce8c14c345acf52f963e19808f59ec7e8308687c3200d308a9e3848d419d381d5b1c62c14bd49ff1
+  checksum: 10c0/512df00d31879a1bc422c10cb34357f41b2cebe45f8a236521bcb65370b070033f02ec7a07ef1b827ef5b7dc84ba27d1119cf494a91f6edd93caee226cc60cf5
   languageName: node
   linkType: hard
 
@@ -757,12 +757,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@effect/language-service@npm:0.87.2":
-  version: 0.87.2
-  resolution: "@effect/language-service@npm:0.87.2"
+"@effect/language-service@npm:0.87.3":
+  version: 0.87.3
+  resolution: "@effect/language-service@npm:0.87.3"
   bin:
     effect-language-service: cli.js
-  checksum: 10c0/3b15798974ed9aaf5215a3d58cde15bd667f0e167ee3d6c2829a458ddfecaf3a92c8790db0d94bcd2e6710ae9bd7d3c58748fe1629b257b6a8e7ebf85a786a34
+  checksum: 10c0/567c245835d8239395a701567b3dbec7d013ab7dae9313b274217e5220e8d6190d210bdd8075d6957cacdaf4a754dde74f2c531c10c57174601757299b6bf012
   languageName: node
   linkType: hard
 
@@ -1221,9 +1221,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@graphql-codegen/cli@npm:7.4.2":
-  version: 7.4.2
-  resolution: "@graphql-codegen/cli@npm:7.4.2"
+"@graphql-codegen/cli@npm:7.4.3":
+  version: 7.4.3
+  resolution: "@graphql-codegen/cli@npm:7.4.3"
   dependencies:
     "@babel/generator": "npm:^7.18.13"
     "@babel/template": "npm:^7.18.10"
@@ -1272,7 +1272,7 @@ __metadata:
     graphql-codegen: esm/bin.js
     graphql-codegen-cjs: cjs/bin.js
     graphql-codegen-esm: esm/bin.js
-  checksum: 10c0/e4337e004471fe953d3160ea755b5df952ea862354fcfbc3a58a4eac3f1d9aec5dbb6858c6fb89d13aebfa6bb4224c5aa84cdb883a8c2290212184118658ed25
+  checksum: 10c0/47f7e77e2c309c363f70853a4bc38111a7a2118b66b3aa01170c574acdffb310581ad548a607ea355fcaa51f033773b34efab3416c5ef197e29c7f8c4be59919
   languageName: node
   linkType: hard
 
@@ -2398,7 +2398,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-e2e-tests@workspace:packages/e2e-tests"
   dependencies:
-    "@cardano-sdk/key-management": "npm:0.29.18"
+    "@cardano-sdk/key-management": "npm:0.29.19"
     "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
     "@midnightntwrk/wallet-sdk-abstractions": "workspace:*"
     "@midnightntwrk/wallet-sdk-address-format": "workspace:*"
@@ -2411,7 +2411,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-testkit": "workspace:^"
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "workspace:^"
     "@midnightntwrk/wallet-sdk-utilities": "workspace:^"
-    "@types/node": "npm:24.13.6"
+    "@types/node": "npm:24.19.0"
     "@vitest/ui": "npm:4.1.11"
     eslint: "npm:10.11.0"
     pino: "npm:10.3.1"
@@ -2541,7 +2541,7 @@ __metadata:
     "@effect/rpc": "npm:0.76.2"
     "@effect/sql": "npm:0.52.1"
     "@effect/workflow": "npm:0.19.1"
-    "@graphql-codegen/cli": "npm:7.4.2"
+    "@graphql-codegen/cli": "npm:7.4.3"
     "@graphql-codegen/client-preset": "npm:6.2.0"
     "@graphql-typed-document-node/core": "npm:^3.2.0"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.2.1"
@@ -2560,11 +2560,11 @@ __metadata:
   resolution: "@midnightntwrk/wallet-sdk-monorepo@workspace:."
   dependencies:
     "@changesets/cli": "npm:2.31.1"
-    "@effect/language-service": "npm:0.87.2"
+    "@effect/language-service": "npm:0.87.3"
     "@eslint/compat": "npm:2.1.1"
     "@eslint/js": "npm:10.0.1"
     "@tsconfig/node24": "npm:24.0.5"
-    "@types/node": "npm:24.13.6"
+    "@types/node": "npm:24.19.0"
     "@vitest/coverage-v8": "npm:4.1.11"
     "@vitest/runner": "npm:4.1.11"
     "@vitest/ui": "npm:4.1.11"
@@ -2579,7 +2579,7 @@ __metadata:
     rimraf: "npm:6.1.3"
     testcontainers: "npm:11.14.0"
     tslib: "npm:2.8.1"
-    turbo: "npm:2.11.3"
+    turbo: "npm:2.11.5"
     typescript: "npm:5.9.3"
     typescript-eslint: "npm:8.70.1"
     vitest: "npm:4.1.11"
@@ -3754,7 +3754,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@scure/base@npm:2.4.0":
+"@scure/base@npm:2.4.0, @scure/base@npm:^2.0.0":
   version: 2.4.0
   resolution: "@scure/base@npm:2.4.0"
   checksum: 10c0/985a4bdcafa4289e0cb8b6d53453347308d5ff6ffcbe84d8fac102374fb419b52db565e98fa3931b79a4be1cc3218583065bbca27dfaabca687aac0f3db3639d
@@ -3765,13 +3765,6 @@ __metadata:
   version: 1.2.6
   resolution: "@scure/base@npm:1.2.6"
   checksum: 10c0/49bd5293371c4e062cb6ba689c8fe3ea3981b7bb9c000400dc4eafa29f56814cdcdd27c04311c2fec34de26bc373c593a1d6ca6d754398a488d587943b7c128a
-  languageName: node
-  linkType: hard
-
-"@scure/base@npm:^2.0.0":
-  version: 2.2.0
-  resolution: "@scure/base@npm:2.2.0"
-  checksum: 10c0/30158ccf5da86b0f06928f1cfe24a29fbea22824adf6f8895222910cade1ad4fe7593958aacf563287e6b4c55746f47395178e7a4763b059c22d6ee8e6f76387
   languageName: node
   linkType: hard
 
@@ -3915,44 +3908,44 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@turbo/darwin-64@npm:2.11.3":
-  version: 2.11.3
-  resolution: "@turbo/darwin-64@npm:2.11.3"
+"@turbo/darwin-64@npm:2.11.5":
+  version: 2.11.5
+  resolution: "@turbo/darwin-64@npm:2.11.5"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"@turbo/darwin-arm64@npm:2.11.3":
-  version: 2.11.3
-  resolution: "@turbo/darwin-arm64@npm:2.11.3"
+"@turbo/darwin-arm64@npm:2.11.5":
+  version: 2.11.5
+  resolution: "@turbo/darwin-arm64@npm:2.11.5"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"@turbo/linux-64@npm:2.11.3":
-  version: 2.11.3
-  resolution: "@turbo/linux-64@npm:2.11.3"
+"@turbo/linux-64@npm:2.11.5":
+  version: 2.11.5
+  resolution: "@turbo/linux-64@npm:2.11.5"
   conditions: (os=android | os=linux) & cpu=x64
   languageName: node
   linkType: hard
 
-"@turbo/linux-arm64@npm:2.11.3":
-  version: 2.11.3
-  resolution: "@turbo/linux-arm64@npm:2.11.3"
+"@turbo/linux-arm64@npm:2.11.5":
+  version: 2.11.5
+  resolution: "@turbo/linux-arm64@npm:2.11.5"
   conditions: (os=android | os=linux) & cpu=arm64
   languageName: node
   linkType: hard
 
-"@turbo/windows-64@npm:2.11.3":
-  version: 2.11.3
-  resolution: "@turbo/windows-64@npm:2.11.3"
+"@turbo/windows-64@npm:2.11.5":
+  version: 2.11.5
+  resolution: "@turbo/windows-64@npm:2.11.5"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
-"@turbo/windows-arm64@npm:2.11.3":
-  version: 2.11.3
-  resolution: "@turbo/windows-arm64@npm:2.11.3"
+"@turbo/windows-arm64@npm:2.11.5":
+  version: 2.11.5
+  resolution: "@turbo/windows-arm64@npm:2.11.5"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
@@ -4074,20 +4067,20 @@ __metadata:
   linkType: hard
 
 "@types/node@npm:*":
-  version: 26.6.2
-  resolution: "@types/node@npm:26.6.2"
+  version: 26.6.3
+  resolution: "@types/node@npm:26.6.3"
   dependencies:
     undici-types: "npm:~8.9.0"
-  checksum: 10c0/bb411ff5863a79a28ffa4ebadf2499d44046aa114d25a7a6c78f57def118123a0a7dea99e8fe38849099e9dba2b41b8853a7a282037618559f58653c35e7c5c5
+  checksum: 10c0/51070287167d157d246a5ad83e6ead93aa310bbd9cc880ecd1f244a00c2a31491620f997fbbb6ba4ce164388694827999ec68c1d16c3fb64c1037056e64613c7
   languageName: node
   linkType: hard
 
-"@types/node@npm:24.13.6, @types/node@npm:^24.13.2":
-  version: 24.13.6
-  resolution: "@types/node@npm:24.13.6"
+"@types/node@npm:24.19.0, @types/node@npm:^24.13.2":
+  version: 24.19.0
+  resolution: "@types/node@npm:24.19.0"
   dependencies:
-    undici-types: "npm:~7.18.0"
-  checksum: 10c0/b6302b2ede891e3a583a6e9c75390e8bc0fb8a99ea81c61ed029c244426550f1508ebae4ba1acf32840fb22a7df461f1e87b449043a8f906240b31a090866c1a
+    undici-types: "npm:>=7.24.0 <7.24.7"
+  checksum: 10c0/f38afca05eb323a01243aa06a4cb8e69ef3423e1115e4464a211c6556156c024bb80fadeb7e3691802a247e7e653b70bad8c528b291153e4f48fccecc6159735
   languageName: node
   linkType: hard
 
@@ -6816,8 +6809,8 @@ __metadata:
   linkType: hard
 
 "graphql-ws@npm:^6.0.6, graphql-ws@npm:^6.0.7":
-  version: 6.2.2
-  resolution: "graphql-ws@npm:6.2.2"
+  version: 6.3.0
+  resolution: "graphql-ws@npm:6.3.0"
   peerDependencies:
     "@fastify/websocket": ^10 || ^11
     crossws: ~0.3 || ~0.4
@@ -6830,7 +6823,7 @@ __metadata:
       optional: true
     ws:
       optional: true
-  checksum: 10c0/91c2a96d1625517c641bc0a7f756970b69b0fff9ca4276dcb73eac439aa136683f95a0fdceb18f805963913c4556150bb1522835d6aae54916553c31150445ad
+  checksum: 10c0/a4fee977feb9df0ab0cf293cdbbf3d623bc74ffdd959f77a3c69ab037e70988572962ec2bcafc41bb31cc3e0a134fb86750ca984a717ae3f0d293fc74b7cf2e9
   languageName: node
   linkType: hard
 
@@ -10404,16 +10397,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"turbo@npm:2.11.3":
-  version: 2.11.3
-  resolution: "turbo@npm:2.11.3"
+"turbo@npm:2.11.5":
+  version: 2.11.5
+  resolution: "turbo@npm:2.11.5"
   dependencies:
-    "@turbo/darwin-64": "npm:2.11.3"
-    "@turbo/darwin-arm64": "npm:2.11.3"
-    "@turbo/linux-64": "npm:2.11.3"
-    "@turbo/linux-arm64": "npm:2.11.3"
-    "@turbo/windows-64": "npm:2.11.3"
-    "@turbo/windows-arm64": "npm:2.11.3"
+    "@turbo/darwin-64": "npm:2.11.5"
+    "@turbo/darwin-arm64": "npm:2.11.5"
+    "@turbo/linux-64": "npm:2.11.5"
+    "@turbo/linux-arm64": "npm:2.11.5"
+    "@turbo/windows-64": "npm:2.11.5"
+    "@turbo/windows-arm64": "npm:2.11.5"
   dependenciesMeta:
     "@turbo/darwin-64":
       optional: true
@@ -10429,7 +10422,7 @@ __metadata:
       optional: true
   bin:
     turbo: bin/turbo
-  checksum: 10c0/31e78d37f044b25227cdb0b947073e0b5f662946e9911868438f0c0690ebe3f39a5e5b1cfce72b17cac28b0b71ab711a831c53ce72e66ee54690b4aa71e766f9
+  checksum: 10c0/2fc7e68ec2d56e038d84f2d3ee528e356fcf4bc6af4434e39b96d4c63518e406ff04fb35c912b0a5bbbcf5bf5431ba054ebb0ca26921e34e117ad19e6a06e6d6
   languageName: node
   linkType: hard
 
@@ -10537,17 +10530,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"undici-types@npm:>=7.24.0 <7.24.7":
+  version: 7.24.6
+  resolution: "undici-types@npm:7.24.6"
+  checksum: 10c0/d9cd8befb643ac904615c280a095ba4240531f6bb4a5e75a22a7483630ca8d3f1016d2ab6ace6ceda1f63b3a2db2fe037fafe121d6917a0187573aa548ff78ca
+  languageName: node
+  linkType: hard
+
 "undici-types@npm:~5.26.4":
   version: 5.26.5
   resolution: "undici-types@npm:5.26.5"
   checksum: 10c0/bb673d7876c2d411b6eb6c560e0c571eef4a01c1c19925175d16e3a30c4c428181fb8d7ae802a261f283e4166a0ac435e2f505743aa9e45d893f9a3df017b501
-  languageName: node
-  linkType: hard
-
-"undici-types@npm:~7.18.0":
-  version: 7.18.2
-  resolution: "undici-types@npm:7.18.2"
-  checksum: 10c0/85a79189113a238959d7a647368e4f7c5559c3a404ebdb8fc4488145ce9426fcd82252a844a302798dfc0e37e6fb178ff481ed03bc4caf634c5757d9ef43521d
   languageName: node
   linkType: hard
 
@@ -10558,10 +10551,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"undici@npm:8.10.2":
-  version: 8.10.2
-  resolution: "undici@npm:8.10.2"
-  checksum: 10c0/66d7fc69149207cab570d6abbc9e965b6afe1ae889a7d46945b431165c973d6a56f3dd8b70a856e7ae1e550b6366a1cde6f06e68640587f0dadca38de72995ee
+"undici@npm:8.11.2":
+  version: 8.11.2
+  resolution: "undici@npm:8.11.2"
+  checksum: 10c0/106f6991178fb7562fd90cdec7993c5f807a9428682306091f0c4b27fc474ec291f868e29972c6252988bf061ad193df943b3b99e775be157a28d92bbb95699d
   languageName: node
   linkType: hard
 
