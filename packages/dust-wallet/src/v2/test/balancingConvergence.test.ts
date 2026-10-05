@@ -24,7 +24,7 @@
  *   dry run spends the selected coins against the wallet's own Dust state. The capability is built by hand around the
  *   real coins and keys capabilities so that its coin selection can be guarded: a balancing loop that never settles is
  *   synchronous and blocks the event loop, so no test timeout could stop it. The guard turns that into a failure after
- *   a bounded number of rounds; a loop that settles never gets near it.
+ *   a bounded number of coin selections; a loop that settles never gets near it.
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
@@ -55,24 +55,28 @@ const COST_PARAMETERS = { feeBlocksMargin: 5 };
 const NIGHT_AWARD = 1_000_000_000n;
 // Long enough for the Night to pay for its own registration, short enough that what is left starts below that window.
 const SECONDS_BEFORE_REGISTERING = 100n;
-// Far more rounds than a settling balance needs; only a loop that never settles reaches it.
-const MAX_BALANCING_ROUNDS = 100;
+// Far more coin selections than a settling balance needs; only a loop that never settles reaches it.
+const MAX_COIN_SELECTIONS = 100;
 
 /**
- * A coin selection that is the default one, until it has been asked for more often than a settling balance ever would.
+ * The default coin selection, until it has been asked for a coin more often than a settling balance ever would.
  *
  * @remarks
- *   The capability asks for its coin selection once per balancing round, so the count is the number of rounds.
+ *   Every balancing pass that still has a deficit asks the selection for coins, one at a time, until the pass covers it.
+ *   The count therefore climbs with every pass: a balance that settles asks a handful of times, and only a loop that
+ *   never settles reaches the bound. Counting the selections themselves, rather than how often the capability fetched
+ *   the selection function, is what makes the guard see a loop whichever of the two the loop repeats.
  */
 const guardedCoinSelection = (): (() => CoinSelection) => {
-  const rounds = { count: 0 };
-  return () => {
-    rounds.count += 1;
-    if (rounds.count > MAX_BALANCING_ROUNDS) {
-      throw new Error(`Dust balancing did not settle within ${MAX_BALANCING_ROUNDS} rounds`);
+  const selections = { count: 0 };
+  const guarded: CoinSelection = (coins) => {
+    selections.count += 1;
+    if (selections.count > MAX_COIN_SELECTIONS) {
+      throw new Error(`Dust balancing did not settle within ${MAX_COIN_SELECTIONS} coin selections`);
     }
-    return chooseCoin;
+    return chooseCoin(coins);
   };
+  return () => guarded;
 };
 
 /** A wallet holding exactly one Dust coin, generating from a small Night holding in the in-memory simulator. */
