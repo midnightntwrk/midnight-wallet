@@ -8,6 +8,11 @@ name: Integration
 # aggregate gate: green only if every file passed.
 on:
   workflow_call:
+    secrets:
+      MIDNIGHTCI_PACKAGES_READ:
+        required: true
+      APP_INFRA_SECRET:
+        required: true
 
 env:
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
