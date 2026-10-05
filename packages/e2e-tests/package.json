@@ -15,7 +15,7 @@
     "lint": "eslint --max-warnings 0"
   },
   "devDependencies": {
-    "@cardano-sdk/key-management": "0.29.18",
+    "@cardano-sdk/key-management": "0.29.19",
     "@midnight-ntwrk/ledger-v8": "^8.1.0",
     "@midnightntwrk/wallet-sdk-abstractions": "workspace:*",
     "@midnightntwrk/wallet-sdk-address-format": "workspace:*",
@@ -28,7 +28,7 @@
     "@midnightntwrk/wallet-sdk-testkit": "workspace:^",
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "workspace:^",
     "@midnightntwrk/wallet-sdk-utilities": "workspace:^",
-    "@types/node": "24.13.6",
+    "@types/node": "24.19.0",
     "@vitest/ui": "4.1.11",
     "eslint": "10.11.0",
     "pino": "10.3.1",
