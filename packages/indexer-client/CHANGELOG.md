@@ -1,5 +1,46 @@
 # @midnightntwrk/wallet-sdk-indexer-client
 
+## 2.0.0
+
+### Major Changes
+
+- b545c3b: feat(indexer-client): automate the GraphQL schema sync and bump to indexer v4.3.2 (#305)
+
+  A new `schema:sync` script keeps the committed schema (`indexer.gql`) and its generated types locked to a pinned
+  indexer release, replacing the manual copy that used to drift. The pinned schema is bumped to v4.3.2.
+
+  BREAKING CHANGE: the generated types are now produced by graphql-codegen's operation-scoped `client` preset, so the
+  package no longer re-exports bare schema types. Names like `Maybe`, `InputMaybe`, `Scalars`, and object types such as
+  `Block` and `TransactionResult` are no longer exported — use the operation types (e.g. `TransactionStatusQuery`)
+  instead.
+
+### Minor Changes
+
+- e89ab0b: Track transaction lifecycle in transaction history. Submitted transactions are now recorded as pending,
+  transition to finalized once confirmed by the indexer, and to rejected if they are reverted — giving a single,
+  consistent view of in-flight and settled transactions.
+- 4628d98: feat(indexer-client): adopt the indexer's `graphql-transport-ws+deflate` subscription compression (#462)
+
+  Subscriptions now negotiate the indexer's deflate subprotocol (indexer >= 4.4.0), so payloads at or above the server's
+  256 B threshold arrive as zlib binary frames and are inflated client-side. Compression is always on with no public
+  configuration; against an indexer that predates the subprotocol the client silently falls back to standard
+  `graphql-transport-ws`.
+
+  The WebSocket connection is also now held open for the client's entire lifetime (`lazy: false`), so backpressure
+  pause/resume cycles reuse a single physical connection instead of reconnecting each time, and disposing the client
+  leaves nothing pending — no timers survive to delay the exit of a short-lived process.
+
+### Patch Changes
+
+- 44bbcae: Remove unused devDependencies `@graphql-codegen/typescript` and `@graphql-codegen/typescript-operations`.
+  They are bundled transitively by `@graphql-codegen/client-preset` (used via `preset: 'client'` in `codegen.ts`), so
+  dropping them as direct dependencies has no effect on code generation or the published package.
+- 1eaad77: Pin internal `@midnightntwrk/wallet-sdk-*` dependencies to exact versions instead of caret ranges. A caret
+  range on a prerelease base (e.g. `^5.0.0-beta.0`) satisfies canary snapshots published on the same `major.minor.patch`
+  (`5.0.0-canary.*`), and since `canary` sorts above `beta`/`alpha`, installing a prerelease pulled canary builds of the
+  sibling packages. Exact pins make published releases resolve to a single coherent set regardless of what snapshots
+  exist on the registry.
+
 ## 1.2.3
 
 ### Patch Changes
