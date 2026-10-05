@@ -28,6 +28,7 @@ import {
 } from '../Sync.js';
 import { type IndexerLivenessUpdate } from '../SyncSchema.js';
 import { type TransactionHistoryService } from '../TransactionHistory.js';
+import { UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
 
 /** The whole supported span: these tests are about the liveness verdict, not the activation boundary. */
 const activeRange = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion);
@@ -174,6 +175,36 @@ describe('makeSimulatorSyncCapability', () => {
     );
 
     expect(Either.getOrThrow(result).progress.indexerLiveness).toStrictEqual(IndexerLiveness.Unknown());
+  });
+
+  it('makeSimulatorSyncCapability records a liveness verdict and leaves the cursor and coins alone', () => {
+    // A verdict judges the indexer, not the chain: it says nothing about which transactions were applied or which coins
+    // exist. Writing anything but the verdict would let the liveness check corrupt the cursor or the wallet's coins.
+    const coinOf = (intentHash: string, outputNo: number): UtxoWithMeta =>
+      new UtxoWithMeta({
+        utxo: { value: 42n, owner: publicKey.addressHex, type: 'type1', intentHash, outputNo },
+        meta: { ctime: new Date(0), registeredForDustGeneration: false },
+      });
+    const wallet = CoreWallet.restore(
+      UnshieldedState.restore(
+        [coinOf('intent-available', 0)],
+        [{ utxo: coinOf('intent-pending', 1), ttl: new Date('2026-01-01T01:00:00.000Z') }],
+      ),
+      publicKey,
+      { appliedId: 42n, highestTransactionId: 99n },
+      ProtocolVersion.MinSupportedVersion,
+      'undeployed',
+    );
+    const behind = IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n });
+
+    const result = Either.getOrThrow(
+      makeSimulatorSyncCapability().applyUpdate(wallet, livenessUpdate(behind), activeRange),
+    );
+
+    expect(result.progress.indexerLiveness).toStrictEqual(behind);
+    expect(result.progress.appliedId).toBe(42n);
+    expect(result.progress.highestTransactionId).toBe(99n);
+    expect(UnshieldedState.toArrays(result.state)).toEqual(UnshieldedState.toArrays(wallet.state));
   });
 });
 
