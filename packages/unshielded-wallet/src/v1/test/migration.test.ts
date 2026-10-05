@@ -26,22 +26,29 @@ import {
   makeEmptyWalletMigration,
   type PreviousLedgerWallet,
 } from '../Migration.js';
-import { type PendingUtxo, UnshieldedState } from '../UnshieldedState.js';
+import { UnshieldedState } from '../UnshieldedState.js';
 import { fixtureOwner, fixtureUtxo } from './syncFixtures.js';
 
 const owner = fixtureOwner();
 
+/** The expiry a fixture booking was taken with. The migration releases bookings whatever their expiry. */
+const BOOKING_TTL = new Date('2999-01-01T00:00:00.000Z');
+
 /** A previous-ledger wallet, described structurally. Its verifying key is a bare hex string, as this ledger's are. */
 const previousWallet = (params: {
   readonly available: readonly ReturnType<typeof fixtureUtxo>[];
-  readonly pending?: ReadonlyArray<Omit<PendingUtxo, 'restored'>>;
+  readonly pending?: readonly ReturnType<typeof fixtureUtxo>[];
   readonly appliedId: bigint;
   readonly protocolVersion: bigint;
 }): PreviousLedgerWallet => ({
   // Built through the real `UnshieldedState`, not from plain arrays: the previous variant hands over a state whose
   // UTXOs live in Effect `HashMap`s, and a fixture that passed arrays would let a migration that iterated entries
-  // instead of values pass here and fail only against a real wallet.
-  state: UnshieldedState.restore(params.available, params.pending ?? []),
+  // instead of values pass here and fail only against a real wallet. A booking there is the UTXO plus its expiry, as
+  // the previous variant holds it, so the migration has to unwrap it rather than read it as a UTXO.
+  state: UnshieldedState.restore(
+    params.available,
+    (params.pending ?? []).map((utxo) => ({ utxo, ttl: BOOKING_TTL })),
+  ),
   publicKey: {
     publicKey: owner.publicKey,
     addressHex: owner.addressHex,
@@ -102,7 +109,7 @@ describe('unshielded state migration', () => {
       const booked = fixtureUtxo(owner, 55n, 9);
       const previous = previousWallet({
         available: [fixtureUtxo(owner, 100n, 0)],
-        pending: [{ utxo: booked, ttl: new Date('2026-01-01T01:00:00.000Z') }],
+        pending: [booked],
         appliedId: 4n,
         protocolVersion: 7n,
       });
