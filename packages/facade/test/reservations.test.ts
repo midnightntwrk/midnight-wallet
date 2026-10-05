@@ -20,20 +20,27 @@ import {
   type AnyTx,
   type FinalizedTx,
   NetworkId,
+  NoOpTransactionHistoryStorage,
   ProtocolVersion,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
+import { CustomUnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import {
+  Sync as UnshieldedSync,
+  V2Builder as UnshieldedV2Builder,
+} from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
 import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { type FacadeState, type WalletFacade } from '../src/index.js';
+import { type FacadeState, type WalletEntry, type WalletFacade } from '../src/index.js';
 import type { V9UnboundTransaction, VersionedProvingService } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import {
   createSimulatorWalletFactories,
   deriveWalletKeys,
   makeSimulatorFacade,
+  SilentPendingTransactions,
   tokenValue,
   waitForUnshieldedBalance,
   type SimulatorConfig,
@@ -319,5 +326,91 @@ describe('Balancing a transaction the caller already put its own coins into', ()
       expect(recorded.toSorted()).toEqual(newlyBooked.toSorted());
       // The caller's coin was booked for its first transaction, not by this balancing, so this record leaves it alone.
       expect(recorded).not.toContain(utxoKey(callersCoin));
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+describe('Bookings restored from a snapshot', () => {
+  // A snapshot carries the coins a previous process had booked, and nothing in it says whether their transactions are
+  // still out there. Once sync reaches the tip, a booked coin no transaction spent is free again, except where the
+  // pending set still accounts for it: a transaction being tracked is what says its coins are spoken for from
+  // submission onwards, so a coin it spends has to stay booked.
+  it('keeps a restored booking a tracked transaction spends, and frees the one nothing accounts for', () =>
+    Effect.gen(function* () {
+      const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
+      // Two coins, so the previous process can book one for each of two transfers.
+      const simulator = yield* Simulator.init({
+        genesisMints: [
+          nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress),
+          nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress),
+        ],
+        blockProducer: immediateBlockProducer(),
+      });
+      const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
+      const previous = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config));
+
+      yield* waitForUnshieldedBalance(previous, NIGHT, tokenValue(200_000n));
+      yield* simulator.fastForward(10_000n);
+      const address = yield* Effect.promise(() => previous.unshielded.getAddress());
+      const ttl = new Date(Date.now() + 60 * 60 * 1000);
+      const transfer = () =>
+        previous.transferTransaction(
+          [
+            {
+              type: 'unshielded' as const,
+              outputs: [{ type: NIGHT, receiverAddress: address, amount: tokenValue(1n) }],
+            },
+          ],
+          { ttl, payFees: false },
+        );
+      const pendingCoinsReach = (facade: WalletFacade, count: number): Effect.Effect<FacadeState> =>
+        Effect.promise(() =>
+          rx.firstValueFrom(facade.state().pipe(rx.filter((state) => state.unshielded.pendingCoins.length === count))),
+        );
+
+      // The first transfer is finalized, so the pending set tracks it and it alone accounts for its coin.
+      const tracked = yield* Effect.promise(() => transfer());
+      const [trackedCoin] = (yield* pendingCoinsReach(previous, 1)).unshielded.pendingCoins.map(utxoKey);
+      yield* Effect.promise(() => previous.finalizeRecipe(tracked));
+
+      // The second is abandoned after balancing; its coin stays booked with nothing in the restored pending set for it.
+      yield* Effect.promise(() => transfer());
+      const bookedByPrevious = (yield* pendingCoinsReach(previous, 2)).unshielded.pendingCoins.map(utxoKey);
+      const [abandonedCoin] = bookedByPrevious.filter((id) => id !== trackedCoin);
+
+      const snapshot = yield* Effect.promise(() => previous.unshielded.serializeState());
+      const { all } = yield* pendingSet(previous);
+      expect(all).toHaveLength(1);
+      expect(abandonedCoin).toBeDefined();
+
+      // The restored pending set holds the tracked transaction and no reservation, so the tracked transaction is the only
+      // thing that can account for either booking.
+      const restoredPending = new SilentPendingTransactions();
+      restoredPending.states.next({ all, reservations: [] });
+      const RestoredUnshieldedWallet = CustomUnshieldedWallet(
+        { ...config, txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>() },
+        new UnshieldedV2Builder()
+          .withSync(UnshieldedSync.makeSimulatorSyncService, UnshieldedSync.makeSimulatorSyncCapability)
+          .withSerializationDefaults()
+          .withTransactingDefaults()
+          .withSigningDefaults()
+          .withCoinsAndBalancesDefaults()
+          .withKeysDefaults()
+          .withCoinSelectionDefaults()
+          .withTransactionHistoryDefaults(),
+      );
+      const restored = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config), {
+        unshielded: () => RestoredUnshieldedWallet.restore(snapshot),
+        pendingTransactionsService: () => restoredPending,
+      });
+
+      const settled = yield* Effect.promise(() =>
+        rx.firstValueFrom(
+          restored
+            .state()
+            .pipe(rx.filter((state) => state.unshielded.availableCoins.map(utxoKey).includes(abandonedCoin))),
+        ),
+      );
+
+      expect(settled.unshielded.pendingCoins.map(utxoKey)).toEqual([trackedCoin]);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
