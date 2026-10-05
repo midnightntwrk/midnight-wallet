@@ -221,6 +221,7 @@ const isCoveredBy = <TTransaction>(
     Option.map((trait) => trait.areAllTxIdsIncluded(item.tx, txIds)),
     Option.getOrElse(() => false),
   );
+
 /** Two reservations, or a reservation and a transaction, are the same spend if they share any identifier. */
 const sharesIdentifier = (reservation: Reservation, identifiers: readonly string[]): boolean =>
   reservation.identifiers.some((id) => identifiers.includes(id));
@@ -525,7 +526,6 @@ const hasEpochEnded = <TTransaction>(
     Option.getOrElse(() => false),
   );
 
-//It has to stay immutable in the code now. Any changes made should be separate schemas with fallbacks/conversions
 const ReservationSchema = Schema.Struct({
   identifiers: Schema.Array(Schema.String),
   intentHashes: Schema.Array(Schema.String),
