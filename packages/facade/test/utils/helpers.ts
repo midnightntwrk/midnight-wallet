@@ -309,11 +309,15 @@ export const deriveWalletKeys = (
  * it on scope close.
  *
  * Proving and submission services are created internally from the simulator config.
+ *
+ * @param overrides - Init parameters to use instead of the simulator defaults, for a test that has to drive one of the
+ *   services itself.
  */
 export const makeSimulatorFacade = (
   config: SimulatorConfig,
   keys: WalletKeys,
   factories: SimulatorWalletFactories,
+  overrides: Partial<Parameters<typeof WalletFacade.init>[0]> = {},
 ): Effect.Effect<WalletFacade, never, Scope.Scope> => {
   const dustParameters = ledgerV9.LedgerParameters.initialParameters().dust;
   const provingService = createSimulatorProvingService();
@@ -339,6 +343,7 @@ export const makeSimulatorFacade = (
         submissionService: () => submissionService,
         fetchBlockData: () => makeSimulatorBlockDataFetcher(config.simulator),
         clock: () => simulatorClock(config.simulator),
+        ...overrides,
       });
 
       // Start the wallet with keys

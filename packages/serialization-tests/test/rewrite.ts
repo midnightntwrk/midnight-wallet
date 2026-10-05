@@ -47,8 +47,14 @@ const singleWriterRewriters: Pick<Record<Surface, Rewriter>, 'tx-history' | 'pen
 
 const shieldedV1 = ShieldedV1Serialization.makeDefaultV1SerializationCapability();
 const shieldedV2 = ShieldedV2Serialization.makeDefaultV2SerializationCapability();
-const unshieldedV1 = UnshieldedV1Serialization.makeDefaultV1SerializationCapability();
-const unshieldedV2 = UnshieldedV2Serialization.makeDefaultV2SerializationCapability();
+/**
+ * A fixed instant for the unshielded readers. A booking stored without an expiry is dated a lifetime ahead of the
+ * moment it is read back, so without a pinned clock the rewritten payload would differ on every run and the baseline
+ * could never be matched.
+ */
+const frozenClock = { now: () => new Date('2026-03-01T12:00:00.000Z') };
+const unshieldedV1 = UnshieldedV1Serialization.makeDefaultV1SerializationCapability({ clock: frozenClock });
+const unshieldedV2 = UnshieldedV2Serialization.makeDefaultV2SerializationCapability({ clock: frozenClock });
 const dustV1 = DustV1Serialization.makeDefaultV1SerializationCapability();
 const dustV2 = DustV2Serialization.makeDefaultV2SerializationCapability();
 

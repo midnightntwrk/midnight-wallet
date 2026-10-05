@@ -96,7 +96,7 @@ export type PreviousLedgerWallet = Readonly<{
     // would be satisfied by the real state and then silently carry across a list of malformed pairs. `HashMap` is an
     // Effect type, not a ledger one, so naming it here keeps this description version-agnostic.
     readonly availableUtxos: HashMap.HashMap<string, UtxoLike>;
-    readonly pendingUtxos: HashMap.HashMap<string, UtxoLike>;
+    readonly pendingUtxos: HashMap.HashMap<string, BookingLike>;
   };
   publicKey: {
     readonly publicKey: string;
@@ -121,6 +121,19 @@ export type UtxoLike = {
     readonly ctime: Date;
     readonly registeredForDustGeneration: boolean;
   };
+};
+
+/**
+ * A booking of the previous ledger version, as plain data: the reserved UTXO, and whatever else the previous variant
+ * keeps beside it.
+ *
+ * @remarks
+ *   Only the UTXO is described, because only the UTXO crosses. The booking's expiry and its restored flag describe a
+ *   reservation for a transaction that cannot land on this side of the boundary, and the migration releases every
+ *   booking rather than carrying it (see {@link makeCrossLedgerMigration}), so nothing here reads them.
+ */
+export type BookingLike = {
+  readonly utxo: UtxoLike;
 };
 
 /**
@@ -173,7 +186,7 @@ export const makeCrossLedgerMigration = (): StateMigration<PreviousLedgerWallet>
         UnshieldedState.restore(
           [
             ...Array.from(HashMap.values(previousState.state.availableUtxos), carryUtxo),
-            ...Array.from(HashMap.values(previousState.state.pendingUtxos), carryUtxo),
+            ...Array.from(HashMap.values(previousState.state.pendingUtxos), (booking) => carryUtxo(booking.utxo)),
           ],
           [],
         ),

@@ -11,15 +11,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// The version signals the running variant puts on its state stream: an ordinary transition, and the healing emission
-// that rescues a snapshot restored at a version this variant does not own.
-import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+// Two things about the running variant. The version signals it puts on its state stream: an ordinary transition, and
+// the healing emission that rescues a snapshot restored at a version this variant does not own. And how it runs sync:
+// the connection flag follows the subscription, and the liveness feed lives at wallet scope.
+import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { StateChange, type Variant, VersionChangeType } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { Duration, Effect, Scope, Stream, SubscriptionRef } from 'effect';
+import { Cause, Duration, Effect, Exit, Option, Schedule, Scope, Stream, SubscriptionRef } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
 import { RunningV1Variant } from '../RunningV1Variant.js';
+import { makeDefaultSyncCapability, type SyncService } from '../Sync.js';
+import { type SyncUpdate } from '../SyncSchema.js';
+import { type TransactionHistoryService } from '../TransactionHistory.js';
 import { UnshieldedState } from '../UnshieldedState.js';
+import { SyncWalletError } from '../WalletError.js';
 import { fixtureOwner } from './syncFixtures.js';
 
 const owner = fixtureOwner();
@@ -103,5 +108,328 @@ describe('unshielded running variant version signals', () => {
     expect(emissions.filter(StateChange.isVersionChange)).toEqual([]);
     // ...but the stream was genuinely live, so the empty result above is not a false pass.
     expect(emissions.filter(StateChange.isState).length).toBeGreaterThan(0);
+  });
+});
+
+const noOpHistory: TransactionHistoryService = { put: () => Effect.void };
+
+const syncCapability = makeDefaultSyncCapability(
+  { indexerClientConnection: { indexerHttpUrl: 'http://localhost:8088/api/v1/graphql' } },
+  () => ({ transactionHistoryService: noOpHistory }),
+);
+
+/**
+ * A liveness feed for doubles whose test is about the indexer subscription rather than the check.
+ *
+ * @remarks
+ *   Every service supplies a feed, so one with no check to run says so. `Skipped` does not gate completion, which keeps
+ *   these tests measuring the subscription behaviour they are about.
+ */
+const noCheck = () =>
+  Stream.make<SyncUpdate[]>({
+    type: 'IndexerLiveness',
+    verdict: IndexerLiveness.Skipped({ reason: 'no-liveness-feed' }),
+  });
+
+/** A subscription that reports a fully synchronized wallet, then dies — an indexer WebSocket dropping mid-session. */
+const dyingSyncService: SyncService<CoreWallet, SyncUpdate> = {
+  livenessUpdates: noCheck,
+  updates: () =>
+    Stream.concat(
+      Stream.make<SyncUpdate[]>(
+        {
+          type: 'IndexerLiveness',
+          verdict: IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n }),
+        },
+        { type: 'UnshieldedTransactionsProgress', highestTransactionId: 0, protocolVersion: 0 },
+      ),
+      Stream.fail(new SyncWalletError({ message: 'websocket closed' })),
+    ),
+};
+
+describe('RunningV1Variant.startSync', () => {
+  it('should clear isConnected when the sync stream fails, so a dead subscription cannot keep reporting synced', async () => {
+    // `isConnected` was written true on every progress update and cleared nowhere: it latched. When the subscription
+    // dropped, the stream failed into its retry backoff with the wallet still holding isConnected: true, a caught-up
+    // cursor, and the last liveness verdict — so `isCompleteWithin()` reported a wallet connected to nothing as
+    // synchronized, for up to the full backoff (capped at two minutes) or an entire indexer outage. The liveness check
+    // cannot catch this one: the indexer itself may be healthy — it is this wallet's subscription that is dead — so
+    // the connection flag is the only truthful signal, and it must go false the moment the stream does.
+    const program = Effect.gen(function* () {
+      const stateRef = yield* SubscriptionRef.make(CoreWallet.init(owner, 'undeployed'));
+      const scope = yield* Scope.make();
+
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef, activationRange },
+        // Type cast required because: startSync exercises only the sync service and capability; building the full
+        // context would drag transacting, serialization and key material into a test about a connection flag.
+        {
+          syncService: dyingSyncService,
+          syncCapability,
+          transactionHistoryService: noOpHistory,
+        } as unknown as RunningV1Variant.Context<string, SyncUpdate>,
+      );
+
+      // Subscribed before sync starts, so no intermediate state can slip past between replay and live changes.
+      const firstDisconnectAfterConnect = yield* Effect.fork(
+        stateRef.changes.pipe(
+          Stream.map((wallet) => wallet.progress),
+          // Drop everything up to and including the moment the update latched the flag true...
+          Stream.dropUntil((progress) => progress.isConnected),
+          // ...then wait for it to be cleared. Carrying the whole progress out, so completion is asserted on the same
+          // state the flag was observed on.
+          Stream.filter((progress) => !progress.isConnected),
+          Stream.runHead,
+        ),
+      );
+      yield* Effect.yieldNow();
+
+      yield* variant.startSyncInBackground().pipe(Effect.provideService(Scope.Scope, scope));
+
+      const progressAfterFailure = yield* firstDisconnectAfterConnect.await.pipe(
+        Effect.flatten,
+        // Both abnormal endings are defects, not expected failures: the state stream cannot end while its ref lives,
+        // and the timeout firing is precisely the bug under test.
+        Effect.flatMap(Option.match({ onNone: () => Effect.dieMessage('state stream ended'), onSome: Effect.succeed })),
+        Effect.timeoutFailCause({
+          duration: Duration.seconds(3),
+          onTimeout: () => Cause.die(new Error('isConnected was never cleared after the sync stream failed')),
+        }),
+      );
+
+      yield* Scope.close(scope, Exit.void);
+
+      return progressAfterFailure;
+    });
+
+    const progress = await Effect.runPromise(Effect.scoped(program));
+
+    expect(progress.isConnected).toBe(false);
+    // The cursor is caught up and the last verdict is InSync — without the cleared flag, this wallet would count as
+    // fully synchronized while connected to nothing. This is the assertion the whole feature's premise implies.
+    expect(progress.isStrictlyComplete()).toBe(false);
+  });
+
+  it(
+    'should build the liveness feed once at wallet scope, so an indexer-stream retry does not restart the poller',
+    { timeout: 10_000 },
+    async () => {
+      // `updates()` fails and is rebuilt by the variant's retry — that is its contract. The liveness feed must not be
+      // torn down with it: rebuilding it on every retry reconnects its node client each time and silences verdicts
+      // during exactly the windows — indexer outages — the check exists for. The feed's lifetime is the wallet's.
+      const builds = { indexer: 0, liveness: 0 };
+
+      const retryingSyncService: SyncService<CoreWallet, SyncUpdate> = {
+        updates: () => {
+          builds.indexer += 1;
+          return Stream.concat(
+            Stream.make<SyncUpdate[]>({
+              type: 'UnshieldedTransactionsProgress',
+              highestTransactionId: 0,
+              protocolVersion: 0,
+            }),
+            Stream.fail(new SyncWalletError({ message: 'websocket closed' })),
+          );
+        },
+        livenessUpdates: () => {
+          builds.liveness += 1;
+          return Stream.concat(
+            Stream.make<SyncUpdate[]>({
+              type: 'IndexerLiveness',
+              verdict: IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n }),
+            }),
+            // Held open: a real verdict stream never ends, and an ending one would mask a feed that was rebuilt.
+            Stream.never,
+          );
+        },
+      };
+
+      const program = Effect.gen(function* () {
+        const stateRef = yield* SubscriptionRef.make(CoreWallet.init(owner, 'undeployed'));
+        const scope = yield* Scope.make();
+
+        const variant = new RunningV1Variant(
+          scope,
+          { stateRef, activationRange },
+          // Type cast required because: startSync exercises only the sync service and capability; building the full
+          // context would drag transacting, serialization and key material into a test about feed ownership.
+          {
+            syncService: retryingSyncService,
+            syncCapability,
+            transactionHistoryService: noOpHistory,
+          } as unknown as RunningV1Variant.Context<string, SyncUpdate>,
+        );
+
+        const verdictArrived = yield* Effect.fork(
+          stateRef.changes.pipe(
+            Stream.filter((wallet) => IndexerLiveness.isInSync(wallet.progress.indexerLiveness)),
+            Stream.runHead,
+          ),
+        );
+        yield* Effect.yieldNow();
+
+        yield* variant.startSyncInBackground().pipe(Effect.provideService(Scope.Scope, scope));
+
+        // Wait through at least one retry of the indexer stream — the rebuild the liveness feed must survive.
+        yield* Effect.sync(() => builds.indexer).pipe(
+          Effect.repeat({ until: (count) => count >= 2, schedule: Schedule.spaced(Duration.millis(50)) }),
+          Effect.timeoutFailCause({
+            duration: Duration.seconds(8),
+            onTimeout: () => Cause.die(new Error('the indexer stream was never retried')),
+          }),
+        );
+
+        yield* verdictArrived.await.pipe(
+          Effect.flatten,
+          Effect.flatMap(
+            Option.match({ onNone: () => Effect.dieMessage('state stream ended'), onSome: Effect.succeed }),
+          ),
+          Effect.timeoutFailCause({
+            duration: Duration.seconds(3),
+            onTimeout: () => Cause.die(new Error('no liveness verdict ever reached the wallet state')),
+          }),
+        );
+
+        yield* Scope.close(scope, Exit.void);
+
+        return builds;
+      });
+
+      const observed = await Effect.runPromise(Effect.scoped(program));
+
+      expect(observed.indexer).toBeGreaterThanOrEqual(2);
+      expect(observed.liveness).toBe(1);
+    },
+  );
+
+  it('should report Skipped when the sync service runs no check, so a custom source can still report synced', async () => {
+    // `Unknown` is the progress default and gates completion, so a source that will never be checked has to say so or
+    // the wallet is blocked forever, with no error and no log. Every service supplies a feed — the field is required —
+    // so one with no check to run reports it through that feed rather than by leaving the field out, and the variant
+    // has no absence to interpret.
+    const feedlessSyncService: SyncService<CoreWallet, SyncUpdate> = {
+      updates: () =>
+        Stream.concat(
+          Stream.make<SyncUpdate[]>({
+            type: 'UnshieldedTransactionsProgress',
+            highestTransactionId: 0,
+            protocolVersion: 0,
+          }),
+          // Held open: a live subscription does not end.
+          Stream.never,
+        ),
+      livenessUpdates: () =>
+        Stream.make<SyncUpdate[]>({
+          type: 'IndexerLiveness',
+          verdict: IndexerLiveness.Skipped({ reason: 'no-liveness-feed' }),
+        }),
+    };
+
+    const program = Effect.gen(function* () {
+      const stateRef = yield* SubscriptionRef.make(CoreWallet.init(owner, 'undeployed'));
+      const scope = yield* Scope.make();
+
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef, activationRange },
+        // Type cast required because: the test exercises only the sync service and capability; building the full
+        // context would drag transacting, serialization and key material into a test about the liveness default.
+        {
+          syncService: feedlessSyncService,
+          syncCapability,
+          transactionHistoryService: noOpHistory,
+        } as unknown as RunningV1Variant.Context<string, SyncUpdate>,
+      );
+
+      const connected = yield* Effect.fork(
+        stateRef.changes.pipe(
+          Stream.filter((wallet) => wallet.progress.isConnected),
+          Stream.runHead,
+        ),
+      );
+      yield* Effect.yieldNow();
+
+      yield* variant.startSyncInBackground().pipe(Effect.provideService(Scope.Scope, scope));
+
+      yield* connected.await.pipe(
+        Effect.flatten,
+        Effect.timeoutFailCause({
+          duration: Duration.seconds(3),
+          onTimeout: () => Cause.die(new Error('the progress update never reached the wallet state')),
+        }),
+      );
+
+      const wallet = yield* SubscriptionRef.get(stateRef);
+      yield* Scope.close(scope, Exit.void);
+
+      return wallet.progress;
+    });
+
+    const progress = await Effect.runPromise(Effect.scoped(program));
+
+    expect(progress.indexerLiveness).toStrictEqual(IndexerLiveness.Skipped({ reason: 'no-liveness-feed' }));
+    // The user-visible symptom: connected, caught up, and still never "synced".
+    expect(progress.isStrictlyComplete()).toBe(true);
+  });
+
+  it('should treat a subscription that ends cleanly as dropped, clearing isConnected and rebuilding it', async () => {
+    // The indexer closes a subscription with a graphql-ws `complete` when its own stream ends; the client turns that
+    // into a clean stream end. A live wallet's update source has no legitimate end — every source is open-ended — so an
+    // end is a dropped connection by another name. Without this, the sync fiber simply finished: no retry, no flag
+    // reset, and the wallet went on reporting itself synchronized while no further transaction could ever reach it.
+    const builds = { indexer: 0 };
+
+    const endingSyncService: SyncService<CoreWallet, SyncUpdate> = {
+      livenessUpdates: noCheck,
+      updates: () => {
+        builds.indexer += 1;
+        return builds.indexer === 1
+          ? // The first subscription reports a caught-up wallet, then the indexer completes it.
+            Stream.make<SyncUpdate[]>({
+              type: 'UnshieldedTransactionsProgress',
+              highestTransactionId: 0,
+              protocolVersion: 0,
+            })
+          : // The rebuilt one says nothing, so the flag the retry cleared stays observable.
+            Stream.never;
+      },
+    };
+
+    const program = Effect.gen(function* () {
+      const stateRef = yield* SubscriptionRef.make(CoreWallet.init(owner, 'undeployed'));
+      const scope = yield* Scope.make();
+
+      const variant = new RunningV1Variant(
+        scope,
+        { stateRef, activationRange },
+        // Type cast required because: the test exercises only the sync service and capability; building the full
+        // context would drag transacting, serialization and key material into a test about subscription lifetime.
+        {
+          syncService: endingSyncService,
+          syncCapability,
+          transactionHistoryService: noOpHistory,
+        } as unknown as RunningV1Variant.Context<string, SyncUpdate>,
+      );
+
+      yield* variant.startSyncInBackground().pipe(Effect.provideService(Scope.Scope, scope));
+
+      // Give the retry a bounded chance to rebuild the subscription; the assertions below decide the outcome.
+      yield* Effect.sync(() => builds.indexer).pipe(
+        Effect.repeat({ until: (count) => count >= 2, schedule: Schedule.spaced(Duration.millis(50)) }),
+        Effect.timeoutOption(Duration.seconds(5)),
+      );
+
+      const wallet = yield* SubscriptionRef.get(stateRef);
+      yield* Scope.close(scope, Exit.void);
+
+      return { progress: wallet.progress, builds: builds.indexer };
+    });
+
+    const observed = await Effect.runPromise(Effect.scoped(program));
+
+    expect(observed.builds).toBeGreaterThanOrEqual(2);
+    expect(observed.progress.isConnected).toBe(false);
+    expect(observed.progress.isStrictlyComplete()).toBe(false);
   });
 });

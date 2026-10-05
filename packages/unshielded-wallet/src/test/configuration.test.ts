@@ -33,7 +33,10 @@ describe('DefaultUnshieldedConfiguration', () => {
           txHistoryStorage: V2TransactionHistory.UnshieldedHistoryStorage;
           forks: ProtocolVersion.ForkSchedule;
           chainVersionProbe?: ChainVersionProbe;
-        }
+        } & Pick<
+          V2Sync.DefaultSyncConfiguration,
+          'clock' | 'nodeClientConnection' | 'livenessConfiguration' | 'livenessPollInterval' | 'relayURL'
+        >
       >
     >;
   });

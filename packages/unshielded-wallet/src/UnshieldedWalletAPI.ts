@@ -38,11 +38,11 @@ import { type CoreWallet } from './v2/index.js';
 import { type KeysCapability } from './v2/Keys.js';
 import { type SerializationCapability } from './v2/Serialization.js';
 import { type SignSegment } from './v2/Signing.js';
-import { type IndexerClientConnection } from './v2/Sync.js';
+import { type DefaultSyncConfiguration, type IndexerClientConnection } from './v2/Sync.js';
 import { type SyncProgress } from './v2/SyncProgress.js';
 import { type TokenTransfer } from './v2/Transacting.js';
 import { type UnshieldedHistoryStorage } from './v2/TransactionHistory.js';
-import { type UtxoWithMeta } from './v2/UnshieldedState.js';
+import { type UtxoHash, type UtxoWithMeta } from './v2/UnshieldedState.js';
 
 /** The core state of whichever unshielded variant produced an emission. */
 export type UnshieldedCoreState = V1CoreWallet | CoreWallet;
@@ -200,7 +200,12 @@ export type DefaultUnshieldedConfiguration = {
    *   where it started before there was a probe.
    */
   chainVersionProbe?: ChainVersionProbe;
-};
+} & Pick<
+  DefaultSyncConfiguration,
+  // The liveness cross-check and the booking sweep's clock, which every variant's sync declares the same way and the
+  // wallet passes through untouched. Picked rather than redeclared so that a change to a variant's field fails here.
+  'clock' | 'nodeClientConnection' | 'livenessConfiguration' | 'livenessPollInterval' | 'relayURL'
+>;
 
 export type UnshieldedWalletAPI<TSerialized = string> = {
   readonly state: rx.Observable<UnshieldedWalletState<TSerialized>>;
@@ -243,6 +248,40 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
   waitForSyncedState(allowedGap?: bigint): Promise<UnshieldedWalletState<TSerialized>>;
 
   revertTransaction(transaction: AnyTx): Promise<void>;
+
+  /**
+   * Releases the booked coins named by `utxoIds`, making them spendable again.
+   *
+   * Use this when the transaction that booked them is not to hand — a caller tracking only the ids it reserved, or a
+   * reservation being cleaned up. When the transaction is available, prefer {@link revertTransaction}.
+   *
+   * @example
+   *   ```typescript
+   *   await wallet.revertUtxos(['4b0f…#0', '4b0f…#1']);
+   *   ```;
+   *
+   * @param utxoIds - Ids of the coins to release, each `intentHash#outputNo`. An id that is not booked is ignored,
+   *   since sync may have cleared the coin first.
+   * @returns A promise that resolves once the wallet state has been updated
+   */
+  revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void>;
+
+  /**
+   * Releases bookings that came back from a snapshot and that `coveredIds` does not account for.
+   *
+   * Call this once sync has reached the chain tip: from there, every transaction the address is party to has been
+   * applied, so a coin still booked was never spent by the process that booked it. Pass the coins some durable record
+   * still accounts for — a transaction waiting on a counterparty, say — and those stay booked.
+   *
+   * @example
+   *   ```typescript
+   *   await wallet.releaseRestoredPending(idsStillSpokenFor);
+   *   ```;
+   *
+   * @param coveredIds - Ids of coins to leave booked, each `intentHash#outputNo`
+   * @returns A promise that resolves once the wallet state has been updated
+   */
+  releaseRestoredPending(coveredIds: ReadonlyArray<UtxoHash>): Promise<void>;
 
   getAddress(): Promise<UnshieldedAddress>;
 

@@ -16,7 +16,7 @@
 // no key transformation to perform, since v8 verifying keys are already bare hex strings on both sides. Every UTXO
 // crosses, and every one of them crosses as AVAILABLE — a booking made for a transaction of the previous ledger
 // version outlives its own reason at the boundary.
-import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, HashMap } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
@@ -26,7 +26,7 @@ import {
   makeEmptyWalletMigration,
   type PreviousLedgerWallet,
 } from '../Migration.js';
-import { UnshieldedState } from '../UnshieldedState.js';
+import { type PendingUtxo, UnshieldedState } from '../UnshieldedState.js';
 import { fixtureOwner, fixtureUtxo } from './syncFixtures.js';
 
 const owner = fixtureOwner();
@@ -34,7 +34,7 @@ const owner = fixtureOwner();
 /** A previous-ledger wallet, described structurally. Its verifying key is a bare hex string, as this ledger's are. */
 const previousWallet = (params: {
   readonly available: readonly ReturnType<typeof fixtureUtxo>[];
-  readonly pending?: readonly ReturnType<typeof fixtureUtxo>[];
+  readonly pending?: ReadonlyArray<Omit<PendingUtxo, 'restored'>>;
   readonly appliedId: bigint;
   readonly protocolVersion: bigint;
 }): PreviousLedgerWallet => ({
@@ -49,7 +49,12 @@ const previousWallet = (params: {
   },
   networkId: NetworkId.NetworkId.Undeployed,
   protocolVersion: params.protocolVersion,
-  progress: { appliedId: params.appliedId, highestTransactionId: params.appliedId, isConnected: true },
+  progress: {
+    appliedId: params.appliedId,
+    highestTransactionId: params.appliedId,
+    isConnected: true,
+    indexerLiveness: IndexerLiveness.Unknown(),
+  },
 });
 
 describe('unshielded state migration', () => {
@@ -97,7 +102,7 @@ describe('unshielded state migration', () => {
       const booked = fixtureUtxo(owner, 55n, 9);
       const previous = previousWallet({
         available: [fixtureUtxo(owner, 100n, 0)],
-        pending: [booked],
+        pending: [{ utxo: booked, ttl: new Date('2026-01-01T01:00:00.000Z') }],
         appliedId: 4n,
         protocolVersion: 7n,
       });

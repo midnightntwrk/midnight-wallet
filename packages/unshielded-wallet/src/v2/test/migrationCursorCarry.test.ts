@@ -25,7 +25,7 @@
 // `highestTransactionId` is also known NOT to survive `serialize` -> `restore`; it is absent from the snapshot and
 // rebuilt as `appliedId`. Pinning it here records that the two carry routes genuinely differ, rather than leaving it
 // to be discovered as a contradiction later.
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { IndexerLiveness, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { makeCrossLedgerMigration, type PreviousLedgerWallet } from '../Migration.js';
@@ -58,6 +58,7 @@ const previousWallet = (params: {
     appliedId: params.appliedId,
     highestTransactionId: params.highestTransactionId,
     isConnected: params.isConnected ?? true,
+    indexerLiveness: IndexerLiveness.Unknown(),
   },
 });
 

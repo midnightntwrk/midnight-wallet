@@ -17,7 +17,7 @@
 // them crosses as AVAILABLE — a booking made for a transaction of the previous ledger version outlives its own reason
 // at the boundary. The other transformation is the key, which goes from ledger-v8's bare hex string to ledger-v9's
 // `{tag, value}` record.
-import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, HashMap } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
@@ -36,6 +36,9 @@ const owner = fixtureOwner();
  * A previous-ledger (v8) wallet, described structurally. Its verifying key is a bare hex string — that is exactly what
  * ledger-v8 hands out, and the difference this migration has to reconcile.
  */
+/** The expiry a fixture booking was taken with. The migration releases bookings whatever their expiry. */
+const BOOKING_TTL = new Date('2999-01-01T00:00:00.000Z');
+
 const previousWallet = (params: {
   readonly available: readonly ReturnType<typeof fixtureUtxo>[];
   readonly pending?: readonly ReturnType<typeof fixtureUtxo>[];
@@ -44,8 +47,12 @@ const previousWallet = (params: {
 }): PreviousLedgerWallet => ({
   // Built through the real `UnshieldedState`, not from plain arrays: the previous variant hands over a state whose
   // UTXOs live in Effect `HashMap`s, and a fixture that passed arrays would let a migration that iterated entries
-  // instead of values pass here and fail only against a real wallet.
-  state: UnshieldedState.restore(params.available, params.pending ?? []),
+  // instead of values pass here and fail only against a real wallet. A booking there is the UTXO plus its expiry, as
+  // the previous variant holds it, so the migration has to unwrap it rather than read it as a UTXO.
+  state: UnshieldedState.restore(
+    params.available,
+    (params.pending ?? []).map((utxo) => ({ utxo, ttl: BOOKING_TTL })),
+  ),
   publicKey: {
     publicKey: owner.publicKey.value,
     addressHex: owner.addressHex,
@@ -53,7 +60,12 @@ const previousWallet = (params: {
   },
   networkId: NetworkId.NetworkId.Undeployed,
   protocolVersion: params.protocolVersion,
-  progress: { appliedId: params.appliedId, highestTransactionId: params.appliedId, isConnected: true },
+  progress: {
+    appliedId: params.appliedId,
+    highestTransactionId: params.appliedId,
+    isConnected: true,
+    indexerLiveness: IndexerLiveness.Unknown(),
+  },
 });
 
 describe('unshielded state migration', () => {

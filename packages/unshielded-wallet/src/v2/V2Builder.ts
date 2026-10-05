@@ -15,7 +15,11 @@ import { Effect, type Either, Scope, type Types } from 'effect';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type Variant, type VariantBuilder, WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { RunningV2Variant, V2Tag } from './RunningV2Variant.js';
-import { makeDefaultV2SerializationCapability, type SerializationCapability } from './Serialization.js';
+import {
+  type DefaultSerializationConfiguration,
+  makeDefaultV2SerializationCapability,
+  type SerializationCapability,
+} from './Serialization.js';
 import {
   type DefaultSyncContext,
   type DefaultSyncConfiguration,
@@ -24,7 +28,7 @@ import {
   makeDefaultSyncService,
   makeDefaultSyncCapability,
 } from './Sync.js';
-import { type WalletSyncUpdate } from './SyncSchema.js';
+import { type SyncUpdate } from './SyncSchema.js';
 import {
   type DefaultTransactingConfiguration,
   type DefaultTransactingContext,
@@ -75,7 +79,7 @@ export type V2Variant<TSerialized, TSyncUpdate, TPreviousState = null> = Variant
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyV2Variant = V2Variant<any, any, any>;
-export type DefaultV2Variant = V2Variant<string, WalletSyncUpdate, null>;
+export type DefaultV2Variant = V2Variant<string, SyncUpdate, null>;
 
 export type TransactionOf<T extends AnyV2Variant> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,9 +93,9 @@ export type SerializedStateOf<T extends AnyV2Variant> =
 
 export type DefaultV2Builder = V2Builder<
   DefaultV2Configuration,
-  RunningV2Variant.Context<string, WalletSyncUpdate>,
+  RunningV2Variant.Context<string, SyncUpdate>,
   string,
-  WalletSyncUpdate,
+  SyncUpdate,
   null
 >;
 
@@ -125,7 +129,7 @@ export class V2Builder<
     TConfig & DefaultSyncConfiguration,
     TContext & DefaultSyncContext,
     TSerialized,
-    WalletSyncUpdate,
+    SyncUpdate,
     TPreviousState
   > {
     return this.withSync(makeDefaultSyncService, makeDefaultSyncCapability);
@@ -145,7 +149,13 @@ export class V2Builder<
     });
   }
 
-  withSerializationDefaults(): V2Builder<TConfig, TContext, string, TSyncUpdate, TPreviousState> {
+  withSerializationDefaults(): V2Builder<
+    TConfig & Pick<DefaultSerializationConfiguration, 'clock'>,
+    TContext,
+    string,
+    TSyncUpdate,
+    TPreviousState
+  > {
     return this.withSerialization(makeDefaultV2SerializationCapability);
   }
 

@@ -198,6 +198,7 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
           result,
         },
       ],
+      reservations: [],
     });
     await sleep(0.2);
   };
@@ -291,6 +292,7 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
     const traits = finalizedTransactionTraits(forkVersion);
     pending.states.next({
       all: [{ tx, creationTime: DateTime.unsafeMake(Date.now()), protocolVersion: Option.some(tx.protocolVersion) }],
+      reservations: [],
     });
     vi.spyOn(pending, 'clear').mockImplementation((transaction) => {
       pending.states.next(PendingTransactions.clear(pending.states.value, transaction, traits));
@@ -315,6 +317,7 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
     await facade.submitTransaction(tx);
     pending.states.next({
       all: [{ tx, creationTime: DateTime.unsafeMake(Date.now()), protocolVersion: Option.some(tx.protocolVersion) }],
+      reservations: [],
     });
     vi.spyOn(configuration.txHistoryStorage, 'getAll').mockRejectedValue(new Error('history storage unavailable'));
     const orphan = vi.spyOn(pending, 'orphanBeyond');

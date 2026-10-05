@@ -56,7 +56,7 @@ import { RunningV1Variant } from '../RunningV1Variant.js';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { makeDefaultSigningService } from '../Signing.js';
 import { makeDefaultSyncCapability, makeDefaultSyncService } from '../Sync.js';
-import { VersionSignalSyncUpdate, type WalletSyncUpdate } from '../SyncSchema.js';
+import { VersionSignalSyncUpdate, type SyncUpdate } from '../SyncSchema.js';
 import { makeDefaultTransactingCapability } from '../Transacting.js';
 import { UnshieldedState } from '../UnshieldedState.js';
 import { fixtureOwner, fixtureTransaction, recordingHistory } from './syncFixtures.js';
@@ -212,7 +212,7 @@ const chainPushing =
   () =>
     Stream.concat(Stream.fromIterable(frames), Stream.never);
 
-const collect = (wallet: CoreWallet, chain: ChainSource): Promise<readonly WalletSyncUpdate[]> =>
+const collect = (wallet: CoreWallet, chain: ChainSource): Promise<readonly SyncUpdate[]> =>
   makeDefaultSyncService({ indexerClientConnection })
     .updates(wallet)
     .pipe(
@@ -298,7 +298,7 @@ describe('reading the chain version off the progress frames', () => {
  *   turns a recorded version into a hand-over signal are the ones the package ships — which is the point: the drill
  *   found a gap between those three, not inside any one of them.
  */
-const variantContextOf = (): RunningV1Variant.Context<string, WalletSyncUpdate> => {
+const variantContextOf = (): RunningV1Variant.Context<string, SyncUpdate> => {
   const configuration = { indexerClientConnection, networkId };
   const coinsAndBalancesCapability = makeDefaultCoinsAndBalancesCapability();
   const keysCapability = makeDefaultKeysCapability();

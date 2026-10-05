@@ -55,4 +55,12 @@ export class SilentPendingTransactions implements PendingTransactionsService<Fin
   orphanBeyond(_chainNow: ProtocolVersion.ProtocolVersion): Promise<void> {
     return Promise.resolve();
   }
+
+  addReservation(_reservation: PendingTransactions.Reservation): Promise<void> {
+    return Promise.resolve();
+  }
+
+  clearReservation(_identifiers: readonly string[]): Promise<void> {
+    return Promise.resolve();
+  }
 }

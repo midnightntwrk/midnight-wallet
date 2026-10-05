@@ -40,6 +40,9 @@ const configuration: DefaultConfiguration = {
   costParameters: {
     feeBlocksMargin: 5,
   },
+  // Transactions are submitted through this node. Syncing also needs a node — it cross-checks the indexer's reported
+  // position against the chain's finalized head — and rather than name the same endpoint twice, this one is used. A
+  // wallet built without submission configuration names its own under `nodeClientConnection` instead.
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
   // One proof server per ledger version, keyed the way `forks` is: `v8` answers below `forks.v9`, `v9` from it. A
   // transaction is proved by the backend for the ledger version that authored its bytes, so the wallet proves on either

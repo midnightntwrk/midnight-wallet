@@ -25,10 +25,6 @@
  *   real coins and keys capabilities so that its coin selection can be guarded: a balancing loop that never settles is
  *   synchronous and blocks the event loop, so no test timeout could stop it. The guard turns that into a failure after
  *   a bounded number of rounds; a loop that settles never gets near it.
- *
- *   Marked `it.fails` because the defect is still present: the second round hands the balancer the fee as a positive
- *   imbalance, which it reads as a surplus, so nothing is selected and the guard stops the loop. The assertion fails
- *   for exactly that reason today. Change it back to `it` in the same change that fixes the balancing.
  */
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
@@ -161,7 +157,7 @@ const walletWithOneGeneratingDustCoin = Effect.gen(function* () {
 });
 
 describe('paying a fee with Dust', () => {
-  it.fails('refuses, rather than spinning, when the coin that covers the fee cannot also cover its own spend', () =>
+  it('refuses, rather than spinning, when the coin that covers the fee cannot also cover its own spend', () =>
     Effect.gen(function* () {
       const { dustSecretKey, state, ledgerParameters, now, recipient } = yield* walletWithOneGeneratingDustCoin;
 
@@ -217,6 +213,5 @@ describe('paying a fee with Dust', () => {
         onRight: () => ({ tag: 'balanced', message: '' }),
       });
       expect(outcome.tag, outcome.message).toBe('Wallet.InsufficientFunds');
-    }).pipe(Effect.scoped, Effect.runPromise),
-  );
+    }).pipe(Effect.scoped, Effect.runPromise));
 });

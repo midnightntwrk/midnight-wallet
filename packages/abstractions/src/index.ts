@@ -19,6 +19,7 @@ export * as NetworkId from './NetworkId.js';
 export * as SyncProgress from './SyncProgress.js';
 export * from './TokenType.js';
 export * from './WalletTransaction.js';
+export * as IndexerLiveness from './IndexerLiveness.js';
 export * from './InMemoryTransactionHistoryStorage.js';
 export * from './NoOpTransactionHistoryStorage.js';
 export * as TransactionHistoryStorage from './TransactionHistoryStorage.js';
