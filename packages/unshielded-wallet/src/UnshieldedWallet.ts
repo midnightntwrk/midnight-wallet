@@ -33,8 +33,8 @@ import {
   type UnboundTransactionBalanceResult,
   type UnprovenTransactionBalanceResult,
 } from './v1/Transacting.js';
-import { type WalletSyncUpdate } from './v1/SyncSchema.js';
-import { type UtxoWithMeta } from './v1/UnshieldedState.js';
+import { type SyncUpdate } from './v1/SyncSchema.js';
+import { type UtxoHash, type UtxoWithMeta } from './v1/UnshieldedState.js';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnightntwrk/wallet-sdk-runtime';
 import { type PublicKey } from './KeyStore.js';
@@ -105,15 +105,11 @@ export class UnshieldedWalletState<TSerialized = string> {
   }
 }
 
-export type UnshieldedWallet = CustomizedUnshieldedWallet<WalletSyncUpdate, string>;
+export type UnshieldedWallet = CustomizedUnshieldedWallet<SyncUpdate, string>;
 
 export type DefaultUnshieldedConfiguration = DefaultV1Configuration;
 
-export type UnshieldedWalletClass = CustomizedUnshieldedWalletClass<
-  WalletSyncUpdate,
-  string,
-  DefaultUnshieldedConfiguration
->;
+export type UnshieldedWalletClass = CustomizedUnshieldedWalletClass<SyncUpdate, string, DefaultUnshieldedConfiguration>;
 
 export type UnshieldedWalletAPI<TSerialized = string> = {
   readonly state: rx.Observable<UnshieldedWalletState<TSerialized>>;
@@ -165,19 +161,53 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
     transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
   ): Promise<void>;
 
+  /**
+   * Releases the booked coins named by `utxoIds`, making them spendable again.
+   *
+   * Use this when the transaction that booked them is not to hand — a caller tracking only the ids it reserved, or a
+   * reservation being cleaned up. When the transaction is available, prefer {@link revertTransaction}.
+   *
+   * @example
+   *   ```typescript
+   *   await wallet.revertUtxos(['4b0f…#0', '4b0f…#1']);
+   *   ```;
+   *
+   * @param utxoIds - Ids of the coins to release, each `intentHash#outputNo`. An id that is not booked is ignored,
+   *   since sync may have cleared the coin first.
+   * @returns A promise that resolves once the wallet state has been updated
+   */
+  revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void>;
+
+  /**
+   * Releases bookings that came back from a snapshot and that `coveredIds` does not account for.
+   *
+   * Call this once sync has reached the chain tip: from there, every transaction the address is party to has been
+   * applied, so a coin still booked was never spent by the process that booked it. Pass the coins some durable record
+   * still accounts for — a transaction waiting on a counterparty, say — and those stay booked.
+   *
+   * @example
+   *   ```typescript
+   *   await wallet.releaseRestoredPending(idsStillSpokenFor);
+   *   ```;
+   *
+   * @param coveredIds - Ids of coins to leave booked, each `intentHash#outputNo`
+   * @returns A promise that resolves once the wallet state has been updated
+   */
+  releaseRestoredPending(coveredIds: ReadonlyArray<UtxoHash>): Promise<void>;
+
   getAddress(): Promise<UnshieldedAddress>;
 
   stop(): Promise<void>;
 };
 
 export type CustomizedUnshieldedWallet<
-  TSyncUpdate = WalletSyncUpdate,
+  TSyncUpdate = SyncUpdate,
   TSerialized = string,
 > = UnshieldedWalletAPI<TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate>>]>;
 
 export interface CustomizedUnshieldedWalletClass<
-  TSyncUpdate = WalletSyncUpdate,
+  TSyncUpdate = SyncUpdate,
   TSerialized = string,
   TConfig extends BaseV1Configuration = DefaultV1Configuration,
 > extends WalletLike.BaseWalletClass<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate>>]> {
@@ -192,7 +222,7 @@ export function UnshieldedWallet(configuration: DefaultV1Configuration): Unshiel
 
 export function CustomUnshieldedWallet<
   TConfig extends BaseV1Configuration = DefaultV1Configuration,
-  TSyncUpdate = WalletSyncUpdate,
+  TSyncUpdate = SyncUpdate,
   TSerialized = string,
 >(
   configuration: TConfig,
@@ -334,6 +364,22 @@ export function CustomUnshieldedWallet<
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.revertTransaction(transaction),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.revertUtxos(utxoIds),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    releaseRestoredPending(coveredIds: ReadonlyArray<UtxoHash>): Promise<void> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.releaseRestoredPending(coveredIds),
         })
         .pipe(Effect.runPromise);
     }

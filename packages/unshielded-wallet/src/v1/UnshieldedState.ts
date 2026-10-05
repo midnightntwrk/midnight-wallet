@@ -26,6 +26,22 @@ export class UtxoWithMeta extends Data.Class<{
   readonly meta: UtxoMeta;
 }> {}
 
+/**
+ * A coin reserved by a transaction that has been balanced but has not settled, together with the expiry that
+ * reservation was taken with. `ttl` is the TTL of the transaction the coin was booked for: from that instant the ledger
+ * rejects the transaction, so the reservation cannot still be valid and the coin returns to the available side.
+ */
+export interface PendingUtxo {
+  readonly utxo: UtxoWithMeta;
+  readonly ttl: Date;
+  /**
+   * True when this booking came back from a snapshot rather than being taken by the running process. The process that
+   * took it is gone, so once sync proves nothing on chain spent the coin, only a durable record of the transaction can
+   * justify keeping it booked.
+   */
+  readonly restored: boolean;
+}
+
 export type UpdateStatus = 'SUCCESS' | 'FAILURE' | 'PARTIAL_SUCCESS';
 
 export interface UnshieldedUpdate {
@@ -36,10 +52,37 @@ export interface UnshieldedUpdate {
 
 export interface UnshieldedState {
   readonly availableUtxos: HashMap.HashMap<UtxoHash, UtxoWithMeta>;
-  readonly pendingUtxos: HashMap.HashMap<UtxoHash, UtxoWithMeta>;
+  readonly pendingUtxos: HashMap.HashMap<UtxoHash, PendingUtxo>;
 }
 
 const UtxoHash = (utxo: ledger.Utxo): UtxoHash => `${utxo.intentHash}#${utxo.outputNo}`;
+
+/**
+ * Moves every booking `shouldRelease` selects back to the available side.
+ *
+ * The three ways a booking ends — its id is named, it came back from a snapshot nothing accounts for, its expiry has
+ * passed — differ only in which bookings they pick, so the move itself lives here. A booking nothing selects is left
+ * alone rather than reported: sync may have cleared the coin first, and that race is expected.
+ *
+ * Returns the state it was given when nothing is selected, so a caller publishing on change does not publish on a sweep
+ * that found nothing.
+ */
+const releaseBookings = (
+  state: UnshieldedState,
+  shouldRelease: (booking: PendingUtxo, hash: UtxoHash) => boolean,
+): UnshieldedState => {
+  const releasable = HashMap.filter(state.pendingUtxos, shouldRelease);
+
+  return HashMap.isEmpty(releasable)
+    ? state
+    : {
+        availableUtxos: HashMap.union(
+          state.availableUtxos,
+          HashMap.map(releasable, ({ utxo }) => utxo),
+        ),
+        pendingUtxos: HashMap.removeMany(state.pendingUtxos, HashMap.keys(releasable)),
+      };
+};
 
 export const UnshieldedState = {
   empty: (): UnshieldedState => ({
@@ -47,12 +90,36 @@ export const UnshieldedState = {
     pendingUtxos: HashMap.empty(),
   }),
 
-  restore: (availableUtxos: readonly UtxoWithMeta[], pendingUtxos: readonly UtxoWithMeta[]): UnshieldedState => ({
-    availableUtxos: HashMap.fromIterable(availableUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo])),
-    pendingUtxos: HashMap.fromIterable(pendingUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo])),
-  }),
+  /**
+   * Rebuilds the state from a persisted snapshot. The two maps are disjoint by construction, so a UTxO a snapshot
+   * records in both is kept on the pending side only: the spend that booked it may still be on its way, and expiry
+   * releases it if it is not.
+   */
+  restore: (
+    availableUtxos: readonly UtxoWithMeta[],
+    // Every entry read back is restored by definition, so the caller does not get to say otherwise.
+    pendingUtxos: ReadonlyArray<Omit<PendingUtxo, 'restored'>>,
+  ): UnshieldedState => {
+    const pending = HashMap.fromIterable(
+      pendingUtxos.map((entry) => [UtxoHash(entry.utxo.utxo), { ...entry, restored: true }] as const),
+    );
+    return {
+      availableUtxos: HashMap.fromIterable(
+        availableUtxos
+          .filter((utxo) => !HashMap.has(pending, UtxoHash(utxo.utxo)))
+          .map((utxo) => [UtxoHash(utxo.utxo), utxo] as const),
+      ),
+      pendingUtxos: pending,
+    };
+  },
 
-  spend: (state: UnshieldedState, utxo: UtxoWithMeta): Either.Either<UnshieldedState, UtxoNotFoundError> =>
+  /**
+   * Books a coin for a transaction being balanced, moving it from the available side to the pending side.
+   *
+   * @param ttl - The TTL of the transaction the coin is being booked for. It bounds the reservation: nothing else
+   *   releases a booking whose transaction is abandoned before submission, so without it the coin is stuck forever.
+   */
+  spend: (state: UnshieldedState, utxo: UtxoWithMeta, ttl: Date): Either.Either<UnshieldedState, UtxoNotFoundError> =>
     Either.gen(function* () {
       const hash = UtxoHash(utxo.utxo);
       if (!HashMap.has(state.availableUtxos, hash)) {
@@ -60,7 +127,7 @@ export const UnshieldedState = {
       }
       return {
         availableUtxos: HashMap.remove(state.availableUtxos, hash),
-        pendingUtxos: HashMap.set(state.pendingUtxos, hash, utxo),
+        pendingUtxos: HashMap.set(state.pendingUtxos, hash, { utxo, ttl, restored: false }),
       };
     }),
 
@@ -76,14 +143,18 @@ export const UnshieldedState = {
     });
   },
 
-  spendByUtxo: (state: UnshieldedState, utxo: ledger.Utxo): Either.Either<UnshieldedState, UtxoNotFoundError> =>
+  spendByUtxo: (
+    state: UnshieldedState,
+    utxo: ledger.Utxo,
+    ttl: Date,
+  ): Either.Either<UnshieldedState, UtxoNotFoundError> =>
     Either.gen(function* () {
       const hash = UtxoHash(utxo);
       const found = yield* Either.fromOption(
         HashMap.get(state.availableUtxos, hash),
         () => new UtxoNotFoundError({ utxo }),
       );
-      return yield* UnshieldedState.spend(state, found);
+      return yield* UnshieldedState.spend(state, found, ttl);
     }),
 
   rollbackSpendByUtxo: (state: UnshieldedState, utxo: ledger.Utxo): Either.Either<UnshieldedState, never> =>
@@ -91,9 +162,47 @@ export const UnshieldedState = {
       HashMap.get(state.pendingUtxos, UtxoHash(utxo)),
       Option.match({
         onNone: () => Either.right(state),
-        onSome: (found) => UnshieldedState.rollbackSpend(state, found),
+        onSome: (found) => UnshieldedState.rollbackSpend(state, found.utxo),
       }),
     ),
+
+  /**
+   * Releases a booked coin named by its id, returning it to the available side. A reservation records the ids of the
+   * coins it books rather than the coins themselves, so releasing one has to be possible from the id alone.
+   *
+   * Like {@link UnshieldedState.rollbackSpend}, an id that is not booked is left alone rather than reported: sync may
+   * have cleared the coin first, and that race is expected.
+   */
+  rollbackSpendByHash: (state: UnshieldedState, hash: UtxoHash): UnshieldedState =>
+    releaseBookings(state, (_booking, booked) => booked === hash),
+
+  /**
+   * Releases every booking that came back from a snapshot and that `coveredIds` does not account for.
+   *
+   * Meant for the moment sync reaches the chain tip: from there, every transaction the address is party to has been
+   * applied, so a coin still booked was never spent by the process that booked it. Releasing it then returns it in
+   * seconds rather than at the transaction's TTL.
+   *
+   * @param coveredIds - Coins some durable record still accounts for, such as a transaction waiting on a counterparty.
+   *   Those stay booked: the wallet cannot see that transaction, but something else knows it is still live.
+   */
+  releaseRestoredPending: (state: UnshieldedState, coveredIds: ReadonlyArray<UtxoHash>): UnshieldedState => {
+    const covered = new Set(coveredIds);
+
+    return releaseBookings(state, ({ restored }, hash) => restored && !covered.has(hash));
+  },
+
+  /**
+   * Releases every booking that has reached its expiry, returning those coins to the available side. A booking is only
+   * released by the submit path today, so a transaction abandoned between balancing and submission leaks its coins;
+   * this sweep is what bounds that leak to the transaction's own lifetime.
+   *
+   * @param now - The instant to expire against. A booking expires once its TTL has passed, not at it: the ledger
+   *   accepts an intent while its TTL is at or after the block's timestamp, so the transaction is still valid at the
+   *   instant its TTL names.
+   */
+  expirePending: (state: UnshieldedState, now: Date): UnshieldedState =>
+    releaseBookings(state, ({ ttl }) => ttl.getTime() < now.getTime()),
 
   applyUpdate: (
     state: UnshieldedState,
@@ -104,18 +213,22 @@ export const UnshieldedState = {
         return yield* Either.left(new ApplyTransactionError({ message: `Invalid status: ${update.status}` }));
       }
 
+      const spentHashes = update.spentUtxos.map((utxo) => UtxoHash(utxo.utxo));
+      const pendingUtxos = HashMap.removeMany(state.pendingUtxos, spentHashes);
+
       return {
         availableUtxos: HashMap.union(
-          HashMap.removeMany(
-            state.availableUtxos,
-            update.spentUtxos.map((utxo) => UtxoHash(utxo.utxo)),
+          HashMap.removeMany(state.availableUtxos, spentHashes),
+          // A created UTxO that is still booked must not re-enter availableUtxos. The indexer replays the
+          // transaction that created a booked coin whenever sync resumes from a cursor predating it, and the two
+          // maps are disjoint by construction — every balance accessor counts them independently.
+          HashMap.fromIterable(
+            update.createdUtxos
+              .filter((utxo) => !HashMap.has(pendingUtxos, UtxoHash(utxo.utxo)))
+              .map((utxo) => [UtxoHash(utxo.utxo), utxo] as const),
           ),
-          HashMap.fromIterable(update.createdUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo])),
         ),
-        pendingUtxos: HashMap.removeMany(
-          state.pendingUtxos,
-          update.spentUtxos.map((utxo) => UtxoHash(utxo.utxo)),
-        ),
+        pendingUtxos,
       };
     }),
 
@@ -144,7 +257,7 @@ export const UnshieldedState = {
     state: UnshieldedState,
   ): {
     readonly availableUtxos: readonly UtxoWithMeta[];
-    readonly pendingUtxos: readonly UtxoWithMeta[];
+    readonly pendingUtxos: readonly PendingUtxo[];
   } => ({
     availableUtxos: HashMap.toValues(state.availableUtxos),
     pendingUtxos: HashMap.toValues(state.pendingUtxos),

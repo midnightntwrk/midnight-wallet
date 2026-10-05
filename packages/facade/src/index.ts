@@ -44,13 +44,14 @@ import {
   UnshieldedSectionSchema,
   mergeUnshieldedSections,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { TransactionOps as UnshieldedTransactionOps } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
 import { DustSectionSchema, mergeDustSections } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Array as Arr, pipe, Schema } from 'effect';
+import { Array as Arr, DateTime, pipe, Schema } from 'effect';
 import { TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import { combineLatest, map, type Observable, firstValueFrom, type Subscription, concatMap } from 'rxjs';
+import { combineLatest, map, type Observable, filter, firstValueFrom, take, type Subscription, concatMap } from 'rxjs';
 import {
   type DefaultPendingTransactionsServiceConfiguration,
   PendingTransactions,
@@ -307,6 +308,10 @@ export class FacadeState {
 
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+/** How a coin is named wherever it is referred to without being carried: in a reservation, and in a release by id. */
+const coinIdsOf = (utxos: readonly { intentHash: string; outputNo: number }[]): readonly string[] =>
+  utxos.map((utxo) => `${utxo.intentHash}#${utxo.outputNo}`);
+
 /**
  * Clock abstraction for obtaining the current time. By default, the facade uses the system clock
  * ({@link Clock.systemClock}); for testing with a simulator, inject a custom clock (e.g. one backed by the simulator's
@@ -535,6 +540,8 @@ export class WalletFacade {
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
   readonly clock: Clock.Clock;
   #pendingSubscription: Subscription;
+  #expiredReservationSubscription: Subscription;
+  #restoredBookingSubscription: Subscription;
 
   /**
    * Constructor is private on purpose - much of initialization of the facade is potentially asynchronous, and adding
@@ -569,6 +576,136 @@ export class WalletFacade {
         concatMap((item) => this.revert(item.tx)),
       )
       .subscribe();
+
+    // A reservation past its TTL stands for a transaction the ledger will not accept, so the record has done its job
+    // and is dropped. It does not release the coins: the wallet books each one with the same TTL and sweeps them
+    // itself, so one mechanism owns release.
+    //
+    // Releasing from here as well would be a second sweep on a different clock, and a coin the wallet has already
+    // freed can be booked again for another transaction before this one fires. The ids a reservation holds say
+    // nothing about which booking currently holds them, so that release would free the wrong one.
+    this.#expiredReservationSubscription = this.pendingTransactionsService
+      .state()
+      .pipe(
+        concatMap((pending) => PendingTransactions.allExpiredReservations(pending)),
+        concatMap((reservation) => this.pendingTransactionsService.clearReservation(reservation.identifiers)),
+      )
+      .subscribe();
+
+    // Coins a previous process left booked would otherwise sit until their transactions' TTLs, which can be an hour.
+    // Once sync reaches the tip, every transaction this address is party to has been applied, so a coin still booked
+    // was never spent — unless a reservation or a transaction being tracked says the spend is still out there. Both
+    // halves matter: registering a transaction drops the reservation standing in for it, so from submission onwards
+    // the tracked transaction is the only thing saying its coins are spoken for.
+    //
+    // This only sees what the services were given. A pending-transactions service restored from storage covers the
+    // spends a previous process submitted; one started empty covers none of them, and a restored booking whose
+    // transaction is still in the mempool is released here.
+    this.#restoredBookingSubscription = this.unshielded.state
+      .pipe(
+        filter((unshielded) => unshielded.state.progress.isStrictlyComplete()),
+        // Only bookings restored at startup are candidates, and this releases all of them at once, so the first time
+        // sync reaches the tip is the only time there is anything to do. Acting once also keeps the reaction from
+        // feeding itself: releasing publishes new state, which would otherwise satisfy this same condition again.
+        take(1),
+        concatMap(async () => {
+          const { publicKey } = (await firstValueFrom(this.unshielded.state)).state;
+          const pending = await firstValueFrom(this.pendingTransactionsService.state());
+          const stillSpokenFor = PendingTransactions.coveredUnshieldedIds(pending, (tx) =>
+            UnshieldedTransactionOps.extractOwnInputs(tx, publicKey.publicKey).map(
+              (utxo) => `${utxo.intentHash}#${utxo.outputNo}`,
+            ),
+          );
+          await this.unshielded.releaseRestoredPending(stillSpokenFor);
+        }),
+      )
+      .subscribe();
+  }
+
+  /**
+   * Records that a just-balanced transaction has unshielded coins reserved.
+   *
+   * Balancing books those coins, but nothing tracks the transaction until it is submitted, so a caller that abandons it
+   * in between leaves the coins spoken for with no record saying so. The reservation is that record, and it is matched
+   * to the transaction that eventually arrives by identifier, which proving and binding leave unchanged.
+   *
+   * Takes the transaction the unshielded wallet produced rather than the merged one: its inputs are exactly the coins
+   * booked here, and its identifiers are a subset of whatever the merged transaction ends up carrying.
+   */
+  async #reserve(
+    unshieldedTx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish> | undefined,
+    ttl: Date,
+  ): Promise<void> {
+    if (!unshieldedTx) {
+      return;
+    }
+
+    const { publicKey } = (await firstValueFrom(this.unshielded.state)).state;
+    const bookedCoins = UnshieldedTransactionOps.extractOwnInputs(unshieldedTx, publicKey.publicKey);
+
+    await this.#reserveIds(unshieldedTx, coinIdsOf(bookedCoins), ttl);
+  }
+
+  /** Records `bookedIds` against `unshieldedTx`, or nothing at all when the transaction booked no coins. */
+  async #reserveIds(
+    unshieldedTx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    bookedIds: readonly string[],
+    ttl: Date,
+  ): Promise<void> {
+    if (bookedIds.length === 0) {
+      return;
+    }
+
+    await this.pendingTransactionsService.addReservation({
+      identifiers: unshieldedTx.identifiers(),
+      intentHashes: [...(unshieldedTx.intents?.entries() ?? [])].map(([segment, intent]) => intent.intentHash(segment)),
+      inputs: { unshielded: bookedIds },
+      ttl,
+      createdAt: DateTime.unsafeFromDate(this.clock.now()),
+      expired: false,
+    });
+  }
+
+  /** The coins currently booked, by id. */
+  async #bookedCoinIds(): Promise<readonly string[]> {
+    return coinIdsOf((await firstValueFrom(this.unshielded.state)).pendingCoins.map((coin) => coin.utxo));
+  }
+
+  /**
+   * Balances a transaction in place and records only the coins the wallet itself booked doing so.
+   *
+   * In-place balancing hands back the caller's own transaction with the wallet's inputs added, so the result names
+   * coins from two sources: the ones coin selection just took, and any the caller had already put there. Only the first
+   * are this wallet's booking, and they are exactly the ones that moved onto the pending side.
+   */
+  async #balanceInPlaceAndReserve<
+    T extends ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish> | undefined,
+  >(balance: () => Promise<T>, ttl: Date): Promise<T> {
+    const bookedBefore = new Set(await this.#bookedCoinIds());
+    const balanced = await balance();
+
+    if (balanced === undefined) {
+      return balanced;
+    }
+
+    const newlyBooked = (await this.#bookedCoinIds()).filter((id) => !bookedBefore.has(id));
+    await this.#reserveIds(balanced, newlyBooked, ttl);
+
+    return balanced;
+  }
+
+  /**
+   * Undoes a booking taken while balancing, together with the record that stood for it.
+   *
+   * The two always go together. A record left behind outlives the coins it named, and until its TTL passes it tells
+   * anything that reads it that a spend is still out there — holding coins at the next reconciliation that nothing is
+   * actually holding.
+   */
+  async #revertUnshieldedBooking(
+    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Promise<void> {
+    await this.unshielded.revertTransaction(tx);
+    await this.pendingTransactionsService.clearReservation([...tx.identifiers()]);
   }
 
   private defaultTtl(): Date {
@@ -683,6 +820,7 @@ export class WalletFacade {
       nightVerifyingKey,
       ttl,
     );
+    await this.#reserve(txWithOffers, ttl);
 
     // Step 3 — Dust attaches its DustActions onto the intent the unshielded wallet just built.
     // If this fails we must unbook the UTxOs so the caller can retry.
@@ -696,7 +834,7 @@ export class WalletFacade {
         split.feePayment,
       );
     } catch (error) {
-      await this.unshielded.revertTransaction(txWithOffers);
+      await this.#revertUnshieldedBooking(txWithOffers);
       throw error;
     }
 
@@ -709,7 +847,7 @@ export class WalletFacade {
     if (isRegistration && hasUnregisteredGuaranteed) {
       const fee = await this.dust.calculateFee([txWithDustActions]);
       if (split.feePayment < fee) {
-        await this.unshielded.revertTransaction(txWithOffers);
+        await this.#revertUnshieldedBooking(txWithOffers);
         throw Error(
           `Insufficient generated dust to cover registration fee (have ${split.feePayment}, need ${fee}). ` +
             `Use WalletFacade.waitForGeneratedDust(utxos, ${fee}) before retrying.`,
@@ -729,7 +867,7 @@ export class WalletFacade {
       }
       return signedRecipe.transaction;
     } catch (error) {
-      await this.unshielded.revertTransaction(txWithOffers);
+      await this.#revertUnshieldedBooking(txWithOffers);
       throw error;
     }
   }
@@ -819,6 +957,7 @@ export class WalletFacade {
     const unshieldedBalancingTx = shouldBalanceUnshielded
       ? await this.unshielded.balanceFinalizedTransaction(tx)
       : undefined;
+    await this.#reserve(unshieldedBalancingTx, ttl);
 
     const shieldedBalancingTx = shouldBalanceShielded
       ? await this.shielded.balanceTransaction(shieldedSecretKeys, tx)
@@ -884,7 +1023,7 @@ export class WalletFacade {
 
     // For unbound transactions, unshielded balancing happens in place not with a balancing transaction
     const balancedUnshieldedTx = shouldBalanceUnshielded
-      ? await this.unshielded.balanceUnboundTransaction(tx)
+      ? await this.#balanceInPlaceAndReserve(() => this.unshielded.balanceUnboundTransaction(tx), ttl)
       : undefined;
 
     // Step 2: Unbound unshielded tx are balanced in place, use it as base tx if present
@@ -952,7 +1091,7 @@ export class WalletFacade {
 
     // For unproven transactions, unshielded balancing happens in place
     const balancedUnshieldedTx = shouldBalanceUnshielded
-      ? await this.unshielded.balanceUnprovenTransaction(tx)
+      ? await this.#balanceInPlaceAndReserve(() => this.unshielded.balanceUnprovenTransaction(tx), ttl)
       : undefined;
 
     // Step 2: Use the balanced unshielded tx if present, otherwise use the original tx
@@ -1080,7 +1219,7 @@ export class WalletFacade {
     } catch (error) {
       await Promise.allSettled([
         this.shielded.revertTransaction(tx),
-        this.unshielded.revertTransaction(tx),
+        this.#revertUnshieldedBooking(tx),
         this.dust.revertTransaction(tx),
       ]);
       throw error;
@@ -1136,6 +1275,7 @@ export class WalletFacade {
 
     const unshieldedTx =
       unshieldedOutputs.length > 0 ? await this.unshielded.transferTransaction(unshieldedOutputs, ttl) : undefined;
+    await this.#reserve(unshieldedTx, ttl);
 
     const mergedTxs = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx)!;
 
@@ -1254,6 +1394,7 @@ export class WalletFacade {
     const unshieldedTx = hasUnshieldedPart
       ? await this.unshielded.initSwap(unshieldedInputs ?? {}, unshieldedOutputs, ttl)
       : undefined;
+    await this.#reserve(unshieldedTx, ttl);
 
     const combinedTx = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx);
 
@@ -1382,6 +1523,8 @@ export class WalletFacade {
       this.submissionService.close(),
       this.pendingTransactionsService.stop(),
       Promise.resolve(this.#pendingSubscription?.unsubscribe()),
+      Promise.resolve(this.#expiredReservationSubscription?.unsubscribe()),
+      Promise.resolve(this.#restoredBookingSubscription?.unsubscribe()),
     ]);
   }
 

@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { NEVER } from 'rxjs';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
@@ -70,6 +71,9 @@ describe('Facade submission', () => {
           UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(createKeystore(seed, config.networkId))),
         );
         mockedUnshielded.start.mockResolvedValue(undefined);
+        // The facade watches this stream for the moment sync reaches the tip; this wallet never gets there.
+        // Type cast required because: `state` is declared read-only on the wallet, and mocking it is the point.
+        (mockedUnshielded as unknown as { state: typeof NEVER }).state = NEVER;
         return mockedUnshielded;
       },
       dust: (config) => {

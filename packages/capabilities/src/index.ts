@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 export * from './balancer/index.js';
+export * from './liveness/index.js';
 export * from './pendingTransactions/index.js';
 export * from './proving/index.js';
 export * from './simulation/index.js';
