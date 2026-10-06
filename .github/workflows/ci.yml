@@ -227,7 +227,6 @@ jobs:
   # here as a single job. GitHub nests the matrix jobs under this one caller in
   # the checks UI (many parallel runners, one tidy collapsible check), and this
   # job's status is the aggregate gate — green only if every file passed.
-  # secrets: inherit passes APP_INFRA_SECRET and the GH tokens to the called workflow.
   integration:
     name: Integration Tests
     # Runs in parallel with test-unit and e2e-smoke (all gated only on general-checks)
@@ -239,7 +238,9 @@ jobs:
       contents: read
       checks: write
     uses: ./.github/workflows/integration.yml
-    secrets: inherit
+    secrets:
+      MIDNIGHTCI_PACKAGES_READ: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
+      APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
 
   e2e-smoke:
     name: Smoke E2E

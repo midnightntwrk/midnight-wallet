@@ -258,6 +258,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
           NPM_CONFIG_PROVENANCE: 'true'
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
 
@@ -310,10 +311,10 @@ jobs:
 
           # Publish under a branch-specific dist-tag: "canary" on main,
           # "canary-<branch>" elsewhere.
-          if [ "${{ github.ref_name }}" = "main" ]; then
+          if [ "$REF_NAME" = "main" ]; then
             CANARY_TAG="canary"
           else
-            CANARY_TAG="canary-${{ github.ref_name }}"
+            CANARY_TAG="canary-$REF_NAME"
           fi
 
           # Canonical @midnightntwrk scope: `changeset publish` (OIDC +

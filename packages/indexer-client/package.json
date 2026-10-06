@@ -45,10 +45,10 @@
     "@effect/rpc": "0.76.2",
     "@effect/sql": "0.52.1",
     "@effect/workflow": "0.19.1",
-    "@graphql-codegen/cli": "7.4.2",
+    "@graphql-codegen/cli": "7.4.3",
     "@graphql-codegen/client-preset": "6.2.0",
     "tsx": "4.23.15",
-    "yaml": "^2.9.0"
+    "yaml": "2.9.1"
   },
   "scripts": {
     "gql:codegen": "graphql-codegen --clean --config codegen.ts",
