@@ -106,8 +106,18 @@ export function CustomUnshieldedWallet<
   const sealUnproven = (result: ledger.UnprovenTransaction | undefined): UnprovenTx | undefined =>
     result === undefined ? undefined : seal(result);
 
-  const sealUnbound = (result: UnboundTransaction | undefined): UnboundTx | undefined =>
-    result === undefined ? undefined : WalletTransaction.adopt('Unbound', result, ProtocolVersion.MinSupportedVersion);
+  /**
+   * Re-seals a transaction this wallet changed in place, at the stamp of the handle it was handed.
+   *
+   * @remarks
+   *   Signing a transaction, or balancing it by adding inputs and change to it, adds to bytes whoever built it fixed; it
+   *   does not make this wallet their author, so what goes back out carries the stamp that came in rather than the one
+   *   this wallet stamps its own transactions with.
+   */
+  const resealAs =
+    <TStage extends WalletTransaction.Stage>(handed: AnyTx, stage: TStage) =>
+    (changed: { serialize: () => Uint8Array }): WalletTransaction<TStage> =>
+      WalletTransaction.adopt(stage, changed, handed.protocolVersion);
 
   return class CustomUnshieldedWalletImplementation
     extends BaseWallet
@@ -212,7 +222,7 @@ export function CustomUnshieldedWallet<
           [V2Tag]: (v2) =>
             carried<UnboundTransaction>(tx).pipe(
               Effect.flatMap((unwrapped) => v2.balanceUnboundTransaction(unwrapped)),
-              Effect.map(sealUnbound),
+              Effect.map((result) => (result === undefined ? undefined : resealAs(tx, 'Unbound')(result))),
             ),
         })
         .pipe(Effect.runPromise);
@@ -224,7 +234,7 @@ export function CustomUnshieldedWallet<
           [V2Tag]: (v2) =>
             carried<ledger.UnprovenTransaction>(tx).pipe(
               Effect.flatMap((unwrapped) => v2.balanceUnprovenTransaction(unwrapped)),
-              Effect.map(sealUnproven),
+              Effect.map((result) => (result === undefined ? undefined : resealAs(tx, 'Unproven')(result))),
             ),
         })
         .pipe(Effect.runPromise);
@@ -268,7 +278,7 @@ export function CustomUnshieldedWallet<
           [V2Tag]: (v2) =>
             carried<ledger.UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((unwrapped) => v2.signUnprovenTransaction(unwrapped, signSegment)),
-              Effect.map(seal),
+              Effect.map(resealAs(transaction, 'Unproven')),
             ),
         })
         .pipe(Effect.runPromise);
@@ -280,7 +290,7 @@ export function CustomUnshieldedWallet<
           [V2Tag]: (v2) =>
             carried<UnboundTransaction>(transaction).pipe(
               Effect.flatMap((unwrapped) => v2.signUnboundTransaction(unwrapped, signSegment)),
-              Effect.map((tx) => WalletTransaction.adopt('Unbound', tx, ProtocolVersion.MinSupportedVersion)),
+              Effect.map(resealAs(transaction, 'Unbound')),
             ),
         })
         .pipe(Effect.runPromise);

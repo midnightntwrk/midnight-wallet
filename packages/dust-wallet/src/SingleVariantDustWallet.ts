@@ -131,6 +131,19 @@ export function CustomDustWallet<
   const carried = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
     EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, wholeTimeline));
 
+  /**
+   * Re-seals a transaction this wallet changed in place, at the stamp of the handle it was handed.
+   *
+   * @remarks
+   *   Attaching a registration to a transaction, or a signature to one, adds to bytes whoever built it fixed and does not
+   *   make this wallet their author, so what goes back out carries the stamp that came in rather than the one this
+   *   wallet stamps its own transactions with.
+   */
+  const resealAs =
+    (handed: UnprovenTx) =>
+    (changed: UnprovenTransaction): UnprovenTx =>
+      WalletTransaction.adopt(handed.stage, changed, handed.protocolVersion);
+
   return class CustomDustWalletImplementation
     extends BaseWallet
     implements CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>
@@ -311,7 +324,7 @@ export function CustomDustWallet<
               Effect.flatMap((tx) =>
                 v2.attachDustRegistration(tx, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment),
               ),
-              Effect.map(seal),
+              Effect.map(resealAs(transaction)),
             ),
         })
         .pipe(Effect.runPromise);
@@ -323,7 +336,7 @@ export function CustomDustWallet<
           [V2Tag]: (v2) =>
             carried<UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((tx) => v2.addDustGenerationSignature(tx, signature)),
-              Effect.map(seal),
+              Effect.map(resealAs(transaction)),
             ),
         })
         .pipe(Effect.runPromise);
@@ -335,7 +348,7 @@ export function CustomDustWallet<
           [V2Tag]: (v2) =>
             carried<UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((tx) => v2.addDustRegistrationSignature(tx, signature)),
-              Effect.map(seal),
+              Effect.map(resealAs(transaction)),
             ),
         })
         .pipe(Effect.runPromise);
