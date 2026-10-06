@@ -3,7 +3,7 @@
 exports[`Snippet outputs > with network > should output the correct result for 'balancing' 1`] = `
 [
   "Unshielded transfer by balancing completed
-Did sender send all its Night? false
+Did sender send all its Night? true
 Did receiver receive all the Night? true
 ",
 ]
@@ -254,6 +254,7 @@ Synced state:
       appliedId: 0n,
       highestTransactionId: 0n,
       isConnected: true,
+      indexerLiveness: { indexerHeight: 1n, finalizedHeight: 1n, _tag: 'InSync' },
       isStrictlyComplete: [Function: isStrictlyComplete],
       isCompleteWithin: [Function: isCompleteWithin]
     },
@@ -278,7 +279,7 @@ Synced state:
 
 exports[`Snippet outputs > with network > should output the correct result for 'hard-fork-support' 1`] = `
 [
-  "Protocol phase: settled at version 2000000
+  "Protocol phase: settled at version 2001000
 Pending transactions: 0, of which orphaned by the fork: 0
 Restored the snapshot this wallet just wrote? true
 ",
@@ -1475,17 +1476,6 @@ dust:
 ]
 `;
 
-exports[`Snippet outputs > without network > should output the correct result for 'transaction-history-persistence' 1`] = `
-[
-  "restored entries [ 'c0a46613b653a5c6f14a369f3799cdb122a57c3ec83a9f1358717fa8a2221204' ]
-tryRestore succeeded true
-older history entries 1
-refused unknown-version v9
-Could not restore the transaction-history payload (format v9, unknown-version): Transaction history declares format v9, which this build cannot read. This build reads v2.
-",
-]
-`;
-
 exports[`Snippet outputs > without network > should output the correct result for 'indexer-liveness' 1`] = `
 [
   "Unknown — blocks sync completion: true
@@ -1506,6 +1496,17 @@ WrongNetwork — blocks sync completion: true
   The indexer and the node are not on the same chain — they disagree about block 1000 (indexer 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, node 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff). Check the configured endpoints.
 WrongNetwork — blocks sync completion: true
   The indexer and the node are not on the same chain — they disagree about block 1000 (indexer could not name a block there, node 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff). Check the configured endpoints.
+",
+]
+`;
+
+exports[`Snippet outputs > without network > should output the correct result for 'transaction-history-persistence' 1`] = `
+[
+  "restored entries [ 'c0a46613b653a5c6f14a369f3799cdb122a57c3ec83a9f1358717fa8a2221204' ]
+tryRestore succeeded true
+older history entries 1
+refused unknown-version v9
+Could not restore the transaction-history payload (format v9, unknown-version): Transaction history declares format v9, which this build cannot read. This build reads v2.
 ",
 ]
 `;
