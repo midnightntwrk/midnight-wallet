@@ -471,7 +471,8 @@ export function CustomForkingDustWallet<
    *
    * @remarks
    *   The stamp is the floor of the variant's epoch: every decision it is later read for asks which side of the boundary
-   *   the bytes belong to, and the floor answers that the same way as any other version in the same epoch.
+   *   the bytes belong to, and the floor answers that the same way as any other version in the same epoch. It is only
+   *   for transactions this wallet builds; one it is handed and changes in place keeps its own (see `resealAs`).
    */
   const v8Epoch = ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, configuration.forks.v9);
   const v9Epoch = ProtocolVersion.epochOf(configuration.forks.v9, configuration.forks.v9);
@@ -485,6 +486,19 @@ export function CustomForkingDustWallet<
   /** Reads a transaction built from the boundary, refusing one built before it. */
   const v9Tx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
     EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, v9Epoch));
+
+  /**
+   * Re-seals a transaction this wallet changed in place, at the stamp of the handle it was handed.
+   *
+   * @remarks
+   *   Attaching a registration to a transaction, or a signature to one, adds to bytes whoever built it fixed — for a
+   *   registration, the unshielded wallet — and does not make this wallet their author. So what goes back out carries
+   *   the stamp that came in rather than the floor this wallet stamps its own transactions with.
+   */
+  const resealAs =
+    (handed: UnprovenTx) =>
+    (changed: { serialize: () => Uint8Array }): UnprovenTx =>
+      WalletTransaction.adopt(handed.stage, changed, handed.protocolVersion);
 
   /**
    * How long a start waits for the chain to say which version it is on.
@@ -918,14 +932,14 @@ export function CustomForkingDustWallet<
               Effect.flatMap(([tx, key]) =>
                 v1.attachDustRegistration(tx, currentTime, key, dustReceiverAddress, feePayment),
               ),
-              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v8Stamp)),
+              Effect.map(resealAs(transaction)),
             ),
           [V2Tag]: (v2) =>
             v9Tx<ledgerV9.UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((tx) =>
                 v2.attachDustRegistration(tx, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment),
               ),
-              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp)),
+              Effect.map(resealAs(transaction)),
             ),
         })
         .pipe(Effect.runPromise);
@@ -940,12 +954,12 @@ export function CustomForkingDustWallet<
               EitherOps.toEffect(Signatures.lowerSignature(signature)),
             ]).pipe(
               Effect.flatMap(([tx, lowered]) => v1.addDustGenerationSignature(tx, lowered)),
-              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v8Stamp)),
+              Effect.map(resealAs(transaction)),
             ),
           [V2Tag]: (v2) =>
             v9Tx<ledgerV9.UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((tx) => v2.addDustGenerationSignature(tx, signature)),
-              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp)),
+              Effect.map(resealAs(transaction)),
             ),
         })
         .pipe(Effect.runPromise);
@@ -960,12 +974,12 @@ export function CustomForkingDustWallet<
               EitherOps.toEffect(Signatures.lowerSignature(signature)),
             ]).pipe(
               Effect.flatMap(([tx, lowered]) => v1.addDustRegistrationSignature(tx, lowered)),
-              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v8Stamp)),
+              Effect.map(resealAs(transaction)),
             ),
           [V2Tag]: (v2) =>
             v9Tx<ledgerV9.UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((tx) => v2.addDustRegistrationSignature(tx, signature)),
-              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp)),
+              Effect.map(resealAs(transaction)),
             ),
         })
         .pipe(Effect.runPromise);

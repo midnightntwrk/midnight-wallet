@@ -50,6 +50,7 @@ import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/c
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, Option, Stream, pipe } from 'effect';
 import { CustomForkingDustWallet, type ForkingDustWallet, type ForkingDustWalletClass } from '../DustWallet.js';
+import { CustomDustWallet, type CustomizedDustWallet } from '../SingleVariantDustWallet.js';
 import { type CoreWallet as V1CoreWallet } from '../v1/CoreWallet.js';
 import * as V1Sync from '../v1/Sync.js';
 import { V1Builder } from '../v1/V1Builder.js';
@@ -268,6 +269,25 @@ const v2SyncService = (
   blockData: () => Effect.succeed(v9BlockData(configuration.syncTime)),
 });
 
+/**
+ * The V2 variant's builder: the shipped one, reading the replay instead of an indexer.
+ *
+ * @remarks
+ *   Left without a migration so that a single-variant wallet can be built from it too; the forking wallet below adds the
+ *   migration it watches the hand-over through.
+ */
+const timelineV2Builder = () =>
+  new V2Builder()
+    .withDefaultTransactionType()
+    .withSync(v2SyncService, () => V2Sync.makeDefaultSyncCapability())
+    .withSerializationDefaults()
+    .withTransactingDefaults()
+    .withCoinsAndBalancesDefaults()
+    .withTransactionHistory(() => noOpV2History)
+    .withKeysDefaults()
+    .withStartAuxDefaults()
+    .withCoinSelectionDefaults();
+
 // =============================================================================
 // The wallet
 // =============================================================================
@@ -385,17 +405,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     .withStartAuxDefaults()
     .withCoinSelectionDefaults();
 
-  const v2Builder = new V2Builder()
-    .withDefaultTransactionType()
-    .withSync(v2SyncService, () => V2Sync.makeDefaultSyncCapability())
-    .withSerializationDefaults()
-    .withTransactingDefaults()
-    .withCoinsAndBalancesDefaults()
-    .withTransactionHistory(() => noOpV2History)
-    .withKeysDefaults()
-    .withStartAuxDefaults()
-    .withCoinSelectionDefaults()
-    .withMigration(() => capturingCrossLedgerMigration(dustParameters.v9, captured));
+  const v2Builder = timelineV2Builder().withMigration(() => capturingCrossLedgerMigration(dustParameters.v9, captured));
 
   const WalletClass = CustomForkingDustWallet(
     { networkId, forks: { v9: forkVersion }, ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}) },
@@ -470,3 +480,33 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     }),
   );
 };
+
+/** Everything needed to point the shipped single-variant dust wallet at a replay. */
+export type SingleVariantWalletConfig = Readonly<{
+  /** What the one variant reads: the same shape the V2 variant of a forking wallet reads its replay in. */
+  replayed: Effect.Effect<readonly TimelineEvent[], never>;
+  networkId: NetworkId.NetworkId;
+  seed: Uint8Array;
+  dustParameters: V9Parameters;
+  /** The instant everything delivered is valued at. */
+  syncTime: Date;
+}>;
+
+/**
+ * Builds the shipped single-variant dust wallet over an in-memory replay: the V2 variant alone, answering for the whole
+ * protocol timeline.
+ *
+ * @param config The replay, the seed to start from, and what the wallet is valued against.
+ * @returns The wallet, started from the seed and not yet synchronizing — `start` is the caller's.
+ */
+export const makeSingleVariantWallet = (config: SingleVariantWalletConfig): CustomizedDustWallet =>
+  CustomDustWallet(
+    {
+      networkId: config.networkId,
+      costParameters: { feeBlocksMargin: 5 },
+      dustParameters: config.dustParameters,
+      replayed: config.replayed,
+      syncTime: config.syncTime,
+    },
+    timelineV2Builder(),
+  ).startWithSeed(config.seed, config.dustParameters);

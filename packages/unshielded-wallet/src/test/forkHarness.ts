@@ -38,6 +38,7 @@ import {
   type ForkingUnshieldedWalletClass,
 } from '../UnshieldedWallet.js';
 import { type PublicKey } from '../KeyStore.js';
+import { CustomUnshieldedWallet, type CustomizedUnshieldedWallet } from '../SingleVariantUnshieldedWallet.js';
 import { type CoreWallet as V1CoreWallet } from '../v1/CoreWallet.js';
 import * as V1Migration from '../v1/Migration.js';
 import * as V1Sync from '../v1/Sync.js';
@@ -196,6 +197,31 @@ const timelineSyncService = <TUpdate>(
     Stream.fromIterable(timeline.filter((item) => BigInt(item.id) > state.progress.appliedId).map(toUpdate)),
 });
 
+/**
+ * The V2 variant's builder: the shipped one, reading the timeline instead of an indexer.
+ *
+ * @remarks
+ *   Left without a migration so that a single-variant wallet can be built from it too; the forking wallet below adds the
+ *   migration it watches the hand-over through.
+ */
+const timelineV2Builder = () =>
+  new V2Builder()
+    .withSync(
+      (configuration: SourceConfiguration) =>
+        timelineSyncService<V2Update>(configuration.timeline, (item) => item.update as V2Update),
+      (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: V2History }) =>
+        V2Sync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
+          getContext(),
+        ),
+    )
+    .withSerializationDefaults()
+    .withTransactingDefaults()
+    .withSigningDefaults()
+    .withCoinsAndBalancesDefaults()
+    .withTransactionHistory(() => noOpV2History)
+    .withKeysDefaults()
+    .withCoinSelectionDefaults();
+
 // =============================================================================
 // The wallet
 // =============================================================================
@@ -295,23 +321,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
       V1Migration.makeEmptyWalletMigration({ networkId: configuration.networkId }),
     );
 
-  const v2Builder = new V2Builder()
-    .withSync(
-      (configuration: SourceConfiguration) =>
-        timelineSyncService<V2Update>(configuration.timeline, (item) => item.update as V2Update),
-      (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: V2History }) =>
-        V2Sync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
-          getContext(),
-        ),
-    )
-    .withSerializationDefaults()
-    .withTransactingDefaults()
-    .withSigningDefaults()
-    .withCoinsAndBalancesDefaults()
-    .withTransactionHistory(() => noOpV2History)
-    .withKeysDefaults()
-    .withCoinSelectionDefaults()
-    .withMigration(() => capturingCrossLedgerMigration(captured));
+  const v2Builder = timelineV2Builder().withMigration(() => capturingCrossLedgerMigration(captured));
 
   const WalletClass = CustomForkingUnshieldedWallet(
     {
@@ -361,3 +371,25 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     }),
   );
 };
+
+/** Everything needed to point the shipped single-variant unshielded wallet at a timeline. */
+export type SingleVariantWalletConfig = {
+  /** The timeline the one variant reads, whatever versions it is reported at. */
+  readonly timeline: readonly TimelineItem[];
+  /** The identity the wallet is started with. */
+  readonly publicKey: PublicKey;
+  readonly networkId?: NetworkId.NetworkId;
+};
+
+/**
+ * Builds the shipped single-variant unshielded wallet over an in-memory timeline: the V2 variant alone, answering for
+ * the whole protocol timeline.
+ *
+ * @param config The timeline and the identity to start with.
+ * @returns The wallet, started with that identity and not yet synchronizing — `start` is the caller's.
+ */
+export const makeSingleVariantWallet = (config: SingleVariantWalletConfig): CustomizedUnshieldedWallet<V2Update> =>
+  CustomUnshieldedWallet(
+    { networkId: config.networkId ?? NetworkId.NetworkId.Undeployed, timeline: config.timeline },
+    timelineV2Builder(),
+  ).startWithPublicKey(config.publicKey);
