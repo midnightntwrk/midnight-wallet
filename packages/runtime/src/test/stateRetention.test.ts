@@ -12,8 +12,6 @@
 // limitations under the License.
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as EArray, Chunk, Deferred, Effect, Queue, type Scope, Stream } from 'effect';
-import { setFlagsFromString } from 'node:v8';
-import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import { StateChange, type Variant, type VariantBuilder, type WalletRuntimeError } from '../abstractions/index.js';
 import { WalletBuilder } from '../WalletBuilder.js';
@@ -129,10 +127,9 @@ describe('Runtime state stream retention', () => {
   });
 
   it('lets superseded states be garbage-collected while a subscriber stays attached', async () => {
-    // Exposes the collector without starting the worker with --expose-gc.
-    setFlagsFromString('--expose-gc');
-    // Type cast required because: runInNewContext returns `any`; 'gc' resolves to V8's collector once exposed.
-    const gc = runInNewContext('gc') as () => void;
+    // The unit project starts its workers with --expose-gc (see vitest.config.ts); without it there is nothing to measure.
+    const gc = globalThis.gc;
+    expect(gc).toBeDefined();
 
     const wallet = startWallet();
     const { release, received } = laggingSubscriber(wallet, published);
@@ -140,9 +137,9 @@ describe('Runtime state stream retention', () => {
 
     const refs = await pushAll(wallet, published).then((steps) => steps.map((step) => new WeakRef(step)));
     await settle();
-    gc();
+    gc?.();
     await nextMacrotask();
-    gc();
+    gc?.();
 
     // Still reachable by design: the current state in the runtime's ref, and at most one state in the lagging
     // subscriber's buffer. Everything older must have been released, or a long sync holds every state it ever had.
@@ -152,6 +149,6 @@ describe('Runtime state stream retention', () => {
     await received;
     await wallet.stop();
 
-    expect(alive).toBeLessThanOrEqual(3);
+    expect(alive).toBeLessThanOrEqual(2);
   });
 });
