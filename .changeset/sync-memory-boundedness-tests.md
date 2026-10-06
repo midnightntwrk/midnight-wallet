@@ -9,6 +9,7 @@ Unit tests now fail when any of the mechanisms that keep sync memory bounded is 
   the last event, and delivers every event exactly once;
 - the runtime's state stream hands a lagging subscriber only the latest state and lets superseded states be
   garbage-collected;
-- shielded and Dust event sync, in both variants, subscribe through the backpressured path with the configured bounds.
+- shielded and Dust event sync, in both variants, subscribe through the backpressured path with the configured bounds;
+- the shielded version watcher's event-id probe reads one answer and closes its subscription before signalling.
 
 Previously, disabling backpressure or the runtime's sliding buffer left every unit test green.
