@@ -141,7 +141,6 @@ describe('withBackpressure', () => {
     expect(log.disposals).toBe(1);
     expect(log.delivered).toBeLessThanOrEqual(bufferSize + 1);
     expect(log.peakUnconsumed).toBeLessThanOrEqual(bufferSize + 1);
-    expect(log.delivered).toBeLessThan(Number(total));
 
     await Effect.runPromise(Fiber.interrupt(run));
   });

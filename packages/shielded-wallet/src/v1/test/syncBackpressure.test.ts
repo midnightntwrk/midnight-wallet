@@ -25,10 +25,28 @@ import { makeEventsSyncService } from '../Sync.js';
 
 type Call =
   | { readonly method: 'subscribe' }
-  | { readonly method: 'subscribeWithBackpressure'; readonly bufferSize: number; readonly resumeThreshold: number };
+  | {
+      readonly method: 'subscribeWithBackpressure';
+      readonly bufferSize: number;
+      readonly resumeThreshold: number;
+      // What the sync reads as an event's position. Backpressure resumes from it and drops the event a resume repeats,
+      // so a wrong field would lose or duplicate events.
+      readonly keyOfEvent7: bigint;
+    };
+
+/** Reads the backpressure key of an event whose id is 7, on a timeline whose highest id is 99. */
+const keyOfEvent7 = (key: (item: never) => bigint): bigint =>
+  // Type cast required because: the fake client is generic over every subscription document, and this test drives
+  // only the zswapLedgerEvents one. The tip id differs from the event id, so a key reading the wrong field shows.
+  (key as (item: { readonly zswapLedgerEvents: { readonly id: number; readonly maxId: number } }) => bigint)({
+    zswapLedgerEvents: { id: 7, maxId: 99 },
+  });
 
 // Test-harness bookkeeping: the fake client records what the sync asked it for.
-const recorded = vi.hoisted(() => ({ calls: [] as Call[] }));
+const recorded = vi.hoisted(() => {
+  const calls: Call[] = [];
+  return { calls };
+});
 
 // The sync service provides its WebSocket layer inline, so the module's layer is the only seam for a fake client.
 vi.mock('@midnightntwrk/wallet-sdk-indexer-client/effect', async (importOriginal) => {
@@ -44,6 +62,7 @@ vi.mock('@midnightntwrk/wallet-sdk-indexer-client/effect', async (importOriginal
         method: 'subscribeWithBackpressure',
         bufferSize: options.bufferSize,
         resumeThreshold: options.resumeThreshold,
+        keyOfEvent7: keyOfEvent7(options.key),
       });
       return Stream.empty;
     },
@@ -83,13 +102,13 @@ describe('V1 shielded wallet event subscription backpressure', () => {
 
   it('subscribes through the backpressured path with the default bounds', async () => {
     expect(await subscriptionCalls()).toEqual([
-      { method: 'subscribeWithBackpressure', bufferSize: 10000, resumeThreshold: 100 },
+      { method: 'subscribeWithBackpressure', bufferSize: 10000, resumeThreshold: 100, keyOfEvent7: 7n },
     ]);
   });
 
   it('passes the configured bounds through to the subscription', async () => {
     expect(await subscriptionCalls({ bufferSize: 500, resumeThreshold: 50 })).toEqual([
-      { method: 'subscribeWithBackpressure', bufferSize: 500, resumeThreshold: 50 },
+      { method: 'subscribeWithBackpressure', bufferSize: 500, resumeThreshold: 50, keyOfEvent7: 7n },
     ]);
   });
 });
