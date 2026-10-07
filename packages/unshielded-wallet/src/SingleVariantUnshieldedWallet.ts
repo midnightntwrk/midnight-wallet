@@ -47,18 +47,18 @@ import {
 } from './v2/index.js';
 import { type RunningV2Variant } from './v2/RunningV2Variant.js';
 import { type SignSegment } from './v2/Signing.js';
-import { type WalletSyncUpdate } from './v2/SyncSchema.js';
+import { type SyncUpdate } from './v2/SyncSchema.js';
 import { type TokenTransfer } from './v2/Transacting.js';
-import { type UtxoWithMeta } from './v2/UnshieldedState.js';
+import { type UtxoHash, type UtxoWithMeta } from './v2/UnshieldedState.js';
 
 export type CustomizedUnshieldedWallet<
-  TSyncUpdate = WalletSyncUpdate,
+  TSyncUpdate = SyncUpdate,
   TSerialized = string,
 > = UnshieldedWalletAPI<TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate>>]>;
 
 export interface CustomizedUnshieldedWalletClass<
-  TSyncUpdate = WalletSyncUpdate,
+  TSyncUpdate = SyncUpdate,
   TSerialized = string,
   TConfig extends BaseV2Configuration = DefaultV2Configuration,
 > extends WalletLike.BaseWalletClass<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate>>]> {
@@ -69,7 +69,7 @@ export interface CustomizedUnshieldedWalletClass<
 
 export function CustomUnshieldedWallet<
   TConfig extends BaseV2Configuration = DefaultV2Configuration,
-  TSyncUpdate = WalletSyncUpdate,
+  TSyncUpdate = SyncUpdate,
   TSerialized = string,
 >(
   configuration: TConfig,
@@ -308,6 +308,14 @@ export function CustomUnshieldedWallet<
             ),
         })
         .pipe(Effect.runPromise);
+    }
+
+    revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void> {
+      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.revertUtxos(utxoIds) }).pipe(Effect.runPromise);
+    }
+
+    releaseRestoredPending(coveredIds: ReadonlyArray<UtxoHash>): Promise<void> {
+      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.releaseRestoredPending(coveredIds) }).pipe(Effect.runPromise);
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<UnshieldedWalletState<TSerialized>> {

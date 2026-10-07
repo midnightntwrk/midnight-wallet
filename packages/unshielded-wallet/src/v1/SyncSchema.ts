@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Schema } from 'effect';
+import { type IndexerLiveness } from '@midnightntwrk/wallet-sdk-abstractions';
 import { SafeBigInt } from '@midnightntwrk/wallet-sdk-utilities';
 
 const DateFromMillis = Schema.transform(Schema.Number, Schema.DateFromSelf, {
@@ -204,3 +205,19 @@ export const VersionSignalSyncUpdate = {
  *   this address's timeline says nothing.
  */
 export type WalletSyncUpdate = IndexerSyncUpdate | VersionSignalSyncUpdate;
+
+/**
+ * A new verdict on whether the indexer agrees with the node's finalized head.
+ *
+ * @remarks
+ *   Deliberately not part of {@link WalletSyncUpdateSchema}. That schema decodes what the indexer sends over the wire, and
+ *   a liveness verdict is produced by the wallet comparing two sources — it is never decoded from a payload, so it
+ *   would be a member that never matches.
+ */
+export type IndexerLivenessUpdate = {
+  readonly type: 'IndexerLiveness';
+  readonly verdict: IndexerLiveness.IndexerLiveness;
+};
+
+/** Everything the unshielded sync stream can carry: the indexer's own updates, plus verdicts from the liveness check. */
+export type SyncUpdate = WalletSyncUpdate | IndexerLivenessUpdate;

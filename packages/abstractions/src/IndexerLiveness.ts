@@ -1,0 +1,474 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+import { Data, Option } from 'effect';
+
+/**
+ * Why an indexer liveness check did not produce a verdict.
+ *
+ * @remarks
+ *   Modelled as a union rather than a bare boolean so that additional skip conditions can be introduced without a
+ *   breaking change to {@link IndexerLiveness}.
+ *
+ *   - `no-node-configured`: the default sync service found no node endpoint to compare the indexer against.
+ *   - `simulation`: the wallet syncs from an in-memory simulator, which has no node and never will.
+ *   - `no-liveness-feed`: the wallet's sync service has no check to run — a custom source supplied through the builder.
+ *       Every service exposes a liveness feed, so such a source reports this through its own feed rather than by
+ *       leaving one out.
+ */
+export type SkipReason = 'no-node-configured' | 'simulation' | 'no-liveness-feed';
+
+/**
+ * The result of cross-checking an indexer's reported position against a node's finalized head.
+ *
+ * @remarks
+ *   An indexer reports its own progress, and nothing in that report is derived from consensus. A wallet that treats the
+ *   report as authoritative reports itself fully synchronized over a stale view when the indexer is stalled, lagging,
+ *   or withholding data. This type carries the outcome of an independent check against a node, so that "the indexer
+ *   says it is caught up" can be told apart from "the indexer agrees with the finalized chain".
+ *
+ *   Only {@link IndexerLiveness.Behind} and {@link IndexerLiveness.WrongNetwork} are negative verdicts.
+ *   {@link IndexerLiveness.Skipped} and {@link IndexerLiveness.Unknown} both mean "no verdict was reached", and must not
+ *   gate sync completion — a caller that configured no node endpoint would otherwise never observe a synchronized
+ *   wallet.
+ */
+export type IndexerLiveness = Data.TaggedEnum<{
+  /** The check could not run at all. Carries no judgement about the indexer. */
+  Skipped: { readonly reason: SkipReason };
+
+  /** The check can run but has not yet produced its first verdict. */
+  Unknown: {}; // eslint-disable-line @typescript-eslint/no-empty-object-type
+
+  /**
+   * The check is configured, but its most recent poll could not complete.
+   *
+   * @remarks
+   *   Either read may be the one that failed — the node's finalized head or the indexer's latest block — or the poll as a
+   *   whole may have timed out; `lastError` says which. A failed poll proves nothing about the indexer's own progress,
+   *   so this verdict does not gate sync completion — a node outage must not make a wallet whose indexer is healthy
+   *   report itself unsynchronized. It is a distinct variant rather than a reuse of {@link IndexerLiveness.Unknown} so
+   *   that a misconfigured or dead endpoint is visible to the caller instead of being indistinguishable from a check
+   *   that has not yet run. The protection this check provides degrades while polls fail, and this variant is how that
+   *   degradation announces itself.
+   *
+   *   A failed poll never replaces a verdict that gates. {@link IndexerLiveness.Behind} and
+   *   {@link IndexerLiveness.WrongNetwork} are proofs about the indexer, and an endpoint going quiet disproves neither —
+   *   only a successful comparison can. Were they replaced, one timeout would open the sync gate over the same stale
+   *   view the previous poll caught; see {@link afterFailedPoll}.
+   */
+  Unavailable: {
+    /** How many consecutive polls have failed. */
+    readonly consecutiveFailures: number;
+    /** The message from the most recent failure. It names the read that failed, for diagnosis. */
+    readonly lastError: string;
+  };
+
+  /**
+   * The indexer's position is within the accepted tolerance of the node's finalized head.
+   *
+   * @remarks
+   *   The heights are those at which this verdict was first reached, not the chain's current position: a publisher that
+   *   deduplicates with {@link equivalent} does not republish an `InSync` for the chain merely advancing.
+   */
+  InSync: {
+    /** The height of the latest block the indexer reports having processed. */
+    readonly indexerHeight: bigint;
+    /** The height of the node's highest finalized block. */
+    readonly finalizedHeight: bigint;
+  };
+
+  /** The indexer's position trails the node's finalized head by more than the accepted tolerance. */
+  Behind: {
+    /** The height of the latest block the indexer reports having processed. */
+    readonly indexerHeight: bigint;
+    /** The height of the node's highest finalized block. */
+    readonly finalizedHeight: bigint;
+    /** How far the indexer trails the finalized head, in blocks. Always greater than the accepted tolerance. */
+    readonly lag: bigint;
+  };
+
+  /**
+   * The indexer claims a position further ahead of the node's finalized head than read skew can explain.
+   *
+   * @remarks
+   *   The indexer ingests finalized blocks only — `subscribe_finalized_blocks` is its sole chain subscription — so its
+   *   reported block is a finalized one and cannot legitimately run far ahead of a node's finalized head. The chains
+   *   are already known to match by the time heights are compared (a mismatch is {@link IndexerLiveness.WrongNetwork}
+   *   and pre-empts every height verdict), so a large overshoot means either a node endpoint whose finality lags — one
+   *   restarting or resyncing — or an indexer reporting a height it cannot support. Without this variant,
+   *   over-reporting would be a cost-free way to pass a liveness check.
+   */
+  Ahead: {
+    /** The height of the latest block the indexer reports having processed. */
+    readonly indexerHeight: bigint;
+    /** The height of the node's highest finalized block. */
+    readonly finalizedHeight: bigint;
+    /** How far the indexer leads the finalized head, in blocks. Always greater than the accepted tolerance. */
+    readonly overshoot: bigint;
+  };
+
+  /**
+   * The indexer and the node name different blocks at a height both claim to have passed: they are not on the same
+   * chain.
+   *
+   * @remarks
+   *   A height is a number the indexer chooses, and nothing in it is derived from consensus. Comparing heights alone
+   *   therefore proves only that the indexer can count — an indexer reporting a height it never reached passes. This
+   *   verdict is the outcome of the stronger question: at a height both endpoints claim to have passed, do they name
+   *   the same block?
+   *
+   *   Both endpoints report finalized blocks only, and finality is what makes a disagreement conclusive: a finalized
+   *   block cannot be reorganised away, so two different hashes at the same finalized height cannot be two views of one
+   *   chain. Genesis is the `height: 0n` case of exactly this comparison, not a separate kind of failure.
+   *
+   *   Unlike {@link IndexerLiveness.Unavailable}, this cannot be transient. Both hashes were read successfully and differ,
+   *   which proves at least one endpoint points at another chain — and it will keep pointing there until reconfigured.
+   *   Every height the indexer reports therefore describes a different chain, so height comparison is meaningless and
+   *   this verdict gates sync completion (see {@link IndexerLiveness.blocksSyncCompletion}): an application waiting for
+   *   sync must not proceed — and then submit — over data from the wrong network.
+   *
+   *   A hash is absent when that endpoint could not name a block at `height` despite having just claimed to have passed
+   *   it. That contradicts its own report rather than merely failing to answer — it has not shown itself to be on this
+   *   chain — so it belongs here rather than in {@link IndexerLiveness.Unavailable}, which does not gate. Both hashes
+   *   are carried as reported, so a diagnostic can show the operator exactly what each endpoint answered.
+   */
+  WrongNetwork: {
+    /** The height at which the two endpoints were compared. Both claimed to have passed it; `0n` is the genesis check. */
+    readonly height: bigint;
+    /** The block the indexer names at `height`, as it reported it, or `Option.none` when it could not name one. */
+    readonly indexerBlockHash: Option.Option<string>;
+    /** The block the node names at `height`, as it reported it, or `Option.none` when it could not name one. */
+    readonly nodeBlockHash: Option.Option<string>;
+  };
+}>;
+
+const IndexerLiveness = Data.taggedEnum<IndexerLiveness>();
+
+/** A type predicate that determines if a given value is an {@link IndexerLiveness.Skipped} enum variant. */
+export const isSkipped = IndexerLiveness.$is('Skipped');
+
+/** A type predicate that determines if a given value is an {@link IndexerLiveness.Unknown} enum variant. */
+export const isUnknown = IndexerLiveness.$is('Unknown');
+
+/** A type predicate that determines if a given value is an {@link IndexerLiveness.InSync} enum variant. */
+export const isInSync = IndexerLiveness.$is('InSync');
+
+/** A type predicate that determines if a given value is an {@link IndexerLiveness.Behind} enum variant. */
+export const isBehind = IndexerLiveness.$is('Behind');
+
+/** A type predicate that determines if a given value is an {@link IndexerLiveness.Ahead} enum variant. */
+export const isAhead = IndexerLiveness.$is('Ahead');
+
+/** A type predicate that determines if a given value is an {@link IndexerLiveness.Unavailable} enum variant. */
+export const isUnavailable = IndexerLiveness.$is('Unavailable');
+
+/** A type predicate that determines if a given value is an {@link IndexerLiveness.WrongNetwork} enum variant. */
+export const isWrongNetwork = IndexerLiveness.$is('WrongNetwork');
+
+export const { $match: match, Skipped, Unknown, InSync, Behind, Ahead, Unavailable, WrongNetwork } = IndexerLiveness;
+
+/**
+ * A block, named by the two things both endpoints can report about it.
+ *
+ * @remarks
+ *   The pair travels together because neither half is usable alone here: a height with no hash is a number the reporting
+ *   endpoint chose, and a hash with no height cannot be looked up on the other side.
+ */
+export type BlockRef = {
+  /** The block's height. */
+  readonly height: bigint;
+  /** The block's hash, in whatever presentation the reporting endpoint uses. */
+  readonly hash: string;
+};
+
+/**
+ * Decides whether two block hashes name the same block.
+ *
+ * @remarks
+ *   Presentation differs by source — a node reports its genesis hash `0x`-prefixed and lowercase, an indexer serves a
+ *   plain hex string with no guaranteed prefix or case — so only the bytes may decide. A formatting difference reported
+ *   as a wrong network would gate a correctly configured wallet forever.
+ * @param left - One genesis-block hash, in any hex presentation.
+ * @param right - The other genesis-block hash, in any hex presentation.
+ * @returns `true` when both hashes carry the same bytes.
+ */
+export const sameBlockHash = (left: string, right: string): boolean => normalizeHash(left) === normalizeHash(right);
+
+/** Reduces a hex hash to bare lowercase digits, so presentation cannot influence a comparison. */
+const normalizeHash = (hash: string): string => hash.toLowerCase().replace(/^0x/, '');
+
+/**
+ * Determines whether a verdict shows the indexer to be serving a stale view of the chain.
+ *
+ * @remarks
+ *   It holds for {@link IndexerLiveness.Behind} alone. Only that verdict proves something about the data the wallet is
+ *   using: the indexer is missing finalized blocks, so the wallet's view is genuinely out of date. Sync-completion
+ *   checks gate on {@link blocksSyncCompletion} instead, which additionally holds for {@link IndexerLiveness.Unknown} —
+ *   staleness proven and staleness not-yet-ruled-out are different statements, and this predicate makes only the
+ *   first.
+ * @example
+ *   ```ts
+ *   const knownStale = IndexerLiveness.indicatesStaleView(progress.indexerLiveness);
+ *   ```;
+ *
+ * @param liveness - The verdict to test.
+ * @returns `true` when the indexer is known to trail the finalized head beyond the accepted tolerance.
+ */
+export const indicatesStaleView = (liveness: IndexerLiveness): boolean => isBehind(liveness);
+
+/**
+ * Determines whether a verdict must keep a wallet from reporting itself synchronized.
+ *
+ * @remarks
+ *   This is the predicate that sync-completion checks gate on, rather than testing for individual variants.
+ *
+ *   It holds for {@link IndexerLiveness.Behind}, which proves the wallet's view is out of date, and for
+ *   {@link IndexerLiveness.Unknown}, which records that a check exists but has not yet reached its first verdict. The
+ *   second matters because the first verdict needs a node connection and a metadata download — seconds — while the
+ *   indexer's first progress update lands in well under one. If `Unknown` did not block, a wallet with a stalled
+ *   indexer would report itself synchronized in exactly that window, over exactly the stale view the check exists to
+ *   catch.
+ *
+ *   It deliberately does not hold for {@link IndexerLiveness.Skipped}: that variant means no verdict is ever coming, so
+ *   blocking on it would leave every wallet without a node endpoint permanently unsynchronized — which is why `Skipped`
+ *   and `Unknown` are distinct variants. Nor does it hold for {@link IndexerLiveness.Unavailable} — a failed poll proves
+ *   nothing about the indexer's progress — or for {@link IndexerLiveness.Ahead}, which cannot distinguish a wrong
+ *   indexer from a lagging node endpoint. Wrong-network deployments do gate, but through
+ *   {@link IndexerLiveness.WrongNetwork}, whose genesis-hash comparison is deterministic where a height threshold could
+ *   never be.
+ * @example
+ *   ```ts
+ *   const canReportSynced = !IndexerLiveness.blocksSyncCompletion(progress.indexerLiveness);
+ *   ```;
+ *
+ * @param liveness - The verdict to test.
+ * @returns `true` when the wallet must not report itself synchronized under this verdict.
+ */
+export const blocksSyncCompletion = (liveness: IndexerLiveness): boolean =>
+  isBehind(liveness) || isUnknown(liveness) || isWrongNetwork(liveness);
+
+/**
+ * Compares an indexer's reported block height against a node's finalized block height.
+ *
+ * @remarks
+ *   The two tolerances are separate because they bound different things. `maxBehindBlocks` is a staleness allowance — how
+ *   out-of-date a view a caller is willing to treat as current — and can be generous. `maxAheadBlocks` bounds read
+ *   skew: the indexer ingests finalized blocks only, so it cannot legitimately lead a node's finalized head by more
+ *   than the time between the two reads accounts for, and this value should stay small. A single shared tolerance would
+ *   force a generous staleness allowance to also admit a large fabricated overshoot.
+ * @example
+ *   ```ts
+ *   const verdict = IndexerLiveness.evaluate({
+ *     indexerHeight: 1_000n,
+ *     finalizedHeight: 1_030n,
+ *     maxBehindBlocks: 10n,
+ *     maxAheadBlocks: 2n,
+ *   });
+ *   // IndexerLiveness.Behind({ indexerHeight: 1000n, finalizedHeight: 1030n, lag: 30n })
+ *   ```;
+ *
+ * @param params - The two heights to compare, and the tolerances to allow in each direction.
+ * @param params.indexerHeight - The height of the latest block the indexer reports having processed.
+ * @param params.finalizedHeight - The height of the node's highest finalized block.
+ * @param params.maxBehindBlocks - How many blocks the indexer may trail the finalized head by and still count as in
+ *   sync. `0n` requires the indexer to have reached the finalized head exactly.
+ * @param params.maxAheadBlocks - How many blocks the indexer may lead the finalized head by and still count as in sync.
+ *   `0n` admits no overshoot at all.
+ * @returns {@link IndexerLiveness.Behind} When the indexer trails by more than `maxBehindBlocks`,
+ *   {@link IndexerLiveness.Ahead} when it leads by more than `maxAheadBlocks`, and {@link IndexerLiveness.InSync}
+ *   otherwise. Never {@link IndexerLiveness.Skipped} or {@link IndexerLiveness.Unknown}, which describe the absence of a
+ *   check rather than its outcome.
+ */
+export const evaluate = ({
+  indexerHeight,
+  finalizedHeight,
+  maxBehindBlocks,
+  maxAheadBlocks,
+}: {
+  readonly indexerHeight: bigint;
+  readonly finalizedHeight: bigint;
+  readonly maxBehindBlocks: bigint;
+  readonly maxAheadBlocks: bigint;
+}): IndexerLiveness => {
+  const lag = finalizedHeight - indexerHeight;
+  const overshoot = -lag;
+
+  return lag > maxBehindBlocks
+    ? Behind({ indexerHeight, finalizedHeight, lag })
+    : overshoot > maxAheadBlocks
+      ? Ahead({ indexerHeight, finalizedHeight, overshoot })
+      : InSync({ indexerHeight, finalizedHeight });
+};
+
+/**
+ * Produces the verdict that follows a poll failing.
+ *
+ * @remarks
+ *   A verdict that gates sync completion on the strength of a successful comparison — {@link IndexerLiveness.Behind} or
+ *   {@link IndexerLiveness.WrongNetwork} — is kept as it is. A failed poll proves nothing, so it cannot disprove what an
+ *   earlier poll established; only another successful comparison can. Replacing such a verdict with
+ *   {@link IndexerLiveness.Unavailable}, which does not gate, would let a single timeout release a caller waiting on a
+ *   stale indexer.
+ *
+ *   Every other verdict becomes `Unavailable`. Its consecutive-failure count is the only state a liveness check carries
+ *   between polls, and this function is where it advances. It counts up while failures continue, so a caller can tell a
+ *   single missed poll from a node that has been unreachable for a long time, and resets once any other verdict has
+ *   intervened, so a fresh outage is not reported as a continuing one.
+ * @example
+ *   ```ts
+ *   const next = IndexerLiveness.afterFailedPoll(previous, 'websocket closed');
+ *   ```;
+ *
+ * @param previous - The verdict before this poll.
+ * @param lastError - The message from the failure that just occurred.
+ * @returns `previous` unchanged when it is {@link IndexerLiveness.Behind} or {@link IndexerLiveness.WrongNetwork};
+ *   otherwise an {@link IndexerLiveness.Unavailable} verdict whose count continues the previous run of failures, or
+ *   starts a new one.
+ */
+export const afterFailedPoll = (previous: IndexerLiveness, lastError: string): IndexerLiveness =>
+  isBehind(previous) || isWrongNetwork(previous)
+    ? previous
+    : Unavailable({
+        // Any other verdict means the node was reachable since the last failure, so this outage starts a fresh count.
+        consecutiveFailures: isUnavailable(previous) ? previous.consecutiveFailures + 1 : 1,
+        lastError,
+      });
+
+/**
+ * Decides whether two verdicts say the same thing to a caller.
+ *
+ * @remarks
+ *   Structural equality is the wrong test for "has anything changed": {@link IndexerLiveness.InSync},
+ *   {@link IndexerLiveness.Behind} and {@link IndexerLiveness.Ahead} carry the two heights they were computed from, and
+ *   on a live chain both advance about five blocks per poll, so consecutive verdicts are never structurally equal. A
+ *   publisher deduplicating on structure would fan a new wallet state out to every subscriber once per poll, forever,
+ *   with nothing about the wallet changed.
+ *
+ *   What a caller acts on is the kind of verdict and, where the variant carries one, its magnitude: a `Behind` whose lag
+ *   has grown is news, a lengthening outage keeps counting, and a different reason or a different pair of hashes is a
+ *   different statement. The heights alone are not: an `InSync` at a later height is the same report as the one before
+ *   it. A publisher that deduplicates with this predicate therefore leaves the heights on a published verdict as they
+ *   were when that verdict was first reached.
+ * @example
+ *   ```ts
+ *   const quiet = verdicts.pipe(Stream.changesWith(IndexerLiveness.equivalent));
+ *   ```;
+ *
+ * @param left - One verdict.
+ * @param right - The other.
+ * @returns `true` when a caller would learn nothing new from `right` after `left`.
+ */
+export const equivalent = (left: IndexerLiveness, right: IndexerLiveness): boolean =>
+  match(left, {
+    Skipped: ({ reason }) => isSkipped(right) && right.reason === reason,
+    Unknown: () => isUnknown(right),
+    Unavailable: ({ consecutiveFailures }) => isUnavailable(right) && right.consecutiveFailures === consecutiveFailures,
+    InSync: () => isInSync(right),
+    Behind: ({ lag }) => isBehind(right) && right.lag === lag,
+    Ahead: () => isAhead(right),
+    WrongNetwork: ({ height, indexerBlockHash, nodeBlockHash }) =>
+      isWrongNetwork(right) &&
+      right.height === height &&
+      Option.getOrElse(right.indexerBlockHash, () => '') === Option.getOrElse(indexerBlockHash, () => '') &&
+      Option.getOrElse(right.nodeBlockHash, () => '') === Option.getOrElse(nodeBlockHash, () => ''),
+  });
+
+/**
+ * Decides whether two endpoints that both claim a given block agree on which block it is.
+ *
+ * @remarks
+ *   An absent hash is a disagreement, not an unknown: the endpoint has just claimed to have passed this height, so being
+ *   unable to name the block there contradicts its own report.
+ */
+const agreeOn = (left: Option.Option<string>, right: Option.Option<string>): boolean =>
+  Option.match(left, {
+    onNone: () => false,
+    onSome: (leftHash) =>
+      Option.match(right, { onNone: () => false, onSome: (rightHash) => sameBlockHash(leftHash, rightHash) }),
+  });
+
+/**
+ * Cross-checks an indexer's reported tip against a node's finalized head, by block rather than by height alone.
+ *
+ * @remarks
+ *   Heights alone cannot decide this. A height is a number the indexer chooses, so an indexer that reports one it never
+ *   reached passes a height-only comparison at no cost. The block at that height is the part it cannot invent: both
+ *   endpoints serve finalized blocks, and a finalized block cannot be reorganised away, so a disagreement about one is
+ *   conclusive rather than a transient difference of view.
+ *
+ *   Exactly one block is compared, at the lower of the two heights — the newest block both endpoints claim to have
+ *   passed. `sharedHash` is that block as reported by whichever endpoint is ahead, and is the check's only extra read;
+ *   when the heights are equal the two tips are already the same block and `sharedHash` is ignored. An endpoint that
+ *   cannot name a block there has failed to show it is on this chain, which is why an absent hash produces
+ *   {@link IndexerLiveness.WrongNetwork} rather than {@link IndexerLiveness.Unavailable}.
+ *
+ *   The heights are still what decide a passing verdict: agreement on the shared block only clears the way for
+ *   {@link evaluate}, it does not excuse a lag or an overshoot beyond the tolerances.
+ * @example
+ *   ```ts
+ *   const verdict = IndexerLiveness.evaluateTips({
+ *     indexer: { height: 1_002n, hash: '0xabc…' },
+ *     finalized: { height: 1_000n, hash: '0xdef…' },
+ *     // The indexer leads, so this is the indexer's block at height 1_000.
+ *     sharedHash: Option.some('0xdef…'),
+ *     maxBehindBlocks: 10n,
+ *     maxAheadBlocks: 10n,
+ *   });
+ *   // IndexerLiveness.InSync({ indexerHeight: 1002n, finalizedHeight: 1000n })
+ *   ```;
+ *
+ * @param params - The two tips, the block they share, and the tolerances to allow in each direction.
+ * @param params.indexer - The height and hash of the latest block the indexer reports having processed.
+ * @param params.finalized - The height and hash of the node's highest finalized block.
+ * @param params.sharedHash - The block at the lower of the two heights, as reported by whichever endpoint is ahead of
+ *   the other, or `Option.none` when that endpoint could not name one. Ignored when the heights are equal.
+ * @param params.maxBehindBlocks - How many blocks the indexer may trail the finalized head by and still count as in
+ *   sync.
+ * @param params.maxAheadBlocks - How many blocks the indexer may lead the finalized head by and still count as in sync.
+ * @returns {@link IndexerLiveness.WrongNetwork} When the two endpoints do not name the same block at the shared height;
+ *   otherwise the height verdict from {@link evaluate}.
+ */
+export const evaluateTips = ({
+  indexer,
+  finalized,
+  sharedHash,
+  maxBehindBlocks,
+  maxAheadBlocks,
+}: {
+  readonly indexer: BlockRef;
+  readonly finalized: BlockRef;
+  readonly sharedHash: Option.Option<string>;
+  readonly maxBehindBlocks: bigint;
+  readonly maxAheadBlocks: bigint;
+}): IndexerLiveness => {
+  // The newest block both endpoints claim to have passed, and what each of them names there. Whichever endpoint is
+  // ahead had to be asked; the other one is already reporting that block as its own tip.
+  const shared =
+    indexer.height === finalized.height
+      ? {
+          height: indexer.height,
+          indexerBlockHash: Option.some(indexer.hash),
+          nodeBlockHash: Option.some(finalized.hash),
+        }
+      : indexer.height > finalized.height
+        ? { height: finalized.height, indexerBlockHash: sharedHash, nodeBlockHash: Option.some(finalized.hash) }
+        : { height: indexer.height, indexerBlockHash: Option.some(indexer.hash), nodeBlockHash: sharedHash };
+
+  return agreeOn(shared.indexerBlockHash, shared.nodeBlockHash)
+    ? evaluate({
+        indexerHeight: indexer.height,
+        finalizedHeight: finalized.height,
+        maxBehindBlocks,
+        maxAheadBlocks,
+      })
+    : WrongNetwork(shared);
+};

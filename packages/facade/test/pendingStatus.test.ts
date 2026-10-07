@@ -52,6 +52,7 @@ const held = (
       ...(result !== undefined ? { result } : {}),
     },
   ],
+  reservations: [],
 });
 
 describe('a transaction the chain has not answered for', () => {

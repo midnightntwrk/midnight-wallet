@@ -136,8 +136,8 @@ describe('a cross-ledger dust migration handed parameters that are not the chain
   it('is unaffected by a wrong night-dust ratio, so a guard on that field would fix nothing', async () => {
     // The boundary of the exposure, and the reason it is worth stating. `nightDustRatio` governs generation capacity
     // from registered Night; the dust recovered here arrives as replayed `dustInitialUtxo` events that already carry
-    // their values, so the ratio never enters the arithmetic. A reviewer reading only the case above could reasonably
-    // conclude every field is dangerous and validate the wrong one.
+    // their values, so the ratio never enters the arithmetic. Read on its own, the case above could suggest that every
+    // field is dangerous, and lead to validating the wrong one.
     const chain = await buildDustChain();
     const secretKey: DustSecretKey = fixtureSecretKey();
     const base = chainParameters();
