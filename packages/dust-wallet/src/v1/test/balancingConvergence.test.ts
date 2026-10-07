@@ -24,7 +24,7 @@
  *   dry run spends the selected coins against the wallet's own Dust state. The capability is built by hand around the
  *   real coins and keys capabilities so that its coin selection can be guarded: a balancing loop that never settles is
  *   synchronous and blocks the event loop, so no test timeout could stop it. The guard turns that into a failure after
- *   a bounded number of coin selections; a loop that settles never gets near it.
+ *   a bounded number of coin-selection fetches and calls; a loop that settles never gets near it.
  */
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
@@ -52,28 +52,36 @@ const COST_PARAMETERS = { feeBlocksMargin: 5 };
 const NIGHT_AWARD = 1_000_000_000n;
 // Long enough for the Night to pay for its own registration, short enough that what is left starts below that window.
 const SECONDS_BEFORE_REGISTERING = 100n;
-// Far more coin selections than a settling balance needs; only a loop that never settles reaches it.
-const MAX_COIN_SELECTIONS = 100;
+// Far more coin-selection fetches and calls than a settling balance needs; only a loop that never settles reaches it.
+const MAX_COIN_SELECTION_TICKS = 100;
 
 /**
- * The default coin selection, until it has been asked for a coin more often than a settling balance ever would.
+ * The default coin selection, guarded by how often the capability fetches it and how often it calls it.
  *
  * @remarks
- *   Every balancing pass that still has a deficit asks the selection for coins, one at a time, until the pass covers it.
- *   The count therefore climbs with every pass: a balance that settles asks a handful of times, and only a loop that
- *   never settles reaches the bound. Counting the selections themselves, rather than how often the capability fetched
- *   the selection function, is what makes the guard see a loop whichever of the two the loop repeats.
+ *   A balancing loop can repeat either one without the other: a loop that re-fetches the selection every round but no
+ *   longer needs a coin calls it only once, and a loop that keeps one fetched selection calls it on every pass.
+ *   Counting both catches either kind, so the guard fails once the total passes the bound. A balance that settles uses
+ *   a handful of ticks: one fetch and a couple of calls.
  */
 const guardedCoinSelection = (): (() => CoinSelection) => {
-  const selections = { count: 0 };
-  const guarded: CoinSelection = (coins) => {
-    selections.count += 1;
-    if (selections.count > MAX_COIN_SELECTIONS) {
-      throw new Error(`Dust balancing did not settle within ${MAX_COIN_SELECTIONS} coin selections`);
+  const ticks = { count: 0 };
+  const tick = (): void => {
+    ticks.count += 1;
+    if (ticks.count > MAX_COIN_SELECTION_TICKS) {
+      throw new Error(
+        `Dust balancing did not settle within ${MAX_COIN_SELECTION_TICKS} coin-selection fetches and calls`,
+      );
     }
+  };
+  const guarded: CoinSelection = (coins) => {
+    tick();
     return chooseCoin(coins);
   };
-  return () => guarded;
+  return () => {
+    tick();
+    return guarded;
+  };
 };
 
 /** A wallet holding exactly one Dust coin, generating from a small Night holding in the in-memory simulator. */
