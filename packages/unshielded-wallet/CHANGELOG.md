@@ -1,5 +1,186 @@
 # @midnightntwrk/wallet-sdk-unshielded-wallet
 
+## 4.0.0-rc.1
+
+### Major Changes
+
+- 7ee351c: fix(unshielded-wallet)!: stop a leaked booking duplicating a UTxO and doubling the balance
+
+  A resync could re-admit a booked UTxO as available, and a booking taken while balancing was never released if the
+  transaction was abandoned before submission. Both were persisted, so the balance stayed doubled across restarts.
+
+  - Sync no longer re-admits a booked UTxO, and a snapshot holding one coin as both available and pending loads with it
+    pending only, so corrupted state repairs itself on the next start.
+  - A booking carries its transaction's TTL and is released once sync has caught up and the TTL has passed.
+  - The facade records each balanced but unproven transaction as a reservation in the pending-transactions service (ids
+    and TTL only, never the transaction). Bookings restored from a snapshot are released at the chain tip unless a
+    reservation or a tracked transaction still accounts for them.
+  - Balancing in place now books the coins it selects.
+  - New `UnshieldedWallet.revertUtxos(ids)` releases booked coins by id.
+
+  Both stored formats gained an optional member, so a store written by this release is still readable by an earlier one.
+
+  BREAKING CHANGE:
+
+  - unshielded-wallet: `UnshieldedState.spend`, `UnshieldedState.spendByUtxo`, `CoreWallet.spend` and
+    `CoreWallet.spendUtxos` take the transaction's TTL as a required last argument. `UnshieldedState.restore` and
+    `toArrays` exchange pending entries as `{ utxo, ttl, restored }`. `UnshieldedWalletAPI` and `TransactingCapability`
+    gain `revertUtxos` and `releaseRestoredPending`, which custom implementations must add.
+  - capabilities: `PendingTransactions` gains a required `reservations` field, and `PendingTransactionsService` and
+    `PendingTransactionsServiceEffect` gain `addReservation` and `clearReservation`, which custom implementations must
+    add.
+  - facade: a `pendingTransactionsService` or `unshielded` factory passed to `WalletFacade.init` must return an
+    implementation with those new methods.
+
+- 7ee351c: feat(unshielded-wallet)!: cross-check the indexer's reported tip against the node's finalized head
+
+  The unshielded wallet no longer takes the indexer's word that it is synced. It polls a node's finalized head (every 30
+  seconds by default) and checks that indexer and node name the same block at the newest height both have passed;
+  genesis is the height-zero case. The node is `nodeClientConnection`, falling back to `relayURL`; a wallet naming
+  neither is not checked. Tune with `livenessConfiguration` and `livenessPollInterval`.
+
+  The result is an `IndexerLiveness` verdict on `SyncProgress`. `Behind`, `Unknown` and `WrongNetwork` block completion;
+  `InSync`, `Ahead`, `Unavailable` and `Skipped` do not. A failed poll keeps a `Behind` or `WrongNetwork` verdict, so a
+  node outage cannot release a caller waiting on a stale indexer. A verdict is republished only when it changes
+  (`IndexerLiveness.equivalent`), not on every poll. This detects staleness, not withholding. The shielded and dust
+  wallets are not gated (#743).
+
+  ### Fixes
+  - Unshielded `isConnected` clears when the indexer subscription drops or completes, and the subscription is rebuilt in
+    both cases; it previously latched `true` (#743).
+  - `api.rpc` calls (`getGenesis()`) work right after node client creation.
+  - Node connection failures are typed errors, no longer defects.
+  - A finite `reconnectionTimeout` also bounds the initial connection and retries within it, so a restarting node
+    connects on a later attempt instead of failing the build.
+  - The unshielded sync retry backoff is really capped at two minutes; it previously kept doubling until it stopped
+    retrying (#742).
+
+  BREAKING CHANGE (`wallet-sdk`, `wallet-sdk-facade`, `wallet-sdk-unshielded-wallet`): `isStrictlyComplete()`,
+  `isCompleteWithin()`, `FacadeState.isSynced` and `waitForSyncedState()` now also need a first liveness verdict that
+  does not block. On by default for every wallet with a `relayURL`. Against a stale indexer `waitForSyncedState()`
+  neither rejects nor times out; race it against your own deadline and read `progress.indexerLiveness` (see the
+  `indexer-liveness` docs snippet). `SyncProgressData` gains a required `indexerLiveness` field, defaulted by
+  `createSyncProgress()`. Sync types are parameterised on `SyncUpdate`, a superset of `WalletSyncUpdate`.
+
+  BREAKING CHANGE (`wallet-sdk-unshielded-wallet`): `SyncService.livenessUpdates` is required. A custom source with
+  nothing to check emits one `IndexerLiveness.Skipped({ reason: 'no-liveness-feed' })` and ends. `SimulatorSyncUpdate`
+  now includes a liveness update.
+
+  BREAKING CHANGE (`wallet-sdk-node-client`): `NodeClient.Service` gains required `getFinalizedBlock()`,
+  `getGenesisHash()` and `getBlockHashAt(height)`; `getBlockHashAt` returns `Option.none` for a height with no block.
+  Only implementers are affected.
+
+  `wallet-sdk-abstractions` adds `IndexerLiveness`: the verdict type, `evaluate` and `evaluateTips` for comparing an
+  indexer against a node, `blocksSyncCompletion`, `equivalent` and `sameBlockHash`.
+
+  `wallet-sdk-capabilities` adds the liveness check: `LivenessServiceImpl`, `LivenessReads` (`indexerTip`,
+  `finalizedBlock`, `indexerBlockHashAt`, `nodeBlockHashAt`), `makeDefaultLivenessReads`,
+  `DEFAULT_LIVENESS_CONFIGURATION` and `DEFAULT_POLL_INTERVAL`.
+
+- 1660f24: Version every persisted format, read what earlier releases wrote, refuse the rest with a tagged error.
+
+  ### Breaking
+  - `finalizedBlock` is optional on `FinalizedLifecycle` and `FinalizedWalletEntry`; `isFinalizedWalletEntry` no longer
+    implies one is present.
+  - `InMemoryTransactionHistoryStorage.restore` throws `TransactionHistoryRestoreError` instead of returning an empty
+    store; `tryRestore` returns it as a `Left`.
+  - An unreadable snapshot is refused with `SnapshotRestoreError` (tag
+    `@midnightntwrk/wallet-sdk-abstractions/SnapshotFormat/SnapshotRestoreError`), not `Wallet.Other`.
+  - A finalized history entry with no block is reported as `BlocklessFinalizedEntryError` (tag
+    `Wallet.BlocklessFinalizedEntry`), not `TransactionHistoryError`.
+  - `upgradeV1ToV2` takes `readonly unknown[]`; `upgradeToCurrentFormat` returns an `Either`.
+
+  ### Added
+  - Histories are written as `{ version: 'v2', entries }`. Snapshots carry `version: 'v1'`, or `v2` for the unshielded
+    V2 variant (key is `{ tag, value }`); a `v1` unshielded snapshot is upgraded on read. Unknown versions are refused
+    by name.
+  - Snapshots carry `writtenBy: 'v1' | 'v2'`. A snapshot is restored by its writer when that variant is registered and
+    the protocol version is not below the writer's activation; otherwise by protocol version. An unshielded snapshot
+    with no `writtenBy` and a bare-string key counts as written by V1.
+  - Abstractions: `SnapshotFormat` (`versionField`, `writtenByField`, `isSnapshotWriter`, `readSnapshot`,
+    `SnapshotRestoreError` with `surface`, `detectedVersion`, `reason`, `cause`), `SnapshotRouting` (`readEnvelope`,
+    `routeSnapshot`), `TransactionHistoryFormat.detectVersion`; `TransactionHistoryRestoreError` carries a `reason`.
+  - Facade exports `finalizedTransactionTraits`; dust exports `Serialization` from `/v1`.
+  - CI gates persisted formats on drift, fixture coverage and frozen fixtures.
+
+  ### Fixed
+  - Histories saved by abstractions 2.1.0 or earlier restore; each entry gains a `finalized` lifecycle and, if missing,
+    empty `identifiers`.
+  - The `txHistory` embedded in a shielded 1.0.0 snapshot, and `coinHashesPending` written by V2, are no longer dropped
+    by a reader; both survive the `forks.v9` crossing.
+  - A V1 snapshot saved in the fork window now migrates: booked UTXOs released, `registeredForDustGeneration` cleared,
+    stranded shielded spends released. Covers earlier snapshots for unshielded, from this release on for shielded and
+    dust.
+  - A V2 snapshot with a protocol version below V2's activation starts on V1 instead of failing with "No variant to
+    init".
+  - `restore` throws the tagged error `tryRestore` reports, not `getOrThrow called on a Left`.
+  - `hasTTLExpired` applies the dust grace period only to transactions carrying shielded offers, and to transactions
+    with no intents.
+  - `NoOpTransactionHistoryStorage.serialize` writes `{ version: 'v2', entries: [] }`.
+
+  Nothing saved by this release opens in abstractions 2.1.0.
+
+### Minor Changes
+
+- 7ee351c: feat(unshielded-wallet): export the sync configuration, and let serialization take a clock
+
+  The package exports `DefaultUnshieldedSyncConfiguration`, `NodeClientConnection` and `resolveNodeEndpoint`, so an
+  application can type the liveness settings (`nodeClientConnection`, `livenessConfiguration`, `livenessPollInterval`)
+  it passes to the wallet.
+
+  `makeDefaultV1SerializationCapability` and `makeDefaultV2SerializationCapability` take an optional `{ clock }`. It
+  dates a booking restored from a snapshot written before bookings carried an expiry; the default is system time, as
+  before.
+
+### Patch Changes
+
+- d0f38b3: fix: report the protocol version a restored or probe-started wallet's state records (#774)
+
+  A wallet started from a state it already held (every `restore`/`tryRestore`, and every fresh start with a
+  `chainVersionProbe` configured) reported its variant's lower bound instead of the chain's version, and never corrected
+  it: on ledger-v8 it reported `0`, on ledger-v9 `forks.v9`. The wrong value reached
+  `WalletFacade.activeProtocolVersion` and the `protocolVersion` stamped on every recipe and transaction the facade
+  built. Such a wallet now reports the version its state records, as a wallet that crossed the boundary by hand-over
+  always did.
+
+  **Breaking (runtime):** `Variant` requires `protocolVersionOf(state)`, returning the protocol version a state of the
+  variant records. The runtime reads it when it starts a variant from existing state, and never reports a version below
+  the variant's activation range. A variant whose state keeps no version answers `ProtocolVersion.MinSupportedVersion`,
+  which starts it at its lower bound as before. The variants of the unshielded, shielded and dust wallets implement it.
+
+- 56542fa: fix: keep a transaction's stamp when a wallet signs or balances it in place (#797)
+
+  A wallet that changed a transaction it was handed re-stamped it at the lowest version of its epoch (`0` below
+  `forks.v9`, `forks.v9` from it), whatever the transaction came in with. So a transaction adopted at the version the
+  chain reports, as `WalletFacade.adoptTransaction` does, came back from `signRecipe` with a different
+  `protocolVersion`, and a recipe with nothing to sign no longer equalled the one handed over. The side of the fork
+  never changed, so nothing was routed differently.
+
+  Methods that change the transaction they are handed now return it with the stamp it came in with: the unshielded
+  wallet's `signUnprovenTransaction`, `signUnboundTransaction`, `balanceUnprovenTransaction` and
+  `balanceUnboundTransaction`, and the dust wallet's `attachDustRegistration`, `addDustGenerationSignature` and
+  `addDustRegistrationSignature`, on both variants and in the single-variant `CustomUnshieldedWallet` /
+  `CustomDustWallet`. Transactions a wallet builds itself are stamped as before.
+
+- 7ee351c: fix(unshielded-wallet): keep a blocking liveness verdict across the hand-over to the next ledger version
+
+  The migration from the V1 to the V2 variant restarted the indexer liveness verdict at `Unknown`, so a node outage
+  right after the hand-over turned a `Behind` or `WrongNetwork` the wallet had already proven into `Unavailable`, which
+  does not block completion: `isStrictlyComplete`, `waitForSyncedState` and the facade's `isSynced` opened over an
+  indexer known to be stale. The verdict is about the one indexer and node the wallet polls whichever variant runs, so
+  `Behind` and `WrongNetwork` now cross the hand-over as a failed poll would keep them. Every other verdict still
+  restarts at `Unknown`.
+
+- Updated dependencies [d0f38b3]
+- Updated dependencies [7ee351c]
+- Updated dependencies [7ee351c]
+- Updated dependencies [7ee351c]
+- Updated dependencies [1660f24]
+  - @midnightntwrk/wallet-sdk-runtime@2.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0-rc.1
+
 ## 4.0.0-rc.0
 
 ### Patch Changes

@@ -1,5 +1,144 @@
 # @midnightntwrk/wallet-sdk-dust-wallet
 
+## 5.0.0-rc.1
+
+### Major Changes
+
+- 1660f24: Version every persisted format, read what earlier releases wrote, refuse the rest with a tagged error.
+
+  ### Breaking
+  - `finalizedBlock` is optional on `FinalizedLifecycle` and `FinalizedWalletEntry`; `isFinalizedWalletEntry` no longer
+    implies one is present.
+  - `InMemoryTransactionHistoryStorage.restore` throws `TransactionHistoryRestoreError` instead of returning an empty
+    store; `tryRestore` returns it as a `Left`.
+  - An unreadable snapshot is refused with `SnapshotRestoreError` (tag
+    `@midnightntwrk/wallet-sdk-abstractions/SnapshotFormat/SnapshotRestoreError`), not `Wallet.Other`.
+  - A finalized history entry with no block is reported as `BlocklessFinalizedEntryError` (tag
+    `Wallet.BlocklessFinalizedEntry`), not `TransactionHistoryError`.
+  - `upgradeV1ToV2` takes `readonly unknown[]`; `upgradeToCurrentFormat` returns an `Either`.
+
+  ### Added
+  - Histories are written as `{ version: 'v2', entries }`. Snapshots carry `version: 'v1'`, or `v2` for the unshielded
+    V2 variant (key is `{ tag, value }`); a `v1` unshielded snapshot is upgraded on read. Unknown versions are refused
+    by name.
+  - Snapshots carry `writtenBy: 'v1' | 'v2'`. A snapshot is restored by its writer when that variant is registered and
+    the protocol version is not below the writer's activation; otherwise by protocol version. An unshielded snapshot
+    with no `writtenBy` and a bare-string key counts as written by V1.
+  - Abstractions: `SnapshotFormat` (`versionField`, `writtenByField`, `isSnapshotWriter`, `readSnapshot`,
+    `SnapshotRestoreError` with `surface`, `detectedVersion`, `reason`, `cause`), `SnapshotRouting` (`readEnvelope`,
+    `routeSnapshot`), `TransactionHistoryFormat.detectVersion`; `TransactionHistoryRestoreError` carries a `reason`.
+  - Facade exports `finalizedTransactionTraits`; dust exports `Serialization` from `/v1`.
+  - CI gates persisted formats on drift, fixture coverage and frozen fixtures.
+
+  ### Fixed
+  - Histories saved by abstractions 2.1.0 or earlier restore; each entry gains a `finalized` lifecycle and, if missing,
+    empty `identifiers`.
+  - The `txHistory` embedded in a shielded 1.0.0 snapshot, and `coinHashesPending` written by V2, are no longer dropped
+    by a reader; both survive the `forks.v9` crossing.
+  - A V1 snapshot saved in the fork window now migrates: booked UTXOs released, `registeredForDustGeneration` cleared,
+    stranded shielded spends released. Covers earlier snapshots for unshielded, from this release on for shielded and
+    dust.
+  - A V2 snapshot with a protocol version below V2's activation starts on V1 instead of failing with "No variant to
+    init".
+  - `restore` throws the tagged error `tryRestore` reports, not `getOrThrow called on a Left`.
+  - `hasTTLExpired` applies the dust grace period only to transactions carrying shielded offers, and to transactions
+    with no intents.
+  - `NoOpTransactionHistoryStorage.serialize` writes `{ version: 'v2', entries: [] }`.
+
+  Nothing saved by this release opens in abstractions 2.1.0.
+
+### Minor Changes
+
+- f1d84a7: feat: reject an underfunded dust registration with a typed `InsufficientDustForFeeError`
+
+  `WalletFacade.registerNightUtxosForDustGeneration` used to reject a first-time registration whose generated dust could
+  not yet pay its own fee with a plain `Error`, the amounts only in its message. It now rejects with
+  `InsufficientDustForFeeError` (`_tag` `'Wallet.InsufficientDustForFee'`), part of the dust wallet's `WalletError`
+  union in both variants. It carries `claimableFeePayment` (the fee payment the transaction was built with), `fee` and
+  `shortfall` in Specks, and an `estimate` of when generation will cover the fee: `Reachable` with the seconds and the
+  moment, or `Unreachable` with the reason (`NoGeneration`, `ExceedsCap`). The message keeps its old opening and always
+  names `waitForGeneratedDust`: with a timeout long enough to see the estimate out when the fee is reachable, or saying
+  it will not help when it is not. The booked Night UTxOs are still released before the rejection.
+
+  Recognise it with `isInsufficientDustForFeeError(error)`, exported from the dust wallet package root: each variant
+  declares its own class, so `instanceof` against one alone misses the other.
+
+  The dust wallet gains `ensureFeeCoverage(currentTime, nightUtxos, feePayment, fee)`, which judges the attached fee
+  payment and rejects with the error itself rather than a fiber wrapper, and `feeCoverageEstimate` on its
+  coins-and-balances capability.
+
+### Patch Changes
+
+- 7ee351c: Fix `computeBalancingRecipe` looping forever instead of terminating on wallets holding several part-drained
+  dust coins.
+
+  The loop had no bound on the number of passes and no check that a pass had made progress. Its first pass was seeded
+  with the transaction's dust imbalance, which is negative (a deficit); every later pass was seeded with the fee it had
+  just computed, which is positive. `getBalanceRecipe` treats a non-negative seed as a surplus of dust — it adds a
+  change output and selects zero inputs — so any wallet whose first pass under-covered its own fee looped forever,
+  rebuilding and proof-erasing an identical transaction on every pass while its memory grew unbounded.
+
+  Each pass now seeds the balancer with the outstanding deficit — the fee still unpaid by the coins already chosen and
+  by the dust the transactions already carry — over the coins not yet selected, and passes the per-input fee measured so
+  far as `inputFeeOverhead`, so the second pass normally completes what the first left short. A pass that consumes no
+  coin fails instead of repeating, which bounds the loop by the pool size. Selected coins keep their selection order, so
+  the fee is drained from the coins chosen first, as before.
+
+  Behaviour that changes as a result, all of it previously unreachable because the loop hung first:
+
+  - Dust the transactions already carry — existing spends, registration allowances — now counts toward coverage, so new
+    inputs pay only the shortfall rather than the whole fee on top of it. The reported fee remains the total fee of the
+    merged result, as `estimateFee` documents.
+  - A transaction that already covers its fee produces no balancing intent. `balanceTransactions` returns an empty
+    transaction, which merges as the identity, instead of an intent with empty `DustActions`, which the ledger rejects.
+  - If the configured `coinSelection` exhausts the pool without covering the fee, selection is retried once
+    largest-first: an additive selection is only guaranteed to find a covering set when it takes coins from the top. A
+    selector that declines coins is never overridden and reports insufficient funds directly.
+  - A selector that returns a coin it was not offered fails with `TransactingError` naming the mismatch, rather than
+    pricing the same transaction repeatedly.
+
+  `dryRunFee` gains an optional trailing parameter carrying the proof-erased, merged transactions so a caller pricing
+  several input sets need not merge them once per set; with no inputs it now prices the transactions as they are rather
+  than with an extra empty intent. No other public API changes.
+
+- d0f38b3: fix: report the protocol version a restored or probe-started wallet's state records (#774)
+
+  A wallet started from a state it already held (every `restore`/`tryRestore`, and every fresh start with a
+  `chainVersionProbe` configured) reported its variant's lower bound instead of the chain's version, and never corrected
+  it: on ledger-v8 it reported `0`, on ledger-v9 `forks.v9`. The wrong value reached
+  `WalletFacade.activeProtocolVersion` and the `protocolVersion` stamped on every recipe and transaction the facade
+  built. Such a wallet now reports the version its state records, as a wallet that crossed the boundary by hand-over
+  always did.
+
+  **Breaking (runtime):** `Variant` requires `protocolVersionOf(state)`, returning the protocol version a state of the
+  variant records. The runtime reads it when it starts a variant from existing state, and never reports a version below
+  the variant's activation range. A variant whose state keeps no version answers `ProtocolVersion.MinSupportedVersion`,
+  which starts it at its lower bound as before. The variants of the unshielded, shielded and dust wallets implement it.
+
+- 56542fa: fix: keep a transaction's stamp when a wallet signs or balances it in place (#797)
+
+  A wallet that changed a transaction it was handed re-stamped it at the lowest version of its epoch (`0` below
+  `forks.v9`, `forks.v9` from it), whatever the transaction came in with. So a transaction adopted at the version the
+  chain reports, as `WalletFacade.adoptTransaction` does, came back from `signRecipe` with a different
+  `protocolVersion`, and a recipe with nothing to sign no longer equalled the one handed over. The side of the fork
+  never changed, so nothing was routed differently.
+
+  Methods that change the transaction they are handed now return it with the stamp it came in with: the unshielded
+  wallet's `signUnprovenTransaction`, `signUnboundTransaction`, `balanceUnprovenTransaction` and
+  `balanceUnboundTransaction`, and the dust wallet's `attachDustRegistration`, `addDustGenerationSignature` and
+  `addDustRegistrationSignature`, on both variants and in the single-variant `CustomUnshieldedWallet` /
+  `CustomDustWallet`. Transactions a wallet builds itself are stamped as before.
+
+- Updated dependencies [d0f38b3]
+- Updated dependencies [7ee351c]
+- Updated dependencies [7ee351c]
+- Updated dependencies [7ee351c]
+- Updated dependencies [1660f24]
+  - @midnightntwrk/wallet-sdk-runtime@2.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0-rc.1
+
 ## 5.0.0-rc.0
 
 ### Patch Changes
