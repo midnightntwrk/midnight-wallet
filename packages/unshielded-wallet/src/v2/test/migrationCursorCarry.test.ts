@@ -98,10 +98,10 @@ describe('the cursor a cross-ledger migration hands over', () => {
     expect(wallet.progress.isCompleteWithin()).toBe(false);
   });
 
-  it('starts the liveness verdict again at Unknown, whatever the previous variant had concluded', async () => {
-    // The other part of the cursor that must not cross. A verdict compares one indexer feed against the node, and the
-    // hand-over moves the wallet onto a feed of another ledger version: an `InSync` about the previous feed would let
-    // the migrated wallet report itself synchronized on the strength of a check nobody has made of this one.
+  it('starts an InSync liveness verdict again at Unknown, so the migrated wallet vouches for the feed only once it has checked it', async () => {
+    // The other part of the cursor that must not cross as it stands. An `InSync` would let the migrated wallet report
+    // itself synchronized on the strength of a check made before the hand-over; only a verdict that already blocks
+    // completion, `Behind` or `WrongNetwork`, carries across (see `migration.test.ts`).
     const base = previousWallet({ appliedId: 42n, highestTransactionId: 42n });
     const previous: PreviousLedgerWallet = {
       ...base,
