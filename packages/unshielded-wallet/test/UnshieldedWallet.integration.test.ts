@@ -14,7 +14,9 @@ import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntw
 import * as rx from 'rxjs';
 import { firstValueFrom } from 'rxjs';
 import { randomUUID } from 'node:crypto';
-import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { DockerComposeEnvironment, GenericContainer, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { UnshieldedWallet } from '../src/index.js';
 import { getUnshieldedSeed, createWalletConfig, waitForCoins } from './testUtils.js';
@@ -77,6 +79,72 @@ describe('UnshieldedWallet', () => {
       expect(verdict._tag).toBe('InSync');
     } finally {
       await wallet.stop();
+    }
+  });
+
+  it('should refuse to report synced when the node it cross-checks against is on a different chain', async () => {
+    // A real node on a different chain: the stack's own node image, started from the `dev` chain spec with one inert
+    // storage key added to its genesis. Everything else about the chain is the same, so it produces and finalizes
+    // blocks like the stack's node, but its genesis hash differs — which is exactly what the check compares before
+    // trusting any height. The indexer, meanwhile, is the stack's own and fully caught up, so without the check this
+    // wallet would report itself synced.
+    const nodeImage = /image: '(ghcr\.io\/midnight-ntwrk\/midnight-node:[^']+)'/.exec(
+      readFileSync(join(getComposeDirectory(), 'docker-compose.yml'), 'utf8'),
+    )?.[1];
+    if (nodeImage === undefined) {
+      throw new Error('No midnight-node image found in the compose file');
+    }
+    const otherChainNode = await new GenericContainer(nodeImage)
+      .withEnvironment({
+        CFG_PRESET: 'dev',
+        SIDECHAIN_BLOCK_BENEFICIARY: '04bcf7ad3be7a5c790460be82a713af570f22e0f801f6659ab8e84a52be6969e',
+      })
+      .withEntrypoint(['sh', '-c'])
+      .withCommand([
+        '/midnight-node build-spec --raw --disable-default-bootnode 2>/dev/null' +
+          ` | sed 's/"top": *{/"top":{"0x${'00'.repeat(32)}":"0x01",/' > /tmp/other-chain.json` +
+          ' && CHAIN=/tmp/other-chain.json exec /entrypoint.sh',
+      ])
+      .withExposedPorts(9944)
+      .withWaitStrategy(Wait.forLogMessage(/Imported #1/))
+      .start();
+
+    const config = createWalletConfig(indexerPort, {
+      nodeClientConnection: { nodeURL: `ws://localhost:${otherChainNode.getMappedPort(9944)}` },
+      livenessPollInterval: '2 seconds',
+    });
+    const keystore = createKeystore({ kind: 'schnorr', secret: unshieldedSeed }, config.networkId);
+    const wallet = await UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(keystore));
+
+    await wallet.start();
+
+    try {
+      // Waiting for the coins as well as the verdict: the gate is only shown to hold if everything else about the
+      // wallet says it is synced.
+      const state = await firstValueFrom(
+        wallet.state.pipe(
+          rx.filter(
+            (state) =>
+              IndexerLiveness.isWrongNetwork(state.progress.indexerLiveness) &&
+              state.availableCoins.length > 0 &&
+              state.progress.isConnected &&
+              state.progress.appliedId === state.progress.highestTransactionId,
+          ),
+        ),
+      );
+
+      expect(state.progress.indexerLiveness._tag).toBe('WrongNetwork');
+      expect(state.progress.isStrictlyComplete()).toBe(false);
+
+      // `WrongNetwork` is pinned for the wallet's lifetime, so this never resolves; ten seconds is five polls.
+      const synced = await Promise.race([
+        wallet.waitForSyncedState().then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 10_000)),
+      ]);
+      expect(synced).toBe(false);
+    } finally {
+      await wallet.stop();
+      await otherChainNode.stop();
     }
   });
 
