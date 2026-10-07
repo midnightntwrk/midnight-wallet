@@ -258,6 +258,9 @@ jobs:
     name: Unit Tests
     needs: [general-checks]
     runs-on: ubuntu-latest
+    # A unit test that loops synchronously cannot be stopped by vitest's own timeout; without this bound it would hold
+    # the runner for GitHub's 6-hour default. Recent runs take 3–8 min.
+    timeout-minutes: 20
     # checks: write lets the junit-report action publish the unit test-result check-run.
     permissions:
       contents: read
