@@ -364,14 +364,6 @@ describe('makeDefaultSyncService liveness feed', () => {
           ),
       );
 
-    it('should report a failed poll as Unavailable for a wallet with no verdict yet', async () => {
-      // The control for the test below: it shows a poll does fail within the window, so a `Behind` that survives the
-      // window has survived a failed poll rather than outrun it.
-      const verdicts = await verdictsInFirstSecond(CoreWallet.init(publicKey, 'undeployed'));
-
-      expect(verdicts.some(IndexerLiveness.isUnavailable)).toBe(true);
-    });
-
     it('should start from the wallet’s own verdict, so a failed poll cannot turn Behind into Unavailable', async () => {
       // The feed is built from the state the variant starts with — after a hand-over, the state the migration carried.
       // Seeded at `Unknown` instead, the first failed poll would publish `Unavailable`, which does not gate, and release
@@ -379,10 +371,14 @@ describe('makeDefaultSyncService liveness feed', () => {
       const behind = IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n });
       const wallet = CoreWallet.updateProgress(CoreWallet.init(publicKey, 'undeployed'), { indexerLiveness: behind });
 
-      const verdicts = await verdictsInFirstSecond(wallet);
+      // A wallet with no verdict yet shows that a poll does fail inside the window, so a `Behind` that survives the
+      // window has survived a failed poll rather than outrun it.
+      const fromNothing = await verdictsInFirstSecond(CoreWallet.init(publicKey, 'undeployed'));
+      const fromBehind = await verdictsInFirstSecond(wallet);
 
-      expect(verdicts.length).toBeGreaterThan(0);
-      expect(verdicts.every((verdict) => IndexerLiveness.equivalent(verdict, behind))).toBe(true);
+      expect(fromNothing.some(IndexerLiveness.isUnavailable)).toBe(true);
+      expect(fromBehind.length).toBeGreaterThan(0);
+      expect(fromBehind.every((verdict) => IndexerLiveness.equivalent(verdict, behind))).toBe(true);
     });
   });
 
