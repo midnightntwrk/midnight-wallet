@@ -1,5 +1,99 @@
 # @midnightntwrk/wallet-sdk-abstractions
 
+## 3.0.0-rc.1
+
+### Major Changes
+
+- 1660f24: Version every persisted format, read what earlier releases wrote, refuse the rest with a tagged error.
+
+  ### Breaking
+  - `finalizedBlock` is optional on `FinalizedLifecycle` and `FinalizedWalletEntry`; `isFinalizedWalletEntry` no longer
+    implies one is present.
+  - `InMemoryTransactionHistoryStorage.restore` throws `TransactionHistoryRestoreError` instead of returning an empty
+    store; `tryRestore` returns it as a `Left`.
+  - An unreadable snapshot is refused with `SnapshotRestoreError` (tag
+    `@midnightntwrk/wallet-sdk-abstractions/SnapshotFormat/SnapshotRestoreError`), not `Wallet.Other`.
+  - A finalized history entry with no block is reported as `BlocklessFinalizedEntryError` (tag
+    `Wallet.BlocklessFinalizedEntry`), not `TransactionHistoryError`.
+  - `upgradeV1ToV2` takes `readonly unknown[]`; `upgradeToCurrentFormat` returns an `Either`.
+
+  ### Added
+  - Histories are written as `{ version: 'v2', entries }`. Snapshots carry `version: 'v1'`, or `v2` for the unshielded
+    V2 variant (key is `{ tag, value }`); a `v1` unshielded snapshot is upgraded on read. Unknown versions are refused
+    by name.
+  - Snapshots carry `writtenBy: 'v1' | 'v2'`. A snapshot is restored by its writer when that variant is registered and
+    the protocol version is not below the writer's activation; otherwise by protocol version. An unshielded snapshot
+    with no `writtenBy` and a bare-string key counts as written by V1.
+  - Abstractions: `SnapshotFormat` (`versionField`, `writtenByField`, `isSnapshotWriter`, `readSnapshot`,
+    `SnapshotRestoreError` with `surface`, `detectedVersion`, `reason`, `cause`), `SnapshotRouting` (`readEnvelope`,
+    `routeSnapshot`), `TransactionHistoryFormat.detectVersion`; `TransactionHistoryRestoreError` carries a `reason`.
+  - Facade exports `finalizedTransactionTraits`; dust exports `Serialization` from `/v1`.
+  - CI gates persisted formats on drift, fixture coverage and frozen fixtures.
+
+  ### Fixed
+  - Histories saved by abstractions 2.1.0 or earlier restore; each entry gains a `finalized` lifecycle and, if missing,
+    empty `identifiers`.
+  - The `txHistory` embedded in a shielded 1.0.0 snapshot, and `coinHashesPending` written by V2, are no longer dropped
+    by a reader; both survive the `forks.v9` crossing.
+  - A V1 snapshot saved in the fork window now migrates: booked UTXOs released, `registeredForDustGeneration` cleared,
+    stranded shielded spends released. Covers earlier snapshots for unshielded, from this release on for shielded and
+    dust.
+  - A V2 snapshot with a protocol version below V2's activation starts on V1 instead of failing with "No variant to
+    init".
+  - `restore` throws the tagged error `tryRestore` reports, not `getOrThrow called on a Left`.
+  - `hasTTLExpired` applies the dust grace period only to transactions carrying shielded offers, and to transactions
+    with no intents.
+  - `NoOpTransactionHistoryStorage.serialize` writes `{ version: 'v2', entries: [] }`.
+
+  Nothing saved by this release opens in abstractions 2.1.0.
+
+### Minor Changes
+
+- 7ee351c: feat(unshielded-wallet)!: cross-check the indexer's reported tip against the node's finalized head
+
+  The unshielded wallet no longer takes the indexer's word that it is synced. It polls a node's finalized head (every 30
+  seconds by default) and checks that indexer and node name the same block at the newest height both have passed;
+  genesis is the height-zero case. The node is `nodeClientConnection`, falling back to `relayURL`; a wallet naming
+  neither is not checked. Tune with `livenessConfiguration` and `livenessPollInterval`.
+
+  The result is an `IndexerLiveness` verdict on `SyncProgress`. `Behind`, `Unknown` and `WrongNetwork` block completion;
+  `InSync`, `Ahead`, `Unavailable` and `Skipped` do not. A failed poll keeps a `Behind` or `WrongNetwork` verdict, so a
+  node outage cannot release a caller waiting on a stale indexer. A verdict is republished only when it changes
+  (`IndexerLiveness.equivalent`), not on every poll. This detects staleness, not withholding. The shielded and dust
+  wallets are not gated (#743).
+
+  ### Fixes
+  - Unshielded `isConnected` clears when the indexer subscription drops or completes, and the subscription is rebuilt in
+    both cases; it previously latched `true` (#743).
+  - `api.rpc` calls (`getGenesis()`) work right after node client creation.
+  - Node connection failures are typed errors, no longer defects.
+  - A finite `reconnectionTimeout` also bounds the initial connection and retries within it, so a restarting node
+    connects on a later attempt instead of failing the build.
+  - The unshielded sync retry backoff is really capped at two minutes; it previously kept doubling until it stopped
+    retrying (#742).
+
+  BREAKING CHANGE (`wallet-sdk`, `wallet-sdk-facade`, `wallet-sdk-unshielded-wallet`): `isStrictlyComplete()`,
+  `isCompleteWithin()`, `FacadeState.isSynced` and `waitForSyncedState()` now also need a first liveness verdict that
+  does not block. On by default for every wallet with a `relayURL`. Against a stale indexer `waitForSyncedState()`
+  neither rejects nor times out; race it against your own deadline and read `progress.indexerLiveness` (see the
+  `indexer-liveness` docs snippet). `SyncProgressData` gains a required `indexerLiveness` field, defaulted by
+  `createSyncProgress()`. Sync types are parameterised on `SyncUpdate`, a superset of `WalletSyncUpdate`.
+
+  BREAKING CHANGE (`wallet-sdk-unshielded-wallet`): `SyncService.livenessUpdates` is required. A custom source with
+  nothing to check emits one `IndexerLiveness.Skipped({ reason: 'no-liveness-feed' })` and ends. `SimulatorSyncUpdate`
+  now includes a liveness update.
+
+  BREAKING CHANGE (`wallet-sdk-node-client`): `NodeClient.Service` gains required `getFinalizedBlock()`,
+  `getGenesisHash()` and `getBlockHashAt(height)`; `getBlockHashAt` returns `Option.none` for a height with no block.
+  Only implementers are affected.
+
+  `wallet-sdk-abstractions` adds `IndexerLiveness`: the verdict type, `evaluate` and `evaluateTips` for comparing an
+  indexer against a node, `blocksSyncCompletion`, `equivalent` and `sameBlockHash`.
+
+  `wallet-sdk-capabilities` adds the liveness check: `LivenessServiceImpl`, `LivenessReads` (`indexerTip`,
+  `finalizedBlock`, `indexerBlockHashAt`, `nodeBlockHashAt`), `makeDefaultLivenessReads`,
+  `DEFAULT_LIVENESS_CONFIGURATION` and `DEFAULT_POLL_INTERVAL`.
+
 ## 3.0.0-rc.0
 
 ### Patch Changes
