@@ -10,6 +10,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+/**
+ * Whether the bundled in-process prover proves a ledger-v9 transaction with the default key material.
+ *
+ * @remarks
+ *   Network is needed (the key material is fetched); Docker is not.
+ */
 import {
   CostModel,
   createShieldedCoinInfo,
