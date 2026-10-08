@@ -10,10 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Cause, Effect, Exit, Stream } from 'effect';
+import { Cause, Chunk, Effect, Either, Exit, Stream } from 'effect';
+import { strToU8, zlibSync } from 'fflate';
 import { parse } from 'graphql';
 import { GRAPHQL_TRANSPORT_WS_PROTOCOL } from 'graphql-ws';
 import { describe, expect, it, vi } from 'vitest';
+import { ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { GRAPHQL_TRANSPORT_WS_DEFLATE } from '../DeflateWebSocket.js';
 import { type Query } from '../Query.js';
 import * as SubscriptionClient from '../SubscriptionClient.js';
 import * as WsSubscriptionClient from '../WsSubscriptionClient.js';
@@ -106,6 +109,63 @@ const makeUnreachableFake = (): typeof WebSocket => {
   // Type cast required because: `typeof WebSocket` describes the full DOM constructor, while
   // graphql-ws only ever touches the members implemented above.
   return UnreachableFakeWebSocket as unknown as typeof WebSocket;
+};
+
+/**
+ * A `typeof WebSocket` stand-in for an indexer that negotiates deflate, answers a subscription with one zlib-compressed
+ * `next` frame, and then drops the connection uncleanly (1006) — what a wallet sees when the indexer restarts or a load
+ * balancer cuts the socket mid-sync. Mutation confined to test setup, as with the fakes above.
+ */
+const makeDroppingDeflateFake = (payload: object): typeof WebSocket => {
+  class DroppingDeflateFakeWebSocket {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSING = 2;
+    static readonly CLOSED = 3;
+
+    readyState = DroppingDeflateFakeWebSocket.CONNECTING;
+    protocol = GRAPHQL_TRANSPORT_WS_DEFLATE;
+    binaryType: WebSocket['binaryType'] = 'blob';
+    onopen: (() => void) | null = null;
+    onmessage: ((event: MessageEvent) => void) | null = null;
+    onclose: ((event: unknown) => void) | null = null;
+    onerror: ((event: unknown) => void) | null = null;
+
+    constructor() {
+      void Promise.resolve().then(() => {
+        this.readyState = DroppingDeflateFakeWebSocket.OPEN;
+        this.onopen?.();
+      });
+    }
+
+    send(data: string): void {
+      const message = JSON.parse(data) as { readonly type: string; readonly id?: string };
+      if (message.type === 'connection_init') {
+        void Promise.resolve().then(() =>
+          this.onmessage?.(new MessageEvent('message', { data: JSON.stringify({ type: 'connection_ack' }) })),
+        );
+      }
+      if (message.type === 'subscribe') {
+        const compressed = zlibSync(strToU8(JSON.stringify({ id: message.id, type: 'next', payload })));
+        const frame = new ArrayBuffer(compressed.byteLength);
+        new Uint8Array(frame).set(compressed);
+        void Promise.resolve()
+          .then(() => this.onmessage?.(new MessageEvent('message', { data: frame })))
+          .then(() => {
+            this.readyState = DroppingDeflateFakeWebSocket.CLOSED;
+            this.onclose?.({ code: 1006, reason: '', wasClean: false });
+          });
+      }
+    }
+
+    close(): void {
+      this.readyState = DroppingDeflateFakeWebSocket.CLOSED;
+    }
+  }
+
+  // Type cast required because: `typeof WebSocket` describes the full DOM constructor, while
+  // the deflate wrapper and graphql-ws only ever touch the members implemented above.
+  return DroppingDeflateFakeWebSocket as unknown as typeof WebSocket;
 };
 
 /** Awaits `n` chained microtask ticks, letting promise-driven library internals settle. */
@@ -241,5 +301,39 @@ describe('WsSubscriptionClient', () => {
         );
       },
     );
+  });
+
+  describe('subscribe', () => {
+    // The deflate wrapper sits between the socket and graphql-ws, so every event graphql-ws relies on has to pass
+    // through it. If the close is lost on the way, graphql-ws never learns the indexer went away: the subscription
+    // neither ends nor fails, and the wallet's sync stalls silently instead of failing into its retry. The timeout turns
+    // that stall into a failure of this test rather than a hang.
+    it('delivers the inflated event, then fails with a ServerError when the indexer drops the connection', async () => {
+      const payload = { data: { events: 'first' } };
+
+      const outcome = await Effect.gen(function* () {
+        const client = yield* SubscriptionClient.SubscriptionClient;
+        return yield* Stream.runCollect(Stream.either(client.subscribe(anySubscription, {})));
+      }).pipe(
+        Effect.provide(
+          WsSubscriptionClient.layer(
+            { url: 'ws://indexer.test/graphql/ws' },
+            { webSocketImpl: makeDroppingDeflateFake(payload) },
+          ),
+        ),
+        Effect.scoped,
+        Effect.timeoutFail({
+          duration: '2 seconds',
+          onTimeout: () => 'subscription stalled after the connection dropped',
+        }),
+        Effect.runPromise,
+      );
+
+      const [delivered, ended] = Chunk.toReadonlyArray(outcome);
+      // The compressed frame reached graphql-ws as text and was parsed into the subscription's data.
+      expect(delivered).toEqual(Either.right(payload.data));
+      // The drop surfaced as a transport failure the sync's retry can act on, not a stall or a GraphQL error.
+      expect(Either.isLeft(ended) ? ended.left : undefined).toBeInstanceOf(ServerError);
+    });
   });
 });

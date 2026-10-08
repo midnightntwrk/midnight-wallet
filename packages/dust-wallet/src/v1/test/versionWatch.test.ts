@@ -352,6 +352,41 @@ describe('watching the chain for a version the dust events never mention', () =>
     expect(Chunk.toArray(collected)).toEqual([]);
     expect(Effect.runSync(Ref.get(tipAsked))).toEqual([]);
   });
+  it('takes one answer from the event-id probe and closes it before signalling', async () => {
+    // The probe rides the dust event subscription, which goes on pushing every event after the cursor for as long as it
+    // is open, into an unbounded queue. Reading more than the first answer, or leaving it open, buffers the timeline on
+    // every tick of the watcher.
+    const pulled = Effect.runSync(Ref.make(0));
+    const closed = Effect.runSync(Ref.make(false));
+    const endlessTimeline = (): Stream.Stream<
+      DustLedgerEventTipSubscription,
+      ClientError | ServerError,
+      SubscriptionClient
+    > =>
+      Stream.iterate(1, (id) => id + 1).pipe(
+        Stream.tap(() => Ref.update(pulled, (n) => n + 1)),
+        Stream.map((id) => ({ dustLedgerEvents: { id, maxId: 41 } })),
+        Stream.ensuring(Ref.set(closed, true)),
+      );
+
+    const closedWhenSignalled = await service(20)
+      .updates(syncedWallet(41n), fixtureSecretKey())
+      .pipe(
+        Stream.filter(isVersionSignal),
+        Stream.take(1),
+        Stream.mapEffect(() => Ref.get(closed)),
+        Stream.runCollect,
+        Effect.map(Chunk.toArray),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version), recorder())),
+        Effect.provideService(DustLedgerEventTip.tag, endlessTimeline),
+        Effect.provideService(DustLedgerEvents.tag, quietChain),
+        Effect.scoped,
+        Effect.runPromise,
+      );
+
+    expect(closedWhenSignalled).toEqual([true]);
+    expect(Effect.runSync(Ref.get(pulled))).toBeLessThanOrEqual(2);
+  });
 });
 
 // =============================================================================

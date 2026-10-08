@@ -34,6 +34,8 @@ export default defineConfig({
         test: {
           name: 'unit',
           include: ['**/*.test.ts'],
+          // stateRetention.test.ts forces full collections to check that superseded states are released.
+          execArgv: ['--expose-gc'],
           exclude: [...configDefaults.exclude, '**/dist/**', '**/*.integration.test.ts'],
         },
       },
