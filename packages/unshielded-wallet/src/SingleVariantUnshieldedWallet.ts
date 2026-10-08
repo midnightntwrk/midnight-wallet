@@ -47,18 +47,18 @@ import {
 } from './v2/index.js';
 import { type RunningV2Variant } from './v2/RunningV2Variant.js';
 import { type SignSegment } from './v2/Signing.js';
-import { type WalletSyncUpdate } from './v2/SyncSchema.js';
+import { type SyncUpdate } from './v2/SyncSchema.js';
 import { type TokenTransfer } from './v2/Transacting.js';
-import { type UtxoWithMeta } from './v2/UnshieldedState.js';
+import { type UtxoHash, type UtxoWithMeta } from './v2/UnshieldedState.js';
 
 export type CustomizedUnshieldedWallet<
-  TSyncUpdate = WalletSyncUpdate,
+  TSyncUpdate = SyncUpdate,
   TSerialized = string,
 > = UnshieldedWalletAPI<TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate>>]>;
 
 export interface CustomizedUnshieldedWalletClass<
-  TSyncUpdate = WalletSyncUpdate,
+  TSyncUpdate = SyncUpdate,
   TSerialized = string,
   TConfig extends BaseV2Configuration = DefaultV2Configuration,
 > extends WalletLike.BaseWalletClass<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate>>]> {
@@ -69,7 +69,7 @@ export interface CustomizedUnshieldedWalletClass<
 
 export function CustomUnshieldedWallet<
   TConfig extends BaseV2Configuration = DefaultV2Configuration,
-  TSyncUpdate = WalletSyncUpdate,
+  TSyncUpdate = SyncUpdate,
   TSerialized = string,
 >(
   configuration: TConfig,
@@ -106,8 +106,18 @@ export function CustomUnshieldedWallet<
   const sealUnproven = (result: ledger.UnprovenTransaction | undefined): UnprovenTx | undefined =>
     result === undefined ? undefined : seal(result);
 
-  const sealUnbound = (result: UnboundTransaction | undefined): UnboundTx | undefined =>
-    result === undefined ? undefined : WalletTransaction.adopt('Unbound', result, ProtocolVersion.MinSupportedVersion);
+  /**
+   * Re-seals a transaction this wallet changed in place, at the stamp of the handle it was handed.
+   *
+   * @remarks
+   *   Signing a transaction, or balancing it by adding inputs and change to it, adds to bytes whoever built it fixed; it
+   *   does not make this wallet their author, so what goes back out carries the stamp that came in rather than the one
+   *   this wallet stamps its own transactions with.
+   */
+  const resealAs =
+    <TStage extends WalletTransaction.Stage>(handed: AnyTx, stage: TStage) =>
+    (changed: { serialize: () => Uint8Array }): WalletTransaction<TStage> =>
+      WalletTransaction.adopt(stage, changed, handed.protocolVersion);
 
   return class CustomUnshieldedWalletImplementation
     extends BaseWallet
@@ -212,7 +222,7 @@ export function CustomUnshieldedWallet<
           [V2Tag]: (v2) =>
             carried<UnboundTransaction>(tx).pipe(
               Effect.flatMap((unwrapped) => v2.balanceUnboundTransaction(unwrapped)),
-              Effect.map(sealUnbound),
+              Effect.map((result) => (result === undefined ? undefined : resealAs(tx, 'Unbound')(result))),
             ),
         })
         .pipe(Effect.runPromise);
@@ -224,7 +234,7 @@ export function CustomUnshieldedWallet<
           [V2Tag]: (v2) =>
             carried<ledger.UnprovenTransaction>(tx).pipe(
               Effect.flatMap((unwrapped) => v2.balanceUnprovenTransaction(unwrapped)),
-              Effect.map(sealUnproven),
+              Effect.map((result) => (result === undefined ? undefined : resealAs(tx, 'Unproven')(result))),
             ),
         })
         .pipe(Effect.runPromise);
@@ -268,7 +278,7 @@ export function CustomUnshieldedWallet<
           [V2Tag]: (v2) =>
             carried<ledger.UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((unwrapped) => v2.signUnprovenTransaction(unwrapped, signSegment)),
-              Effect.map(seal),
+              Effect.map(resealAs(transaction, 'Unproven')),
             ),
         })
         .pipe(Effect.runPromise);
@@ -280,7 +290,7 @@ export function CustomUnshieldedWallet<
           [V2Tag]: (v2) =>
             carried<UnboundTransaction>(transaction).pipe(
               Effect.flatMap((unwrapped) => v2.signUnboundTransaction(unwrapped, signSegment)),
-              Effect.map((tx) => WalletTransaction.adopt('Unbound', tx, ProtocolVersion.MinSupportedVersion)),
+              Effect.map(resealAs(transaction, 'Unbound')),
             ),
         })
         .pipe(Effect.runPromise);
@@ -298,6 +308,14 @@ export function CustomUnshieldedWallet<
             ),
         })
         .pipe(Effect.runPromise);
+    }
+
+    revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void> {
+      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.revertUtxos(utxoIds) }).pipe(Effect.runPromise);
+    }
+
+    releaseRestoredPending(coveredIds: ReadonlyArray<UtxoHash>): Promise<void> {
+      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.releaseRestoredPending(coveredIds) }).pipe(Effect.runPromise);
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<UnshieldedWalletState<TSerialized>> {

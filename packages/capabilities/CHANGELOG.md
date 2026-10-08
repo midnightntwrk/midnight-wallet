@@ -1,5 +1,94 @@
 # @midnightntwrk/wallet-sdk-capabilities
 
+## 4.0.0-rc.1
+
+### Major Changes
+
+- 7ee351c: fix(unshielded-wallet)!: stop a leaked booking duplicating a UTxO and doubling the balance
+
+  A resync could re-admit a booked UTxO as available, and a booking taken while balancing was never released if the
+  transaction was abandoned before submission. Both were persisted, so the balance stayed doubled across restarts.
+
+  - Sync no longer re-admits a booked UTxO, and a snapshot holding one coin as both available and pending loads with it
+    pending only, so corrupted state repairs itself on the next start.
+  - A booking carries its transaction's TTL and is released once sync has caught up and the TTL has passed.
+  - The facade records each balanced but unproven transaction as a reservation in the pending-transactions service (ids
+    and TTL only, never the transaction). Bookings restored from a snapshot are released at the chain tip unless a
+    reservation or a tracked transaction still accounts for them.
+  - Balancing in place now books the coins it selects.
+  - New `UnshieldedWallet.revertUtxos(ids)` releases booked coins by id.
+
+  Both stored formats gained an optional member, so a store written by this release is still readable by an earlier one.
+
+  BREAKING CHANGE:
+
+  - unshielded-wallet: `UnshieldedState.spend`, `UnshieldedState.spendByUtxo`, `CoreWallet.spend` and
+    `CoreWallet.spendUtxos` take the transaction's TTL as a required last argument. `UnshieldedState.restore` and
+    `toArrays` exchange pending entries as `{ utxo, ttl, restored }`. `UnshieldedWalletAPI` and `TransactingCapability`
+    gain `revertUtxos` and `releaseRestoredPending`, which custom implementations must add.
+  - capabilities: `PendingTransactions` gains a required `reservations` field, and `PendingTransactionsService` and
+    `PendingTransactionsServiceEffect` gain `addReservation` and `clearReservation`, which custom implementations must
+    add.
+  - facade: a `pendingTransactionsService` or `unshielded` factory passed to `WalletFacade.init` must return an
+    implementation with those new methods.
+
+### Minor Changes
+
+- 7ee351c: feat(unshielded-wallet)!: cross-check the indexer's reported tip against the node's finalized head
+
+  The unshielded wallet no longer takes the indexer's word that it is synced. It polls a node's finalized head (every 30
+  seconds by default) and checks that indexer and node name the same block at the newest height both have passed;
+  genesis is the height-zero case. The node is `nodeClientConnection`, falling back to `relayURL`; a wallet naming
+  neither is not checked. Tune with `livenessConfiguration` and `livenessPollInterval`.
+
+  The result is an `IndexerLiveness` verdict on `SyncProgress`. `Behind`, `Unknown` and `WrongNetwork` block completion;
+  `InSync`, `Ahead`, `Unavailable` and `Skipped` do not. A failed poll keeps a `Behind` or `WrongNetwork` verdict, so a
+  node outage cannot release a caller waiting on a stale indexer. A verdict is republished only when it changes
+  (`IndexerLiveness.equivalent`), not on every poll. This detects staleness, not withholding. The shielded and dust
+  wallets are not gated (#743).
+
+  ### Fixes
+  - Unshielded `isConnected` clears when the indexer subscription drops or completes, and the subscription is rebuilt in
+    both cases; it previously latched `true` (#743).
+  - `api.rpc` calls (`getGenesis()`) work right after node client creation.
+  - Node connection failures are typed errors, no longer defects.
+  - A finite `reconnectionTimeout` also bounds the initial connection and retries within it, so a restarting node
+    connects on a later attempt instead of failing the build.
+  - The unshielded sync retry backoff is really capped at two minutes; it previously kept doubling until it stopped
+    retrying (#742).
+
+  BREAKING CHANGE (`wallet-sdk`, `wallet-sdk-facade`, `wallet-sdk-unshielded-wallet`): `isStrictlyComplete()`,
+  `isCompleteWithin()`, `FacadeState.isSynced` and `waitForSyncedState()` now also need a first liveness verdict that
+  does not block. On by default for every wallet with a `relayURL`. Against a stale indexer `waitForSyncedState()`
+  neither rejects nor times out; race it against your own deadline and read `progress.indexerLiveness` (see the
+  `indexer-liveness` docs snippet). `SyncProgressData` gains a required `indexerLiveness` field, defaulted by
+  `createSyncProgress()`. Sync types are parameterised on `SyncUpdate`, a superset of `WalletSyncUpdate`.
+
+  BREAKING CHANGE (`wallet-sdk-unshielded-wallet`): `SyncService.livenessUpdates` is required. A custom source with
+  nothing to check emits one `IndexerLiveness.Skipped({ reason: 'no-liveness-feed' })` and ends. `SimulatorSyncUpdate`
+  now includes a liveness update.
+
+  BREAKING CHANGE (`wallet-sdk-node-client`): `NodeClient.Service` gains required `getFinalizedBlock()`,
+  `getGenesisHash()` and `getBlockHashAt(height)`; `getBlockHashAt` returns `Option.none` for a height with no block.
+  Only implementers are affected.
+
+  `wallet-sdk-abstractions` adds `IndexerLiveness`: the verdict type, `evaluate` and `evaluateTips` for comparing an
+  indexer against a node, `blocksSyncCompletion`, `equivalent` and `sameBlockHash`.
+
+  `wallet-sdk-capabilities` adds the liveness check: `LivenessServiceImpl`, `LivenessReads` (`indexerTip`,
+  `finalizedBlock`, `indexerBlockHashAt`, `nodeBlockHashAt`), `makeDefaultLivenessReads`,
+  `DEFAULT_LIVENESS_CONFIGURATION` and `DEFAULT_POLL_INTERVAL`.
+
+### Patch Changes
+
+- Updated dependencies [7ee351c]
+- Updated dependencies [7ee351c]
+- Updated dependencies [7ee351c]
+- Updated dependencies [1660f24]
+  - @midnightntwrk/wallet-sdk-node-client@2.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0-rc.1
+
 ## 4.0.0-rc.0
 
 ### Patch Changes

@@ -178,6 +178,7 @@ describe('A pending transaction the fork left behind', () => {
           },
         },
       ],
+      reservations: [],
     });
 
     await sleep(0.2);

@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type NetworkId, ProtocolVersion, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
+import { IndexerLiveness, type NetworkId, ProtocolVersion, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, HashMap } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { type SyncProgressData } from './SyncProgress.js';
@@ -93,7 +93,7 @@ export type PreviousLedgerWallet = Readonly<{
     // would be satisfied by the real state and then silently carry across a list of malformed pairs. `HashMap` is an
     // Effect type, not a ledger one, so naming it here keeps this description version-agnostic.
     readonly availableUtxos: HashMap.HashMap<string, UtxoLike>;
-    readonly pendingUtxos: HashMap.HashMap<string, UtxoLike>;
+    readonly pendingUtxos: HashMap.HashMap<string, BookingLike>;
   };
   publicKey: {
     readonly publicKey: string;
@@ -118,6 +118,19 @@ export type UtxoLike = {
     readonly ctime: Date;
     readonly registeredForDustGeneration: boolean;
   };
+};
+
+/**
+ * A booking of the previous ledger version, as plain data: the reserved UTXO, and whatever else the previous variant
+ * keeps beside it.
+ *
+ * @remarks
+ *   Only the UTXO is described, because only the UTXO crosses. The booking's expiry and its restored flag describe a
+ *   reservation for a transaction that cannot land on this side of the boundary, and the migration releases every
+ *   booking rather than carrying it (see {@link makeCrossLedgerMigration}), so nothing here reads them.
+ */
+export type BookingLike = {
+  readonly utxo: UtxoLike;
 };
 
 /**
@@ -164,34 +177,52 @@ export type UtxoLike = {
  *   Sync progress is carried **unchanged** — parked, not rewound and not advanced. The boundary transaction was observed
  *   and annotated but deliberately never applied, so the cursor still points just before it; the new variant re-fetches
  *   it from there and applies it exactly once. Rewinding to zero would re-apply history the wallet already holds;
- *   advancing past it would lose the boundary transaction outright.
+ *   advancing past it would lose the boundary transaction outright. The liveness verdict crosses only if it blocks
+ *   completion: a `Behind` or `WrongNetwork` the previous variant proved about the shared indexer stays in force until
+ *   this variant's first successful poll; anything else restarts at `Unknown`.
  * @returns A migration from a previous-ledger-version wallet.
  */
 export const makeCrossLedgerMigration = (): StateMigration<PreviousLedgerWallet> => ({
   migrate: (previousState) =>
     Effect.succeed(
-      CoreWallet.restore(
-        UnshieldedState.restore(
-          [
-            ...Array.from(HashMap.values(previousState.state.availableUtxos), carryUtxo),
-            ...Array.from(HashMap.values(previousState.state.pendingUtxos), carryUtxo),
-          ],
-          [],
+      CoreWallet.updateProgress(
+        CoreWallet.restore(
+          UnshieldedState.restore(
+            [
+              ...Array.from(HashMap.values(previousState.state.availableUtxos), carryUtxo),
+              ...Array.from(HashMap.values(previousState.state.pendingUtxos), (booking) => carryUtxo(booking.utxo)),
+            ],
+            [],
+          ),
+          {
+            publicKey: previousState.publicKey.publicKey,
+            addressHex: previousState.publicKey.addressHex,
+            address: previousState.publicKey.address,
+          },
+          {
+            appliedId: previousState.progress.appliedId,
+            highestTransactionId: previousState.progress.highestTransactionId,
+          },
+          ProtocolVersion.ProtocolVersion(previousState.protocolVersion),
+          previousState.networkId,
         ),
-        {
-          publicKey: previousState.publicKey.publicKey,
-          addressHex: previousState.publicKey.addressHex,
-          address: previousState.publicKey.address,
-        },
-        {
-          appliedId: previousState.progress.appliedId,
-          highestTransactionId: previousState.progress.highestTransactionId,
-        },
-        ProtocolVersion.ProtocolVersion(previousState.protocolVersion),
-        previousState.networkId,
+        { indexerLiveness: carriedVerdict(previousState.progress.indexerLiveness) },
       ),
     ),
 });
+
+/**
+ * The liveness verdict the migrated wallet starts from: the previous variant's, if it blocks completion.
+ *
+ * @remarks
+ *   The wallet polls one indexer and one node whichever variant is running, so a verdict is about the chain, not about
+ *   the ledger version. A failed poll keeps `Behind` and `WrongNetwork` so that a node outage cannot release a caller
+ *   waiting on an indexer already proven stale; the hand-over carries exactly those two, so it cannot become the one
+ *   failed poll that does. Every other verdict restarts at `Unknown`, which blocks completion just the same until the
+ *   new variant's first successful poll, so nothing vouches for a feed this variant has not checked.
+ */
+const carriedVerdict = (verdict: IndexerLiveness.IndexerLiveness): IndexerLiveness.IndexerLiveness =>
+  IndexerLiveness.isBehind(verdict) || IndexerLiveness.isWrongNetwork(verdict) ? verdict : IndexerLiveness.Unknown();
 
 /**
  * Rebuilds a previous-version UTXO as one of this version's, field for field — save one.

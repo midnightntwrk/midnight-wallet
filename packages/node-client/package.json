@@ -1,6 +1,6 @@
 {
   "name": "@midnightntwrk/wallet-sdk-node-client",
-  "version": "2.0.0-rc.0",
+  "version": "2.0.0-rc.1",
   "type": "module",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -33,7 +33,7 @@
     }
   },
   "dependencies": {
-    "@midnightntwrk/wallet-sdk-abstractions": "3.0.0-rc.0",
+    "@midnightntwrk/wallet-sdk-abstractions": "3.0.0-rc.1",
     "@midnightntwrk/wallet-sdk-utilities": "1.2.2-rc.0",
     "@polkadot/api": "^16.5.4",
     "@polkadot/types": "^16.5.4",
@@ -57,16 +57,15 @@
   "devDependencies": {
     "@effect/cluster": "0.60.2",
     "@effect/experimental": "0.61.1",
-    "@effect/platform": "0.97.1",
-    "@effect/platform-node": "0.108.1",
+    "@effect/platform": "0.97.2",
+    "@effect/platform-node": "0.108.2",
     "@effect/rpc": "0.76.2",
     "@effect/sql": "0.52.1",
     "@effect/workflow": "0.19.1",
     "@midnightntwrk/ledger-v9": "1.0.0-rc.5",
     "@midnightntwrk/wallet-sdk-prover-client": "^2.0.0-rc.0",
-    "@types/tar-stream": "3.1.4",
-    "tar-stream": "3.2.0",
-    "tsx": "4.23.13"
+    "tar-stream": "3.2.1",
+    "tsx": "4.23.15"
   },
   "scripts": {
     "typecheck-script": "tsc -b ./tsconfig.script.json --noEmit",

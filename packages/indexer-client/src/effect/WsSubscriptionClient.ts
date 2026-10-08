@@ -16,6 +16,7 @@ import { type GraphQLError, print } from 'graphql';
 import { SubscriptionClient } from './SubscriptionClient.js';
 import { type Query } from './Query.js';
 import { withBackpressure, type Source } from './Backpressure.js';
+import { makeDeflateWebSocket } from './DeflateWebSocket.js';
 import {
   type InvalidProtocolSchemeError,
   WsURL,
@@ -45,18 +46,80 @@ const toClientOrServerError = (err: unknown): ClientError | ServerError =>
 // Layer / class
 // ============================================================================
 
+/**
+ * @internal Test-only transport seams for {@link layer} — deliberately NOT part of
+ * {@link SubscriptionClient.ServerConfig}. Compression is always offered (falling back
+ * automatically against servers without it) and connection reuse is fixed policy; consumers get
+ * no knobs for either. These seams exist solely so integration tests can run a compression-off
+ * reference and observe raw frames on the wire.
+ */
+export interface TransportInternals {
+  /** Offer the deflate compression subprotocol (default: true). */
+  readonly compression?: boolean | undefined;
+  /** The underlying WebSocket constructor (default: the global `WebSocket`). */
+  readonly webSocketImpl?: typeof WebSocket | undefined;
+}
+
+/**
+ * Builds a {@link SubscriptionClient} layer backed by a `graphql-ws` WebSocket connection to the indexer.
+ *
+ * The connection negotiates the indexer's compression subprotocol (with automatic fallback against servers that predate
+ * compression) and is held open for the client's entire scope (`lazy: false`), so backpressure pause/resume cycles and
+ * re-subscriptions always reuse it instead of paying a reconnect handshake. Correctness never depends on connection
+ * lifetime (resume is always cursor-based), so this is pure policy, not configuration. Non-lazy mode also makes
+ * disposal total: graphql-ws never arms its lazy-close timer, whose handle its `dispose()` leaks — a pending timer that
+ * would otherwise keep a short-lived Node process alive after the wallet stopped. The client is scoped — it is
+ * disposed, closing the connection and cancelling its timers, when the surrounding scope closes.
+ *
+ * @example
+ *   ```typescript
+ *   const events = ZswapEvents.run({ id: 0 }).pipe(
+ *     Stream.runCollect,
+ *     Effect.provide(WsSubscriptionClient.layer({ url: 'ws://localhost:8088/api/v4/graphql/ws' })),
+ *     Effect.scoped,
+ *   );
+ *   ```;
+ *
+ * @param config - The indexer WebSocket endpoint and optional keep-alive interval
+ * @param internals - `@internal` test-only transport seams; production callers omit this
+ * @returns A scoped layer providing `SubscriptionClient`, failing with `InvalidProtocolSchemeError` if `config.url` is
+ *   not a WebSocket URL
+ */
 export const layer: (
   config: SubscriptionClient.ServerConfig,
-) => Layer.Layer<SubscriptionClient, InvalidProtocolSchemeError, Scope.Scope> = (config) =>
+  internals?: TransportInternals,
+) => Layer.Layer<SubscriptionClient, InvalidProtocolSchemeError, Scope.Scope> = (config, internals) =>
   Layer.scoped(
     SubscriptionClient,
     WsURL.make(config.url).pipe(
       Effect.flatMap((url) =>
         Effect.acquireRelease(
-          Effect.sync(() =>
-            createClient({ url: url.toString(), shouldRetry: () => false, keepAlive: config.keepAlive ?? 15_000 }),
-          ),
-          (client) => Effect.sync(() => client.dispose()),
+          Effect.sync(() => {
+            // Resolved at acquire time, guarded so runtimes without the global reach graphql-ws's
+            // own probing and descriptive "implementation missing" error instead of a ReferenceError.
+            const webSocketImpl =
+              internals?.webSocketImpl ?? (typeof WebSocket === 'undefined' ? undefined : WebSocket);
+            return createClient({
+              url: url.toString(),
+              shouldRetry: () => false,
+              lazy: false,
+              // A connection failing while nothing is subscribed needs no handling: active
+              // subscriptions surface transport errors through their own sinks, and the next
+              // subscribe dials afresh. Without this graphql-ws would console.error the event.
+              onNonLazyError: () => undefined,
+              keepAlive: config.keepAlive ?? 15_000,
+              webSocketImpl:
+                internals?.compression === false
+                  ? internals.webSocketImpl
+                  : webSocketImpl === undefined
+                    ? undefined
+                    : makeDeflateWebSocket(webSocketImpl),
+            });
+          }),
+          // dispose() is async and rejects when the connection attempt it awaits has already
+          // failed — which still means "nothing left to close", i.e. successful disposal. Await
+          // it so the rejection is absorbed here instead of floating as an unhandled rejection.
+          (client) => Effect.promise(() => Promise.resolve(client.dispose()).then(undefined, () => undefined)),
         ),
       ),
       Effect.map((client) => new WebSocketSubscriptionClientImpl(client)),

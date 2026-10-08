@@ -25,7 +25,7 @@
 // `highestTransactionId` is also known NOT to survive `serialize` -> `restore`; it is absent from the snapshot and
 // rebuilt as `appliedId`. Pinning it here records that the two carry routes genuinely differ, rather than leaving it
 // to be discovered as a contradiction later.
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { IndexerLiveness, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { makeCrossLedgerMigration, type PreviousLedgerWallet } from '../Migration.js';
@@ -58,6 +58,7 @@ const previousWallet = (params: {
     appliedId: params.appliedId,
     highestTransactionId: params.highestTransactionId,
     isConnected: params.isConnected ?? true,
+    indexerLiveness: IndexerLiveness.Unknown(),
   },
 });
 
@@ -95,5 +96,23 @@ describe('the cursor a cross-ledger migration hands over', () => {
     // And so the wallet does not answer "synced" at the boundary, even with no gap to close. Whether it should is a
     // question for the runtime that restarts sync, not for the migration; this pins today's answer.
     expect(wallet.progress.isCompleteWithin()).toBe(false);
+  });
+
+  it('starts an InSync liveness verdict again at Unknown, so the migrated wallet vouches for the feed only once it has checked it', async () => {
+    // The other part of the cursor that must not cross as it stands. An `InSync` would let the migrated wallet report
+    // itself synchronized on the strength of a check made before the hand-over; only a verdict that already blocks
+    // completion, `Behind` or `WrongNetwork`, carries across (see `migration.test.ts`).
+    const base = previousWallet({ appliedId: 42n, highestTransactionId: 42n });
+    const previous: PreviousLedgerWallet = {
+      ...base,
+      progress: {
+        ...base.progress,
+        indexerLiveness: IndexerLiveness.InSync({ indexerHeight: 40n, finalizedHeight: 40n }),
+      },
+    };
+
+    const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previous));
+
+    expect(wallet.progress.indexerLiveness).toEqual(IndexerLiveness.Unknown());
   });
 });

@@ -65,15 +65,15 @@ import {
 } from './UnshieldedWalletAPI.js';
 import { CoreWallet as V1CoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
 import { type PublicKey as V1PublicKey } from './v1/KeyStore.js';
-import { type WalletSyncUpdate as V1SyncUpdate } from './v1/SyncSchema.js';
+import { type SyncUpdate as V1SyncUpdate } from './v1/SyncSchema.js';
 import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
 import { type SignSegment as V1SignSegment } from './v1/Signing.js';
 import { type UnboundTransaction as V1UnboundTransaction } from './v1/TransactionOps.js';
 import { type SignSegment } from './v2/Signing.js';
-import { type WalletSyncUpdate as V2SyncUpdate } from './v2/SyncSchema.js';
+import { type SyncUpdate as V2SyncUpdate } from './v2/SyncSchema.js';
 import { type TokenTransfer } from './v2/Transacting.js';
 import { type UnboundTransaction } from './v2/TransactionOps.js';
-import { type UtxoWithMeta } from './v2/UnshieldedState.js';
+import { type UtxoHash, type UtxoWithMeta } from './v2/UnshieldedState.js';
 import { type WalletError as V1WalletError } from './v1/WalletError.js';
 import { type WalletError } from './v2/WalletError.js';
 
@@ -285,7 +285,8 @@ export function CustomForkingUnshieldedWallet<
    *
    * @remarks
    *   The stamp is the floor of the variant's epoch: every decision it is later read for asks which side of the boundary
-   *   the bytes belong to, and the floor answers that the same way as any other version in the same epoch.
+   *   the bytes belong to, and the floor answers that the same way as any other version in the same epoch. It is only
+   *   for transactions this wallet builds; one it is handed and changes in place keeps its own (see `resealAs`).
    */
   const v8Epoch = ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, configuration.forks.v9);
   const v9Epoch = ProtocolVersion.epochOf(configuration.forks.v9, configuration.forks.v9);
@@ -306,6 +307,20 @@ export function CustomForkingUnshieldedWallet<
 
   const sealV9 = (result: ledgerV9.UnprovenTransaction | undefined): UnprovenTx | undefined =>
     result === undefined ? undefined : WalletTransaction.adopt('Unproven', result, v9Stamp);
+
+  /**
+   * Re-seals a transaction this wallet changed in place, at the stamp of the handle it was handed.
+   *
+   * @remarks
+   *   Signing a transaction, or balancing it by adding inputs and change to it, adds to bytes whoever built it fixed; it
+   *   does not make this wallet their author. So what goes back out carries the stamp that came in — the floor this
+   *   wallet stamps its own transactions with would change it whenever the caller's was any other version of the
+   *   epoch.
+   */
+  const resealAs =
+    <TStage extends WalletTransaction.Stage>(handed: AnyTx, stage: TStage) =>
+    (changed: { serialize: () => Uint8Array }): WalletTransaction<TStage> =>
+      WalletTransaction.adopt(stage, changed, handed.protocolVersion);
 
   /**
    * Adapts the caller's signer to ledger-v8's signature shape.
@@ -601,33 +616,34 @@ export function CustomForkingUnshieldedWallet<
           [V1Tag]: (v1) =>
             v8Tx<V1UnboundTransaction>(tx).pipe(
               Effect.flatMap((unwrapped) => v1.balanceUnboundTransaction(unwrapped)),
-              Effect.map((result) =>
-                result === undefined ? undefined : WalletTransaction.adopt('Unbound', result, v8Stamp),
-              ),
+              Effect.map((result) => (result === undefined ? undefined : resealAs(tx, 'Unbound')(result))),
             ),
           [V2Tag]: (v2) =>
             v9Tx<UnboundTransaction>(tx).pipe(
               Effect.flatMap((unwrapped) => v2.balanceUnboundTransaction(unwrapped)),
-              Effect.map((result) =>
-                result === undefined ? undefined : WalletTransaction.adopt('Unbound', result, v9Stamp),
-              ),
+              Effect.map((result) => (result === undefined ? undefined : resealAs(tx, 'Unbound')(result))),
             ),
         })
         .pipe(Effect.runPromise);
     }
 
+    /**
+     * Balances an unproven transaction, which happens in place rather than by producing a second transaction.
+     *
+     * @returns The transaction with this wallet's inputs added, or nothing when it needed none.
+     */
     balanceUnprovenTransaction(tx: AnyTx): Promise<UnprovenTx | undefined> {
       return this.runtime
         .dispatch<UnprovenTx | undefined, TransactingError>({
           [V1Tag]: (v1) =>
             v8Tx<ledgerV8.UnprovenTransaction>(tx).pipe(
               Effect.flatMap((unwrapped) => v1.balanceUnprovenTransaction(unwrapped)),
-              Effect.map(sealV8),
+              Effect.map((result) => (result === undefined ? undefined : resealAs(tx, 'Unproven')(result))),
             ),
           [V2Tag]: (v2) =>
             v9Tx<ledgerV9.UnprovenTransaction>(tx).pipe(
               Effect.flatMap((unwrapped) => v2.balanceUnprovenTransaction(unwrapped)),
-              Effect.map(sealV9),
+              Effect.map((result) => (result === undefined ? undefined : resealAs(tx, 'Unproven')(result))),
             ),
         })
         .pipe(Effect.runPromise);
@@ -694,12 +710,12 @@ export function CustomForkingUnshieldedWallet<
           [V1Tag]: (v1) =>
             v8Tx<ledgerV8.UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((unwrapped) => v1.signUnprovenTransaction(unwrapped, loweredSigner(signSegment))),
-              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v8Stamp)),
+              Effect.map(resealAs(transaction, 'Unproven')),
             ),
           [V2Tag]: (v2) =>
             v9Tx<ledgerV9.UnprovenTransaction>(transaction).pipe(
               Effect.flatMap((unwrapped) => v2.signUnprovenTransaction(unwrapped, signSegment)),
-              Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp)),
+              Effect.map(resealAs(transaction, 'Unproven')),
             ),
         })
         .pipe(Effect.runPromise);
@@ -711,12 +727,12 @@ export function CustomForkingUnshieldedWallet<
           [V1Tag]: (v1) =>
             v8Tx<V1UnboundTransaction>(transaction).pipe(
               Effect.flatMap((unwrapped) => v1.signUnboundTransaction(unwrapped, loweredSigner(signSegment))),
-              Effect.map((tx) => WalletTransaction.adopt('Unbound', tx, v8Stamp)),
+              Effect.map(resealAs(transaction, 'Unbound')),
             ),
           [V2Tag]: (v2) =>
             v9Tx<UnboundTransaction>(transaction).pipe(
               Effect.flatMap((unwrapped) => v2.signUnboundTransaction(unwrapped, signSegment)),
-              Effect.map((tx) => WalletTransaction.adopt('Unbound', tx, v9Stamp)),
+              Effect.map(resealAs(transaction, 'Unbound')),
             ),
         })
         .pipe(Effect.runPromise);
@@ -755,6 +771,24 @@ export function CustomForkingUnshieldedWallet<
               >(transaction, v9Epoch),
               { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertTransaction(unwrapped) },
             ),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void> {
+      return this.runtime
+        .dispatch<void, WalletError>({
+          [V1Tag]: (v1) => v1.revertUtxos(utxoIds),
+          [V2Tag]: (v2) => v2.revertUtxos(utxoIds),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    releaseRestoredPending(coveredIds: ReadonlyArray<UtxoHash>): Promise<void> {
+      return this.runtime
+        .dispatch<void, WalletError>({
+          [V1Tag]: (v1) => v1.releaseRestoredPending(coveredIds),
+          [V2Tag]: (v2) => v2.releaseRestoredPending(coveredIds),
         })
         .pipe(Effect.runPromise);
     }

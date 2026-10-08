@@ -19,7 +19,8 @@
  *   about which ledger version wrote them, so a handle that goes through `signRecipe` has to come back stamped as it
  *   went in — and a recipe with nothing to sign has to come back equal to the one handed over. The handle here comes
  *   from `adoptTransaction`, which is how a dApp connector's transaction enters the wallet, stamped with the version
- *   the facade is acting at.
+ *   the facade is acting at. It is adopted at both stages a dApp hands one over at, because the two are signed through
+ *   different calls: an unproven recipe's transaction, and an unbound recipe's base transaction.
  *
  *   Both sides of the boundary are covered, because the unshielded wallet signs through a different variant on each: a
  *   Schnorr identity starts on the V1 variant and stays there while nothing hands it over, and an ECDSA identity, which
@@ -76,6 +77,30 @@ const v8Bytes = (): Uint8Array => ledgerV8.Transaction.fromParts(NETWORK_ID).ser
 
 const v9Bytes = (): Uint8Array => ledgerV9.Transaction.fromParts(NETWORK_ID).serialize();
 
+/** A prover that is never asked anything: a transaction with nothing in it has nothing to prove. */
+const noProofs = {
+  check: () => Promise.resolve([]),
+  prove: () => Promise.reject(new Error('A transaction with nothing in it should have nothing to prove')),
+  lookupKey: () => Promise.resolve(undefined),
+};
+
+/** The same transaction at the unbound stage: proved, which is how a dApp hands one over, and not yet bound. */
+const v8UnboundBytes = async (): Promise<Uint8Array> =>
+  (
+    await ledgerV8.Transaction.fromParts(NETWORK_ID).prove(
+      noProofs,
+      ledgerV8.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
+    )
+  ).serialize();
+
+const v9UnboundBytes = async (): Promise<Uint8Array> =>
+  (
+    await ledgerV9.Transaction.fromParts(NETWORK_ID).prove(
+      noProofs,
+      ledgerV9.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
+    )
+  ).serialize();
+
 const noSignatureExpected = (): never => {
   throw new Error('No signature segment should be requested for a transaction with no intents');
 };
@@ -124,15 +149,26 @@ describe('WalletFacade.signRecipe keeps the stamp of the transaction it signs', 
     facade = undefined;
   });
 
-  // Expected to fail until signing keeps a transaction's stamp: today the unshielded wallet re-stamps what it signs at
-  // the floor of its epoch, so the stamp comes back as 0 below the boundary and as the boundary version from it. Turn
-  // back into `it.each` once the stamp survives signing.
-  it.fails.each([
-    { side: 'below the boundary (V1 variant, Schnorr identity)', kind: 'schnorr', version: belowFork, bytes: v8Bytes },
-    { side: 'from the boundary (V2 variant, ECDSA identity)', kind: 'ecdsa', version: fromFork, bytes: v9Bytes },
-  ] as const)('$side', async ({ kind, version, bytes }) => {
+  const sides = [
+    {
+      side: 'below the boundary (V1 variant, Schnorr identity)',
+      kind: 'schnorr',
+      version: belowFork,
+      unprovenBytes: v8Bytes,
+      unboundBytes: v8UnboundBytes,
+    },
+    {
+      side: 'from the boundary (V2 variant, ECDSA identity)',
+      kind: 'ecdsa',
+      version: fromFork,
+      unprovenBytes: v9Bytes,
+      unboundBytes: v9UnboundBytes,
+    },
+  ] as const;
+
+  it.each(sides)('of an unproven recipe, $side', async ({ kind, version, unprovenBytes }) => {
     facade = await facadeAt(kind, version);
-    const handle = facade.adoptTransaction(bytes(), 'Unproven');
+    const handle = facade.adoptTransaction(unprovenBytes(), 'Unproven');
     expect(handle.protocolVersion).toBe(version);
     const recipe: BalancingRecipe = { type: 'UNPROVEN_TRANSACTION', protocolVersion: version, transaction: handle };
 
@@ -140,6 +176,21 @@ describe('WalletFacade.signRecipe keeps the stamp of the transaction it signs', 
 
     expect(signed.type).toBe('UNPROVEN_TRANSACTION');
     expect(signed.type === 'UNPROVEN_TRANSACTION' && signed.transaction.protocolVersion).toBe(version);
+    expect(signed).toEqual(recipe);
+  });
+
+  // The unbound recipe is signed through the other signing call, on its base transaction — the one a dApp handed over
+  // already proved, and so the one whose stamp came from `adoptTransaction`.
+  it.each(sides)('of an unbound recipe, $side', async ({ kind, version, unboundBytes }) => {
+    facade = await facadeAt(kind, version);
+    const handle = facade.adoptTransaction(await unboundBytes(), 'Unbound');
+    expect(handle.protocolVersion).toBe(version);
+    const recipe: BalancingRecipe = { type: 'UNBOUND_TRANSACTION', protocolVersion: version, baseTransaction: handle };
+
+    const signed = await facade.signRecipe(recipe, noSignatureExpected);
+
+    expect(signed.type).toBe('UNBOUND_TRANSACTION');
+    expect(signed.type === 'UNBOUND_TRANSACTION' && signed.baseTransaction.protocolVersion).toBe(version);
     expect(signed).toEqual(recipe);
   });
 });

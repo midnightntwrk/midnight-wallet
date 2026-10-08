@@ -66,12 +66,24 @@ const valuesByPath = (payload: unknown): Record<string, readonly string[]> =>
  * `informationPreservation.test.ts` has the same notion for its own check; it is repeated rather than shared so that
  * neither file has to change when the other's question does.
  */
-const contentOf = (payload: unknown): unknown => {
-  if (Array.isArray(payload) || typeof payload !== 'object' || payload === null) return payload;
+const contentKeyOf = (payload: unknown): string | undefined => {
+  if (Array.isArray(payload) || typeof payload !== 'object' || payload === null) return undefined;
   const entries = Object.entries(payload as Record<string, unknown>);
   const rest = entries.filter(([key]) => key !== 'version');
   const hadVersion = entries.length - rest.length === 1;
-  return hadVersion && rest.length === 1 && Array.isArray(rest[0]?.[1]) ? rest[0]?.[1] : Object.fromEntries(rest);
+  return hadVersion && rest.length === 1 && Array.isArray(rest[0]?.[1]) ? rest[0]?.[0] : undefined;
+};
+
+/**
+ * Peels the envelope, unwrapping the content under `key` when the stored payload kept it there. The key is taken from
+ * the stored side so that a writer adding a second member beside the content — reservations beside the pending
+ * transactions — compares the same content, and the comparison does not re-root every path under the key it already
+ * had.
+ */
+const contentOf = (payload: unknown, key: string | undefined = contentKeyOf(payload)): unknown => {
+  if (Array.isArray(payload) || typeof payload !== 'object' || payload === null) return payload;
+  const rest = Object.fromEntries(Object.entries(payload as Record<string, unknown>).filter(([k]) => k !== 'version'));
+  return key !== undefined && Array.isArray(rest[key]) ? rest[key] : rest;
 };
 
 /**
@@ -87,8 +99,9 @@ const isTheUnshieldedKeyUpgrade = (writer: Writer, surface: Surface, path: strin
 
 /** Paths whose values differ between a stored payload and what this build writes back for it. */
 const changedPaths = (stored: unknown, written: unknown): readonly string[] => {
-  const before = valuesByPath(contentOf(stored));
-  const after = valuesByPath(contentOf(written));
+  const key = contentKeyOf(stored) ?? contentKeyOf(written);
+  const before = valuesByPath(contentOf(stored, key));
+  const after = valuesByPath(contentOf(written, key));
   return Object.keys(before).filter((path) => JSON.stringify(before[path]) !== JSON.stringify(after[path]));
 };
 

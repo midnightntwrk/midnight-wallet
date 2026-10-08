@@ -28,7 +28,12 @@
  *   here. What the wallet is started with is an identity, and the harness hands it the one an application holds: the
  *   ledger-v9's {@link PublicKey}.
  */
-import { NetworkId, type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  IndexerLiveness,
+  NetworkId,
+  type ProtocolState,
+  type ProtocolVersion,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, HashMap, Option, Stream, pipe } from 'effect';
@@ -38,16 +43,17 @@ import {
   type ForkingUnshieldedWalletClass,
 } from '../UnshieldedWallet.js';
 import { type PublicKey } from '../KeyStore.js';
+import { CustomUnshieldedWallet, type CustomizedUnshieldedWallet } from '../SingleVariantUnshieldedWallet.js';
 import { type CoreWallet as V1CoreWallet } from '../v1/CoreWallet.js';
 import * as V1Migration from '../v1/Migration.js';
 import * as V1Sync from '../v1/Sync.js';
-import { type WalletSyncUpdate as V1Update } from '../v1/SyncSchema.js';
+import { type SyncUpdate as V1Update } from '../v1/SyncSchema.js';
 import { type TransactionHistoryService as V1History } from '../v1/TransactionHistory.js';
 import { V1Builder } from '../v1/V1Builder.js';
 import { type CoreWallet as V2CoreWallet } from '../v2/CoreWallet.js';
 import * as V2Migration from '../v2/Migration.js';
 import * as V2Sync from '../v2/Sync.js';
-import { type WalletSyncUpdate as V2Update } from '../v2/SyncSchema.js';
+import { type IndexerLivenessUpdate, type SyncUpdate as V2Update } from '../v2/SyncSchema.js';
 import { type TransactionHistoryService as V2History } from '../v2/TransactionHistory.js';
 import { V2Builder } from '../v2/V2Builder.js';
 import { type TimelineItem } from './forkTimeline.js';
@@ -130,7 +136,7 @@ export const utxosOf = (wallet: V1CoreWallet | V2CoreWallet): readonly CarriedUt
  *   separately distinguishes "returned to the available set" from "still reserved for a transaction that cannot land".
  */
 export const bookedUtxosOf = (wallet: V1CoreWallet | V2CoreWallet): readonly CarriedUtxo[] =>
-  sortedCarried(Array.from(HashMap.values(wallet.state.pendingUtxos), plainUtxo));
+  sortedCarried(Array.from(HashMap.values(wallet.state.pendingUtxos), ({ utxo }) => plainUtxo(utxo)));
 
 /** Wraps the real cross-ledger migration so the test can see exactly what crossed. */
 const capturingCrossLedgerMigration = (
@@ -191,10 +197,45 @@ type SourceConfiguration = Readonly<{
 const timelineSyncService = <TUpdate>(
   timeline: readonly TimelineItem[],
   toUpdate: (item: TimelineItem) => TUpdate,
+  livenessVerdict: TUpdate,
 ) => ({
   updates: (state: V1CoreWallet | V2CoreWallet) =>
     Stream.fromIterable(timeline.filter((item) => BigInt(item.id) > state.progress.appliedId).map(toUpdate)),
+  // An in-memory timeline has no node to cross-check against. It says so once, as the simulator does, because a wallet
+  // whose liveness stays `Unknown` never reports itself synchronized.
+  livenessUpdates: () => Stream.make(livenessVerdict),
 });
+
+/** The one liveness verdict an in-memory timeline can give, identical in shape for both ledger versions. */
+const noLivenessCheck: IndexerLivenessUpdate = {
+  type: 'IndexerLiveness',
+  verdict: IndexerLiveness.Skipped({ reason: 'no-liveness-feed' }),
+};
+
+/**
+ * The V2 variant's builder: the shipped one, reading the timeline instead of an indexer.
+ *
+ * @remarks
+ *   Left without a migration so that a single-variant wallet can be built from it too; the forking wallet below adds the
+ *   migration it watches the hand-over through.
+ */
+const timelineV2Builder = () =>
+  new V2Builder()
+    .withSync(
+      (configuration: SourceConfiguration) =>
+        timelineSyncService<V2Update>(configuration.timeline, (item) => item.update as V2Update, noLivenessCheck),
+      (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: V2History }) =>
+        V2Sync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
+          getContext(),
+        ),
+    )
+    .withSerializationDefaults()
+    .withTransactingDefaults()
+    .withSigningDefaults()
+    .withCoinsAndBalancesDefaults()
+    .withTransactionHistory(() => noOpV2History)
+    .withKeysDefaults()
+    .withCoinSelectionDefaults();
 
 // =============================================================================
 // The wallet
@@ -277,7 +318,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
   const v1Builder = new V1Builder()
     .withSync(
       (configuration: SourceConfiguration) =>
-        timelineSyncService<V1Update>(configuration.timeline, (item) => item.update as V1Update),
+        timelineSyncService<V1Update>(configuration.timeline, (item) => item.update as V1Update, noLivenessCheck),
       // The REAL capability, boundary rule and all — only the service that would open a WebSocket is substituted.
       (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: V1History }) =>
         V1Sync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
@@ -295,23 +336,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
       V1Migration.makeEmptyWalletMigration({ networkId: configuration.networkId }),
     );
 
-  const v2Builder = new V2Builder()
-    .withSync(
-      (configuration: SourceConfiguration) =>
-        timelineSyncService<V2Update>(configuration.timeline, (item) => item.update as V2Update),
-      (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: V2History }) =>
-        V2Sync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
-          getContext(),
-        ),
-    )
-    .withSerializationDefaults()
-    .withTransactingDefaults()
-    .withSigningDefaults()
-    .withCoinsAndBalancesDefaults()
-    .withTransactionHistory(() => noOpV2History)
-    .withKeysDefaults()
-    .withCoinSelectionDefaults()
-    .withMigration(() => capturingCrossLedgerMigration(captured));
+  const v2Builder = timelineV2Builder().withMigration(() => capturingCrossLedgerMigration(captured));
 
   const WalletClass = CustomForkingUnshieldedWallet(
     {
@@ -361,3 +386,25 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     }),
   );
 };
+
+/** Everything needed to point the shipped single-variant unshielded wallet at a timeline. */
+export type SingleVariantWalletConfig = {
+  /** The timeline the one variant reads, whatever versions it is reported at. */
+  readonly timeline: readonly TimelineItem[];
+  /** The identity the wallet is started with. */
+  readonly publicKey: PublicKey;
+  readonly networkId?: NetworkId.NetworkId;
+};
+
+/**
+ * Builds the shipped single-variant unshielded wallet over an in-memory timeline: the V2 variant alone, answering for
+ * the whole protocol timeline.
+ *
+ * @param config The timeline and the identity to start with.
+ * @returns The wallet, started with that identity and not yet synchronizing — `start` is the caller's.
+ */
+export const makeSingleVariantWallet = (config: SingleVariantWalletConfig): CustomizedUnshieldedWallet<V2Update> =>
+  CustomUnshieldedWallet(
+    { networkId: config.networkId ?? NetworkId.NetworkId.Undeployed, timeline: config.timeline },
+    timelineV2Builder(),
+  ).startWithPublicKey(config.publicKey);

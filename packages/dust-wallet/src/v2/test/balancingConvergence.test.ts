@@ -24,11 +24,7 @@
  *   dry run spends the selected coins against the wallet's own Dust state. The capability is built by hand around the
  *   real coins and keys capabilities so that its coin selection can be guarded: a balancing loop that never settles is
  *   synchronous and blocks the event loop, so no test timeout could stop it. The guard turns that into a failure after
- *   a bounded number of rounds; a loop that settles never gets near it.
- *
- *   Marked `it.fails` because the defect is still present: the second round hands the balancer the fee as a positive
- *   imbalance, which it reads as a surplus, so nothing is selected and the guard stops the loop. The assertion fails
- *   for exactly that reason today. Change it back to `it` in the same change that fixes the balancing.
+ *   a bounded number of coin-selection fetches and calls; a loop that settles never gets near it.
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
@@ -59,23 +55,35 @@ const COST_PARAMETERS = { feeBlocksMargin: 5 };
 const NIGHT_AWARD = 1_000_000_000n;
 // Long enough for the Night to pay for its own registration, short enough that what is left starts below that window.
 const SECONDS_BEFORE_REGISTERING = 100n;
-// Far more rounds than a settling balance needs; only a loop that never settles reaches it.
-const MAX_BALANCING_ROUNDS = 100;
+// Far more coin-selection fetches and calls than a settling balance needs; only a loop that never settles reaches it.
+const MAX_COIN_SELECTION_TICKS = 100;
 
 /**
- * A coin selection that is the default one, until it has been asked for more often than a settling balance ever would.
+ * The default coin selection, guarded by how often the capability fetches it and how often it calls it.
  *
  * @remarks
- *   The capability asks for its coin selection once per balancing round, so the count is the number of rounds.
+ *   A balancing loop can repeat either one without the other: a loop that re-fetches the selection every round but no
+ *   longer needs a coin calls it only once, and a loop that keeps one fetched selection calls it on every pass.
+ *   Counting both catches either kind, so the guard fails once the total passes the bound. A balance that settles uses
+ *   a handful of ticks: one fetch and a couple of calls.
  */
 const guardedCoinSelection = (): (() => CoinSelection) => {
-  const rounds = { count: 0 };
-  return () => {
-    rounds.count += 1;
-    if (rounds.count > MAX_BALANCING_ROUNDS) {
-      throw new Error(`Dust balancing did not settle within ${MAX_BALANCING_ROUNDS} rounds`);
+  const ticks = { count: 0 };
+  const tick = (): void => {
+    ticks.count += 1;
+    if (ticks.count > MAX_COIN_SELECTION_TICKS) {
+      throw new Error(
+        `Dust balancing did not settle within ${MAX_COIN_SELECTION_TICKS} coin-selection fetches and calls`,
+      );
     }
-    return chooseCoin;
+  };
+  const guarded: CoinSelection = (coins) => {
+    tick();
+    return chooseCoin(coins);
+  };
+  return () => {
+    tick();
+    return guarded;
   };
 };
 
@@ -158,7 +166,7 @@ const walletWithOneGeneratingDustCoin = Effect.gen(function* () {
 });
 
 describe('paying a fee with Dust', () => {
-  it.fails('refuses, rather than spinning, when the coin that covers the fee cannot also cover its own spend', () =>
+  it('refuses, rather than spinning, when the coin that covers the fee cannot also cover its own spend', () =>
     Effect.gen(function* () {
       const { dustSecretKey, state, ledgerParameters, now, recipient } = yield* walletWithOneGeneratingDustCoin;
 
@@ -214,6 +222,5 @@ describe('paying a fee with Dust', () => {
         onRight: () => ({ tag: 'balanced', message: '' }),
       });
       expect(outcome.tag, outcome.message).toBe('Wallet.InsufficientFunds');
-    }).pipe(Effect.scoped, Effect.runPromise),
-  );
+    }).pipe(Effect.scoped, Effect.runPromise));
 });

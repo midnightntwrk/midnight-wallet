@@ -1,6 +1,6 @@
 {
   "name": "@midnightntwrk/wallet-sdk-indexer-client",
-  "version": "2.0.0-rc.0",
+  "version": "2.0.0-rc.1",
   "type": "module",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,6 +32,7 @@
     "@graphql-typed-document-node/core": "^3.2.0",
     "@midnightntwrk/wallet-sdk-utilities": "1.2.2-rc.0",
     "effect": "^3.19.19",
+    "fflate": "^0.8.2",
     "graphql": "^17.0.0",
     "graphql-http": "^1.22.4",
     "graphql-ws": "^6.0.7"
@@ -39,15 +40,15 @@
   "devDependencies": {
     "@effect/cluster": "0.60.2",
     "@effect/experimental": "0.61.1",
-    "@effect/platform": "0.97.1",
-    "@effect/platform-node": "0.108.1",
+    "@effect/platform": "0.97.2",
+    "@effect/platform-node": "0.108.2",
     "@effect/rpc": "0.76.2",
     "@effect/sql": "0.52.1",
     "@effect/workflow": "0.19.1",
-    "@graphql-codegen/cli": "7.4.0",
-    "@graphql-codegen/client-preset": "6.1.3",
-    "tsx": "4.23.13",
-    "yaml": "^2.8.3"
+    "@graphql-codegen/cli": "7.4.2",
+    "@graphql-codegen/client-preset": "6.2.0",
+    "tsx": "4.23.15",
+    "yaml": "^2.9.0"
   },
   "scripts": {
     "gql:codegen": "graphql-codegen --clean --config codegen.ts",

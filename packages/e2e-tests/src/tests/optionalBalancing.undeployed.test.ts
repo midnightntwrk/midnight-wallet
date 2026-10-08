@@ -181,10 +181,7 @@ describe('Optional Balancing', () => {
       expect(imbalances.unshielded).toBeLessThan(0n);
     });
 
-    // Expected to fail until signing keeps a transaction's stamp: the unshielded wallet re-stamps what it signs at the
-    // floor of its epoch (2000000) while `sealed()` adopts at the version the chain reports (2001000), so the signed
-    // recipe differs from the one handed over in its stamp alone. Turn back into `it` once the stamp survives signing.
-    it.fails('allows to progress to signing when only shielded tokens are being utilized', async () => {
+    it('allows to progress to signing when only shielded tokens are being utilized', async () => {
       await facade.waitForSyncedState();
 
       const tx = pipe(createArbitraryShieldedOffer(), (offer) =>
@@ -297,10 +294,7 @@ describe('Optional Balancing', () => {
       expect(baseImbalances.unshielded).toBeLessThan(0n);
     });
 
-    // Expected to fail until signing keeps a transaction's stamp: the unshielded wallet re-stamps what it signs at the
-    // floor of its epoch (2000000) while `sealed()` adopts at the version the chain reports (2001000), so the signed
-    // recipe differs from the one handed over in its stamp alone. Turn back into `it` once the stamp survives signing.
-    it.fails('allows to progress to signing when only shielded tokens are being utilized', async () => {
+    it('allows to progress to signing when only shielded tokens are being utilized', async () => {
       await facade.waitForSyncedState();
 
       const tx = await pipe(

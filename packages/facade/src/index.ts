@@ -46,11 +46,13 @@ import {
   UnshieldedSectionSchema,
   mergeUnshieldedSections,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
+import { TransactionOps as V1UnshieldedTransactionOps } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { TransactionOps as V2UnshieldedTransactionOps } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
 import { DustSectionSchema, mergeDustSections } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Array as Arr, type DateTime, Either, Option, pipe, Schema } from 'effect';
+import { Array as Arr, DateTime, Either, Option, pipe, Schema } from 'effect';
 import {
   type AnyTx,
   type FinalizedTx,
@@ -70,10 +72,12 @@ import {
   combineLatest,
   concatMap,
   distinctUntilChanged,
+  filter,
   firstValueFrom,
   map,
   type Observable,
   type Subscription,
+  take,
   tap,
 } from 'rxjs';
 import {
@@ -699,6 +703,22 @@ export class FacadeState {
 
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+/** How a coin is named wherever it is referred to without being carried: in a reservation, and in a release by id. */
+const coinIdsOf = (utxos: readonly { intentHash: string; outputNo: number }[]): readonly string[] =>
+  utxos.map((utxo) => `${utxo.intentHash}#${utxo.outputNo}`);
+
+/**
+ * What a transaction of either ledger version says about its own identity, which is all a reservation needs of it.
+ *
+ * @remarks
+ *   Structural on purpose: both ledger versions name a transaction the same way, and a reservation outlives the crossing,
+ *   so what is recorded about one must not depend on which version wrote it.
+ */
+type IdentifiedTransaction = Readonly<{
+  identifiers(): string[];
+  intents: ReadonlyMap<number, { intentHash(segmentId: number): string }> | undefined;
+}>;
+
 /**
  * Clock abstraction for obtaining the current time. By default, the facade uses the system clock
  * ({@link Clock.systemClock}); for testing with a simulator, inject a custom clock (e.g. one backed by the simulator's
@@ -1011,6 +1031,8 @@ export class WalletFacade {
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
   readonly clock: Clock.Clock;
   #pendingSubscription: Subscription;
+  #expiredReservationSubscription: Subscription;
+  #restoredBookingSubscription: Subscription;
   #protocolVersionSubscription: Subscription;
   /**
    * The protocol version the wallets have all reached, as last observed.
@@ -1063,6 +1085,49 @@ export class WalletFacade {
         }),
       )
       .subscribe();
+
+    // A reservation past its TTL stands for a transaction the ledger will not accept, so the record has done its job
+    // and is dropped. It does not release the coins: the wallet books each one with the same TTL and sweeps them
+    // itself, so one mechanism owns release.
+    //
+    // Releasing from here as well would be a second sweep on a different clock, and a coin the wallet has already
+    // freed can be booked again for another transaction before this one fires. The ids a reservation holds say
+    // nothing about which booking currently holds them, so that release would free the wrong one.
+    this.#expiredReservationSubscription = this.pendingTransactionsService
+      .state()
+      .pipe(
+        concatMap((pending) => PendingTransactions.allExpiredReservations(pending)),
+        concatMap((reservation) => this.pendingTransactionsService.clearReservation(reservation.identifiers)),
+      )
+      .subscribe();
+
+    // Coins a previous process left booked would otherwise sit until their transactions' TTLs, which can be an hour.
+    // Once sync reaches the tip, every transaction this address is party to has been applied, so a coin still booked
+    // was never spent — unless a reservation or a transaction being tracked says the spend is still out there. Both
+    // halves matter: registering a transaction drops the reservation standing in for it, so from submission onwards
+    // the tracked transaction is the only thing saying its coins are spoken for.
+    //
+    // This only sees what the services were given. A pending-transactions service restored from storage covers the
+    // spends a previous process submitted; one started empty covers none of them, and a restored booking whose
+    // transaction is still in the mempool is released here.
+    this.#restoredBookingSubscription = this.unshielded.state
+      .pipe(
+        filter((unshielded) => unshielded.state.progress.isStrictlyComplete()),
+        // Only bookings restored at startup are candidates, and this releases all of them at once, so the first time
+        // sync reaches the tip is the only time there is anything to do. Acting once also keeps the reaction from
+        // feeding itself: releasing publishes new state, which would otherwise satisfy this same condition again.
+        take(1),
+        concatMap(async () => {
+          const { publicKey } = (await firstValueFrom(this.unshielded.state)).state;
+          const pending = await firstValueFrom(this.pendingTransactionsService.state());
+          const stillSpokenFor = PendingTransactions.coveredUnshieldedIds(pending, (tx) =>
+            this.#ownInputIds(tx, publicKey.publicKey),
+          );
+          await this.unshielded.releaseRestoredPending(stillSpokenFor);
+        }),
+      )
+      .subscribe();
+
     // Deliberately built from the wallets' own states rather than from `state()`: `state()` includes the pending set,
     // and orphaning writes to it, so feeding that back here would be a cycle.
     this.#protocolVersionSubscription = combineLatest([this.shielded.state, this.unshielded.state, this.dust.state])
@@ -1202,6 +1267,142 @@ export class WalletFacade {
     );
   }
 
+  /**
+   * Reads the transaction a handle carries, with the ledger version the handle itself names.
+   *
+   * @remarks
+   *   The counterpart of {@link accept}, which reads at the version the facade is acting at and refuses the rest. This one
+   *   asks nothing of the facade's position: the handle was stamped by whichever ledger version built it, and that
+   *   version is the one that can read its bytes. It is how a transaction tracked across a crossing can still name its
+   *   coins afterwards.
+   * @param handle The handle to read.
+   * @returns The carried transaction.
+   */
+  #carried<T>(handle: AnyTx): T {
+    return Either.getOrThrowWith(
+      WalletTransaction.unwrapWithin<T>(handle, this.epochOf(handle.protocolVersion)),
+      (error: ProtocolVersionMismatchError) => error,
+    );
+  }
+
+  /**
+   * The ids of this wallet's own coins that `handle` spends, read with the ledger version that built it.
+   *
+   * @remarks
+   *   The identity is this wallet's in ledger-v9's shape; a transaction built below the boundary is read with ledger-v8,
+   *   whose verifying key is the bare bytes of the one scheme it has, so the key is narrowed to match. Only a schnorr
+   *   identity ever has a ledger-v8 transaction to read, because the wallet refuses to start that variant with any
+   *   other, so the narrowing cannot fail here and a failure is reported as the defect it would be.
+   * @param handle The transaction to read.
+   * @param publicKey This wallet's verifying key, in the shape of whichever variant is running: ledger-v8's bare hex
+   *   below the boundary, ledger-v9's tagged record from it.
+   * @returns Every coin of this wallet's the transaction spends, each `intentHash#outputNo`.
+   */
+  #ownInputIds(
+    handle: AnyTx,
+    publicKey: ledgerV8.SignatureVerifyingKey | ledgerV9.SignatureVerifyingKey,
+  ): readonly string[] {
+    // Lifted once so both branches start from ledger-v9's shape; ledger-v8's key is the bare string, so the check is exact.
+    const verifyingKey = typeof publicKey === 'string' ? Signatures.liftSignatureVerifyingKey(publicKey) : publicKey;
+    const ownInputs =
+      handle.protocolVersion < this.#forkVersion
+        ? V1UnshieldedTransactionOps.extractOwnInputs(
+            this.#carried<ledgerV8.Transaction<ledgerV8.SignatureEnabled, ledgerV8.Proofish, ledgerV8.Bindingish>>(
+              handle,
+            ),
+            Either.getOrThrowWith(Signatures.lowerSignatureVerifyingKey(verifyingKey), (error) => error),
+          )
+        : V2UnshieldedTransactionOps.extractOwnInputs(
+            this.#carried<ledgerV9.Transaction<ledgerV9.SignatureEnabled, ledgerV9.Proofish, ledgerV9.Bindingish>>(
+              handle,
+            ),
+            verifyingKey,
+          );
+
+    return coinIdsOf(ownInputs);
+  }
+
+  /**
+   * Records that a just-balanced transaction has unshielded coins reserved.
+   *
+   * Balancing books those coins, but nothing tracks the transaction until it is submitted, so a caller that abandons it
+   * in between leaves the coins spoken for with no record saying so. The reservation is that record, and it is matched
+   * to the transaction that eventually arrives by identifier, which proving and binding leave unchanged.
+   *
+   * Takes the transaction the unshielded wallet produced rather than the merged one: its inputs are exactly the coins
+   * booked here, and its identifiers are a subset of whatever the merged transaction ends up carrying.
+   */
+  async #reserve(unshieldedTx: AnyTx | undefined, ttl: Date): Promise<void> {
+    if (!unshieldedTx) {
+      return;
+    }
+
+    const { publicKey } = (await firstValueFrom(this.unshielded.state)).state;
+
+    await this.#reserveIds(unshieldedTx, this.#ownInputIds(unshieldedTx, publicKey.publicKey), ttl);
+  }
+
+  /** Records `bookedIds` against `unshieldedTx`, or nothing at all when the transaction booked no coins. */
+  async #reserveIds(unshieldedTx: AnyTx, bookedIds: readonly string[], ttl: Date): Promise<void> {
+    if (bookedIds.length === 0) {
+      return;
+    }
+
+    const identity = this.#carried<IdentifiedTransaction>(unshieldedTx);
+
+    await this.pendingTransactionsService.addReservation({
+      identifiers: identity.identifiers(),
+      intentHashes: [...(identity.intents?.entries() ?? [])].map(([segment, intent]) => intent.intentHash(segment)),
+      inputs: { unshielded: bookedIds },
+      ttl,
+      createdAt: DateTime.unsafeFromDate(this.clock.now()),
+      expired: false,
+    });
+  }
+
+  /**
+   * Balances a transaction in place and records only the coins the wallet itself booked doing so.
+   *
+   * In-place balancing hands back the caller's own transaction with the wallet's inputs added, so the result names
+   * coins from two sources: the ones coin selection just took, and any the caller had already put there. Only the first
+   * are this wallet's booking, and they are exactly the inputs of this wallet's that the balanced transaction carries
+   * and the caller's did not.
+   *
+   * Read off the two transactions, not off the wallet's published state: the wallet publishes its state on its own
+   * fiber, so a read taken as soon as the balancing call returns can still show the coins as available, and the booking
+   * would go unrecorded.
+   */
+  async #balanceInPlaceAndReserve<T extends AnyTx | undefined>(
+    tx: AnyTx,
+    balance: () => Promise<T>,
+    ttl: Date,
+  ): Promise<T> {
+    const { publicKey } = (await firstValueFrom(this.unshielded.state)).state;
+    const inputsBefore = new Set(this.#ownInputIds(tx, publicKey.publicKey));
+    const balanced = await balance();
+
+    if (balanced === undefined) {
+      return balanced;
+    }
+
+    const newlyBooked = this.#ownInputIds(balanced, publicKey.publicKey).filter((id) => !inputsBefore.has(id));
+    await this.#reserveIds(balanced, newlyBooked, ttl);
+
+    return balanced;
+  }
+
+  /**
+   * Undoes a booking taken while balancing, together with the record that stood for it.
+   *
+   * The two always go together. A record left behind outlives the coins it named, and until its TTL passes it tells
+   * anything that reads it that a spend is still out there — holding coins at the next reconciliation that nothing is
+   * actually holding.
+   */
+  async #revertUnshieldedBooking(tx: AnyTx): Promise<void> {
+    await this.unshielded.revertTransaction(tx);
+    await this.pendingTransactionsService.clearReservation([...this.#carried<IdentifiedTransaction>(tx).identifiers()]);
+  }
+
   private defaultTtl(): Date {
     return new Date(this.clock.now().getTime() + DEFAULT_TTL_MS);
   }
@@ -1330,6 +1531,7 @@ export class WalletFacade {
       nightVerifyingKey,
       ttl,
     );
+    await this.#reserve(txWithOffers, ttl);
 
     // Step 3 — Dust attaches its DustActions onto the intent the unshielded wallet just built.
     // If this fails we must unbook the UTxOs so the caller can retry.
@@ -1343,7 +1545,7 @@ export class WalletFacade {
         split.feePayment,
       );
     } catch (error) {
-      await this.unshielded.revertTransaction(txWithOffers);
+      await this.#revertUnshieldedBooking(txWithOffers);
       throw error;
     }
 
@@ -1363,7 +1565,7 @@ export class WalletFacade {
       try {
         await this.dust.ensureFeeCoverage(now, nightUtxosWithMeta, split.feePayment, fee);
       } catch (error) {
-        await this.unshielded.revertTransaction(txWithOffers);
+        await this.#revertUnshieldedBooking(txWithOffers);
         throw error;
       }
     }
@@ -1380,7 +1582,7 @@ export class WalletFacade {
       }
       return signedRecipe.transaction;
     } catch (error) {
-      await this.unshielded.revertTransaction(txWithOffers);
+      await this.#revertUnshieldedBooking(txWithOffers);
       throw error;
     }
   }
@@ -1466,6 +1668,7 @@ export class WalletFacade {
     const unshieldedBalancingTx = shouldBalanceUnshielded
       ? await this.unshielded.balanceFinalizedTransaction(tx)
       : undefined;
+    await this.#reserve(unshieldedBalancingTx, ttl);
 
     const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
 
@@ -1523,7 +1726,7 @@ export class WalletFacade {
 
     // For unbound transactions, unshielded balancing happens in place not with a balancing transaction
     const balancedUnshieldedTx = shouldBalanceUnshielded
-      ? await this.unshielded.balanceUnboundTransaction(tx)
+      ? await this.#balanceInPlaceAndReserve(tx, () => this.unshielded.balanceUnboundTransaction(tx), ttl)
       : undefined;
 
     // Step 2: Unbound unshielded tx are balanced in place, use it as base tx if present
@@ -1581,7 +1784,7 @@ export class WalletFacade {
 
     // For unproven transactions, unshielded balancing happens in place
     const balancedUnshieldedTx = shouldBalanceUnshielded
-      ? await this.unshielded.balanceUnprovenTransaction(tx)
+      ? await this.#balanceInPlaceAndReserve(tx, () => this.unshielded.balanceUnprovenTransaction(tx), ttl)
       : undefined;
 
     // Step 2: Use the balanced unshielded tx if present, otherwise use the original tx
@@ -1743,7 +1946,7 @@ export class WalletFacade {
     } catch (error) {
       await Promise.allSettled([
         this.shielded.revertTransaction(tx),
-        this.unshielded.revertTransaction(tx),
+        this.#revertUnshieldedBooking(tx),
         this.dust.revertTransaction(tx),
       ]);
       throw error;
@@ -1791,6 +1994,7 @@ export class WalletFacade {
 
     const unshieldedTx =
       unshieldedOutputs.length > 0 ? await this.unshielded.transferTransaction(unshieldedOutputs, ttl) : undefined;
+    await this.#reserve(unshieldedTx, ttl);
 
     const mergedTxs = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx)!;
 
@@ -1911,6 +2115,7 @@ export class WalletFacade {
     const unshieldedTx = hasUnshieldedPart
       ? await this.unshielded.initSwap(unshieldedInputs ?? {}, unshieldedOutputs, ttl)
       : undefined;
+    await this.#reserve(unshieldedTx, ttl);
 
     const combinedTx = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx);
 
@@ -2155,6 +2360,8 @@ export class WalletFacade {
       this.pendingTransactionsService.stop(),
       Promise.resolve(this.#pendingSubscription?.unsubscribe()),
       Promise.resolve(this.#protocolVersionSubscription?.unsubscribe()),
+      Promise.resolve(this.#expiredReservationSubscription?.unsubscribe()),
+      Promise.resolve(this.#restoredBookingSubscription?.unsubscribe()),
     ]);
   }
 

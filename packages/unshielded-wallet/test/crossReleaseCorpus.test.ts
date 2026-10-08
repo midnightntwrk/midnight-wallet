@@ -70,7 +70,7 @@ describe('an unshielded snapshot written by the last ledger-v8 release', () => {
     expect(HashMap.size(wallet.state.availableUtxos)).toBe(1);
     expect(HashMap.size(wallet.state.pendingUtxos)).toBe(1);
     expect([...HashMap.values(wallet.state.availableUtxos)][0].utxo.intentHash).toBe('intent-available');
-    expect([...HashMap.values(wallet.state.pendingUtxos)][0].utxo.intentHash).toBe('intent-pending');
+    expect([...HashMap.values(wallet.state.pendingUtxos)][0].utxo.utxo.intentHash).toBe('intent-pending');
   });
 
   it('carries a value that release wrote that a double cannot hold', () => {
@@ -88,7 +88,7 @@ describe('an unshielded snapshot written by the last ledger-v8 release', () => {
     expect(available.meta.ctime).toBeInstanceOf(Date);
     expect(available.meta.ctime.toISOString()).toBe('2026-03-04T05:06:07.008Z');
     expect(available.meta.registeredForDustGeneration).toBe(true);
-    expect(pending.meta.registeredForDustGeneration).toBe(false);
+    expect(pending.utxo.meta.registeredForDustGeneration).toBe(false);
   });
 
   it('reads the legacy bare-string verifying key that release wrote', () => {

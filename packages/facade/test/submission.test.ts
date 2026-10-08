@@ -12,6 +12,7 @@
 // limitations under the License.
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
+import { NEVER } from 'rxjs';
 import {
   NetworkId,
   InMemoryTransactionHistoryStorage,
@@ -89,7 +90,8 @@ describe('Facade submission', () => {
         const wallet = await UnshieldedWallet(config).startWithPublicKey(
           PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
         );
-        const mockedUnshielded = withRealState(vi.mockObject(wallet), wallet);
+        // The facade watches this stream for the moment sync reaches the tip; this wallet never gets there.
+        const mockedUnshielded = withRealState(vi.mockObject(wallet), { state: NEVER });
         mockedUnshielded.start.mockResolvedValue(undefined);
         return mockedUnshielded;
       },

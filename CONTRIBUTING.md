@@ -3,11 +3,34 @@
 We welcome your contributions to the Midnight network! By contributing, you'll play a vital role in shaping the future
 of a blockchain focused on data privacy.
 
-### Contributor License Agreement
+## Developer Certificate of Origin (DCO)
 
-Like many other open source projects, we ask contributors to sign a contributor License Agreement before accepting
-contributions. We use CLA assistant (https://github.com/cla-assistant/cla-assistant) to streamline the CLA signing
-process, enabling contributors to sign our CLAs directly within a GitHub pull request.
+All contributions must include a sign-off in every commit message, certifying that you have the right to submit the code
+under the project license. This is done by adding a `Signed-off-by` trailer using `git commit -s`:
+
+```
+git commit -s -m "feat: your commit message"
+```
+
+This produces a commit message like:
+
+```
+feat: your commit message
+
+Signed-off-by: Your Name <your@email.com>
+```
+
+By signing off, you agree to the [Developer Certificate of Origin (version 1.1)](https://developercertificate.org/).
+
+If you have forgotten to sign off past commits in a PR, you can amend them:
+
+```bash
+# Amend the last commit
+git commit --amend -s --no-edit
+
+# Or rebase to sign off multiple commits (replace N with the number of commits)
+git rebase --signoff HEAD~N
+```
 
 ## Getting Started
 

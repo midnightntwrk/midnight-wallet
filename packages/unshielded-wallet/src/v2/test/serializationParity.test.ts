@@ -58,8 +58,11 @@ const pending = generateMockUtxoWithMeta({
   registeredForDustGeneration: false,
 });
 
+/** The expiry the pending UTXO was booked with, which the snapshot must carry beside it. */
+const BOOKING_TTL = new Date('2026-03-04T06:06:07.009Z');
+
 const wallet = CoreWallet.restore(
-  UnshieldedState.restore([available], [pending]),
+  UnshieldedState.restore([available], [{ utxo: pending, ttl: BOOKING_TTL }]),
   publicKey,
   // Deliberately different: a snapshot that rebuilt the tip from the applied position would satisfy an equal pair.
   { highestTransactionId: 99n, appliedId: 42n },
@@ -82,8 +85,8 @@ beforeAll(() => {
   }
 });
 
-const only = (utxos: HashMap.HashMap<string, ReturnType<typeof generateMockUtxoWithMeta>>) => {
-  const values = [...HashMap.values(utxos)];
+const only = <A>(entries: HashMap.HashMap<string, A>): A => {
+  const values = [...HashMap.values(entries)];
   expect(values.length).toBe(1);
   return values[0];
 };
@@ -95,7 +98,14 @@ describe('what an unshielded snapshot carries besides its key', () => {
     expect(HashMap.size(restored.state.availableUtxos)).toBe(1);
     expect(HashMap.size(restored.state.pendingUtxos)).toBe(1);
     expect(only(restored.state.availableUtxos).utxo.intentHash).toBe('intent-available');
-    expect(only(restored.state.pendingUtxos).utxo.intentHash).toBe('intent-pending');
+    expect(only(restored.state.pendingUtxos).utxo.utxo.intentHash).toBe('intent-pending');
+  });
+
+  it('keeps the expiry the pending UTXO was booked with, as a Date', () => {
+    const booking = only(restored.state.pendingUtxos);
+
+    expect(booking.ttl).toBeInstanceOf(Date);
+    expect(booking.ttl.getTime()).toBe(BOOKING_TTL.getTime());
   });
 
   it('keeps a value larger than a double can hold, as a bigint', () => {
@@ -107,7 +117,7 @@ describe('what an unshielded snapshot carries besides its key', () => {
 
   it('keeps the creation time as a Date, and the dust registration state of each side', () => {
     const carriedAvailable = only(restored.state.availableUtxos);
-    const carriedPending = only(restored.state.pendingUtxos);
+    const carriedPending = only(restored.state.pendingUtxos).utxo;
 
     expect(carriedAvailable.meta.ctime).toBeInstanceOf(Date);
     expect(carriedAvailable.meta.ctime.getTime()).toBe(CTIME.getTime());

@@ -25,3 +25,10 @@ export {
 } from './v2/TransactionHistory.js';
 export { type SignSegment } from './v2/Signing.js';
 export * from './KeyStore.js';
+// The sync configuration under a wallet-qualified name, for the same reason as the restore errors above: the dust
+// wallet exports a `DefaultSyncConfiguration` of its own, and the umbrella barrel would otherwise hold two.
+export {
+  type DefaultSyncConfiguration as DefaultUnshieldedSyncConfiguration,
+  type NodeClientConnection,
+  resolveNodeEndpoint,
+} from './v2/Sync.js';

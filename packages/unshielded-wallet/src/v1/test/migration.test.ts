@@ -16,8 +16,8 @@
 // no key transformation to perform, since v8 verifying keys are already bare hex strings on both sides. Every UTXO
 // crosses, and every one of them crosses as AVAILABLE — a booking made for a transaction of the previous ledger
 // version outlives its own reason at the boundary.
-import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Effect, HashMap } from 'effect';
+import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Effect, HashMap, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
 import {
@@ -31,6 +31,9 @@ import { fixtureOwner, fixtureUtxo } from './syncFixtures.js';
 
 const owner = fixtureOwner();
 
+/** The expiry a fixture booking was taken with. The migration releases bookings whatever their expiry. */
+const BOOKING_TTL = new Date('2999-01-01T00:00:00.000Z');
+
 /** A previous-ledger wallet, described structurally. Its verifying key is a bare hex string, as this ledger's are. */
 const previousWallet = (params: {
   readonly available: readonly ReturnType<typeof fixtureUtxo>[];
@@ -40,8 +43,12 @@ const previousWallet = (params: {
 }): PreviousLedgerWallet => ({
   // Built through the real `UnshieldedState`, not from plain arrays: the previous variant hands over a state whose
   // UTXOs live in Effect `HashMap`s, and a fixture that passed arrays would let a migration that iterated entries
-  // instead of values pass here and fail only against a real wallet.
-  state: UnshieldedState.restore(params.available, params.pending ?? []),
+  // instead of values pass here and fail only against a real wallet. A booking there is the UTXO plus its expiry, as
+  // the previous variant holds it, so the migration has to unwrap it rather than read it as a UTXO.
+  state: UnshieldedState.restore(
+    params.available,
+    (params.pending ?? []).map((utxo) => ({ utxo, ttl: BOOKING_TTL })),
+  ),
   publicKey: {
     publicKey: owner.publicKey,
     addressHex: owner.addressHex,
@@ -49,7 +56,12 @@ const previousWallet = (params: {
   },
   networkId: NetworkId.NetworkId.Undeployed,
   protocolVersion: params.protocolVersion,
-  progress: { appliedId: params.appliedId, highestTransactionId: params.appliedId, isConnected: true },
+  progress: {
+    appliedId: params.appliedId,
+    highestTransactionId: params.appliedId,
+    isConnected: true,
+    indexerLiveness: IndexerLiveness.Unknown(),
+  },
 });
 
 describe('unshielded state migration', () => {
@@ -195,6 +207,46 @@ describe('unshielded state migration', () => {
 
       expect(wallet.networkId).toBe(NetworkId.NetworkId.Undeployed);
       expect(wallet.protocolVersion).toBe(7n);
+    });
+
+    describe('the liveness verdict', () => {
+      // The wallet polls one indexer and one node whichever variant is running, so a verdict is about the chain, not
+      // about the ledger version. A failed poll keeps `Behind` and `WrongNetwork` precisely so that a node outage
+      // cannot release a caller waiting on an indexer already proven stale; the hand-over must not become the one
+      // failed poll that does. Anything else restarts at `Unknown`, so the new variant never inherits a verdict
+      // that lets completion through without a check of its own.
+      const withVerdict = (indexerLiveness: IndexerLiveness.IndexerLiveness): PreviousLedgerWallet => {
+        const base = previousWallet({ available: [], appliedId: 4n, protocolVersion: 7n });
+        return { ...base, progress: { ...base.progress, indexerLiveness } };
+      };
+
+      it('should carry a Behind verdict across, so a node outage at the hand-over cannot release a caller waiting on a stale indexer', async () => {
+        const behind = IndexerLiveness.Behind({ indexerHeight: 10n, finalizedHeight: 40n, lag: 30n });
+
+        const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(withVerdict(behind)));
+
+        expect(wallet.progress.indexerLiveness).toEqual(behind);
+      });
+
+      it('should carry a WrongNetwork verdict across, because the indexer the new variant polls is the same one that was on the wrong chain', async () => {
+        const wrongNetwork = IndexerLiveness.WrongNetwork({
+          height: 0n,
+          indexerBlockHash: Option.some('aa'.repeat(32)),
+          nodeBlockHash: Option.some(`0x${'bb'.repeat(32)}`),
+        });
+
+        const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(withVerdict(wrongNetwork)));
+
+        expect(wallet.progress.indexerLiveness).toEqual(wrongNetwork);
+      });
+
+      it('should start an InSync verdict again at Unknown, so the new variant vouches for the feed only once it has checked it', async () => {
+        const inSync = IndexerLiveness.InSync({ indexerHeight: 40n, finalizedHeight: 40n });
+
+        const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(withVerdict(inSync)));
+
+        expect(wallet.progress.indexerLiveness).toEqual(IndexerLiveness.Unknown());
+      });
     });
   });
 });

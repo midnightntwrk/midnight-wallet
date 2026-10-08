@@ -57,15 +57,26 @@ const uniqueSorted = (paths: readonly string[]): readonly string[] => [...new Se
  * An envelope is recognised structurally rather than by name: a `version` alongside exactly one other key whose value
  * is an array. Anything else is content already, minus its `version` if it has one.
  */
-const contentOf = (payload: unknown): unknown => {
-  if (Array.isArray(payload) || typeof payload !== 'object' || payload === null) return payload;
+const contentKeyOf = (payload: unknown): string | undefined => {
+  if (Array.isArray(payload) || typeof payload !== 'object' || payload === null) return undefined;
   const entries = Object.entries(payload as Record<string, unknown>);
   const [versioned, rest] = [
     entries.filter(([key]) => key === 'version'),
     entries.filter(([key]) => key !== 'version'),
   ];
-  if (versioned.length === 1 && rest.length === 1 && Array.isArray(rest[0]?.[1])) return rest[0]?.[1];
-  return Object.fromEntries(rest);
+  return versioned.length === 1 && rest.length === 1 && Array.isArray(rest[0]?.[1]) ? rest[0]?.[0] : undefined;
+};
+
+/**
+ * Peels the envelope, unwrapping the content under `key` when the stored payload kept it there. The key is taken from
+ * the stored side so that a writer adding a second member beside the content — reservations beside the pending
+ * transactions — is still held to every path the content carried, rather than re-rooting them under a key the stored
+ * payload never showed.
+ */
+const contentOf = (payload: unknown, key: string | undefined = contentKeyOf(payload)): unknown => {
+  if (Array.isArray(payload) || typeof payload !== 'object' || payload === null) return payload;
+  const rest = Object.fromEntries(Object.entries(payload as Record<string, unknown>).filter(([k]) => k !== 'version'));
+  return key !== undefined && Array.isArray(rest[key]) ? rest[key] : rest;
 };
 
 /**
@@ -116,8 +127,9 @@ describe('reading a stored payload and writing it back keeps everything it carri
       const stored: unknown = JSON.parse(fixture.serialized);
       const written: unknown = JSON.parse(rewritten);
 
-      const before = uniqueSorted(keyPaths(contentOf(stored)));
-      const after = uniqueSorted(keyPaths(contentOf(written)));
+      const key = contentKeyOf(stored) ?? contentKeyOf(written);
+      const before = uniqueSorted(keyPaths(contentOf(stored, key)));
+      const after = uniqueSorted(keyPaths(contentOf(written, key)));
 
       const lost = before.filter((path) => !after.includes(path));
 
