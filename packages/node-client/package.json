@@ -35,12 +35,12 @@
   "dependencies": {
     "@midnightntwrk/wallet-sdk-abstractions": "2.1.0",
     "@midnightntwrk/wallet-sdk-utilities": "1.2.1",
-    "@polkadot/api": "^16.5.4",
-    "@polkadot/types": "^16.5.4",
+    "@polkadot/api": "^17.0.0",
+    "@polkadot/types": "^17.0.0",
     "@polkadot/util": "^14.0.1",
     "@types/bn.js": "^5.2.0",
     "bn.js": "^5.2.3",
-    "effect": "^3.19.19"
+    "effect": "^4.0.0"
   },
   "peerDependencies": {
     "@midnight-ntwrk/ledger-v8": "^8.1.0",
@@ -58,7 +58,7 @@
     "@effect/cluster": "0.60.2",
     "@effect/experimental": "0.61.1",
     "@effect/platform": "0.97.2",
-    "@effect/platform-node": "0.108.2",
+    "@effect/platform-node": "4.0.0",
     "@effect/rpc": "0.76.2",
     "@effect/sql": "0.52.1",
     "@effect/workflow": "0.19.1",
