@@ -719,6 +719,9 @@ type IdentifiedTransaction = Readonly<{
   intents: ReadonlyMap<number, { intentHash(segmentId: number): string }> | undefined;
 }>;
 
+/** Undoes one booking a builder took, in the wallet that took it. */
+type Release = () => Promise<void>;
+
 /**
  * Clock abstraction for obtaining the current time. By default, the facade uses the system clock
  * ({@link Clock.systemClock}); for testing with a simulator, inject a custom clock (e.g. one backed by the simulator's
@@ -1376,19 +1379,20 @@ export class WalletFacade {
     tx: AnyTx,
     balance: () => Promise<T>,
     ttl: Date,
-  ): Promise<T> {
+  ): Promise<{ balanced: T; release: Release }> {
     const { publicKey } = (await firstValueFrom(this.unshielded.state)).state;
     const inputsBefore = new Set(this.#ownInputIds(tx, publicKey.publicKey));
     const balanced = await balance();
 
     if (balanced === undefined) {
-      return balanced;
+      return { balanced, release: () => Promise.resolve() };
     }
 
     const newlyBooked = this.#ownInputIds(balanced, publicKey.publicKey).filter((id) => !inputsBefore.has(id));
-    await this.#reserveIds(balanced, newlyBooked, ttl);
+    const release = this.#inPlaceUnshieldedBooking(balanced, newlyBooked);
+    await this.#releasingOnFailure([release], () => this.#reserveIds(balanced, newlyBooked, ttl));
 
-    return balanced;
+    return { balanced, release };
   }
 
   /**
@@ -1401,6 +1405,54 @@ export class WalletFacade {
   async #revertUnshieldedBooking(tx: AnyTx): Promise<void> {
     await this.unshielded.revertTransaction(tx);
     await this.pendingTransactionsService.clearReservation([...this.#carried<IdentifiedTransaction>(tx).identifiers()]);
+  }
+
+  /**
+   * Runs one step of a builder that has already booked coins, releasing those bookings if the step fails.
+   *
+   * A builder that rejects hands its caller no transaction, so the caller has nothing to revert: whatever the builder
+   * booked before the failing step would stay booked. Each booking is released by the wallet that took it, and only
+   * that booking is, so nothing the caller or another transaction holds is touched.
+   */
+  async #releasingOnFailure<T>(booked: readonly Release[], step: () => Promise<T> | T): Promise<T> {
+    try {
+      return await step();
+    } catch (error) {
+      await Promise.allSettled(booked.map((release) => release()));
+      throw error;
+    }
+  }
+
+  /** Releases the coins the shielded wallet booked for `tx`, a transaction it built. */
+  #shieldedBooking(tx: AnyTx | undefined): Release {
+    return async () => (tx ? this.shielded.revertTransaction(tx) : undefined);
+  }
+
+  /**
+   * Releases the coins the unshielded wallet booked for `tx`, a transaction it built, with the record that stood for
+   * them.
+   */
+  #unshieldedBooking(tx: AnyTx | undefined): Release {
+    return async () => (tx ? this.#revertUnshieldedBooking(tx) : undefined);
+  }
+
+  /**
+   * Releases `bookedIds`, the coins the unshielded wallet booked balancing a caller's transaction in place into
+   * `balanced`, with the record that stood for them. The coins the caller had already put there are not the wallet's
+   * booking, so they stay as they were; releasing the whole transaction would free them too.
+   */
+  #inPlaceUnshieldedBooking(balanced: AnyTx, bookedIds: readonly string[]): Release {
+    return async () => {
+      await this.unshielded.revertUtxos(bookedIds);
+      await this.pendingTransactionsService.clearReservation([
+        ...this.#carried<IdentifiedTransaction>(balanced).identifiers(),
+      ]);
+    };
+  }
+
+  /** Releases the Dust the dust wallet booked for `tx`, the fee-paying transaction it built. */
+  #dustBooking(tx: AnyTx | undefined): Release {
+    return async () => (tx ? this.dust.revertTransaction(tx) : undefined);
   }
 
   private defaultTtl(): Date {
@@ -1668,21 +1720,32 @@ export class WalletFacade {
     const unshieldedBalancingTx = shouldBalanceUnshielded
       ? await this.unshielded.balanceFinalizedTransaction(tx)
       : undefined;
-    await this.#reserve(unshieldedBalancingTx, ttl);
+    const afterUnshielded = [this.#unshieldedBooking(unshieldedBalancingTx)];
+    await this.#releasingOnFailure(afterUnshielded, () => this.#reserve(unshieldedBalancingTx, ttl));
 
-    const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
+    const shieldedBalancingTx = await this.#releasingOnFailure(afterUnshielded, () =>
+      shouldBalanceShielded ? this.shielded.balanceTransaction(tx) : undefined,
+    );
+    const afterShielded = [...afterUnshielded, this.#shieldedBooking(shieldedBalancingTx)];
 
     // Step 2: Merge unshielded and shielded balancing
-    const mergedBalancingTx = this.mergeUnprovenTransactions(shieldedBalancingTx, unshieldedBalancingTx);
+    const mergedBalancingTx = await this.#releasingOnFailure(afterShielded, () =>
+      this.mergeUnprovenTransactions(shieldedBalancingTx, unshieldedBalancingTx),
+    );
 
     // Step 3: Conditionally add dust/fee balancing
-    const dustResult = shouldBalanceDust
-      ? await this.dust.balanceTransactions(mergedBalancingTx ? [tx, mergedBalancingTx] : [tx], ttl)
-      : undefined;
+    const dustResult = await this.#releasingOnFailure(afterShielded, () =>
+      shouldBalanceDust
+        ? this.dust.balanceTransactions(mergedBalancingTx ? [tx, mergedBalancingTx] : [tx], ttl)
+        : undefined,
+    );
     const feeBalancingTx = dustResult?.transaction;
+    const afterDust = [...afterShielded, this.#dustBooking(feeBalancingTx)];
 
     // Step 4: Merge fee balancing and create final recipe
-    const balancingTx = this.mergeUnprovenTransactions(mergedBalancingTx, feeBalancingTx);
+    const balancingTx = await this.#releasingOnFailure(afterDust, () =>
+      this.mergeUnprovenTransactions(mergedBalancingTx, feeBalancingTx),
+    );
 
     if (!balancingTx) {
       throw new Error('No balancing transaction was created. Please check your transaction.');
@@ -1723,23 +1786,33 @@ export class WalletFacade {
 
     // Step 1: Run unshielded and shielded balancing
     const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
+    const afterShielded = [this.#shieldedBooking(shieldedBalancingTx)];
 
     // For unbound transactions, unshielded balancing happens in place not with a balancing transaction
-    const balancedUnshieldedTx = shouldBalanceUnshielded
-      ? await this.#balanceInPlaceAndReserve(tx, () => this.unshielded.balanceUnboundTransaction(tx), ttl)
-      : undefined;
+    const unshieldedBalancing = await this.#releasingOnFailure(afterShielded, () =>
+      shouldBalanceUnshielded
+        ? this.#balanceInPlaceAndReserve(tx, () => this.unshielded.balanceUnboundTransaction(tx), ttl)
+        : undefined,
+    );
+    const balancedUnshieldedTx = unshieldedBalancing?.balanced;
+    const afterUnshielded = [...afterShielded, ...(unshieldedBalancing ? [unshieldedBalancing.release] : [])];
 
     // Step 2: Unbound unshielded tx are balanced in place, use it as base tx if present
     const baseTx = balancedUnshieldedTx ?? tx;
 
     // Step 3: Conditionally add dust/fee balancing
-    const dustResult = shouldBalanceDust
-      ? await this.dust.balanceTransactions(shieldedBalancingTx ? [baseTx, shieldedBalancingTx] : [baseTx], ttl)
-      : undefined;
+    const dustResult = await this.#releasingOnFailure(afterUnshielded, () =>
+      shouldBalanceDust
+        ? this.dust.balanceTransactions(shieldedBalancingTx ? [baseTx, shieldedBalancingTx] : [baseTx], ttl)
+        : undefined,
+    );
     const feeBalancingTransaction = dustResult?.transaction;
+    const afterDust = [...afterUnshielded, this.#dustBooking(feeBalancingTransaction)];
 
     // Step 4: Create the final balancing transaction
-    const balancingTransaction = this.mergeUnprovenTransactions(shieldedBalancingTx, feeBalancingTransaction);
+    const balancingTransaction = await this.#releasingOnFailure(afterDust, () =>
+      this.mergeUnprovenTransactions(shieldedBalancingTx, feeBalancingTransaction),
+    );
 
     // if there is no balancingTransaction and there was no unshielded tx balancing (in place) throw an error.
     if (!balancingTransaction && !balancedUnshieldedTx) {
@@ -1781,24 +1854,36 @@ export class WalletFacade {
 
     // Step 1: Run unshielded and shielded balancing
     const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
+    const afterShielded = [this.#shieldedBooking(shieldedBalancingTx)];
 
     // For unproven transactions, unshielded balancing happens in place
-    const balancedUnshieldedTx = shouldBalanceUnshielded
-      ? await this.#balanceInPlaceAndReserve(tx, () => this.unshielded.balanceUnprovenTransaction(tx), ttl)
-      : undefined;
+    const unshieldedBalancing = await this.#releasingOnFailure(afterShielded, () =>
+      shouldBalanceUnshielded
+        ? this.#balanceInPlaceAndReserve(tx, () => this.unshielded.balanceUnprovenTransaction(tx), ttl)
+        : undefined,
+    );
+    const balancedUnshieldedTx = unshieldedBalancing?.balanced;
+    const afterUnshielded = [...afterShielded, ...(unshieldedBalancing ? [unshieldedBalancing.release] : [])];
 
     // Step 2: Use the balanced unshielded tx if present, otherwise use the original tx
     const baseTx = balancedUnshieldedTx ?? tx;
 
     // Step 3: Merge shielded balancing into base tx if present
-    const mergedTx = this.mergeUnprovenTransactions(baseTx, shieldedBalancingTx)!;
+    const mergedTx = (await this.#releasingOnFailure(afterUnshielded, () =>
+      this.mergeUnprovenTransactions(baseTx, shieldedBalancingTx),
+    ))!;
 
     // Step 4: Conditionally add dust/fee balancing
-    const dustResult = shouldBalanceDust ? await this.dust.balanceTransactions([mergedTx], ttl) : undefined;
+    const dustResult = await this.#releasingOnFailure(afterUnshielded, () =>
+      shouldBalanceDust ? this.dust.balanceTransactions([mergedTx], ttl) : undefined,
+    );
     const feeBalancingTx = dustResult?.transaction;
+    const afterDust = [...afterUnshielded, this.#dustBooking(feeBalancingTx)];
 
     // Step 5: Merge fee balancing if present
-    const balancedTx = this.mergeUnprovenTransactions(mergedTx, feeBalancingTx)!;
+    const balancedTx = (await this.#releasingOnFailure(afterDust, () =>
+      this.mergeUnprovenTransactions(mergedTx, feeBalancingTx),
+    ))!;
 
     return {
       type: 'UNPROVEN_TRANSACTION',
@@ -1991,18 +2076,28 @@ export class WalletFacade {
 
     const shieldedTx =
       shieldedOutputs.length > 0 ? await this.shielded.transferTransaction(shieldedOutputs) : undefined;
+    const afterShielded = [this.#shieldedBooking(shieldedTx)];
 
-    const unshieldedTx =
-      unshieldedOutputs.length > 0 ? await this.unshielded.transferTransaction(unshieldedOutputs, ttl) : undefined;
-    await this.#reserve(unshieldedTx, ttl);
+    const unshieldedTx = await this.#releasingOnFailure(afterShielded, () =>
+      unshieldedOutputs.length > 0 ? this.unshielded.transferTransaction(unshieldedOutputs, ttl) : undefined,
+    );
+    const afterUnshielded = [...afterShielded, this.#unshieldedBooking(unshieldedTx)];
+    await this.#releasingOnFailure(afterUnshielded, () => this.#reserve(unshieldedTx, ttl));
 
-    const mergedTxs = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx)!;
+    const mergedTxs = (await this.#releasingOnFailure(afterUnshielded, () =>
+      this.mergeUnprovenTransactions(shieldedTx, unshieldedTx),
+    ))!;
 
     // Add fee payment
-    const dustResult = payFees ? await this.dust.balanceTransactions([mergedTxs], ttl) : undefined;
+    const dustResult = await this.#releasingOnFailure(afterUnshielded, () =>
+      payFees ? this.dust.balanceTransactions([mergedTxs], ttl) : undefined,
+    );
     const feeBalancingTx = dustResult?.transaction;
+    const afterDust = [...afterUnshielded, this.#dustBooking(feeBalancingTx)];
 
-    const finalTx = this.mergeUnprovenTransactions(mergedTxs, feeBalancingTx)!;
+    const finalTx = (await this.#releasingOnFailure(afterDust, () =>
+      this.mergeUnprovenTransactions(mergedTxs, feeBalancingTx),
+    ))!;
 
     return {
       type: 'UNPROVEN_TRANSACTION',
@@ -2111,22 +2206,31 @@ export class WalletFacade {
     const shieldedTx = hasShieldedPart
       ? await this.shielded.initSwap(shieldedInputs ?? {}, shieldedOutputs)
       : undefined;
+    const afterShielded = [this.#shieldedBooking(shieldedTx)];
 
-    const unshieldedTx = hasUnshieldedPart
-      ? await this.unshielded.initSwap(unshieldedInputs ?? {}, unshieldedOutputs, ttl)
-      : undefined;
-    await this.#reserve(unshieldedTx, ttl);
+    const unshieldedTx = await this.#releasingOnFailure(afterShielded, () =>
+      hasUnshieldedPart ? this.unshielded.initSwap(unshieldedInputs ?? {}, unshieldedOutputs, ttl) : undefined,
+    );
+    const afterUnshielded = [...afterShielded, this.#unshieldedBooking(unshieldedTx)];
+    await this.#releasingOnFailure(afterUnshielded, () => this.#reserve(unshieldedTx, ttl));
 
-    const combinedTx = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx);
+    const combinedTx = await this.#releasingOnFailure(afterUnshielded, () => {
+      const merged = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx);
+      if (!merged) {
+        throw Error('Unexpected transaction state.');
+      }
+      return merged;
+    });
 
-    if (!combinedTx) {
-      throw Error('Unexpected transaction state.');
-    }
-
-    const dustResult = payFees ? await this.dust.balanceTransactions([combinedTx], ttl) : undefined;
+    const dustResult = await this.#releasingOnFailure(afterUnshielded, () =>
+      payFees ? this.dust.balanceTransactions([combinedTx], ttl) : undefined,
+    );
     const feeBalancingTx = dustResult?.transaction;
+    const afterDust = [...afterUnshielded, this.#dustBooking(feeBalancingTx)];
 
-    const finalTx = this.mergeUnprovenTransactions(combinedTx, feeBalancingTx)!;
+    const finalTx = (await this.#releasingOnFailure(afterDust, () =>
+      this.mergeUnprovenTransactions(combinedTx, feeBalancingTx),
+    ))!;
 
     return {
       type: 'UNPROVEN_TRANSACTION',
