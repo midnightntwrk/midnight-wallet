@@ -31,7 +31,7 @@
   "dependencies": {
     "@graphql-typed-document-node/core": "^3.2.0",
     "@midnightntwrk/wallet-sdk-utilities": "1.2.1",
-    "effect": "^3.19.19",
+    "effect": "^4.0.0",
     "fflate": "^0.8.2",
     "graphql": "^17.0.0",
     "graphql-http": "^1.22.4",
@@ -41,7 +41,7 @@
     "@effect/cluster": "0.60.2",
     "@effect/experimental": "0.61.1",
     "@effect/platform": "0.97.2",
-    "@effect/platform-node": "0.108.2",
+    "@effect/platform-node": "4.0.0",
     "@effect/rpc": "0.76.2",
     "@effect/sql": "0.52.1",
     "@effect/workflow": "0.19.1",
