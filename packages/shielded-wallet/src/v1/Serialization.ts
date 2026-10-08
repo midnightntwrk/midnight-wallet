@@ -89,6 +89,10 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     // know, those snapshots restored without complaint and lost the history on the next write. Declaring it optional
     // carries it back out untouched. Optional, not defaulted: a snapshot written without it keeps its exact bytes.
     txHistory: Schema.optional(Schema.Array(Schema.String)),
+    // When each booked coin may be released (see `CoreWallet.bookingDeadlines`), so a restart does not extend how long
+    // a coin stays locked. Optional: absent when nothing is booked, and absent from every snapshot written before it
+    // existed, whose bookings are given a full lifetime from the first update after loading.
+    bookingDeadlines: Schema.optional(Schema.Record({ key: Schema.String, value: Schema.Date })),
     // The V2 variant's mid-crossing marker. This variant is never in that state and never reads this, but the twins
     // share one format version, so a V2-written snapshot is this schema's shape too — and a key this schema did not
     // declare would be ignored on the way in and dropped on the way out, which is exactly how `txHistory` above was
@@ -112,6 +116,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         ...(w.progress?.appliedIndex !== undefined ? { offset: w.progress.appliedIndex } : {}),
         ...(w.legacyTxHistory !== undefined ? { txHistory: w.legacyTxHistory } : {}),
         ...(w.foreignCoinHashesPending !== undefined ? { coinHashesPending: w.foreignCoinHashesPending } : {}),
+        ...(w.bookingDeadlines !== undefined ? { bookingDeadlines: w.bookingDeadlines } : {}),
       });
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
@@ -121,21 +126,28 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         serialized,
         SnapshotFormat.readSnapshot({ surface: 'shielded', reads: [SNAPSHOT_FORMAT_VERSION], schema: SnapshotSchema }),
         Either.flatMap((snapshot: Snapshot) =>
-          CoreWallet.restoreWithCoinHashes(
-            snapshot.publicKeys,
-            snapshot.state,
-            snapshot.coinHashes,
-            {
-              appliedIndex: snapshot.offset ?? 0n,
-              highestRelevantWalletIndex: 0n,
-              highestIndex: 0n,
-              highestRelevantIndex: 0n,
-              isConnected: false,
-            },
-            snapshot.protocolVersion,
-            snapshot.networkId,
-            snapshot.txHistory,
-            snapshot.coinHashesPending,
+          pipe(
+            CoreWallet.restoreWithCoinHashes(
+              snapshot.publicKeys,
+              snapshot.state,
+              snapshot.coinHashes,
+              {
+                appliedIndex: snapshot.offset ?? 0n,
+                highestRelevantWalletIndex: 0n,
+                highestIndex: 0n,
+                highestRelevantIndex: 0n,
+                isConnected: false,
+              },
+              snapshot.protocolVersion,
+              snapshot.networkId,
+              snapshot.txHistory,
+              snapshot.coinHashesPending,
+            ),
+            Either.map((wallet: CoreWallet) =>
+              snapshot.bookingDeadlines !== undefined
+                ? { ...wallet, bookingDeadlines: snapshot.bookingDeadlines }
+                : wallet,
+            ),
           ),
         ),
       );

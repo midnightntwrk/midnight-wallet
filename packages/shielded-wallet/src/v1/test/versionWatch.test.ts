@@ -470,3 +470,25 @@ describe('a wallet on the quiet side of a fork', () => {
     expect(observed.state.progress.appliedIndex).toBe(41n);
   });
 });
+
+describe('the version watch on a chain with no shielded traffic', () => {
+  it('should follow each version check with an empty batch, because releasing an expired booking needs the keys a batch carries', async () => {
+    const collected = await service(20)
+      .updates(syncedWallet(41n), keys())
+      .pipe(
+        Stream.take(4),
+        Stream.runCollect,
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version, 42), recorder<BlockHashQueryVariables>())),
+        Effect.provideService(ZswapEventTip.tag, servingEventTip(41, recorder<ZswapEventTipSubscriptionVariables>())),
+        Effect.provideService(ZswapEvents.tag, quietChain),
+        Effect.scoped,
+        Effect.runPromise,
+      );
+
+    const updates = Chunk.toArray(collected);
+    expect(updates.map((update) => update._tag)).toEqual(['VersionSignal', 'Events', 'VersionSignal', 'Events']);
+    const batches = updates.flatMap((update) => (update._tag === 'Events' ? [update] : []));
+    expect(batches.map((batch) => batch.updates)).toEqual([[], []]);
+    expect(batches.every((batch) => batch.secretKeys instanceof ledger.ZswapSecretKeys)).toBe(true);
+  });
+});

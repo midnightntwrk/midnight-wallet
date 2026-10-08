@@ -39,7 +39,7 @@ import {
 import { OutOfOrderSyncUpdateError, SyncWalletError, type WalletError } from './WalletError.js';
 import { WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
-import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { Clock, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
@@ -599,9 +599,14 @@ export const makeEventsSyncService = (
       // The timeline is what the source is for, so it decides when the source is done: `haltStrategy: 'left'` stops the
       // watcher with it rather than leaving a poll loop running against a stream nobody is reading. It has nothing to
       // say about failure — a failing timeline still fails the merged stream, where the variant's retry can see it.
-      return Stream.merge(timeline, versionWatch(config, indexerWsUrl, resumeFrom, state.protocolVersion), {
-        haltStrategy: 'left',
-      });
+      // Each version check is followed by an update carrying no events but the wallet's keys. On a chain with no
+      // shielded traffic the checks are all a caught-up wallet receives, and releasing an expired booking needs the
+      // keys, which a version signal does not carry.
+      const ticks = pipe(
+        versionWatch(config, indexerWsUrl, resumeFrom, state.protocolVersion),
+        Stream.flatMap((signal) => Stream.make<WalletSyncUpdate[]>(signal, WalletSyncUpdate.create([], secretKeys))),
+      );
+      return Stream.merge(timeline, ticks, { haltStrategy: 'left' });
     },
   };
 };
@@ -639,8 +644,23 @@ const applyVersionSignal = (state: CoreWallet, update: VersionSignalSyncUpdate):
   ];
 };
 
+/**
+ * Releases expired bookings, but only once the wallet has caught up with the chain: while a replay is running, a booked
+ * coin may already have been spent by a transaction the replay has not delivered, and releasing it would offer a coin
+ * that is gone. Reads the system clock, which is what a deadline set by {@link CoreWallet.expireBookings} was read off.
+ */
+const expireBookingsIfCaughtUp = (wallet: CoreWallet, secretKeys: ledger.ZswapSecretKeys | undefined): CoreWallet =>
+  wallet.progress.isStrictlyComplete()
+    ? CoreWallet.expireBookings(wallet, secretKeys, Clock.systemClock.now())
+    : wallet;
+
+/**
+ * Applies an update from the indexer, then expires the wallet's bookings. A batch of events, empty or not, carries the
+ * keys a release needs; a version signal does not, so it only dates bookings, and the source follows each one with an
+ * empty batch to do the rest.
+ */
 export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
-  return {
+  const applyWithoutExpiry: SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> = {
     applyUpdate: (
       state: CoreWallet,
       wrappedUpdate: WalletSyncUpdate,
@@ -708,6 +728,14 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
       ];
     },
   };
+
+  return {
+    applyUpdate: (wallet, wrappedUpdate, activeRange) => {
+      const [state, changes] = applyWithoutExpiry.applyUpdate(wallet, wrappedUpdate, activeRange);
+      const secretKeys = wrappedUpdate._tag === 'Events' ? wrappedUpdate.secretKeys : undefined;
+      return [expireBookingsIfCaughtUp(state, secretKeys), changes];
+    },
+  };
 };
 
 export type SimulatorSyncConfiguration = {
@@ -728,6 +756,7 @@ export const makeSimulatorSyncService = (
       // Then subscribe to state$ for subsequent changes, but deduplicate by block number
       // to avoid processing the same block twice.
       let lastSeenBlockNumber: bigint | undefined;
+      let lastSeenTime: number | undefined;
 
       return pipe(
         Stream.fromEffect(config.simulator.getLatestState()),
@@ -738,11 +767,19 @@ export const makeSimulatorSyncService = (
             return false; // Skip blank state
           }
           const blockNumber = lastBlock.number;
-          // Skip if we've already seen this block (deduplication)
-          if (lastSeenBlockNumber !== undefined && blockNumber <= lastSeenBlockNumber) {
+          const time = state.currentTime.getTime();
+          // Skip if we've already seen this block (deduplication), unless the clock has moved: time passing with no new
+          // block is still what expires a booking.
+          if (
+            lastSeenBlockNumber !== undefined &&
+            blockNumber <= lastSeenBlockNumber &&
+            lastSeenTime !== undefined &&
+            time <= lastSeenTime
+          ) {
             return false;
           }
           lastSeenBlockNumber = blockNumber;
+          lastSeenTime = time;
           return true;
         }),
         Stream.map((state) => ({ update: state, secretKeys })),
@@ -751,8 +788,12 @@ export const makeSimulatorSyncService = (
   };
 };
 
+/**
+ * Applies the simulator's state, then expires the wallet's bookings against the simulator's clock rather than the wall
+ * clock, since simulator time is what drives the wallet here.
+ */
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate, ChangesResult> => {
-  return {
+  const applyWithoutExpiry: SyncCapability<CoreWallet, SimulatorSyncUpdate, ChangesResult> = {
     applyUpdate: (
       state: CoreWallet,
       update: SimulatorSyncUpdate,
@@ -793,6 +834,13 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
             lastAppliedBlock === undefined ? Number(state.protocolVersion) : Number(lastAppliedBlock.protocolVersion),
         },
       ];
+    },
+  };
+
+  return {
+    applyUpdate: (wallet, update, activeRange) => {
+      const [state, changes] = applyWithoutExpiry.applyUpdate(wallet, update, activeRange);
+      return [CoreWallet.expireBookings(state, update.secretKeys, update.update.currentTime), changes];
     },
   };
 };

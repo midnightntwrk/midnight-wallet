@@ -12,6 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
+import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
 import { InvalidCoinHashesError, type WalletError } from './WalletError.js';
 
@@ -95,7 +96,52 @@ export type CoreWallet = Readonly<{
    * reader's promise not to lose what it cannot represent, not a state this variant can be in.
    */
   foreignCoinHashesPending?: true;
+  /**
+   * When each booked coin, by nonce, may be released: the instant after which no transaction spending it can still be
+   * included. See {@link CoreWallet.expireBookings}.
+   *
+   * @remarks
+   *   The ledger's `pendingSpends` records a booking but not when it ends, and the ledger's own expiry does nothing, so
+   *   the wallet keeps the deadline beside it and saves it with the snapshot: a restart must not extend how long a coin
+   *   stays locked. Absent when nothing is booked, so a snapshot of an idle wallet keeps the bytes it had.
+   */
+  bookingDeadlines?: Readonly<Record<ledger.Nonce, Date>>;
 }>;
+
+/**
+ * Releases the reservations `state` holds for `coins`, by re-deriving each spend and reporting it failed — the ledger's
+ * own way of un-booking one. The coin stays at the Merkle index the chain gave it, in a tree of unchanged height and
+ * root.
+ */
+const releaseSpends = (
+  state: ledger.ZswapLocalState,
+  secretKeys: ledger.ZswapSecretKeys,
+  coins: readonly ledger.QualifiedShieldedCoinInfo[],
+): ledger.ZswapLocalState =>
+  pipe(
+    coins,
+    Arr.reduce(state, (released, coin) =>
+      pipe(
+        LedgerOps.ledgerTry(() => {
+          const [reserved, input] = released.spend(secretKeys, coin, 0);
+          return reserved.applyFailed(ledger.ZswapOffer.fromInput(input, coin.type, coin.value));
+        }),
+        // A reservation the ledger declines to re-derive is left exactly where it already was: one coin is not worth
+        // failing the update every other coin in this wallet is waiting on.
+        Either.getOrElse(() => released),
+      ),
+    ),
+  );
+
+/**
+ * How long a booking may stand before the wallet releases it: the ledger's default `global_ttl`.
+ *
+ * @remarks
+ *   A shielded input is valid only while the Merkle root it was proven against is still in the chain's root history, and
+ *   that history drops roots older than `global_ttl`, so no shielded spend can be included later than this after it was
+ *   built. A transaction's own TTL can only be shorter.
+ */
+const BOOKING_LIFETIME_MS = 60 * 60 * 1000;
 
 export const CoreWallet = {
   init(localState: ledger.ZswapLocalState, secretKeys: ledger.ZswapSecretKeys, networkId: string): CoreWallet {
@@ -300,6 +346,57 @@ export const CoreWallet = {
     const newState = wallet.state.revertTransaction(tx);
 
     return { ...wallet, state: newState };
+  },
+
+  /**
+   * Releases every booking whose deadline has passed, and gives every booking without one a full lifetime from `now`.
+   *
+   * @remarks
+   *   A transaction that is abandoned, or never included, leaves its coins booked with nothing to settle them, and the
+   *   booking is saved with the wallet, so without this the coins would stay locked for good. A deadline is set the
+   *   first time a booking is seen here rather than when it is taken, so it is read off the same clock it is later
+   *   checked against; a booking restored from a snapshot that recorded none is treated the same way, so it is never
+   *   released early. A booking is released strictly after its deadline, never at it: a spend is valid up to and
+   *   including it.
+   *
+   *   Releasing needs `secretKeys`, because un-booking a spend means re-deriving it; without them, deadlines are still
+   *   set and nothing is released. Returns the wallet it was given when nothing changed, so a caller that publishes on
+   *   change does not publish on every sweep.
+   * @param wallet The wallet to sweep. The caller decides when it is safe to: only once sync has caught up.
+   * @param secretKeys The keys a sync update carried, if it carried any.
+   * @param now The instant to expire against.
+   * @returns The wallet with expired bookings released and every remaining booking dated.
+   */
+  expireBookings(wallet: CoreWallet, secretKeys: ledger.ZswapSecretKeys | undefined, now: Date): CoreWallet {
+    const known = wallet.bookingDeadlines ?? {};
+    const dated = [...wallet.state.pendingSpends.values()].map(([coin]) => ({
+      coin,
+      deadline: known[coin.nonce] ?? new Date(now.getTime() + BOOKING_LIFETIME_MS),
+    }));
+    const expired = secretKeys === undefined ? [] : dated.filter(({ deadline }) => deadline.getTime() < now.getTime());
+    const state =
+      expired.length === 0 || secretKeys === undefined
+        ? wallet.state
+        : releaseSpends(
+            wallet.state,
+            secretKeys,
+            expired.map(({ coin }) => coin),
+          );
+    const stillBooked = new Set([...state.pendingSpends.values()].map(([coin]) => coin.nonce));
+    const deadlines: Record<ledger.Nonce, Date> = Object.fromEntries(
+      dated.filter(({ coin }) => stillBooked.has(coin.nonce)).map(({ coin, deadline }) => [coin.nonce, deadline]),
+    );
+
+    const unchanged =
+      state === wallet.state &&
+      Object.keys(deadlines).length === Object.keys(known).length &&
+      Object.keys(deadlines).every((nonce) => known[nonce]?.getTime() === deadlines[nonce].getTime());
+    if (unchanged) {
+      return wallet;
+    }
+
+    const { bookingDeadlines: _, ...rest } = wallet;
+    return Object.keys(deadlines).length === 0 ? { ...rest, state } : { ...rest, state, bookingDeadlines: deadlines };
   },
 
   // TODO: Remove after tx history is implemented
