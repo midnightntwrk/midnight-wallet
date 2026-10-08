@@ -76,17 +76,46 @@ const signSegment: SignSegment = (data) => Promise.resolve(ledgerV9.signData(led
 /** What the wallet pays out in the transactions it is asked to balance, less than either UTxO it holds. */
 const payout = 50n;
 
+/** A prover that is never asked anything: neither an empty intent nor an unshielded offer has a proof to make. */
+const noProofs = {
+  check: () => Promise.resolve([]),
+  prove: () => Promise.reject(new Error('An empty intent or an unshielded offer should have nothing to prove')),
+  lookupKey: () => Promise.resolve(undefined),
+};
+
+/** A transaction as it is handed over at `stage`. */
+type AtStage = (stage: TransactionStage) => Promise<{ serialize: () => Uint8Array }>;
+
+/**
+ * An unproven transaction, or the same one proved and not yet bound when it is handed over unbound — the shape a dApp
+ * hands an unbound transaction over in, so the unbound calls are given a real unbound transaction to change.
+ */
+const atV8Stage =
+  (transaction: ledgerV8.UnprovenTransaction): AtStage =>
+  (stage) =>
+    stage === 'Unbound'
+      ? transaction.prove(noProofs, ledgerV8.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel)
+      : Promise.resolve(transaction);
+
+const atV9Stage =
+  (transaction: ledgerV9.UnprovenTransaction): AtStage =>
+  (stage) =>
+    stage === 'Unbound'
+      ? transaction.prove(noProofs, ledgerV9.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel)
+      : Promise.resolve(transaction);
+
 /** Each ledger version's own transactions to hand in, so each variant is handed bytes it can read. */
 type LedgerTransactions = Readonly<{
   /** A transaction with one intent, so the signer is really asked for a signature. */
-  toSign: () => { serialize: () => Uint8Array };
+  toSign: AtStage;
   /** A transaction paying out and spending nothing, so the wallet has to add an input of its own. */
-  toBalance: () => { serialize: () => Uint8Array };
+  toBalance: AtStage;
 }>;
 
 const v8Transactions: LedgerTransactions = {
-  toSign: () => ledgerV8.Transaction.fromParts(networkId, undefined, undefined, ledgerV8.Intent.new(ttl())),
-  toBalance: () => {
+  toSign: (stage) =>
+    atV8Stage(ledgerV8.Transaction.fromParts(networkId, undefined, undefined, ledgerV8.Intent.new(ttl())))(stage),
+  toBalance: (stage) => {
     const intent = ledgerV8.Intent.new(ttl());
     // Mutated in place because the ledger's intents are built that way; this is test setup, not wallet code.
     intent.guaranteedUnshieldedOffer = ledgerV8.UnshieldedOffer.new(
@@ -94,13 +123,14 @@ const v8Transactions: LedgerTransactions = {
       [{ value: payout, owner: owner.addressHex, type: timelineTokenType }],
       [],
     );
-    return ledgerV8.Transaction.fromParts(networkId, undefined, undefined, intent);
+    return atV8Stage(ledgerV8.Transaction.fromParts(networkId, undefined, undefined, intent))(stage);
   },
 };
 
 const v9Transactions: LedgerTransactions = {
-  toSign: () => ledgerV9.Transaction.fromParts(networkId, undefined, undefined, ledgerV9.Intent.new(ttl())),
-  toBalance: () => {
+  toSign: (stage) =>
+    atV9Stage(ledgerV9.Transaction.fromParts(networkId, undefined, undefined, ledgerV9.Intent.new(ttl())))(stage),
+  toBalance: (stage) => {
     const intent = ledgerV9.Intent.new(ttl());
     // Mutated in place because the ledger's intents are built that way; this is test setup, not wallet code.
     intent.guaranteedUnshieldedOffer = ledgerV9.UnshieldedOffer.new(
@@ -108,7 +138,7 @@ const v9Transactions: LedgerTransactions = {
       [{ value: payout, owner: owner.addressHex, type: timelineTokenType }],
       [],
     );
-    return ledgerV9.Transaction.fromParts(networkId, undefined, undefined, intent);
+    return atV9Stage(ledgerV9.Transaction.fromParts(networkId, undefined, undefined, intent))(stage);
   },
 };
 
@@ -192,7 +222,7 @@ describe('a forking unshielded wallet keeps the stamp of a transaction it change
       Effect.gen(function* () {
         const wallet = yield* forkingWalletAt(version);
         expect(yield* wallet.activeTag).toBe(tag);
-        const handed = WalletTransaction.adopt(stage, transactions[input](), version);
+        const handed = WalletTransaction.adopt(stage, yield* Effect.promise(() => transactions[input](stage)), version);
 
         const answer = yield* Effect.promise(() => call(wallet.unshielded, handed));
 
@@ -208,7 +238,11 @@ describe('a single-variant unshielded wallet keeps the stamp of a transaction it
   it.each(inPlaceOperations)('$operation', async ({ stage, input, call }) =>
     Effect.gen(function* () {
       const wallet = yield* singleVariantWalletAt(v9Version);
-      const handed = WalletTransaction.adopt(stage, v9Transactions[input](), v9Version);
+      const handed = WalletTransaction.adopt(
+        stage,
+        yield* Effect.promise(() => v9Transactions[input](stage)),
+        v9Version,
+      );
 
       const answer = yield* Effect.promise(() => call(wallet, handed));
 
