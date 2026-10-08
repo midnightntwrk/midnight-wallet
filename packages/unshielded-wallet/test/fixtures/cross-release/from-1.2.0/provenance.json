@@ -1,0 +1,16 @@
+{
+  "generatedFrom": {
+    "sdk": "1.2.0",
+    "shielded": "3.0.2",
+    "unshielded": "3.1.0",
+    "dust": "4.2.0",
+    "ledger": "8.1.2"
+  },
+  "fixtures": [
+    {
+      "name": "unshielded-funded",
+      "describes": "available and pending UTXOs on their own sides, a value beyond what a double holds exactly, both dust-registration states, and a sync cursor whose two indices differ",
+      "bytes": 980
+    }
+  ]
+}

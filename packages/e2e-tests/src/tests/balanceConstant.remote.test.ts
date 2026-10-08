@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
@@ -36,7 +36,7 @@ describe('Balance constant', () => {
   const expectedUnshieldedBalance = utils.tNightAmount(10n);
   const expectedDustBalance = expectedShieldedBalance;
   const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.network}.state`;
-  const syncTimeout = 1_800_000;
+  const syncTimeout = 15 * 60 * 1000; // 15 minutes; a longer bound only converts a wedge into lane time
 
   let wallet: utils.WalletInit;
   let fixture: TestContainersFixture;
@@ -72,7 +72,9 @@ describe('Balance constant', () => {
   test(
     'Balance is constant when syncing from a restored state @healthcheck',
     async () => {
-      await utils.saveState(wallet.wallet, filename);
+      // Deliberate save inside the test body: this test's subject is save-then-restore, and it only reaches this line
+      // on the passing path. It is not the `afterEach` persistence that the poisoning guard exists for.
+      await utils.saveState(wallet, filename);
       const restoredWallet = await utils.provideWallet(filename, seed, fixture);
       const syncedState = await restoredWallet.wallet.waitForSyncedState();
 

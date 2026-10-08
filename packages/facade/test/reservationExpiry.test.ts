@@ -18,8 +18,8 @@
  * coin freed by the first can be booked again before the second fires. A release driven by the reservation would then
  * free a booking taken for a different transaction, since the ids alone say nothing about which booking holds them.
  */
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { type FinalizedTx, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   PendingTransactions,
   type PendingTransactionsService,
@@ -62,11 +62,11 @@ const nightGenesisMint = (
  * A pending-transactions service whose state this test drives directly, so an expired reservation can be presented at a
  * chosen moment rather than waited for.
  */
-const controllablePendingService = (): PendingTransactionsService<ledger.FinalizedTransaction> & {
-  emit: (state: PendingTransactions.PendingTransactions<ledger.FinalizedTransaction>) => void;
-  current: () => PendingTransactions.PendingTransactions<ledger.FinalizedTransaction>;
+const controllablePendingService = (): PendingTransactionsService<FinalizedTx> & {
+  emit: (state: PendingTransactions.PendingTransactions<FinalizedTx>) => void;
+  current: () => PendingTransactions.PendingTransactions<FinalizedTx>;
 } => {
-  const subject = new rx.BehaviorSubject<PendingTransactions.PendingTransactions<ledger.FinalizedTransaction>>(
+  const subject = new rx.BehaviorSubject<PendingTransactions.PendingTransactions<FinalizedTx>>(
     PendingTransactions.empty(),
   );
 
@@ -77,6 +77,8 @@ const controllablePendingService = (): PendingTransactionsService<ledger.Finaliz
     // Nothing here submits, so tracking never starts.
     addPendingTransaction: () => Promise.resolve(),
     clear: () => Promise.resolve(),
+    // The simulator never crosses a protocol boundary, so there is never anything to orphan.
+    orphanBeyond: () => Promise.resolve(),
     addReservation: (reservation) => {
       subject.next(PendingTransactions.addReservation(subject.value, reservation));
       return Promise.resolve();
@@ -122,14 +124,13 @@ describe('A reservation reaching its expiry', () => {
     // The expired reservation below names the booked coin but stands for a different spend, which is exactly the
     // shape the two clocks produce: an abandoned transaction's record outliving the coin it once held.
     Effect.gen(function* () {
-      const { facade, keys, transfer, pending } = yield* fundedFacade();
+      const { facade, transfer, pending } = yield* fundedFacade();
 
       yield* Effect.promise(() =>
-        facade.transferTransaction(
-          transfer(tokenValue(1n)),
-          { shieldedSecretKeys: keys.shieldedKeys, dustSecretKey: keys.dustKey },
-          { ttl: new Date(Date.now() + 60 * 60 * 1000), payFees: false },
-        ),
+        facade.transferTransaction(transfer(tokenValue(1n)), {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+          payFees: false,
+        }),
       );
 
       const booked: FacadeState = yield* Effect.promise(() => rx.firstValueFrom(facade.state()));

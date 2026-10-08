@@ -1,6 +1,6 @@
 services:
   proof-server:
-    image: 'ghcr.io/midnight-ntwrk/proof-server:8.1.0'
+    image: 'ghcr.io/midnight-ntwrk/proof-server:9.0.0-rc.7'
     container_name: proof-server_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
@@ -19,11 +19,7 @@ services:
       start_period: 10s
 
   indexer:
-    # 4.4.0 is the first indexer offering the graphql-transport-ws+deflate subprotocol; only rc
-    # images exist so far and they are amd64-only, hence the platform pin (emulated on arm64
-    # hosts). Move to the stable multi-arch 4.4.0 tag and drop the platform pin once it ships.
-    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.4.0-rc.1'
-    platform: linux/amd64
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.4.0-rc.6-068403cd'
     container_name: indexer_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
@@ -49,7 +45,7 @@ services:
       node:
         condition: service_healthy
   node:
-    image: 'ghcr.io/midnight-ntwrk/midnight-node:1.0.0'
+    image: 'ghcr.io/midnight-ntwrk/midnight-node:2.1.0-rc.3'
     container_name: node_$TESTCONTAINERS_UID
     cap_drop:
       - ALL

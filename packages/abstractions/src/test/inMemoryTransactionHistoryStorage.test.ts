@@ -11,7 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, it, expect } from 'vitest';
-import { Schema } from 'effect';
+import { Either, Schema } from 'effect';
+import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { TransactionHistoryRestoreError } from '../TransactionHistoryFormat.js';
 import {
   type FinalizedEntryInput,
   type PendingEntryInput,
@@ -113,6 +115,42 @@ describe('InMemoryTransactionHistoryStorage gotFinalized respects the merge func
 });
 
 describe('InMemoryTransactionHistoryStorage gotPending / gotRejected', () => {
+  it('removes superseded rejection entries when inclusion arrives after orphaning', async () => {
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema);
+    await storage.gotRejected(rejectedInput('submission-a', ['id-a'], new Date()));
+    await storage.gotRejected(rejectedInput('submission-b', ['id-b'], new Date()));
+    await storage.gotFinalized(finalizedInput('chain-hash', { identifiers: ['id-a', 'id-b'] }));
+    expect((await storage.getAll()).map((entry) => entry.hash)).toEqual(['chain-hash']);
+  });
+  it.each(['chain-hash', 'submission-hash'])('preserves inclusion over rejection keyed by %s', async (hash) => {
+    // Even a caller-provided merge that blindly takes incoming fields cannot downgrade inclusion.
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
+    await Promise.all([
+      storage.gotFinalized(finalizedInput('chain-hash', { identifiers: ['id-a', 'id-b'] })),
+      storage.gotRejected(rejectedInput(hash, ['id-a'], new Date(), 'orphaned-by-protocol-upgrade')),
+    ]);
+    expect(await storage.getAll()).toHaveLength(1);
+    expect((await storage.get('chain-hash'))?.lifecycle.status).toBe('finalized');
+  });
+
+  it('writes nothing for a rejection under the submission hash once inclusion is recorded under the chain hash', async () => {
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
+    await storage.gotFinalized(finalizedInput('chain-hash', { identifiers: ['id-a', 'id-b'] }));
+
+    await storage.gotRejected(rejectedInput('submission-hash', ['id-a'], new Date()));
+
+    const entries = await storage.getAll();
+    expect(entries.map((entry) => [entry.hash, entry.lifecycle.status])).toEqual([['chain-hash', 'finalized']]);
+  });
+
+  it('does not treat partial identifier overlap or empty identifiers as inclusion', async () => {
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema);
+    await storage.gotFinalized(finalizedInput('chain-hash', { identifiers: ['id-a'] }));
+    await storage.gotRejected(rejectedInput('overlapping', ['id-a', 'id-b'], new Date()));
+    await storage.gotRejected(rejectedInput('empty', [], new Date()));
+    expect((await storage.get('overlapping'))?.lifecycle.status).toBe('rejected');
+    expect((await storage.get('empty'))?.lifecycle.status).toBe('rejected');
+  });
   it('should store a pending entry under its hash with a pending lifecycle', async () => {
     const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
 
@@ -200,13 +238,13 @@ describe('InMemoryTransactionHistoryStorage clears pending entries precisely', (
     expect(await storage.get('p-empty')).toBeDefined();
   });
 
-  it('only clears pending entries, leaving a finalized sibling with overlapping identifiers intact', async () => {
+  it('leaves a finalized sibling with overlapping identifiers intact', async () => {
     const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
 
     await storage.gotFinalized(finalizedInput('k1', { identifiers: ['id-a'] }));
     await storage.gotFinalized(finalizedInput('k2', { identifiers: ['id-a'] }));
 
-    // k1 must not be deleted by k2's finalize — clearing targets pending entries only.
+    // k1 must not be deleted by k2's finalize — both record known inclusion.
     expect(await storage.get('k1')).toBeDefined();
     expect(await storage.get('k2')).toBeDefined();
   });
@@ -274,5 +312,68 @@ describe('extendEntrySchema', () => {
     // The extension field survives a serialize/restore cycle too.
     const restored = InMemoryTransactionHistoryStorage.restore(await storage.serialize(), ExtendedSchema, merge);
     expect(await restored.get('tx')).toEqual(result);
+  });
+});
+
+describe('InMemoryTransactionHistoryStorage.restore refusals', () => {
+  it('should refuse a payload that is not readable JSON', () => {
+    const result = InMemoryTransactionHistoryStorage.tryRestore('not json', TransactionHistoryEntryCommonSchema);
+
+    expect(Either.isLeft(result)).toBe(true);
+    expect(EitherOps.getOrThrowRight(result).detectedVersion).toBe('unrecognised');
+    expect(EitherOps.getOrThrowRight(result).reason).toBe('unparseable');
+    expect(EitherOps.getOrThrowRight(result).message).toContain('transaction-history');
+  });
+
+  it('should refuse an object payload with no recognisable format rather than restore zero entries', () => {
+    const result = InMemoryTransactionHistoryStorage.tryRestore('{}', TransactionHistoryEntryCommonSchema);
+
+    expect(Either.isLeft(result)).toBe(true);
+    expect(EitherOps.getOrThrowRight(result)).toBeInstanceOf(TransactionHistoryRestoreError);
+  });
+
+  it('should report the version the payload was read from when an entry fails the schema', () => {
+    // A bare array is `v1`, so a decode failure inside it has to be reported against `v1` — naming the
+    // version this build writes would point a reader at a payload that was never on disk.
+    const firstFormatWithABadEntry = JSON.stringify([{ hash: '0xaaa', identifiers: 'not-an-array' }]);
+
+    const result = InMemoryTransactionHistoryStorage.tryRestore(
+      firstFormatWithABadEntry,
+      TransactionHistoryEntryCommonSchema,
+    );
+
+    expect(EitherOps.getOrThrowRight(result).detectedVersion).toBe('v1');
+    expect(EitherOps.getOrThrowRight(result).reason).toBe('invalid-entries');
+    expect(EitherOps.getOrThrowRight(result).message).toContain('v1');
+  });
+
+  it('should report v2 when an entry inside a current-format envelope fails the schema', () => {
+    const currentFormatWithABadEntry = JSON.stringify({
+      version: 'v2',
+      entries: [{ hash: '0xaaa', identifiers: 'not-an-array' }],
+    });
+
+    const result = InMemoryTransactionHistoryStorage.tryRestore(
+      currentFormatWithABadEntry,
+      TransactionHistoryEntryCommonSchema,
+    );
+
+    expect(EitherOps.getOrThrowRight(result).detectedVersion).toBe('v2');
+  });
+
+  it('should throw from restore exactly the error tryRestore reports, so a caller of either learns the same thing', () => {
+    const reported = EitherOps.getOrThrowRight(
+      InMemoryTransactionHistoryStorage.tryRestore(
+        '{"version":"v9","entries":[]}',
+        TransactionHistoryEntryCommonSchema,
+      ),
+    );
+
+    expect(() =>
+      InMemoryTransactionHistoryStorage.restore('{"version":"v9","entries":[]}', TransactionHistoryEntryCommonSchema),
+    ).toThrow(TransactionHistoryRestoreError);
+    expect(() =>
+      InMemoryTransactionHistoryStorage.restore('{"version":"v9","entries":[]}', TransactionHistoryEntryCommonSchema),
+    ).toThrow(reported.message);
   });
 });

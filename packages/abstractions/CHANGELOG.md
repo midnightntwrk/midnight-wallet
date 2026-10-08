@@ -1,5 +1,290 @@
 # @midnightntwrk/wallet-sdk-abstractions
 
+## 3.0.0-rc.1
+
+### Major Changes
+
+- 1660f24: Version every persisted format, read what earlier releases wrote, refuse the rest with a tagged error.
+
+  ### Breaking
+  - `finalizedBlock` is optional on `FinalizedLifecycle` and `FinalizedWalletEntry`; `isFinalizedWalletEntry` no longer
+    implies one is present.
+  - `InMemoryTransactionHistoryStorage.restore` throws `TransactionHistoryRestoreError` instead of returning an empty
+    store; `tryRestore` returns it as a `Left`.
+  - An unreadable snapshot is refused with `SnapshotRestoreError` (tag
+    `@midnightntwrk/wallet-sdk-abstractions/SnapshotFormat/SnapshotRestoreError`), not `Wallet.Other`.
+  - A finalized history entry with no block is reported as `BlocklessFinalizedEntryError` (tag
+    `Wallet.BlocklessFinalizedEntry`), not `TransactionHistoryError`.
+  - `upgradeV1ToV2` takes `readonly unknown[]`; `upgradeToCurrentFormat` returns an `Either`.
+
+  ### Added
+  - Histories are written as `{ version: 'v2', entries }`. Snapshots carry `version: 'v1'`, or `v2` for the unshielded
+    V2 variant (key is `{ tag, value }`); a `v1` unshielded snapshot is upgraded on read. Unknown versions are refused
+    by name.
+  - Snapshots carry `writtenBy: 'v1' | 'v2'`. A snapshot is restored by its writer when that variant is registered and
+    the protocol version is not below the writer's activation; otherwise by protocol version. An unshielded snapshot
+    with no `writtenBy` and a bare-string key counts as written by V1.
+  - Abstractions: `SnapshotFormat` (`versionField`, `writtenByField`, `isSnapshotWriter`, `readSnapshot`,
+    `SnapshotRestoreError` with `surface`, `detectedVersion`, `reason`, `cause`), `SnapshotRouting` (`readEnvelope`,
+    `routeSnapshot`), `TransactionHistoryFormat.detectVersion`; `TransactionHistoryRestoreError` carries a `reason`.
+  - Facade exports `finalizedTransactionTraits`; dust exports `Serialization` from `/v1`.
+  - CI gates persisted formats on drift, fixture coverage and frozen fixtures.
+
+  ### Fixed
+  - Histories saved by abstractions 2.1.0 or earlier restore; each entry gains a `finalized` lifecycle and, if missing,
+    empty `identifiers`.
+  - The `txHistory` embedded in a shielded 1.0.0 snapshot, and `coinHashesPending` written by V2, are no longer dropped
+    by a reader; both survive the `forks.v9` crossing.
+  - A V1 snapshot saved in the fork window now migrates: booked UTXOs released, `registeredForDustGeneration` cleared,
+    stranded shielded spends released. Covers earlier snapshots for unshielded, from this release on for shielded and
+    dust.
+  - A V2 snapshot with a protocol version below V2's activation starts on V1 instead of failing with "No variant to
+    init".
+  - `restore` throws the tagged error `tryRestore` reports, not `getOrThrow called on a Left`.
+  - `hasTTLExpired` applies the dust grace period only to transactions carrying shielded offers, and to transactions
+    with no intents.
+  - `NoOpTransactionHistoryStorage.serialize` writes `{ version: 'v2', entries: [] }`.
+
+  Nothing saved by this release opens in abstractions 2.1.0.
+
+### Minor Changes
+
+- 7ee351c: feat(unshielded-wallet)!: cross-check the indexer's reported tip against the node's finalized head
+
+  The unshielded wallet no longer takes the indexer's word that it is synced. It polls a node's finalized head (every 30
+  seconds by default) and checks that indexer and node name the same block at the newest height both have passed;
+  genesis is the height-zero case. The node is `nodeClientConnection`, falling back to `relayURL`; a wallet naming
+  neither is not checked. Tune with `livenessConfiguration` and `livenessPollInterval`.
+
+  The result is an `IndexerLiveness` verdict on `SyncProgress`. `Behind`, `Unknown` and `WrongNetwork` block completion;
+  `InSync`, `Ahead`, `Unavailable` and `Skipped` do not. A failed poll keeps a `Behind` or `WrongNetwork` verdict, so a
+  node outage cannot release a caller waiting on a stale indexer. A verdict is republished only when it changes
+  (`IndexerLiveness.equivalent`), not on every poll. This detects staleness, not withholding. The shielded and dust
+  wallets are not gated (#743).
+
+  ### Fixes
+  - Unshielded `isConnected` clears when the indexer subscription drops or completes, and the subscription is rebuilt in
+    both cases; it previously latched `true` (#743).
+  - `api.rpc` calls (`getGenesis()`) work right after node client creation.
+  - Node connection failures are typed errors, no longer defects.
+  - A finite `reconnectionTimeout` also bounds the initial connection and retries within it, so a restarting node
+    connects on a later attempt instead of failing the build.
+  - The unshielded sync retry backoff is really capped at two minutes; it previously kept doubling until it stopped
+    retrying (#742).
+
+  BREAKING CHANGE (`wallet-sdk`, `wallet-sdk-facade`, `wallet-sdk-unshielded-wallet`): `isStrictlyComplete()`,
+  `isCompleteWithin()`, `FacadeState.isSynced` and `waitForSyncedState()` now also need a first liveness verdict that
+  does not block. On by default for every wallet with a `relayURL`. Against a stale indexer `waitForSyncedState()`
+  neither rejects nor times out; race it against your own deadline and read `progress.indexerLiveness` (see the
+  `indexer-liveness` docs snippet). `SyncProgressData` gains a required `indexerLiveness` field, defaulted by
+  `createSyncProgress()`. Sync types are parameterised on `SyncUpdate`, a superset of `WalletSyncUpdate`.
+
+  BREAKING CHANGE (`wallet-sdk-unshielded-wallet`): `SyncService.livenessUpdates` is required. A custom source with
+  nothing to check emits one `IndexerLiveness.Skipped({ reason: 'no-liveness-feed' })` and ends. `SimulatorSyncUpdate`
+  now includes a liveness update.
+
+  BREAKING CHANGE (`wallet-sdk-node-client`): `NodeClient.Service` gains required `getFinalizedBlock()`,
+  `getGenesisHash()` and `getBlockHashAt(height)`; `getBlockHashAt` returns `Option.none` for a height with no block.
+  Only implementers are affected.
+
+  `wallet-sdk-abstractions` adds `IndexerLiveness`: the verdict type, `evaluate` and `evaluateTips` for comparing an
+  indexer against a node, `blocksSyncCompletion`, `equivalent` and `sameBlockHash`.
+
+  `wallet-sdk-capabilities` adds the liveness check: `LivenessServiceImpl`, `LivenessReads` (`indexerTip`,
+  `finalizedBlock`, `indexerBlockHashAt`, `nodeBlockHashAt`), `makeDefaultLivenessReads`,
+  `DEFAULT_LIVENESS_CONFIGURATION` and `DEFAULT_POLL_INTERVAL`.
+
+## 3.0.0-rc.0
+
+### Patch Changes
+
+- db9102e: chore: cut the first 2.x release candidate — republish the v2 line under the `rc` dist-tag
+
+## 3.0.0-beta.2
+
+### Patch Changes
+
+- 7025e69: Add `WalletFacade.adoptTransaction(bytes, stage)`, for reading a transaction from bytes that name no protocol
+  version.
+
+  Bytes that reach a wallet from outside the SDK carry no version stamp — the DApp Connector API passes a serialized
+  transaction and nothing else — so, until now, every wallet exposing a connector had to write the same routing by hand:
+  read `activeProtocolVersion` off the facade's state, compare it to `forks.v9`, pick `wallet-sdk/ledger/v8` or `/v9`,
+  map the handle's stage to the ledger's signature/proof/binding marker triple, deserialize, and seal the result with
+  `WalletTransaction.adopt`. The stage-to-markers mapping in particular existed nowhere in the SDK, leaving each
+  implementation to re-derive it.
+
+  `adoptTransaction` does that routing with the facade's own current protocol version, and returns the sealed handle:
+
+  ```ts
+  // before
+  const version = (await firstValueFrom(facade.state())).activeProtocolVersion;
+  const markers = { Unproven: [...], Unbound: [...], Finalized: [...] }[stage];
+  const transaction =
+    version < configuration.forks.v9 ? v8.Transaction.deserialize(...markers, bytes) : v9.Transaction.deserialize(...markers, bytes);
+  const handle = WalletTransaction.adopt(stage, transaction, version);
+
+  // after
+  const handle = facade.adoptTransaction(bytes, stage);
+  ```
+
+  Bytes written by the other ledger version — a dApp that authored on the other side of a protocol boundary — are
+  refused with a `WireFormatError` naming the protocol version the wallet is acting at, rather than the ledger's raw
+  serialization-tag mismatch. The policy above it stays with the wallet: whether to accept dApp bytes at all, whether to
+  refuse while the wallets are still crossing, and how to map the refusal onto the connector's own error codes.
+
+## 3.0.0-beta.1
+
+### Major Changes
+
+- b9c1150: Hard-fork support. A wallet runs `@midnight-ntwrk/ledger-v8` below the chain's fork version and
+  `@midnightntwrk/ledger-v9` from it, and follows a live chain across that boundary: balances, coins and transaction
+  history survive the crossing, and a wallet restored from a snapshot crosses too. Applications no longer import a
+  ledger package directly.
+
+  ### Breaking: configuration
+  - `forks: { v9 }` is the protocol version from which ledger-v9 reads the chain. `ProtocolVersion.V9NativeForkVersion`
+    (2000000) is the value a 2.x node reports, and `ProtocolVersion.V9NativeForkSchedule` is
+    `{ v9: V9NativeForkVersion }`. The facade presets it as `DefaultForkSchedule` when `forks` is left out of the
+    configuration and hands the completed configuration to every factory in `InitParams`;
+    `WalletFacade.resolveConfiguration(configuration)` returns the same for code outside a factory. `ShieldedWallet`,
+    `UnshieldedWallet` and `DustWallet` require `forks`.
+  - `provers: { v8?, v9 }` names a proving backend per ledger version, each `{ kind: 'server', url }` or
+    `{ kind: 'wasm' }`. `provingServerUrl` remains the shorthand for one proof server under both keys; `provers` wins
+    when both are given, and naming neither fails with `ProvingConfigurationError`. A transaction whose version has no
+    backend fails with `UnsupportedProvingVersionError`. No published proof-server image serves both ledger versions, so
+    a chain with ledger-v8 history wants a server per key; the in-process prover serves both.
+  - `chainVersionProbe` (optional, all three wallets) asks on every start which protocol version the chain's first block
+    was produced under, so the wallet starts on the matching ledger version; the default asks the indexer. A failed
+    probe never fails a start: the wallet starts on ledger-v8 and crosses on its first synced update.
+
+  ### Breaking: starting a wallet
+  - Wallets start from seeds. `WalletSeeds.fromMasterSeed(masterSeed, { account?, addressIndex?, unshieldedRole? })`
+    derives the shielded, dust and unshielded seeds and throws `SeedDerivationError` for a seed it cannot read.
+    `ShieldedWallet(...)` and `DustWallet(...)` gain `startWithSeed(seed)` and `startWithKeys({ v8, v9 })`, both
+    returning a `Promise`; `startWithSecretKeys` and `startWithSecretKey` are removed. The unshielded
+    `startWithPublicKey` also returns a `Promise`. The single-ledger `CustomShieldedWallet` and `CustomDustWallet` keep
+    their synchronous starts and cannot cross a fork.
+  - `WalletFacade.start` takes `WalletSeeds` or `FacadeKeysByEpoch`
+    (`{ v8: { shielded, dust }, v9: { shielded, dust } }`), and its third argument is now `{ manualSync?: boolean }`;
+    `doSync` takes the same start material.
+  - The `secretKeys` parameter is gone from every transaction-building method. A stopped wallet drops its key material,
+    so transacting after `stop()` fails with `MissingStartAuxError`.
+  - `DustWallet(...).startWithSeed(seed, dustParameters?)` and `DefaultDustConfiguration.dustParameters` take a plain
+    `DustGenerationRates` object and default to the ledger's initial parameters.
+  - Snapshots restore on whichever ledger version wrote them. `tryRestore` returns the reason a snapshot cannot be read
+    instead of throwing; the dust wallet adds `peekProtocolVersion` and `UnsupportedSnapshotVersionError`; the shielded
+    `Restore` and unshielded `UnshieldedRestore` namespaces inspect a snapshot.
+
+  ### Breaking: transactions carry the version that built them
+  - Every facade and wallet method that took or returned a ledger transaction now uses `WalletTransaction`, a handle
+    that records the protocol version the transaction was built for. A handle for the other ledger version is refused
+    with `ProtocolVersionMismatchError`. Applications that build their own transactions import
+    `@midnightntwrk/wallet-sdk/ledger/v8` or `/ledger/v9` and seal the result with
+    `WalletTransaction.adopt('Unproven', tx, protocolVersion)`; handles serialize with `toWire` and `fromWire`.
+  - `finalizeTransaction` and `finalizeRecipe` stamp the version the transaction was authored at, not the version
+    reached while it was being proved. If the chain moved to the other ledger version during proving, they fail with
+    `ProtocolVersionMismatchError` and release the coins the transaction had reserved.
+  - `FacadeState.pending` is an array of `{ transaction, submittedAt, authoredFor, status }`, with `status` one of
+    `Submitted`, `Confirmed`, `Rejected` or `Orphaned`. A transaction still pending when the chain crosses is orphaned:
+    it can never be included, so its coins are released and history records the rejection with reason
+    `orphaned-by-protocol-upgrade`. `revert` and `revertTransaction` accept an optional reason.
+  - A verdict that arrives after a transaction has already landed, such as a late pending-status check, an expired TTL
+    or the protocol upgrade orphaning it, clears the pending entry rather than recording a rejection, and an included
+    failure still releases the coins it had reserved. History storage implementations must give a recorded inclusion
+    precedence over a later rejection: `gotRejected` writes nothing for a transaction a finalized entry already covers,
+    `gotFinalized` clears every pending or rejected entry it covers under another hash, and
+    `TransactionHistoryStorage.coversTransaction` is the predicate. `mergeWalletEntries` keeps a finalized entry over an
+    incoming rejected one.
+  - The facade recipes and `BlockData` gain a required `protocolVersion`. Proving, validation and ledger-parameter reads
+    route on the transaction's version.
+
+  ### Behaviour at the fork
+  - `FacadeState.protocolVersion`, `activeProtocolVersion` and `protocol` report where the wallets are: `Settled`
+    (`{ version }`) or `Crossing` (`{ from, to, behind }`).
+  - The shielded wallet carries its coins across at their positions in the commitment tree. Commitments and nullifiers
+    are recomputed on the first synced update after the crossing, so until then `balances`, `availableCoins` and
+    `pendingCoins` read empty. Coins booked for a ledger-v8 transaction still in flight at the crossing are released in
+    that same update, since nothing on ledger-v9 can include that transaction; its change outputs stay in
+    `pendingOutputs` and overstate the pending balance. The dust wallet starts empty and rebuilds from the chain.
+    Unshielded UTxOs booked by transactions still pending return to the available balance.
+  - A wallet with no traffic of its own still notices the fork. The unshielded wallet reads the version off its sync
+    progress; the shielded and dust wallets re-ask the chain's tip on a timer
+    (`DefaultSyncConfiguration.versionWatch.intervalMs`, default 30 s, zero or less disables). The recorded protocol
+    version only ever increases.
+  - Carried Night UTxOs cross with `registeredForDustGeneration: false`, matching what the indexer reports, so
+    re-register them on ledger-v9. `claimableFeePayment(dustState, nightUtxos, now)` gives the amount
+    `waitForGeneratedDust` waits on.
+  - Known limitations: the dust projections-based fast sync does not hand over at a fork on its own, and a fresh dust
+    wallet on a chain that forked over history replays the ledger-v8 dust events before crossing.
+
+  ### Breaking: renamed exports
+
+  Everything typed by one ledger version now says which in its name, so the ledger-v8 counterparts can sit next to it.
+  In `@midnightntwrk/wallet-sdk-capabilities/proving` and `/validation`, also reachable through
+  `@midnightntwrk/wallet-sdk/capabilities/proving`:
+
+  | Before                                                               | After                                                            |
+  | -------------------------------------------------------------------- | ---------------------------------------------------------------- |
+  | `fromProvingProvider`, `fromProvingProviderEffect`                   | `fromV9ProvingProvider`, `fromV9ProvingProviderEffect`           |
+  | `makeServerProvingService`, `makeServerProvingServiceEffect`         | `makeV9ServerProvingService`, `makeV9ServerProvingServiceEffect` |
+  | `makeWasmProvingService`, `makeWasmProvingServiceEffect`             | `makeV9WasmProvingService`, `makeV9WasmProvingServiceEffect`     |
+  | `UnboundTransaction`                                                 | `V9UnboundTransaction`                                           |
+  | `AnyValidatableTransaction`                                          | `AnyV9ValidatableTransaction`                                    |
+  | `makeDefaultValidationService`, `makeDefaultValidationServiceEffect` | `makeV9ValidationService`, `makeV9ValidationServiceEffect`       |
+
+  `@midnightntwrk/wallet-sdk-shielded` re-exports `V9UnboundTransaction` in place of `UnboundTransaction`. The versioned
+  `makeDefaultVersionedValidationService` and `makeDefaultVersionedValidationServiceEffect` keep their names.
+
+  ### Breaking: package APIs
+
+  For code that composes wallets or test fixtures by hand.
+
+  - Each wallet package exports the ledger-v8 wallet on `./v1` and the ledger-v9 wallet on `./v2` (`shielded/v1`,
+    `shielded/v2`, and likewise `dust` and `unshielded`, in `@midnightntwrk/wallet-sdk`), with `V1`- and `V2`-named
+    exports. The dust `./v1` has no projections-based fast sync; the unshielded `./v1` has its own `createKeystore`
+    taking a plain `Uint8Array`, and no ECDSA. Both subpaths export a `Migration` namespace, and their builders gain
+    `withStartAux`, `withStartAuxDefaults`, `withMigration` and `withMigrationDefaults`.
+  - `ShieldedWalletState`, `DustWalletState` and `UnshieldedWalletState` lose `capabilities`, `services` and `mapState`;
+    `fromVariant` replaces it. Shielded `BalancingResult` is renamed `ShieldedBalancingResult`.
+    `DefaultShieldedConfiguration`, `DefaultDustConfiguration` and `DefaultUnshieldedConfiguration` are declared by each
+    package; the testkit's configuration types follow.
+  - Sync updates are tagged unions (`_tag` for shielded and dust, `type` for unshielded) with a `VersionSignal` member.
+    A custom sync capability receives the protocol-version range it owns as a third `applyUpdate` argument and must
+    leave updates beyond it unapplied.
+  - Capabilities: proving and validation are `VersionedProvingService` and `VersionedValidationService`
+    (`validateTx(tx, protocolVersion, options)`); `makeDefaultVersionedProvingService` and
+    `makeDefaultVersionedValidationService` take the fork schedule as their second argument, and `ProvingBackends` is
+    the type of `provers`. A backend handed the other ledger version's transaction fails with
+    `ProvingEpochMismatchError`. New subpaths `./chainVersion` (`makeIndexerChainVersionProbe`), `./codecs`
+    (`LedgerParametersCodec`) and `./signatures` (`Signing`). Pending transactions are versioned:
+    `addPendingTransaction(tx, protocolVersion)` and `orphanBeyond(chainNow)`. Simulation has a simulator per ledger
+    version, `V8` and `V9`, and `ForkSimulator` drives one chain across a boundary.
+  - Abstractions: `ProtocolVersion.ForkSchedule`, `ProtocolVersion.Registry` and `ProtocolVersion.epochOf`;
+    `ProtocolState` requires a `variantTag`. Runtime: `withVariant(sinceVersion, builder, configuration?)`,
+    `VariantContext.activationRange` and `Runtime.onVariantActivation`. Indexer client: `protocolVersion` on
+    `BlockHash`, `DustLedgerEvents`, `DustNullifierTransactions` and the unshielded progress frame, and the id-only
+    subscriptions `ZswapEventTip` and `DustLedgerEventTip`. Prover client: `asV8ProvingProvider()` next to
+    `asV9ProvingProvider()`, and `WasmProver.makeDefaultKeyMaterialProvider({ circuits })` to pick the circuit line.
+  - `@midnightntwrk/wallet-sdk` gains the `ledger/v8`, `ledger/v9` and `capabilities/codecs` subpaths, and its root
+    exports `Token.night`, `parseTokenType`, `Signing`, and `DustGenerationRates` with `asV8DustParameters` and
+    `asV9DustParameters`, so token types, signatures and dust parameters need no ledger import.
+
+  ### Dependencies
+  - `@midnightntwrk/ledger-v9` `1.0.0-rc.4`. Its dust spend circuit differs from rc.3, so run proof server `9.0.0-rc.7`,
+    the build the rc.4 ledger declares; the `./testing` containers in `@midnightntwrk/wallet-sdk-utilities` default to
+    it.
+  - `@midnight-ntwrk/ledger-v8` is a runtime dependency of the capabilities, wallet, facade, prover-client, testkit and
+    umbrella packages, so browser bundles load two ledger WASM modules.
+
+## 3.0.0-beta.0
+
+### Major Changes
+
+- e89ab0b: Track transaction lifecycle in transaction history. Submitted transactions are now recorded as pending,
+  transition to finalized once confirmed by the indexer, and to rejected if they are reverted — giving a single,
+  consistent view of in-flight and settled transactions.
+
 ## 2.1.0
 
 ### Minor Changes

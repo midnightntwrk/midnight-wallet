@@ -100,6 +100,49 @@ will return as soon as the release workflow runs again.
 
 ---
 
+## Release Lines: `main` (1.x) and `v2`
+
+Since June 2026 the SDK is developed on **two release lines**, because the 2.x line migrates from
+`@midnight-ntwrk/ledger-v8` to `@midnightntwrk/ledger-v9` (a breaking change):
+
+| Branch | Line | Ledger | Publishes as                                                 |
+| ------ | ---- | ------ | ------------------------------------------------------------ |
+| `main` | 1.x  | v8     | `latest` dist-tag, canaries under `canary`                   |
+| `v2`   | 2.x  | v9     | `rc` dist-tag (pre-release mode), canaries under `canary-v2` |
+
+How the `v2` line works:
+
+- The `v2` branch is in **Changesets pre-release mode** (`.changeset/pre.json`, tag `rc`) — every release from it is
+  versioned `X.Y.Z-rc.N` and published under the `rc` dist-tag, so 1.x keeps owning `latest`. The line started under
+  `beta`. Changesets does not restart the counter when the tag changes (`2.0.0-beta.4` would become `2.0.0-rc.5`), so
+  the first release PR after a switch is renumbered to `-rc.0` by hand, in package versions, internal dependency ranges
+  and changelogs; later releases count up from there. Changing the tag alone releases nothing: the PR that switches it
+  must also carry a changeset that `patch`-bumps every published package, or no release PR opens.
+- The branch-local `.changeset/config.json` sets `baseBranch: "v2"`; the automated release PR lives on
+  `changeset-release/v2` (`chore: release (v2)`).
+- PRs containing ledger-v9 / 2.x work must target `v2`, not `main`.
+- Merge `main` into `v2` regularly so the lines don't drift; fixes land on `main` first while 1.x is the primary line.
+
+### Phase 2: GA cutover checklist (when 2.x becomes stable)
+
+Execute these steps **in order** when the v2 line is ready to replace 1.x as the primary release:
+
+1. **Cut a `v1` maintenance branch first**, from the last 1.x commit on `main` — _before_ merging `v2` into `main`. On
+   that branch:
+   - Add `v1` to the branch lists in `.github/workflows/cd.yml` and `check-changeset.yml`.
+   - Set `baseBranch: "v1"` in `.changeset/config.json`.
+   - ⚠️ **Change the publish step to use an explicit dist-tag** (e.g. `yarn changeset publish --tag v1`).
+     `changeset publish` tags `latest` by default — without this, a 1.x backport patch would steal the `latest` dist-tag
+     from 2.x.
+2. **Exit pre-release mode on `v2`**: run `yarn changeset pre exit` and commit the removed `.changeset/pre.json`.
+3. **Merge `v2` into `main`.** The release PR on `main` then versions the real majors (e.g. `@midnight-ntwrk/wallet-sdk`
+   → `2.0.0`) and publishing it tags them `latest`. When resolving conflicts, `main`'s `.changeset/config.json` must end
+   up with `baseBranch: "main"`.
+4. **Retire the `v2` branch**: remove it from the workflow branch lists (or delete the branch) so it no longer
+   publishes.
+5. **Sanity-check dist-tags** on the registry afterwards: `latest` → 2.x, `v1` → last 1.x, and the `rc` tag points at
+   the final pre-release (it is not moved automatically).
+
 ## Known Install Warnings
 
 `yarn install` currently ends with `Done with warnings` because of one unresolved peer range. It is expected, and it is
@@ -140,6 +183,11 @@ Tests are split by **filename suffix** so each tier can run independently:
 - **End-to-end** — full wallet flows through the public API live in the `e2e-tests` package as `*.undeployed.test.ts`
   and run via `turbo test-undeployed` (smoke subset on PRs, full suite nightly). The docs-snippets runner is also e2e
   and runs in that lane while staying in its own package.
+- **Fork crossing** — a fourth e2e sub-project, `fork` (`*.fork.test.ts`, `yarn turbo test-fork`): boots a chain from
+  the ledger-v8 node's spec, runs it on the ledger-v9 binary, and enacts the real ledger 8 → 9 runtime upgrade so a
+  wallet crosses an actual protocol boundary — something no other lane does, since every other stack is on ledger-v9
+  from block 1. It is in neither the PR smoke lane nor the nightly undeployed run; it has its own nightly/dispatch
+  workflow, `.github/workflows/e2e-hard-fork.yml`, and is documented in `packages/e2e-tests/README.md`.
 
 In CI, unit tests run as a fast early gate. Integration tests run as a **matrix with one job per file** (own runner +
 own Docker stack), so no two files contend for infra and a failing file never cancels the rest. The file list is

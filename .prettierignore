@@ -8,3 +8,9 @@ reports/
 
 # Third-party skills are vendored, not ours to reformat
 .claude/
+# Snapshots written by a released SDK. They are bytes, not source: reformatting one would mean the corpus no
+# longer holds what any release actually wrote.
+**/test/fixtures/cross-release/
+# The indexer schema is fetched upstream and pinned by `schema.lock`, whose sha256 is over these exact bytes.
+# Reformatting it makes `yarn schema:sync` report drift against an unchanged upstream.
+packages/indexer-client/indexer.gql

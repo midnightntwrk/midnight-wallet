@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -37,9 +37,10 @@ import {
   isFinalizedWalletEntry,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ArrayOps, DateOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { carried } from './helpers/transactions.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
@@ -67,7 +68,10 @@ describe('Dust Registration', () => {
   const shieldedSenderSeed = getShieldedSeed(SENDER_SEED);
   const unshieldedSenderSeed = getUnshieldedSeed(SENDER_SEED);
   const dustSenderSeed = getDustSeed(SENDER_SEED);
-  const unshieldedSenderKeystore = createKeystore(unshieldedSenderSeed, NetworkId.NetworkId.Undeployed);
+  const unshieldedSenderKeystore = createKeystore(
+    { kind: 'schnorr', secret: unshieldedSenderSeed },
+    NetworkId.NetworkId.Undeployed,
+  );
 
   let startedEnvironment: StartedDockerComposeEnvironment;
   let configuration: DefaultConfiguration;
@@ -87,6 +91,7 @@ describe('Dust Registration', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      forks: ProtocolVersion.V9NativeForkSchedule,
       costParameters: {
         feeBlocksMargin: 5,
       },
@@ -112,7 +117,10 @@ describe('Dust Registration', () => {
     shieldedReceiverSeed = getShieldedSeed(RECEIVER_SEED);
     unshieldedReceiverSeed = getUnshieldedSeed(RECEIVER_SEED);
     dustReceiverSeed = getDustSeed(RECEIVER_SEED);
-    unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);
+    unshieldedReceiverKeystore = createKeystore(
+      { kind: 'schnorr', secret: unshieldedReceiverSeed },
+      NetworkId.NetworkId.Undeployed,
+    );
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
 
     senderFacade = await WalletFacade.init({
@@ -131,14 +139,12 @@ describe('Dust Registration', () => {
     });
 
     await Promise.all([
-      senderFacade.start(
-        ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      ),
-      receiverFacade.start(
-        ledger.ZswapSecretKeys.fromSeed(shieldedReceiverSeed),
-        ledger.DustSecretKey.fromSeed(dustReceiverSeed),
-      ),
+      senderFacade.start({ shielded: shieldedSenderSeed, unshielded: shieldedSenderSeed, dust: dustSenderSeed }),
+      receiverFacade.start({
+        shielded: shieldedReceiverSeed,
+        unshielded: shieldedReceiverSeed,
+        dust: dustReceiverSeed,
+      }),
     ]);
   });
 
@@ -165,19 +171,13 @@ describe('Dust Registration', () => {
     ];
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const transferTxRecipe = await senderFacade.transferTransaction(
-      tokenTransfer,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
-      {
-        ttl,
-      },
-    );
+    const transferTxRecipe = await senderFacade.transferTransaction(tokenTransfer, {
+      ttl,
+    });
 
-    const signedTransferTxRecipe = await senderFacade.signRecipe(transferTxRecipe, (payload) =>
-      unshieldedSenderKeystore.signData(payload),
+    const signedTransferTxRecipe = await senderFacade.signRecipe(
+      transferTxRecipe,
+      unshieldedSenderKeystore.signDataAsync,
     );
 
     const finalizedTx = await senderFacade.finalizeRecipe(signedTransferTxRecipe);
@@ -211,7 +211,7 @@ describe('Dust Registration', () => {
     const dustRegistrationRecipe = await receiverFacade.registerNightUtxosForDustGeneration(
       nightUtxos,
       unshieldedReceiverKeystore.getPublicKey(),
-      (payload) => unshieldedReceiverKeystore.signData(payload),
+      unshieldedReceiverKeystore.signDataAsync,
     );
 
     const provenDustRegistrationTx = await receiverFacade.finalizeRecipe(dustRegistrationRecipe);
@@ -223,7 +223,9 @@ describe('Dust Registration', () => {
     const receiverStateAfterRegistration = await rx.firstValueFrom(
       receiverFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await receiverFacade.queryTxHistoryByHash(provenDustRegistrationTx.transactionHash());
+          const txInHistory = await receiverFacade.queryTxHistoryByHash(
+            carried<ledger.FinalizedTransaction>(provenDustRegistrationTx).transactionHash(),
+          );
 
           return {
             state,
@@ -262,15 +264,9 @@ describe('Dust Registration', () => {
           ],
         },
       ],
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
       { ttl: new Date(Date.now() + 30 * 60 * 1000) },
     );
-    const signedTransfer = await senderFacade.signRecipe(transferTxRecipe, (payload) =>
-      unshieldedSenderKeystore.signData(payload),
-    );
+    const signedTransfer = await senderFacade.signRecipe(transferTxRecipe, unshieldedSenderKeystore.signDataAsync);
     const finalizedTransfer = await senderFacade.finalizeRecipe(signedTransfer);
     await senderFacade.submitTransaction(finalizedTransfer);
 
@@ -296,7 +292,7 @@ describe('Dust Registration', () => {
     await receiverFacade.registerNightUtxosForDustGeneration(
       nightUtxos,
       unshieldedReceiverKeystore.getPublicKey(),
-      (payload) => unshieldedReceiverKeystore.signData(payload),
+      unshieldedReceiverKeystore.signDataAsync,
     );
 
     // Booking contract: the just-registered UTxOs must no longer appear as available
@@ -314,7 +310,7 @@ describe('Dust Registration', () => {
       receiverFacade.registerNightUtxosForDustGeneration(
         nightUtxos,
         unshieldedReceiverKeystore.getPublicKey(),
-        (payload) => unshieldedReceiverKeystore.signData(payload),
+        unshieldedReceiverKeystore.signDataAsync,
       ),
     ).rejects.toThrow();
   });
@@ -349,17 +345,10 @@ describe('Dust Registration', () => {
     };
 
     await senderFacade
-      .transferTransaction(
-        [transfersToMake],
-        {
-          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-        },
-        {
-          ttl: DateOps.addSeconds(new Date(), 1800),
-        },
-      )
-      .then((recipe) => senderFacade.signRecipe(recipe, (payload) => unshieldedSenderKeystore.signData(payload)))
+      .transferTransaction([transfersToMake], {
+        ttl: DateOps.addSeconds(new Date(), 1800),
+      })
+      .then((recipe) => senderFacade.signRecipe(recipe, unshieldedSenderKeystore.signDataAsync))
       .then((signedTxRecipe) => senderFacade.finalizeRecipe(signedTxRecipe))
       .then((tx) => senderFacade.submitTransaction(tx));
 
@@ -391,7 +380,7 @@ describe('Dust Registration', () => {
       .registerNightUtxosForDustGeneration(
         receiverStateBeforeRegistration.unshielded.availableCoins,
         unshieldedReceiverKeystore.getPublicKey(),
-        (payload) => unshieldedReceiverKeystore.signData(payload),
+        unshieldedReceiverKeystore.signDataAsync,
       )
       .then((recipe) => receiverFacade.finalizeRecipe(recipe))
       .then((tx) => receiverFacade.submitTransaction(tx));

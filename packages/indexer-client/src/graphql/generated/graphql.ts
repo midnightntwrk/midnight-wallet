@@ -24,8 +24,14 @@ export type BlockHashQuery = {
   readonly block: {
     readonly height: number;
     readonly hash: string;
+    readonly protocolVersion: number;
     readonly ledgerParameters: string;
     readonly timestamp: number;
+    readonly zswapEndIndex: number;
+    readonly dustCommitmentEndIndex: number;
+    readonly dustGenerationEndIndex: number;
+    readonly dustCommitmentMerkleTreeRoot: string | null;
+    readonly dustGenerationMerkleTreeRoot: string | null;
   } | null;
 };
 
@@ -40,6 +46,20 @@ export type DisconnectMutationVariables = Exact<{
 }>;
 
 export type DisconnectMutation = { readonly disconnect: null };
+
+export type DustCommitmentMerkleTreeUpdateQueryVariables = Exact<{
+  startIndex: number;
+  endIndex: number;
+}>;
+
+export type DustCommitmentMerkleTreeUpdateQuery = {
+  readonly dustCommitmentMerkleTreeUpdate: {
+    readonly startIndex: number;
+    readonly endIndex: number;
+    readonly update: string;
+    readonly protocolVersion: number;
+  };
+};
 
 export type FetchTermsAndConditionsQueryVariables = Exact<{ [key: string]: never }>;
 
@@ -96,16 +116,141 @@ export type TransactionStatusQuery = {
   >;
 };
 
+export type DustGenerationsSubscriptionVariables = Exact<{
+  dustAddress: string;
+  blockHash: string;
+  dtimeCutoffHeight: number;
+}>;
+
+export type DustGenerationsSubscription = {
+  readonly dustGenerations:
+    | {
+        readonly __typename: 'DustGenerationDtimeUpdateItem';
+        readonly generationMtIndex: number;
+        readonly newDtime: number;
+        readonly nightUtxoHash: string;
+        readonly treeInsertionPath: string;
+      }
+    | {
+        readonly __typename: 'DustGenerationsItem';
+        readonly commitmentMtIndex: number;
+        readonly generationMtIndex: number;
+        readonly owner: string;
+        readonly value: string;
+        readonly initialValue: string;
+        readonly backingNight: string;
+        readonly ctime: number;
+        readonly transactionId: number;
+        readonly transactionHash: string;
+        readonly collapsedMerkleTree: {
+          readonly startIndex: number;
+          readonly endIndex: number;
+          readonly update: string;
+          readonly protocolVersion: number;
+        } | null;
+      }
+    | {
+        readonly __typename: 'DustGenerationsProgress';
+        readonly highestIndex: number;
+        readonly collapsedMerkleTree: {
+          readonly startIndex: number;
+          readonly endIndex: number;
+          readonly update: string;
+          readonly protocolVersion: number;
+        } | null;
+      };
+};
+
+export type DustLedgerEventTipSubscriptionVariables = Exact<{
+  id: number | null | undefined;
+}>;
+
+export type DustLedgerEventTipSubscription = {
+  readonly dustLedgerEvents:
+    | { readonly id: number; readonly maxId: number }
+    | { readonly id: number; readonly maxId: number }
+    | { readonly id: number; readonly maxId: number }
+    | { readonly id: number; readonly maxId: number };
+};
+
 export type DustLedgerEventsSubscriptionVariables = Exact<{
   id: number | null | undefined;
 }>;
 
 export type DustLedgerEventsSubscription = {
   readonly dustLedgerEvents:
-    | { readonly id: number; readonly raw: string; readonly maxId: number; readonly type: 'DustGenerationDtimeUpdate' }
-    | { readonly id: number; readonly raw: string; readonly maxId: number; readonly type: 'DustInitialUtxo' }
-    | { readonly id: number; readonly raw: string; readonly maxId: number; readonly type: 'DustSpendProcessed' }
-    | { readonly id: number; readonly raw: string; readonly maxId: number; readonly type: 'ParamChange' };
+    | {
+        readonly id: number;
+        readonly raw: string;
+        readonly maxId: number;
+        readonly protocolVersion: number;
+        readonly type: 'DustGenerationDtimeUpdate';
+      }
+    | {
+        readonly id: number;
+        readonly raw: string;
+        readonly maxId: number;
+        readonly protocolVersion: number;
+        readonly type: 'DustInitialUtxo';
+      }
+    | {
+        readonly id: number;
+        readonly raw: string;
+        readonly maxId: number;
+        readonly protocolVersion: number;
+        readonly type: 'DustSpendProcessed';
+      }
+    | {
+        readonly id: number;
+        readonly raw: string;
+        readonly maxId: number;
+        readonly protocolVersion: number;
+        readonly type: 'ParamChange';
+      };
+};
+
+export type DustNullifierTransactionsSubscriptionVariables = Exact<{
+  nullifierLeBytesPrefixes: ReadonlyArray<string> | string;
+  fromBlock: number | null | undefined;
+  toBlock: number | null | undefined;
+}>;
+
+export type DustNullifierTransactionsSubscription = {
+  readonly dustNullifierTransactions: {
+    readonly nullifierLeBytes: string;
+    readonly commitmentLeBytes: string;
+    readonly transactionId: number;
+    readonly transactionHash: string;
+    readonly blockHeight: number;
+    readonly blockHash: string;
+    readonly transaction:
+      | {
+          readonly __typename: 'BridgeClaimTransaction';
+          readonly block: { readonly protocolVersion: number; readonly ledgerParameters: string };
+        }
+      | {
+          readonly __typename: 'RegularTransaction';
+          readonly id: number;
+          readonly hash: string;
+          readonly dustLedgerEvents: ReadonlyArray<
+            | { readonly id: number; readonly raw: string; readonly maxId: number; readonly protocolVersion: number }
+            | { readonly id: number; readonly raw: string; readonly maxId: number; readonly protocolVersion: number }
+            | { readonly id: number; readonly raw: string; readonly maxId: number; readonly protocolVersion: number }
+            | { readonly id: number; readonly raw: string; readonly maxId: number; readonly protocolVersion: number }
+          >;
+          readonly zswapLedgerEvents: ReadonlyArray<{
+            readonly id: number;
+            readonly raw: string;
+            readonly maxId: number;
+            readonly protocolVersion: number;
+          }>;
+          readonly block: { readonly protocolVersion: number; readonly ledgerParameters: string };
+        }
+      | {
+          readonly __typename: 'SystemTransaction';
+          readonly block: { readonly protocolVersion: number; readonly ledgerParameters: string };
+        };
+  };
 };
 
 export type ShieldedTransactionsSubscriptionVariables = Exact<{
@@ -202,8 +347,18 @@ export type UnshieldedTransactionsSubscription = {
           readonly registeredForDustGeneration: boolean;
         }>;
       }
-    | { readonly highestTransactionId: number; readonly type: 'UnshieldedTransactionsProgress' };
+    | {
+        readonly highestTransactionId: number;
+        readonly protocolVersion: number;
+        readonly type: 'UnshieldedTransactionsProgress';
+      };
 };
+
+export type ZswapEventTipSubscriptionVariables = Exact<{
+  id: number | null | undefined;
+}>;
+
+export type ZswapEventTipSubscription = { readonly zswapLedgerEvents: { readonly id: number; readonly maxId: number } };
 
 export type ZswapEventsSubscriptionVariables = Exact<{
   id: number | null | undefined;
@@ -250,8 +405,14 @@ export const BlockHashDocument = {
               selections: [
                 { kind: 'Field', name: { kind: 'Name', value: 'height' } },
                 { kind: 'Field', name: { kind: 'Name', value: 'hash' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
                 { kind: 'Field', name: { kind: 'Name', value: 'ledgerParameters' } },
                 { kind: 'Field', name: { kind: 'Name', value: 'timestamp' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'zswapEndIndex' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'dustCommitmentEndIndex' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'dustGenerationEndIndex' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'dustCommitmentMerkleTreeRoot' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'dustGenerationMerkleTreeRoot' } },
               ],
             },
           },
@@ -326,6 +487,58 @@ export const DisconnectDocument = {
     },
   ],
 } as unknown as DocumentNode<DisconnectMutation, DisconnectMutationVariables>;
+export const DustCommitmentMerkleTreeUpdateDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'query',
+      name: { kind: 'Name', value: 'DustCommitmentMerkleTreeUpdate' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: { kind: 'Variable', name: { kind: 'Name', value: 'startIndex' } },
+          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } } },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: { kind: 'Variable', name: { kind: 'Name', value: 'endIndex' } },
+          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } } },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'dustCommitmentMerkleTreeUpdate' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'startIndex' },
+                value: { kind: 'Variable', name: { kind: 'Name', value: 'startIndex' } },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'endIndex' },
+                value: { kind: 'Variable', name: { kind: 'Name', value: 'endIndex' } },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'startIndex' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'endIndex' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'update' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DustCommitmentMerkleTreeUpdateQuery, DustCommitmentMerkleTreeUpdateQueryVariables>;
 export const FetchTermsAndConditionsDocument = {
   kind: 'Document',
   definitions: [
@@ -537,6 +750,172 @@ export const TransactionStatusDocument = {
     },
   ],
 } as unknown as DocumentNode<TransactionStatusQuery, TransactionStatusQueryVariables>;
+export const DustGenerationsDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'subscription',
+      name: { kind: 'Name', value: 'DustGenerations' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: { kind: 'Variable', name: { kind: 'Name', value: 'dustAddress' } },
+          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'DustAddress' } } },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: { kind: 'Variable', name: { kind: 'Name', value: 'blockHash' } },
+          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'HexEncoded' } } },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: { kind: 'Variable', name: { kind: 'Name', value: 'dtimeCutoffHeight' } },
+          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } } },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'dustGenerations' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'dustAddress' },
+                value: { kind: 'Variable', name: { kind: 'Name', value: 'dustAddress' } },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'blockHash' },
+                value: { kind: 'Variable', name: { kind: 'Name', value: 'blockHash' } },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'dtimeCutoffHeight' },
+                value: { kind: 'Variable', name: { kind: 'Name', value: 'dtimeCutoffHeight' } },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: '__typename' } },
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DustGenerationsItem' } },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      { kind: 'Field', name: { kind: 'Name', value: 'commitmentMtIndex' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'generationMtIndex' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'owner' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'value' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'initialValue' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'backingNight' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'ctime' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'transactionId' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'transactionHash' } },
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'collapsedMerkleTree' },
+                        selectionSet: {
+                          kind: 'SelectionSet',
+                          selections: [
+                            { kind: 'Field', name: { kind: 'Name', value: 'startIndex' } },
+                            { kind: 'Field', name: { kind: 'Name', value: 'endIndex' } },
+                            { kind: 'Field', name: { kind: 'Name', value: 'update' } },
+                            { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DustGenerationsProgress' } },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      { kind: 'Field', name: { kind: 'Name', value: 'highestIndex' } },
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'collapsedMerkleTree' },
+                        selectionSet: {
+                          kind: 'SelectionSet',
+                          selections: [
+                            { kind: 'Field', name: { kind: 'Name', value: 'startIndex' } },
+                            { kind: 'Field', name: { kind: 'Name', value: 'endIndex' } },
+                            { kind: 'Field', name: { kind: 'Name', value: 'update' } },
+                            { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+                {
+                  kind: 'InlineFragment',
+                  typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'DustGenerationDtimeUpdateItem' } },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      { kind: 'Field', name: { kind: 'Name', value: 'generationMtIndex' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'newDtime' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'nightUtxoHash' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'treeInsertionPath' } },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DustGenerationsSubscription, DustGenerationsSubscriptionVariables>;
+export const DustLedgerEventTipDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'subscription',
+      name: { kind: 'Name', value: 'DustLedgerEventTip' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'dustLedgerEvents' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'id' },
+                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'maxId' } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DustLedgerEventTipSubscription, DustLedgerEventTipSubscriptionVariables>;
 export const DustLedgerEventsDocument = {
   kind: 'Document',
   definitions: [
@@ -571,6 +950,7 @@ export const DustLedgerEventsDocument = {
                 { kind: 'Field', name: { kind: 'Name', value: 'id' } },
                 { kind: 'Field', name: { kind: 'Name', value: 'raw' } },
                 { kind: 'Field', name: { kind: 'Name', value: 'maxId' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
               ],
             },
           },
@@ -579,6 +959,134 @@ export const DustLedgerEventsDocument = {
     },
   ],
 } as unknown as DocumentNode<DustLedgerEventsSubscription, DustLedgerEventsSubscriptionVariables>;
+export const DustNullifierTransactionsDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'subscription',
+      name: { kind: 'Name', value: 'DustNullifierTransactions' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: { kind: 'Variable', name: { kind: 'Name', value: 'nullifierLeBytesPrefixes' } },
+          type: {
+            kind: 'NonNullType',
+            type: {
+              kind: 'ListType',
+              type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'HexEncoded' } } },
+            },
+          },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: { kind: 'Variable', name: { kind: 'Name', value: 'fromBlock' } },
+          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
+        },
+        {
+          kind: 'VariableDefinition',
+          variable: { kind: 'Variable', name: { kind: 'Name', value: 'toBlock' } },
+          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'dustNullifierTransactions' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'nullifierLeBytesPrefixes' },
+                value: { kind: 'Variable', name: { kind: 'Name', value: 'nullifierLeBytesPrefixes' } },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'fromBlock' },
+                value: { kind: 'Variable', name: { kind: 'Name', value: 'fromBlock' } },
+              },
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'toBlock' },
+                value: { kind: 'Variable', name: { kind: 'Name', value: 'toBlock' } },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'nullifierLeBytes' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'commitmentLeBytes' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'transactionId' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'transactionHash' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'blockHeight' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'blockHash' } },
+                {
+                  kind: 'Field',
+                  name: { kind: 'Name', value: 'transaction' },
+                  selectionSet: {
+                    kind: 'SelectionSet',
+                    selections: [
+                      { kind: 'Field', name: { kind: 'Name', value: '__typename' } },
+                      {
+                        kind: 'Field',
+                        name: { kind: 'Name', value: 'block' },
+                        selectionSet: {
+                          kind: 'SelectionSet',
+                          selections: [
+                            { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
+                            { kind: 'Field', name: { kind: 'Name', value: 'ledgerParameters' } },
+                          ],
+                        },
+                      },
+                      {
+                        kind: 'InlineFragment',
+                        typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'RegularTransaction' } },
+                        selectionSet: {
+                          kind: 'SelectionSet',
+                          selections: [
+                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                            { kind: 'Field', name: { kind: 'Name', value: 'hash' } },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'dustLedgerEvents' },
+                              selectionSet: {
+                                kind: 'SelectionSet',
+                                selections: [
+                                  { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                                  { kind: 'Field', name: { kind: 'Name', value: 'raw' } },
+                                  { kind: 'Field', name: { kind: 'Name', value: 'maxId' } },
+                                  { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
+                                ],
+                              },
+                            },
+                            {
+                              kind: 'Field',
+                              name: { kind: 'Name', value: 'zswapLedgerEvents' },
+                              selectionSet: {
+                                kind: 'SelectionSet',
+                                selections: [
+                                  { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                                  { kind: 'Field', name: { kind: 'Name', value: 'raw' } },
+                                  { kind: 'Field', name: { kind: 'Name', value: 'maxId' } },
+                                  { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
+                                ],
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<DustNullifierTransactionsSubscription, DustNullifierTransactionsSubscriptionVariables>;
 export const ShieldedTransactionsDocument = {
   kind: 'Document',
   definitions: [
@@ -882,6 +1390,7 @@ export const UnshieldedTransactionsDocument = {
                         name: { kind: 'Name', value: '__typename' },
                       },
                       { kind: 'Field', name: { kind: 'Name', value: 'highestTransactionId' } },
+                      { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
                     ],
                   },
                 },
@@ -893,6 +1402,46 @@ export const UnshieldedTransactionsDocument = {
     },
   ],
 } as unknown as DocumentNode<UnshieldedTransactionsSubscription, UnshieldedTransactionsSubscriptionVariables>;
+export const ZswapEventTipDocument = {
+  kind: 'Document',
+  definitions: [
+    {
+      kind: 'OperationDefinition',
+      operation: 'subscription',
+      name: { kind: 'Name', value: 'ZswapEventTip' },
+      variableDefinitions: [
+        {
+          kind: 'VariableDefinition',
+          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
+        },
+      ],
+      selectionSet: {
+        kind: 'SelectionSet',
+        selections: [
+          {
+            kind: 'Field',
+            name: { kind: 'Name', value: 'zswapLedgerEvents' },
+            arguments: [
+              {
+                kind: 'Argument',
+                name: { kind: 'Name', value: 'id' },
+                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
+              },
+            ],
+            selectionSet: {
+              kind: 'SelectionSet',
+              selections: [
+                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
+                { kind: 'Field', name: { kind: 'Name', value: 'maxId' } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  ],
+} as unknown as DocumentNode<ZswapEventTipSubscription, ZswapEventTipSubscriptionVariables>;
 export const ZswapEventsDocument = {
   kind: 'Document',
   definitions: [

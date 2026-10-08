@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { inspect } from 'util';
@@ -184,11 +184,21 @@ describe('Funded wallet', () => {
     'Shielded transaction history entries contain receivedCoins and spentCoins',
     async () => {
       await funded.wallet.waitForSyncedState();
-      const txHistory = await funded.wallet.getAllFromTxHistory();
-      const confirmed = txHistory.filter(isFinalizedWalletEntry);
-      const shieldedEntries = confirmed.filter((e) => e.shielded !== undefined);
-      expect(shieldedEntries.length).toBeGreaterThan(0);
-      shieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
+      // Shielded tx-history is populated in a detached fiber after state sync (it needs an extra
+      // TransactionHistoryDetail indexer query the shielded subscription doesn't provide), so it is
+      // eventually consistent and not covered by waitForSyncedState(). Poll until it lands.
+      const shieldedEntries = await vi.waitFor(
+        async () => {
+          const txHistory = await funded.wallet.getAllFromTxHistory();
+          const confirmed = txHistory.filter(isFinalizedWalletEntry);
+          const shieldedEntries = confirmed.filter((e) => e.shielded !== undefined);
+          expect(shieldedEntries.length).toBeGreaterThan(0);
+          shieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
+          return shieldedEntries;
+        },
+        { timeout: 30_000, interval: 1_000 },
+      );
+
       // At least one entry should have receivedCoins (from genesis funding)
       const entryWithReceived = shieldedEntries.find((e) => e.shielded!.receivedCoins.length > 0);
       expect(entryWithReceived).toBeDefined();

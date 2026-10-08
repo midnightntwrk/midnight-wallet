@@ -11,12 +11,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
-import { type CombinedSwapInputs, type CombinedSwapOutputs, type WalletFacade } from '../src/index.js';
+import {
+  type CombinedSwapInputs,
+  type CombinedSwapOutputs,
+  type UnprovenTransactionRecipe,
+  type WalletFacade,
+} from '../src/index.js';
 import {
   createSimulatorWalletFactories,
   deriveWalletKeys,
@@ -36,20 +41,32 @@ const shieldedTokenType = ledger.shieldedToken().raw;
 const nightTokenType = ledger.nativeToken().raw;
 
 /**
+ * Opens the transaction a recipe carries, at exactly the version the recipe says it was built for.
+ *
+ * @remarks
+ *   A one-wide range: the test is asking for the transaction the handle holds and no other, so the version it names is
+ *   the recipe's own. Naming the wrong ledger type would fail on the first property read.
+ */
+const builtTransaction = (recipe: UnprovenTransactionRecipe): ledger.UnprovenTransaction =>
+  Either.getOrThrow(
+    WalletTransaction.unwrapWithin<ledger.UnprovenTransaction>(
+      recipe.transaction,
+      ProtocolVersion.makeRange(recipe.protocolVersion, ProtocolVersion.ProtocolVersion(recipe.protocolVersion + 1n)),
+    ),
+  );
+
+/**
  * Boots a simulator with the given genesis funds, starts a maker facade, and runs `assert` against it. The facade is
  * torn down when the scope closes.
  */
-const runWithMaker = (
-  genesisMints: [GenesisMint, ...GenesisMint[]],
-  assert: (facade: WalletFacade, keys: ReturnType<typeof deriveWalletKeys>) => Promise<void>,
-) =>
+const runWithMaker = (genesisMints: [GenesisMint, ...GenesisMint[]], assert: (facade: WalletFacade) => Promise<void>) =>
   Effect.gen(function* () {
     const keys = deriveWalletKeys(SEED, NETWORK_ID);
     const simulator = yield* Simulator.init({ genesisMints, blockProducer: immediateBlockProducer() });
     const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
     const factories = createSimulatorWalletFactories(config);
     const facade = yield* makeSimulatorFacade(config, keys, factories);
-    yield* Effect.promise(() => assert(facade, keys));
+    yield* Effect.promise(() => assert(facade));
   }).pipe(Effect.scoped, Effect.runPromise);
 
 describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
@@ -63,7 +80,7 @@ describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
           recipient: deriveWalletKeys(SEED, NETWORK_ID).shieldedKeys,
         },
       ],
-      async (facade, keys) => {
+      async (facade) => {
         await waitForShieldedCoins(facade).pipe(Effect.runPromise);
 
         const ttl = new Date(Date.now() + 60 * 60 * 1000);
@@ -78,13 +95,8 @@ describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
           },
         ];
 
-        const recipe = await facade.initSwap(
-          desiredInputs,
-          desiredOutputs,
-          { shieldedSecretKeys: keys.shieldedKeys, dustSecretKey: keys.dustKey },
-          { ttl },
-        );
-        const tx = recipe.transaction;
+        const recipe = await facade.initSwap(desiredInputs, desiredOutputs, { ttl });
+        const tx = builtTransaction(recipe);
 
         // Give side (shielded input) is represented: the single genesis coin is selected.
         expect(tx.guaranteedOffer).toBeDefined();
@@ -112,7 +124,7 @@ describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
           verifyingKey: deriveWalletKeys(SEED, NETWORK_ID).signatureVerifyingKey,
         },
       ],
-      async (facade, keys) => {
+      async (facade) => {
         await waitForUnshieldedBalance(facade, nightTokenType, tokenValue(1n)).pipe(Effect.runPromise);
 
         const ttl = new Date(Date.now() + 60 * 60 * 1000);
@@ -127,13 +139,8 @@ describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
           },
         ];
 
-        const recipe = await facade.initSwap(
-          desiredInputs,
-          desiredOutputs,
-          { shieldedSecretKeys: keys.shieldedKeys, dustSecretKey: keys.dustKey },
-          { ttl },
-        );
-        const tx = recipe.transaction;
+        const recipe = await facade.initSwap(desiredInputs, desiredOutputs, { ttl });
+        const tx = builtTransaction(recipe);
 
         // Give side (unshielded input) is represented as a single intent.
         expect(tx.intents?.size).toBe(1);

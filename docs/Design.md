@@ -271,6 +271,16 @@ For example:
 - for coins, there is a capability only, which lists available coins, as well as computes different kinds of balances
   (available, total, pending)
 
+The synchronization capability also validates the order of what the service delivers, so an indexer fault surfaces as a
+typed error rather than as corrupted state. Shielded and Dust ledger events must arrive in strictly ascending id order;
+a batch with an id at or below its predecessor, or at or below the applied cursor, is refused whole with
+`OutOfOrderSyncUpdateError`. Contiguity is deliberately not checked: in the indexer, zswap, dust and contract events
+share one id sequence and each subscription filters its own grouping, so gaps in a stream are normal, and a skipped
+commitment-inserting event is caught by the ledger's own insertion check instead. Unshielded transaction ids are a
+sparse per-address subsequence of a global id, so only "strictly above the cursor" is checked there: an id equal to the
+cursor is a re-delivery and a no-op, and a spend of a UTXO the wallet does not hold is refused before the cursor moves.
+In every case state and cursor stay untouched, and the running variant logs the error and retries from the same cursor.
+
 ### Summary and code example
 
 Immutability, combined with allowing only pure functional, synchronous operations on the state, covers a lot of what is
@@ -367,6 +377,39 @@ class VariantBuilder {
     }
 }
 ```
+
+## Persisted formats
+
+The SDK does not store anything itself. It hands the application strings to keep and give back later, and an application
+may give one back long after the version that wrote it stopped shipping. The vocabulary below keeps that concern apart
+from the superficially similar one of protocol versions and hard forks.
+
+**Persisted surface** — a string the SDK gives the application to store and hand back. There are five, each stored
+independently by the application: the shielded, unshielded and dust wallet snapshots, the transaction history, and the
+pending transactions. The facade does not compose them into one blob.
+
+**Format version** — the version of a persisted surface's encoded shape, written into the payload as
+`{ version: 'vN', ... }`. Each surface has its own line: the transaction history is on `v2` while the other four are on
+`v1`, because a format version belongs to a surface, not to a release. A payload with no `version` is the first version
+of its surface — the envelope did not exist when it was written, so its absence is the marker.
+
+**Protocol version** — the chain's hard-fork number, `protocolVersion`, which lives _inside_ a payload as data. It is
+not a format version and cannot serve as one.
+
+**Format upgrade** — a pure function from an encoded `vN` payload to an encoded `vN+1` one. Upgrades chain a version at
+a time and never skip, so each step only has to know the version immediately before it. Distinct from **variant
+migration**, the runtime's existing term for moving live wallet state across a hard fork (`migrateToNextVariant`).
+
+**Drift baseline** — a recording of what the current build writes, kept under `fixtures/_baseline/<writer>/`, one folder
+per wallet variant because both variants write the snapshot surfaces. It carries no compatibility promise; it exists so
+that a change to what we _write_ cannot pass unnoticed.
+
+**Compatibility promise** — every format version shipped in a stable release loads in every later stable release. There
+is no downgrade: a reader meeting a version it does not know refuses the payload and names the version it found. A
+format that only ever existed on a pre-release tag carries no promise.
+
+Rules for changing any of this: `.claude/rules/persisted-formats.md`. The reasoning, and the alternatives rejected: ADR
+[0008](decisions/0008-persisted-format-versioning.md).
 
 ## Links and references
 

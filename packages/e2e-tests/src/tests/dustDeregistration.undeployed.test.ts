@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
@@ -27,9 +27,10 @@ import {
   isFinalizedWalletEntry,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { makeDefaultSubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
+import { carried } from './helpers/transactions.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
 
@@ -59,7 +60,10 @@ describe('Dust Deregistration', () => {
   const unshieldedWalletSeed = getUnshieldedSeed(SEED);
   const dustWalletSeed = getDustSeed(SEED);
 
-  const unshieldedWalletKeystore = createKeystore(unshieldedWalletSeed, NetworkId.NetworkId.Undeployed);
+  const unshieldedWalletKeystore = createKeystore(
+    { kind: 'schnorr', secret: unshieldedWalletSeed },
+    NetworkId.NetworkId.Undeployed,
+  );
 
   let startedEnvironment: StartedDockerComposeEnvironment;
   let configuration: DefaultConfiguration;
@@ -79,6 +83,7 @@ describe('Dust Deregistration', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      forks: ProtocolVersion.V9NativeForkSchedule,
       costParameters: {
         feeBlocksMargin: 5,
       },
@@ -104,10 +109,7 @@ describe('Dust Deregistration', () => {
       submissionService: (configuration) => makeDefaultSubmissionService(configuration),
     });
 
-    await walletFacade.start(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),
-      ledger.DustSecretKey.fromSeed(dustWalletSeed),
-    );
+    await walletFacade.start({ shielded: shieldedWalletSeed, unshielded: shieldedWalletSeed, dust: dustWalletSeed });
   });
 
   afterEach(async () => {
@@ -133,19 +135,12 @@ describe('Dust Deregistration', () => {
     const dustDeregistrationTx = await walletFacade.deregisterFromDustGeneration(
       nightUtxosRegisteredForDustGeneration.slice(0, deregisterTokens),
       unshieldedWalletKeystore.getPublicKey(),
-      (payload) => unshieldedWalletKeystore.signData(payload),
+      unshieldedWalletKeystore.signDataAsync,
     );
 
-    const balancingRecipe = await walletFacade.balanceUnprovenTransaction(
-      dustDeregistrationTx.transaction,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletSeed),
-      },
-      {
-        ttl: new Date(Date.now() + 30 * 60 * 1000),
-      },
-    );
+    const balancingRecipe = await walletFacade.balanceUnprovenTransaction(dustDeregistrationTx.transaction, {
+      ttl: new Date(Date.now() + 30 * 60 * 1000),
+    });
 
     const finalizedDustDeregistrationTx = await walletFacade.finalizeRecipe(balancingRecipe);
 
@@ -156,7 +151,9 @@ describe('Dust Deregistration', () => {
     const walletStateAfterDeregistration = await rx.firstValueFrom(
       walletFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await walletFacade.queryTxHistoryByHash(finalizedDustDeregistrationTx.transactionHash());
+          const txInHistory = await walletFacade.queryTxHistoryByHash(
+            carried<ledger.FinalizedTransaction>(finalizedDustDeregistrationTx).transactionHash(),
+          );
 
           return {
             state,
@@ -201,8 +198,10 @@ describe('Dust Deregistration', () => {
     expect(nightUtxos.length).toBeGreaterThan(0);
 
     // First call: build a deregistration recipe without submitting it.
-    await walletFacade.deregisterFromDustGeneration(nightUtxos, unshieldedWalletKeystore.getPublicKey(), (payload) =>
-      unshieldedWalletKeystore.signData(payload),
+    await walletFacade.deregisterFromDustGeneration(
+      nightUtxos,
+      unshieldedWalletKeystore.getPublicKey(),
+      unshieldedWalletKeystore.signDataAsync,
     );
 
     // Booking contract: the just-deregistered UTxOs must no longer appear as available
@@ -216,8 +215,10 @@ describe('Dust Deregistration', () => {
 
     // Fail-fast contract: a second deregistration over the same UTxOs must reject at build time.
     await expect(
-      walletFacade.deregisterFromDustGeneration(nightUtxos, unshieldedWalletKeystore.getPublicKey(), (payload) =>
-        unshieldedWalletKeystore.signData(payload),
+      walletFacade.deregisterFromDustGeneration(
+        nightUtxos,
+        unshieldedWalletKeystore.getPublicKey(),
+        unshieldedWalletKeystore.signDataAsync,
       ),
     ).rejects.toThrow();
   });

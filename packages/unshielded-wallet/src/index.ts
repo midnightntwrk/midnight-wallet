@@ -10,11 +10,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+export * from './UnshieldedWalletAPI.js';
+export * from './SingleVariantUnshieldedWallet.js';
 export * from './UnshieldedWallet.js';
+// Exported under a wallet-qualified name rather than unqualified. The umbrella package re-exports all three wallets
+// into one barrel, and each declares its own `UnsupportedSnapshotVersionError` — three classes of the same name with
+// three different deterministic tags, one per wallet whose snapshot could not be read. Namespacing the third one keeps
+// that barrel unambiguous without renaming the two that shipped before it.
+export * as UnshieldedRestore from './Restore.js';
 export {
   type UnshieldedTransactionHistoryEntry,
   UnshieldedSectionSchema,
   mergeUnshieldedSections,
-} from './v1/TransactionHistory.js';
+} from './v2/TransactionHistory.js';
+export { type SignSegment } from './v2/Signing.js';
 export * from './KeyStore.js';
-export { type DefaultSyncConfiguration, type NodeClientConnection, resolveNodeEndpoint } from './v1/Sync.js';
+// The sync configuration under a wallet-qualified name, for the same reason as the restore errors above: the dust
+// wallet exports a `DefaultSyncConfiguration` of its own, and the umbrella barrel would otherwise hold two.
+export {
+  type DefaultSyncConfiguration as DefaultUnshieldedSyncConfiguration,
+  type NodeClientConnection,
+  resolveNodeEndpoint,
+} from './v2/Sync.js';

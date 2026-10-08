@@ -14,7 +14,7 @@ import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { toProtocolStateArray } from '../testing/utils.js';
-import { NumericRangeBuilder } from '../testing/variants.js';
+import { Numeric, NumericRangeBuilder } from '../testing/variants.js';
 import { WalletBuilder } from '../WalletBuilder.js';
 
 describe('Wallet', () => {
@@ -32,12 +32,13 @@ describe('Wallet', () => {
       expect(wallet).toBeDefined();
 
       const errorHandler = vi.fn();
-      const receivedStates = await toProtocolStateArray<number>(wallet.rawState.pipe(rx.take(4)), errorHandler);
+      const receivedStates = await toProtocolStateArray(wallet.rawState.pipe(rx.take(4)), errorHandler);
 
       expect(receivedStates).toEqual([
-        { version: ProtocolVersion.MinSupportedVersion, state: 0 }, // The initial state is emitted both by runtime and the variant
-        { version: ProtocolVersion.MinSupportedVersion, state: 0 },
-        { version: ProtocolVersion.MinSupportedVersion, state: 1 },
+        // The initial state is emitted both by runtime and the variant
+        { version: ProtocolVersion.MinSupportedVersion, variantTag: Numeric, state: 0 },
+        { version: ProtocolVersion.MinSupportedVersion, variantTag: Numeric, state: 0 },
+        { version: ProtocolVersion.MinSupportedVersion, variantTag: Numeric, state: 1 },
       ]);
       expect(errorHandler).toHaveBeenCalled();
     });

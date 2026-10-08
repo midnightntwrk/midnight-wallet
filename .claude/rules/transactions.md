@@ -16,10 +16,15 @@ When building or inspecting transactions, consult the spec — don't guess proto
 
 ## Type and spec sources
 
-- **Ledger types**: `node_modules/@midnight*ntwrk/ledger-v*/*.d.ts` — `Transaction`, `Intent`, `ZswapOffer`,
-  `DustActions`, etc. Both the scope and the major version move, so glob rather than hardcode: upstream publishes under
-  `@midnight-ntwrk` (dashed, current) and `@midnightntwrk` (dashless, where it's heading), and the ledger major is part
-  of the package name. Check the depending package's `package.json` for what's actually installed.
+- **Ledger types**: `node_modules/@midnightntwrk/ledger-v9/ledger-v9.d.ts` and
+  `node_modules/@midnight-ntwrk/ledger-v8/ledger-v8.d.ts` — `Transaction`, `Intent`, `ZswapOffer`, `DustActions`, etc.
+  Two ledgers are installed and both are real: ledger-v9 (`@midnightntwrk`, dashless scope) from `forks.v9`, ledger-v8
+  (`@midnight-ntwrk`, dashed scope) below it. Use the types of the version that **produced** the transaction — decided by
+  the transaction's own protocol version, never by which package is easier to import.
+- **The handle**: a `WalletTransaction` (`packages/abstractions/src/WalletTransaction.ts`) carries that version as data.
+  `WalletTransaction.unwrapWithin(handle, range)` is how a test gets at the transaction inside; it refuses a stamp
+  outside the range rather than handing bytes to a ledger that would misread them. E2e suites wrap this as
+  `carried`/`sealed` (`packages/e2e-tests/src/tests/helpers/transactions.ts`).
 - **Ledger spec** (midnight-ledger repo, `spec/`): `intents-transactions.md` (structure, intents, segments, binding),
   `zswap.md` (shielded protocol), `dust.md` (fee mechanics), `night.md` (unshielded), `cost-model.md` (fees).
 - **Wallet spec** (in-repo): `docs/spec/Specification.md` — transaction lifecycle (pending → confirmed →
@@ -38,7 +43,9 @@ When building or inspecting transactions, consult the spec — don't guess proto
 
 - API usage patterns: `packages/docs-snippets/src/` (transfers, swap, balancing, initialization) — always check here
   first.
-- Transaction building: `packages/unshielded-wallet/src/v1/Transacting.ts`; tests
-  `packages/unshielded-wallet/src/v1/test/transacting.test.ts`,
-  `packages/shielded-wallet/src/v1/test/transacting.test.ts` (imbalance assertions).
+- Transaction building: `packages/unshielded-wallet/src/v2/Transacting.ts` (`v1` is its ledger-v8 twin); tests
+  `packages/unshielded-wallet/src/v2/test/transacting.test.ts`,
+  `packages/shielded-wallet/src/v2/test/transacting.test.ts` (offers, inputs and outputs),
+  `packages/dust-wallet/src/v2/test/transacting.test.ts` (`intent.dustActions` registrations and spends),
+  `packages/e2e-tests/src/tests/optionalBalancing.undeployed.test.ts` (imbalances per segment).
 - Balancing: `packages/capabilities/src/balancer/test/Balancer.test.ts`.

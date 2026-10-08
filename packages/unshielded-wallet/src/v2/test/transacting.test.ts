@@ -1,0 +1,747 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
+import { ArrayOps, DateOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { Array as Arr, Cause, Effect, Exit, HashMap, Option, pipe, Record as Rec } from 'effect';
+import * as fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
+import { createKeystore, PublicKey } from '../../KeyStore.js';
+import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
+import { CoreWallet } from '../CoreWallet.js';
+import { makeDefaultKeysCapability } from '../Keys.js';
+import { makeDefaultSigningService } from '../Signing.js';
+import {
+  type DefaultTransactingConfiguration,
+  type DefaultTransactingContext,
+  makeDefaultTransactingCapability,
+  type TokenTransfer,
+} from '../Transacting.js';
+import { TransactionOps } from '../TransactionOps.js';
+import { UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
+import { InsufficientFundsError, SignError, SpendUtxoError, TransactingError } from '../WalletError.js';
+
+const NIGHT = ledger.nativeToken().raw;
+const tokenA = ledger.sampleRawTokenType();
+const tokenB = ledger.sampleRawTokenType();
+
+type TestUtxo = UtxoWithMeta;
+const utxoArbitrary = (tokenType: ledger.RawTokenType, owner: PublicKey): fc.Arbitrary<TestUtxo> => {
+  return fc
+    .record({
+      utxo: fc.record<ledger.Utxo>({
+        value: fc.bigInt({ min: 1n, max: (1n << 64n) - 1n }),
+        owner: fc.constant(owner.addressHex),
+        type: fc.constant(tokenType),
+        intentHash: fc.context().map(() => ledger.sampleIntentHash()),
+        outputNo: fc.nat(10),
+      }),
+      meta: fc.record({
+        ctime: fc.date(),
+        registeredForDustGeneration: fc.boolean(),
+      }),
+    })
+    .map((data) => new UtxoWithMeta(data));
+};
+
+const outputArbitrary = (tokenType: ledger.RawTokenType, value: bigint): fc.Arbitrary<TokenTransfer> => {
+  return fc.record({
+    amount: fc.constant(value),
+    type: fc.constant(tokenType),
+    receiverAddress: fc
+      .uint8Array({ minLength: 32, maxLength: 32 })
+      .map((bytes) => Buffer.from(bytes))
+      .map((bytes) => new UnshieldedAddress(bytes)),
+  });
+};
+
+const walletAndTransfersArbitrary = (): fc.Arbitrary<{
+  wallet: CoreWallet;
+  outputs: Record<ledger.RawTokenType, ReadonlyArray<TokenTransfer>>;
+}> => {
+  const sample = ledger.sampleSigningKey();
+  const keystore = createKeystore(
+    { kind: sample.tag, secret: Buffer.from(sample.value, 'hex') },
+    NetworkId.NetworkId.Undeployed,
+  );
+  const ownerPK = PublicKey.fromKeyStore(keystore);
+  return fc
+    .record({
+      [NIGHT]: fc.array(utxoArbitrary(NIGHT, ownerPK), { minLength: 1, maxLength: 20 }),
+      [tokenA]: fc.array(utxoArbitrary(tokenA, ownerPK), { minLength: 1, maxLength: 20 }),
+      [tokenB]: fc.array(utxoArbitrary(tokenB, ownerPK), { minLength: 1, maxLength: 20 }),
+    })
+    .chain((allUtxos: Record<ledger.RawTokenType, ReadonlyArray<TestUtxo>>) => {
+      const balances: Record<ledger.RawTokenType, bigint> = pipe(
+        allUtxos,
+        Rec.map((utxos) =>
+          pipe(
+            utxos,
+            Arr.map((utxo) => utxo.utxo.value),
+            ArrayOps.sumBigInt,
+          ),
+        ),
+      );
+
+      const outputsArbitrary = (type: ledger.RawTokenType): fc.Arbitrary<ReadonlyArray<TokenTransfer>> => {
+        return fc.integer({ min: 1, max: allUtxos[type].length }).chain((numberOfOutputs) => {
+          return fc.bigInt({ min: 1n, max: balances[type] / BigInt(numberOfOutputs) }).chain((valuePerOutput) => {
+            return fc.array(outputArbitrary(type, valuePerOutput), {
+              minLength: numberOfOutputs,
+              maxLength: numberOfOutputs,
+            });
+          });
+        });
+      };
+
+      return fc.record({
+        utxos: fc.constant(pipe(allUtxos, Rec.values, Arr.flatten)),
+        outputs: fc.record({
+          [NIGHT]: outputsArbitrary(NIGHT),
+          [tokenA]: outputsArbitrary(tokenA),
+          [tokenB]: outputsArbitrary(tokenB),
+        }),
+      });
+    })
+    .map(({ utxos, outputs }) => {
+      const state = UnshieldedState.restore(utxos, []);
+      const wallet = CoreWallet.restore(
+        state,
+        ownerPK,
+        { appliedId: 0n, highestTransactionId: 0n },
+        ProtocolVersion.ProtocolVersion(1n),
+        NetworkId.NetworkId.Undeployed,
+      );
+
+      return { keystore, wallet, outputs };
+    });
+};
+
+/** A wallet holding one spendable Night UTxO, together with the keystore that owns it. */
+const walletWithSingleNightUtxo = (): { keystore: ReturnType<typeof createKeystore>; wallet: CoreWallet } => {
+  const sample = ledger.sampleSigningKey();
+  const keystore = createKeystore(
+    { kind: sample.tag, secret: Buffer.from(sample.value, 'hex') },
+    NetworkId.NetworkId.Undeployed,
+  );
+  const ownerPK = PublicKey.fromKeyStore(keystore);
+  const utxos = [
+    new UtxoWithMeta({
+      utxo: {
+        value: 1_000n,
+        owner: ownerPK.addressHex,
+        type: NIGHT,
+        intentHash: ledger.sampleIntentHash(),
+        outputNo: 0,
+      },
+      meta: { ctime: new Date(0), registeredForDustGeneration: false },
+    }),
+  ];
+  return {
+    keystore,
+    wallet: CoreWallet.restore(
+      UnshieldedState.restore(utxos, []),
+      ownerPK,
+      { appliedId: 0n, highestTransactionId: 0n },
+      ProtocolVersion.ProtocolVersion(1n),
+      NetworkId.NetworkId.Undeployed,
+    ),
+  };
+};
+
+describe('Unshielded wallet transacting', () => {
+  const config: DefaultTransactingConfiguration = {
+    networkId: NetworkId.NetworkId.Undeployed,
+  };
+  const context: DefaultTransactingContext = {
+    coinSelection: chooseCoin,
+    coinsAndBalancesCapability: makeDefaultCoinsAndBalancesCapability(),
+    keysCapability: makeDefaultKeysCapability(),
+  };
+
+  const buildWalletWithNightUtxos = (count: number): { wallet: CoreWallet; utxos: ReadonlyArray<UtxoWithMeta> } => {
+    const sample = ledger.sampleSigningKey();
+    const keystore = createKeystore(
+      { kind: sample.tag, secret: Buffer.from(sample.value, 'hex') },
+      NetworkId.NetworkId.Undeployed,
+    );
+    const ownerPK = PublicKey.fromKeyStore(keystore);
+    const utxos: ReadonlyArray<UtxoWithMeta> = pipe(
+      Arr.range(0, count - 1),
+      Arr.map(
+        (i) =>
+          new UtxoWithMeta({
+            utxo: {
+              value: 1_000n + BigInt(i),
+              owner: ownerPK.addressHex,
+              type: NIGHT,
+              intentHash: ledger.sampleIntentHash(),
+              outputNo: i,
+            },
+            meta: { ctime: new Date(0), registeredForDustGeneration: false },
+          }),
+      ),
+    );
+    const state = UnshieldedState.restore(utxos, []);
+    const wallet = CoreWallet.restore(
+      state,
+      ownerPK,
+      { appliedId: 0n, highestTransactionId: 0n },
+      ProtocolVersion.ProtocolVersion(1n),
+      NetworkId.NetworkId.Undeployed,
+    );
+    return { wallet, utxos };
+  };
+
+  it('uses fallible section for issuing transfers involving Night', () => {
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    const ttl = DateOps.addSeconds(new Date(), 1800);
+
+    fc.assert(
+      fc.property(walletAndTransfersArbitrary(), ({ wallet, outputs }) => {
+        const outputsToUse = pipe(outputs, Rec.values, Arr.flatten);
+        const { transaction } = transacting.makeTransfer(wallet, outputsToUse, ttl).pipe(EitherOps.getOrThrowLeft);
+
+        const theIntent: ledger.Intent<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish> = transaction
+          .intents!.values()
+          .take(1)
+          .next().value!;
+
+        expect(transaction.intents).toBeDefined();
+        expect(transaction.intents!.size).toEqual(1);
+        expect(theIntent).toBeDefined();
+        // There are/should be other tests verifying intent contents. Here we only want to ensure usage of a proper section
+        expect(theIntent.fallibleUnshieldedOffer).toBeDefined();
+        expect(theIntent.guaranteedUnshieldedOffer).toBeUndefined();
+      }),
+    );
+  });
+
+  it('uses guaranteed section for issuing transfers not involving Night', () => {
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    const ttl = DateOps.addSeconds(new Date(), 1800);
+
+    fc.assert(
+      fc.property(walletAndTransfersArbitrary(), ({ wallet, outputs }) => {
+        const outputsToUse = pipe(
+          outputs,
+          Rec.filter((_value, key) => key != NIGHT),
+          Rec.values,
+          Arr.flatten,
+        );
+
+        const { transaction } = transacting.makeTransfer(wallet, outputsToUse, ttl).pipe(EitherOps.getOrThrowLeft);
+
+        const theIntent: ledger.Intent<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish> = transaction
+          .intents!.values()
+          .take(1)
+          .next().value!;
+
+        expect(transaction.intents).toBeDefined();
+        expect(transaction.intents!.size).toEqual(1);
+        expect(theIntent).toBeDefined();
+        // There are/should be other tests verifying intent contents. Here we only want to ensure usage of a proper section
+        expect(theIntent.fallibleUnshieldedOffer).toBeUndefined();
+        expect(theIntent.guaranteedUnshieldedOffer).toBeDefined();
+      }),
+    );
+  });
+
+  it('revert clears pending coins after makeTransfer', () => {
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    const ttl = DateOps.addSeconds(new Date(), 1800);
+
+    fc.assert(
+      fc.property(walletAndTransfersArbitrary(), ({ wallet, outputs }) => {
+        const outputsToUse = pipe(outputs, Rec.values, Arr.flatten);
+
+        // Make a transfer - this should move coins from available to pending
+        const { newState, transaction } = transacting
+          .makeTransfer(wallet, outputsToUse, ttl)
+          .pipe(EitherOps.getOrThrowLeft);
+
+        // Verify that some coins are now pending
+        const pendingCountAfterTransfer = HashMap.size(newState.state.pendingUtxos);
+        expect(pendingCountAfterTransfer).toBeGreaterThan(0);
+
+        // Revert the transaction - this should move coins back from pending to available
+        const revertedWallet = transacting.revertTransaction(newState, transaction).pipe(EitherOps.getOrThrowLeft);
+
+        // Verify that pending coins are cleared and moved back to available
+        expect(HashMap.size(revertedWallet.state.pendingUtxos)).toBe(0);
+
+        // Verify the reverted wallet has the same available coins as the original wallet
+        expect(HashMap.size(revertedWallet.state.availableUtxos)).toBe(HashMap.size(wallet.state.availableUtxos));
+      }),
+    );
+  });
+
+  it('revert only clears pending coins for the reverted transaction', () => {
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    const ttl = DateOps.addSeconds(new Date(), 1800);
+
+    fc.assert(
+      fc.property(walletAndTransfersArbitrary(), ({ wallet, outputs }) => {
+        const outputsToUse = pipe(outputs, Rec.values, Arr.flatten);
+
+        const [firstOutput, ...remainingOutputs] = outputsToUse;
+
+        const firstOutputMapped = [
+          {
+            ...firstOutput,
+            amount: 1n,
+          },
+        ];
+
+        const { newState: stateAfterTx1, transaction: tx1 } = transacting
+          .makeTransfer(wallet, firstOutputMapped, ttl)
+          .pipe(EitherOps.getOrThrowLeft);
+        const pendingCountAfterTx1 = HashMap.size(stateAfterTx1.state.pendingUtxos);
+        expect(pendingCountAfterTx1).toBeGreaterThan(0);
+
+        const { newState: stateAfterTx2, transaction: tx2 } = transacting
+          .makeTransfer(stateAfterTx1, remainingOutputs, ttl)
+          .pipe(EitherOps.getOrThrowLeft);
+
+        const pendingCountAfterTx2 = HashMap.size(stateAfterTx2.state.pendingUtxos);
+        expect(pendingCountAfterTx2).toBeGreaterThan(pendingCountAfterTx1);
+
+        const walletAfterRevert = transacting.revertTransaction(stateAfterTx2, tx1).pipe(EitherOps.getOrThrowLeft);
+
+        const pendingCountAfterRevert = HashMap.size(walletAfterRevert.state.pendingUtxos);
+        expect(pendingCountAfterRevert).toBe(pendingCountAfterTx2 - pendingCountAfterTx1);
+
+        const walletAfterBothReverts = transacting
+          .revertTransaction(walletAfterRevert, tx2)
+          .pipe(EitherOps.getOrThrowLeft);
+
+        expect(HashMap.size(walletAfterBothReverts.state.pendingUtxos)).toBe(0);
+        expect(HashMap.size(walletAfterBothReverts.state.availableUtxos)).toBe(
+          HashMap.size(wallet.state.availableUtxos),
+        );
+      }),
+    );
+  });
+
+  // The signer throws if it is ever reached, so a transaction with no intents must come back untouched without it.
+  describe('when signing', () => {
+    it('does nothing if an unproven transaction does not have any intents', async () => {
+      const signing = makeDefaultSigningService();
+
+      const emptyTx = ledger.Transaction.fromParts(config.networkId);
+      const result = await Effect.runPromise(
+        signing.sign(emptyTx, () => {
+          throw new Error('should not be called');
+        }),
+      );
+
+      expect(result).toBe(emptyTx);
+    });
+
+    it('does nothing if an unbound transaction does not have any intents', async () => {
+      const signing = makeDefaultSigningService();
+
+      const emptyTx = await ledger.Transaction.fromParts(config.networkId).prove(
+        {
+          prove() {
+            return Promise.resolve(Buffer.from([42]));
+          },
+          check(): Promise<(bigint | undefined)[]> {
+            return Promise.resolve([]);
+          },
+          // A transaction with no intents has no circuit, so no key is ever looked up.
+          lookupKey(): Promise<ledger.ProvingKeyMaterial | undefined> {
+            return Promise.resolve(undefined);
+          },
+        },
+        ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
+      );
+      const result = await Effect.runPromise(
+        signing.sign(emptyTx, () => {
+          throw new Error('should not be called');
+        }),
+      );
+
+      expect(result).toBe(emptyTx);
+    });
+
+    it('surfaces a rejecting signer as a SignError carrying the original cause', async () => {
+      // The whole point of the async signer is out-of-process backends, which fail for their own reasons. Their
+      // failure has to arrive as a typed error holding the original rejection, not as a defect or a bare string.
+      const signing = makeDefaultSigningService();
+      const transacting = makeDefaultTransactingCapability(config, () => context);
+      const { wallet } = walletWithSingleNightUtxo();
+      const { transaction } = transacting
+        .makeTransfer(
+          wallet,
+          [{ amount: 100n, type: NIGHT, receiverAddress: new UnshieldedAddress(Buffer.alloc(32, 5)) }],
+          DateOps.addSeconds(new Date(), 1800),
+        )
+        .pipe(EitherOps.getOrThrowLeft);
+      const backendDown = new Error('MPC coordinator unreachable');
+
+      const exit = await Effect.runPromiseExit(signing.sign(transaction, () => Promise.reject(backendDown)));
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const error = Option.getOrThrow(Cause.failureOption(exit.cause));
+        expect(error).toBeInstanceOf(SignError);
+        if (error instanceof SignError) {
+          expect(error.cause).toBe(backendDown);
+        }
+      }
+    });
+  });
+
+  describe('extractOwnInputs', () => {
+    it("returns UTxOs owned by the wallet's ADDRESS, not by its verifying key", () => {
+      // An intent input is a UtxoSpend, owned by a verifying key; a Utxo is owned by the address derived from that
+      // key. Under ledger-v9 the key is tagged, so copying its hex value into `owner` typechecks — and hands back a
+      // `Utxo` whose `owner` is a key. Every other Utxo in the wallet carries an address there.
+      const transacting = makeDefaultTransactingCapability(config, () => context);
+      const { wallet } = walletWithSingleNightUtxo();
+      const verifyingKey = wallet.publicKey.publicKey;
+      const { transaction } = transacting
+        .makeTransfer(
+          wallet,
+          [{ amount: 100n, type: NIGHT, receiverAddress: new UnshieldedAddress(Buffer.alloc(32, 5)) }],
+          DateOps.addSeconds(new Date(), 1800),
+        )
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const ownInputs = TransactionOps.extractOwnInputs(transaction, verifyingKey);
+
+      expect(ownInputs.length).toBeGreaterThan(0);
+      expect(ownInputs.every((utxo) => utxo.owner === wallet.publicKey.addressHex)).toBe(true);
+      expect(ownInputs.some((utxo) => utxo.owner === verifyingKey.value)).toBe(false);
+    });
+  });
+
+  describe('rotateUtxos', () => {
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    const ttl = DateOps.addSeconds(new Date(), 1800);
+
+    it('books all provided UTxOs into pendingUtxos and removes them from availableUtxos', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(4);
+      const [guaranteedUtxo, ...fallibleUtxos] = utxos;
+
+      const { newState } = transacting
+        .rotateUtxos(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      expect(HashMap.size(newState.state.availableUtxos)).toBe(0);
+      expect(HashMap.size(newState.state.pendingUtxos)).toBe(utxos.length);
+    });
+
+    it('builds an intent with the guaranteed UTxO in the guaranteed offer and the rest in the fallible offer', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(3);
+      const [guaranteedUtxo, ...fallibleUtxos] = utxos;
+
+      const { transaction } = transacting
+        .rotateUtxos(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      expect(transaction.intents).toBeDefined();
+      expect(transaction.intents!.size).toBe(1);
+
+      const intent: ledger.Intent<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish> = transaction
+        .intents!.values()
+        .take(1)
+        .next().value!;
+
+      expect(intent.guaranteedUnshieldedOffer).toBeDefined();
+      expect(intent.guaranteedUnshieldedOffer!.inputs.length).toBe(1);
+      expect(intent.guaranteedUnshieldedOffer!.inputs[0].intentHash).toBe(guaranteedUtxo.utxo.intentHash);
+
+      expect(intent.fallibleUnshieldedOffer).toBeDefined();
+      expect(intent.fallibleUnshieldedOffer!.inputs.length).toBe(fallibleUtxos.length);
+    });
+
+    it('omits the fallible offer when no fallible UTxOs are provided', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(1);
+
+      const { transaction } = transacting
+        .rotateUtxos(wallet, utxos, [], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const intent: ledger.Intent<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish> = transaction
+        .intents!.values()
+        .take(1)
+        .next().value!;
+
+      expect(intent.guaranteedUnshieldedOffer).toBeDefined();
+      expect(intent.guaranteedUnshieldedOffer!.inputs.length).toBe(1);
+      expect(intent.fallibleUnshieldedOffer).toBeUndefined();
+    });
+
+    it('fails when a provided UTxO is not in availableUtxos', () => {
+      const { wallet } = buildWalletWithNightUtxos(2);
+      const unknownUtxo = new UtxoWithMeta({
+        utxo: {
+          value: 999n,
+          owner: wallet.publicKey.addressHex,
+          type: NIGHT,
+          intentHash: ledger.sampleIntentHash(),
+          outputNo: 999,
+        },
+        meta: { ctime: new Date(0), registeredForDustGeneration: false },
+      });
+
+      const error = transacting
+        .rotateUtxos(wallet, [unknownUtxo], [], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowRight);
+
+      expect(error).toBeInstanceOf(SpendUtxoError);
+    });
+
+    it('fails when a provided UTxO is already pending from a prior call', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(2);
+      const [first, second] = utxos;
+
+      const { newState } = transacting
+        .rotateUtxos(wallet, [first], [], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const error = transacting
+        .rotateUtxos(newState, [first], [second], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowRight);
+
+      expect(error).toBeInstanceOf(SpendUtxoError);
+    });
+
+    it('booked UTxOs cannot be reused by a subsequent makeTransfer (race fix)', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(2);
+      const [guaranteedUtxo, fallibleUtxo] = utxos;
+
+      const { newState } = transacting
+        .rotateUtxos(wallet, [guaranteedUtxo], [fallibleUtxo], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const totalNightInPending = pipe(
+        utxos,
+        Arr.map((u) => u.utxo.value),
+        ArrayOps.sumBigInt,
+      );
+
+      const error = transacting
+        .makeTransfer(
+          newState,
+          [
+            {
+              amount: totalNightInPending,
+              type: NIGHT,
+              receiverAddress: new UnshieldedAddress(Buffer.alloc(32, 1)),
+            },
+          ],
+          ttl,
+        )
+        .pipe(EitherOps.getOrThrowRight);
+
+      expect(error).toBeInstanceOf(InsufficientFundsError);
+    });
+
+    it('revertTransaction restores booked UTxOs from pending back to available', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(3);
+      const [guaranteedUtxo, ...fallibleUtxos] = utxos;
+
+      const { newState: bookedState, transaction } = transacting
+        .rotateUtxos(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      // Sanity check: booking did move every UTxO from available to pending.
+      expect(HashMap.size(bookedState.state.availableUtxos)).toBe(0);
+      expect(HashMap.size(bookedState.state.pendingUtxos)).toBe(utxos.length);
+
+      const restoredState = transacting.revertTransaction(bookedState, transaction).pipe(EitherOps.getOrThrowLeft);
+
+      // Revert contract: every booked UTxO returns to availableUtxos, pendingUtxos drains to empty.
+      // This is the primitive the facade's catch block relies on when a later build step fails after
+      // rotateUtxos has already booked.
+      expect(HashMap.size(restoredState.state.availableUtxos)).toBe(utxos.length);
+      expect(HashMap.size(restoredState.state.pendingUtxos)).toBe(0);
+    });
+
+    it('fails when no UTxOs are provided in either section', () => {
+      const { wallet } = buildWalletWithNightUtxos(1);
+
+      const error = transacting
+        .rotateUtxos(wallet, [], [], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowRight);
+
+      expect(error).toBeInstanceOf(TransactingError);
+    });
+  });
+
+  describe('when balancing a transaction in place', () => {
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    const ttl = DateOps.addSeconds(new Date(), 1800);
+    const receiverAddress = new UnshieldedAddress(Buffer.alloc(32, 7)).data.toString('hex');
+
+    /** An intent owing `value` Night in its fallible section, so the segment it lands in needs balancing. */
+    const owingIntent = (value: bigint): ledger.Intent<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding> => {
+      const intent = ledger.Intent.new(ttl);
+      intent.fallibleUnshieldedOffer = ledger.UnshieldedOffer.new(
+        [],
+        [{ owner: receiverAddress, type: NIGHT, value }],
+        [],
+      );
+      return intent;
+    };
+
+    const unbalancedTransaction = (value: bigint): ledger.UnprovenTransaction =>
+      ledger.Transaction.fromParts(config.networkId, undefined, undefined, owingIntent(value));
+
+    /** Ids of every UTxO the transaction spends, across all intents and both sections. */
+    const inputIdsOf = (
+      transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    ): ReadonlyArray<string> =>
+      pipe(
+        Arr.fromIterable(transaction.intents?.values() ?? []),
+        Arr.flatMap((intent) => [
+          ...(intent.guaranteedUnshieldedOffer?.inputs ?? []),
+          ...(intent.fallibleUnshieldedOffer?.inputs ?? []),
+        ]),
+        Arr.map((input) => `${input.intentHash}#${input.outputNo}`),
+      );
+
+    it('books the coins it selects, so they leave availableUtxos and appear in pendingUtxos', () => {
+      const { wallet } = buildWalletWithNightUtxos(2);
+
+      const [balanced, newState] = transacting
+        .balanceUnprovenTransaction(wallet, unbalancedTransaction(900n))
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const spentIds = inputIdsOf(balanced!);
+
+      expect(spentIds.length).toBeGreaterThan(0);
+      expect(HashMap.size(newState.state.pendingUtxos)).toBe(spentIds.length);
+      expect(Arr.every(spentIds, (id) => HashMap.has(newState.state.pendingUtxos, id))).toBe(true);
+      expect(Arr.every(spentIds, (id) => !HashMap.has(newState.state.availableUtxos, id))).toBe(true);
+    });
+
+    it('books the coins with the transaction TTL, so the booking expires with the transaction', () => {
+      const { wallet } = buildWalletWithNightUtxos(2);
+
+      const [balanced, newState] = transacting
+        .balanceUnprovenTransaction(wallet, unbalancedTransaction(900n))
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const intentTtl = balanced!.intents!.values().take(1).next().value!.ttl;
+      const bookings = Arr.fromIterable(HashMap.values(newState.state.pendingUtxos));
+
+      expect(bookings.length).toBeGreaterThan(0);
+      expect(Arr.every(bookings, (booking) => booking.ttl.getTime() === intentTtl.getTime())).toBe(true);
+    });
+
+    it('never picks the same coin for two transactions balanced one after the other', () => {
+      const { wallet } = buildWalletWithNightUtxos(2);
+
+      const [firstBalanced, stateAfterFirst] = transacting
+        .balanceUnprovenTransaction(wallet, unbalancedTransaction(900n))
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const [secondBalanced] = transacting
+        .balanceUnprovenTransaction(stateAfterFirst, unbalancedTransaction(900n))
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const firstIds = inputIdsOf(firstBalanced!);
+      const secondIds = inputIdsOf(secondBalanced!);
+
+      // Both balancings must have selected coins, or an empty intersection would prove nothing.
+      expect(firstIds.length).toBeGreaterThan(0);
+      expect(secondIds.length).toBeGreaterThan(0);
+      expect(Arr.intersection(firstIds, secondIds)).toEqual([]);
+    });
+
+    it('never picks the same coin twice when one transaction has two segments to balance', () => {
+      const { wallet } = buildWalletWithNightUtxos(2);
+
+      const twoSegmentTransaction = ledger.Transaction.fromParts(
+        config.networkId,
+        undefined,
+        undefined,
+        owingIntent(900n),
+      ).addIntent({ tag: 'specific', value: 2 }, owingIntent(900n));
+
+      const [balanced] = transacting
+        .balanceUnprovenTransaction(wallet, twoSegmentTransaction)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const spentIds = inputIdsOf(balanced!);
+
+      // Something must have been selected, or a dedupe of nothing would prove nothing.
+      expect(spentIds.length).toBeGreaterThan(0);
+      expect(Arr.dedupe(spentIds)).toEqual(spentIds);
+    });
+
+    it('reports insufficient funds once its own bookings leave nothing to select', () => {
+      const { wallet } = buildWalletWithNightUtxos(1);
+
+      const [, stateAfterFirst] = transacting
+        .balanceUnprovenTransaction(wallet, unbalancedTransaction(900n))
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const error = transacting
+        .balanceUnprovenTransaction(stateAfterFirst, unbalancedTransaction(900n))
+        .pipe(EitherOps.getOrThrowRight);
+
+      expect(error).toBeInstanceOf(InsufficientFundsError);
+    });
+  });
+
+  // A booking must expire with the transaction that holds it: a shorter one frees a coin a live transaction still
+  // spends, and a longer one keeps a coin locked after its transaction can no longer be accepted.
+  describe('when booking coins for a transaction it builds', () => {
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    // Whole seconds, so the TTL survives the ledger's intent encoding unchanged and can be compared exactly.
+    const ttl = new Date(Math.ceil(Date.now() / 1000) * 1000 + 1_800_000);
+    const receiverAddress = new UnshieldedAddress(Buffer.alloc(32, 7)).data.toString('hex');
+
+    const bookingTtlsOf = (wallet: CoreWallet): ReadonlyArray<Date> =>
+      Arr.map(UnshieldedState.toArrays(wallet.state).pendingUtxos, (booking) => booking.ttl);
+
+    it('initSwap books its coins with the transaction TTL', () => {
+      const { wallet } = buildWalletWithNightUtxos(2);
+
+      const { newState } = transacting.initSwap(wallet, { [NIGHT]: 500n }, [], ttl).pipe(EitherOps.getOrThrowLeft);
+
+      const bookingTtls = bookingTtlsOf(newState);
+      expect(bookingTtls.length).toBeGreaterThan(0);
+      expect(bookingTtls).toEqual(Arr.map(bookingTtls, () => ttl));
+    });
+
+    it('balanceFinalizedTransaction books its coins with the transaction TTL', () => {
+      const { wallet } = buildWalletWithNightUtxos(2);
+      // An intent owing Night in its guaranteed section: the only section a bound transaction leaves open to balancing.
+      const intent = ledger.Intent.new(ttl);
+      intent.guaranteedUnshieldedOffer = ledger.UnshieldedOffer.new(
+        [],
+        [{ owner: receiverAddress, type: NIGHT, value: 900n }],
+        [],
+      );
+      const finalized = ledger.Transaction.fromParts(config.networkId, undefined, undefined, intent).mockProve();
+
+      const [balancing, newState] = transacting
+        .balanceFinalizedTransaction(wallet, finalized)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const bookingTtls = bookingTtlsOf(newState);
+      expect(balancing).toBeDefined();
+      expect(bookingTtls.length).toBeGreaterThan(0);
+      expect(bookingTtls).toEqual(Arr.map(bookingTtls, () => ttl));
+    });
+  });
+});

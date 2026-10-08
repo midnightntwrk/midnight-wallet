@@ -11,11 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // #region setup
-import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';
-import { generateRandomSeed } from '@midnightntwrk/wallet-sdk';
+import { generateRandomSeed, isInsufficientDustForFeeError, Token } from '@midnightntwrk/wallet-sdk';
 
 const sender = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
@@ -33,20 +32,16 @@ await sender.wallet
           {
             amount: 500_000_000_000n,
             receiverAddress: await wallet.unshielded.getAddress(),
-            type: ledger.nativeToken().raw,
+            type: Token.night,
           },
         ],
       },
     ],
     {
-      shieldedSecretKeys: sender.shieldedSecretKeys,
-      dustSecretKey: sender.dustSecretKey,
-    },
-    {
       ttl: new Date(Date.now() + 30 * 60 * 1000),
     },
   )
-  .then((recipe) => sender.wallet.signRecipe(recipe, (payload) => sender.unshieldedKeystore.signData(payload)))
+  .then((recipe) => sender.wallet.signRecipe(recipe, sender.unshieldedKeystore.signDataAsync))
   .then((recipe) => sender.wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => sender.wallet.submitTransaction(finalizedTransaction))
   .then(() =>
@@ -54,7 +49,7 @@ await sender.wallet
       wallet.state().pipe(
         rx.filter((s) => s.isSynced),
         rx.filter((s) => {
-          const nightBalance = s.unshielded.balances[ledger.nativeToken().raw] ?? 0n;
+          const nightBalance = s.unshielded.balances[Token.night] ?? 0n;
           return nightBalance > 0n;
         }),
       ),
@@ -77,8 +72,16 @@ await wallet
   .registerNightUtxosForDustGeneration(
     stateBefore.unshielded.availableCoins,
     unshieldedKeystore.getPublicKey(),
-    (payload) => unshieldedKeystore.signData(payload),
+    unshieldedKeystore.signDataAsync,
   )
+  .catch((error: unknown) => {
+    // Had the dust fallen short of the fee after all, the registration rejects with a typed error: recognise it with the
+    // guard to read how far short it is and when generation will cover it, then wait and retry.
+    if (isInsufficientDustForFeeError(error)) {
+      console.log('Registration fee not covered yet:', error.message);
+    }
+    throw error;
+  })
   .then((recipe) => wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => wallet.submitTransaction(finalizedTransaction));
 

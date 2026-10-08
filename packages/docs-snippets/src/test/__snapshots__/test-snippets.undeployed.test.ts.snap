@@ -3,7 +3,7 @@
 exports[`Snippet outputs > with network > should output the correct result for 'balancing' 1`] = `
 [
   "Unshielded transfer by balancing completed
-Did sender send all its Night? false
+Did sender send all its Night? true
 Did receiver receive all the Night? true
 ",
 ]
@@ -34,12 +34,254 @@ Generating dust after designation: true
 ]
 `;
 
+exports[`Snippet outputs > with network > should output the correct result for 'dust-fast-sync' 1`] = `
+[
+  "Dust state after projections-based fast sync:
+{
+  totalCoins: [
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 24034453359289059849897357334564325073097009103426486395115878951231362120630n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '10ba51819808fc09897af46574aa37b3fee89f7dc0dde00cae2924d09d3c33b5',
+        mtIndex: 1n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 31442200660458619681158617659182332215873696935192568222776955722661365985367n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'adde850d59eb29dfe814ef592dcbdb5589841a219d37d9adbfccef7049323761',
+        mtIndex: 4n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 32085853901361226275975148233968772158240692306844594632853942642512958619094n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'adf6979ee2caf3662dabe4588eb2311de04e97293c6f96e366bd4a67034d87e7',
+        mtIndex: 0n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 50586679687627173730485799926282314706847051589385752828012176203617501615946n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '35c11fc00b7f242d172ebade4edbb1d123134b444f6562ecfa80feb76eda126a',
+        mtIndex: 2n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 39236833992364654568272956423128803082965139162007277965439978026566466488297n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '15b3234d60a4ed3adefcc87dd4673c738a40455848a52787079dabddc072cbde',
+        mtIndex: 3n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    }
+  ],
+  availableCoins: [
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 24034453359289059849897357334564325073097009103426486395115878951231362120630n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '10ba51819808fc09897af46574aa37b3fee89f7dc0dde00cae2924d09d3c33b5',
+        mtIndex: 1n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 31442200660458619681158617659182332215873696935192568222776955722661365985367n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'adde850d59eb29dfe814ef592dcbdb5589841a219d37d9adbfccef7049323761',
+        mtIndex: 4n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 32085853901361226275975148233968772158240692306844594632853942642512958619094n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'adf6979ee2caf3662dabe4588eb2311de04e97293c6f96e366bd4a67034d87e7',
+        mtIndex: 0n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 50586679687627173730485799926282314706847051589385752828012176203617501615946n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '35c11fc00b7f242d172ebade4edbb1d123134b444f6562ecfa80feb76eda126a',
+        mtIndex: 2n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    },
+    {
+      token: {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 39236833992364654568272956423128803082965139162007277965439978026566466488297n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '15b3234d60a4ed3adefcc87dd4673c738a40455848a52787079dabddc072cbde',
+        mtIndex: 3n
+      },
+      dtime: undefined,
+      maxCap: 250000000000000000000000n,
+      maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+      generatedNow: 250000000000000000000000n,
+      rate: 413350000000000000n
+    }
+  ],
+  pendingCoins: [],
+  progress: {
+    appliedIndex: 133n,
+    highestRelevantWalletIndex: 133n,
+    highestIndex: 1n,
+    highestRelevantIndex: 0n,
+    isConnected: true,
+    isStrictlyComplete: [Function: isStrictlyComplete],
+    isCompleteWithin: [Function: isCompleteWithin]
+  },
+  publicKey: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+  address: DustAddress {
+    data: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+    Symbol(MidnightBech32m): Bech32mCodec {
+      type: 'dust',
+      dataToBytes: [Function (anonymous)],
+      dataFromBytes: [Function (anonymous)]
+    }
+  }
+}
+",
+]
+`;
+
 exports[`Snippet outputs > with network > should output the correct result for 'dust-sponsorship' 1`] = `
 [
   "User received night for main transaction 1000000000n
 Sponsored transfer completed
 Did sponsor receive their night back? true
 Did user spent all the Night? true
+",
+]
+`;
+
+exports[`Snippet outputs > with network > should output the correct result for 'ecdsa-initialization' 1`] = `
+[
+  "ECDSA verifying key: {
+  tag: 'ecdsa',
+  value: '02948f9a220c28f52e08d374d2b148c66da54004f5ff50afa9e3601a6eec746cf5'
+}
+ECDSA unshielded address: mn_addr_undeployed183vvkddegcrnk76dmjzku65ganhvtq8qp7ux6ac4atzxqjmjvnfqhkveyd
+Synced state:
+{
+  unshielded: {
+    balances: {},
+    availableCoins: [],
+    pendingCoins: [],
+    totalCoins: [],
+    progress: {
+      appliedId: 0n,
+      highestTransactionId: 0n,
+      isConnected: true,
+      indexerLiveness: { indexerHeight: 1n, finalizedHeight: 1n, _tag: 'InSync' },
+      isStrictlyComplete: [Function: isStrictlyComplete],
+      isCompleteWithin: [Function: isCompleteWithin]
+    },
+    address: UnshieldedAddress {
+      data: Buffer(32) [Uint8Array] [
+         60,  88, 203,  53, 185,  70,   7,  59,
+        123,  77, 220, 133, 110, 106, 136, 236,
+        238, 197, 128, 224,  15, 184, 109, 119,
+         21, 234, 196,  96,  75, 114, 100, 210
+      ],
+      Symbol(MidnightBech32m): Bech32mCodec {
+        type: 'addr',
+        dataToBytes: [Function (anonymous)],
+        dataFromBytes: [Function (anonymous)]
+      }
+    }
+  }
+}
+",
+]
+`;
+
+exports[`Snippet outputs > with network > should output the correct result for 'hard-fork-support' 1`] = `
+[
+  "Protocol phase: settled at version 2001000
+Pending transactions: 0, of which orphaned by the fork: 0
+Restored the snapshot this wallet just wrote? true
 ",
 ]
 `;
@@ -258,7 +500,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '4f01b08ab148c772c79546ddd0ea01e590faff67d2b8c45d6286c3b712e56566',
+          intentHash: '712928a30857eaf9156d6586cfd4da630857890204141095a06abf35ddc1a45f',
           outputNo: 0
         },
         meta: {
@@ -271,7 +513,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '9088914a55294e336fc812e224c8f49fd9e85a77a949f0cd5d803fcf3617f58a',
+          intentHash: '60a18d41c9c5bf3eabe7af5c76bd1f51a2a2a3be7b39d252a624bbaa40f1ab64',
           outputNo: 0
         },
         meta: {
@@ -284,7 +526,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '3ed92a2b3eb60560d7731ab3991c8727ffa10422053d908ee1abebe4efa983f3',
+          intentHash: '25fe03f8906c9bd2a9db4f2690d2e9e4f17b4194cc41b79458076d8ae486afaf',
           outputNo: 0
         },
         meta: {
@@ -297,7 +539,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: 'b4d50fe61f991089873e1024e101b4796df0a0a32d7ac2b68c2ab0f389ed163d',
+          intentHash: 'f66718af2c6a3d4f217f605194408c13563121e936f0015f22a2a405598e60f6',
           outputNo: 0
         },
         meta: {
@@ -310,7 +552,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '01c5ad3ff58d687dfe27fc779726188adfe777de5efa8f938a014d7fd7045c59',
+          intentHash: '8333a6a659b0000423af1448f1621662ebb8335bfaa0947b295c301483ab882f',
           outputNo: 0
         },
         meta: {
@@ -326,7 +568,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '4f01b08ab148c772c79546ddd0ea01e590faff67d2b8c45d6286c3b712e56566',
+          intentHash: '712928a30857eaf9156d6586cfd4da630857890204141095a06abf35ddc1a45f',
           outputNo: 0
         },
         meta: {
@@ -339,7 +581,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '9088914a55294e336fc812e224c8f49fd9e85a77a949f0cd5d803fcf3617f58a',
+          intentHash: '60a18d41c9c5bf3eabe7af5c76bd1f51a2a2a3be7b39d252a624bbaa40f1ab64',
           outputNo: 0
         },
         meta: {
@@ -352,7 +594,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '3ed92a2b3eb60560d7731ab3991c8727ffa10422053d908ee1abebe4efa983f3',
+          intentHash: '25fe03f8906c9bd2a9db4f2690d2e9e4f17b4194cc41b79458076d8ae486afaf',
           outputNo: 0
         },
         meta: {
@@ -365,7 +607,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: 'b4d50fe61f991089873e1024e101b4796df0a0a32d7ac2b68c2ab0f389ed163d',
+          intentHash: 'f66718af2c6a3d4f217f605194408c13563121e936f0015f22a2a405598e60f6',
           outputNo: 0
         },
         meta: {
@@ -378,7 +620,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '01c5ad3ff58d687dfe27fc779726188adfe777de5efa8f938a014d7fd7045c59',
+          intentHash: '8333a6a659b0000423af1448f1621662ebb8335bfaa0947b295c301483ab882f',
           outputNo: 0
         },
         meta: {
@@ -415,26 +657,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
         token: {
           initialValue: 0n,
           owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 13088517450973686970152768661065689363167451574549707287779681333087175449879n,
+          nonce: 24034453359289059849897357334564325073097009103426486395115878951231362120630n,
           seq: 0,
           ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: '47efc37cb1f6e9840820529e664a26ef73faae932466aaf94cb523c2df577051',
-          mtIndex: 3n
-        },
-        dtime: undefined,
-        maxCap: 250000000000000000000000n,
-        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
-        generatedNow: 0n,
-        rate: 413350000000000000n
-      },
-      {
-        token: {
-          initialValue: 0n,
-          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 42893292875135508753536130035348474003127516395402026718833581445210855971899n,
-          seq: 0,
-          ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: 'f5e761a22c22f362f1e62435c303c3f6210d93cde80f4ada80465002a172ecc9',
+          backingNight: '10ba51819808fc09897af46574aa37b3fee89f7dc0dde00cae2924d09d3c33b5',
           mtIndex: 1n
         },
         dtime: undefined,
@@ -447,26 +673,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
         token: {
           initialValue: 0n,
           owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 1745140344819704722944939379634971667776427568416407665182918455673712706265n,
+          nonce: 31442200660458619681158617659182332215873696935192568222776955722661365985367n,
           seq: 0,
           ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: 'dbc992416fb38e47a2bf278c7b1ae21ffd5cbd9e8053e8a005b0b5f169d3ba0d',
-          mtIndex: 0n
-        },
-        dtime: undefined,
-        maxCap: 250000000000000000000000n,
-        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
-        generatedNow: 0n,
-        rate: 413350000000000000n
-      },
-      {
-        token: {
-          initialValue: 0n,
-          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 47328617721753985431634820245914989086163962200470388189810085622249242341812n,
-          seq: 0,
-          ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: 'd087d400e91da16db57f168bf66a3a81ef6dc81d19e65f5b15c45a2b1a1bdb37',
+          backingNight: 'adde850d59eb29dfe814ef592dcbdb5589841a219d37d9adbfccef7049323761',
           mtIndex: 4n
         },
         dtime: undefined,
@@ -479,11 +689,43 @@ exports[`Snippet outputs > with network > should output the correct result for '
         token: {
           initialValue: 0n,
           owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 27457460796546782211544967038462586941404094425927548594800125881255297448521n,
+          nonce: 32085853901361226275975148233968772158240692306844594632853942642512958619094n,
           seq: 0,
           ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: '26016f630a34d8c1c5f43c41783ff67ceb82c5181529428cca0fbe9efcd28296',
+          backingNight: 'adf6979ee2caf3662dabe4588eb2311de04e97293c6f96e366bd4a67034d87e7',
+          mtIndex: 0n
+        },
+        dtime: undefined,
+        maxCap: 250000000000000000000000n,
+        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+        generatedNow: 0n,
+        rate: 413350000000000000n
+      },
+      {
+        token: {
+          initialValue: 0n,
+          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+          nonce: 50586679687627173730485799926282314706847051589385752828012176203617501615946n,
+          seq: 0,
+          ctime: 2025-08-05T12:00:00.000Z,
+          backingNight: '35c11fc00b7f242d172ebade4edbb1d123134b444f6562ecfa80feb76eda126a',
           mtIndex: 2n
+        },
+        dtime: undefined,
+        maxCap: 250000000000000000000000n,
+        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+        generatedNow: 0n,
+        rate: 413350000000000000n
+      },
+      {
+        token: {
+          initialValue: 0n,
+          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+          nonce: 39236833992364654568272956423128803082965139162007277965439978026566466488297n,
+          seq: 0,
+          ctime: 2025-08-05T12:00:00.000Z,
+          backingNight: '15b3234d60a4ed3adefcc87dd4673c738a40455848a52787079dabddc072cbde',
+          mtIndex: 3n
         },
         dtime: undefined,
         maxCap: 250000000000000000000000n,
@@ -497,26 +739,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
         token: {
           initialValue: 0n,
           owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 13088517450973686970152768661065689363167451574549707287779681333087175449879n,
+          nonce: 24034453359289059849897357334564325073097009103426486395115878951231362120630n,
           seq: 0,
           ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: '47efc37cb1f6e9840820529e664a26ef73faae932466aaf94cb523c2df577051',
-          mtIndex: 3n
-        },
-        dtime: undefined,
-        maxCap: 250000000000000000000000n,
-        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
-        generatedNow: 0n,
-        rate: 413350000000000000n
-      },
-      {
-        token: {
-          initialValue: 0n,
-          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 42893292875135508753536130035348474003127516395402026718833581445210855971899n,
-          seq: 0,
-          ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: 'f5e761a22c22f362f1e62435c303c3f6210d93cde80f4ada80465002a172ecc9',
+          backingNight: '10ba51819808fc09897af46574aa37b3fee89f7dc0dde00cae2924d09d3c33b5',
           mtIndex: 1n
         },
         dtime: undefined,
@@ -529,26 +755,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
         token: {
           initialValue: 0n,
           owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 1745140344819704722944939379634971667776427568416407665182918455673712706265n,
+          nonce: 31442200660458619681158617659182332215873696935192568222776955722661365985367n,
           seq: 0,
           ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: 'dbc992416fb38e47a2bf278c7b1ae21ffd5cbd9e8053e8a005b0b5f169d3ba0d',
-          mtIndex: 0n
-        },
-        dtime: undefined,
-        maxCap: 250000000000000000000000n,
-        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
-        generatedNow: 0n,
-        rate: 413350000000000000n
-      },
-      {
-        token: {
-          initialValue: 0n,
-          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 47328617721753985431634820245914989086163962200470388189810085622249242341812n,
-          seq: 0,
-          ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: 'd087d400e91da16db57f168bf66a3a81ef6dc81d19e65f5b15c45a2b1a1bdb37',
+          backingNight: 'adde850d59eb29dfe814ef592dcbdb5589841a219d37d9adbfccef7049323761',
           mtIndex: 4n
         },
         dtime: undefined,
@@ -561,11 +771,43 @@ exports[`Snippet outputs > with network > should output the correct result for '
         token: {
           initialValue: 0n,
           owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 27457460796546782211544967038462586941404094425927548594800125881255297448521n,
+          nonce: 32085853901361226275975148233968772158240692306844594632853942642512958619094n,
           seq: 0,
           ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: '26016f630a34d8c1c5f43c41783ff67ceb82c5181529428cca0fbe9efcd28296',
+          backingNight: 'adf6979ee2caf3662dabe4588eb2311de04e97293c6f96e366bd4a67034d87e7',
+          mtIndex: 0n
+        },
+        dtime: undefined,
+        maxCap: 250000000000000000000000n,
+        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+        generatedNow: 0n,
+        rate: 413350000000000000n
+      },
+      {
+        token: {
+          initialValue: 0n,
+          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+          nonce: 50586679687627173730485799926282314706847051589385752828012176203617501615946n,
+          seq: 0,
+          ctime: 2025-08-05T12:00:00.000Z,
+          backingNight: '35c11fc00b7f242d172ebade4edbb1d123134b444f6562ecfa80feb76eda126a',
           mtIndex: 2n
+        },
+        dtime: undefined,
+        maxCap: 250000000000000000000000n,
+        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+        generatedNow: 0n,
+        rate: 413350000000000000n
+      },
+      {
+        token: {
+          initialValue: 0n,
+          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+          nonce: 39236833992364654568272956423128803082965139162007277965439978026566466488297n,
+          seq: 0,
+          ctime: 2025-08-05T12:00:00.000Z,
+          backingNight: '15b3234d60a4ed3adefcc87dd4673c738a40455848a52787079dabddc072cbde',
+          mtIndex: 3n
         },
         dtime: undefined,
         maxCap: 250000000000000000000000n,
@@ -576,8 +818,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
     ],
     pendingCoins: [],
     progress: {
-      appliedIndex: 128n,
-      highestRelevantWalletIndex: 128n,
+      appliedIndex: 50n,
+      highestRelevantWalletIndex: 50n,
       highestIndex: 0n,
       highestRelevantIndex: 0n,
       isConnected: true,
@@ -855,7 +1097,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '4f01b08ab148c772c79546ddd0ea01e590faff67d2b8c45d6286c3b712e56566',
+          intentHash: '712928a30857eaf9156d6586cfd4da630857890204141095a06abf35ddc1a45f',
           outputNo: 0
         },
         meta: {
@@ -868,7 +1110,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '9088914a55294e336fc812e224c8f49fd9e85a77a949f0cd5d803fcf3617f58a',
+          intentHash: '60a18d41c9c5bf3eabe7af5c76bd1f51a2a2a3be7b39d252a624bbaa40f1ab64',
           outputNo: 0
         },
         meta: {
@@ -881,7 +1123,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '3ed92a2b3eb60560d7731ab3991c8727ffa10422053d908ee1abebe4efa983f3',
+          intentHash: '25fe03f8906c9bd2a9db4f2690d2e9e4f17b4194cc41b79458076d8ae486afaf',
           outputNo: 0
         },
         meta: {
@@ -894,7 +1136,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: 'b4d50fe61f991089873e1024e101b4796df0a0a32d7ac2b68c2ab0f389ed163d',
+          intentHash: 'f66718af2c6a3d4f217f605194408c13563121e936f0015f22a2a405598e60f6',
           outputNo: 0
         },
         meta: {
@@ -907,7 +1149,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '01c5ad3ff58d687dfe27fc779726188adfe777de5efa8f938a014d7fd7045c59',
+          intentHash: '8333a6a659b0000423af1448f1621662ebb8335bfaa0947b295c301483ab882f',
           outputNo: 0
         },
         meta: {
@@ -923,7 +1165,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '4f01b08ab148c772c79546ddd0ea01e590faff67d2b8c45d6286c3b712e56566',
+          intentHash: '712928a30857eaf9156d6586cfd4da630857890204141095a06abf35ddc1a45f',
           outputNo: 0
         },
         meta: {
@@ -936,7 +1178,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '9088914a55294e336fc812e224c8f49fd9e85a77a949f0cd5d803fcf3617f58a',
+          intentHash: '60a18d41c9c5bf3eabe7af5c76bd1f51a2a2a3be7b39d252a624bbaa40f1ab64',
           outputNo: 0
         },
         meta: {
@@ -949,7 +1191,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '3ed92a2b3eb60560d7731ab3991c8727ffa10422053d908ee1abebe4efa983f3',
+          intentHash: '25fe03f8906c9bd2a9db4f2690d2e9e4f17b4194cc41b79458076d8ae486afaf',
           outputNo: 0
         },
         meta: {
@@ -962,7 +1204,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: 'b4d50fe61f991089873e1024e101b4796df0a0a32d7ac2b68c2ab0f389ed163d',
+          intentHash: 'f66718af2c6a3d4f217f605194408c13563121e936f0015f22a2a405598e60f6',
           outputNo: 0
         },
         meta: {
@@ -975,7 +1217,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           value: 50000000000000n,
           owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
           type: '0000000000000000000000000000000000000000000000000000000000000000',
-          intentHash: '01c5ad3ff58d687dfe27fc779726188adfe777de5efa8f938a014d7fd7045c59',
+          intentHash: '8333a6a659b0000423af1448f1621662ebb8335bfaa0947b295c301483ab882f',
           outputNo: 0
         },
         meta: {
@@ -1012,26 +1254,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
         token: {
           initialValue: 0n,
           owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 13088517450973686970152768661065689363167451574549707287779681333087175449879n,
+          nonce: 24034453359289059849897357334564325073097009103426486395115878951231362120630n,
           seq: 0,
           ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: '47efc37cb1f6e9840820529e664a26ef73faae932466aaf94cb523c2df577051',
-          mtIndex: 3n
-        },
-        dtime: undefined,
-        maxCap: 250000000000000000000000n,
-        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
-        generatedNow: 0n,
-        rate: 413350000000000000n
-      },
-      {
-        token: {
-          initialValue: 0n,
-          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 42893292875135508753536130035348474003127516395402026718833581445210855971899n,
-          seq: 0,
-          ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: 'f5e761a22c22f362f1e62435c303c3f6210d93cde80f4ada80465002a172ecc9',
+          backingNight: '10ba51819808fc09897af46574aa37b3fee89f7dc0dde00cae2924d09d3c33b5',
           mtIndex: 1n
         },
         dtime: undefined,
@@ -1044,26 +1270,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
         token: {
           initialValue: 0n,
           owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 1745140344819704722944939379634971667776427568416407665182918455673712706265n,
+          nonce: 31442200660458619681158617659182332215873696935192568222776955722661365985367n,
           seq: 0,
           ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: 'dbc992416fb38e47a2bf278c7b1ae21ffd5cbd9e8053e8a005b0b5f169d3ba0d',
-          mtIndex: 0n
-        },
-        dtime: undefined,
-        maxCap: 250000000000000000000000n,
-        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
-        generatedNow: 0n,
-        rate: 413350000000000000n
-      },
-      {
-        token: {
-          initialValue: 0n,
-          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 47328617721753985431634820245914989086163962200470388189810085622249242341812n,
-          seq: 0,
-          ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: 'd087d400e91da16db57f168bf66a3a81ef6dc81d19e65f5b15c45a2b1a1bdb37',
+          backingNight: 'adde850d59eb29dfe814ef592dcbdb5589841a219d37d9adbfccef7049323761',
           mtIndex: 4n
         },
         dtime: undefined,
@@ -1076,11 +1286,43 @@ exports[`Snippet outputs > with network > should output the correct result for '
         token: {
           initialValue: 0n,
           owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 27457460796546782211544967038462586941404094425927548594800125881255297448521n,
+          nonce: 32085853901361226275975148233968772158240692306844594632853942642512958619094n,
           seq: 0,
           ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: '26016f630a34d8c1c5f43c41783ff67ceb82c5181529428cca0fbe9efcd28296',
+          backingNight: 'adf6979ee2caf3662dabe4588eb2311de04e97293c6f96e366bd4a67034d87e7',
+          mtIndex: 0n
+        },
+        dtime: undefined,
+        maxCap: 250000000000000000000000n,
+        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+        generatedNow: 0n,
+        rate: 413350000000000000n
+      },
+      {
+        token: {
+          initialValue: 0n,
+          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+          nonce: 50586679687627173730485799926282314706847051589385752828012176203617501615946n,
+          seq: 0,
+          ctime: 2025-08-05T12:00:00.000Z,
+          backingNight: '35c11fc00b7f242d172ebade4edbb1d123134b444f6562ecfa80feb76eda126a',
           mtIndex: 2n
+        },
+        dtime: undefined,
+        maxCap: 250000000000000000000000n,
+        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+        generatedNow: 0n,
+        rate: 413350000000000000n
+      },
+      {
+        token: {
+          initialValue: 0n,
+          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+          nonce: 39236833992364654568272956423128803082965139162007277965439978026566466488297n,
+          seq: 0,
+          ctime: 2025-08-05T12:00:00.000Z,
+          backingNight: '15b3234d60a4ed3adefcc87dd4673c738a40455848a52787079dabddc072cbde',
+          mtIndex: 3n
         },
         dtime: undefined,
         maxCap: 250000000000000000000000n,
@@ -1094,26 +1336,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
         token: {
           initialValue: 0n,
           owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 13088517450973686970152768661065689363167451574549707287779681333087175449879n,
+          nonce: 24034453359289059849897357334564325073097009103426486395115878951231362120630n,
           seq: 0,
           ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: '47efc37cb1f6e9840820529e664a26ef73faae932466aaf94cb523c2df577051',
-          mtIndex: 3n
-        },
-        dtime: undefined,
-        maxCap: 250000000000000000000000n,
-        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
-        generatedNow: 0n,
-        rate: 413350000000000000n
-      },
-      {
-        token: {
-          initialValue: 0n,
-          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 42893292875135508753536130035348474003127516395402026718833581445210855971899n,
-          seq: 0,
-          ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: 'f5e761a22c22f362f1e62435c303c3f6210d93cde80f4ada80465002a172ecc9',
+          backingNight: '10ba51819808fc09897af46574aa37b3fee89f7dc0dde00cae2924d09d3c33b5',
           mtIndex: 1n
         },
         dtime: undefined,
@@ -1126,26 +1352,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
         token: {
           initialValue: 0n,
           owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 1745140344819704722944939379634971667776427568416407665182918455673712706265n,
+          nonce: 31442200660458619681158617659182332215873696935192568222776955722661365985367n,
           seq: 0,
           ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: 'dbc992416fb38e47a2bf278c7b1ae21ffd5cbd9e8053e8a005b0b5f169d3ba0d',
-          mtIndex: 0n
-        },
-        dtime: undefined,
-        maxCap: 250000000000000000000000n,
-        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
-        generatedNow: 0n,
-        rate: 413350000000000000n
-      },
-      {
-        token: {
-          initialValue: 0n,
-          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 47328617721753985431634820245914989086163962200470388189810085622249242341812n,
-          seq: 0,
-          ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: 'd087d400e91da16db57f168bf66a3a81ef6dc81d19e65f5b15c45a2b1a1bdb37',
+          backingNight: 'adde850d59eb29dfe814ef592dcbdb5589841a219d37d9adbfccef7049323761',
           mtIndex: 4n
         },
         dtime: undefined,
@@ -1158,11 +1368,43 @@ exports[`Snippet outputs > with network > should output the correct result for '
         token: {
           initialValue: 0n,
           owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-          nonce: 27457460796546782211544967038462586941404094425927548594800125881255297448521n,
+          nonce: 32085853901361226275975148233968772158240692306844594632853942642512958619094n,
           seq: 0,
           ctime: 2025-08-05T12:00:00.000Z,
-          backingNight: '26016f630a34d8c1c5f43c41783ff67ceb82c5181529428cca0fbe9efcd28296',
+          backingNight: 'adf6979ee2caf3662dabe4588eb2311de04e97293c6f96e366bd4a67034d87e7',
+          mtIndex: 0n
+        },
+        dtime: undefined,
+        maxCap: 250000000000000000000000n,
+        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+        generatedNow: 0n,
+        rate: 413350000000000000n
+      },
+      {
+        token: {
+          initialValue: 0n,
+          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+          nonce: 50586679687627173730485799926282314706847051589385752828012176203617501615946n,
+          seq: 0,
+          ctime: 2025-08-05T12:00:00.000Z,
+          backingNight: '35c11fc00b7f242d172ebade4edbb1d123134b444f6562ecfa80feb76eda126a',
           mtIndex: 2n
+        },
+        dtime: undefined,
+        maxCap: 250000000000000000000000n,
+        maxCapReachedAt: 2025-08-12T12:00:15.000Z,
+        generatedNow: 0n,
+        rate: 413350000000000000n
+      },
+      {
+        token: {
+          initialValue: 0n,
+          owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+          nonce: 39236833992364654568272956423128803082965139162007277965439978026566466488297n,
+          seq: 0,
+          ctime: 2025-08-05T12:00:00.000Z,
+          backingNight: '15b3234d60a4ed3adefcc87dd4673c738a40455848a52787079dabddc072cbde',
+          mtIndex: 3n
         },
         dtime: undefined,
         maxCap: 250000000000000000000000n,
@@ -1173,8 +1415,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
     ],
     pendingCoins: [],
     progress: {
-      appliedIndex: 128n,
-      highestRelevantWalletIndex: 128n,
+      appliedIndex: 50n,
+      highestRelevantWalletIndex: 50n,
       highestIndex: 0n,
       highestRelevantIndex: 0n,
       isConnected: true,
@@ -1254,6 +1496,17 @@ WrongNetwork — blocks sync completion: true
   The indexer and the node are not on the same chain — they disagree about block 1000 (indexer 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee, node 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff). Check the configured endpoints.
 WrongNetwork — blocks sync completion: true
   The indexer and the node are not on the same chain — they disagree about block 1000 (indexer could not name a block there, node 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff). Check the configured endpoints.
+",
+]
+`;
+
+exports[`Snippet outputs > without network > should output the correct result for 'transaction-history-persistence' 1`] = `
+[
+  "restored entries [ 'c0a46613b653a5c6f14a369f3799cdb122a57c3ec83a9f1358717fa8a2221204' ]
+tryRestore succeeded true
+older history entries 1
+refused unknown-version v9
+Could not restore the transaction-history payload (format v9, unknown-version): Transaction history declares format v9, which this build cannot read. This build reads v2.
 ",
 ]
 `;

@@ -35,9 +35,20 @@ export const FinalizedBlockSchema = Schema.Struct({
 
 export type FinalizedBlock = Schema.Schema.Type<typeof FinalizedBlockSchema>;
 
+/**
+ * A transaction that reached a block. `finalizedBlock` is optional because an entry restored from a history written
+ * before the lifecycle field existed is known to have been finalized, but carries no record of which block it landed
+ * in. No block is invented for those; a reader that needs one fetches it from the indexer by transaction hash.
+ *
+ * The optionality is a property of the format, not of that one path: the schema accepts a blockless finalized entry
+ * from any writer and cannot tell an upgraded one from one a caller wrote that way, so `FinalizedEntryInput` requires
+ * the block at the type level to keep the SDK's own writes whole. Nothing backfills a blockless entry afterwards either
+ * — every sync resumes after the position the snapshot recorded, so the block that would fill it is never replayed. An
+ * entry restored without a block stays without one for the life of the history.
+ */
 export const FinalizedLifecycleSchema = Schema.Struct({
   status: Schema.Literal('finalized'),
-  finalizedBlock: FinalizedBlockSchema,
+  finalizedBlock: Schema.optional(FinalizedBlockSchema),
 });
 
 export type FinalizedLifecycle = Schema.Schema.Type<typeof FinalizedLifecycleSchema>;
@@ -122,6 +133,24 @@ export type RejectedTransactionHistoryCommon = TransactionHistoryEntryCommon & {
 export type SerializedTransactionHistory = string;
 
 /**
+ * Whether `entry` records the transaction `key` names: the same hash, or every one of `key`'s identifiers. Identifiers
+ * are per-build commitments, so an entry carrying all of them is the same transaction included under an aggregated
+ * hash. An empty identifier set names no transaction and therefore neither covers nor is covered.
+ *
+ * @param entry - The recorded entry.
+ * @param key - The hash and identifiers of the transaction being asked about.
+ * @returns Whether `entry` is a record of that transaction.
+ */
+export const coversTransaction = (
+  entry: Pick<TransactionHistoryEntryCommon, 'hash' | 'identifiers'>,
+  key: Pick<TransactionHistoryEntryCommon, 'hash' | 'identifiers'>,
+): boolean => {
+  if (entry.hash === key.hash) return true;
+  const recorded = new Set(entry.identifiers);
+  return key.identifiers.length > 0 && key.identifiers.every((id) => recorded.has(id));
+};
+
+/**
  * An entry with common fields plus any additional properties (wallet sections). Used by wallet packages for
  * projection/filtering when the exact type is not known.
  */
@@ -141,6 +170,11 @@ export type PendingEntryInput<T extends TransactionHistoryEntryCommon = Transact
  * Input for `gotFinalized` — the entry minus its `lifecycle` field, which the storage attaches itself. Carries
  * `finalizedBlock` directly so callers don't construct the lifecycle object. `T` is the entry shape including any
  * wallet-specific extensions (e.g. `shielded`, `dust`).
+ *
+ * `finalizedBlock` is required here even though it is optional on {@link FinalizedLifecycleSchema}: the SDK always knows
+ * the block when it writes a finalized entry, because the only writer runs from the sync path after the indexer
+ * returned the transaction inside one. The sole source of a blockless finalized entry is the v1-to-v2 upgrade of a
+ * history written before the lifecycle field existed, which invents no block it cannot prove.
  */
 export type FinalizedEntryInput<T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon> = Omit<
   T,
@@ -177,6 +211,11 @@ export interface TransactionHistoryReader<T extends { hash: TransactionHash } = 
  * keys (in particular: clearing a prior `pending` entry keyed by an identifier when its `finalized` or `rejected`
  * counterpart arrives keyed by the tx hash).
  *
+ * Recorded inclusion takes precedence over a later rejection. Sync records inclusion independently of the
+ * pending-status poller, so a verdict may arrive after a `finalized` entry {@link coversTransaction covers} the
+ * transaction, and that verdict must neither overwrite the entry nor leave a rejected duplicate under the submission's
+ * own hash. Implementations check this atomically with the write.
+ *
  * `T` appears only in input position, so this interface is **contravariant** in T: a `TransactionHistoryWriter<Wider>`
  * is assignable to `TransactionHistoryWriter<Narrower>`.
  */
@@ -184,13 +223,14 @@ export interface TransactionHistoryWriter<T extends TransactionHistoryEntryCommo
   /** Record that a tx has been submitted and is awaiting confirmation. */
   gotPending(entry: PendingEntryInput<T>): Promise<void>;
   /**
-   * Record that a tx has been confirmed on-chain. Inserts/merges the entry under its tx hash and clears any earlier
-   * `pending` entry whose identifiers are contained in this entry's identifier set.
+   * Record that a tx has been confirmed on-chain. Inserts/merges the entry under its tx hash and clears every earlier
+   * `pending` or `rejected` entry this entry {@link coversTransaction covers} under another hash.
    */
   gotFinalized(entry: FinalizedEntryInput<T>): Promise<void>;
   /**
    * Record that a tx will not land — failed, partial-success, TTL-expired, or otherwise reverted. Keyed the same way as
-   * `gotPending` so the lifecycle transition is in-place.
+   * `gotPending` so the lifecycle transition is in-place. Writes nothing when a `finalized` entry already covers the
+   * tx.
    */
   gotRejected(entry: RejectedEntryInput<T>): Promise<void>;
 }

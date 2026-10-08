@@ -12,11 +12,14 @@
 // limitations under the License.
 import * as rx from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import * as utils from './utils.js';
+import { shouldPersistState } from '@midnightntwrk/wallet-sdk-testkit/core';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
+import { carried } from './helpers/transactions.js';
+import { Buffer } from 'buffer';
 
 /** Tests performing a token transfer */
 
@@ -41,7 +44,9 @@ describe('Token transfer', () => {
   let wallet: utils.WalletInit;
   let wallet2: utils.WalletInit;
   let fixture: TestContainersFixture;
-  const syncTimeout = 60 * 60 * 1000; // 60 minutes in milliseconds
+  // A remote sync from scratch takes tens of seconds and the transfer itself a couple of minutes, so a bound in the
+  // tens of minutes only ever means something has wedged. An hour just turns one wedge into an hour of lane time.
+  const syncTimeout = 15 * 60 * 1000; // 15 minutes
   const timeout = 600_000;
 
   beforeEach(async () => {
@@ -69,9 +74,12 @@ describe('Token transfer', () => {
     }
   }, syncTimeout);
 
-  afterEach(async () => {
-    await utils.saveState(wallet.wallet, filenameWallet);
-    await utils.saveState(wallet2.wallet, filenameWallet2);
+  afterEach(async (context) => {
+    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
+    if (shouldPersistState(context)) {
+      await utils.saveState(wallet, filenameWallet);
+      await utils.saveState(wallet2, filenameWallet2);
+    }
     await sender.wallet.stop();
     await receiver.wallet.stop();
     logger.info('Wallets stopped');
@@ -121,22 +129,15 @@ describe('Token transfer', () => {
         },
       ];
 
-      const txRecipe = await sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 30 * 60 * 1000),
-        },
-      );
+      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      });
       logger.info(txRecipe);
       const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
-      logger.info(finalizedTx.toString());
+      logger.info(Buffer.from(finalizedTx.serialize()).toString('hex'));
       logger.info('Submitting tx:');
       const txId = await sender.wallet.submitTransaction(finalizedTx);
-      const txHash = finalizedTx.transactionHash();
+      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
       logger.info('Transaction hash: ' + txHash);
@@ -144,6 +145,7 @@ describe('Token transfer', () => {
         ready: (entry) => entry.shielded !== undefined,
       });
       utils.expectSenderShieldedTxHistory(senderTxEntry);
+      await utils.waitForFacadePendingClear(sender.wallet);
       const finalState = await sender.wallet.waitForSyncedState();
       const senderFinalShieldedBalance1 = finalState.shielded.balances[nativeToken1Raw];
       const senderFinalShieldedBalance2 = finalState.shielded.balances[nativeToken2Raw];
@@ -213,16 +215,9 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txRecipe = await sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 30 * 60 * 1000),
-        },
-      );
+      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      });
       const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
       const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);

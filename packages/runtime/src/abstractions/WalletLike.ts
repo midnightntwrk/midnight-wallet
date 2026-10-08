@@ -11,12 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { type Scope } from 'effect';
+import { type Option, type Scope } from 'effect';
 import { type Observable } from 'rxjs';
-import { type Runtime } from '../Runtime.js';
+import { type Runtime, type RuntimeState } from '../Runtime.js';
 import { type AnyVersionedVariantArray, type StateOf, type VariantRecord } from './Variant.js';
 import { type HList, type Poly } from '@midnightntwrk/wallet-sdk-utilities';
-import { type ProtocolState } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 
 /** Defines the static portion of base wallet class definition */
 export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray, TConfiguration = object> {
@@ -24,6 +24,15 @@ export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray, TCo
   new (runtime: Runtime<TVariants>, scope: Scope.CloseableScope): WalletLike<TVariants>;
   allVariants(): TVariants;
   allVariantsRecord(): VariantRecord<TVariants>;
+  /**
+   * Resolves the variant that is active for a given protocol version, so a caller holding only a version — a snapshot's
+   * envelope, the chain's current version — can address {@link start} by the tag of the variant that owns it.
+   *
+   * @param version The protocol version to resolve.
+   * @returns The versioned variant whose activation range contains `version`, or `Option.none()` when no registered
+   *   variant covers it.
+   */
+  variantFor(version: ProtocolVersion.ProtocolVersion): Option.Option<HList.Each<TVariants>>;
   startEmpty<T extends WalletClassLike<TVariants, any>>(walletClass: T): WalletOf<T>;
   startFirst<T extends WalletClassLike<TVariants, any>>(
     walletClass: T,
@@ -33,6 +42,28 @@ export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray, TCo
     walletClass: T,
     tag: Tag,
     state: StateOf<HList.Find<TVariants, { variant: Poly.WithTag<Tag> }>>,
+  ): WalletOf<T>;
+  /**
+   * Starts a wallet on a variant that was resolved at runtime, with the state that variant produced.
+   *
+   * @remarks
+   *   The sibling {@link start} addresses a variant by a tag known statically, which is what lets it demand exactly that
+   *   variant's state type. A tag recovered from data — a snapshot's protocol version, the chain's current version —
+   *   carries no such static knowledge, and `HList.Find` over a union of tags cannot recover it: it resolves to the
+   *   first matching registration, or to `never`, so the state parameter it computes is not the one the caller holds.
+   *
+   *   Passing the resolved variant itself instead keeps the two ends of the pairing together. The state is typed as that
+   *   variant's, which for a `variantFor` result is the union of the registered variants' states — the honest guarantee
+   *   when the version is runtime data, and enough to make the call type-check without a cast at the call site.
+   * @param walletClass The wallet class to construct.
+   * @param variant The versioned variant to start on, as resolved by {@link variantFor}.
+   * @param state The state that variant is to start from.
+   * @returns The started wallet.
+   */
+  startAtVariant<T extends WalletClassLike<TVariants, any>, TVariant extends HList.Each<TVariants>>(
+    walletClass: T,
+    variant: TVariant,
+    state: StateOf<TVariant>,
   ): WalletOf<T>;
 }
 
@@ -57,7 +88,7 @@ export interface WalletLike<TVariants extends AnyVersionedVariantArray> {
   readonly runtimeScope: Scope.CloseableScope;
 
   /** A stream of state changes over any amount of time that have been processed by the wallet. */
-  readonly rawState: Observable<ProtocolState.ProtocolState<StateOf<HList.Each<TVariants>>>>;
+  readonly rawState: Observable<RuntimeState<TVariants>>;
 
   /** Stops the wallet */
   stop(): Promise<void>;

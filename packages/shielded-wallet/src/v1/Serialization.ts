@@ -11,10 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
-import { WalletError } from './WalletError.js';
+import { type WalletError } from './WalletError.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { CoreWallet } from './CoreWallet.js';
-import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
@@ -63,8 +63,15 @@ const StateFromUInt8Array = (): Schema.Schema<ledger.ZswapLocalState, Uint8Array
 const HexedState = (): Schema.Schema<ledger.ZswapLocalState, string> =>
   pipe(Schema.Uint8ArrayFromHex, Schema.compose(StateFromUInt8Array()));
 
+// The format version lives beside the twins, not in either of them, so the V2 variant can read it without loading
+// ledger-v8. Re-exported here because the version is part of this variant's serialization surface.
+export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+
 export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   const SnapshotSchema = Schema.Struct({
+    version: SnapshotFormat.versionField('shielded', SNAPSHOT_FORMAT_VERSION),
+    writtenBy: SnapshotFormat.writtenByField(),
     publicKeys: Schema.Struct({
       coinPublicKey: Schema.String,
       encryptionPublicKey: Schema.String,
@@ -77,18 +84,34 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
       key: Schema.String,
       value: Schema.Struct({ nullifier: Schema.String, commitment: Schema.String }),
     }),
+    // 1.0.0 embedded the transaction history here, as hex-encoded proven ledger transactions. The field was dropped
+    // from this schema when history moved to its own storage, and because Effect Schema ignores keys it does not
+    // know, those snapshots restored without complaint and lost the history on the next write. Declaring it optional
+    // carries it back out untouched. Optional, not defaulted: a snapshot written without it keeps its exact bytes.
+    txHistory: Schema.optional(Schema.Array(Schema.String)),
+    // The V2 variant's mid-crossing marker. This variant is never in that state and never reads this, but the twins
+    // share one format version, so a V2-written snapshot is this schema's shape too — and a key this schema did not
+    // declare would be ignored on the way in and dropped on the way out, which is exactly how `txHistory` above was
+    // lost. Declared here so it is carried instead. See `CoreWallet.foreignCoinHashesPending`.
+    coinHashesPending: Schema.optional(Schema.Literal(true)),
   });
 
   type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
+        version: SNAPSHOT_FORMAT_VERSION,
+        writtenBy: SnapshotFormat.V1_SNAPSHOT_WRITER,
         publicKeys: w.publicKeys,
         state: w.state,
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
-        offset: w.progress?.appliedIndex,
         coinHashes: w.coinHashes,
+        // Optional fields are spread in only when present, so the snapshot object never carries an `undefined` key:
+        // the bytes must not depend on `JSON.stringify` dropping one.
+        ...(w.progress?.appliedIndex !== undefined ? { offset: w.progress.appliedIndex } : {}),
+        ...(w.legacyTxHistory !== undefined ? { txHistory: w.legacyTxHistory } : {}),
+        ...(w.foreignCoinHashesPending !== undefined ? { coinHashesPending: w.foreignCoinHashesPending } : {}),
       });
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
@@ -96,8 +119,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError> => {
       return pipe(
         serialized,
-        Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => WalletError.other(err)),
+        SnapshotFormat.readSnapshot({ surface: 'shielded', reads: [SNAPSHOT_FORMAT_VERSION], schema: SnapshotSchema }),
         Either.flatMap((snapshot: Snapshot) =>
           CoreWallet.restoreWithCoinHashes(
             snapshot.publicKeys,
@@ -112,6 +134,8 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
             },
             snapshot.protocolVersion,
             snapshot.networkId,
+            snapshot.txHistory,
+            snapshot.coinHashesPending,
           ),
         ),
       );

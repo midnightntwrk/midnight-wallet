@@ -1,0 +1,108 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Either } from 'effect';
+import { describe, expect, it } from 'vitest';
+import { CoreWallet } from '../src/v1/CoreWallet.js';
+import { createKeystore, PublicKey } from '../src/v1/KeyStore.js';
+import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js';
+import { createKeystore as createV2Keystore, PublicKey as V2PublicKey } from '../src/KeyStore.js';
+import { CoreWallet as V2CoreWallet } from '../src/v2/CoreWallet.js';
+import { makeDefaultV2SerializationCapability } from '../src/v2/Serialization.js';
+
+// A real, self-consistent key: its address derives from it, which is what the capability asserts on the way back in.
+// A fabricated pair would fail that check and never reach the version handling these tests are about.
+const publicKey = PublicKey.fromKeyStore(createKeystore(Buffer.alloc(32, 3), NetworkId.NetworkId.Undeployed));
+
+describe('V1 unshielded snapshot format version', () => {
+  const capability = makeDefaultV1SerializationCapability();
+  const emptyWallet = () => CoreWallet.init(publicKey, NetworkId.NetworkId.Undeployed);
+
+  /** A snapshot as written before the format version existed: today's fields, with no `version` among them. */
+  const withoutVersion = (serialized: string): string => {
+    const { version: _version, ...rest } = JSON.parse(serialized) as Record<string, unknown>;
+    return JSON.stringify(rest);
+  };
+
+  it('should stamp the current format version into every snapshot it writes', () => {
+    const written: unknown = JSON.parse(capability.serialize(emptyWallet()));
+
+    expect(written).toMatchObject({ version: 'v1' });
+  });
+
+  it('should name itself as the writer of every snapshot it writes', () => {
+    expect(JSON.parse(capability.serialize(emptyWallet()))).toMatchObject({ writtenBy: 'v1' });
+  });
+
+  it('should read a snapshot that carries no version as the first format', () => {
+    const restored = capability.deserialize(withoutVersion(capability.serialize(emptyWallet())));
+
+    expect(Either.isRight(restored)).toBe(true);
+  });
+
+  it('should refuse a snapshot whose version this build does not know', () => {
+    const fromANewerSdk = JSON.stringify({
+      ...(JSON.parse(capability.serialize(emptyWallet())) as Record<string, unknown>),
+      version: 'v2',
+    });
+
+    const restored = capability.deserialize(fromANewerSdk);
+
+    expect(Either.isLeft(restored)).toBe(true);
+  });
+
+  it('should name the surface and the version it found when it refuses a snapshot', () => {
+    const fromANewerSdk = JSON.stringify({
+      ...(JSON.parse(capability.serialize(emptyWallet())) as Record<string, unknown>),
+      version: 'v2',
+    });
+
+    const restored = capability.deserialize(fromANewerSdk);
+    const failure = Either.isLeft(restored) ? restored.left.message : 'the snapshot was restored';
+
+    expect(failure).toContain(
+      'Refusing an unshielded snapshot written in format version "v2": this build reads v1 and does not downgrade.',
+    );
+  });
+
+  it('should round-trip a wallet through serialize and deserialize unchanged', () => {
+    const first = capability.serialize(emptyWallet());
+
+    const restored = capability.deserialize(first);
+    const second = Either.isRight(restored) ? capability.serialize(restored.right) : 'did not restore';
+
+    expect(second).toEqual(first);
+  });
+});
+
+describe('V2 unshielded snapshot format version', () => {
+  const capability = makeDefaultV2SerializationCapability();
+  const v2PublicKey = V2PublicKey.fromKeyStore(
+    createV2Keystore({ kind: 'schnorr', secret: Buffer.alloc(32, 3) }, NetworkId.NetworkId.Undeployed),
+  );
+  const emptyWallet = () => V2CoreWallet.init(v2PublicKey, NetworkId.NetworkId.Undeployed);
+
+  // The writer is a routing hint, not part of the shape. A later variant that keeps this format names itself in the
+  // field, and this build has promised to keep reading this format: refusing on the name would break that promise.
+  it('should read a snapshot naming a writer this build does not know, since the format is still one it reads', () => {
+    const fromALaterVariant = JSON.stringify({
+      ...(JSON.parse(capability.serialize(emptyWallet())) as Record<string, unknown>),
+      writtenBy: 'v3',
+    });
+
+    // The relabelled snapshot restores to the very wallet the untouched one does: same key, state, cursor and version,
+    // with the writer re-stamped by this variant on the way back out.
+    const restored = Either.getOrThrow(capability.deserialize(fromALaterVariant));
+    expect(capability.serialize(restored)).toEqual(capability.serialize(emptyWallet()));
+  });
+});

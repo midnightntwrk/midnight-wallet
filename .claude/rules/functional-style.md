@@ -67,6 +67,6 @@ Mandatory for all SDK code. Rationale and worked examples: `docs/CodingConventio
 ## Where the patterns live
 
 Canonical files: trait/dictionary passing `packages/capabilities/src/pendingTransactions/pendingTransactions.ts`; pure
-state transforms `packages/unshielded-wallet/src/v1/UnshieldedState.ts`; Either utilities
+state transforms `packages/unshielded-wallet/src/v2/UnshieldedState.ts`; Either utilities
 `packages/utilities/src/EitherOps.ts`; tagged enums `packages/runtime/src/abstractions/StateChange.ts`; branded types
 `packages/abstractions/src/ProtocolVersion.ts`; parse-don't-validate `packages/address-format/src/index.ts`.
