@@ -459,7 +459,7 @@ export class V1Builder<
     configuration: TConfig,
   ): RunningV1Variant.Context<TSerialized, TSyncUpdate> {
     if (!isBuildStateFull(this.#buildState)) {
-      throw new Error('Not all components are configured in V2 Builder');
+      throw new Error('Not all components are configured in V1 Builder');
     }
 
     const {
