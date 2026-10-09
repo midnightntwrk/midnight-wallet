@@ -137,16 +137,24 @@ jobs:
             cargo-wasm-${{ runner.os }}-
 
       # Prebuilt binaries rather than `cargo install`, which would compile wasm-bindgen-cli from source on every cache
-      # miss. The wasm-bindgen version must match the crate pin in Cargo.toml exactly or the CLI rejects the .wasm.
+      # miss. The wasm-bindgen version must match the crate pin in Cargo.toml exactly or the CLI rejects the .wasm. The
+      # SHA-256s pin the release assets themselves, not just their versions: these binaries produce the WASM the package
+      # ships, so a replaced asset must fail the job. Update them with the versions, from the GitHub release.
       - name: Install wasm-bindgen and wasm-opt
         env:
           WASM_BINDGEN_VERSION: '0.2.108'
+          WASM_BINDGEN_SHA256: 'd15d7e476feec78d0ec9edc27b8f77279ec7a3e6227756e7036e5cd2066800f4'
           BINARYEN_VERSION: '131'
+          BINARYEN_SHA256: 'b5bf1f0eaf17c63ee588ff7a5954dc8f6ce2c26989051c66f24dfe9ece3e46db'
         run: |
-          curl -sSfL "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${WASM_BINDGEN_VERSION}/wasm-bindgen-${WASM_BINDGEN_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
-            | tar xz -C /tmp
-          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/binaryen-version_${BINARYEN_VERSION}-x86_64-linux.tar.gz" \
-            | tar xz -C /tmp
+          set -euo pipefail
+          wasm_bindgen="/tmp/wasm-bindgen-${WASM_BINDGEN_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          binaryen="/tmp/binaryen-version_${BINARYEN_VERSION}-x86_64-linux.tar.gz"
+          curl -sSfL -o "$wasm_bindgen" "https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${WASM_BINDGEN_VERSION}/$(basename "$wasm_bindgen")"
+          curl -sSfL -o "$binaryen" "https://github.com/WebAssembly/binaryen/releases/download/version_${BINARYEN_VERSION}/$(basename "$binaryen")"
+          printf '%s  %s\n' "$WASM_BINDGEN_SHA256" "$wasm_bindgen" "$BINARYEN_SHA256" "$binaryen" | sha256sum -c -
+          tar xzf "$wasm_bindgen" -C /tmp
+          tar xzf "$binaryen" -C /tmp
           echo "/tmp/wasm-bindgen-${WASM_BINDGEN_VERSION}-x86_64-unknown-linux-musl" >> "$GITHUB_PATH"
           echo "/tmp/binaryen-version_${BINARYEN_VERSION}/bin" >> "$GITHUB_PATH"
 
