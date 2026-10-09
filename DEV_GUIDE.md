@@ -100,47 +100,41 @@ will return as soon as the release workflow runs again.
 
 ---
 
-## Release Lines: `main` (1.x) and `v2`
+## Release Lines: `main` (2.x) and `v1` (1.x)
 
 Since June 2026 the SDK is developed on **two release lines**, because the 2.x line migrates from
-`@midnight-ntwrk/ledger-v8` to `@midnightntwrk/ledger-v9` (a breaking change):
+`@midnight-ntwrk/ledger-v8` to `@midnightntwrk/ledger-v9` (a breaking change). 2.x was built on a `v2` branch until it
+merged into `main`; that branch is retired.
 
-| Branch | Line | Ledger | Publishes as                                                 |
-| ------ | ---- | ------ | ------------------------------------------------------------ |
-| `main` | 1.x  | v8     | `latest` dist-tag, canaries under `canary`                   |
-| `v2`   | 2.x  | v9     | `rc` dist-tag (pre-release mode), canaries under `canary-v2` |
+| Branch | Line | Ledger                          | Publishes as                                                          |
+| ------ | ---- | ------------------------------- | --------------------------------------------------------------------- |
+| `main` | 2.x  | v8 below `forks.v9`, v9 from it | `rc` dist-tag (pre-release mode), canaries under `canary`             |
+| `v1`   | 1.x  | v8                              | `latest` dist-tag until 2.0.0 is released, canaries under `canary-v1` |
 
-How the `v2` line works:
+How the two lines work:
 
-- The `v2` branch is in **Changesets pre-release mode** (`.changeset/pre.json`, tag `rc`) — every release from it is
-  versioned `X.Y.Z-rc.N` and published under the `rc` dist-tag, so 1.x keeps owning `latest`. The line started under
-  `beta`. Changesets does not restart the counter when the tag changes (`2.0.0-beta.4` would become `2.0.0-rc.5`), so
-  the first release PR after a switch is renumbered to `-rc.0` by hand, in package versions, internal dependency ranges
-  and changelogs; later releases count up from there. Changing the tag alone releases nothing: the PR that switches it
-  must also carry a changeset that `patch`-bumps every published package, or no release PR opens.
-- The branch-local `.changeset/config.json` sets `baseBranch: "v2"`; the automated release PR lives on
-  `changeset-release/v2` (`chore: release (v2)`).
-- PRs containing ledger-v9 / 2.x work must target `v2`, not `main`.
-- Merge `main` into `v2` regularly so the lines don't drift; fixes land on `main` first while 1.x is the primary line.
+- `main` is in **Changesets pre-release mode** (`.changeset/pre.json`, tag `rc`) — every release from it is versioned
+  `X.Y.Z-rc.N` and published under the `rc` dist-tag, so 1.x keeps owning `latest`. The line started under `beta`.
+  Changesets does not restart the counter when the tag changes (`2.0.0-beta.4` would become `2.0.0-rc.5`), so the first
+  release PR after a switch is renumbered to `-rc.0` by hand, in package versions, internal dependency ranges and
+  changelogs; later releases count up from there. Changing the tag alone releases nothing: the PR that switches it must
+  also carry a changeset that `patch`-bumps every published package, or no release PR opens.
+- `v1` is the 1.x maintenance branch, cut from the last 1.x commit on `main`. Its branch-local `.changeset/config.json`
+  sets `baseBranch: "v1"`, and its automated release PR lives on `changeset-release/v1`.
+- 2.x work targets `main`; 1.x fixes target `v1`. A fix both lines need lands on each of them.
 
-### Phase 2: GA cutover checklist (when 2.x becomes stable)
+### GA checklist (when 2.x becomes stable)
 
-Execute these steps **in order** when the v2 line is ready to replace 1.x as the primary release:
+The `v1` branch is cut, `v2` is merged into `main`, and `v2` is retired. What remains, **in order**:
 
-1. **Cut a `v1` maintenance branch first**, from the last 1.x commit on `main` — _before_ merging `v2` into `main`. On
-   that branch:
-   - Add `v1` to the branch lists in `.github/workflows/cd.yml` and `check-changeset.yml`.
-   - Set `baseBranch: "v1"` in `.changeset/config.json`.
-   - ⚠️ **Change the publish step to use an explicit dist-tag** (e.g. `yarn changeset publish --tag v1`).
-     `changeset publish` tags `latest` by default — without this, a 1.x backport patch would steal the `latest` dist-tag
-     from 2.x.
-2. **Exit pre-release mode on `v2`**: run `yarn changeset pre exit` and commit the removed `.changeset/pre.json`.
-3. **Merge `v2` into `main`.** The release PR on `main` then versions the real majors (e.g. `@midnight-ntwrk/wallet-sdk`
-   → `2.0.0`) and publishing it tags them `latest`. When resolving conflicts, `main`'s `.changeset/config.json` must end
-   up with `baseBranch: "main"`.
-4. **Retire the `v2` branch**: remove it from the workflow branch lists (or delete the branch) so it no longer
-   publishes.
-5. **Sanity-check dist-tags** on the registry afterwards: `latest` → 2.x, `v1` → last 1.x, and the `rc` tag points at
+1. **Move `v1` off `latest`** before 2.0.0 is published. On `v1`, give the stable publish an explicit dist-tag:
+   `yarn changeset publish --tag v1` in the `publish-stable` job of `.github/workflows/cd.yml`, and
+   `node scripts/publish-alias.mjs --tag v1` for the alias. `changeset publish` tags `latest` by default — without this,
+   a 1.x patch released after 2.0.0 would take the `latest` dist-tag back from 2.x.
+2. **Exit pre-release mode on `main`**: run `yarn changeset pre exit` and commit the result. The next release PR on
+   `main` then versions the real majors (e.g. `@midnightntwrk/wallet-sdk` → `2.0.0`), and publishing it tags them
+   `latest`.
+3. **Sanity-check dist-tags** on the registry afterwards: `latest` → 2.x, `v1` → last 1.x, and the `rc` tag points at
    the final pre-release (it is not moved automatically).
 
 ## Known Install Warnings
