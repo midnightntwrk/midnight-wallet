@@ -2543,6 +2543,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnightntwrk/wallet-sdk-facade@workspace:packages/facade"
   dependencies:
+    "@midnight-ntwrk/ledger-v8": "npm:^8.1.0"
     "@midnightntwrk/ledger-v9": "npm:1.0.0-rc.5"
     "@midnightntwrk/wallet-sdk-abstractions": "npm:3.0.0-rc.1"
     "@midnightntwrk/wallet-sdk-address-format": "npm:4.0.0-rc.0"
