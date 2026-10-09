@@ -58,27 +58,32 @@ have_bindgen="$(wasm-bindgen --version | awk '{print $2}')"
 # upstream workspace inherits `license` and `repository` from it, so the patch also spells those out; if it stops
 # applying, the crate has moved and the patch needs regenerating — a hard failure rather than a silently unpatched
 # build.
+#
+# The source is fetched by the commit the tag points at, never by the tag: a tag can be moved, and this source is
+# compiled into the WASM the package ships. Moving to a new tag means updating both, from
+# `git ls-remote https://github.com/midnightntwrk/midnight-ledger 'refs/tags/<tag>^{}'`.
 # ---------------------------------------------------------------------------
 storage_tag=storage-2.0.4-rc.1
+storage_rev=971a9960b6c281c80fcd7ad873e3ec10b9476404
 storage_patch="$crate_dir/patches/midnight-storage-wasm-instant.patch"
 
-# The stamp covers the patch as well as the tag: editing the patch without the tag moving would otherwise keep building
-# from the previously patched tree until `.vendor` was deleted by hand.
+# The stamp covers the patch as well as the commit: editing the patch without the commit moving would otherwise keep
+# building from the previously patched tree until `.vendor` was deleted by hand.
 patch_digest="$({ sha256sum "$storage_patch" 2>/dev/null || shasum -a 256 "$storage_patch"; } | awk '{print $1}')"
 storage_dir="$vendor_dir/midnight-storage"
 stamp="$storage_dir/.patched-version"
-if [ "$(cat "$stamp" 2>/dev/null || true)" != "$storage_tag $patch_digest" ]; then
-  echo "vendoring midnight-storage $storage_tag with the wasm clock patch"
+if [ "$(cat "$stamp" 2>/dev/null || true)" != "$storage_rev $patch_digest" ]; then
+  echo "vendoring midnight-storage $storage_tag ($storage_rev) with the wasm clock patch"
   rm -rf "$storage_dir"
   mkdir -p "$storage_dir"
-  curl -sSfL "https://codeload.github.com/midnightntwrk/midnight-ledger/tar.gz/refs/tags/${storage_tag}" \
-    | tar xz -C "$storage_dir" --strip-components=2 "midnight-ledger-${storage_tag}/storage"
+  curl -sSfL "https://codeload.github.com/midnightntwrk/midnight-ledger/tar.gz/${storage_rev}" \
+    | tar xz -C "$storage_dir" --strip-components=2 "midnight-ledger-${storage_rev}/storage"
   patch -p1 -s -d "$storage_dir" <"$storage_patch" || {
-    echo "error: $storage_patch does not apply to midnight-storage $storage_tag." >&2
+    echo "error: $storage_patch does not apply to midnight-storage $storage_tag ($storage_rev)." >&2
     echo "       The crate has moved; regenerate the patch (see ../README.md) or drop it if the fix is now released." >&2
     exit 1
   }
-  echo "$storage_tag $patch_digest" >"$stamp"
+  echo "$storage_rev $patch_digest" >"$stamp"
 fi
 
 # The stack protector pulls in OS code that does not exist on wasm — the same reason midnight-ledger's nix build

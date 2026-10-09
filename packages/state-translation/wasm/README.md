@@ -31,7 +31,7 @@ workspace builds those crates from path dependencies, and consuming the translat
 redirecting them to git tags. Use each crate's own release tag (`zswap-9.0.0-rc.5`, not `crate-ledger-9.1.0.0-rc.5`): at
 the ledger's release tag the crates' midnight dependencies are paths into that checkout, which builds a second copy of
 every shared crate, `midnight-storage` included, and fails on mismatched types. **Keep the tags in step with each other,
-and `storage_tag` in the build script with them.**
+and `storage_tag` in the build script with them — together with `storage_rev`, the commit that tag points at.**
 
 ## Iterating against a local checkout
 
@@ -53,18 +53,18 @@ first real state. Verified in isolation: a wasm export whose whole body is `Inst
 which re-exports `std::time` on non-wasm targets and backs `Instant` with `performance.now()` on wasm — so every other
 target is byte-identical.
 
-`../scripts/build-wasm.sh` applies it: it fetches `storage/` from the midnight-ledger git tag in its `storage_tag`,
-patches it into `.vendor/midnight-storage` (gitignored), and the root `Cargo.toml`'s `[patch.crates-io]` points there.
-The source is a git tag because ledger-v9 rc.5 needs `midnight-storage` 2.0.4, which is not on crates.io. The git
-`Cargo.toml` inherits `license` and `repository` from the upstream workspace, so the patch spells those out as well.
-**Drive cargo through the script**; a bare `cargo build` fails on the missing directory, which is deliberate — the
-alternative is silently producing a wasm that traps.
+`../scripts/build-wasm.sh` applies it: it fetches `storage/` from the midnight-ledger commit in its `storage_rev` (the
+commit `storage_tag` points at), patches it into `.vendor/midnight-storage` (gitignored), and the root `Cargo.toml`'s
+`[patch.crates-io]` points there. The source is a git tag because ledger-v9 rc.5 needs `midnight-storage` 2.0.4, which
+is not on crates.io. The git `Cargo.toml` inherits `license` and `repository` from the upstream workspace, so the patch
+spells those out as well. **Drive cargo through the script**; a bare `cargo build` fails on the missing directory, which
+is deliberate — the alternative is silently producing a wasm that traps.
 
 If the patch stops applying, the crate has moved. Regenerate it against the new version rather than working around it:
 
 ```bash
-curl -sSfL https://codeload.github.com/midnightntwrk/midnight-ledger/tar.gz/refs/tags/<storage_tag> \
-  | tar xz --strip-components=1 "midnight-ledger-<storage_tag>/storage"
+curl -sSfL https://codeload.github.com/midnightntwrk/midnight-ledger/tar.gz/<storage_rev> \
+  | tar xz --strip-components=1 "midnight-ledger-<storage_rev>/storage"
 cp -R storage a && cp -R storage b
 # edit b/Cargo.toml and b/src/state_translation.rs, then:
 diff -ruN a b > wasm/patches/midnight-storage-wasm-instant.patch
