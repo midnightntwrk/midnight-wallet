@@ -49,6 +49,9 @@ import {
   type WasmProvingConfiguration,
 } from './provingService.js';
 
+/** Ledger-v9's unproven transaction, named for symmetry with {@link V8UnprovenTransaction}. */
+export type V9UnprovenTransaction = ledgerV9.UnprovenTransaction;
+
 /**
  * Every unproven transaction either ledger version can be asked to prove.
  *
@@ -56,9 +59,6 @@ import {
  *   A genuine union: the two ledger versions' transaction types are nominally distinct, so a caller holding one of them
  *   is holding something the other version's backend provably cannot read.
  */
-/** Ledger-v9's unproven transaction, named for symmetry with {@link V8UnprovenTransaction}. */
-export type V9UnprovenTransaction = ledgerV9.UnprovenTransaction;
-
 export type AnyVersionUnprovenTransaction = V9UnprovenTransaction | V8UnprovenTransaction;
 
 /** Every proved-but-unbound transaction either ledger version can hand back. */

@@ -298,18 +298,6 @@ export interface ForkingDustWalletClass<
 }
 
 /**
- * The same dust parameters, rebuilt by the ledger-v8.
- *
- * @remarks
- *   Dust's own departure from shielded, and the one place this wallet has to translate anything. `DustLocalState` is
- *   parameterised, so an empty ledger-v8 state cannot be built without a ledger-v8 `DustParameters` — and the
- *   application hands over a ledger-v9 one, because that is the ledger version this wallet's public API speaks. What
- *   crosses is therefore the three numbers, not the object: they are plain `bigint`s, and the ledger-v8 class takes
- *   exactly them.
- * @param parameters The ledger-v9's dust parameters.
- * @returns The same generation and decay rates, as a ledger-v8 `DustParameters`.
- */
-/**
  * The rates dust is generated and decays at, as plain data.
  *
  * @remarks
@@ -327,6 +315,18 @@ export type DustGenerationRates = Readonly<{
   dustGracePeriodSeconds: bigint;
 }>;
 
+/**
+ * The same dust parameters, rebuilt by the ledger-v8.
+ *
+ * @remarks
+ *   Dust's own departure from shielded, and the one place this wallet has to translate anything. `DustLocalState` is
+ *   parameterised, so an empty ledger-v8 state cannot be built without a ledger-v8 `DustParameters` — and the
+ *   application hands over a ledger-v9 one, because that is the ledger version this wallet's public API speaks. What
+ *   crosses is therefore the three numbers, not the object: they are plain `bigint`s, and the ledger-v8 class takes
+ *   exactly them.
+ * @param parameters The rates to express.
+ * @returns The same generation and decay rates, as a ledger-v8 `DustParameters`.
+ */
 export const asV8DustParameters = (parameters: DustGenerationRates): ledgerV8.DustParameters =>
   new ledgerV8.DustParameters(
     parameters.nightDustRatio,

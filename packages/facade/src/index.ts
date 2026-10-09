@@ -148,17 +148,6 @@ export const isFinalizedWalletEntry = (entry: WalletEntry): entry is FinalizedWa
   entry.lifecycle.status === 'finalized';
 
 /**
- * Merge two wallet entries arriving under the same hash. Treats the entry as `T × lifecycle` per the storage model:
- *
- * - **Shared scalar facts about the tx** (`protocolVersion`, `status`, `timestamp`, `fees`) — first writer wins. Once any
- *   wallet has set the value, later writes are no-ops for these fields. This is correct because the value is the same
- *   across all wallets (it's a property of the on-chain tx, not the wallet's view of it).
- * - **`identifiers`** — unioned (each wallet may surface a different identifier subset).
- * - **`lifecycle`** — incoming wins, except that a late rejection cannot overwrite recorded on-chain inclusion.
- * - **Wallet sections** (`shielded`, `unshielded`, `dust`) — combined via per-section merge when both sides have them;
- *   otherwise whichever side is present is used.
- */
-/**
  * Combine two optional values under a merge function: if both sides have it, delegate to `merge`; otherwise return
  * whichever side is present (or `undefined` if neither). Encapsulates the four-way pattern used for every wallet
  * section in {@link mergeWalletEntries}.
@@ -172,6 +161,17 @@ const mergeOptionalSection = <T>(
   return existing ?? incoming;
 };
 
+/**
+ * Merge two wallet entries arriving under the same hash. Treats the entry as `T × lifecycle` per the storage model:
+ *
+ * - **Shared scalar facts about the tx** (`protocolVersion`, `status`, `timestamp`, `fees`) — first writer wins. Once any
+ *   wallet has set the value, later writes are no-ops for these fields. This is correct because the value is the same
+ *   across all wallets (it's a property of the on-chain tx, not the wallet's view of it).
+ * - **`identifiers`** — unioned (each wallet may surface a different identifier subset).
+ * - **`lifecycle`** — incoming wins, except that a late rejection cannot overwrite recorded on-chain inclusion.
+ * - **Wallet sections** (`shielded`, `unshielded`, `dust`) — combined via per-section merge when both sides have them;
+ *   otherwise whichever side is present is used.
+ */
 export function mergeWalletEntries(existing: WalletEntry, incoming: WalletEntry): WalletEntry {
   // identifiers: each wallet may surface a different subset, so union them
   const identifiers = Array.from(new Set([...existing.identifiers, ...incoming.identifiers]));

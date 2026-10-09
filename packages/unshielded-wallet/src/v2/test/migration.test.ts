@@ -32,13 +32,13 @@ import { fixtureOwner, fixtureUtxo } from './syncFixtures.js';
 
 const owner = fixtureOwner();
 
+/** The expiry a fixture booking was taken with. The migration releases bookings whatever their expiry. */
+const BOOKING_TTL = new Date('2999-01-01T00:00:00.000Z');
+
 /**
  * A previous-ledger (v8) wallet, described structurally. Its verifying key is a bare hex string — that is exactly what
  * ledger-v8 hands out, and the difference this migration has to reconcile.
  */
-/** The expiry a fixture booking was taken with. The migration releases bookings whatever their expiry. */
-const BOOKING_TTL = new Date('2999-01-01T00:00:00.000Z');
-
 const previousWallet = (params: {
   readonly available: readonly ReturnType<typeof fixtureUtxo>[];
   readonly pending?: readonly ReturnType<typeof fixtureUtxo>[];

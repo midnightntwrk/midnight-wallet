@@ -462,14 +462,6 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   }
 
   /**
-   * Reverts a transaction by rolling back all inputs owned by this wallet
-   *
-   * @param wallet - The wallet to revert the transaction for
-   * @param transaction - The transaction to revert (can be FinalizedTransaction, UnboundTransaction, or
-   *   UnprovenTransaction)
-   * @returns The updated wallet with rolled back UTXOs if successful, otherwise an error
-   */
-  /**
    * Releases the booked coins named by `utxoIds`, without needing the transaction that booked them.
    *
    * @param wallet - The wallet holding the bookings
