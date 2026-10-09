@@ -2536,11 +2536,11 @@ __metadata:
     "@midnightntwrk/wallet-sdk-address-format": "npm:4.0.0-rc.0"
     "@midnightntwrk/wallet-sdk-capabilities": "npm:4.0.0-rc.1"
     "@midnightntwrk/wallet-sdk-dust-wallet": "npm:5.0.0-rc.1"
-    "@midnightntwrk/wallet-sdk-hd": "npm:^3.1.0-rc.0"
+    "@midnightntwrk/wallet-sdk-hd": "npm:3.1.0-rc.0"
     "@midnightntwrk/wallet-sdk-indexer-client": "npm:2.0.0-rc.1"
     "@midnightntwrk/wallet-sdk-shielded": "npm:4.0.0-rc.1"
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "npm:4.0.0-rc.1"
-    "@midnightntwrk/wallet-sdk-utilities": "npm:^1.2.2-rc.0"
+    "@midnightntwrk/wallet-sdk-utilities": "npm:1.2.2-rc.0"
     effect: "npm:^3.19.19"
     rxjs: "npm:^7.8.2"
   languageName: unknown
