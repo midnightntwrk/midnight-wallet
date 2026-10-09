@@ -642,15 +642,6 @@ export class V1Builder<
   }
 
   /**
-   * Resolves the configured migration, or the empty-wallet fallback when none was configured.
-   *
-   * @remarks
-   *   The fallback is written as a nullary function on purpose. It ignores whatever preceded it — it builds an empty
-   *   wallet from nothing — which makes it a valid migration from _any_ previous state, but a `StateMigration<null>`
-   *   value could only be widened to `StateMigration<TPreviousState>` through a cast. Declaring no parameter says the
-   *   same thing to the type system without one.
-   */
-  /**
    * Resolves the configured start-aux derivation.
    *
    * @remarks
@@ -667,6 +658,15 @@ export class V1Builder<
     return configured;
   }
 
+  /**
+   * Resolves the configured migration, or the empty-wallet fallback when none was configured.
+   *
+   * @remarks
+   *   The fallback is written as a nullary function on purpose. It ignores whatever preceded it — it builds an empty
+   *   wallet from nothing — which makes it a valid migration from _any_ previous state, but a `StateMigration<null>`
+   *   value could only be widened to `StateMigration<TPreviousState>` through a cast. Declaring no parameter says the
+   *   same thing to the type system without one.
+   */
   #resolveMigration(configuration: TConfig, getContext: () => TContext): StateMigration<TPreviousState> {
     const configured = this.#buildState.migration;
     return configured === undefined
@@ -781,11 +781,6 @@ declare namespace V1Builder {
       HasTransactionHistory<TConfig, TContext>
   >;
   /**
-   * The migration entry, kept out of {@link FullBuildState} on purpose: absent means "empty wallet", which is the
-   * behaviour every builder had before migrations were configurable, so a builder that never mentions migration must
-   * still be considered complete.
-   */
-  /**
    * The start-aux entry, kept out of {@link FullBuildState} because it is not one of the context-producing capabilities:
    * it takes neither configuration nor sibling capabilities, only a seed.
    */
@@ -793,6 +788,11 @@ declare namespace V1Builder {
     readonly startAux: StartMaterial.StartAuxCapability<TStartAux>;
   };
 
+  /**
+   * The migration entry, kept out of {@link FullBuildState} on purpose: absent means "empty wallet", which is the
+   * behaviour every builder had before migrations were configurable, so a builder that never mentions migration must
+   * still be considered complete.
+   */
   type HasMigration<TConfig, TContext, TPreviousState> = {
     readonly migration: (configuration: TConfig, getContext: () => TContext) => StateMigration<TPreviousState>;
   };
