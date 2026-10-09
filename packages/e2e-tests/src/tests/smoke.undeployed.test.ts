@@ -15,7 +15,7 @@
 import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
@@ -27,7 +27,8 @@ import {
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet, type DustWalletClass } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { type DustWalletFactory } from '@midnightntwrk/wallet-sdk-testkit/core';
+import { carried } from './helpers/transactions.js';
 
 /** Smoke tests */
 
@@ -43,16 +44,18 @@ describe('Smoke tests', () => {
   let fixture: TestContainersFixture;
   let funded: utils.WalletInit;
   let receiver: utils.WalletInit;
-  let Dust: DustWalletClass;
+  let Dust: ReturnType<DustWalletFactory>;
 
   beforeEach(async () => {
     fixture = getFixture();
-    Dust = DustWallet({
-      ...fixture.getWalletConfig(),
-      ...fixture.getDustWalletConfig(),
-    });
-    funded = await utils.initWalletWithSeed(seedFunded, fixture);
-    receiver = await utils.initWalletWithSeed(seed, fixture);
+    // One factory for all three wallets, because the serialize/restore test below must round-trip within one sync
+    // model: a dust snapshot carries one progress value whose meaning differs between the two — an event cursor to the
+    // event-stream sync, a composite metric to the projections sync — so restoring across models resumes from a
+    // position that is not a cursor at all and the wallet never reports synced.
+    const dustWallet = utils.dustWalletFromEnv();
+    Dust = dustWallet({ ...fixture.getWalletConfig(), ...fixture.getDustWalletConfig() });
+    funded = await utils.initWalletWithSeed(seedFunded, fixture, 'schnorr', { dustWallet });
+    receiver = await utils.initWalletWithSeed(seed, fixture, 'schnorr', { dustWallet });
     logger.info('Two wallets started');
   });
 
@@ -62,14 +65,14 @@ describe('Smoke tests', () => {
   }, 20_000);
 
   test(
-    'Valid transfer of shielded and unshielded token @healthcheck',
+    'Valid transfer of shielded and unshielded token',
     async () => {
       logger.info(`shielded token type: ${shieldedTokenRaw}`);
       logger.info(`unshielded token type: ${unshieldedTokenRaw}`);
 
       const balance = 250000000000000n;
       const unshieldedFundedKeyStore = createKeystore(
-        utils.getUnshieldedSeed(seedFunded),
+        { kind: 'schnorr', secret: utils.getUnshieldedSeed(seedFunded) },
         NetworkId.NetworkId.Undeployed,
       );
       await utils.waitForBlockAdvancement(fixture.getIndexerUri());
@@ -118,23 +121,14 @@ describe('Smoke tests', () => {
           ],
         },
       ];
-      const txRecipe = await funded.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 30 * 60 * 1000),
-        },
-      );
-      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
-        unshieldedFundedKeyStore.signData(payload),
-      );
+      const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      });
+      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, unshieldedFundedKeyStore.signDataAsync);
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
-      const txHash = finalizedTx.transactionHash();
+      const txHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash();
 
       const pendingState = await utils.waitForFacadePending(funded.wallet);
       expect(pendingState.shielded.totalCoins.length).toBe(7);
@@ -154,6 +148,7 @@ describe('Smoke tests', () => {
       expect(finalState.unshielded.availableCoins.length).toBe(5);
       expect(finalState.shielded.pendingCoins.length).toBe(0);
       expect(finalState.unshielded.pendingCoins.length).toBe(0);
+      expect(finalState.dust.pendingCoins.length).toBe(0);
 
       await utils.waitForFinalizedShieldedBalance(receiver.wallet.shielded);
       const finalState2 = await receiver.wallet.waitForSyncedState();
@@ -210,10 +205,15 @@ describe('Smoke tests', () => {
       expect(typeof stateObject.state).toBe('string');
       expect(stateObject.state).toBeTruthy();
 
-      // Verify tx history has shielded entries before serialization
-      const txHistoryBeforeSerialize = await funded.wallet.getAllFromTxHistory();
-      const confirmedBeforeSerialize = txHistoryBeforeSerialize.filter(isFinalizedWalletEntry);
-      const shieldedEntries = confirmedBeforeSerialize.filter((e) => e.shielded !== undefined);
+      // Verify tx history has shielded entries before serialization. `beforeEach` builds this wallet fresh, so its
+      // history starts empty and is rediscovered by syncing — and the entries are written by a fan-out that runs
+      // alongside the sync rather than as part of it, so a synced state does not imply a populated history. Reading it
+      // straight after `waitForSyncedState()` is a race, and one this test lost more often than not.
+      const shieldedEntries = await utils.waitForFinalizedTxHistoryEntries(
+        funded.wallet,
+        (entry) => entry.shielded !== undefined,
+        'a finalized shielded entry',
+      );
       expect(shieldedEntries.length).toBeGreaterThan(0);
 
       const walletConfig = fixture.getWalletConfig();
@@ -248,14 +248,19 @@ describe('Smoke tests', () => {
     async () => {
       fixture = getFixture();
       const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
-      const unshieldedKeyStore = createKeystore(utils.getUnshieldedSeed(seedFunded), fixture.getNetworkId());
-      const initialWallet = UnshieldedWallet({
+      const unshieldedKeyStore = createKeystore(
+        { kind: 'schnorr', secret: utils.getUnshieldedSeed(seedFunded) },
+        fixture.getNetworkId(),
+      );
+      const initialWallet = await UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage: unshieldedTxHistoryStorage,
+        // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+        forks: fixture.getWalletConfig().forks,
       }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
       await initialWallet.start();
       logger.info(`Waiting to sync...`);
@@ -280,6 +285,8 @@ describe('Smoke tests', () => {
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage: restoredTxHistoryStorage,
+        // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
+        forks: fixture.getWalletConfig().forks,
       }).restore(serializedState);
 
       await restoredWallet.start();

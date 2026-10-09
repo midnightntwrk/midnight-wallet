@@ -11,16 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
+import { type DefaultShieldedConfiguration } from '@midnightntwrk/wallet-sdk-shielded';
 import { exit } from 'process';
 import { randomUUID } from 'node:crypto';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { type StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
 import { type MidnightNetwork, sleep } from './helpers/network.js';
 import { logger } from './logger.js';
-import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
-import { type DefaultV1Configuration } from '@midnightntwrk/wallet-sdk-shielded/v1';
-import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { type DefaultV2Configuration as DefaultDustV2Configuration } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { type DefaultProvingConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { type DefaultSubmissionConfiguration } from '@midnightntwrk/wallet-sdk-capabilities/submission';
@@ -58,7 +58,8 @@ export function useTestContainersFixture() {
       case 'devnet':
       case 'qanet':
       case 'preview':
-      case 'preprod': {
+      case 'preprod':
+      case 'stagenet': {
         const environmentVars = buildTestEnvironmentVariables(envVarsToPass, {
           additionalVars: {
             TESTCONTAINERS_UID: uid,
@@ -147,6 +148,9 @@ export class TestContainersFixture {
       case 'preprod': {
         return 'https://indexer.preprod.midnight.network/api/v4/graphql';
       }
+      case 'stagenet': {
+        return 'https://indexer.stagenet.shielded.tools/api/v4/graphql';
+      }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
         return `http://localhost:${indexerPort}/api/v3/graphql`;
@@ -170,6 +174,9 @@ export class TestContainersFixture {
       }
       case 'preprod': {
         return 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
+      }
+      case 'stagenet': {
+        return 'wss://indexer.stagenet.shielded.tools/api/v4/graphql/ws';
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
@@ -195,6 +202,9 @@ export class TestContainersFixture {
       case 'preprod': {
         return 'wss://rpc.preprod.midnight.network';
       }
+      case 'stagenet': {
+        return 'wss://rpc.stagenet.shielded.tools';
+      }
       case 'undeployed': {
         const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);
         return `ws://localhost:${nodePortRpc}`;
@@ -217,12 +227,16 @@ export class TestContainersFixture {
         return NetworkId.NetworkId.Preview;
       case 'preprod':
         return NetworkId.NetworkId.PreProd;
+      case 'stagenet':
+        return NetworkId.NetworkId.StageNet;
       default:
         throw new Error(`Unrecognized network: ${String(TestContainersFixture.network)}`);
     }
   }
 
-  public getWalletConfig(): DefaultV1Configuration & DefaultSubmissionConfiguration & DefaultProvingConfiguration {
+  public getWalletConfig(): DefaultShieldedConfiguration &
+    DefaultSubmissionConfiguration &
+    DefaultProvingConfiguration {
     return {
       indexerClientConnection: {
         indexerHttpUrl: this.getIndexerUri(),
@@ -232,10 +246,13 @@ export class TestContainersFixture {
       relayURL: new URL(this.getNodeUri()),
       networkId: this.getNetworkId(),
       txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+      // Every environment these suites run against is on the ledger-v9-native node line, so the wallet reaches its V2
+      // variant; the final mainnet fork constant is still an open question.
+      forks: ProtocolVersion.V9NativeForkSchedule,
     };
   }
 
-  public getDustWalletConfig(): DefaultDustV1Configuration {
+  public getDustWalletConfig(): DefaultDustV2Configuration {
     return {
       networkId: this.getNetworkId(),
       costParameters: {

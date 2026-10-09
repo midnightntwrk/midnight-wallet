@@ -11,12 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { randomBytes } from 'node:crypto';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { inspect } from 'node:util';
+import { Buffer } from 'buffer';
 
 /** Tests checking transaction balancing */
 
@@ -57,8 +58,8 @@ describe('Transaction balancing examples', () => {
     logger.info(inspect(initialState.shielded.availableCoins, { depth: null }));
 
     sender = await utils.initWalletWithSeed(senderSeed, fixture);
-    const senderInitialstate = await sender.wallet.waitForSyncedState();
-    const senderInitialAvailableUnshieldedCoins = senderInitialstate.unshielded.availableCoins.length;
+    const senderInitialState = await sender.wallet.waitForSyncedState();
+    const senderInitialAvailableUnshieldedCoins = senderInitialState.unshielded.availableCoins.length;
 
     const outputsToCreate: CombinedTokenTransfer[] = [
       {
@@ -67,17 +68,17 @@ describe('Transaction balancing examples', () => {
           {
             type: shieldedTokenRaw,
             amount: output100,
-            receiverAddress: senderInitialstate.shielded.address,
+            receiverAddress: senderInitialState.shielded.address,
           },
           {
             type: shieldedTokenRaw,
             amount: output50,
-            receiverAddress: senderInitialstate.shielded.address,
+            receiverAddress: senderInitialState.shielded.address,
           },
           {
             type: shieldedTokenRaw,
             amount: output30,
-            receiverAddress: senderInitialstate.shielded.address,
+            receiverAddress: senderInitialState.shielded.address,
           },
         ],
       },
@@ -86,26 +87,17 @@ describe('Transaction balancing examples', () => {
         outputs: [
           {
             amount: unshieldedAmount,
-            receiverAddress: senderInitialstate.unshielded.address,
+            receiverAddress: senderInitialState.unshielded.address,
             type: unshieldedTokenRaw,
           },
         ],
       },
     ];
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
-    const txRecipe = await funded.wallet.transferTransaction(
-      outputsToCreate,
-      {
-        shieldedSecretKeys: funded.shieldedSecretKeys,
-        dustSecretKey: funded.dustSecretKey,
-      },
-      {
-        ttl: getTtl(),
-      },
-    );
-    const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
-      funded.unshieldedKeystore.signData(payload),
-    );
+    const txRecipe = await funded.wallet.transferTransaction(outputsToCreate, {
+      ttl: getTtl(),
+    });
+    const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, funded.unshieldedKeystore.signDataAsync);
     const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
     const id = await funded.wallet.submitTransaction(finalizedTx);
     logger.info('Transaction id: ' + id);
@@ -125,12 +117,12 @@ describe('Transaction balancing examples', () => {
     const dustRegistrationRecipe = await sender.wallet.registerNightUtxosForDustGeneration(
       nightUtxos,
       sender.unshieldedKeystore.getPublicKey(),
-      (payload) => sender.unshieldedKeystore.signData(payload),
+      sender.unshieldedKeystore.signDataAsync,
     );
     logger.info('Dust registration recipe:');
-    logger.info(dustRegistrationRecipe.transaction.toString());
+    logger.info(Buffer.from(dustRegistrationRecipe.transaction.serialize()).toString('hex'));
     const finalizedDustTx = await sender.wallet.finalizeRecipe(dustRegistrationRecipe);
-    logger.info(finalizedDustTx.toString());
+    logger.info(Buffer.from(finalizedDustTx.serialize()).toString('hex'));
     logger.info('Submitting dust registration transaction');
     const dustRegistrationTxid = await sender.wallet.submitTransaction(finalizedDustTx);
     logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
@@ -177,16 +169,9 @@ describe('Transaction balancing examples', () => {
           ],
         },
       ];
-      const txRecipe = await sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: getTtl(),
-        },
-      );
+      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+        ttl: getTtl(),
+      });
       const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
       const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
@@ -251,16 +236,9 @@ describe('Transaction balancing examples', () => {
           ],
         },
       ];
-      const txRecipe = await sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: getTtl(),
-        },
-      );
+      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+        ttl: getTtl(),
+      });
       const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
       const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
@@ -348,16 +326,9 @@ describe('Transaction balancing examples', () => {
           ],
         },
       ];
-      const txRecipe = await sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: getTtl(),
-        },
-      );
+      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+        ttl: getTtl(),
+      });
       const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
       const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
@@ -428,16 +399,9 @@ describe('Transaction balancing examples', () => {
         },
       ];
       await expect(
-        receiver1.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          {
-            ttl: getTtl(),
-          },
-        ),
+        receiver1.wallet.transferTransaction(outputsToCreate, {
+          ttl: getTtl(),
+        }),
       ).rejects.toThrow('Insufficient funds');
       await receiver1.wallet.stop();
     },

@@ -12,15 +12,21 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type SimulatorState, Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V8 as Simulation } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, HashMap, Option, pipe, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { createKeystore, PublicKey } from '../../KeyStore.js';
+import { createKeystore, PublicKey } from '../KeyStore.js';
 import { type CoreWallet as CoreWalletType, CoreWallet } from '../CoreWallet.js';
 import { makeDefaultSyncCapability, makeSimulatorSyncCapability } from '../Sync.js';
 import { type PendingUtxo, UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
 import { type SyncUpdate, type UnshieldedTransaction, type WalletSyncUpdate } from '../SyncSchema.js';
 import { generateMockUtxoWithMeta, utxoHash } from './testUtils.js';
+
+/**
+ * The whole supported span, so no message in these tests falls beyond the running variant's range: they are about
+ * booking expiry, not the activation boundary (`syncCapability.test.ts` covers that).
+ */
+const activeRange = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion);
 
 /** Simulator time in the simulator tests, which set it either side of this instant. */
 const SIM_TTL = new Date('2026-01-01T01:00:00.000Z');
@@ -66,8 +72,9 @@ const walletHolding = (
   available: readonly UtxoWithMeta[],
   pending: ReadonlyArray<Omit<PendingUtxo, 'restored'>>,
   atTransactionId: bigint = 1n,
+  appliedTransactionId: bigint = atTransactionId,
 ): CoreWalletType =>
-  connected(available, pending, { appliedId: atTransactionId, highestTransactionId: atTransactionId });
+  connected(available, pending, { appliedId: appliedTransactionId, highestTransactionId: atTransactionId });
 
 /** Still replaying history from a cursor behind the chain, so transactions it has not seen yet are still coming. */
 const walletCatchingUp = (
@@ -102,9 +109,11 @@ const transactionUpdate = (
   status: 'SUCCESS',
 });
 
+/** Zero is the source saying it has no chain-tip version to report, so the progress carries no version signal. */
 const progressUpdate = (highestTransactionId: number): WalletSyncUpdate => ({
   type: 'UnshieldedTransactionsProgress',
   highestTransactionId,
+  protocolVersion: 0,
 });
 
 const livenessUpdate = (verdict: IndexerLiveness.IndexerLiveness): SyncUpdate => ({ type: 'IndexerLiveness', verdict });
@@ -131,7 +140,11 @@ describe('Unshielded indexer sync capability', () => {
       const booked = generateMockUtxoWithMeta({ intentHash: 'h-stale', outputNo: 0 });
 
       const after = getOrThrow(
-        capability.applyUpdate(walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 9n), progressUpdate(9)),
+        capability.applyUpdate(
+          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 9n),
+          progressUpdate(9),
+          activeRange,
+        ),
       );
 
       expect(HashMap.has(after.state.availableUtxos, utxoHash(booked))).toBe(true);
@@ -145,7 +158,11 @@ describe('Unshielded indexer sync capability', () => {
       const booked = generateMockUtxoWithMeta({ intentHash: 'h-catching-up', outputNo: 0 });
 
       const after = getOrThrow(
-        capability.applyUpdate(walletCatchingUp([], [{ utxo: booked, ttl: LONG_EXPIRED }]), progressUpdate(900)),
+        capability.applyUpdate(
+          walletCatchingUp([], [{ utxo: booked, ttl: LONG_EXPIRED }]),
+          progressUpdate(900),
+          activeRange,
+        ),
       );
 
       expect(HashMap.has(after.state.availableUtxos, utxoHash(booked))).toBe(false);
@@ -160,7 +177,7 @@ describe('Unshielded indexer sync capability', () => {
       const booked = generateMockUtxoWithMeta({ intentHash: 'h-live', outputNo: 0 });
 
       const after = getOrThrow(
-        capability.applyUpdate(walletHolding([], [{ utxo: booked, ttl: FAR_FUTURE }]), progressUpdate(9)),
+        capability.applyUpdate(walletHolding([], [{ utxo: booked, ttl: FAR_FUTURE }]), progressUpdate(9), activeRange),
       );
 
       expect(HashMap.has(after.state.availableUtxos, utxoHash(booked))).toBe(false);
@@ -176,7 +193,11 @@ describe('Unshielded indexer sync capability', () => {
       const booked = generateMockUtxoWithMeta({ intentHash: 'h-quiet', outputNo: 0 });
 
       const after = getOrThrow(
-        capability.applyUpdate(walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 42n), progressUpdate(42)),
+        capability.applyUpdate(
+          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 42n),
+          progressUpdate(42),
+          activeRange,
+        ),
       );
 
       expect(HashMap.has(after.state.availableUtxos, utxoHash(booked))).toBe(true);
@@ -189,8 +210,9 @@ describe('Unshielded indexer sync capability', () => {
 
       const after = getOrThrow(
         capability.applyUpdate(
-          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 5n),
+          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 5n, 4n),
           transactionUpdate(5, [arriving], []),
+          activeRange,
         ),
       );
 
@@ -211,7 +233,7 @@ describe('Unshielded indexer sync capability', () => {
         ],
       );
 
-      const after = getOrThrow(capability.applyUpdate(wallet, progressUpdate(1)));
+      const after = getOrThrow(capability.applyUpdate(wallet, progressUpdate(1), activeRange));
 
       expect([...HashMap.keys(after.state.availableUtxos)]).toEqual([utxoHash(stale)]);
       expect([...HashMap.keys(after.state.pendingUtxos)]).toEqual([utxoHash(live)]);
@@ -224,8 +246,9 @@ describe('Unshielded indexer sync capability', () => {
 
       const after = getOrThrow(
         capability.applyUpdate(
-          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 6n),
+          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 6n, 5n),
           transactionUpdate(6, [booked], []),
+          activeRange,
         ),
       );
 
@@ -239,8 +262,9 @@ describe('Unshielded indexer sync capability', () => {
 
       const after = getOrThrow(
         capability.applyUpdate(
-          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 7n),
+          walletHolding([], [{ utxo: booked, ttl: LONG_EXPIRED }], 7n, 6n),
           transactionUpdate(7, [], [booked]),
+          activeRange,
         ),
       );
 
@@ -261,6 +285,7 @@ describe('Unshielded indexer sync capability', () => {
         capability.applyUpdate(
           awaitingVerdict,
           livenessUpdate(IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 1_000n })),
+          activeRange,
         ),
       );
 
@@ -277,9 +302,9 @@ describe('Unshielded simulator sync capability', () => {
    */
   const simulatorHoldingOneCoin = (
     currentTime: Date,
-  ): Effect.Effect<{ state: SimulatorState; coin: UtxoWithMeta }, unknown, Scope.Scope> =>
+  ): Effect.Effect<{ state: Simulation.SimulatorState; coin: UtxoWithMeta }, unknown, Scope.Scope> =>
     Effect.gen(function* () {
-      const simulator = yield* Simulator.init({
+      const simulator = yield* Simulation.Simulator.init({
         genesisMints: [
           {
             type: 'unshielded',
@@ -309,9 +334,11 @@ describe('Unshielded simulator sync capability', () => {
           const { state, coin } = yield* simulatorHoldingOneCoin(new Date(SIM_TTL.getTime() + 1));
 
           const after = getOrThrow(
-            makeSimulatorSyncCapability().applyUpdate(walletHolding([], [{ utxo: coin, ttl: SIM_TTL }]), {
-              update: state,
-            }),
+            makeSimulatorSyncCapability().applyUpdate(
+              walletHolding([], [{ utxo: coin, ttl: SIM_TTL }]),
+              { update: state },
+              activeRange,
+            ),
           );
 
           expect(HashMap.has(after.state.availableUtxos, utxoHash(coin))).toBe(true);
@@ -328,9 +355,11 @@ describe('Unshielded simulator sync capability', () => {
           const { state, coin } = yield* simulatorHoldingOneCoin(new Date(SIM_TTL.getTime() - 1));
 
           const after = getOrThrow(
-            makeSimulatorSyncCapability().applyUpdate(walletHolding([], [{ utxo: coin, ttl: SIM_TTL }]), {
-              update: state,
-            }),
+            makeSimulatorSyncCapability().applyUpdate(
+              walletHolding([], [{ utxo: coin, ttl: SIM_TTL }]),
+              { update: state },
+              activeRange,
+            ),
           );
 
           expect(HashMap.size(after.state.availableUtxos)).toEqual(0);

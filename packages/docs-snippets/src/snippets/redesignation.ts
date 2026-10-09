@@ -30,21 +30,14 @@ await sender.wallet
   .registerNightUtxosForDustGeneration(
     [senderUnshieldedState.availableCoins[0]],
     sender.unshieldedKeystore.getPublicKey(),
-    (payload) => sender.unshieldedKeystore.signData(payload),
+    sender.unshieldedKeystore.signDataAsync,
     receiverStateBefore.dust.address,
   )
   .then((recipe) =>
-    sender.wallet.balanceUnprovenTransaction(
-      recipe.transaction,
-      {
-        shieldedSecretKeys: sender.shieldedSecretKeys,
-        dustSecretKey: sender.dustSecretKey,
-      },
-      {
-        ttl: new Date(Date.now() + 30 * 60 * 1000),
-        tokenKindsToBalance: ['dust'],
-      },
-    ),
+    sender.wallet.balanceUnprovenTransaction(recipe.transaction, {
+      ttl: new Date(Date.now() + 30 * 60 * 1000),
+      tokenKindsToBalance: ['dust'],
+    }),
   )
   .then((recipe) => sender.wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => sender.wallet.submitTransaction(finalizedTransaction));

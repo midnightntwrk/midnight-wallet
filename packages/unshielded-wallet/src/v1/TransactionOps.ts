@@ -13,13 +13,27 @@
 import { Either, type Option, pipe, Array as Arr, Iterable as IterableOps } from 'effect';
 import { Imbalances } from '@midnightntwrk/wallet-sdk-capabilities';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import { addressFromKey } from '@midnight-ntwrk/ledger-v8';
 import { TransactingError, type WalletError } from './WalletError.js';
 
-/** Unbound transaction type. This is a transaction that has no signatures and is not bound yet. */
+/**
+ * Unbound transaction type. This is a transaction that has no signatures and is not bound yet.
+ *
+ * @remarks
+ *   Declared here rather than re-exported from the proving capability, unlike its ledger-v9 twin: this one names the
+ *   ledger-v8's classes, so it is a different type and not a duplicate of one. Collapsing the two would make the two
+ *   ledgers interchangeable in the type system while they stay incompatible at runtime.
+ */
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
 /** Utility type to extract the Intent type from a Transaction type. Maps Transaction<S, P, B> to Intent<S, P, B>. */
 export type IntentOf<T> = T extends ledger.Transaction<infer S, infer P, infer B> ? ledger.Intent<S, P, B> : never;
+
+/** A transaction segment paired with the bytes that must be signed to authorize it. */
+export type SignableSegment = { readonly segment: number; readonly data: Uint8Array };
+
+/** A signature produced for a specific transaction segment, ready to be attached. */
+export type SegmentSignature = { readonly segment: number; readonly signature: ledger.Signature };
 
 export type TransactionOps = {
   getSignatureData: (
@@ -34,6 +48,13 @@ export type TransactionOps = {
     transaction: TTransaction,
     signature: ledger.Signature,
     segment: number,
+  ): Either.Either<TTransaction, WalletError>;
+  collectSignableData(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>,
+  ): Either.Either<readonly SignableSegment[], WalletError>;
+  attachSignatures<TTransaction extends ledger.UnprovenTransaction | UnboundTransaction>(
+    transaction: TTransaction,
+    signatures: readonly SegmentSignature[],
   ): Either.Either<TTransaction, WalletError>;
   getImbalances(
     transaction: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
@@ -130,6 +151,30 @@ export const TransactionOps: TransactionOps = {
       return transaction;
     });
   },
+  collectSignableData(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>,
+  ): Either.Either<readonly SignableSegment[], WalletError> {
+    // A transaction with no intents has no signable segments — yields an empty list, never an error.
+    return Either.all(
+      TransactionOps.getSegments(transaction).map((segment) =>
+        Either.map(TransactionOps.getSignatureData(transaction, segment), (data) => ({ segment, data })),
+      ),
+    );
+  },
+  attachSignatures<TTransaction extends ledger.UnprovenTransaction | UnboundTransaction>(
+    transaction: TTransaction,
+    signatures: readonly SegmentSignature[],
+  ): Either.Either<TTransaction, WalletError> {
+    // No scheme validation here, unlike the ledger-v9 variant: this ledger version has a single signature scheme, so
+    // there is no scheme for a signature to disagree with. `SchemeConsistency` is deliberately v9-only.
+    const seed: Either.Either<TTransaction, WalletError> = Either.right(transaction);
+    return pipe(
+      signatures,
+      Arr.reduce(seed, (acc, { segment, signature }) =>
+        Either.flatMap(acc, (tx) => TransactionOps.addSignature(tx, signature, segment)),
+      ),
+    );
+  },
   getImbalances(
     transaction: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
     segment: number,
@@ -171,6 +216,11 @@ export const TransactionOps: TransactionOps = {
     signatureVerifyingKey: ledger.SignatureVerifyingKey,
   ): ledger.Utxo[] {
     const segments = TransactionOps.getSegments(transaction);
+    const ownerAddress = addressFromKey(signatureVerifyingKey);
+    // Intent inputs are UtxoSpends owned by a verifying key; a Utxo is owned by the derived address. Under ledger-v8
+    // both are hex strings, so returning the spend unchanged would typecheck while handing back a `Utxo` whose
+    // `owner` is a key — unlike every other Utxo the wallet holds.
+    const toUtxo = (input: ledger.UtxoSpend): ledger.Utxo => ({ ...input, owner: ownerAddress });
 
     return pipe(
       segments,
@@ -191,7 +241,7 @@ export const TransactionOps: TransactionOps = {
           ? fallibleUnshieldedOffer.inputs.filter((input) => input.owner === signatureVerifyingKey)
           : [];
 
-        return [...ownedInputsfromGuaranteedSection, ...ownedInputsfromFallibleSection];
+        return [...ownedInputsfromGuaranteedSection, ...ownedInputsfromFallibleSection].map(toUtxo);
       }),
     );
   },

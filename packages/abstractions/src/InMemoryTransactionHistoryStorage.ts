@@ -10,7 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Schema } from 'effect';
+import { Either, Schema } from 'effect';
+import {
+  CURRENT_FORMAT_VERSION,
+  TRANSACTION_HISTORY_SURFACE,
+  UNRECOGNISED_FORMAT_VERSION,
+  TransactionHistoryRestoreError,
+  upgradeToCurrentFormat,
+} from './TransactionHistoryFormat.js';
 import {
   type TransactionHistoryStorage,
   type TransactionHash,
@@ -19,7 +26,26 @@ import {
   type FinalizedEntryInput,
   type RejectedEntryInput,
   type SerializedTransactionHistory,
+  coversTransaction,
 } from './TransactionHistoryStorage.js';
+
+/**
+ * Parse a stored payload, turning a malformed one into the same failure as any other unreadable history.
+ *
+ * `JSON.parse` throws, and that throw is the only one here: it is caught at the boundary and turned into the `Left`
+ * every other step in this path already speaks in, so no caller downstream has to know a throw was ever possible.
+ */
+const parseJson = (serialized: string): Either.Either<unknown, TransactionHistoryRestoreError> =>
+  Either.try({
+    try: () => JSON.parse(serialized) as unknown,
+    catch: (cause) =>
+      new TransactionHistoryRestoreError({
+        surface: TRANSACTION_HISTORY_SURFACE,
+        reason: 'unparseable',
+        detectedVersion: UNRECOGNISED_FORMAT_VERSION,
+        cause,
+      }),
+  });
 
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
@@ -53,23 +79,33 @@ export class InMemoryTransactionHistoryStorage<
 
   async gotPending(input: PendingEntryInput<T>): Promise<void> {
     const { submittedAt, ...rest } = input;
+    // Type cast required because: `T` is an open generic, so TypeScript cannot see that `Omit<T, 'lifecycle'>` plus a
+    // `lifecycle` reconstitutes exactly `T`. The input type guarantees it — `PendingEntryInput<T>` is that `Omit` — but
+    // the compiler has no rule that puts a spread of a generic's `Omit` back together.
     const entry = { ...rest, lifecycle: { status: 'pending', submittedAt } } as unknown as T;
     await this.#upsert(entry);
   }
 
   async gotFinalized(input: FinalizedEntryInput<T>): Promise<void> {
     const { finalizedBlock, ...rest } = input;
+    // Type cast required because: `T` is an open generic, so TypeScript cannot see that `Omit<T, 'lifecycle'>` plus a
+    // `lifecycle` reconstitutes exactly `T`. The input type guarantees it — `FinalizedEntryInput<T>` is that `Omit` —
+    // but the compiler has no rule that puts a spread of a generic's `Omit` back together.
     const entry = { ...rest, lifecycle: { status: 'finalized', finalizedBlock } } as unknown as T;
     await this.#upsert(entry);
-    this.#clearPendingByIdentifiers(entry.identifiers, entry.hash);
+    this.#clearUnfinalizedCoveredBy(entry);
   }
 
   async gotRejected(input: RejectedEntryInput<T>): Promise<void> {
+    if (this.#inclusionRecorded(input)) return;
     const { rejectedAt, reason, ...rest } = input;
     const lifecycle =
       reason !== undefined
         ? { status: 'rejected' as const, rejectedAt, reason }
         : { status: 'rejected' as const, rejectedAt };
+    // Type cast required because: `T` is an open generic, so TypeScript cannot see that `Omit<T, 'lifecycle'>` plus a
+    // `lifecycle` reconstitutes exactly `T`. The input type guarantees it — `RejectedEntryInput<T>` is that `Omit` —
+    // but the compiler has no rule that puts a spread of a generic's `Omit` back together.
     const entry = { ...rest, lifecycle } as unknown as T;
     await this.#upsert(entry);
   }
@@ -89,21 +125,83 @@ export class InMemoryTransactionHistoryStorage<
   serialize(): Promise<SerializedTransactionHistory> {
     const allEntries = [...this.#storage.values()];
     const encode = Schema.encodeSync(Schema.Array(this.#schema));
-    return Promise.resolve(JSON.stringify(encode(allEntries)));
+    return Promise.resolve(JSON.stringify({ version: CURRENT_FORMAT_VERSION, entries: encode(allEntries) }));
   }
 
+  /**
+   * Rebuild a storage from a payload produced by {@link serialize}, in any format version this build knows.
+   *
+   * A payload is brought up to the current format before the entry schema sees it, so a history written by an older SDK
+   * opens without the caller doing anything. A payload that cannot be read is refused with a
+   * {@link TransactionHistoryRestoreError} rather than handed back as an empty storage — losing a history silently is
+   * worse than failing to open it. This is {@link tryRestore} with the refusal thrown, the same pairing every wallet's
+   * `restore` and `tryRestore` have.
+   *
+   * @example
+   *   ```ts
+   *   const restored = InMemoryTransactionHistoryStorage.restore(saved, WalletEntrySchema, mergeWalletEntries);
+   *   ```;
+   *
+   * @param serialized - The stored payload.
+   * @param schema - The full entry schema, including any wallet-specific sections.
+   * @param merge - How an incoming write combines with an existing entry under the same hash.
+   * @returns A storage holding every entry in the payload.
+   * @throws TransactionHistoryRestoreError when the payload is not readable JSON, was written in a format version this
+   *   build does not know, or does not decode against `schema` once upgraded. The error names the version the payload
+   *   was actually read from, not the one this build writes, and says why in its `reason` and `message`.
+   */
   static restore<T extends TransactionHistoryEntryCommon, Encoded>(
     serialized: SerializedTransactionHistory,
     schema: Schema.Schema<T, Encoded>,
     merge?: (existing: T, incoming: T) => T,
   ): InMemoryTransactionHistoryStorage<T, Encoded> {
-    const decode = Schema.decodeUnknownSync(Schema.Array(schema));
-    const decoded = decode(JSON.parse(serialized));
-    const storage = new InMemoryTransactionHistoryStorage<T, Encoded>(schema, merge);
-    for (const entry of decoded) {
-      storage.#storage.set(entry.hash, entry);
-    }
-    return storage;
+    return Either.getOrThrowWith(
+      InMemoryTransactionHistoryStorage.tryRestore(serialized, schema, merge),
+      (error) => error,
+    );
+  }
+
+  /**
+   * {@link restore}, reporting a refusal as a `Left` rather than throwing it.
+   *
+   * @example
+   *   ```ts
+   *   const restored = InMemoryTransactionHistoryStorage.tryRestore(saved, WalletEntrySchema, mergeWalletEntries);
+   *   // Either.Either<InMemoryTransactionHistoryStorage<WalletEntry>, TransactionHistoryRestoreError>
+   *   ```;
+   *
+   * @param serialized - The stored payload.
+   * @param schema - The full entry schema, including any wallet-specific sections.
+   * @param merge - How an incoming write combines with an existing entry under the same hash.
+   * @returns A storage holding every entry in the payload, or a `Left` carrying the
+   *   {@link TransactionHistoryRestoreError} that {@link restore} would throw.
+   */
+  static tryRestore<T extends TransactionHistoryEntryCommon, Encoded>(
+    serialized: SerializedTransactionHistory,
+    schema: Schema.Schema<T, Encoded>,
+    merge?: (existing: T, incoming: T) => T,
+  ): Either.Either<InMemoryTransactionHistoryStorage<T, Encoded>, TransactionHistoryRestoreError> {
+    return parseJson(serialized).pipe(
+      Either.flatMap(upgradeToCurrentFormat),
+      Either.flatMap(({ version, entries }) =>
+        Schema.decodeUnknownEither(Schema.Array(schema))(entries).pipe(
+          Either.mapLeft(
+            (cause) =>
+              new TransactionHistoryRestoreError({
+                surface: TRANSACTION_HISTORY_SURFACE,
+                reason: 'invalid-entries',
+                detectedVersion: version,
+                cause,
+              }),
+          ),
+        ),
+      ),
+      Either.map((values) => {
+        const storage = new InMemoryTransactionHistoryStorage<T, Encoded>(schema, merge);
+        values.forEach((entry) => storage.#storage.set(entry.hash, entry));
+        return storage;
+      }),
+    );
   }
 
   #upsert(entry: T): Promise<void> {
@@ -112,18 +210,21 @@ export class InMemoryTransactionHistoryStorage<
     return Promise.resolve();
   }
 
-  #clearPendingByIdentifiers(identifiers: readonly string[], newHash: TransactionHash): void {
-    if (identifiers.length === 0) return;
-    const provided = new Set<string>(identifiers);
-    const match = [...this.#storage.values()].find(
-      (entry) =>
-        entry.identifiers.length > 0 &&
-        entry.identifiers.every((id) => provided.has(id)) &&
-        entry.lifecycle.status === 'pending' &&
-        entry.hash !== newHash,
+  /** Checked synchronously with the write that follows, so a verdict racing sync cannot supersede inclusion. */
+  #inclusionRecorded(key: Pick<T, 'hash' | 'identifiers'>): boolean {
+    return [...this.#storage.values()].some(
+      (entry) => entry.lifecycle.status === 'finalized' && coversTransaction(entry, key),
     );
-    if (match) {
-      this.#storage.delete(match.hash);
-    }
+  }
+
+  #clearUnfinalizedCoveredBy(finalized: T): void {
+    [...this.#storage.values()]
+      .filter(
+        (entry) =>
+          entry.lifecycle.status !== 'finalized' &&
+          entry.hash !== finalized.hash &&
+          coversTransaction(finalized, entry),
+      )
+      .forEach((entry) => this.#storage.delete(entry.hash));
   }
 }

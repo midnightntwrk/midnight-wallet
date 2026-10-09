@@ -12,3 +12,4 @@
 // limitations under the License.
 export * from './HDWallet.js';
 export * from './MnemonicUtils.js';
+export * from './WalletSeeds.js';

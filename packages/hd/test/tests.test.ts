@@ -108,6 +108,21 @@ describe('HD Wallet', () => {
     );
   });
 
+  it('derives disjoint scalars for NightExternal vs EcdsaUnshielded from the same master seed', () => {
+    const seed = generateRandomSeed();
+    const result = HDWallet.fromSeed(seed);
+    if (result.type === 'seedError') throw new Error('seed setup failed');
+
+    const account = result.hdWallet.selectAccount(0);
+    const schnorr = account.selectRole(Roles.NightExternal).deriveKeyAt(0);
+    const ecdsa = account.selectRole(Roles.EcdsaUnshielded).deriveKeyAt(0);
+
+    if (schnorr.type !== 'keyDerived' || ecdsa.type !== 'keyDerived') {
+      throw new Error('expected both derivations to succeed');
+    }
+    expect(Buffer.from(schnorr.key).toString('hex')).not.toEqual(Buffer.from(ecdsa.key).toString('hex'));
+  });
+
   describe('out-of-bounds derivation returns keyOutOfBounds instead of throwing', () => {
     const hdWallet = (() => {
       const result = HDWallet.fromSeed(
@@ -151,12 +166,12 @@ describe('HD Wallet', () => {
     });
 
     it('deriveKeysAt reports every requested role as out of bounds for an invalid index', () => {
-      const roles = [Roles.Zswap, Roles.Metadata, Roles.Dust] as const;
+      const roles = [Roles.Zswap, Roles.NightExternal, Roles.Dust] as const;
       const result = hdWallet
         .selectAccount(0)
         .selectRoles(roles)
         .deriveKeysAt(2 ** 31);
-      expect(result).toEqual({ type: 'keyOutOfBounds', roles: [Roles.Zswap, Roles.Metadata, Roles.Dust] });
+      expect(result).toEqual({ type: 'keyOutOfBounds', roles: [Roles.Zswap, Roles.NightExternal, Roles.Dust] });
     });
   });
 

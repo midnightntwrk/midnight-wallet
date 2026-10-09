@@ -19,13 +19,29 @@ import { BlockHash } from '../BlockHash.js';
 
 describe('BlockHash query', () => {
   it('should support query function injection', async () => {
-    const block = { block: { height: 1_000, hash: 'SOME_HASH', ledgerParameters: '0x0', timestamp: 1 } };
+    const block = {
+      block: {
+        height: 1_000,
+        hash: 'SOME_HASH',
+        protocolVersion: 2_000_000,
+        ledgerParameters: '0x0',
+        timestamp: 1,
+        zswapEndIndex: 1,
+        dustCommitmentEndIndex: 1,
+        dustGenerationEndIndex: 1,
+        dustCommitmentMerkleTreeRoot: '',
+        dustGenerationMerkleTreeRoot: '',
+      },
+    };
     const blockExpectation = expect.objectContaining({
       block: expect.objectContaining({
         height: block.block.height,
         hash: block.block.hash,
+        protocolVersion: block.block.protocolVersion,
         ledgerParameters: block.block.ledgerParameters,
         timestamp: block.block.timestamp,
+        dustCommitmentMerkleTreeRoot: block.block.dustCommitmentMerkleTreeRoot,
+        dustGenerationMerkleTreeRoot: block.block.dustGenerationMerkleTreeRoot,
       }),
     });
     const mockedQueryFn: Mock<(v: BlockHashQueryVariables) => Effect.Effect<BlockHashQuery>> = vi.fn();

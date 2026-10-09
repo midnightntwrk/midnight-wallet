@@ -12,13 +12,14 @@
 // limitations under the License.
 import { firstValueFrom } from 'rxjs';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { exit } from 'node:process';
 import { logger } from './logger.js';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import { inspect } from 'node:util';
+import { Buffer } from 'buffer';
 
 /** Tests performing a token transfer */
 
@@ -112,26 +113,17 @@ describe('Set up test wallet', () => {
         },
       ];
 
-      const txRecipe = await sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 30 * 60 * 1000),
-        },
-      );
+      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      });
       logger.info('Signing tx...');
       logger.info(txRecipe);
-      const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, (payload) =>
-        sender.unshieldedKeystore.signData(payload),
-      );
+      const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, sender.unshieldedKeystore.signDataAsync);
       logger.info('Transaction to prove...');
       logger.info(signedTxRecipe.type.toString());
       const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
       logger.info('Submitting transaction...');
-      logger.info(finalizedTx.toString());
+      logger.info(Buffer.from(finalizedTx.serialize()).toString('hex'));
       const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
@@ -146,7 +138,7 @@ describe('Set up test wallet', () => {
       const dustRegistrationRecipe = await receiver.wallet.registerNightUtxosForDustGeneration(
         [unregisteredNightUtxos[0]],
         receiver.unshieldedKeystore.getPublicKey(),
-        (payload) => receiver.unshieldedKeystore.signData(payload),
+        receiver.unshieldedKeystore.signDataAsync,
       );
       const finalizedDustTx = await receiver.wallet.finalizeRecipe(dustRegistrationRecipe);
       logger.info('Submitting dust registration transaction...');
@@ -201,26 +193,17 @@ describe('Set up test wallet', () => {
         },
       ];
 
-      const txRecipe = await sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: new Date(Date.now() + 30 * 60 * 1000),
-        },
-      );
+      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      });
       logger.info('Signing tx...');
       logger.info(txRecipe);
-      const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, (payload) =>
-        sender.unshieldedKeystore.signData(payload),
-      );
+      const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, sender.unshieldedKeystore.signDataAsync);
       logger.info('Transaction to prove...');
       logger.info(signedTxRecipe);
       const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
       logger.info('Submitting transaction...');
-      logger.info(finalizedTx.toString());
+      logger.info(Buffer.from(finalizedTx.serialize()).toString('hex'));
       const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);

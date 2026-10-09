@@ -37,7 +37,7 @@ sync(): Stream.Stream<Update> → Capability.apply(state, update) → Subscripti
 
 **Canonical examples:**
 
-- `packages/unshielded-wallet/src/v1/UnshieldedState.ts` - Pure state transformations
+- `packages/unshielded-wallet/src/v2/UnshieldedState.ts` - Pure state transformations (`v1` is its ledger-v8 twin)
 - `packages/capabilities/src/pendingTransactions/pendingTransactionsService.ts` - Service orchestrating pure updates
 
 ### Parse, Don't Validate
@@ -247,7 +247,7 @@ return EitherOps.toEffect(pureResult); // Convert at boundary only
 **Canonical examples:**
 
 - `packages/utilities/src/EitherOps.ts` - Either utilities including `toEffect` conversion
-- `packages/shielded-wallet/src/v1/Transacting.ts` - Capabilities return Either
+- `packages/shielded-wallet/src/v2/Transacting.ts` - Capabilities return Either
 - `packages/capabilities/src/proving/provingService.ts` - Services use Effect
 
 ### Generator vs Pipe Style
@@ -626,7 +626,7 @@ When implementing new features, refer to these exemplary files:
 | Monoid, dual functions               | `packages/utilities/src/ArrayOps.ts`                                          |
 | Tagged enum ADT                      | `packages/runtime/src/abstractions/StateChange.ts`                            |
 | Service/Capability separation        | `packages/capabilities/src/pendingTransactions/pendingTransactionsService.ts` |
-| Pure state transformations           | `packages/unshielded-wallet/src/v1/UnshieldedState.ts`                        |
+| Pure state transformations           | `packages/unshielded-wallet/src/v2/UnshieldedState.ts`                        |
 | Parse don't validate                 | `packages/address-format/src/index.ts`                                        |
 | Branded types                        | `packages/abstractions/src/ProtocolVersion.ts`                                |
 

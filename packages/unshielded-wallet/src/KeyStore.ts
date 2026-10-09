@@ -14,12 +14,19 @@ import { UnshieldedAddress, type MidnightBech32m } from '@midnightntwrk/wallet-s
 import {
   addressFromKey,
   type Signature,
+  type SignatureKind,
   type SignatureVerifyingKey,
   signData,
+  type SigningKey as LedgerSigningKey,
   type UserAddress,
   signatureVerifyingKey,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v9';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+
+export type UnshieldedSecretKey = {
+  kind: SignatureKind;
+  secret: Uint8Array<ArrayBufferLike>;
+};
 
 export type PublicKey = {
   publicKey: SignatureVerifyingKey;
@@ -42,15 +49,25 @@ export interface UnshieldedKeystore {
   getBech32Address(): MidnightBech32m;
   getPublicKey(): SignatureVerifyingKey;
   getAddress(): UserAddress;
+  /** The synchronous in-process signing primitive. */
   signData(data: Uint8Array): Signature;
+  /**
+   * Async counterpart of {@link signData} that conforms to the SDK's signer callback shape (`(data) =>
+   * Promise<Signature>`), so the keystore can be passed directly to `signRecipe`/`signUnprovenTransaction`/… without
+   * wrapping each call site. It simply resolves the synchronous {@link signData}; out-of-process backends (MPC, HSM)
+   * supply their own async signer.
+   */
+  signDataAsync: (data: Uint8Array) => Promise<Signature>;
 }
 
-export const createKeystore = (
-  secretKey: Uint8Array<ArrayBufferLike>,
-  networkId: NetworkId.NetworkId,
-): UnshieldedKeystore => {
+export const createKeystore = (secretKey: UnshieldedSecretKey, networkId: NetworkId.NetworkId): UnshieldedKeystore => {
+  const ledgerSigningKey: LedgerSigningKey = {
+    tag: secretKey.kind,
+    value: Buffer.from(secretKey.secret).toString('hex'),
+  };
+
   const keystore: UnshieldedKeystore = {
-    getSecretKey: () => Buffer.from(secretKey),
+    getSecretKey: () => Buffer.from(secretKey.secret),
 
     getBech32Address: () => {
       const address = keystore.getAddress();
@@ -58,11 +75,13 @@ export const createKeystore = (
       return UnshieldedAddress.codec.encode(networkId, new UnshieldedAddress(addressBuffer));
     },
 
-    getPublicKey: () => signatureVerifyingKey(keystore.getSecretKey().toString('hex')),
+    getPublicKey: () => signatureVerifyingKey(ledgerSigningKey),
 
     getAddress: () => addressFromKey(keystore.getPublicKey()),
 
-    signData: (data: Uint8Array) => signData(keystore.getSecretKey().toString('hex'), data),
+    signData: (data: Uint8Array) => signData(ledgerSigningKey, data),
+
+    signDataAsync: (data: Uint8Array) => Promise.resolve(keystore.signData(data)),
   };
 
   return keystore;

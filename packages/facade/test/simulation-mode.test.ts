@@ -28,7 +28,7 @@
  * - Integration tests that don't need real chain interaction
  * - DApp connector reference implementation tests
  */
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, pipe } from 'effect';
@@ -135,8 +135,10 @@ describe('WalletFacade in simulation mode', () => {
 
       // Registration transaction's fee is covered by allowFeePayment (would-be generated Dust)
       const dustRegistrationRecipe = yield* Effect.promise(() =>
-        senderFacade.registerNightUtxosForDustGeneration(nightUtxos, senderKeys.signatureVerifyingKey, (payload) =>
-          senderKeys.unshieldedKeystore.signData(payload),
+        senderFacade.registerNightUtxosForDustGeneration(
+          nightUtxos,
+          senderKeys.signatureVerifyingKey,
+          senderKeys.unshieldedKeystore.signDataAsync,
         ),
       );
       const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
@@ -169,14 +171,7 @@ describe('WalletFacade in simulation mode', () => {
       // Step 8: Create, finalize, and submit the transfer transaction with fee payment
       // payFees: true by default - transaction is balanced with Dust spend
       const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
-        senderFacade.transferTransaction(
-          transferOutputs,
-          {
-            shieldedSecretKeys: senderKeys.shieldedKeys,
-            dustSecretKey: senderKeys.dustKey,
-          },
-          { ttl },
-        ),
+        senderFacade.transferTransaction(transferOutputs, { ttl }),
       );
 
       const finalizedTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(transferRecipe));
@@ -283,8 +278,10 @@ describe('WalletFacade in simulation mode', () => {
       expect(nightUtxos.length).toBeGreaterThan(0);
 
       const dustRegistrationRecipe = yield* Effect.promise(() =>
-        senderFacade.registerNightUtxosForDustGeneration(nightUtxos, senderKeys.signatureVerifyingKey, (payload) =>
-          senderKeys.unshieldedKeystore.signData(payload),
+        senderFacade.registerNightUtxosForDustGeneration(
+          nightUtxos,
+          senderKeys.signatureVerifyingKey,
+          senderKeys.unshieldedKeystore.signDataAsync,
         ),
       );
       const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
@@ -303,7 +300,6 @@ describe('WalletFacade in simulation mode', () => {
       const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
         senderFacade.transferTransaction(
           [{ type: 'unshielded', outputs: [{ type: nightTokenType, receiverAddress, amount: tokenValue(100n) }] }],
-          { shieldedSecretKeys: senderKeys.shieldedKeys, dustSecretKey: senderKeys.dustKey },
           { ttl }, // payFees: true (default)
         ),
       );
@@ -321,6 +317,185 @@ describe('WalletFacade in simulation mode', () => {
           rx.firstValueFrom,
         ),
       );
+      expect(receiverBalance).toEqual(tokenValue(100n));
+    }).pipe(Effect.scoped, Effect.runPromise);
+  });
+
+  /**
+   * Same flow as the Night transfer test above, but the sender's unshielded wallet uses ECDSA keys. This exercises the
+   * full ECDSA spend-authorization path: Dust registration signed with ECDSA and a fee-paying transfer spending
+   * ECDSA-owned UTXOs, received by a schnorr wallet.
+   */
+  it('transfers Night from an ECDSA wallet to a schnorr wallet', async () => {
+    return Effect.gen(function* () {
+      const senderKeys = deriveWalletKeys(SENDER_SEED, NETWORK_ID, 'ecdsa');
+      const receiverKeys = deriveWalletKeys(RECEIVER_SEED, NETWORK_ID, 'schnorr');
+      const nightTokenType = ledger.nativeToken().raw;
+
+      // Genesis: Night tokens minted to the sender's ECDSA-derived address
+      const genesisMints: [GenesisMint] = [
+        {
+          type: 'unshielded',
+          tokenType: nightTokenType,
+          amount: tokenValue(100_000n),
+          recipient: senderKeys.userAddress,
+          verifyingKey: senderKeys.signatureVerifyingKey,
+        },
+      ];
+
+      // Default block producer enforces balancing (requires fee payment)
+      const simulator = yield* Simulator.init({
+        genesisMints,
+        blockProducer: immediateBlockProducer(),
+      });
+
+      const simulatorConfig: SimulatorConfig = {
+        simulator,
+        networkId: NETWORK_ID,
+        costParameters: { feeBlocksMargin: 5 },
+      };
+
+      const factories = createSimulatorWalletFactories(simulatorConfig);
+
+      const senderFacade = yield* makeSimulatorFacade(simulatorConfig, senderKeys, factories);
+      const receiverFacade = yield* makeSimulatorFacade(simulatorConfig, receiverKeys, factories);
+
+      // Wait for sender to see Night balance from genesis at its ECDSA address
+      yield* waitForUnshieldedBalance(senderFacade, nightTokenType, 1n);
+
+      // Fast-forward for Dust generation, then register Night tokens (signed with the ECDSA keystore)
+      yield* simulator.fastForward(10_000n);
+
+      const senderState: FacadeState = yield* Effect.promise(() =>
+        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0))),
+      );
+      const nightUtxos = senderState.unshielded.availableCoins.filter(
+        (coin) => coin.utxo.type === nightTokenType && coin.meta.registeredForDustGeneration === false,
+      );
+      expect(nightUtxos.length).toBeGreaterThan(0);
+
+      const dustRegistrationRecipe = yield* Effect.promise(() =>
+        senderFacade.registerNightUtxosForDustGeneration(
+          nightUtxos,
+          senderKeys.signatureVerifyingKey,
+          senderKeys.unshieldedKeystore.signDataAsync,
+        ),
+      );
+      const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
+      yield* Effect.promise(() => senderFacade.submitTransaction(registrationTx));
+
+      // Wait for Dust to be available
+      yield* Effect.promise(() =>
+        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.dust.availableCoins.length > 0))),
+      );
+
+      // Create and submit Night transfer with fee payment, spending ECDSA-owned UTXOs
+      const receiverAddress = yield* Effect.promise(() => receiverFacade.unshielded.getAddress());
+      const simTime = yield* simulator.query((s) => s.currentTime);
+      const ttl = new Date(simTime.getTime() + 60 * 60 * 1000);
+
+      const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
+        senderFacade.transferTransaction(
+          [{ type: 'unshielded', outputs: [{ type: nightTokenType, receiverAddress, amount: tokenValue(100n) }] }],
+          { ttl }, // payFees: true (default)
+        ),
+      );
+
+      const finalizedTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(transferRecipe));
+      const txHash = yield* Effect.promise(() => senderFacade.submitTransaction(finalizedTx));
+      expect(txHash).toBeTypeOf('string');
+
+      // Wait for the schnorr receiver to see the Night balance
+      const receiverBalance = yield* waitForUnshieldedBalance(receiverFacade, nightTokenType, 1n);
+      expect(receiverBalance).toEqual(tokenValue(100n));
+    }).pipe(Effect.scoped, Effect.runPromise);
+  });
+
+  /**
+   * Same flow with the kinds flipped: a schnorr wallet sends Night to an ECDSA wallet's address. This exercises
+   * ownership detection on receive for ECDSA-derived addresses.
+   */
+  it('transfers Night from a schnorr wallet to an ECDSA wallet', async () => {
+    return Effect.gen(function* () {
+      const senderKeys = deriveWalletKeys(SENDER_SEED, NETWORK_ID, 'schnorr');
+      const receiverKeys = deriveWalletKeys(RECEIVER_SEED, NETWORK_ID, 'ecdsa');
+      const nightTokenType = ledger.nativeToken().raw;
+
+      // Genesis: Night tokens for the schnorr sender
+      const genesisMints: [GenesisMint] = [
+        {
+          type: 'unshielded',
+          tokenType: nightTokenType,
+          amount: tokenValue(100_000n),
+          recipient: senderKeys.userAddress,
+          verifyingKey: senderKeys.signatureVerifyingKey,
+        },
+      ];
+
+      // Default block producer enforces balancing (requires fee payment)
+      const simulator = yield* Simulator.init({
+        genesisMints,
+        blockProducer: immediateBlockProducer(),
+      });
+
+      const simulatorConfig: SimulatorConfig = {
+        simulator,
+        networkId: NETWORK_ID,
+        costParameters: { feeBlocksMargin: 5 },
+      };
+
+      const factories = createSimulatorWalletFactories(simulatorConfig);
+
+      const senderFacade = yield* makeSimulatorFacade(simulatorConfig, senderKeys, factories);
+      const receiverFacade = yield* makeSimulatorFacade(simulatorConfig, receiverKeys, factories);
+
+      // Wait for sender to see Night balance from genesis
+      yield* waitForUnshieldedBalance(senderFacade, nightTokenType, 1n);
+
+      // Fast-forward for Dust generation, then register Night tokens
+      yield* simulator.fastForward(10_000n);
+
+      const senderState: FacadeState = yield* Effect.promise(() =>
+        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0))),
+      );
+      const nightUtxos = senderState.unshielded.availableCoins.filter(
+        (coin) => coin.utxo.type === nightTokenType && coin.meta.registeredForDustGeneration === false,
+      );
+      expect(nightUtxos.length).toBeGreaterThan(0);
+
+      const dustRegistrationRecipe = yield* Effect.promise(() =>
+        senderFacade.registerNightUtxosForDustGeneration(
+          nightUtxos,
+          senderKeys.signatureVerifyingKey,
+          senderKeys.unshieldedKeystore.signDataAsync,
+        ),
+      );
+      const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
+      yield* Effect.promise(() => senderFacade.submitTransaction(registrationTx));
+
+      // Wait for Dust to be available
+      yield* Effect.promise(() =>
+        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.dust.availableCoins.length > 0))),
+      );
+
+      // Create and submit Night transfer to the ECDSA wallet's address
+      const receiverAddress = yield* Effect.promise(() => receiverFacade.unshielded.getAddress());
+      const simTime = yield* simulator.query((s) => s.currentTime);
+      const ttl = new Date(simTime.getTime() + 60 * 60 * 1000);
+
+      const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
+        senderFacade.transferTransaction(
+          [{ type: 'unshielded', outputs: [{ type: nightTokenType, receiverAddress, amount: tokenValue(100n) }] }],
+          { ttl }, // payFees: true (default)
+        ),
+      );
+
+      const finalizedTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(transferRecipe));
+      const txHash = yield* Effect.promise(() => senderFacade.submitTransaction(finalizedTx));
+      expect(txHash).toBeTypeOf('string');
+
+      // Wait for the ECDSA receiver to see the Night balance
+      const receiverBalance = yield* waitForUnshieldedBalance(receiverFacade, nightTokenType, 1n);
       expect(receiverBalance).toEqual(tokenValue(100n));
     }).pipe(Effect.scoped, Effect.runPromise);
   });

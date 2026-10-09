@@ -1,0 +1,51 @@
+# This file is part of MIDNIGHT-WALLET-SDK.
+# Copyright (C) Midnight Foundation
+# SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# WASM bindings for the ledger's v8-to-v9 ledger state translation.
+#
+# A member of the workspace defined by the repository-root Cargo.toml, which is also where the `[patch.crates-io]` block
+# and the `wasm` profile this crate depends on live — Cargo only honours those in a workspace root. See ./README.md.
+[package]
+name = "v8-to-v9-state-translation-wasm"
+version = "0.0.1"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# The translation itself, consumed as a crate. Pinned to a commit on the branch it currently lives on
+# (`tkerber/state-translation/v8-to-v9`), so the pin is explicit and survives a lockfile regeneration; swap to a plain
+# `version = "0.1.0"` once it is released to crates.io. To iterate against a local checkout instead, see the
+# `.cargo/config.toml` note in ./README.md rather than editing this line.
+v8-to-v9-state-translation = { git = "https://github.com/midnightntwrk/midnight-ledger", rev = "e2136df78d80ff795ac80a5e8d08640c4c4eaf75" }
+
+# Both ledgers, for the two `LedgerState` types the translation goes between. Feature sets mirror the translation
+# crate's own, so Cargo's feature unification does not silently widen either side.
+ledger-v8 = { version = "8.1.0", package = "midnight-ledger", features = ["proving"] }
+ledger-v9 = { version = "1.0.0", package = "midnight-ledger-v9", features = ["proving"] }
+
+storage = { version = "2.0.1", package = "midnight-storage", features = ["state-translation"] }
+serialize = { version = "1.1.0", package = "midnight-serialize" }
+base-crypto = { version = "1.0.0", package = "midnight-base-crypto" }
+
+wasm-bindgen = "=0.2.108"
+js-sys = "^0.3.77"
+console_error_panic_hook = "^0.1.7"
+
+# Nothing here asks for randomness, but the crypto crates below do, and on wasm32-unknown-unknown `getrandom` needs to
+# be told where to find it.
+getrandom_2 = { package = "getrandom", version = "^0.2.16", features = ["js"] }
+getrandom_3 = { package = "getrandom", version = "^0.3.4", features = ["wasm_js"] }

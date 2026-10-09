@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either, Option, pipe, Array as Arr } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { InsufficientFundsError, OtherWalletError, TransactingError, type WalletError } from './WalletError.js';
@@ -100,11 +100,6 @@ export interface TransactingCapability<TState> {
     transaction: ledger.UnprovenTransaction,
   ): Either.Either<[UnprovenTransactionBalanceResult, CoreWallet], WalletError>;
 
-  signUnprovenTransaction(
-    transaction: ledger.UnprovenTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Either.Either<ledger.UnprovenTransaction, WalletError>;
-
   revertTransaction(
     wallet: CoreWallet,
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
@@ -141,11 +136,6 @@ export interface TransactingCapability<TState> {
    * @returns The wallet with the uncovered restored coins available again
    */
   releaseRestoredPending(wallet: CoreWallet, coveredIds: ReadonlyArray<UtxoHash>): CoreWallet;
-
-  signUnboundTransaction(
-    transaction: UnboundTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Either.Either<UnboundTransaction, WalletError>;
 }
 
 export type DefaultTransactingConfiguration = {
@@ -320,7 +310,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       const intent = ledger.Intent.new(ttl);
 
-      const hasNightOutput = ledgerOutputs.some((output) => output.type === ledger.nativeToken().raw);
+      const hasNightOutput = ledgerOutputs.some((output) => output.type === Token.night);
       if (hasNightOutput) {
         intent.fallibleUnshieldedOffer = offer;
       } else {
@@ -372,7 +362,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
         );
         const output: ledger.UtxoOutput = {
           owner: ownerAddress,
-          type: ledger.nativeToken().raw,
+          type: Token.night,
           value: totalValue,
         };
         return Option.some(ledger.UnshieldedOffer.new(inputs, [output], []));
@@ -471,51 +461,6 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     });
   }
 
-  signUnprovenTransaction(
-    transaction: ledger.UnprovenTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Either.Either<ledger.UnprovenTransaction, WalletError> {
-    return this.#signTransactionInternal(transaction, signSegment);
-  }
-
-  signUnboundTransaction(
-    transaction: UnboundTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Either.Either<UnboundTransaction, WalletError> {
-    return this.#signTransactionInternal(transaction, signSegment);
-  }
-
-  /**
-   * Internal method to sign either an unproven or unbound transaction
-   *
-   * @param transaction - The transaction to sign
-   * @param signSegment - The signing function
-   * @returns The signed transaction if successful, otherwise an error
-   */
-  #signTransactionInternal<T extends ledger.UnprovenTransaction | UnboundTransaction>(
-    transaction: T,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Either.Either<T, WalletError> {
-    return Either.gen(this, function* () {
-      const segments = this.txOps.getSegments(transaction);
-
-      for (const segment of segments) {
-        const signedData = yield* this.txOps.getSignatureData(transaction, segment);
-        const signature = signSegment(signedData);
-        transaction = yield* this.txOps.addSignature<T>(transaction, signature, segment);
-      }
-      return transaction;
-    });
-  }
-
-  /**
-   * Reverts a transaction by rolling back all inputs owned by this wallet
-   *
-   * @param wallet - The wallet to revert the transaction for
-   * @param transaction - The transaction to revert (can be FinalizedTransaction, UnboundTransaction, or
-   *   UnprovenTransaction)
-   * @returns The updated wallet with rolled back UTXOs if successful, otherwise an error
-   */
   /**
    * Releases the booked coins named by `utxoIds`, without needing the transaction that booked them.
    *

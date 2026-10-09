@@ -11,9 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Either, pipe, Schema } from 'effect';
+import { addressFromKey } from '@midnight-ntwrk/ledger-v8';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
-import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type PublicKey } from './KeyStore.js';
+import { type NetworkId, ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { UnshieldedState, UtxoWithMeta } from './UnshieldedState.js';
 
 export type SerializationCapability<TWallet, TSerialized> = {
@@ -21,10 +24,53 @@ export type SerializationCapability<TWallet, TSerialized> = {
   deserialize(data: TSerialized): Either.Either<TWallet, WalletError>;
 };
 
+/**
+ * Asserts that a {@link PublicKey}'s stored address was really derived from its stored verifying key.
+ *
+ * @remarks
+ *   Deserialization is a trust boundary — a snapshot is whatever was handed back to the wallet — and the schema alone
+ *   cannot catch a spliced key/address pair, since both fields are well-formed strings either way. Deriving one from
+ *   the other is what shows they belong together. Deriving also exercises the ledger's key decoder, which traps in wasm
+ *   on a malformed key, so the call is wrapped and the boundary fails closed with a typed error rather than letting an
+ *   exception escape.
+ *
+ *   The ledger-v9 variant makes the same assertion but reports a mismatch as a `SchemeMismatchError`, naming the
+ *   signature scheme the address must have been derived under. Ledger-v8 has a single scheme, so there is no scheme to
+ *   name and the mismatch is an ordinary wallet error.
+ * @param publicKey - The public-key bundle read out of a snapshot.
+ * @returns `Right(publicKey)` when the address matches the key; otherwise `Left(OtherWalletError)`.
+ */
+export const assertKeyAddressConsistency = (publicKey: PublicKey): Either.Either<PublicKey, WalletError> =>
+  pipe(
+    Either.try({
+      try: () => addressFromKey(publicKey.publicKey),
+      catch: (cause) => new OtherWalletError({ message: 'Unshielded verifying key could not be decoded.', cause }),
+    }),
+    Either.flatMap((derivedAddress): Either.Either<PublicKey, WalletError> =>
+      derivedAddress === publicKey.addressHex
+        ? Either.right(publicKey)
+        : Either.left(
+            new OtherWalletError({
+              message: 'Unshielded address does not match its verifying key.',
+            }),
+          ),
+    ),
+  );
+
 export type DefaultSerializationConfiguration = {
   networkId: NetworkId.NetworkId;
+  /**
+   * The clock a booking restored without an expiry is dated from. Defaults to system time; inject one to make what a
+   * snapshot reads back deterministic, as the format drift tests do.
+   */
+  clock?: Clock.Clock;
 };
 
+// The format versions live beside the twins, not in either of them, so the V2 variant can read them without loading
+// ledger-v8. This variant writes the first one, and re-exports it under the name every writer uses for the version it
+// writes, because that is part of its serialization surface.
+export { V1_SNAPSHOT_FORMAT_VERSION as SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import { V1_SNAPSHOT_FORMAT_VERSION as SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 /**
  * How long a booking restored from a snapshot that predates booking expiries is given, measured from the moment the
  * snapshot is loaded. It matches the transaction lifetime the facade hands out by default, so such a booking is bounded
@@ -32,7 +78,9 @@ export type DefaultSerializationConfiguration = {
  */
 export const LEGACY_BOOKING_LIFETIME_MS = 60 * 60 * 1000;
 
-export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, string> => {
+export const makeDefaultV1SerializationCapability = ({
+  clock = Clock.systemClock,
+}: Pick<DefaultSerializationConfiguration, 'clock'> = {}): SerializationCapability<CoreWallet, string> => {
   const UtxoWithMetaSchema = Schema.Struct({
     utxo: Schema.Struct({
       value: Schema.BigInt,
@@ -59,11 +107,13 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
   const PendingUtxoSchema = Schema.Struct({
     ...UtxoWithMetaSchema.fields,
     ttl: Schema.optionalWith(Schema.Date, {
-      default: () => new Date(Date.now() + LEGACY_BOOKING_LIFETIME_MS),
+      default: () => new Date(clock.now().getTime() + LEGACY_BOOKING_LIFETIME_MS),
     }),
   });
 
   const SnapshotSchema = Schema.Struct({
+    version: SnapshotFormat.versionField('unshielded', SNAPSHOT_FORMAT_VERSION),
+    writtenBy: SnapshotFormat.writtenByField(),
     publicKey: Schema.Struct({
       publicKey: Schema.String,
       addressHex: Schema.String,
@@ -85,6 +135,8 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         const { availableUtxos, pendingUtxos } = UnshieldedState.toArrays(w.state);
 
         return {
+          version: SNAPSHOT_FORMAT_VERSION,
+          writtenBy: SnapshotFormat.V1_SNAPSHOT_WRITER,
           publicKey: w.publicKey,
           state: {
             availableUtxos,
@@ -102,8 +154,18 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     deserialize: (serialized): Either.Either<CoreWallet, WalletError> =>
       pipe(
         serialized,
-        Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => new OtherWalletError(err)),
+        SnapshotFormat.readSnapshot({
+          surface: 'unshielded',
+          reads: [SNAPSHOT_FORMAT_VERSION],
+          schema: SnapshotSchema,
+        }),
+        // The schema proves the snapshot's shape; this proves its key and address belong to each other.
+        Either.flatMap((snapshot) =>
+          pipe(
+            assertKeyAddressConsistency(snapshot.publicKey),
+            Either.map(() => snapshot),
+          ),
+        ),
         Either.map((snapshot) => {
           return CoreWallet.restore(
             UnshieldedState.restore(

@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type DustPublicKey, EncryptionSecretKey, type UserAddress } from '@midnight-ntwrk/ledger-v8';
+import { type DustPublicKey, EncryptionSecretKey, type UserAddress } from '@midnightntwrk/ledger-v9';
 import { bech32m } from '@scure/base';
 import * as subsquidScale from '@subsquid/scale-codec';
 
@@ -324,6 +324,10 @@ export class DustAddress {
 
   serialize(): Buffer {
     return ScaleBigInt.encode(this.data);
+  }
+
+  get hexString(): string {
+    return this.serialize().toString('hex');
   }
 
   equals(other: bigint): boolean;

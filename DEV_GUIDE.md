@@ -100,6 +100,43 @@ will return as soon as the release workflow runs again.
 
 ---
 
+## Release Lines: `main` (2.x) and `v1` (1.x)
+
+Since June 2026 the SDK is developed on **two release lines**, because the 2.x line migrates from
+`@midnight-ntwrk/ledger-v8` to `@midnightntwrk/ledger-v9` (a breaking change). 2.x was built on a `v2` branch until it
+merged into `main`; that branch is retired.
+
+| Branch | Line | Ledger                          | Publishes as                                                          |
+| ------ | ---- | ------------------------------- | --------------------------------------------------------------------- |
+| `main` | 2.x  | v8 below `forks.v9`, v9 from it | `rc` dist-tag (pre-release mode), canaries under `canary`             |
+| `v1`   | 1.x  | v8                              | `latest` dist-tag until 2.0.0 is released, canaries under `canary-v1` |
+
+How the two lines work:
+
+- `main` is in **Changesets pre-release mode** (`.changeset/pre.json`, tag `rc`) — every release from it is versioned
+  `X.Y.Z-rc.N` and published under the `rc` dist-tag, so 1.x keeps owning `latest`. The line started under `beta`.
+  Changesets does not restart the counter when the tag changes (`2.0.0-beta.4` would become `2.0.0-rc.5`), so the first
+  release PR after a switch is renumbered to `-rc.0` by hand, in package versions, internal dependency ranges and
+  changelogs; later releases count up from there. Changing the tag alone releases nothing: the PR that switches it must
+  also carry a changeset that `patch`-bumps every published package, or no release PR opens.
+- `v1` is the 1.x maintenance branch, cut from the last 1.x commit on `main`. Its branch-local `.changeset/config.json`
+  sets `baseBranch: "v1"`, and its automated release PR lives on `changeset-release/v1`.
+- 2.x work targets `main`; 1.x fixes target `v1`. A fix both lines need lands on each of them.
+
+### GA checklist (when 2.x becomes stable)
+
+The `v1` branch is cut, `v2` is merged into `main`, and `v2` is retired. What remains, **in order**:
+
+1. **Move `v1` off `latest`** before 2.0.0 is published. On `v1`, give the stable publish an explicit dist-tag:
+   `yarn changeset publish --tag v1` in the `publish-stable` job of `.github/workflows/cd.yml`, and
+   `node scripts/publish-alias.mjs --tag v1` for the alias. `changeset publish` tags `latest` by default — without this,
+   a 1.x patch released after 2.0.0 would take the `latest` dist-tag back from 2.x.
+2. **Exit pre-release mode on `main`**: run `yarn changeset pre exit` and commit the result. The next release PR on
+   `main` then versions the real majors (e.g. `@midnightntwrk/wallet-sdk` → `2.0.0`), and publishing it tags them
+   `latest`.
+3. **Sanity-check dist-tags** on the registry afterwards: `latest` → 2.x, `v1` → last 1.x, and the `rc` tag points at
+   the final pre-release (it is not moved automatically).
+
 ## Known Install Warnings
 
 `yarn install` currently ends with `Done with warnings` because of one unresolved peer range. It is expected, and it is
@@ -140,6 +177,11 @@ Tests are split by **filename suffix** so each tier can run independently:
 - **End-to-end** — full wallet flows through the public API live in the `e2e-tests` package as `*.undeployed.test.ts`
   and run via `turbo test-undeployed` (smoke subset on PRs, full suite nightly). The docs-snippets runner is also e2e
   and runs in that lane while staying in its own package.
+- **Fork crossing** — a fourth e2e sub-project, `fork` (`*.fork.test.ts`, `yarn turbo test-fork`): boots a chain from
+  the ledger-v8 node's spec, runs it on the ledger-v9 binary, and enacts the real ledger 8 → 9 runtime upgrade so a
+  wallet crosses an actual protocol boundary — something no other lane does, since every other stack is on ledger-v9
+  from block 1. It is in neither the PR smoke lane nor the nightly undeployed run; it has its own nightly/dispatch
+  workflow, `.github/workflows/e2e-hard-fork.yml`, and is documented in `packages/e2e-tests/README.md`.
 
 In CI, unit tests run as a fast early gate. Integration tests run as a **matrix with one job per file** (own runner +
 own Docker stack), so no two files contend for infra and a failing file never cancels the rest. The file list is

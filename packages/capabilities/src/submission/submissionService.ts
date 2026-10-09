@@ -18,8 +18,8 @@ import {
   SubmissionEvent as SubmissionEventImported,
 } from '@midnightntwrk/wallet-sdk-node-client/effect';
 import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type FinalizedTransaction } from '@midnight-ntwrk/ledger-v8';
-import { type SimulatorState, getLastBlock } from '../simulation/Simulator.js';
+import { type FinalizedTransaction } from '@midnightntwrk/ledger-v9';
+import { type SimulatorState, getLastBlock } from '../simulation/v9/Simulator.js';
 
 export const SubmissionEvent = SubmissionEventImported;
 export type SubmissionEvent = SubmissionEventImported.SubmissionEvent;
@@ -74,7 +74,7 @@ export type DefaultSubmissionConfiguration = {
 };
 
 export const makeDefaultSubmissionServiceEffect = <
-  TTransaction extends { serialize: () => Uint8Array } = FinalizedTransaction,
+  TTransaction extends { serialize: () => Uint8Array; toString: () => string } = FinalizedTransaction,
 >(
   config: DefaultSubmissionConfiguration,
 ): SubmissionServiceEffect<TTransaction> => {

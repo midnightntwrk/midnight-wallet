@@ -20,6 +20,7 @@ import {
   Option,
   pipe,
 } from 'effect';
+import { Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   DustActions,
   DustRegistration,
@@ -39,7 +40,6 @@ import {
   type UnprovenTransaction,
   addressFromKey,
   type LedgerParameters,
-  nativeToken,
 } from '@midnight-ntwrk/ledger-v8';
 import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { OtherWalletError, TransactingError, type WalletError, InsufficientFundsError } from './WalletError.js';
@@ -494,7 +494,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       }));
       const output: UtxoOutput = {
         owner: addressFromKey(nightVerifyingKey),
-        type: nativeToken().raw,
+        type: Token.night,
         value: totalValue,
       };
 
@@ -762,20 +762,18 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         );
         newIntent.dustActions = newDustActions;
 
-        const inputsLen = guaranteedUnshieldedOffer.inputs.length;
-        const signatures: Signature[] = [];
-        for (let i = 0; i < inputsLen; ++i) {
-          signatures.push(guaranteedUnshieldedOffer.signatures.at(i) ?? signatureData);
-        }
-        newIntent.guaranteedUnshieldedOffer = guaranteedUnshieldedOffer.addSignatures(signatures);
+        const guaranteedSignatures = Array.from(
+          { length: guaranteedUnshieldedOffer.inputs.length },
+          (_, i) => guaranteedUnshieldedOffer.signatures.at(i) ?? signatureData,
+        );
+        newIntent.guaranteedUnshieldedOffer = guaranteedUnshieldedOffer.addSignatures(guaranteedSignatures);
 
         if (fallibleUnshieldedOffer) {
-          const inputsLen = fallibleUnshieldedOffer.inputs.length;
-          const signatures: Signature[] = [];
-          for (let i = 0; i < inputsLen; ++i) {
-            signatures.push(fallibleUnshieldedOffer.signatures.at(i) ?? signatureData);
-          }
-          newIntent.fallibleUnshieldedOffer = fallibleUnshieldedOffer.addSignatures(signatures);
+          const fallibleSignatures = Array.from(
+            { length: fallibleUnshieldedOffer.inputs.length },
+            (_, i) => fallibleUnshieldedOffer.signatures.at(i) ?? signatureData,
+          );
+          newIntent.fallibleUnshieldedOffer = fallibleUnshieldedOffer.addSignatures(fallibleSignatures);
         }
 
         // make a copy of transaction to avoid mutation

@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { NetworkId, InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { PublicKey, UnshieldedWallet, createKeystore } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
@@ -31,7 +31,8 @@ import {
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils.js';
-import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
+import { makeV9WasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
+import { carried, sealed } from './helpers/transactions.js';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
 
@@ -67,8 +68,14 @@ describe('Wallet Facade Transfer', () => {
   const dustSenderSeed = getDustSeed(SENDER_SEED);
   const dustReceiverSeed = getDustSeed(RECEIVER_SEED);
 
-  const unshieldedSenderKeystore = createKeystore(unshieldedSenderSeed, NetworkId.NetworkId.Undeployed);
-  const unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);
+  const unshieldedSenderKeystore = createKeystore(
+    { kind: 'schnorr', secret: unshieldedSenderSeed },
+    NetworkId.NetworkId.Undeployed,
+  );
+  const unshieldedReceiverKeystore = createKeystore(
+    { kind: 'schnorr', secret: unshieldedReceiverSeed },
+    NetworkId.NetworkId.Undeployed,
+  );
 
   let startedEnvironment: StartedDockerComposeEnvironment;
   let configuration: DefaultConfiguration;
@@ -85,6 +92,7 @@ describe('Wallet Facade Transfer', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      forks: ProtocolVersion.V9NativeForkSchedule,
       costParameters: {
         feeBlocksMargin: 5,
       },
@@ -107,7 +115,7 @@ describe('Wallet Facade Transfer', () => {
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
-      provingService: () => makeWasmProvingService(),
+      provingService: () => makeV9WasmProvingService(),
     });
     receiverFacade = await WalletFacade.init({
       configuration: {
@@ -118,18 +126,16 @@ describe('Wallet Facade Transfer', () => {
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustReceiverSeed, dustParameters),
-      provingService: () => makeWasmProvingService(),
+      provingService: () => makeV9WasmProvingService(),
     });
 
     await Promise.all([
-      senderFacade.start(
-        ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      ),
-      receiverFacade.start(
-        ledger.ZswapSecretKeys.fromSeed(shieldedReceiverSeed),
-        ledger.DustSecretKey.fromSeed(dustReceiverSeed),
-      ),
+      senderFacade.start({ shielded: shieldedSenderSeed, unshielded: shieldedSenderSeed, dust: dustSenderSeed }),
+      receiverFacade.start({
+        shielded: shieldedReceiverSeed,
+        unshielded: shieldedReceiverSeed,
+        dust: dustReceiverSeed,
+      }),
     ]);
   });
 
@@ -137,7 +143,9 @@ describe('Wallet Facade Transfer', () => {
     await Promise.all([senderFacade.stop(), receiverFacade.stop()]);
   });
 
-  it('allows to transfer shielded tokens only', async () => {
+  // @smoke: the one PR-lane test that proves a Dust spend in-process and submits it to a node. Nothing short of a node
+  // verifies a Dust spend proof, so this is what notices the in-process prover's key material falling behind the ledger.
+  it('allows to transfer shielded tokens only @smoke', async () => {
     await Promise.all([senderFacade.waitForSyncedState(), receiverFacade.waitForSyncedState()]);
 
     const receiverAddress = await receiverFacade.shielded.getAddress();
@@ -157,16 +165,12 @@ describe('Wallet Facade Transfer', () => {
         },
       ],
       {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
-      {
         ttl,
       },
     );
 
     const finalizedTx = await senderFacade.finalizeRecipe(unprovenTxRecipe);
-    const finalizedTxHash = finalizedTx.transactionHash().toString();
+    const finalizedTxHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash().toString();
     const submittedTxIdentifier = await senderFacade.submitTransaction(finalizedTx);
 
     expect(submittedTxIdentifier).toBeTypeOf('string');
@@ -210,23 +214,14 @@ describe('Wallet Facade Transfer', () => {
     ];
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const transactionRecipe = await senderFacade.transferTransaction(
-      tokenTransfer,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
-      {
-        ttl,
-      },
-    );
+    const transactionRecipe = await senderFacade.transferTransaction(tokenTransfer, {
+      ttl,
+    });
 
-    const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, (payload) =>
-      unshieldedSenderKeystore.signData(payload),
-    );
+    const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, unshieldedSenderKeystore.signDataAsync);
 
     const finalizedTx = await senderFacade.finalizeRecipe(signedTxRecipe);
-    const finalizedTxHash = finalizedTx.transactionHash().toString();
+    const finalizedTxHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash().toString();
 
     const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
 
@@ -281,11 +276,7 @@ describe('Wallet Facade Transfer', () => {
     const arbitraryTx = ledger.Transaction.fromParts(configuration.networkId, outputOffer);
 
     const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(
-      arbitraryTx,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
+      sealed(senderFacade, 'Unproven', arbitraryTx),
       {
         ttl: new Date(Date.now() + 30 * 60 * 1000),
       },
@@ -328,19 +319,16 @@ describe('Wallet Facade Transfer', () => {
     const arbitraryTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, undefined, undefined, intent);
 
     const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(
-      arbitraryTx,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
+      sealed(senderFacade, 'Unproven', arbitraryTx),
       {
         ttl: new Date(Date.now() + 30 * 60 * 1000),
       },
     );
 
     // Sign the balancing transaction before finalizing
-    const signedBalancingTxRecipe = await senderFacade.signRecipe(balancingTxRecipe, (payload) =>
-      unshieldedSenderKeystore.signData(payload),
+    const signedBalancingTxRecipe = await senderFacade.signRecipe(
+      balancingTxRecipe,
+      unshieldedSenderKeystore.signDataAsync,
     );
 
     const finalizedArbitraryTx = await senderFacade.finalizeRecipe(signedBalancingTxRecipe);
@@ -424,20 +412,11 @@ describe('Wallet Facade Transfer', () => {
       },
     ];
 
-    const transactionRecipe = await senderFacade.transferTransaction(
-      tokenTransfer,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      },
-      { ttl },
-    );
+    const transactionRecipe = await senderFacade.transferTransaction(tokenTransfer, { ttl });
 
-    const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, (payload) =>
-      unshieldedSenderKeystore.signData(payload),
-    );
+    const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, unshieldedSenderKeystore.signDataAsync);
     const finalizedTx = await senderFacade.finalizeRecipe(signedTxRecipe);
-    const finalizedTxHash = finalizedTx.transactionHash().toString();
+    const finalizedTxHash = carried<ledger.FinalizedTransaction>(finalizedTx).transactionHash().toString();
     const submittedTxIdentifier = await senderFacade.submitTransaction(finalizedTx);
 
     // Wait for the tx to land in sender history as a SUCCESS with all three sections present.

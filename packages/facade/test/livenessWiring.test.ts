@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { type FinalizedTx, InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
@@ -30,7 +30,7 @@ import { type DefaultConfiguration, mergeWalletEntries, WalletEntrySchema, Walle
 // Injected so `init` never builds the default submission service: that would open a real node client on `relayURL`
 // with an infinite reconnection timeout, leaving a WebSocket reconnect loop running for the rest of the worker. A unit
 // test may not touch the network, and this test is about configuration plumbing, not submission.
-const fakeSubmission: SubmissionService<ledger.FinalizedTransaction> = {
+const fakeSubmission: SubmissionService<FinalizedTx> = {
   // `Promise<never>` satisfies every overload of the method type; a bare `Promise.reject` is typed to the last one only.
   submitTransaction: (): Promise<never> => Promise.reject(new Error('This submission implementation does not submit')),
   close: () => Promise.resolve(),
@@ -53,6 +53,15 @@ const configuration: DefaultConfiguration = {
   txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
 };
 
+/**
+ * `vi.mockObject` does not carry accessors across, and a wallet's `state` is one. The facade watches every wallet's
+ * state from the moment it is built, so a double without one is not a wallet.
+ */
+const withState = <TMocked>(mocked: TMocked, state: unknown): TMocked => {
+  Object.defineProperty(mocked, 'state', { get: () => state, configurable: true });
+  return mocked;
+};
+
 describe('indexer liveness wiring through the facade', () => {
   it('should hand the unshielded wallet a configuration the liveness check can read a node from', async () => {
     // The check was originally reachable only by setting `nodeClientConnection`, which nothing set — so no wallet built
@@ -65,26 +74,25 @@ describe('indexer liveness wiring through the facade', () => {
     await WalletFacade.init({
       configuration,
       submissionService: () => fakeSubmission,
-      shielded: (config) => {
-        const shielded = vi.mockObject(ShieldedWallet(config).startWithSeed(seed));
+      shielded: async (config) => {
+        const wallet = await ShieldedWallet(config).startWithSeed(seed);
+        const shielded = withState(vi.mockObject(wallet), wallet.state);
         shielded.start.mockResolvedValue(undefined);
         return shielded;
       },
-      unshielded: (config) => {
+      unshielded: async (config) => {
         configurations.push(config);
-        const unshielded = vi.mockObject(
-          UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(createKeystore(seed, config.networkId))),
+        const wallet = await UnshieldedWallet(config).startWithPublicKey(
+          PublicKey.fromKeyStore(createKeystore({ kind: 'schnorr', secret: seed }, config.networkId)),
         );
-        unshielded.start.mockResolvedValue(undefined);
         // The facade watches this stream for the moment sync reaches the tip; this wallet never gets there.
-        // Type cast required because: `state` is declared read-only on the wallet, and mocking it is the point.
-        (unshielded as unknown as { state: typeof NEVER }).state = NEVER;
+        const unshielded = withState(vi.mockObject(wallet), NEVER);
+        unshielded.start.mockResolvedValue(undefined);
         return unshielded;
       },
-      dust: (config) => {
-        const dust = vi.mockObject(
-          DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust),
-        );
+      dust: async (config) => {
+        const wallet = await DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
+        const dust = withState(vi.mockObject(wallet), wallet.state);
         dust.start.mockResolvedValue(undefined);
         return dust;
       },

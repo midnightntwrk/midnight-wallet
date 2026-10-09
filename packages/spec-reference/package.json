@@ -12,9 +12,10 @@
   },
   "dependencies": {
     "@midnight-ntwrk/ledger-v8": "^8.1.0",
-    "@midnightntwrk/ledger-v9": "^1.0.0-rc.2",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.5",
     "@noble/curves": "^1.8.1",
     "@scure/base": "^2.0.0",
+    "@scure/bip32": "^2.0.1",
     "@subsquid/scale-codec": "^4.0.1",
     "commander": "^14.0.0"
   },
@@ -29,6 +30,7 @@
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
     "gen": "tsx ./src/cli.ts gen --dir ./test-vectors",
     "find-seeds-esk": "tsx ./src/cli.ts find-seeds --key shield-esk",
-    "find-seeds-dust": "tsx ./src/cli.ts find-seeds --key dust-pk --number 3"
+    "find-seeds-dust": "tsx ./src/cli.ts find-seeds --key dust-pk --number 3",
+    "test:unit": "vitest run"
   }
 }

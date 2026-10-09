@@ -10,7 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+// Key objects belong to one ledger version; the seeds they are derived from do not. Every ledger version derives the
+// same identity from the same seed, which is why a wallet that has to follow the chain across a protocol boundary is
+// started from seeds — `WalletSeeds.fromMasterSeed` does the derivation below — and not from the key objects. The
+// ledger-v9 is imported here only to show what those seeds become.
+import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
 import { type Role, type AccountKey, HDWallet, Roles } from '@midnightntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 
@@ -36,7 +40,9 @@ function deriveAllKeys(seed: Uint8Array) {
   const dustSeed = deriveRoleKey(account, Roles.Dust);
   const nightKey = deriveRoleKey(account, Roles.NightExternal);
 
-  hdWallet.hdWallet.clear(); // Clear the HDWallet to avoid holding the private key in memory for longer than needed
+  // Wipes the root key's private-key buffer. The derived keys above, and the intermediates BIP32 allocated to reach
+  // them, are not covered — this narrows the window, it does not clear the seed from the process.
+  hdWallet.hdWallet.clear();
 
   return {
     shielded: { seed: shieldedSeed, keys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed) },
@@ -45,7 +51,7 @@ function deriveAllKeys(seed: Uint8Array) {
   };
 }
 
-const seed = Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'); // or generateRandomSeed() from @midnightntwrk/wallet-sdk-hd
+const seed = Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'); // or generateRandomSeed() from @midnightntwrk/wallet-sdk
 const derivedKeys = deriveAllKeys(seed);
 seed.fill(0);
 

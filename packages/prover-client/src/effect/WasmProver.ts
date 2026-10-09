@@ -13,8 +13,9 @@
 import Worker from 'web-worker';
 import { type Context, Effect, Layer, Schema, pipe } from 'effect';
 import { type InvalidProtocolSchemeError, ClientError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import type * as ledger from '@midnightntwrk/ledger-v9';
 import { type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
+import { DefaultKeyMaterialSource, makeKeyMaterialProvider, V8KeyMaterial, V9KeyMaterial } from './KeyMaterial.js';
 import { ProverClient } from './ProverClient.js';
 
 /**
@@ -167,6 +168,8 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
         op: 'prove',
         args: [serializedPreimage, overwriteBindingInput],
       }),
+    lookupKey: (keyLocation: string): Promise<ProvingKeyMaterial | undefined> =>
+      (keyMaterialProvider ?? this.keyMaterialProvider).lookupKey(keyLocation),
   });
 
   proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
@@ -191,68 +194,107 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
   asProvingProvider() {
     return this.wasmProverProvider();
   }
+
+  /**
+   * The same provider {@link asProvingProvider} returns.
+   *
+   * @remarks
+   *   The in-process prover drives a zkir runtime over bytes and never looks at a ledger version, so the provider is the
+   *   same under both names — but the key material it proves with is not interchangeable. Each ledger version's
+   *   circuits were generated as their own generation, and a node rejects a proof made with another's, so a prover
+   *   proves for the ledger version whose key material it was created with: {@link makeV9KeyMaterialProvider} for
+   *   ledger-v9, {@link makeV8KeyMaterialProvider} for ledger-v8.
+   */
+  asV9ProvingProvider() {
+    return this.wasmProverProvider();
+  }
+
+  asV8ProvingProvider() {
+    return this.wasmProverProvider();
+  }
 }
 
-export const makeDefaultKeyMaterialProvider = (): KeyMaterialProvider => {
-  const cache = new Map<string, ProvingKeyMaterial | Uint8Array>();
-  const s3 = 'https://midnight-s3-fileshare-dev-eu-west-1.s3.eu-west-1.amazonaws.com';
-  const ver = 9;
+export {
+  DefaultKeyMaterialSource,
+  KeyMaterialFetchError,
+  KeyMaterialIntegrityError,
+  KeyMaterialTransferError,
+  UnknownPublicParametersError,
+  type KeyMaterialError,
+} from './KeyMaterial.js';
 
-  const fetchWithRetry = async (url: string, retries = 5): Promise<Response> => {
-    for (let i = 0; i < retries; i++) {
-      try {
-        return await fetch(url);
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to fetch at attempt', i + 1, url, e);
-        // cooldown a bit before retrying
-        await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, i + 1)));
-      }
-    }
-    throw new Error(`Failed to fetch ${url} after ${retries} attempts`);
-  };
-
-  const keyMaterialProvider = {
-    lookupKey: async (keyLocation: string): Promise<ProvingKeyMaterial | undefined> => {
-      const pth = {
-        'midnight/zswap/spend': `zswap/${ver}/spend`,
-        'midnight/zswap/output': `zswap/${ver}/output`,
-        'midnight/zswap/sign': `zswap/${ver}/sign`,
-        'midnight/dust/spend': `dust/${ver}/spend`,
-      }[keyLocation];
-      if (pth === undefined) {
-        return undefined;
-      }
-
-      if (cache.has(pth)) {
-        return cache.get(pth) as ProvingKeyMaterial;
-      }
-
-      const pk = await fetchWithRetry(`${s3}/${pth}.prover`);
-      const vk = await fetchWithRetry(`${s3}/${pth}.verifier`);
-      const ir = await fetchWithRetry(`${s3}/${pth}.bzkir`);
-
-      const result = {
-        proverKey: new Uint8Array(await pk.arrayBuffer()),
-        verifierKey: new Uint8Array(await vk.arrayBuffer()),
-        ir: new Uint8Array(await ir.arrayBuffer()),
-      };
-      cache.set(pth, result);
-
-      return result;
-    },
-    getParams: async (k: number): Promise<Uint8Array> => {
-      const cacheKey = `params-${k}`;
-      if (cache.has(cacheKey)) {
-        return cache.get(cacheKey) as Uint8Array;
-      }
-
-      const data = await fetchWithRetry(`${s3}/bls_midnight_2p${k}`);
-      const result = new Uint8Array(await data.arrayBuffer());
-      cache.set(cacheKey, result);
-
-      return result;
-    },
-  };
-  return keyMaterialProvider;
+/** Where the bundled key material providers read from. */
+export type KeyMaterialConfig = {
+  /**
+   * The host to read key material from, in place of {@link DefaultKeyMaterialSource}.
+   *
+   * @remarks
+   *   For serving the files yourself — a mirror, or the page's own origin in a browser, since the default host sends no
+   *   CORS headers. The files are laid out as the default host lays them out (`dust/10/spend.prover`,
+   *   `bls_midnight_2p14`, …), and a path is kept: `https://example.com/keys` reads `https://example.com/keys/dust/…`.
+   *   Whatever the host, every file is checked against the hash its ledger release declares.
+   */
+  readonly source?: URL | string;
 };
+
+/**
+ * The key material ledger-v9's circuits were generated with: circuit generation 10.
+ *
+ * @remarks
+ *   Every file is read from the host the ledger's own data provider reads (or from `config.source`) and checked against
+ *   the SHA-256 the ledger release declares before it is handed back; a file that does not match is refused with
+ *   {@link KeyMaterialIntegrityError}, since a proof made with it would be rejected by a node. Each circuit and each
+ *   parameter size is read once per provider. Checking needs Web Crypto (`crypto.subtle`): Node 19 or later, or a
+ *   browser page served from a secure context.
+ * @example
+ *   ```typescript
+ *   const prover = yield* WasmProver.create({ keyMaterialProvider: WasmProver.makeV9KeyMaterialProvider() });
+ *   const proven = yield* prover.proveTransaction(unprovenV9Transaction, ledger.CostModel.initialCostModel());
+ *   ```;
+ *
+ * @param config Where to read from; the default host when left out.
+ * @returns A provider for {@link create} whose prover proves ledger-v9 transactions.
+ * @throws TypeError if `config.source` is not a URL.
+ */
+export const makeV9KeyMaterialProvider = (config?: KeyMaterialConfig): KeyMaterialProvider =>
+  makeKeyMaterialProvider(V9KeyMaterial, { source: config?.source ?? DefaultKeyMaterialSource });
+
+/**
+ * The key material ledger-v8's circuits were generated with: circuit generation 9.
+ *
+ * @remarks
+ *   The ledger-v8 twin of {@link makeV9KeyMaterialProvider}, read and checked the same way. A prover created with it
+ *   proves ledger-v8 transactions, through `asV8ProvingProvider()`; ledger-v9's Dust spend circuit is a different
+ *   generation, and a node rejects a Dust spend proved with the other version's key material.
+ * @example
+ *   ```typescript
+ *   const prover = yield* WasmProver.create({ keyMaterialProvider: WasmProver.makeV8KeyMaterialProvider() });
+ *   const proven = yield* Effect.promise(() =>
+ *     unprovenV8Transaction.prove(prover.asV8ProvingProvider(), ledgerV8.CostModel.initialCostModel()),
+ *   );
+ *   ```;
+ *
+ * @param config Where to read from; the default host when left out.
+ * @returns A provider for {@link create} whose prover proves ledger-v8 transactions.
+ * @throws TypeError if `config.source` is not a URL.
+ */
+export const makeV8KeyMaterialProvider = (config?: KeyMaterialConfig): KeyMaterialProvider =>
+  makeKeyMaterialProvider(V8KeyMaterial, { source: config?.source ?? DefaultKeyMaterialSource });
+
+/**
+ * The same provider as {@link makeV9KeyMaterialProvider}.
+ *
+ * @remarks
+ *   Ledger-v9's, because ledger-v9 is what this prover's own surface — `proveTransaction`, `asProvingProvider` — is typed
+ *   with. A prover that proves ledger-v8 transactions wants {@link makeV8KeyMaterialProvider} instead.
+ * @example
+ *   ```typescript
+ *   const prover = yield* WasmProver.create({ keyMaterialProvider: WasmProver.makeDefaultKeyMaterialProvider() });
+ *   ```;
+ *
+ * @param config Where to read from; the default host when left out.
+ * @returns A provider for {@link create} whose prover proves ledger-v9 transactions.
+ * @throws TypeError if `config.source` is not a URL.
+ */
+export const makeDefaultKeyMaterialProvider = (config?: KeyMaterialConfig): KeyMaterialProvider =>
+  makeV9KeyMaterialProvider(config);

@@ -1,0 +1,22 @@
+# This file is part of MIDNIGHT-WALLET-SDK.
+# Copyright (C) Midnight Foundation
+# SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# You may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Pinned so the WASM artifact is reproducible: a silent compiler bump can change the emitted binary or break the `blst`
+# C build, and this produces something we ship rather than only run in CI. `midnight-ledger` tracks fenix `stable`, so
+# pinning here is a deliberate divergence — bump it consciously.
+#
+# `targets` is why neither CI nor a contributor needs `rustup target add`: rustup installs the toolchain and the wasm
+# target on the first `cargo` invocation in this workspace.
+[toolchain]
+channel = "1.97"
+targets = ["wasm32-unknown-unknown"]

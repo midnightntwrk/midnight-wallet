@@ -1,0 +1,16 @@
+{
+  "generatedFrom": {
+    "sdk": "1.2.0",
+    "shielded": "3.0.2",
+    "unshielded": "3.1.0",
+    "dust": "4.2.0",
+    "ledger": "8.1.2"
+  },
+  "fixtures": [
+    {
+      "name": "dust-empty",
+      "describes": "a wallet that has seen nothing",
+      "bytes": 316
+    }
+  ]
+}

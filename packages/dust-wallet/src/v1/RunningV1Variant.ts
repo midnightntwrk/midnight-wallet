@@ -10,18 +10,29 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, SubscriptionRef, Stream, pipe, Scope, Sink, Console, Duration, Schedule, Array as Arr } from 'effect';
+import {
+  Effect,
+  SubscriptionRef,
+  Stream,
+  pipe,
+  Scope,
+  Sink,
+  Console,
+  Duration,
+  Schedule,
+  Array as Arr,
+  Ref,
+} from 'effect';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import {
   type DustSecretKey,
-  nativeToken,
   type Signature,
   type SignatureVerifyingKey,
   type FinalizedTransaction,
   type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v8';
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { OtherWalletError, type WalletError } from './WalletError.js';
+import { ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
+import { InsufficientDustForFeeError, OtherWalletError, type WalletError } from './WalletError.js';
 import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
   type WalletRuntimeError,
@@ -31,9 +42,13 @@ import {
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
-import { type BlockData, type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
-import { type SimulatorState } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { type CoinsAndBalancesCapability, type CoinSelection } from './CoinsAndBalances.js';
+import { BackgroundRepeat, type BlockData, type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
+import { type V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import {
+  type CoinsAndBalancesCapability,
+  type CoinSelection,
+  type UtxoWithFullDustDetails,
+} from './CoinsAndBalances.js';
 import { type NightUtxoSplitForDustRegistration, type TransactingCapability } from './Transacting.js';
 import { type CoreWallet } from './CoreWallet.js';
 import { type SerializationCapability } from './Serialization.js';
@@ -52,8 +67,26 @@ const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   return [StateChange.ProgressUpdate({ sourceGap, applyGap })];
 };
 
-const protocolVersionChange = (previous: CoreWallet, current: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
-  return previous.protocolVersion != current.protocolVersion
+/**
+ * The version signals this variant puts on its state stream.
+ *
+ * @remarks
+ *   Two of them, for two different situations. A transition is the ordinary one: the state moved to a version the variant
+ *   may or may not own, and the runtime decides. The healing emission covers restore: a snapshot taken between the
+ *   moment sync annotated an out-of-range version and the moment the runtime acted on it comes back with a version this
+ *   variant does not own and no transition to announce it, so it would sit there forever. Announcing it on the first
+ *   observation is what forward-migrates such a snapshot.
+ */
+const protocolVersionChange = (
+  previous: CoreWallet,
+  current: CoreWallet,
+  isInitial: boolean,
+  activationRange: ProtocolVersion.ProtocolVersion.Range,
+): StateChange.StateChange<CoreWallet>[] => {
+  const transitioned = previous.protocolVersion != current.protocolVersion;
+  const strandedOutsideRange = isInitial && !ProtocolVersion.withinRange(current.protocolVersion, activationRange);
+
+  return transitioned || strandedOutsideRange
     ? [
         StateChange.VersionChange({
           change: VersionChangeType.Version({
@@ -81,7 +114,26 @@ export declare namespace RunningV1Variant {
 
 export const V1Tag: unique symbol = Symbol('V1');
 
-export type DefaultRunningV1 = RunningV1Variant<string, SimulatorState, FinalizedTransaction, DustSecretKey>;
+/**
+ * How a failing synchronization pass is retried.
+ *
+ * @remarks
+ *   Exported so the delays it actually produces can be asserted. A schedule reads as though its combinators apply to the
+ *   delay, and for some of them they do not — which is worth pinning in a test rather than trusting by eye.
+ */
+export const syncRetrySchedule = pipe(
+  Schedule.exponential(Duration.seconds(1), 2),
+  Schedule.jittered,
+  // `union` retries as soon as either side would, so pairing the backoff with a fixed two-minute schedule takes the
+  // shorter of the two — which is the backoff until it grows past two minutes, and two minutes from then on. Written
+  // this way rather than as a `Schedule.map` over the delay: `map` rewrites a schedule's *output*, which it takes
+  // **after** the delay has already been read from it, so mapping an exponential leaves the timing untouched. The
+  // earlier form did exactly that, and backed off unboundedly — past an hour by the twelfth attempt — while reading
+  // as though it were capped.
+  Schedule.union(Schedule.spaced(Duration.minutes(2))),
+);
+
+export type DefaultRunningV1 = RunningV1Variant<string, V8.SimulatorState, FinalizedTransaction, DustSecretKey>;
 
 export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux> implements Variant.RunningVariant<
   typeof V1Tag,
@@ -97,6 +149,21 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   readonly #txHistoryPermits = Effect.makeSemaphore(8).pipe(Effect.runSync);
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
+  #syncLock: Ref.Ref<boolean>;
+  /**
+   * Whether a background synchronization worker is already running.
+   *
+   * @remarks
+   *   Distinct from {@link #syncLock}, which is released at the end of every pass and so says nothing about the worker
+   *   that runs them. Held for the worker's whole lifetime — polling delays and retries included — and released as it
+   *   exits, so a wallet started again while it is already synchronizing keeps the worker it has instead of gaining a
+   *   second one that polls alongside it until the wallet stops.
+   *
+   *   The guard asks only whether a worker is running, not what it was started with, so a second start is ignored even
+   *   when it carries different key material. Starting a running wallet on a second key is not a supported way to
+   *   change keys: stop it first. Two workers would be no better — they would apply two keys' updates to one state.
+   */
+  #backgroundWorkerLock: Ref.Ref<boolean>;
 
   constructor(
     scope: Scope.Scope,
@@ -106,21 +173,32 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     this.#scope = scope;
     this.#context = context;
     this.#v1Context = v1Context;
+    this.#syncLock = Effect.runSync(Ref.make(false));
+    this.#backgroundWorkerLock = Effect.runSync(Ref.make(false));
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
         context.stateRef.changes.pipe(
-          Stream.mapAccum(initialState, (previous: CoreWallet, current: CoreWallet) => {
-            return [current, [previous, current]] as const;
-          }),
+          // The accumulator carries the "have we seen anything yet" flag alongside the previous state: the first
+          // observation is the only one that can be a restored state nobody has inspected against this variant's
+          // range yet, and `SubscriptionRef.changes` replays the current value, so it is exactly this element.
+          Stream.mapAccum(
+            { previous: initialState, isInitial: true },
+            (seen, current: CoreWallet) =>
+              [{ previous: current, isInitial: false }, [seen.previous, current, seen.isInitial] as const] as const,
+          ),
         ),
       ),
       Stream.mapConcat(
-        ([previous, current]: readonly [CoreWallet, CoreWallet]): StateChange.StateChange<CoreWallet>[] => {
+        ([previous, current, isInitial]: readonly [
+          CoreWallet,
+          CoreWallet,
+          boolean,
+        ]): StateChange.StateChange<CoreWallet>[] => {
           // TODO: emit progress only upon actual change
           return [
             StateChange.State({ state: current }),
             ...progress(current),
-            ...protocolVersionChange(previous, current),
+            ...protocolVersionChange(previous, current, isInitial, context.activationRange),
           ];
         },
       ),
@@ -128,83 +206,127 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   }
 
   startSyncInBackground(startAux: TStartAux): Effect.Effect<void> {
-    return this.startSync(startAux).pipe(
-      Stream.runScoped(Sink.drain),
-      Effect.forkScoped,
+    // One pass, in a scope of its own. `Stream.runScoped` acquires into whichever scope it is handed, and the source's
+    // client layers take `Scope` as an input requirement rather than discharging one of their own — so a pass drained
+    // straight into the variant scope leaves its clients open there until the wallet stops, one more set per repeat.
+    // Scoping here closes them as the pass ends, on success, failure or interruption alike, and before any retry delay.
+    // The tx-history fan-out `startSync` forks is deliberately unaffected: it is pinned to the variant scope
+    // explicitly, and none of its work needs a client this scope holds.
+    const pass = this.startSync(startAux).pipe(Stream.runScoped(Sink.drain), Effect.scoped);
+
+    // Retrying the drained pass rather than the stream keeps the scope inside the retry: a failed attempt gives its
+    // resources back before the backoff, instead of holding them for the length of it.
+    const attempt = pass.pipe(Effect.retry(syncRetrySchedule));
+
+    // A service that synchronizes in finite passes would otherwise leave the wallet frozen at whatever its first pass
+    // saw. Repeating re-runs `startSync`, which re-reads the wallet state, so each pass resumes from what the previous
+    // one applied. The retry above cannot serve this purpose: it re-runs a pass on failure, not on completion.
+    // Repeating outside it keeps a transient failure to the pass it happened in, rather than restarting the cycle.
+    const worker = BackgroundRepeat.$match(this.#v1Context.syncService.backgroundRepeat, {
+      Once: () => attempt,
+      WithDelay: ({ delay }) => Effect.repeat(attempt, Schedule.spaced(delay)).pipe(Effect.asVoid),
+    });
+
+    // Taken before the worker is forked and given back as it exits, so the guard covers the gaps between passes that
+    // the sync lock cannot. A second start finds it held and leaves the running worker alone.
+    return Ref.modify(this.#backgroundWorkerLock, (isRunning) => [!isRunning, true] as const).pipe(
+      Effect.flatMap((acquired) =>
+        acquired
+          ? worker.pipe(Effect.ensuring(Ref.set(this.#backgroundWorkerLock, false)), Effect.forkScoped, Effect.asVoid)
+          : Effect.void,
+      ),
       Effect.provideService(Scope.Scope, this.#scope),
     );
   }
 
+  /**
+   * Runs one sync pass to completion, rather than forking it into the background.
+   *
+   * @remarks
+   *   Only meaningful with a sync service whose stream terminates. The indexer-event service this variant defaults to is
+   *   an open subscription, so use {@link startSyncInBackground} with it; this entry point exists for a finite service
+   *   supplied through the builder's `withSync`. It shares {@link startSync}'s lock, so a pass started while a
+   *   background sync is running returns immediately without touching the state.
+   */
+  sync(startAux: TStartAux): Effect.Effect<void, WalletError> {
+    return this.startSync(startAux).pipe(Stream.runScoped(Sink.drain), Effect.scoped);
+  }
+
   startSync(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
     return pipe(
-      SubscriptionRef.get(this.#context.stateRef),
+      // One sync at a time per variant: a second start would open its own subscription against the same state ref
+      // and apply every update twice. The loser of the race gets an empty stream, and only the winner releases the
+      // lock — on the way out of its own stream, whether it ended or failed.
+      Ref.modify(this.#syncLock, (isLocked) => [!isLocked, true] as const),
       Stream.fromEffect,
-      Stream.flatMap((state) => this.#v1Context.syncService.updates(state, startAux)),
-      Stream.mapEffect((update) =>
-        SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
-          Effect.try({
-            try: () => {
-              const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(state, update);
-              return [changesResult, newState] as const;
-            },
-            catch: (err) =>
-              new OtherWalletError({
-                message: 'Error while applying sync update',
-                cause: err,
+      Stream.flatMap((acquired) => {
+        if (!acquired) {
+          return Stream.empty;
+        }
+        return pipe(
+          SubscriptionRef.get(this.#context.stateRef),
+          Stream.fromEffect,
+          Stream.flatMap((state) => this.#v1Context.syncService.updates(state, startAux)),
+          Stream.mapEffect((update) =>
+            SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
+              Effect.try({
+                try: () => {
+                  const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(
+                    state,
+                    update,
+                    this.#context.activationRange,
+                  );
+                  return [changesResult, newState] as const;
+                },
+                catch: (err) =>
+                  new OtherWalletError({
+                    message: 'Error while applying sync update',
+                    cause: err,
+                  }),
               }),
-          }),
-        ).pipe(
-          Effect.flatMap(({ changes, protocolVersion }) =>
-            // Skip the tx-history fork entirely when there are no changes.
-            // Forking unconditionally allocates a fiber per apply call (one
-            // for every batch the sync emits, even the all-progress ones),
-            // which adds up fast during catch-up.
-            changes.length === 0
-              ? Effect.void
-              : pipe(
-                  Effect.forEach(
-                    changes,
-                    (change) =>
-                      pipe(
-                        this.#txHistoryPermits.withPermits(1)(
+            ).pipe(
+              Effect.flatMap(({ changes, protocolVersion }) =>
+                // Skip the tx-history fork entirely when there are no changes.
+                // Forking unconditionally allocates a fiber per apply call (one
+                // for every batch the sync emits, even the all-progress ones),
+                // which adds up fast during catch-up.
+                changes.length === 0
+                  ? Effect.void
+                  : pipe(
+                      Effect.forEach(
+                        changes,
+                        (change) =>
                           pipe(
-                            this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
-                            Effect.flatMap((metadata) =>
-                              this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                            this.#txHistoryPermits.withPermits(1)(
+                              pipe(
+                                this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
+                                Effect.flatMap((metadata) =>
+                                  this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                                ),
+                              ),
+                            ),
+                            Effect.catchAllCause((cause) =>
+                              // A sustained indexer outage (longer than getTransactionDetails' retry window) still
+                              // lands here. applyUpdate has already advanced appliedIndex, so this change.source won't
+                              // be re-processed — the dust section is permanently lost. Surface that as a structured
+                              // error carrying the tx hash, not a silent Console.error defect.
+                              Effect.logError(cause, `Failed to record dust tx-history section for ${change.source}`),
                             ),
                           ),
-                        ),
-                        Effect.catchAllCause((cause) =>
-                          // A sustained indexer outage (longer than getTransactionDetails' retry window) still lands
-                          // here. applyUpdate has already advanced appliedIndex, so this change.source won't be
-                          // re-processed — the dust section is permanently lost. Surface that as a structured error
-                          // carrying the tx hash, not a silent Console.error defect.
-                          Effect.logError(cause, `Failed to record dust tx-history section for ${change.source}`),
-                        ),
+                        // `concurrency` only bounds fiber creation within this one batch; the real cap on simultaneous
+                        // indexer queries is the variant-wide semaphore acquired around each lookup above.
+                        { discard: true, concurrency: 8 },
                       ),
-                    // `concurrency` only bounds fiber creation within this one batch; the real cap on simultaneous
-                    // indexer queries is the variant-wide semaphore acquired around each lookup above.
-                    { discard: true, concurrency: 8 },
-                  ),
-                  Effect.forkScoped,
-                ),
+                      Effect.forkScoped,
+                    ),
+              ),
+              Effect.provideService(Scope.Scope, this.#scope),
+            ),
           ),
-          Effect.provideService(Scope.Scope, this.#scope),
-        ),
-      ),
-      Stream.tapError((error) => Console.error(error)),
-      Stream.retry(
-        pipe(
-          Schedule.exponential(Duration.seconds(1), 2),
-          Schedule.map((delay) => {
-            const maxDelay = Duration.minutes(2);
-            const jitter = Duration.millis(Math.floor(Math.random() * 1000));
-            const delayWithJitter = Duration.toMillis(delay) + Duration.toMillis(jitter);
-
-            return Duration.millis(Math.min(delayWithJitter, Duration.toMillis(maxDelay)));
-          }),
-        ),
-      ),
+          Stream.tapError((error) => Console.error(error)),
+          Stream.ensuring(Ref.set(this.#syncLock, false)),
+        );
+      }),
     );
   }
 
@@ -215,22 +337,32 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
   ): Effect.Effect<UnprovenTransaction, WalletError> {
-    if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
+    if (nightUtxos.some((utxo) => utxo.type !== Token.night)) {
       return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
     }
-    return Effect.gen(this, function* () {
-      const currentState = yield* SubscriptionRef.get(this.#context.stateRef);
-      const blockData = yield* this.#v1Context.syncService.blockData();
-      const resolvedTime = currentTime ?? blockData.timestamp;
-      const utxosWithDustValue = this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(
-        currentState,
-        nightUtxos,
-        resolvedTime,
-      );
-      return yield* this.#v1Context.transactingCapability
-        .createDustGenerationTransaction(resolvedTime, ttl, utxosWithDustValue, nightVerifyingKey, dustReceiverAddress)
-        .pipe(EitherOps.toEffect);
-    });
+    return Effect.Do.pipe(
+      Effect.bind('currentState', () => SubscriptionRef.get(this.#context.stateRef)),
+      Effect.bind('blockData', () => this.#v1Context.syncService.blockData()),
+      Effect.let('resolvedTime', ({ blockData }): Date => currentTime ?? blockData.timestamp),
+      Effect.let('utxosWithDustValue', ({ currentState, resolvedTime }): ReadonlyArray<UtxoWithFullDustDetails> => {
+        return this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(
+          currentState,
+          nightUtxos,
+          resolvedTime,
+        );
+      }),
+      Effect.flatMap(({ utxosWithDustValue, resolvedTime }) => {
+        return this.#v1Context.transactingCapability
+          .createDustGenerationTransaction(
+            resolvedTime,
+            ttl,
+            utxosWithDustValue,
+            nightVerifyingKey,
+            dustReceiverAddress,
+          )
+          .pipe(EitherOps.toEffect);
+      }),
+    );
   }
 
   splitNightUtxosForDustRegistration(
@@ -238,7 +370,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     isRegistration: boolean,
   ): Effect.Effect<NightUtxoSplitForDustRegistration, WalletError> {
-    if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
+    if (nightUtxos.some((utxo) => utxo.type !== Token.night)) {
       return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
     }
     return Effect.gen(this, function* () {
@@ -253,6 +385,50 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         isRegistration,
       );
     });
+  }
+
+  /**
+   * Fails when the fee payment a first-time registration carries is below the registration's fee.
+   *
+   * @remarks
+   *   Judges the payment the transaction was built with, since that is what reaches the chain; the dust state is read
+   *   only to estimate when generation will cover the fee.
+   * @example
+   *   ```ts
+   *   await Effect.runPromise(variant.ensureFeeCoverage(now, nightUtxos, split.feePayment, fee));
+   *   ```;
+   *
+   * @param currentTime The time to estimate from; the same one the registration's split was made at.
+   * @param nightUtxos The Night UTxOs the registration carries.
+   * @param feePayment The fee payment attached to the registration, in Specks.
+   * @param fee The registration's fee, in Specks.
+   * @returns Succeeds when `feePayment` covers `fee`; fails with {@link InsufficientDustForFeeError} otherwise.
+   */
+  ensureFeeCoverage(
+    currentTime: Date,
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    feePayment: bigint,
+    fee: bigint,
+  ): Effect.Effect<void, WalletError> {
+    if (feePayment >= fee) {
+      return Effect.void;
+    }
+    return SubscriptionRef.get(this.#context.stateRef).pipe(
+      Effect.flatMap((currentState) =>
+        Effect.fail(
+          InsufficientDustForFeeError.of({
+            claimableFeePayment: feePayment,
+            fee,
+            estimate: this.#v1Context.coinsAndBalancesCapability.feeCoverageEstimate(
+              currentState,
+              nightUtxos,
+              fee,
+              currentTime,
+            ),
+          }),
+        ),
+      ),
+    );
   }
 
   attachDustRegistration(

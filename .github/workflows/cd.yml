@@ -8,7 +8,6 @@ on:
   push:
     branches:
       - main
-      - v2
 
 permissions: {}
 
@@ -84,9 +83,8 @@ jobs:
         run: |
           set -uo pipefail   # no -e: we handle status's exit code ourselves
           rm -f changeset-status.json
-          # status exits 1 if packages changed without a changeset (possible on
-          # v2 where the diff vs main is non-empty); treat any failure / missing
-          # output as "no releasing changesets".
+          # status exits 1 if packages changed without a changeset; treat any
+          # failure / missing output as "no releasing changesets".
           yarn changeset status --output=changeset-status.json || true
           if [ -f changeset-status.json ]; then
             COUNT=$(node -p "require('./changeset-status.json').releases.length" 2>/dev/null || echo 0)

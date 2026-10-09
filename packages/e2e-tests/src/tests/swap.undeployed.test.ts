@@ -10,10 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import { V1Builder } from '@midnightntwrk/wallet-sdk-shielded/v1';
-import { CustomShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import { NetworkId, InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { PublicKey, UnshieldedWallet, createKeystore } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
@@ -31,7 +30,8 @@ import {
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils.js';
-import { makeWasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
+import { makeV9WasmProvingService } from '@midnightntwrk/wallet-sdk-capabilities';
+import { carried, sealed } from './helpers/transactions.js';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
 
@@ -67,8 +67,14 @@ describe('Swaps', () => {
   const dustWalletASeed = getDustSeed(walletASeed);
   const dustWalletBSeed = getDustSeed(walletBSeed);
 
-  const unshieldedWalletAKeystore = createKeystore(unshieldedWalletASeed, NetworkId.NetworkId.Undeployed);
-  const unshieldedWalletBKeystore = createKeystore(unshieldedWalletBSeed, NetworkId.NetworkId.Undeployed);
+  const unshieldedWalletAKeystore = createKeystore(
+    { kind: 'schnorr', secret: unshieldedWalletASeed },
+    NetworkId.NetworkId.Undeployed,
+  );
+  const unshieldedWalletBKeystore = createKeystore(
+    { kind: 'schnorr', secret: unshieldedWalletBSeed },
+    NetworkId.NetworkId.Undeployed,
+  );
 
   let startedEnvironment: StartedDockerComposeEnvironment;
   let configuration: DefaultConfiguration;
@@ -88,6 +94,7 @@ describe('Swaps', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      forks: ProtocolVersion.V9NativeForkSchedule,
       costParameters: {
         feeBlocksMargin: 5,
       },
@@ -107,8 +114,7 @@ describe('Swaps', () => {
 
     walletAFacade = await WalletFacade.init({
       configuration,
-      shielded: (config) =>
-        CustomShieldedWallet(config, new V1Builder().withDefaults()).startWithSeed(shieldedWalletASeed),
+      shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedWalletASeed),
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
@@ -118,8 +124,7 @@ describe('Swaps', () => {
     });
     walletBFacade = await WalletFacade.init({
       configuration,
-      shielded: (config) =>
-        CustomShieldedWallet(config, new V1Builder().withDefaults()).startWithSeed(shieldedWalletBSeed),
+      shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedWalletBSeed),
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
@@ -129,14 +134,8 @@ describe('Swaps', () => {
     });
 
     await Promise.all([
-      walletAFacade.start(
-        ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
-        ledger.DustSecretKey.fromSeed(dustWalletASeed),
-      ),
-      walletBFacade.start(
-        ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-        ledger.DustSecretKey.fromSeed(dustWalletBSeed),
-      ),
+      walletAFacade.start({ shielded: shieldedWalletASeed, unshielded: shieldedWalletASeed, dust: dustWalletASeed }),
+      walletBFacade.start({ shielded: shieldedWalletBSeed, unshielded: shieldedWalletBSeed, dust: dustWalletBSeed }),
     ]);
   });
 
@@ -158,7 +157,7 @@ describe('Swaps', () => {
   const swapTtl = () => new Date(Date.now() + 60 * 60 * 1000); // 1h from now
 
   it('can perform a shielded swap', async () => {
-    const provingService = makeWasmProvingService();
+    const provingService = makeV9WasmProvingService();
 
     const facadeAState = await walletAFacade.waitForSyncedState();
     const facadeBState = await walletBFacade.waitForSyncedState();
@@ -195,29 +194,17 @@ describe('Swaps', () => {
       },
     ];
 
-    const swapTxRecipe = await walletAFacade.initSwap(
-      desiredInputs,
-      desiredOutputs,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
-      },
-      {
-        ttl,
-      },
-    );
+    const swapTxRecipe = await walletAFacade.initSwap(desiredInputs, desiredOutputs, {
+      ttl,
+    });
 
     // proving the tx instead of calling finalizeRecipe directly, because we want to test the balance of the unbound tx
-    const unboundSwapTx = await provingService.prove(swapTxRecipe.transaction);
+    const unboundSwapTx = await provingService.prove(carried<ledger.UnprovenTransaction>(swapTxRecipe.transaction));
 
     // assuming the tx is submitted to a dex pool and another wallet (wallet B) picks it up
 
     const walletBBalancedTxRecipe = await walletBFacade.balanceUnboundTransaction(
-      unboundSwapTx,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
-      },
+      sealed(walletBFacade, 'Unbound', unboundSwapTx),
       {
         ttl: swapTtl(),
       },
@@ -288,38 +275,23 @@ describe('Swaps', () => {
       },
     ];
 
-    const swapTxRecipe = await walletAFacade.initSwap(
-      desiredInputs,
-      desiredOutputs,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
-      },
-      {
-        ttl,
-      },
-    );
+    const swapTxRecipe = await walletAFacade.initSwap(desiredInputs, desiredOutputs, {
+      ttl,
+    });
 
     const signedSwapTxRecipe = await walletAFacade.signRecipe(swapTxRecipe, (payload) => {
-      return unshieldedWalletAKeystore.signData(payload);
+      return unshieldedWalletAKeystore.signDataAsync(payload);
     });
 
     const finalizedSwapTx = await walletAFacade.finalizeRecipe(signedSwapTxRecipe);
 
     // the tx is picked up by another wallet (wallet B)
-    const walletBBalancedTxRecipe = await walletBFacade.balanceFinalizedTransaction(
-      finalizedSwapTx,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
-      },
-      {
-        ttl,
-      },
-    );
+    const walletBBalancedTxRecipe = await walletBFacade.balanceFinalizedTransaction(finalizedSwapTx, {
+      ttl,
+    });
 
     const walletBSignedTxRecipe = await walletBFacade.signRecipe(walletBBalancedTxRecipe, (payload) => {
-      return unshieldedWalletBKeystore.signData(payload);
+      return unshieldedWalletBKeystore.signDataAsync(payload);
     });
 
     const finalizedTx = await walletBFacade.finalizeRecipe(walletBSignedTxRecipe);
@@ -350,7 +322,7 @@ describe('Swaps', () => {
   });
 
   it('mixed shielded->unshielded swap: delivers the unshielded NIGHT want', async () => {
-    const provingService = makeWasmProvingService();
+    const provingService = makeV9WasmProvingService();
 
     const facadeAState = await walletAFacade.waitForSyncedState();
     const facadeBState = await walletBFacade.waitForSyncedState();
@@ -377,18 +349,10 @@ describe('Swaps', () => {
       },
     ];
 
-    const swapTxRecipe = await walletAFacade.initSwap(
-      desiredInputs,
-      desiredOutputs,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
-      },
-      { ttl },
-    );
+    const swapTxRecipe = await walletAFacade.initSwap(desiredInputs, desiredOutputs, { ttl });
 
     // Sanity: both legs of the mixed swap are present (the want-side leg used to be dropped).
-    const makerTx = swapTxRecipe.transaction;
+    const makerTx = carried<ledger.UnprovenTransaction>(swapTxRecipe.transaction);
     expect(makerTx.guaranteedOffer).toBeDefined();
     const wantOutputs = [...(makerTx.intents?.values() ?? [])]
       .flatMap((intent) => [
@@ -398,18 +362,15 @@ describe('Swaps', () => {
       .filter((output) => output.type === unshieldedTokenType && output.value === wantNightAmount);
     expect(wantOutputs).toHaveLength(1);
 
-    const unboundSwapTx = await provingService.prove(swapTxRecipe.transaction);
+    const unboundSwapTx = await provingService.prove(carried<ledger.UnprovenTransaction>(swapTxRecipe.transaction));
 
     // Taker (B): provide the NIGHT, take the shielded token, sign the unshielded spend, pay fees, submit.
-    const balanced = await walletBFacade.balanceUnboundTransaction(
-      unboundSwapTx,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
-      },
-      { ttl },
+    const balanced = await walletBFacade.balanceUnboundTransaction(sealed(walletBFacade, 'Unbound', unboundSwapTx), {
+      ttl,
+    });
+    const signed = await walletBFacade.signRecipe(balanced, (payload) =>
+      unshieldedWalletBKeystore.signDataAsync(payload),
     );
-    const signed = await walletBFacade.signRecipe(balanced, (payload) => unshieldedWalletBKeystore.signData(payload));
     const finalized = await walletBFacade.finalizeRecipe(signed);
     const txHash = await walletBFacade.submitTransaction(finalized);
     expect(txHash).toBeTypeOf('string');
@@ -459,36 +420,23 @@ describe('Swaps', () => {
       },
     ];
 
-    const swapTxRecipe = await walletAFacade.initSwap(
-      desiredInputs,
-      desiredOutputs,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
-      },
-      { ttl },
-    );
+    const swapTxRecipe = await walletAFacade.initSwap(desiredInputs, desiredOutputs, { ttl });
 
     // Sanity: both legs of the mixed swap are present (the want-side leg used to be dropped).
-    const makerTx = swapTxRecipe.transaction;
+    const makerTx = carried<ledger.UnprovenTransaction>(swapTxRecipe.transaction);
     expect(makerTx.intents?.size).toBe(1); // unshielded give leg
     expect(makerTx.guaranteedOffer).toBeDefined(); // shielded want leg
 
     // Maker signs its unshielded give, finalizes; taker balances the finalized offer.
     const signedMaker = await walletAFacade.signRecipe(swapTxRecipe, (payload) =>
-      unshieldedWalletAKeystore.signData(payload),
+      unshieldedWalletAKeystore.signDataAsync(payload),
     );
     const finalizedMaker = await walletAFacade.finalizeRecipe(signedMaker);
 
-    const balanced = await walletBFacade.balanceFinalizedTransaction(
-      finalizedMaker,
-      {
-        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
-      },
-      { ttl },
+    const balanced = await walletBFacade.balanceFinalizedTransaction(finalizedMaker, { ttl });
+    const signedB = await walletBFacade.signRecipe(balanced, (payload) =>
+      unshieldedWalletBKeystore.signDataAsync(payload),
     );
-    const signedB = await walletBFacade.signRecipe(balanced, (payload) => unshieldedWalletBKeystore.signData(payload));
     const finalizedB = await walletBFacade.finalizeRecipe(signedB);
     const txHash = await walletBFacade.submitTransaction(finalizedB);
     expect(txHash).toBeTypeOf('string');

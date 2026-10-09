@@ -13,4 +13,6 @@
  * limitations under the License.
  */
 
+export * from './v8ProvingService.js';
 export * from './provingService.js';
+export * from './versionedProving.js';

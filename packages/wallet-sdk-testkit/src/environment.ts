@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import {
   type DustWalletConfiguration,
@@ -54,6 +54,12 @@ export const NETWORK_PRESETS: Record<RemoteNetwork, RemoteNetworkPreset> = {
     indexerWsUrl: 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws',
     nodeUrl: 'wss://rpc.preprod.midnight.network',
   },
+  stagenet: {
+    networkId: NetworkId.NetworkId.StageNet,
+    indexerHttpUrl: 'https://indexer.stagenet.shielded.tools/api/v4/graphql',
+    indexerWsUrl: 'wss://indexer.stagenet.shielded.tools/api/v4/graphql/ws',
+    nodeUrl: 'wss://rpc.stagenet.shielded.tools',
+  },
 };
 
 /**
@@ -79,6 +85,9 @@ export const makeEnvironment = (
       relayURL: new URL(endpoints.nodeUrl),
       networkId: endpoints.networkId,
       txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+      // Every environment this testkit drives runs the ledger-v9-native node line, so the wallet reaches its V2
+      // variant; the final mainnet fork constant is still an open question.
+      forks: ProtocolVersion.V9NativeForkSchedule,
     };
   },
   getDustWalletConfig(): DustWalletConfiguration {
@@ -91,6 +100,9 @@ export const makeEnvironment = (
       indexerClientConnection: {
         indexerHttpUrl: endpoints.indexerHttpUrl,
       },
+      // The same boundary the shielded configuration names, for the same reason: this testkit's environments all run
+      // the ledger-v9-native node line, so the dust wallet reaches its V2 variant too.
+      forks: ProtocolVersion.V9NativeForkSchedule,
     };
   },
   down: options.down ?? (async () => {}),
