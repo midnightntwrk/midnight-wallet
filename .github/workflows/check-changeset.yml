@@ -4,7 +4,7 @@ env:
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 on:
   pull_request:
-    branches: [main, v2]
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
