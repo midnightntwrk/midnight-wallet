@@ -1937,7 +1937,7 @@ export class WalletFacade {
       // Read again on the far side of the proof: the epoch is the one thing about the transaction that a crossing
       // during proving can change, and this is where it is caught.
       this.accept<CarriedUnproven>(tx);
-      const finalizedTx = this.seal('Finalized', (unboundTx as unknown as CarriedUnbound).bind(), tx.protocolVersion);
+      const finalizedTx = this.seal('Finalized', unboundTx.bind(), tx.protocolVersion);
       await this.pendingTransactionsService.addPendingTransaction(
         finalizedTx,
         Option.some(finalizedTx.protocolVersion),
