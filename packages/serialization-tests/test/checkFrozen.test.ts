@@ -15,7 +15,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The gate that stops a failing compatibility test being "fixed" by rewriting the evidence.
@@ -33,6 +33,10 @@ import { afterEach, describe, expect, it } from 'vitest';
  * changed, `2` git could not answer. The script separates the last two deliberately — a git that could not run is not
  * the same answer as a fixture that changed, and a CI job that treated them alike would pass on a broken checkout.
  */
+
+// Each case spawns git several times and then the script as a Node process; on a loaded machine that runs far past the
+// default 5 s, and a gate that flakes under load teaches people to retry it rather than read it.
+vi.setConfig({ testTimeout: 30_000 });
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '..', 'check-frozen.mjs');
 
