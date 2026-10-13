@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type CoreWallet } from './CoreWallet.js';
+import { BOOKING_LIFETIME_MS, type CoreWallet } from './CoreWallet.js';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { pipe, Array } from 'effect';
 import { RecordOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -30,6 +30,21 @@ export type PendingCoin = {
 
 export type Coin = AvailableCoin | PendingCoin;
 
+/**
+ * A coin booked for a transaction that has not settled, so it is in the wallet but not spendable.
+ *
+ * @remarks
+ *   Not to be confused with {@link PendingCoin}, which is a coin the wallet expects to receive. `reservedSince` is when
+ *   sync first saw the booking and `releasableAfter` when the wallet will release it if nothing settles it first; both
+ *   are `undefined` until sync has seen it.
+ */
+export type ReservedCoin = {
+  coin: ledger.QualifiedShieldedCoinInfo;
+  nullifier: ledger.Nullifier;
+  reservedSince: Date | undefined;
+  releasableAfter: Date | undefined;
+};
+
 export type Balances = Record<ledger.RawTokenType, bigint>;
 
 export type CoinsAndBalancesCapability<TState> = {
@@ -39,6 +54,8 @@ export type CoinsAndBalancesCapability<TState> = {
   getAvailableCoins(state: TState): readonly AvailableCoin[];
   getPendingCoins(state: TState): readonly PendingCoin[];
   getTotalCoins(state: TState): ReadonlyArray<AvailableCoin | PendingCoin>;
+  /** Optional so that a capability implemented outside this package still satisfies the type; it then reports none. */
+  getReservedCoins?(state: TState): readonly ReservedCoin[];
 };
 
 const calculateBalances = <T extends AvailableCoin | PendingCoin>(coins: T[]): Balances =>
@@ -50,7 +67,7 @@ const calculateBalances = <T extends AvailableCoin | PendingCoin>(coins: T[]): B
     {},
   );
 
-export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapability<CoreWallet> => {
+export const makeDefaultCoinsAndBalancesCapability = (): Required<CoinsAndBalancesCapability<CoreWallet>> => {
   const getAvailableBalances = (state: CoreWallet): Balances => {
     const availableCoins = getAvailableCoins(state);
 
@@ -101,6 +118,23 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
 
   const getTotalCoins = (state: CoreWallet): Array<Coin> => [...getAvailableCoins(state), ...getPendingCoins(state)];
 
+  // A booking's deadline is set a full lifetime after sync first saw it (see CoreWallet.expireBookings), so when it was
+  // first seen is read back off the deadline rather than stored twice.
+  const getReservedCoins = (state: CoreWallet): ReservedCoin[] =>
+    pipe(
+      [...state.state.pendingSpends.values()],
+      Array.map(([coin]) => {
+        const releasableAfter = state.bookingDeadlines?.[coin.nonce];
+        return {
+          coin,
+          nullifier: state.coinHashes[coin.nonce].nullifier,
+          reservedSince:
+            releasableAfter === undefined ? undefined : new Date(releasableAfter.getTime() - BOOKING_LIFETIME_MS),
+          releasableAfter,
+        };
+      }),
+    );
+
   return {
     getAvailableBalances,
     getPendingBalances,
@@ -108,5 +142,6 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
     getAvailableCoins,
     getPendingCoins,
     getTotalCoins,
+    getReservedCoins,
   };
 };

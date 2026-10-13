@@ -141,7 +141,7 @@ const releaseSpends = (
  *   that history drops roots older than `global_ttl`, so no shielded spend can be included later than this after it was
  *   built. A transaction's own TTL can only be shorter.
  */
-const BOOKING_LIFETIME_MS = 60 * 60 * 1000;
+export const BOOKING_LIFETIME_MS = 60 * 60 * 1000;
 
 export const CoreWallet = {
   init(localState: ledger.ZswapLocalState, secretKeys: ledger.ZswapSecretKeys, networkId: string): CoreWallet {

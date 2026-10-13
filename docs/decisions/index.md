@@ -25,6 +25,8 @@ You can install the required package globally by running "npm install -g adr-log
 - [ADR-0008](0008-persisted-format-versioning.md) - Versioning the formats we persist, and proving old data still loads
 - [ADR-0009](0009-unshielded-bookings-persist-and-expire.md) - Unshielded bookings persist, expire at their
   transaction's TTL, and are reconciled against a durable record
+- [ADR-0010](0010-shielded-bookings-expire-in-the-wallet.md) - Shielded bookings expire in the shielded wallet, a
+  lifetime after sync first sees them
 
 <!-- adrlogstop -->
 

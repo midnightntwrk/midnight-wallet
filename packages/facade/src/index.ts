@@ -719,6 +719,15 @@ type IdentifiedTransaction = Readonly<{
   intents: ReadonlyMap<number, { intentHash(segmentId: number): string }> | undefined;
 }>;
 
+/**
+ * The coins a transaction spends from shielded funds, as the nullifiers of its Zswap inputs. Structural for the same
+ * reason as {@link IdentifiedTransaction}: both ledger versions name an input's nullifier the same way.
+ */
+type ShieldedSpends = Readonly<{
+  guaranteedOffer: { readonly inputs: readonly { readonly nullifier: string }[] } | undefined;
+  fallibleOffer: ReadonlyMap<number, { readonly inputs: readonly { readonly nullifier: string }[] }> | undefined;
+}>;
+
 /** Undoes one booking a builder took, in the wallet that took it. */
 type Release = () => Promise<void>;
 
@@ -1351,12 +1360,40 @@ export class WalletFacade {
       return;
     }
 
-    const identity = this.#carried<IdentifiedTransaction>(unshieldedTx);
+    await this.#recordReservation(unshieldedTx, { unshielded: bookedIds }, ttl);
+  }
+
+  /**
+   * Records that a transaction the shielded wallet built has shielded coins reserved, naming them by nullifier.
+   *
+   * The booking itself lives in the shielded wallet's state, which releases it once it expires; this record gives the
+   * coins an owner outside that state, so whoever reads the pending set can see what is holding them. Every input of
+   * such a transaction is one of this wallet's coins, booked for it.
+   */
+  async #reserveShielded(shieldedTx: AnyTx | undefined, ttl: Date): Promise<void> {
+    if (!shieldedTx) {
+      return;
+    }
+
+    const spends = this.#carried<ShieldedSpends>(shieldedTx);
+    const nullifiers = [
+      ...(spends.guaranteedOffer?.inputs ?? []),
+      ...[...(spends.fallibleOffer?.values() ?? [])].flatMap((offer) => offer.inputs),
+    ].map((input) => input.nullifier);
+    if (nullifiers.length === 0) {
+      return;
+    }
+
+    await this.#recordReservation(shieldedTx, { unshielded: [], shielded: nullifiers }, ttl);
+  }
+
+  async #recordReservation(tx: AnyTx, inputs: PendingTransactions.Reservation['inputs'], ttl: Date): Promise<void> {
+    const identity = this.#carried<IdentifiedTransaction>(tx);
 
     await this.pendingTransactionsService.addReservation({
       identifiers: identity.identifiers(),
       intentHashes: [...(identity.intents?.entries() ?? [])].map(([segment, intent]) => intent.intentHash(segment)),
-      inputs: { unshielded: bookedIds },
+      inputs,
       ttl,
       createdAt: DateTime.unsafeFromDate(this.clock.now()),
       expired: false,
@@ -1423,9 +1460,20 @@ export class WalletFacade {
     }
   }
 
-  /** Releases the coins the shielded wallet booked for `tx`, a transaction it built. */
+  /**
+   * Releases the coins the shielded wallet booked for `tx`, a transaction it built, with the record that stood for
+   * them.
+   */
   #shieldedBooking(tx: AnyTx | undefined): Release {
-    return async () => (tx ? this.shielded.revertTransaction(tx) : undefined);
+    return async () => {
+      if (!tx) {
+        return;
+      }
+      await this.shielded.revertTransaction(tx);
+      await this.pendingTransactionsService.clearReservation([
+        ...this.#carried<IdentifiedTransaction>(tx).identifiers(),
+      ]);
+    };
   }
 
   /**
@@ -1727,6 +1775,7 @@ export class WalletFacade {
       shouldBalanceShielded ? this.shielded.balanceTransaction(tx) : undefined,
     );
     const afterShielded = [...afterUnshielded, this.#shieldedBooking(shieldedBalancingTx)];
+    await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedBalancingTx, ttl));
 
     // Step 2: Merge unshielded and shielded balancing
     const mergedBalancingTx = await this.#releasingOnFailure(afterShielded, () =>
@@ -1787,6 +1836,7 @@ export class WalletFacade {
     // Step 1: Run unshielded and shielded balancing
     const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
     const afterShielded = [this.#shieldedBooking(shieldedBalancingTx)];
+    await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedBalancingTx, ttl));
 
     // For unbound transactions, unshielded balancing happens in place not with a balancing transaction
     const unshieldedBalancing = await this.#releasingOnFailure(afterShielded, () =>
@@ -1855,6 +1905,7 @@ export class WalletFacade {
     // Step 1: Run unshielded and shielded balancing
     const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
     const afterShielded = [this.#shieldedBooking(shieldedBalancingTx)];
+    await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedBalancingTx, ttl));
 
     // For unproven transactions, unshielded balancing happens in place
     const unshieldedBalancing = await this.#releasingOnFailure(afterShielded, () =>
@@ -2077,6 +2128,7 @@ export class WalletFacade {
     const shieldedTx =
       shieldedOutputs.length > 0 ? await this.shielded.transferTransaction(shieldedOutputs) : undefined;
     const afterShielded = [this.#shieldedBooking(shieldedTx)];
+    await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedTx, ttl));
 
     const unshieldedTx = await this.#releasingOnFailure(afterShielded, () =>
       unshieldedOutputs.length > 0 ? this.unshielded.transferTransaction(unshieldedOutputs, ttl) : undefined,
@@ -2207,6 +2259,7 @@ export class WalletFacade {
       ? await this.shielded.initSwap(shieldedInputs ?? {}, shieldedOutputs)
       : undefined;
     const afterShielded = [this.#shieldedBooking(shieldedTx)];
+    await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedTx, ttl));
 
     const unshieldedTx = await this.#releasingOnFailure(afterShielded, () =>
       hasUnshieldedPart ? this.unshielded.initSwap(unshieldedInputs ?? {}, unshieldedOutputs, ttl) : undefined,

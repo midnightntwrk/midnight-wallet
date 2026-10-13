@@ -39,7 +39,12 @@ import type { V9UnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilitie
 import { type Duration } from 'effect';
 import type * as rx from 'rxjs';
 import { type CoreWallet as V1CoreWallet } from './v1/CoreWallet.js';
-import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v2/CoinsAndBalances.js';
+import {
+  type AvailableCoin,
+  type CoinsAndBalancesCapability,
+  type PendingCoin,
+  type ReservedCoin,
+} from './v2/CoinsAndBalances.js';
 import { type CoreWallet } from './v2/index.js';
 import { type KeysCapability } from './v2/Keys.js';
 import { type SerializationCapability } from './v2/Serialization.js';
@@ -83,6 +88,8 @@ type ShieldedProjections<TSerialized> = Readonly<{
   totalCoins: () => readonly (AvailableCoin | PendingCoin)[];
   availableCoins: () => readonly AvailableCoin[];
   pendingCoins: () => readonly PendingCoin[];
+  /** Optional so that a state built by hand, without this projection, still constructs; it then reports none. */
+  reservedCoins?: () => readonly ReservedCoin[];
   coinPublicKey: () => ShieldedCoinPublicKey;
   encryptionPublicKey: () => ShieldedEncryptionPublicKey;
   address: () => ShieldedAddress;
@@ -113,6 +120,7 @@ export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.Fi
       totalCoins: () => variant.coinsAndBalances.getTotalCoins(state.state),
       availableCoins: () => variant.coinsAndBalances.getAvailableCoins(state.state),
       pendingCoins: () => variant.coinsAndBalances.getPendingCoins(state.state),
+      reservedCoins: () => variant.coinsAndBalances.getReservedCoins?.(state.state) ?? [],
       coinPublicKey: () => variant.keys.getCoinPublicKey(state.state),
       encryptionPublicKey: () => variant.keys.getEncryptionPublicKey(state.state),
       address: () => variant.keys.getAddress(state.state),
@@ -137,6 +145,14 @@ export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.Fi
 
   get pendingCoins(): readonly PendingCoin[] {
     return this.#projections.pendingCoins();
+  }
+
+  /**
+   * Coins booked for a transaction that has not settled: in the wallet, but not spendable until the transaction is
+   * included, reverted, or the wallet releases the booking once no transaction spending it can still be included.
+   */
+  get reservedCoins(): readonly ReservedCoin[] {
+    return this.#projections.reservedCoins?.() ?? [];
   }
 
   get coinPublicKey(): ShieldedCoinPublicKey {

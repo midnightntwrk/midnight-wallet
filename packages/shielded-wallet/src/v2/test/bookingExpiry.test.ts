@@ -122,6 +122,21 @@ describe('A shielded booking nothing ever settles', () => {
     expect(isReleased(versionCheckAt(seen, after(LIFETIME_MS + 1)))).toBe(true);
   });
 
+  it('should be listed as reserved, with when it was first seen and when it will be released, so a stuck coin can be told apart', () => {
+    const booked = walletWithAbandonedBooking();
+    const [coin] = [...booked.state.coins];
+    expect(coinsAndBalances.getReservedCoins(booked)).toEqual([
+      expect.objectContaining({ coin, reservedSince: undefined, releasableAfter: undefined }),
+    ]);
+
+    const seen = syncAt(booked, bookedAt);
+    expect(coinsAndBalances.getReservedCoins(seen)).toEqual([
+      expect.objectContaining({ coin, reservedSince: bookedAt, releasableAfter: after(LIFETIME_MS) }),
+    ]);
+
+    expect(coinsAndBalances.getReservedCoins(syncAt(seen, after(LIFETIME_MS + 1)))).toEqual([]);
+  });
+
   it('should still be booked at the instant its lifetime ends, because a spend is valid up to and including it', () => {
     const seen = syncAt(walletWithAbandonedBooking(), bookedAt);
 
