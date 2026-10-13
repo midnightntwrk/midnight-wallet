@@ -1,5 +1,5 @@
 ---
-'@midnightntwrk/wallet-sdk-facade': patch
+'@midnightntwrk/wallet-sdk-facade': minor
 ---
 
 Release the coins a transaction builder booked when the builder fails part-way. `transferTransaction`, `initSwap`,
