@@ -240,18 +240,26 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   balanceTransaction(
     secretKeys: ledger.ZswapSecretKeys,
     tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+    ttl?: Date,
   ): Effect.Effect<BalancingResult, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
-      return pipe(this.#v1Context.transactingCapability.balanceTransaction(secretKeys, state, tx), EitherOps.toEffect);
+      return pipe(
+        this.#v1Context.transactingCapability.balanceTransaction(secretKeys, state, tx, ttl),
+        EitherOps.toEffect,
+      );
     });
   }
 
   transferTransaction(
     secretKeys: ledger.ZswapSecretKeys,
     outputs: ReadonlyArray<TokenTransfer>,
+    ttl?: Date,
   ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
-      return pipe(this.#v1Context.transactingCapability.makeTransfer(secretKeys, state, outputs), EitherOps.toEffect);
+      return pipe(
+        this.#v1Context.transactingCapability.makeTransfer(secretKeys, state, outputs, ttl),
+        EitherOps.toEffect,
+      );
     });
   }
 
@@ -259,10 +267,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     secretKeys: ledger.ZswapSecretKeys,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: ReadonlyArray<TokenTransfer>,
+    ttl?: Date,
   ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
-        this.#v1Context.transactingCapability.initSwap(secretKeys, state, desiredInputs, desiredOutputs),
+        this.#v1Context.transactingCapability.initSwap(secretKeys, state, desiredInputs, desiredOutputs, ttl),
         EitherOps.toEffect,
       );
     });

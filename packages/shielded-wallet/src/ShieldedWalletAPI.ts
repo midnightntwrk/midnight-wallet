@@ -212,15 +212,49 @@ export type ShieldedWalletAPI<
    *   No key material is passed: the wallet derives what its current variant needs from what it was started with. A
    *   caller-supplied key object could only ever belong to one ledger version, which is exactly what a wallet spanning
    *   a protocol boundary cannot assume.
+   * @example
+   *   const ttl = new Date(Date.now() + 10 * 60 * 1000);
+   *   const balancing = await wallet.balanceTransaction(tx, ttl);
+   *
+   * @param tx The transaction to balance.
+   * @param ttl The transaction's TTL. It caps how long the coins it spends stay booked, since no spend can be included
+   *   after it; without it the booking lasts the ledger's default `global_ttl`.
+   * @returns The balancing transaction, or nothing when none is needed.
    */
   // we can balance bound and unbound txs
-  balanceTransaction(tx: AnyTx): Promise<ShieldedBalancingResult>;
+  balanceTransaction(tx: AnyTx, ttl?: Date): Promise<ShieldedBalancingResult>;
 
-  transferTransaction(outputs: readonly TokenTransfer[]): Promise<UnprovenTx>;
+  /**
+   * Builds a transaction paying `outputs` from the wallet's shielded coins.
+   *
+   * @example
+   *   const ttl = new Date(Date.now() + 10 * 60 * 1000);
+   *   const transfer = await wallet.transferTransaction([{ type, amount: 100n, receiverAddress }], ttl);
+   *
+   * @param outputs The payments to make.
+   * @param ttl The transaction's TTL. It caps how long the coins it spends stay booked, since no spend can be included
+   *   after it; without it the booking lasts the ledger's default `global_ttl`.
+   * @returns The unproven transfer.
+   */
+  transferTransaction(outputs: readonly TokenTransfer[], ttl?: Date): Promise<UnprovenTx>;
 
+  /**
+   * Builds one side of a swap: the wallet's coins offered for `desiredInputs`, and `desiredOutputs` asked in return.
+   *
+   * @example
+   *   const ttl = new Date(Date.now() + 10 * 60 * 1000);
+   *   const swap = await wallet.initSwap({ [offeredType]: 50n }, [{ type, amount: 100n, receiverAddress }], ttl);
+   *
+   * @param desiredInputs What the wallet offers, by token type.
+   * @param desiredOutputs What the wallet wants to receive.
+   * @param ttl The transaction's TTL. It caps how long the coins it spends stay booked, since no spend can be included
+   *   after it; without it the booking lasts the ledger's default `global_ttl`.
+   * @returns The unproven swap offer.
+   */
   initSwap(
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: readonly TokenTransfer[],
+    ttl?: Date,
   ): Promise<UnprovenTx>;
 
   serializeState(): Promise<TSerialized>;
