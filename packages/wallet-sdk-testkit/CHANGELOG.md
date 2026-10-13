@@ -1,5 +1,15 @@
 # @midnightntwrk/wallet-sdk-testkit
 
+## 1.0.0-rc.2
+
+### Patch Changes
+
+- Updated dependencies [60e35b6]
+- Updated dependencies [60e35b6]
+- Updated dependencies [60e35b6]
+  - @midnightntwrk/wallet-sdk-facade@5.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-rc.2
+
 ## 1.0.0-rc.1
 
 ### Patch Changes

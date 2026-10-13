@@ -1,5 +1,17 @@
 # @midnightntwrk/wallet-sdk-facade
 
+## 5.0.0-rc.2
+
+### Patch Changes
+
+- 60e35b6: fix(facade): declare `@midnightntwrk/wallet-sdk-utilities` and `@midnightntwrk/wallet-sdk-hd` as
+  dependencies. The facade re-exports `Clock` from the first at runtime and names `WalletSeeds` from the second in its
+  public `FacadeStartMaterial` type, so a consumer needs both installed rather than reached through another package.
+- 60e35b6: fix(facade): declare the `@midnight-ntwrk/ledger-v8` dependency the facade imports, so it resolves under
+  strict package managers (pnpm, Yarn PnP) without relying on a sibling package to pull it in
+- Updated dependencies [60e35b6]
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-rc.2
+
 ## 5.0.0-rc.1
 
 ### Major Changes

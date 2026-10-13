@@ -1,5 +1,12 @@
 # @midnightntwrk/wallet-sdk-unshielded-wallet
 
+## 4.0.0-rc.2
+
+### Patch Changes
+
+- 60e35b6: fix(unshielded-wallet): name the V1 builder, not the V2 one, in the V1 builder's incomplete-configuration
+  error
+
 ## 4.0.0-rc.1
 
 ### Major Changes
