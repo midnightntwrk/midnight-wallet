@@ -239,6 +239,9 @@ describe('Proving with the backend configured for the epoch a transaction belong
       ? Option.getOrElse(Cause.failureOption(error[Runtime.FiberFailureCauseId]), () => error)
       : error;
 
+  /** The failure a build reports first: its own, ahead of any release of its bookings that failed with it. */
+  const primary = (error: unknown): unknown => (error instanceof AggregateError ? error.errors[0] : error);
+
   const provenBy = (finalized: WalletTransaction<WalletTransaction.Stage>) =>
     Either.getOrThrow(
       WalletTransaction.unwrapWithin<unknown>(
@@ -277,7 +280,10 @@ describe('Proving with the backend configured for the epoch a transaction belong
       (error: unknown) => error,
     );
 
-    expect(reported(failure)).toBeInstanceOf(ProvingEpochMismatchError);
+    // A transaction the prover refuses is one the wallets cannot read either, so releasing whatever it booked fails
+    // too, and a failed release is never silent: the refusal arrives first, with those failures behind it.
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(reported(primary(failure))).toBeInstanceOf(ProvingEpochMismatchError);
   });
 
   it('refuses a transaction from a version no backend was configured for, naming that version', async () => {

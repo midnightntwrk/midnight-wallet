@@ -732,6 +732,28 @@ type ShieldedSpends = Readonly<{
 type Release = () => Promise<void>;
 
 /**
+ * Releases every booking in `booked` after `error` ended a build, then rejects.
+ *
+ * A failed release is never silent. When every release settles, the rejection is `error` itself, unchanged, so a caller
+ * matching on it is unaffected. When any release rejects, a booking may remain until it expires, and `error` alone
+ * would tell the caller the opposite: the rejection is then an `AggregateError` whose `errors` hold `error` first and
+ * each release's rejection after it, in the order the releases were given.
+ */
+const releaseAndRethrow = async (error: unknown, booked: readonly Release[]): Promise<never> => {
+  const settled = await Promise.allSettled(booked.map((release) => release()));
+  const releaseFailures = Arr.filterMap(settled, (result) =>
+    result.status === 'rejected' ? Option.some<unknown>(result.reason) : Option.none(),
+  );
+  if (releaseFailures.length === 0) {
+    throw error;
+  }
+  throw new AggregateError(
+    [error, ...releaseFailures],
+    'The build failed, and releasing the coins it had booked failed too: a booking may remain until it expires.',
+  );
+};
+
+/**
  * Clock abstraction for obtaining the current time. By default, the facade uses the system clock
  * ({@link Clock.systemClock}); for testing with a simulator, inject a custom clock (e.g. one backed by the simulator's
  * time).
@@ -1450,13 +1472,15 @@ export class WalletFacade {
    * A builder that rejects hands its caller no transaction, so the caller has nothing to revert: whatever the builder
    * booked before the failing step would stay booked. Each booking is released by the wallet that took it, and only
    * that booking is, so nothing the caller or another transaction holds is touched.
+   *
+   * A failed release is never silent: the step's error is rethrown unchanged only when every release settled, and
+   * otherwise arrives inside an `AggregateError` with each release's rejection (see {@link releaseAndRethrow}).
    */
   async #releasingOnFailure<T>(booked: readonly Release[], step: () => Promise<T> | T): Promise<T> {
     try {
       return await step();
     } catch (error) {
-      await Promise.allSettled(booked.map((release) => release()));
-      throw error;
+      return await releaseAndRethrow(error, booked);
     }
   }
 
@@ -1772,7 +1796,7 @@ export class WalletFacade {
     await this.#releasingOnFailure(afterUnshielded, () => this.#reserve(unshieldedBalancingTx, ttl));
 
     const shieldedBalancingTx = await this.#releasingOnFailure(afterUnshielded, () =>
-      shouldBalanceShielded ? this.shielded.balanceTransaction(tx) : undefined,
+      shouldBalanceShielded ? this.shielded.balanceTransaction(tx, ttl) : undefined,
     );
     const afterShielded = [...afterUnshielded, this.#shieldedBooking(shieldedBalancingTx)];
     await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedBalancingTx, ttl));
@@ -1834,7 +1858,7 @@ export class WalletFacade {
       TokenKindsToBalance.toFlags(tokenKindsToBalance);
 
     // Step 1: Run unshielded and shielded balancing
-    const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
+    const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx, ttl) : undefined;
     const afterShielded = [this.#shieldedBooking(shieldedBalancingTx)];
     await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedBalancingTx, ttl));
 
@@ -1903,7 +1927,7 @@ export class WalletFacade {
       TokenKindsToBalance.toFlags(tokenKindsToBalance);
 
     // Step 1: Run unshielded and shielded balancing
-    const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx) : undefined;
+    const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx, ttl) : undefined;
     const afterShielded = [this.#shieldedBooking(shieldedBalancingTx)];
     await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedBalancingTx, ttl));
 
@@ -2061,15 +2085,18 @@ export class WalletFacade {
    * @returns The finalized transaction, stamped with the version it was authored at.
    * @throws {@link ProtocolVersionMismatchError} When the wallets left the transaction's epoch while it was being
    *   proved, or were never in it.
+   * @throws {AggregateError} When giving back a reservation failed as well, so a booking may remain until it expires:
+   *   `errors` holds the original failure first, then each failed release.
    */
   async finalizeTransaction(tx: UnprovenTx): Promise<FinalizedTx> {
+    // Checked before anything is attempted: a transaction refused on its stamp has been handed to nothing, so there is
+    // nothing to release for it, and the wallets would refuse to revert it for the same reason. Only a failure past
+    // this point can leave a booking behind.
+    const accepted = this.accept<ledgerV9.UnprovenTransaction>(tx);
     try {
       // Named as the prover's input rather than its output: the router hands the transaction to the prover registered
       // for the version it was authored at, and what comes back is that ledger version's unbound transaction.
-      const unboundTx = await this.provingService.prove(
-        this.accept<ledgerV9.UnprovenTransaction>(tx),
-        tx.protocolVersion,
-      );
+      const unboundTx = await this.provingService.prove(accepted, tx.protocolVersion);
       // Read again on the far side of the proof: the epoch is the one thing about the transaction that a crossing
       // during proving can change, and this is where it is caught.
       this.accept<CarriedUnproven>(tx);
@@ -2080,12 +2107,11 @@ export class WalletFacade {
       );
       return finalizedTx;
     } catch (error) {
-      await Promise.allSettled([
-        this.shielded.revertTransaction(tx),
-        this.#revertUnshieldedBooking(tx),
-        this.dust.revertTransaction(tx),
+      return await releaseAndRethrow(error, [
+        () => this.shielded.revertTransaction(tx),
+        () => this.#revertUnshieldedBooking(tx),
+        () => this.dust.revertTransaction(tx),
       ]);
-      throw error;
     }
   }
 
@@ -2126,7 +2152,7 @@ export class WalletFacade {
     }
 
     const shieldedTx =
-      shieldedOutputs.length > 0 ? await this.shielded.transferTransaction(shieldedOutputs) : undefined;
+      shieldedOutputs.length > 0 ? await this.shielded.transferTransaction(shieldedOutputs, ttl) : undefined;
     const afterShielded = [this.#shieldedBooking(shieldedTx)];
     await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedTx, ttl));
 
@@ -2256,7 +2282,7 @@ export class WalletFacade {
 
     // Build each leg if the swap involves that token kind, even when it has outputs but no inputs.
     const shieldedTx = hasShieldedPart
-      ? await this.shielded.initSwap(shieldedInputs ?? {}, shieldedOutputs)
+      ? await this.shielded.initSwap(shieldedInputs ?? {}, shieldedOutputs, ttl)
       : undefined;
     const afterShielded = [this.#shieldedBooking(shieldedTx)];
     await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedTx, ttl));

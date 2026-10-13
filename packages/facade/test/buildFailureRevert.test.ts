@@ -221,6 +221,21 @@ const failAfterFeePayment = (facade: WalletFacade): void => {
   });
 };
 
+/** Records the error fee payment rejects with, so a test can tell that exact error apart from anything built around it. */
+const recordFeePaymentFailure = (facade: WalletFacade): { readonly failures: unknown[] } => {
+  const failures: unknown[] = [];
+  const balanceTransactions = facade.dust.balanceTransactions.bind(facade.dust);
+  vi.spyOn(facade.dust, 'balanceTransactions').mockImplementation(async (...args) => {
+    try {
+      return await balanceTransactions(...args);
+    } catch (error) {
+      failures.push(error);
+      throw error;
+    }
+  });
+  return { failures };
+};
+
 const expectNothingLeftBooked = (
   before: FacadeState,
   after: FacadeState,
@@ -324,6 +339,51 @@ describe('A builder that rejects at fee payment', () => {
       );
 
       expectNothingLeftBooked(before, after, pending);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+describe('A builder whose bookings are released after it fails', () => {
+  const transfer =
+    ({ facade, shieldedAddress, unshieldedAddress }: Effect.Effect.Success<ReturnType<typeof fundedFacade>>) =>
+    () =>
+      facade.transferTransaction(
+        [
+          { type: 'shielded', outputs: [{ type: SHIELDED, receiverAddress: shieldedAddress, amount: tokenValue(1n) }] },
+          {
+            type: 'unshielded',
+            outputs: [{ type: NIGHT, receiverAddress: unshieldedAddress, amount: tokenValue(1n) }],
+          },
+        ],
+        { ttl: hourFromNow(), payFees: true },
+      );
+
+  it('should reject with the failing step’s own error, unwrapped, when every release succeeded, so a caller matching on it is unaffected', () =>
+    Effect.gen(function* () {
+      const funded = yield* fundedFacade({ withDust: false });
+      const { failures } = recordFeePaymentFailure(funded.facade);
+
+      const failure = yield* Effect.flip(Effect.tryPromise(transfer(funded)));
+
+      expect(failures).toHaveLength(1);
+      expect(failure.error).toBe(failures[0]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should reject with an AggregateError holding the step’s error first and then the release’s, when a release itself fails, so a booking left behind is never silent', () =>
+    Effect.gen(function* () {
+      const funded = yield* fundedFacade({ withDust: false });
+      const { failures } = recordFeePaymentFailure(funded.facade);
+      const releaseFailure = new Error('the shielded wallet could not release its booking');
+      vi.spyOn(funded.facade.shielded, 'revertTransaction').mockRejectedValue(releaseFailure);
+
+      const failure = yield* Effect.flip(Effect.tryPromise(transfer(funded)));
+
+      expect(failures).toHaveLength(1);
+      expect(failure.error).toBeInstanceOf(AggregateError);
+      // Type cast required because: the instance check above has just established the class.
+      const { errors } = failure.error as AggregateError;
+      expect(errors).toEqual([failures[0], releaseFailure]);
+      expect(errors[0]).toBe(failures[0]);
+      expect(errors[1]).toBe(releaseFailure);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 

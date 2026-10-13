@@ -51,6 +51,9 @@ const SEED = '0000000000000000000000000000000000000000000000000000000000000001';
 /** The ledger's default `global_ttl`, plus a second: past it, no shielded spend built before can still be included. */
 const PAST_A_LIFETIME = 60n * 60n + 1n;
 const LIFETIME_MS = 60 * 60 * 1000;
+/** A TTL well inside a lifetime, so a release at the TTL cannot be mistaken for a release at the lifetime. */
+const TEN_MINUTES_MS = 10 * 60 * 1000;
+const TEN_MINUTES_S = 10n * 60n;
 
 const stateWhere = (facade: WalletFacade, predicate: (state: FacadeState) => boolean): Effect.Effect<FacadeState> =>
   Effect.promise(() => rx.firstValueFrom(facade.state().pipe(rx.filter(predicate), rx.timeout({ first: 5_000 }))));
@@ -161,6 +164,39 @@ describe('A shielded transfer the caller abandons', () => {
 
       yield* simulator.fastForward(PAST_A_LIFETIME);
       const released = yield* stateWhere(facade, (s) => s.shielded.availableCoins.length > 0);
+      expect(released.shielded.reservedCoins).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should have its coins released once the transfer’s TTL has passed, well before a lifetime, because no transaction can be included after its TTL', () =>
+    Effect.gen(function* () {
+      const { simulator, facade, before } = yield* fundedFacade();
+      const [coin] = before.shielded.availableCoins;
+      const receiverAddress = yield* Effect.promise(() => facade.shielded.getAddress());
+      const builtAt = yield* simulator.query((s) => s.currentTime);
+      const ttl = new Date(builtAt.getTime() + TEN_MINUTES_MS);
+
+      yield* Effect.promise(() =>
+        facade.transferTransaction(
+          [{ type: 'shielded', outputs: [{ type: SHIELDED, receiverAddress, amount: tokenValue(1n) }] }],
+          { ttl, payFees: false },
+        ),
+      );
+
+      // Seen by sync: the wallet now knows when the coin will be released, which the TTL brings forward.
+      yield* simulator.fastForward(1n);
+      const seenAt = yield* simulator.query((s) => s.currentTime);
+      const dated = yield* stateWhere(facade, (s) => s.shielded.reservedCoins[0]?.releasableAfter !== undefined);
+      const [reserved] = dated.shielded.reservedCoins;
+      expect(reserved.coin.nonce).toEqual(coin.coin.nonce);
+      expect(reserved.reservedSince).toEqual(seenAt);
+      expect(reserved.releasableAfter).toEqual(ttl);
+
+      yield* simulator.fastForward(TEN_MINUTES_S);
+      const releasedAt = yield* simulator.query((s) => s.currentTime);
+      expect(releasedAt.getTime()).toBeGreaterThan(ttl.getTime());
+      expect(releasedAt.getTime()).toBeLessThan(seenAt.getTime() + LIFETIME_MS);
+      const released = yield* stateWhere(facade, (s) => s.shielded.availableCoins.length > 0);
+      expect(released.shielded.availableCoins.map((c) => c.coin.nonce)).toEqual([coin.coin.nonce]);
       expect(released.shielded.reservedCoins).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 
