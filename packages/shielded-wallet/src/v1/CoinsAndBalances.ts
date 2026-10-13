@@ -10,9 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { BOOKING_LIFETIME_MS, type CoreWallet } from './CoreWallet.js';
+import { bookingDeadline, type CoreWallet } from './CoreWallet.js';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { pipe, Array } from 'effect';
+import { pipe, Array, Option } from 'effect';
 import { RecordOps } from '@midnightntwrk/wallet-sdk-utilities';
 
 export type AvailableCoin = {
@@ -118,21 +118,27 @@ export const makeDefaultCoinsAndBalancesCapability = (): Required<CoinsAndBalanc
 
   const getTotalCoins = (state: CoreWallet): Array<Coin> => [...getAvailableCoins(state), ...getPendingCoins(state)];
 
-  // A booking's deadline is set a full lifetime after sync first saw it (see CoreWallet.expireBookings), so when it was
-  // first seen is read back off the deadline rather than stored twice.
+  // The deadline is derived by the same rule the sweep releases by (`bookingDeadline`), so what is reported is what
+  // happens. Both times are unknown until sync has first seen the booking. A booked coin whose hash entry is missing
+  // cannot be named by its nullifier yet, so it is left out of the view rather than assumed present and dereferenced.
   const getReservedCoins = (state: CoreWallet): ReservedCoin[] =>
     pipe(
       [...state.state.pendingSpends.values()],
-      Array.map(([coin]) => {
-        const releasableAfter = state.bookingDeadlines?.[coin.nonce];
-        return {
-          coin,
-          nullifier: state.coinHashes[coin.nonce].nullifier,
-          reservedSince:
-            releasableAfter === undefined ? undefined : new Date(releasableAfter.getTime() - BOOKING_LIFETIME_MS),
-          releasableAfter,
-        };
-      }),
+      Array.filterMap(([coin]) =>
+        pipe(
+          Option.fromNullable(state.coinHashes[coin.nonce]),
+          Option.map(({ nullifier }) => {
+            const booking = state.bookings?.[coin.nonce];
+            const reservedSince = booking?.seen;
+            return {
+              coin,
+              nullifier,
+              reservedSince,
+              releasableAfter: reservedSince === undefined ? undefined : bookingDeadline(reservedSince, booking?.ttl),
+            };
+          }),
+        ),
+      ),
     );
 
   return {

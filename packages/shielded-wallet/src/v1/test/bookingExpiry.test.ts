@@ -28,13 +28,23 @@
  */
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  BlockHash,
+  ZswapEventTip,
+  ZswapEvents,
+  type BlockHashQuery,
+  type ZswapEventTipSubscription,
+  type ZswapEventsSubscription,
+} from '@midnightntwrk/wallet-sdk-indexer-client';
+import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { pipe } from 'effect';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { Duration, Effect, Fiber, pipe, Stream, TestClock, TestContext } from 'effect';
+import { describe, expect, it } from 'vitest';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
-import { VersionSignalSyncUpdate, WalletSyncUpdate, makeEventsSyncCapability } from '../Sync.js';
+import { WalletSyncUpdate, makeEventsSyncCapability, makeEventsSyncService } from '../Sync.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const keys = (): ledger.ZswapSecretKeys => ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 5));
@@ -48,38 +58,71 @@ const after = (ms: number): Date => new Date(bookedAt.getTime() + ms);
 const coinsAndBalances = makeDefaultCoinsAndBalancesCapability();
 const serialization = makeDefaultV1SerializationCapability();
 
-// The sweep reads the system clock, so the system clock is what each step pins. Only `Date` is faked: nothing here
-// waits on a timer.
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] });
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
-
-/** Applies an update that carries no events, as a caught-up wallet receives on a quiet chain, at `now`. */
+/**
+ * Applies an update that carries no events, as a caught-up wallet receives on a quiet chain, stamped by its source at
+ * `now`. The stamp is the only clock the sweep reads, so nothing here touches the machine's clock.
+ */
 const syncAt = (wallet: CoreWallet, now: Date): CoreWallet => {
-  vi.setSystemTime(now);
-  const [state] = makeEventsSyncCapability().applyUpdate(wallet, WalletSyncUpdate.create([], keys()), activeRange);
+  const [state] = makeEventsSyncCapability().applyUpdate(wallet, WalletSyncUpdate.create([], keys(), now), activeRange);
   return state;
 };
 
+/** How often the indexer source sends its heartbeat, with or without anything to report. */
+const WATCH_INTERVAL_MS = 30_000;
+
+/** A tip block as the indexer serves it, reported at `protocolVersion`, with the rest filled in. */
+const tipAt = (protocolVersion: number): BlockHashQuery => ({
+  block: {
+    height: 100,
+    hash: '0xabc',
+    protocolVersion,
+    ledgerParameters: '0x00',
+    timestamp: 1_700_000_000,
+    zswapEndIndex: 100,
+    dustCommitmentEndIndex: 0,
+    dustGenerationEndIndex: 0,
+    dustCommitmentMerkleTreeRoot: null,
+    dustGenerationMerkleTreeRoot: null,
+  },
+});
+
+/** An event subscription that stays open and never pushes anything: a chain with no shielded traffic. */
+const quietChain = (): Stream.Stream<ZswapEventsSubscription, ClientError | ServerError, SubscriptionClient> =>
+  Stream.never;
+
+const eventTip = (): Stream.Stream<ZswapEventTipSubscription, ClientError | ServerError, SubscriptionClient> =>
+  Stream.make({ zswapLedgerEvents: { id: 100, maxId: 100 } });
+
 /**
- * Applies the periodic version check at `now` as the source delivers it: the signal, reporting the tip the wallet has
- * already reached, then the empty batch that follows it. On a chain with no shielded traffic these are the only updates
- * a caught-up wallet receives.
+ * Runs the indexer source against a quiet chain whose tip is on the wallet's own protocol version, folding everything
+ * it emits into the wallet, for `elapsedMs` of test-clock time.
  */
-const versionCheckAt = (wallet: CoreWallet, now: Date): CoreWallet => {
-  vi.setSystemTime(now);
+const runOnQuietChain = (wallet: CoreWallet, elapsedMs: number): Promise<CoreWallet> => {
   const capability = makeEventsSyncCapability();
-  const [signalled] = capability.applyUpdate(
-    wallet,
-    VersionSignalSyncUpdate.create(Number(wallet.protocolVersion), Number(wallet.progress.appliedIndex)),
-    activeRange,
+  const source = makeEventsSyncService({
+    indexerClientConnection: {
+      indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+      indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+    },
+    batchUpdates: { size: 100, timeout: 60_000, spacing: 0 },
+    versionWatch: { intervalMs: WATCH_INTERVAL_MS },
+  });
+
+  return pipe(
+    source.updates(wallet, keys()),
+    Stream.interruptAfter(Duration.millis(elapsedMs)),
+    Stream.runFold(wallet, (state, update) => capability.applyUpdate(state, update, activeRange)[0]),
+    Effect.provideService(BlockHash.tag, () => Effect.succeed(tipAt(Number(wallet.protocolVersion)))),
+    Effect.provideService(ZswapEventTip.tag, eventTip),
+    Effect.provideService(ZswapEvents.tag, quietChain),
+    Effect.scoped,
+    Effect.fork,
+    // The test clock only moves when told to, and the run above only ends when it has moved far enough.
+    Effect.tap(() => TestClock.adjust(Duration.millis(elapsedMs + WATCH_INTERVAL_MS))),
+    Effect.flatMap(Fiber.join),
+    Effect.provide(TestContext.TestContext),
+    Effect.runPromise,
   );
-  const [state] = capability.applyUpdate(signalled, WalletSyncUpdate.create([], keys()), activeRange);
-  return state;
 };
 
 const caughtUp = (wallet: CoreWallet): CoreWallet =>
@@ -88,15 +131,27 @@ const caughtUp = (wallet: CoreWallet): CoreWallet =>
 const behind = (wallet: CoreWallet): CoreWallet =>
   CoreWallet.updateProgress(wallet, { appliedIndex: 10n, highestRelevantWalletIndex: 100n, isConnected: true });
 
-/** A caught-up wallet holding one coin, which it has booked for a transaction it then abandoned. */
-const walletWithAbandonedBooking = (): CoreWallet => {
+/** A caught-up wallet holding one coin, nothing booked. */
+const walletWithOneCoin = (): CoreWallet => {
   const mine = keys();
   const coin = ledger.createShieldedCoinInfo(ledger.shieldedToken().raw, 500n);
   const output = ledger.ZswapOutput.new(coin, 0, mine.coinPublicKey, mine.encryptionPublicKey);
   const offer = ledger.ZswapOffer.fromOutput<ledger.PreProof>(output, coin.type, coin.value);
-  const settled = caughtUp(CoreWallet.init(new ledger.ZswapLocalState().apply(mine, offer), mine, networkId));
-  return pipe(CoreWallet.spendCoins(settled, mine, [[...settled.state.coins][0]], 0), ([, booked]) => booked);
+  return caughtUp(CoreWallet.init(new ledger.ZswapLocalState().apply(mine, offer), mine, networkId));
 };
+
+/**
+ * Books the wallet's one coin for a transaction, with the transaction's TTL when it has one.
+ *
+ * @returns The transaction the coin was booked for, and the wallet holding the booking.
+ */
+const book = (wallet: CoreWallet, ttl?: Date): [ledger.UnprovenTransaction, CoreWallet] => {
+  const [offers, booked] = CoreWallet.spendCoins(wallet, keys(), [[...wallet.state.coins][0]], 0, ttl);
+  return [ledger.Transaction.fromParts(networkId, offers[0]), booked];
+};
+
+/** A caught-up wallet holding one coin, which it has booked for a transaction it then abandoned. */
+const walletWithAbandonedBooking = (ttl?: Date): CoreWallet => pipe(book(walletWithOneCoin(), ttl), ([, w]) => w);
 
 const restarted = (wallet: CoreWallet): CoreWallet =>
   caughtUp(EitherOps.getOrThrowLeft(serialization.deserialize(null, serialization.serialize(wallet))));
@@ -115,11 +170,21 @@ describe('A shielded booking nothing ever settles', () => {
     expect(isReleased(syncAt(seen, after(LIFETIME_MS + 1)))).toBe(true);
   });
 
-  it('should be released by the periodic version check alone, so a chain with no shielded traffic still frees the coin', () => {
-    const seen = versionCheckAt(walletWithAbandonedBooking(), bookedAt);
-    expect(isBooked(seen)).toBe(true);
+  it("should be released by the source's heartbeat alone, so a chain with no shielded traffic and no new version still frees the coin", async () => {
+    // The chain is already on the wallet's version and never pushes an event, so the source has neither a batch nor a
+    // version to report: its heartbeat is the only update the wallet receives.
+    const released = await runOnQuietChain(walletWithAbandonedBooking(), LIFETIME_MS + 4 * WATCH_INTERVAL_MS);
 
-    expect(isReleased(versionCheckAt(seen, after(LIFETIME_MS + 1)))).toBe(true);
+    expect(isReleased(released)).toBe(true);
+  });
+
+  it('should be expired against the time its update was stamped with, not the machine clock, so the source alone decides when a booking has lapsed', () => {
+    // `bookedAt` lies days before any machine running this test: a sweep reading the machine's clock would first see
+    // the booking now and still hold it an hour later in update time, while one reading the stamp releases it.
+    const seen = syncAt(walletWithAbandonedBooking(), bookedAt);
+    expect(isBooked(syncAt(seen, after(LIFETIME_MS)))).toBe(true);
+
+    expect(isReleased(syncAt(seen, after(LIFETIME_MS + 1)))).toBe(true);
   });
 
   it('should be listed as reserved, with when it was first seen and when it will be released, so a stuck coin can be told apart', () => {
@@ -169,5 +234,72 @@ describe('A shielded booking nothing ever settles', () => {
     expect(isBooked(syncAt(seen, new Date(loadedAt.getTime() + LIFETIME_MS)))).toBe(true);
 
     expect(isReleased(syncAt(seen, new Date(loadedAt.getTime() + LIFETIME_MS + 1)))).toBe(true);
+  });
+});
+
+describe('A shielded booking taken for a transaction with a TTL', () => {
+  const ttl = after(10 * 60 * 1000);
+
+  it('should be released once the TTL has passed, so a coin is not held for a transaction that can no longer be included', () => {
+    const seen = syncAt(walletWithAbandonedBooking(ttl), bookedAt);
+
+    expect(isReleased(syncAt(seen, new Date(ttl.getTime() + 1)))).toBe(true);
+  });
+
+  it('should still be booked at the instant its TTL ends, because the transaction is valid up to and including it', () => {
+    const seen = syncAt(walletWithAbandonedBooking(ttl), bookedAt);
+
+    expect(isBooked(syncAt(seen, ttl))).toBe(true);
+  });
+
+  it('should keep the full lifetime when the TTL lies beyond it, because no shielded spend outlives the lifetime anyway', () => {
+    const seen = syncAt(walletWithAbandonedBooking(after(5 * LIFETIME_MS)), bookedAt);
+
+    expect(isBooked(syncAt(seen, after(LIFETIME_MS)))).toBe(true);
+    expect(isReleased(syncAt(seen, after(LIFETIME_MS + 1)))).toBe(true);
+  });
+
+  it('should be listed with when it was first seen and the TTL as when it will be released, so the reported deadline is the real one', () => {
+    const booked = walletWithAbandonedBooking(ttl);
+    const [coin] = [...booked.state.coins];
+
+    expect(coinsAndBalances.getReservedCoins(syncAt(booked, bookedAt))).toEqual([
+      expect.objectContaining({ coin, reservedSince: bookedAt, releasableAfter: ttl }),
+    ]);
+  });
+});
+
+describe('A shielded booking reverted and taken again', () => {
+  it('should be given a full lifetime from when the new booking was first seen, so a coin re-booked for a fresh transaction is not released under it', () => {
+    const [abandoned, booked] = book(walletWithOneCoin());
+    const seen = syncAt(booked, bookedAt);
+
+    const reverted = CoreWallet.revertTransaction(seen, abandoned);
+    expect(isReleased(reverted)).toBe(true);
+
+    const rebookedAt = after(LIFETIME_MS / 2);
+    const [, rebooked] = book(reverted);
+    const reseen = syncAt(rebooked, rebookedAt);
+
+    expect(isBooked(syncAt(reseen, after(LIFETIME_MS + 1)))).toBe(true);
+    expect(isBooked(syncAt(reseen, new Date(rebookedAt.getTime() + LIFETIME_MS)))).toBe(true);
+    expect(isReleased(syncAt(reseen, new Date(rebookedAt.getTime() + LIFETIME_MS + 1)))).toBe(true);
+  });
+
+  it('should list the new booking as reserved since it was first seen, not since the reverted one was', () => {
+    const [abandoned, booked] = book(walletWithOneCoin());
+    const reverted = CoreWallet.revertTransaction(syncAt(booked, bookedAt), abandoned);
+
+    const rebookedAt = after(LIFETIME_MS / 2);
+    const [, rebooked] = book(reverted);
+    const [coin] = [...rebooked.state.coins];
+
+    expect(coinsAndBalances.getReservedCoins(syncAt(rebooked, rebookedAt))).toEqual([
+      expect.objectContaining({
+        coin,
+        reservedSince: rebookedAt,
+        releasableAfter: new Date(rebookedAt.getTime() + LIFETIME_MS),
+      }),
+    ]);
   });
 });

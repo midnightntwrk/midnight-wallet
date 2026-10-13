@@ -471,14 +471,16 @@ describe('a wallet on the quiet side of a fork', () => {
   });
 });
 
-describe('the version watch on a chain with no shielded traffic', () => {
-  it('should follow each version check with an empty batch, because releasing an expired booking needs the keys a batch carries', async () => {
+describe('the source on a chain with no shielded traffic and no new version', () => {
+  it('should still send a heartbeat on every interval with the keys and the time, because releasing an expired booking needs both and nothing else arrives', async () => {
+    // The tip is on the version the wallet already holds, so there is no signal to send and no event to batch: the
+    // heartbeat is the only thing the wallet hears.
     const collected = await service(20)
       .updates(syncedWallet(41n), keys())
       .pipe(
-        Stream.take(4),
+        Stream.interruptAfter('150 millis'),
         Stream.runCollect,
-        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v9Version, 42), recorder<BlockHashQueryVariables>())),
+        Effect.provideService(BlockHash.tag, servingTip(tipBlock(v8Version, 42), recorder<BlockHashQueryVariables>())),
         Effect.provideService(ZswapEventTip.tag, servingEventTip(41, recorder<ZswapEventTipSubscriptionVariables>())),
         Effect.provideService(ZswapEvents.tag, quietChain),
         Effect.scoped,
@@ -486,9 +488,11 @@ describe('the version watch on a chain with no shielded traffic', () => {
       );
 
     const updates = Chunk.toArray(collected);
-    expect(updates.map((update) => update._tag)).toEqual(['VersionSignal', 'Events', 'VersionSignal', 'Events']);
-    const batches = updates.flatMap((update) => (update._tag === 'Events' ? [update] : []));
-    expect(batches.map((batch) => batch.updates)).toEqual([[], []]);
-    expect(batches.every((batch) => batch.secretKeys instanceof ledger.ZswapSecretKeys)).toBe(true);
+    expect(updates.length).toBeGreaterThanOrEqual(2);
+    expect(updates.map((update) => update._tag)).toEqual(updates.map(() => 'Events'));
+    const heartbeats = updates.flatMap((update) => (update._tag === 'Events' ? [update] : []));
+    expect(heartbeats.map((heartbeat) => heartbeat.updates)).toEqual(heartbeats.map(() => []));
+    expect(heartbeats.every((heartbeat) => heartbeat.secretKeys instanceof ledger.ZswapSecretKeys)).toBe(true);
+    expect(heartbeats.every((heartbeat) => heartbeat.now instanceof Date)).toBe(true);
   });
 });
