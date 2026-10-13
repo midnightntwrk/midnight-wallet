@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { BOOKING_LIFETIME_MS, type CoreWallet } from './CoreWallet.js';
+import { bookingDeadline, type CoreWallet } from './CoreWallet.js';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 import { pipe, Array, Option } from 'effect';
 import { RecordOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -123,8 +123,8 @@ export const makeDefaultCoinsAndBalancesCapability = (): Required<CoinsAndBalanc
 
   const getTotalCoins = (state: CoreWallet): Array<Coin> => [...getAvailableCoins(state), ...getPendingCoins(state)];
 
-  // A booking's deadline is set a full lifetime after sync first saw it (see CoreWallet.expireBookings), so when it was
-  // first seen is read back off the deadline rather than stored twice.
+  // The deadline is derived by the same rule the sweep releases by (`bookingDeadline`), so what is reported is what
+  // happens. Both times are unknown until sync has first seen the booking.
   const getReservedCoins = (state: CoreWallet): ReservedCoin[] =>
     pipe(
       [...state.state.pendingSpends.values()],
@@ -132,13 +132,13 @@ export const makeDefaultCoinsAndBalancesCapability = (): Required<CoinsAndBalanc
         pipe(
           Option.fromNullable(state.coinHashes[coin.nonce]),
           Option.map(({ nullifier }) => {
-            const releasableAfter = state.bookingDeadlines?.[coin.nonce];
+            const booking = state.bookings?.[coin.nonce];
+            const reservedSince = booking?.seen;
             return {
               coin,
               nullifier,
-              reservedSince:
-                releasableAfter === undefined ? undefined : new Date(releasableAfter.getTime() - BOOKING_LIFETIME_MS),
-              releasableAfter,
+              reservedSince,
+              releasableAfter: reservedSince === undefined ? undefined : bookingDeadline(reservedSince, booking?.ttl),
             };
           }),
         ),
