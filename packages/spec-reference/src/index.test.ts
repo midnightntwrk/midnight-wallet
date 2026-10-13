@@ -13,9 +13,10 @@
 import * as crypto from 'node:crypto';
 import { expect, test, vi } from 'vitest';
 
-// The parity and roundtrip cases run the spec's pure-JS cryptography against the WASM ledger; on CI runners several of
-// them take 7-14 s, past vitest's 5 s default. First observed the first time this file ran in CI at all.
-vi.setConfig({ testTimeout: 30_000 });
+// The parity and roundtrip cases run the spec's pure-JS cryptography against the WASM ledger over 1000 seeds. Alone
+// they take about a second each, but CI runs every package's unit tests at once, and there the Schnorr parity case
+// takes 22-33 s, so a 30 s bound failed it on load alone. The bound only has to stop a hung case, not time a slow one.
+vi.setConfig({ testTimeout: 120_000 });
 import {
   Bech32m,
   type Bech32mCodec,
