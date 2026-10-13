@@ -15,3 +15,8 @@ The facade now records a reservation for every shielded booking it makes, naming
 optional `inputs.shielded` of the pending-transactions reservation record, and clears it with the booking. Like the
 unshielded section, it records who holds the coins; the shielded wallet itself releases them once they expire. The
 field is optional, so stored pending-transaction sets keep loading unchanged.
+
+`balanceTransaction`, `transferTransaction` and `initSwap` of the shielded wallet API take an optional trailing
+`ttl?: Date`. It caps how long the coins they book stay booked: they are released after the TTL if nothing settles
+them first, and never later than the ledger's default `global_ttl` (one hour) after sync first sees them. The facade
+passes the TTL it already holds.

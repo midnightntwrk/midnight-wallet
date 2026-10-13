@@ -164,12 +164,12 @@ neither leaves mechanism 2 as the only rule, which is where this started.
 All three wallets reserve coins while balancing, and all three have to decide when a reservation is no longer valid. The
 ledger owns that state for shielded and dust; the SDK owns it for unshielded.
 
-| Concept            | Unshielded                      | Shielded                           | Dust                         |
-| ------------------ | ------------------------------- | ---------------------------------- | ---------------------------- |
-| Coins owned        | `availableUtxos` + `pending`    | `state.coins`                      | `state.coins`                |
-| Reservations held  | `pendingUtxos`                  | `pendingSpends` (ledger)           | `pendingDust` (SDK) + ledger |
-| Reservation expiry | `ttl`, required                 | `bookingDeadlines` (SDK, ADR-0010) | ledger's `processTtls`       |
-| Reaped by          | the wallet, on each sync update | the wallet, on each sync update    | the ledger                   |
+| Concept            | Unshielded                      | Shielded                        | Dust                         |
+| ------------------ | ------------------------------- | ------------------------------- | ---------------------------- |
+| Coins owned        | `availableUtxos` + `pending`    | `state.coins`                   | `state.coins`                |
+| Reservations held  | `pendingUtxos`                  | `pendingSpends` (ledger)        | `pendingDust` (SDK) + ledger |
+| Reservation expiry | `ttl`, required                 | `bookings` (SDK, ADR-0010)      | ledger's `processTtls`       |
+| Reaped by          | the wallet, on each sync update | the wallet, on each sync update | the ledger                   |
 
 Shielded has the same leak and cannot use the same fix directly: `pendingSpends` is the ledger's own field, serialized
 with its state, and the ledger's expiry endpoint is documented as non-functional. That is decided in
