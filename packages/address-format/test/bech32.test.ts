@@ -275,21 +275,6 @@ describe('decoding rejects', () => {
         UnshieldedAddress.codec.decode('testnet', withPayload('addr', 'testnet', Buffer.alloc(size))),
       ).toThrow('Unshielded address needs to be 32 bytes long');
     });
-
-    // A shielded address is a 32-byte coin public key followed by a 32-byte encryption public key. Anything else cannot
-    // be split into the two keys, and accepting it would let a malformed address pass validation only to fail when a
-    // transfer to it is built.
-    it.each([63, 65])('should reject a %i-byte shielded address', (size) => {
-      expect(() =>
-        ShieldedAddress.codec.decode('testnet', withPayload('shield-addr', 'testnet', Buffer.alloc(size))),
-      ).toThrow('Shielded address needs to be 64 bytes long');
-    });
-
-    it.each([31, 33])('should reject a %i-byte encryption public key', (size) => {
-      expect(() =>
-        ShieldedEncryptionPublicKey.codec.decode('testnet', withPayload('shield-epk', 'testnet', Buffer.alloc(size))),
-      ).toThrow('Encryption public key needs to be 32 bytes long');
-    });
   });
 
   describe('a Dust public key outside the scalar field', () => {

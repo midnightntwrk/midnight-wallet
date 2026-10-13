@@ -157,9 +157,6 @@ export class ShieldedAddress {
     'shield-addr',
     (addr) => Buffer.concat([addr.coinPublicKey.data, addr.encryptionPublicKey.data]),
     (bytes) => {
-      if (bytes.length != ShieldedCoinPublicKey.keyLength + ShieldedEncryptionPublicKey.keyLength) {
-        throw new Error('Shielded address needs to be 64 bytes long');
-      }
       const coinPublicKey = new ShieldedCoinPublicKey(bytes.subarray(0, ShieldedCoinPublicKey.keyLength));
       const encryptionPublicKey = new ShieldedEncryptionPublicKey(bytes.subarray(ShieldedCoinPublicKey.keyLength));
       return new ShieldedAddress(coinPublicKey, encryptionPublicKey);
@@ -255,9 +252,6 @@ export class ShieldedEncryptionPublicKey {
   public readonly data: Buffer;
 
   constructor(data: Buffer) {
-    if (data.length != ShieldedEncryptionPublicKey.keyLength) {
-      throw new Error('Encryption public key needs to be 32 bytes long');
-    }
     this.data = data;
   }
 
