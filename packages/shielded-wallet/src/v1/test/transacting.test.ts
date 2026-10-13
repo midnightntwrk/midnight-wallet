@@ -878,6 +878,48 @@ describe('V1 Wallet Transacting', () => {
       expect(expectedCoins[theOtherTokenType]).toEqual(theOtherTokenAmount);
     });
 
+    // One leg of a mixed swap may be all want: the wallet asks for a shielded token and gives none, its give side
+    // being unshielded. That leg must still ask for exactly the requested output, watch for it, and spend none of the
+    // wallet's coins, since the counter-party is the one funding it.
+    it('inits a swap that only receives, owing exactly the requested output and spending no coins', () => {
+      const theOtherTokenType = ledger.sampleRawTokenType();
+      const theOtherTokenAmount = 10_000n;
+      const initialCoinValues = [shieldedValue(1), shieldedValue(2), shieldedValue(3)];
+      const wallets = prepareWallets({
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+      });
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+      const proving = makeSimulatorProvingServiceEffect();
+
+      return Effect.gen(function* () {
+        const [swapTx, newState] = yield* EitherOps.toEffect(
+          transacting.initSwap(wallets.A.keys, wallets.A.wallet, {}, [
+            makeTransferOutput({
+              recipient: wallets.A,
+              coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
+            }),
+          ]),
+        );
+        const proven: ledger.ProofErasedTransaction = yield* proving.prove(swapTx);
+        const imbalances = proven.imbalances(0);
+
+        expect(new Set(imbalances.keys().filter((key) => key.tag === 'shielded'))).toEqual(
+          new Set([{ tag: 'shielded', raw: theOtherTokenType }]),
+        );
+        expect(getNonDustImbalance(imbalances, theOtherTokenType)).toEqual(-1n * theOtherTokenAmount);
+        expect(swapTx.guaranteedOffer?.inputs ?? []).toEqual([]);
+        expect(newState.state.pendingSpends.size).toEqual(0);
+        expect(
+          pipe(
+            newState.state.pendingOutputs.values(),
+            Iterable.map(([coin]) => ({ type: coin.type, value: coin.value })),
+            Arr.fromIterable,
+          ),
+        ).toEqual([{ type: theOtherTokenType, value: theOtherTokenAmount }]);
+      }).pipe(Effect.runPromise);
+    });
+
     it('raises an error if there are not enough tokens for swap', () => {
       const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;

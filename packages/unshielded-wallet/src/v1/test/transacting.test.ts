@@ -731,4 +731,44 @@ describe('Unshielded wallet transacting', () => {
       expect(bookingTtls).toEqual(Arr.map(bookingTtls, () => ttl));
     });
   });
+
+  // One leg of a mixed swap may be all want: the wallet asks for tokens of this kind and gives none, its give side
+  // being of the other kind. That leg must carry exactly the requested outputs and spend none of the wallet's coins,
+  // since the counter-party is the one funding them.
+  describe('when initiating a swap that only receives', () => {
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    const ttl = new Date(Date.now() + 1_800_000);
+    const receiverAddress = new UnshieldedAddress(Buffer.alloc(32, 7));
+    const wanted: ReadonlyArray<TokenTransfer> = [
+      { amount: 700n, type: NIGHT, receiverAddress },
+      { amount: 300n, type: tokenA, receiverAddress },
+    ];
+
+    it('builds a guaranteed offer holding exactly the requested outputs, spending and booking none of its coins', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(2);
+
+      const { transaction, newState } = transacting.initSwap(wallet, {}, wanted, ttl).pipe(EitherOps.getOrThrowLeft);
+
+      const intent = transaction.intents?.get(1);
+      expect(intent?.guaranteedUnshieldedOffer?.inputs).toEqual([]);
+      // The ledger keeps an offer's outputs in its own order, so they are compared regardless of order.
+      const outputs = intent?.guaranteedUnshieldedOffer?.outputs.map(({ owner, type, value }) => ({
+        owner,
+        type,
+        value,
+      }));
+      expect(outputs).toHaveLength(2);
+      expect(outputs).toEqual(
+        expect.arrayContaining([
+          { owner: receiverAddress.data.toString('hex'), type: NIGHT, value: 700n },
+          { owner: receiverAddress.data.toString('hex'), type: tokenA, value: 300n },
+        ]),
+      );
+      expect(intent?.fallibleUnshieldedOffer).toBeUndefined();
+
+      const { availableUtxos, pendingUtxos } = UnshieldedState.toArrays(newState.state);
+      expect(pendingUtxos).toEqual([]);
+      expect(availableUtxos).toHaveLength(utxos.length);
+    });
+  });
 });
