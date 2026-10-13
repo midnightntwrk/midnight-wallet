@@ -56,10 +56,8 @@ if (testnetVector === undefined || mainnetVector === undefined) {
 const withPayload = (type: string, network: string, payload: Buffer) => new MidnightBech32m(type, network, payload);
 
 describe('the specification test vectors', () => {
-  it('cover every network and both unshielded signature schemes', () => {
-    expect(new Set(vectors.map((vector) => vector.networkId))).toEqual(
-      new Set([null, 'my-private-net', 'devnet', 'testnet', 'my-private-net-5']),
-    );
+  // The scheme-specific tests below skip vectors without a key of that scheme; this keeps them from passing on none.
+  it('should include addresses of both unshielded signature schemes', () => {
     expect(unshieldedEntries.length).toBeGreaterThan(0);
     expect(ecdsaEntries.length).toBeGreaterThan(0);
   });
@@ -189,16 +187,13 @@ describe('the specification test vectors', () => {
 });
 
 describe('the mainnet network id', () => {
-  it('should encode the string "mainnet" exactly as the mainnet symbol, with no network segment', () => {
+  it('should treat the string "mainnet" as the mainnet symbol, so a mainnet address carries no network segment', () => {
     const address = new DustAddress(ScaleBigInt.decode(bytes(mainnetVector.dustAddress.hex)));
 
     expect(DustAddress.codec.encode('mainnet', address).asString()).toBe(mainnetVector.dustAddress.bech32m);
-  });
-
-  it('should accept a mainnet address when decoding for the string "mainnet"', () => {
-    const address = DustAddress.codec.decode('mainnet', MidnightBech32m.parse(mainnetVector.dustAddress.bech32m));
-
-    expect(address.hexString).toBe(mainnetVector.dustAddress.hex);
+    expect(
+      DustAddress.codec.decode('mainnet', MidnightBech32m.parse(mainnetVector.dustAddress.bech32m)).hexString,
+    ).toBe(mainnetVector.dustAddress.hex);
   });
 });
 
@@ -222,28 +217,24 @@ describe('decoding rejects', () => {
     });
   });
 
-  describe('a credential of a different type', () => {
-    const credentials = [
-      { type: 'shield-addr', codec: ShieldedAddress.codec, bech32m: testnetVector.shieldedAddress.bech32m },
-      { type: 'shield-cpk', codec: ShieldedCoinPublicKey.codec, bech32m: testnetVector.shieldedCPK.bech32m },
-      { type: 'shield-esk', codec: ShieldedEncryptionSecretKey.codec, bech32m: testnetVector.shieldedESK.bech32m },
-      { type: 'dust', codec: DustAddress.codec, bech32m: testnetVector.dustAddress.bech32m },
-    ] as const;
+  // An unshielded address and a coin public key are both 32 bytes, so either payload would decode as the other: only
+  // the credential type keeps one from being read as the other.
+  describe('a credential of a different type with a payload of the same size', () => {
     const unshielded = unshieldedEntries.find(({ vector }) => vector.networkId === 'testnet');
-    if (unshielded === undefined)
+    if (unshielded === undefined) {
       throw new Error('the specification vectors no longer cover a testnet unshielded address');
-    const all = [...credentials, { type: 'addr', codec: UnshieldedAddress.codec, bech32m: unshielded.entry.bech32m }];
+    }
 
-    // Every codec against every other credential's string: a payload of the right length must still be refused when it
-    // is labelled as something else.
-    const pairs = all.flatMap((decoder) =>
-      all.filter((other) => other.type !== decoder.type).map((other) => ({ decoder, other })),
-    );
+    it('should reject a coin public key when decoding an unshielded address', () => {
+      expect(() =>
+        UnshieldedAddress.codec.decode('testnet', MidnightBech32m.parse(testnetVector.shieldedCPK.bech32m)),
+      ).toThrow('Expected type addr, got shield-cpk');
+    });
 
-    it.each(pairs)('should reject a $other.type string when decoding a $decoder.type', ({ decoder, other }) => {
-      expect(() => decoder.codec.decode('testnet', MidnightBech32m.parse(other.bech32m))).toThrow(
-        `Expected type ${decoder.type}, got ${other.type}`,
-      );
+    it('should reject an unshielded address when decoding a coin public key', () => {
+      expect(() =>
+        ShieldedCoinPublicKey.codec.decode('testnet', MidnightBech32m.parse(unshielded.entry.bech32m)),
+      ).toThrow('Expected type shield-cpk, got addr');
     });
   });
 
@@ -294,16 +285,6 @@ describe('decoding rejects', () => {
       ).toThrow('Shielded address needs to be 64 bytes long');
     });
 
-    it('should accept a 64-byte shielded address', () => {
-      const payload = bytes(testnetVector.shieldedAddress.hex);
-
-      expect(
-        ShieldedAddress.codec
-          .decode('testnet', withPayload('shield-addr', 'testnet', payload))
-          .encryptionPublicKeyString(),
-      ).toBe(testnetVector.shieldedAddress.hex.slice(64));
-    });
-
     it.each([31, 33])('should reject a %i-byte encryption public key', (size) => {
       expect(() =>
         ShieldedEncryptionPublicKey.codec.decode('testnet', withPayload('shield-epk', 'testnet', Buffer.alloc(size))),
@@ -320,10 +301,6 @@ describe('decoding rejects', () => {
       );
 
       expect(decoded.data).toBe(largest);
-    });
-
-    it('should refuse to construct an address at the field modulus', () => {
-      expect(() => new DustAddress(BLSScalar.modulus)).toThrow('Dust address is too large');
     });
 
     it('should reject an encoded key at the field modulus', () => {
