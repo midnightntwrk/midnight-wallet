@@ -183,7 +183,14 @@ type SourceConfiguration = Readonly<{
   networkId: NetworkId.NetworkId;
   /** The single timeline both variants read, each decoding it as its own ledger version's update. */
   timeline: readonly TimelineItem[];
+  /** The verdicts the liveness feed reports, in place of the single `Skipped` an in-memory timeline gives by default. */
+  liveness?: Stream.Stream<IndexerLiveness.IndexerLiveness>;
+  /** Whether the source stays open after the timeline, as a live subscription does, instead of ending. */
+  openEnded?: boolean;
 }>;
+
+/** The one liveness verdict an in-memory timeline can give on its own. */
+const noLivenessCheck = IndexerLiveness.Skipped({ reason: 'no-liveness-feed' });
 
 /**
  * A sync service over an in-memory timeline, honouring the wallet's cursor.
@@ -195,22 +202,26 @@ type SourceConfiguration = Readonly<{
  *   re-fetch the boundary transaction, and one that resumed from a bumped cursor really would miss it.
  */
 const timelineSyncService = <TUpdate>(
-  timeline: readonly TimelineItem[],
+  configuration: SourceConfiguration,
   toUpdate: (item: TimelineItem) => TUpdate,
-  livenessVerdict: TUpdate,
+  toLivenessUpdate: (verdict: IndexerLiveness.IndexerLiveness) => TUpdate,
 ) => ({
+  // A source that ends is one the variant treats as dropped: it clears `isConnected` and reconnects. Tests that need a
+  // wallet to stay connected at the tip ask for the source to stay open, as a live indexer subscription does.
   updates: (state: V1CoreWallet | V2CoreWallet) =>
-    Stream.fromIterable(timeline.filter((item) => BigInt(item.id) > state.progress.appliedId).map(toUpdate)),
-  // An in-memory timeline has no node to cross-check against. It says so once, as the simulator does, because a wallet
-  // whose liveness stays `Unknown` never reports itself synchronized.
-  livenessUpdates: () => Stream.make(livenessVerdict),
+    Stream.fromIterable(
+      configuration.timeline.filter((item) => BigInt(item.id) > state.progress.appliedId).map(toUpdate),
+    ).pipe(Stream.concat(configuration.openEnded === true ? Stream.never : Stream.empty)),
+  // An in-memory timeline has no node to cross-check against. Unless a test supplies verdicts of its own, it says so
+  // once, as the simulator does, because a wallet whose liveness stays `Unknown` never reports itself synchronized.
+  livenessUpdates: () => (configuration.liveness ?? Stream.make(noLivenessCheck)).pipe(Stream.map(toLivenessUpdate)),
 });
 
-/** The one liveness verdict an in-memory timeline can give, identical in shape for both ledger versions. */
-const noLivenessCheck: IndexerLivenessUpdate = {
+/** A liveness verdict as the sync stream carries it, identical in shape for both ledger versions. */
+const livenessUpdate = (verdict: IndexerLiveness.IndexerLiveness): IndexerLivenessUpdate => ({
   type: 'IndexerLiveness',
-  verdict: IndexerLiveness.Skipped({ reason: 'no-liveness-feed' }),
-};
+  verdict,
+});
 
 /**
  * The V2 variant's builder: the shipped one, reading the timeline instead of an indexer.
@@ -223,7 +234,7 @@ const timelineV2Builder = () =>
   new V2Builder()
     .withSync(
       (configuration: SourceConfiguration) =>
-        timelineSyncService<V2Update>(configuration.timeline, (item) => item.update as V2Update, noLivenessCheck),
+        timelineSyncService<V2Update>(configuration, (item) => item.update as V2Update, livenessUpdate),
       (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: V2History }) =>
         V2Sync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
           getContext(),
@@ -262,6 +273,10 @@ export type ForkWalletConfig = {
    * variant and learns the version from the first message it sees.
    */
   readonly chainVersionProbe?: ChainVersionProbe;
+  /** The verdicts the liveness feed reports. Absent means the single `Skipped` an in-memory timeline gives. */
+  readonly liveness?: Stream.Stream<IndexerLiveness.IndexerLiveness>;
+  /** Whether the source stays open after the timeline, as a live subscription does. Absent means it ends. */
+  readonly openEnded?: boolean;
 };
 
 /** A state emission, whichever variant produced it. */
@@ -313,12 +328,17 @@ export type ForkWallet = {
 export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWallet> => {
   const networkId = config.networkId ?? NetworkId.NetworkId.Undeployed;
   const captured = Deferred.unsafeMake<CapturedMigration>(FiberId.none);
-  const variantConfiguration: SourceConfiguration = { networkId, timeline: config.timeline };
+  const variantConfiguration: SourceConfiguration = {
+    networkId,
+    timeline: config.timeline,
+    ...(config.liveness !== undefined ? { liveness: config.liveness } : {}),
+    ...(config.openEnded !== undefined ? { openEnded: config.openEnded } : {}),
+  };
 
   const v1Builder = new V1Builder()
     .withSync(
       (configuration: SourceConfiguration) =>
-        timelineSyncService<V1Update>(configuration.timeline, (item) => item.update as V1Update, noLivenessCheck),
+        timelineSyncService<V1Update>(configuration, (item) => item.update as V1Update, livenessUpdate),
       // The REAL capability, boundary rule and all — only the service that would open a WebSocket is substituted.
       (_configuration: SourceConfiguration, getContext: () => { transactionHistoryService: V1History }) =>
         V1Sync.makeDefaultSyncCapability({ indexerClientConnection: { indexerHttpUrl: 'http://unused' } }, () =>
@@ -394,6 +414,10 @@ export type SingleVariantWalletConfig = {
   /** The identity the wallet is started with. */
   readonly publicKey: PublicKey;
   readonly networkId?: NetworkId.NetworkId;
+  /** The verdicts the liveness feed reports. Absent means the single `Skipped` an in-memory timeline gives. */
+  readonly liveness?: Stream.Stream<IndexerLiveness.IndexerLiveness>;
+  /** Whether the source stays open after the timeline, as a live subscription does. Absent means it ends. */
+  readonly openEnded?: boolean;
 };
 
 /**
@@ -405,6 +429,11 @@ export type SingleVariantWalletConfig = {
  */
 export const makeSingleVariantWallet = (config: SingleVariantWalletConfig): CustomizedUnshieldedWallet<V2Update> =>
   CustomUnshieldedWallet(
-    { networkId: config.networkId ?? NetworkId.NetworkId.Undeployed, timeline: config.timeline },
+    {
+      networkId: config.networkId ?? NetworkId.NetworkId.Undeployed,
+      timeline: config.timeline,
+      ...(config.liveness !== undefined ? { liveness: config.liveness } : {}),
+      ...(config.openEnded !== undefined ? { openEnded: config.openEnded } : {}),
+    },
     timelineV2Builder(),
   ).startWithPublicKey(config.publicKey);
