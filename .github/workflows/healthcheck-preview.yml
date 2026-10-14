@@ -19,4 +19,11 @@ jobs:
       network: preview
       modifier: '-t @healthcheck'
       skip_cache: ${{ inputs.skip_cache || false }}
-    secrets: inherit
+    secrets:
+      MIDNIGHTCI_PACKAGES_WRITE: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
+      APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
+      E2E_TESTS_SEED: ${{ secrets.E2E_TESTS_SEED }}
+      E2E_TESTS_SEED2: ${{ secrets.E2E_TESTS_SEED2 }}
+      E2E_TESTS_SEED_STABLE: ${{ secrets.E2E_TESTS_SEED_STABLE }}
+      E2E_TESTS_NT_SEED: ${{ secrets.E2E_TESTS_NT_SEED }}
+      E2E_TESTS_NT_SEED2: ${{ secrets.E2E_TESTS_NT_SEED2 }}

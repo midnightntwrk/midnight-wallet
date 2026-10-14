@@ -51,5 +51,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Verify that a changeset exists
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          yarn changeset status --since=origin/${{ github.base_ref }} --verbose
+          yarn changeset status --since="origin/$BASE_REF" --verbose
