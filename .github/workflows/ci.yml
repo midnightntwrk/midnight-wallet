@@ -117,7 +117,7 @@ jobs:
       # and nothing in this job runs turbo, so — as in e2e-smoke — there is no `^dist` rebuild to paper over a wrong
       # path. It would surface as ERR_MODULE_NOT_FOUND in the verify step.
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-artifacts-${{ github.run_id }}
           path: packages
@@ -232,7 +232,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-artifacts-${{ github.run_id }}
           path: .
@@ -311,7 +311,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-artifacts-${{ github.run_id }}
           path: .
@@ -406,7 +406,7 @@ jobs:
       # packages/<pkg>/dist. Unlike test:unit/test:integration, test-undeployed
       # has no `^dist` dependency and never rebuilds, so it relies on this dist.
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-artifacts-${{ github.run_id }}
           path: packages
@@ -580,7 +580,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-publish-artifacts-${{ github.run_id }}
           path: .
