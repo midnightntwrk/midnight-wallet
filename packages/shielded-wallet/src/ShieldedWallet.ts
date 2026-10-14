@@ -53,6 +53,7 @@ import {
 import { EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
 import { Duration, Effect, Either, Match, Option, Ref, type Scope, pipe } from 'effect';
 import * as rx from 'rxjs';
+import { runPromiseThrowingFailure } from './PromiseBoundary.js';
 import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
 import {
   type DefaultShieldedConfiguration,
@@ -506,7 +507,7 @@ export function CustomForkingShieldedWallet<
               ),
           }),
         ),
-        Effect.runPromise,
+        runPromiseThrowingFailure,
       );
     }
 
@@ -703,7 +704,7 @@ export function CustomForkingShieldedWallet<
         // chain that has not forked yet.
         yield* Ref.update(this.#retainedKeys, (retained) => ({ ...retained, v9: Option.some(secretKeys) }));
         yield* this.#startSynchronizing();
-      }).pipe(Effect.runPromise);
+      }).pipe(runPromiseThrowingFailure);
     }
 
     startWithSeed(seed: Uint8Array): Promise<void> {
@@ -712,14 +713,14 @@ export function CustomForkingShieldedWallet<
         // has nothing left to contribute.
         yield* Ref.set(this.#retainedKeys, keysFromSeed(WalletSeed.WalletSeed(seed)));
         yield* this.#startSynchronizing();
-      }).pipe(Effect.runPromise);
+      }).pipe(runPromiseThrowingFailure);
     }
 
     startWithKeys(keys: ShieldedKeysByEpoch): Promise<void> {
       return Effect.gen(this, function* () {
         yield* Ref.set(this.#retainedKeys, { v8: Option.some(keys.v8), v9: Option.some(keys.v9) });
         yield* this.#startSynchronizing();
-      }).pipe(Effect.runPromise);
+      }).pipe(runPromiseThrowingFailure);
     }
 
     async stop(): Promise<void> {
@@ -777,7 +778,7 @@ export function CustomForkingShieldedWallet<
               Effect.map(sealV9),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     transferTransaction(outputs: readonly TokenTransfer[]): Promise<UnprovenTx> {
@@ -794,7 +795,7 @@ export function CustomForkingShieldedWallet<
               Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp)),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     initSwap(
@@ -814,7 +815,7 @@ export function CustomForkingShieldedWallet<
               Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp)),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     /**
@@ -849,7 +850,7 @@ export function CustomForkingShieldedWallet<
               { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertTransaction(unwrapped) },
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<string>> {

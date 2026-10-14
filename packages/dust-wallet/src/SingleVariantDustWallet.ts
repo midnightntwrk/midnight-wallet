@@ -243,7 +243,7 @@ export function CustomDustWallet<
         }
 
         yield* this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground(secretKey) });
-      }).pipe(Effect.runPromise);
+      }).pipe(runPromiseThrowingFailure);
     }
 
     override async stop(): Promise<void> {
@@ -253,7 +253,7 @@ export function CustomDustWallet<
     }
 
     stepSync(secretKey: TStartAux): Promise<void> {
-      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.sync(secretKey) }).pipe(Effect.runPromise);
+      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.sync(secretKey) }).pipe(runPromiseThrowingFailure);
     }
 
     /**
@@ -295,7 +295,7 @@ export function CustomDustWallet<
               .createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress)
               .pipe(Effect.map(seal)),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     async splitNightUtxosForDustRegistration(
@@ -307,7 +307,7 @@ export function CustomDustWallet<
         .dispatch({
           [V2Tag]: (v2) => v2.splitNightUtxosForDustRegistration(currentTime, nightUtxos, isRegistration),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     async attachDustRegistration(
@@ -327,7 +327,7 @@ export function CustomDustWallet<
               Effect.map(resealAs(transaction)),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     addDustGenerationSignature(transaction: UnprovenTx, signature: Signature): Promise<UnprovenTx> {
@@ -339,7 +339,7 @@ export function CustomDustWallet<
               Effect.map(resealAs(transaction)),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     addDustRegistrationSignature(transaction: UnprovenTx, signature: Signature): Promise<UnprovenTx> {
@@ -351,7 +351,7 @@ export function CustomDustWallet<
               Effect.map(resealAs(transaction)),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     calculateFee(transactions: ReadonlyArray<AnyTx>): Promise<bigint> {
@@ -360,7 +360,7 @@ export function CustomDustWallet<
           [V2Tag]: (v2) =>
             Effect.forEach(transactions, carried<AnyTransaction>).pipe(Effect.flatMap((txs) => v2.calculateFee(txs))),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     estimateFee(transactions: ReadonlyArray<AnyTx>, ttl?: Date, currentTime?: Date): Promise<bigint> {
@@ -372,7 +372,7 @@ export function CustomDustWallet<
               Effect.flatMap(([key, txs]) => v2.estimateFee(key, txs, effectiveTtl, currentTime)),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     balanceTransactions(
@@ -388,7 +388,7 @@ export function CustomDustWallet<
               Effect.map(({ transaction, blockData }) => ({ transaction: seal(transaction), blockData })),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     revertTransaction(transaction: AnyTx): Promise<void> {
@@ -400,7 +400,7 @@ export function CustomDustWallet<
               onRight: (tx) => v2.revertTransaction(tx),
             }),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     ensureFeeCoverage(

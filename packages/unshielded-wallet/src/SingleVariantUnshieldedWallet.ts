@@ -36,6 +36,7 @@ import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Either, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type PublicKey } from './KeyStore.js';
+import { runPromiseThrowingFailure } from './PromiseBoundary.js';
 import { type UnshieldedWalletAPI, UnshieldedWalletState } from './UnshieldedWalletAPI.js';
 import {
   type BaseV2Configuration,
@@ -196,7 +197,7 @@ export function CustomUnshieldedWallet<
         }
 
         yield* this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground() });
-      }).pipe(Effect.runPromise);
+      }).pipe(runPromiseThrowingFailure);
     }
 
     override async stop(): Promise<void> {
@@ -213,7 +214,7 @@ export function CustomUnshieldedWallet<
               Effect.map(sealUnproven),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     balanceUnboundTransaction(tx: AnyTx): Promise<UnboundTx | undefined> {
@@ -225,7 +226,7 @@ export function CustomUnshieldedWallet<
               Effect.map((result) => (result === undefined ? undefined : resealAs(tx, 'Unbound')(result))),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     balanceUnprovenTransaction(tx: AnyTx): Promise<UnprovenTx | undefined> {
@@ -237,7 +238,7 @@ export function CustomUnshieldedWallet<
               Effect.map((result) => (result === undefined ? undefined : resealAs(tx, 'Unproven')(result))),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<UnprovenTx> {
@@ -245,7 +246,7 @@ export function CustomUnshieldedWallet<
         .dispatch({
           [V2Tag]: (v2) => v2.transferTransaction(outputs, ttl).pipe(Effect.map(seal)),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     rotateUtxos(
@@ -259,7 +260,7 @@ export function CustomUnshieldedWallet<
           [V2Tag]: (v2) =>
             v2.rotateUtxos(guaranteedUtxos, fallibleUtxos, nightVerifyingKey, ttl).pipe(Effect.map(seal)),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     initSwap(
@@ -269,7 +270,7 @@ export function CustomUnshieldedWallet<
     ): Promise<UnprovenTx> {
       return this.runtime
         .dispatch({ [V2Tag]: (v2) => v2.initSwap(desiredInputs, desiredOutputs, ttl).pipe(Effect.map(seal)) })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     signUnprovenTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnprovenTx> {
@@ -281,7 +282,7 @@ export function CustomUnshieldedWallet<
               Effect.map(resealAs(transaction, 'Unproven')),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     signUnboundTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnboundTx> {
@@ -293,7 +294,7 @@ export function CustomUnshieldedWallet<
               Effect.map(resealAs(transaction, 'Unbound')),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     revertTransaction(transaction: AnyTx): Promise<void> {
@@ -307,15 +308,17 @@ export function CustomUnshieldedWallet<
               { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertTransaction(unwrapped) },
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void> {
-      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.revertUtxos(utxoIds) }).pipe(Effect.runPromise);
+      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.revertUtxos(utxoIds) }).pipe(runPromiseThrowingFailure);
     }
 
     releaseRestoredPending(coveredIds: ReadonlyArray<UtxoHash>): Promise<void> {
-      return this.runtime.dispatch({ [V2Tag]: (v2) => v2.releaseRestoredPending(coveredIds) }).pipe(Effect.runPromise);
+      return this.runtime
+        .dispatch({ [V2Tag]: (v2) => v2.releaseRestoredPending(coveredIds) })
+        .pipe(runPromiseThrowingFailure);
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<UnshieldedWalletState<TSerialized>> {
