@@ -25,12 +25,14 @@ import {
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import {
   type DefaultDustConfiguration,
+  type DustKeysByEpoch,
   type DustWalletAPI,
   type DustWalletState,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { type CoinsAndBalances as DustCoinsAndBalances } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
   type DefaultShieldedConfiguration,
+  type ShieldedKeysByEpoch,
   type ShieldedWalletAPI,
   type ShieldedWalletState,
   ShieldedSectionSchema,
@@ -481,7 +483,9 @@ export type FacadeStartOptions = Readonly<{
    * Leaves the dust wallet unstarted in the background, to be driven a step at a time with `doSync`.
    *
    * @remarks
-   *   Requires a dust wallet built with the projections sync service; see `makeEventLessSyncService`.
+   *   Requires a dust wallet built with the projections sync service; see `makeEventLessSyncService`. That service needs
+   *   ledger-v9, so a dust wallet still below `forks.v9` cannot be stepped, and `doSync` rejects for it: start such a
+   *   wallet without this option, so it synchronizes in the background.
    */
   manualSync?: boolean;
 }>;
@@ -490,8 +494,9 @@ export type FacadeStartOptions = Readonly<{
  * The ledger-v9 key objects the wallets' own `start` takes, from whichever material the caller supplied.
  *
  * @remarks
- *   Only the ledger-v9 side is needed here: a wallet built from seeds or from both versions' keys already holds what its
- *   V1 variant needs, retained when it was built. What `start` supplies is the side the wallet's own API speaks.
+ *   What a wallet composed for ledger-v9 alone is started from. A wallet composed for both ledger versions is started
+ *   from the material itself instead (see {@link startsOnEitherSide}), because these keys answer for its V2 variant
+ *   only.
  */
 const v9KeysOf = (
   material: FacadeStartMaterial,
@@ -502,6 +507,44 @@ const v9KeysOf = (
         shielded: ledgerV9.ZswapSecretKeys.fromSeed(material.shielded),
         dust: ledgerV9.DustSecretKey.fromSeed(material.dust),
       };
+
+/** A wallet that can be started from material answering for either side of a protocol boundary. */
+type StartsOnEitherSide<TKeysByEpoch> = Readonly<{
+  startWithSeed: (seed: Uint8Array) => Promise<void>;
+  startWithKeys: (keys: TKeysByEpoch) => Promise<void>;
+}>;
+
+/**
+ * Whether a wallet can be started from material answering for either side of a protocol boundary.
+ *
+ * @remarks
+ *   The forking compositions — `ShieldedWallet` and `DustWallet` — can, and must be: a snapshot carries no key material,
+ *   so one restored below the boundary resumes on its V1 variant holding nothing that variant can use, and only the
+ *   seed or the ledger-v8 keys can start it there. A wallet composed for one ledger version alone cannot, and needs
+ *   nothing beyond that version's keys.
+ */
+const startsOnEitherSide = <TKeysByEpoch>(wallet: object): wallet is StartsOnEitherSide<TKeysByEpoch> =>
+  'startWithSeed' in wallet && 'startWithKeys' in wallet;
+
+/** Starts the shielded wallet from the facade's material, handing a forking wallet both sides of it. */
+const startShielded = (wallet: ShieldedWalletAPI, material: FacadeStartMaterial): Promise<void> => {
+  if (!startsOnEitherSide<ShieldedKeysByEpoch>(wallet)) {
+    return wallet.start(v9KeysOf(material).shielded);
+  }
+  return 'v9' in material
+    ? wallet.startWithKeys({ v8: material.v8.shielded, v9: material.v9.shielded })
+    : wallet.startWithSeed(material.shielded);
+};
+
+/** Starts the dust wallet from the facade's material, handing a forking wallet both sides of it. */
+const startDust = (wallet: DustWalletAPI, material: FacadeStartMaterial): Promise<void> => {
+  if (!startsOnEitherSide<DustKeysByEpoch>(wallet)) {
+    return wallet.start(v9KeysOf(material).dust);
+  }
+  return 'v9' in material
+    ? wallet.startWithKeys({ v8: material.v8.dust, v9: material.v9.dust })
+    : wallet.startWithSeed(material.dust);
+};
 
 /** Which of the three wallets a reading is about. */
 export type WalletKind = keyof WalletProtocolVersions;
@@ -2332,11 +2375,10 @@ export class WalletFacade {
    *   `makeEventLessSyncService`).
    */
   async start(material: FacadeStartMaterial, options: FacadeStartOptions = {}): Promise<void> {
-    const keys = v9KeysOf(material);
     await Promise.all([
-      this.shielded.start(keys.shielded),
+      startShielded(this.shielded, material),
       this.unshielded.start(),
-      !options.manualSync ? this.dust.start(keys.dust) : undefined,
+      !options.manualSync ? startDust(this.dust, material) : undefined,
       this.pendingTransactionsService.start(),
     ]);
   }
@@ -2346,6 +2388,9 @@ export class WalletFacade {
    * the shielded and unshielded wallets keep syncing in the background via {@link start}.
    *
    * @param material The same material {@link start} was given.
+   * @returns Nothing; resolves once the pass has finished.
+   * @throws The dust wallet's `ManualSyncUnsupportedError` while it is below `forks.v9`: manual sync steps the
+   *   projections sync service, which only ledger-v9 supports.
    */
   async doSync(material: FacadeStartMaterial): Promise<void> {
     await this.dust.stepSync(v9KeysOf(material).dust);

@@ -239,18 +239,9 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     );
   }
 
-  /**
-   * Runs one sync pass to completion, rather than forking it into the background.
-   *
-   * @remarks
-   *   Only meaningful with a sync service whose stream terminates. The indexer-event service this variant defaults to is
-   *   an open subscription, so use {@link startSyncInBackground} with it; this entry point exists for a finite service
-   *   supplied through the builder's `withSync`. It shares {@link startSync}'s lock, so a pass started while a
-   *   background sync is running returns immediately without touching the state.
-   */
-  sync(startAux: TStartAux): Effect.Effect<void, WalletError> {
-    return this.startSync(startAux).pipe(Stream.runScoped(Sink.drain), Effect.scoped);
-  }
+  // No `sync`, unlike the V2 variant: a step by hand is one pass of a sync service that ends, and the only such service
+  // a dust wallet has is the projections one, which no published ledger-v8 can support. This variant synchronizes in
+  // the background only.
 
   startSync(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
     return pipe(

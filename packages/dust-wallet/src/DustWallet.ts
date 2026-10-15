@@ -52,7 +52,7 @@ import {
   type WalletRuntimeError,
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Clock, EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
-import { Duration, Effect, Either, Match, Option, Ref, type Scope, pipe } from 'effect';
+import { Data, Duration, Effect, Either, Match, Option, Ref, type Scope, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
 import {
@@ -99,6 +99,21 @@ type TransactingError =
   | StartMaterial.MissingStartAuxError
   | ProtocolVersionMismatchError
   | Signatures.UnsupportedSignatureKindError;
+
+/**
+ * Raised when a dust wallet on its V1 variant is asked to synchronize one step at a time.
+ *
+ * @remarks
+ *   A step is one pass of a sync service that ends, and the only such service a dust wallet ships is the projections one,
+ *   which rests on `DustLocalState` members only ledger-v9 has. The V1 variant runs ledger-v8, so below `forks.v9` a
+ *   dust wallet synchronizes in the background once started, and can be stepped only from the boundary on.
+ */
+export class ManualSyncUnsupportedError extends Data.TaggedError(
+  '@midnightntwrk/wallet-sdk-dust-wallet/DustWallet/ManualSyncUnsupportedError',
+)<{
+  readonly message: string;
+  readonly variantTag: symbol;
+}> {}
 
 /** The V1 variant a forking dust wallet registers: the one that reads the chain before the boundary. */
 export type V1DustVariant<TSyncUpdate> = V1Variant<
@@ -721,20 +736,6 @@ export function CustomForkingDustWallet<
       );
     }
 
-    /** One synchronization step on a variant, with key material it can use. */
-    #stepSyncOn<TStartAux, TError>(
-      running: { sync: (aux: TStartAux) => Effect.Effect<void, TError> },
-      keysFor: (retained: RetainedKeys) => Either.Either<TStartAux, StartMaterial.MissingStartAuxError>,
-    ): Effect.Effect<void, TError | StartMaterial.MissingStartAuxError> {
-      return Ref.get(this.#retainedKeys).pipe(
-        Effect.flatMap((retained) =>
-          Option.isNone(retained.v8) && Option.isNone(retained.v9)
-            ? Effect.void
-            : EitherOps.toEffect(keysFor(retained)).pipe(Effect.flatMap((aux) => running.sync(aux))),
-        ),
-      );
-    }
-
     /**
      * Whether the activation watcher has been registered.
      *
@@ -843,14 +844,23 @@ export function CustomForkingDustWallet<
      * Runs one synchronization step on whichever variant is current.
      *
      * @remarks
-     *   Available on both sides of the boundary: the V1 variant is stepped with a key derived from what the wallet
-     *   retained, exactly as background synchronization is.
+     *   From `forks.v9` only. The V1 variant has no step to take, whatever keys the wallet holds, and refuses with a
+     *   {@link ManualSyncUnsupportedError}: below the boundary the wallet synchronizes in the background once started.
      * @param secretKey The ledger-v9's dust secret key.
      */
     stepSync(secretKey: ledgerV9.DustSecretKey): Promise<void> {
       return this.runtime
-        .dispatch<void, WalletError | StartMaterial.MissingStartAuxError>({
-          [V1Tag]: (v1) => this.#stepSyncOn(v1, v8Aux),
+        .dispatch<void, WalletError | ManualSyncUnsupportedError>({
+          [V1Tag]: () =>
+            Effect.fail(
+              new ManualSyncUnsupportedError({
+                message:
+                  `This wallet is on the variant ${String(V1Tag)}, which runs ledger-v8 and cannot be synchronized a ` +
+                  `step at a time: stepping needs the projections sync service, which only ledger-v9 supports. Below ` +
+                  `forks.v9, start the wallet and let it synchronize in the background.`,
+                variantTag: V1Tag,
+              }),
+            ),
           [V2Tag]: (v2) => v2.sync(secretKey),
         })
         .pipe(Effect.runPromise);
