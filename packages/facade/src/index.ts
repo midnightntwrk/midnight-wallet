@@ -483,7 +483,9 @@ export type FacadeStartOptions = Readonly<{
    * Leaves the dust wallet unstarted in the background, to be driven a step at a time with `doSync`.
    *
    * @remarks
-   *   Requires a dust wallet built with the projections sync service; see `makeEventLessSyncService`.
+   *   Requires a dust wallet built with the projections sync service; see `makeEventLessSyncService`. That service needs
+   *   ledger-v9, so a dust wallet still below `forks.v9` cannot be stepped, and `doSync` rejects for it: start such a
+   *   wallet without this option, so it synchronizes in the background.
    */
   manualSync?: boolean;
 }>;
@@ -2386,6 +2388,9 @@ export class WalletFacade {
    * the shielded and unshielded wallets keep syncing in the background via {@link start}.
    *
    * @param material The same material {@link start} was given.
+   * @returns Nothing; resolves once the pass has finished.
+   * @throws The dust wallet's `ManualSyncUnsupportedError` while it is below `forks.v9`: manual sync steps the
+   *   projections sync service, which only ledger-v9 supports.
    */
   async doSync(material: FacadeStartMaterial): Promise<void> {
     await this.dust.stepSync(v9KeysOf(material).dust);
