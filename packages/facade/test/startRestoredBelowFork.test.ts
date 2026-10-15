@@ -22,6 +22,9 @@
  *   ledger-v9's, and `FacadeKeysByEpoch` carries them outright — so a facade started from either must resume these
  *   wallets where their snapshots left them, rather than fail for want of keys the caller handed over.
  *
+ *   Manual synchronization is the exception: it steps the dust wallet's projections sync, which only ledger-v9 has, so a
+ *   facade asked to step a dust wallet still on its V1 variant must refuse rather than resolve having read nothing.
+ *
  *   The shielded and dust wallets are the shipped forking compositions, each variant syncing from a simulated chain of
  *   its own ledger version; the chain they read is a ledger-v8 one that never reaches the boundary.
  */
@@ -40,7 +43,7 @@ import * as ShieldedV2 from '@midnightntwrk/wallet-sdk-shielded/v2';
 import { CustomForkingUnshieldedWallet, createKeystore, PublicKey } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import * as UnshieldedV1 from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
 import * as UnshieldedV2 from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
-import { Effect } from 'effect';
+import { Cause, Effect, Option, Runtime } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { type FacadeStartMaterial, type WalletEntry, WalletFacade } from '../src/index.js';
@@ -244,6 +247,23 @@ const facadeOverRestoredWallets = (seeds: WalletSeeds) =>
     );
   });
 
+/**
+ * The typed failure a facade call rejected with, or `None` if it resolved.
+ *
+ * @remarks
+ *   The facade passes the wallets' rejections through, and those carry the effect cause rather than the error itself.
+ */
+const failureOf = (call: Promise<unknown>): Effect.Effect<Option.Option<unknown>> =>
+  Effect.promise(() =>
+    call.then(
+      () => Option.none<unknown>(),
+      (rejection: unknown) =>
+        Runtime.isFiberFailure(rejection)
+          ? Cause.failureOption(rejection[Runtime.FiberFailureCauseId])
+          : Option.some(rejection),
+    ),
+  );
+
 /** Starts the facade from `material`, and waits until all three wallets have caught up with the ledger-v8 chain. */
 const startAndSync = (facade: WalletFacade, material: FacadeStartMaterial) =>
   Effect.gen(function* () {
@@ -279,5 +299,21 @@ describe('A facade started over wallets restored below forks.v9', () => {
       });
 
       expect(synced.activeProtocolVersion).toBeLessThan(forkVersion);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+describe('A facade synchronized by hand over wallets restored below forks.v9', () => {
+  const seeds = WalletSeeds.fromMasterSeed(MASTER_SEED);
+
+  it('refuses to step the dust wallet, whose V1 variant only synchronizes in the background', () =>
+    Effect.gen(function* () {
+      const facade = yield* facadeOverRestoredWallets(seeds);
+      yield* Effect.promise(() => facade.start(seeds, { manualSync: true }));
+
+      const failure = yield* failureOf(facade.doSync(seeds));
+
+      expect(Option.getOrUndefined(failure)).toMatchObject({
+        _tag: '@midnightntwrk/wallet-sdk-dust-wallet/DustWallet/ManualSyncUnsupportedError',
+      });
     }).pipe(Effect.scoped, Effect.runPromise));
 });
