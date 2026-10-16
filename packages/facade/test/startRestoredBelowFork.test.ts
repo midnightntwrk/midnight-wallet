@@ -22,8 +22,9 @@
  *   ledger-v9's, and `FacadeKeysByEpoch` carries them outright — so a facade started from either must resume these
  *   wallets where their snapshots left them, rather than fail for want of keys the caller handed over.
  *
- *   Manual synchronization is the exception: it steps the dust wallet's projections sync, which only ledger-v9 has, so a
- *   facade asked to step a dust wallet still on its V1 variant must refuse rather than resolve having read nothing.
+ *   Manual synchronization is the exception: it steps the dust wallet's projections sync, which only ledger-v9 has. A
+ *   facade asked for it while the dust wallet is below `forks.v9` refuses — in `start()` before starting anything, so
+ *   that starting again without it is a first start, and in `doSync()` — rather than leave a wallet nothing will move.
  *
  *   The shielded and dust wallets are the shipped forking compositions, each variant syncing from a simulated chain of
  *   its own ledger version; the chain they read is a ledger-v8 one that never reaches the boundary.
@@ -33,7 +34,7 @@ import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, NoOpTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Simulator, V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { CustomForkingDustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { CustomForkingDustWallet, ManualSyncUnsupportedError } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import * as DustV1 from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import * as DustV2 from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import { WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
@@ -43,7 +44,7 @@ import * as ShieldedV2 from '@midnightntwrk/wallet-sdk-shielded/v2';
 import { CustomForkingUnshieldedWallet, createKeystore, PublicKey } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import * as UnshieldedV1 from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
 import * as UnshieldedV2 from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
-import { Cause, Effect, Option, Runtime } from 'effect';
+import { Effect } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { type FacadeStartMaterial, type WalletEntry, WalletFacade } from '../src/index.js';
@@ -67,7 +68,10 @@ const v9DustParameters = ledgerV9.LedgerParameters.initialParameters().dust;
  * A facade whose shielded and dust wallets were restored from snapshots their own V1 variants wrote, and so hold no key
  * material until the facade starts them.
  */
-const facadeOverRestoredWallets = (seeds: WalletSeeds) =>
+const facadeOverRestoredWallets = (
+  seeds: WalletSeeds,
+  pendingTransactions: SilentPendingTransactions = new SilentPendingTransactions(),
+) =>
   Effect.gen(function* () {
     const v8Chain = yield* V8.Simulator.init({
       networkId: NETWORK_ID,
@@ -240,29 +244,35 @@ const facadeOverRestoredWallets = (seeds: WalletSeeds) =>
           unshielded: () => unshielded,
           dust: () => dust,
           provingService: () => createV8MockProvingService(),
-          pendingTransactionsService: () => new SilentPendingTransactions(),
+          pendingTransactionsService: () => pendingTransactions,
         }),
       ),
       (facade) => Effect.promise(() => facade.stop()),
     );
   });
 
-/**
- * The typed failure a facade call rejected with, or `None` if it resolved.
- *
- * @remarks
- *   The facade passes the wallets' rejections through, and those carry the effect cause rather than the error itself.
- */
-const failureOf = (call: Promise<unknown>): Effect.Effect<Option.Option<unknown>> =>
+/** A pending service that records each time it is started, so a test can tell a first start from a second. */
+class StartRecordingPendingTransactions extends SilentPendingTransactions {
+  readonly starts: null[] = [];
+
+  override start(): Promise<void> {
+    this.starts.push(null);
+    return Promise.resolve();
+  }
+}
+
+/** What a facade call rejected with, exactly as a caller catches it, or `undefined` if it resolved. */
+const rejectionOf = (call: Promise<unknown>): Effect.Effect<unknown> =>
   Effect.promise(() =>
     call.then(
-      () => Option.none<unknown>(),
-      (rejection: unknown) =>
-        Runtime.isFiberFailure(rejection)
-          ? Cause.failureOption(rejection[Runtime.FiberFailureCauseId])
-          : Option.some(rejection),
+      () => undefined,
+      (rejection: unknown) => rejection,
     ),
   );
+
+/** The protocol version the facade reads off its dust wallet before anything has been started. */
+const dustVersionOf = (facade: WalletFacade) =>
+  Effect.promise(() => rx.firstValueFrom(facade.state())).pipe(Effect.map((state) => state.protocolVersion.dust));
 
 /** Starts the facade from `material`, and waits until all three wallets have caught up with the ledger-v8 chain. */
 const startAndSync = (facade: WalletFacade, material: FacadeStartMaterial) =>
@@ -302,18 +312,43 @@ describe('A facade started over wallets restored below forks.v9', () => {
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
-describe('A facade synchronized by hand over wallets restored below forks.v9', () => {
+describe('A facade asked to synchronize by hand over wallets restored below forks.v9', () => {
   const seeds = WalletSeeds.fromMasterSeed(MASTER_SEED);
 
-  it('refuses to step the dust wallet, whose V1 variant only synchronizes in the background', () =>
+  it('refuses manualSync in start(), before starting anything', () =>
+    Effect.gen(function* () {
+      const pendingTransactions = new StartRecordingPendingTransactions();
+      const facade = yield* facadeOverRestoredWallets(seeds, pendingTransactions);
+      const dustVersion = yield* dustVersionOf(facade);
+      expect(dustVersion).toBeLessThan(forkVersion);
+
+      const rejection = yield* rejectionOf(facade.start(seeds, { manualSync: true }));
+
+      expect(rejection).toBeInstanceOf(ManualSyncUnsupportedError);
+      expect(rejection).toMatchObject({ protocolVersion: dustVersion });
+      expect(pendingTransactions.starts).toHaveLength(0);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('resumes them in the background when started again without it, each service started once', () =>
+    Effect.gen(function* () {
+      const pendingTransactions = new StartRecordingPendingTransactions();
+      const facade = yield* facadeOverRestoredWallets(seeds, pendingTransactions);
+      yield* rejectionOf(facade.start(seeds, { manualSync: true }));
+
+      const synced = yield* startAndSync(facade, seeds);
+
+      expect(synced.activeProtocolVersion).toBeLessThan(forkVersion);
+      expect(pendingTransactions.starts).toHaveLength(1);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('refuses doSync with the error itself, not a wrapper around it', () =>
     Effect.gen(function* () {
       const facade = yield* facadeOverRestoredWallets(seeds);
-      yield* Effect.promise(() => facade.start(seeds, { manualSync: true }));
+      const dustVersion = yield* dustVersionOf(facade);
 
-      const failure = yield* failureOf(facade.doSync(seeds));
+      const rejection = yield* rejectionOf(facade.doSync(seeds));
 
-      expect(Option.getOrUndefined(failure)).toMatchObject({
-        _tag: '@midnightntwrk/wallet-sdk-dust-wallet/DustWallet/ManualSyncUnsupportedError',
-      });
+      expect(rejection).toBeInstanceOf(ManualSyncUnsupportedError);
+      expect(rejection).toMatchObject({ protocolVersion: dustVersion });
     }).pipe(Effect.scoped, Effect.runPromise));
 });

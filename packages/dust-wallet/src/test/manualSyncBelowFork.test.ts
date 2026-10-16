@@ -18,26 +18,25 @@
  *   A step is one pass of a sync service that ends, and the only such service a dust wallet ships is the projections one,
  *   which rests on `DustLocalState` members only ledger-v9 has. The V1 variant runs ledger-v8, so it has no step to
  *   take: below `forks.v9` a dust wallet synchronizes in the background, once started. Asked to step there, it says so
- *   rather than resolving having read nothing.
+ *   rather than resolving having read nothing, and it rejects with the error itself, naming the protocol version it is
+ *   at, so a caller can recognise it with `instanceof`.
  *
  *   The ledger-v8 source here ends at once, so a step that wrongly went ahead would resolve rather than hang.
  */
 
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Cause, Effect, Option, Runtime, Stream } from 'effect';
+import { Effect, Option, Stream, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
+import { ManualSyncUnsupportedError } from '../DustWallet.js';
 import { V1Tag } from '../v1/RunningV1Variant.js';
 import { dustParameters as v8DustParameters, dustSeed } from '../v1/test/dustEvents.js';
 import { dustParameters as v9DustParameters } from '../v2/test/dustEvents.js';
-import { type ForkWallet, makeForkWallet } from './forkHarness.js';
+import { type ForkWallet, type ForkedState, makeForkWallet } from './forkHarness.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
 /** Where the wallet registers its V2 variant. */
 const forkVersion = ProtocolVersion.ProtocolVersion(7n);
-
-/** The tag of the error a step on the V1 variant is refused with. */
-const manualSyncUnsupported = '@midnightntwrk/wallet-sdk-dust-wallet/DustWallet/ManualSyncUnsupportedError';
 
 /** A forking dust wallet built from a seed, on the V1 variant a wallet with no history is on, and never started. */
 const walletBelowTheBoundary: Effect.Effect<ForkWallet> = makeForkWallet({
@@ -55,21 +54,16 @@ const walletBelowTheBoundary: Effect.Effect<ForkWallet> = makeForkWallet({
 const runningTag = (wallet: ForkWallet['dust']): Effect.Effect<string | symbol> =>
   wallet.runtime.currentVariant.pipe(Effect.map((current) => current.runningVariant.__polyTag__));
 
-/**
- * The typed failure a wallet call rejected with, or `None` if it resolved.
- *
- * @remarks
- *   The wallet's API is promise-shaped and its failures are effect failures, so a rejection carries the cause rather than
- *   the error itself.
- */
-const failureOf = (call: Promise<unknown>): Effect.Effect<Option.Option<unknown>> =>
+/** The state a wallet holds now, read off its runtime. */
+const currentState = (wallet: ForkWallet['dust']): Effect.Effect<ForkedState, unknown> =>
+  pipe(wallet.runtime.stateChanges, Stream.take(1), Stream.runHead, Effect.map(Option.getOrThrow));
+
+/** What a wallet call rejected with, exactly as a caller catches it, or `undefined` if it resolved. */
+const rejectionOf = (call: Promise<unknown>): Effect.Effect<unknown> =>
   Effect.promise(() =>
     call.then(
-      () => Option.none<unknown>(),
-      (rejection: unknown) =>
-        Runtime.isFiberFailure(rejection)
-          ? Cause.failureOption(rejection[Runtime.FiberFailureCauseId])
-          : Option.some(rejection),
+      () => undefined,
+      (rejection: unknown) => rejection,
     ),
   );
 
@@ -83,10 +77,13 @@ describe('a forking dust wallet stepped by hand on its V1 variant', () => {
       const restored = writer.walletClass.restore(snapshot);
       yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
       expect(yield* runningTag(restored)).toBe(V1Tag);
+      const { protocolVersion } = (yield* currentState(restored)).state;
+      expect(protocolVersion).toBeLessThan(forkVersion);
 
-      const failure = yield* failureOf(restored.stepSync(writer.keys.v9));
+      const rejection = yield* rejectionOf(restored.stepSync(writer.keys.v9));
 
-      expect(Option.getOrUndefined(failure)).toMatchObject({ _tag: manualSyncUnsupported, variantTag: V1Tag });
+      expect(rejection).toBeInstanceOf(ManualSyncUnsupportedError);
+      expect(rejection).toMatchObject({ protocolVersion });
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('should refuse a wallet that holds both ledger versions’ keys, because the refusal is about the variant and not the keys', async () =>
@@ -94,9 +91,12 @@ describe('a forking dust wallet stepped by hand on its V1 variant', () => {
       const wallet = yield* walletBelowTheBoundary;
       yield* Effect.addFinalizer(() => wallet.stop);
       expect(yield* wallet.activeTag).toBe(V1Tag);
+      const { protocolVersion } = (yield* currentState(wallet.dust)).state;
+      expect(protocolVersion).toBeLessThan(forkVersion);
 
-      const failure = yield* failureOf(wallet.dust.stepSync(wallet.keys.v9));
+      const rejection = yield* rejectionOf(wallet.dust.stepSync(wallet.keys.v9));
 
-      expect(Option.getOrUndefined(failure)).toMatchObject({ _tag: manualSyncUnsupported, variantTag: V1Tag });
+      expect(rejection).toBeInstanceOf(ManualSyncUnsupportedError);
+      expect(rejection).toMatchObject({ protocolVersion });
     }).pipe(Effect.scoped, Effect.runPromise));
 });
