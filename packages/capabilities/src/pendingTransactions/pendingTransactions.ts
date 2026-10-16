@@ -171,8 +171,12 @@ export type RejectedTransactionItem<TTransaction> = PendingTransactionsItem<TTra
 export type Reservation = Readonly<{
   identifiers: readonly string[];
   intentHashes: readonly string[];
-  /** Ids of the coins this transaction reserved, per wallet, so each wallet can release its own. */
-  inputs: Readonly<{ unshielded: readonly string[] }>;
+  /**
+   * Ids of the coins this transaction reserved, per wallet: unshielded coins as `intentHash#outputNo`, shielded coins
+   * by nullifier. The shielded wallet releases its own bookings once they expire, so its ids here are a record of who
+   * holds the coins, not a release instruction.
+   */
+  inputs: Readonly<{ unshielded: readonly string[]; shielded?: readonly string[] }>;
   /** The transaction's TTL: from this instant the ledger rejects it, so the reservation cannot still be valid. */
   ttl: Date;
   createdAt: DateTime.Utc;
@@ -529,7 +533,12 @@ const hasEpochEnded = <TTransaction>(
 const ReservationSchema = Schema.Struct({
   identifiers: Schema.Array(Schema.String),
   intentHashes: Schema.Array(Schema.String),
-  inputs: Schema.Struct({ unshielded: Schema.Array(Schema.String) }),
+  // `shielded` is optional: it arrived after the format was in the field, and is absent when nothing shielded was
+  // booked, so a reservation that books only unshielded coins keeps the bytes it had.
+  inputs: Schema.Struct({
+    unshielded: Schema.Array(Schema.String),
+    shielded: Schema.optionalWith(Schema.Array(Schema.String), { exact: true }),
+  }),
   ttl: Schema.Date,
   createdAt: Schema.DateTimeUtc,
   expired: Schema.Boolean,

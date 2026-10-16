@@ -35,6 +35,7 @@ export const shieldedAt = (state: ShieldedWalletState, version: ProtocolVersion.
     totalCoins: () => state.totalCoins,
     availableCoins: () => state.availableCoins,
     pendingCoins: () => state.pendingCoins,
+    reservedCoins: () => state.reservedCoins,
     coinPublicKey: () => state.coinPublicKey,
     encryptionPublicKey: () => state.encryptionPublicKey,
     address: () => state.address,
