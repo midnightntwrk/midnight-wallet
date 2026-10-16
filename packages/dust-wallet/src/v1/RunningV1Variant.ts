@@ -239,9 +239,9 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     );
   }
 
-  // No `sync`, unlike the V2 variant: a step by hand is one pass of a sync service that ends, and the only such service
-  // a dust wallet has is the projections one, which no published ledger-v8 can support. This variant synchronizes in
-  // the background only.
+  // No `sync`, unlike the V2 variant: a step runs one pass and waits for it to end, and the only dust sync service the
+  // SDK ships whose passes end is the projections one, which needs ledger-v9. This variant synchronizes in the
+  // background only, whatever service it was built with; `DustWallet.stepSync` refuses on it.
 
   startSync(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
     return pipe(
