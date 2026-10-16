@@ -28,6 +28,7 @@ import {
   type DustKeysByEpoch,
   type DustWalletAPI,
   type DustWalletState,
+  ManualSyncUnsupportedError,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { type CoinsAndBalances as DustCoinsAndBalances } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
@@ -484,8 +485,8 @@ export type FacadeStartOptions = Readonly<{
    *
    * @remarks
    *   Requires a dust wallet built with the projections sync service; see `makeEventLessSyncService`. That service needs
-   *   ledger-v9, so a dust wallet still below `forks.v9` cannot be stepped, and `doSync` rejects for it: start such a
-   *   wallet without this option, so it synchronizes in the background.
+   *   ledger-v9, so while the dust wallet is below `forks.v9` `start` refuses this option, before starting anything:
+   *   start without it there, and the dust wallet synchronizes in the background.
    */
   manualSync?: boolean;
 }>;
@@ -2373,8 +2374,13 @@ export class WalletFacade {
    * @param options `manualSync` leaves the dust wallet unstarted in the background; drive it explicitly with
    *   {@link doSync} instead (requires a dust wallet built with the projections sync service, see
    *   `makeEventLessSyncService`).
+   * @throws `ManualSyncUnsupportedError` When `manualSync` is asked for while the dust wallet is below `forks.v9`.
+   *   Nothing has been started then, so starting again without it is a first start.
    */
   async start(material: FacadeStartMaterial, options: FacadeStartOptions = {}): Promise<void> {
+    if (options.manualSync) {
+      await this.#refuseManualSyncBelowFork();
+    }
     await Promise.all([
       startShielded(this.shielded, material),
       this.unshielded.start(),
@@ -2384,13 +2390,33 @@ export class WalletFacade {
   }
 
   /**
+   * Refuses manual synchronization while the dust wallet is below `forks.v9`.
+   *
+   * @remarks
+   *   There the dust wallet is on its V1 variant, which cannot be stepped, so a dust wallet left to `doSync` would never
+   *   move. Asked before any wallet is started, so a refusal leaves the facade exactly as it was.
+   */
+  async #refuseManualSyncBelowFork(): Promise<void> {
+    const { protocolVersion } = await firstValueFrom(this.dust.state);
+    if (protocolVersion < this.#forkVersion) {
+      throw new ManualSyncUnsupportedError({
+        message:
+          `The dust wallet is at protocol version ${protocolVersion}, below forks.v9 (${this.#forkVersion}), where it ` +
+          `cannot be synchronized by hand: manual sync needs the projections sync service, which needs ledger-v9. ` +
+          `Start the facade without manualSync, and the dust wallet synchronizes in the background.`,
+        protocolVersion,
+      });
+    }
+  }
+
+  /**
    * Runs a single dust synchronization pass and resolves when it completes. Only the dust wallet supports manual sync;
    * the shielded and unshielded wallets keep syncing in the background via {@link start}.
    *
    * @param material The same material {@link start} was given.
    * @returns Nothing; resolves once the pass has finished.
-   * @throws The dust wallet's `ManualSyncUnsupportedError` while it is below `forks.v9`: manual sync steps the
-   *   projections sync service, which only ledger-v9 supports.
+   * @throws `ManualSyncUnsupportedError` While the dust wallet is below `forks.v9`: manual sync steps the projections
+   *   sync service, which only ledger-v9 supports.
    */
   async doSync(material: FacadeStartMaterial): Promise<void> {
     await this.dust.stepSync(v9KeysOf(material).dust);
