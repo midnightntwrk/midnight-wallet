@@ -28,7 +28,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -70,7 +70,7 @@ jobs:
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-${{ github.run_attempt }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: build-artifacts-${{ github.run_id }}
@@ -95,7 +95,7 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.nvmrc'
           cache: 'yarn'
@@ -117,7 +117,7 @@ jobs:
       # and nothing in this job runs turbo, so — as in e2e-smoke — there is no `^dist` rebuild to paper over a wrong
       # path. It would surface as ERR_MODULE_NOT_FOUND in the verify step.
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-artifacts-${{ github.run_id }}
           path: packages
@@ -191,7 +191,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -232,7 +232,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-artifacts-${{ github.run_id }}
           path: .
@@ -278,7 +278,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -311,7 +311,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-artifacts-${{ github.run_id }}
           path: .
@@ -326,7 +326,7 @@ jobs:
       # mis-groups under an unrelated suite ("Check for Changeset") — same root
       # cause as the integration reporter, see #520.
       - name: Publish Unit Test Report
-        uses: mikepenz/action-junit-report@a9170d5795813c01ab4901ffb045b52bab4ab09d # v6
+        uses: mikepenz/action-junit-report@b7b80d7ac5b1da46d6aaff9fb57ad50d8453bcb3 # v6
         if: success() || failure()
         with:
           annotate_only: true
@@ -362,7 +362,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -406,7 +406,7 @@ jobs:
       # packages/<pkg>/dist. Unlike test:unit/test:integration, test-undeployed
       # has no `^dist` dependency and never rebuilds, so it relies on this dist.
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-artifacts-${{ github.run_id }}
           path: packages
@@ -481,7 +481,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -523,7 +523,7 @@ jobs:
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-${{ github.run_attempt }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: build-publish-artifacts-${{ github.run_id }}
@@ -540,7 +540,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -580,7 +580,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: build-publish-artifacts-${{ github.run_id }}
           path: .
