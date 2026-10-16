@@ -218,7 +218,7 @@ export type ShieldedWalletAPI<
    *
    * @param tx The transaction to balance.
    * @param ttl The transaction's TTL. It caps how long the coins it spends stay booked, since no spend can be included
-   *   after it; without it the booking lasts the ledger's default `global_ttl`.
+   *   after it; without it the booking lasts mainnet's `global_ttl`, 14 days.
    * @returns The balancing transaction, or nothing when none is needed.
    */
   // we can balance bound and unbound txs
@@ -233,7 +233,7 @@ export type ShieldedWalletAPI<
    *
    * @param outputs The payments to make.
    * @param ttl The transaction's TTL. It caps how long the coins it spends stay booked, since no spend can be included
-   *   after it; without it the booking lasts the ledger's default `global_ttl`.
+   *   after it; without it the booking lasts mainnet's `global_ttl`, 14 days.
    * @returns The unproven transfer.
    */
   transferTransaction(outputs: readonly TokenTransfer[], ttl?: Date): Promise<UnprovenTx>;
@@ -248,7 +248,7 @@ export type ShieldedWalletAPI<
    * @param desiredInputs What the wallet offers, by token type.
    * @param desiredOutputs What the wallet wants to receive.
    * @param ttl The transaction's TTL. It caps how long the coins it spends stay booked, since no spend can be included
-   *   after it; without it the booking lasts the ledger's default `global_ttl`.
+   *   after it; without it the booking lasts mainnet's `global_ttl`, 14 days.
    * @returns The unproven swap offer.
    */
   initSwap(

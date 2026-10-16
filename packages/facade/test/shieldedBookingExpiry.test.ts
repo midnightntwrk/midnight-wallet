@@ -48,9 +48,9 @@ const NETWORK_ID = NetworkId.NetworkId.Undeployed;
 const SHIELDED = ledger.shieldedToken().raw;
 const SEED = '0000000000000000000000000000000000000000000000000000000000000001';
 
-/** The ledger's default `global_ttl`, plus a second: past it, no shielded spend built before can still be included. */
-const PAST_A_LIFETIME = 60n * 60n + 1n;
-const LIFETIME_MS = 60 * 60 * 1000;
+/** Mainnet's `global_ttl`, 14 days, plus a second: past it, no shielded spend built before can still be included. */
+const PAST_A_LIFETIME = 14n * 24n * 60n * 60n + 1n;
+const LIFETIME_MS = 14 * 24 * 60 * 60 * 1000;
 /** A TTL well inside a lifetime, so a release at the TTL cannot be mistaken for a release at the lifetime. */
 const TEN_MINUTES_MS = 10 * 60 * 1000;
 const TEN_MINUTES_S = 10n * 60n;
@@ -81,6 +81,8 @@ const fundedFacade = () =>
       Effect.promise(() =>
         on.transferTransaction(
           [{ type: 'shielded', outputs: [{ type: SHIELDED, receiverAddress, amount: tokenValue(1n) }] }],
+          // The simulator's clock starts at the epoch, so a TTL taken from the machine clock lies far beyond the lifetime:
+          // what releases these coins is the lifetime, never the TTL.
           { ttl: new Date(Date.now() + LIFETIME_MS), payFees: false },
         ),
       );

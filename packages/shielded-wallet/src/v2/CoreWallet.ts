@@ -177,14 +177,16 @@ const releaseSpends = (
   );
 
 /**
- * How long a booking may stand before the wallet releases it: the ledger's default `global_ttl`.
+ * How long a booking may stand when no TTL bounds it: mainnet's `global_ttl`, 14 days.
  *
  * @remarks
- *   A shielded input is valid only while the Merkle root it was proven against is still in the chain's root history, and
- *   that history drops roots older than `global_ttl`, so no shielded spend can be included later than this after it was
- *   built. A transaction's own TTL can only be shorter.
+ *   A shielded input is valid only while the Merkle root it was proven against is still in the chain's root history,
+ *   which drops roots older than `global_ttl`, and the ledger includes no transaction whose TTL lies further ahead than
+ *   `global_ttl`. The parameter is not exposed to the SDK, so this is the longest value a shipped parameter set uses. A
+ *   chain's own `global_ttl` may be shorter (the ledger's built-in parameters say one hour), which only holds a coin
+ *   longer than it needed to be.
  */
-export const BOOKING_LIFETIME_MS = 60 * 60 * 1000;
+export const BOOKING_LIFETIME_MS = 14 * 24 * 60 * 60 * 1000;
 
 /**
  * The instant after which a booking may be released: when its transaction's TTL ends, or a full
@@ -196,7 +198,7 @@ export const BOOKING_LIFETIME_MS = 60 * 60 * 1000;
  *   spend is valid up to and including it.
  * @example
  *   bookingDeadline(new Date('2026-10-08T12:00:00Z'), new Date('2026-10-08T12:10:00Z')); // 12:10
- *   bookingDeadline(new Date('2026-10-08T12:00:00Z'), undefined); // 13:00
+ *   bookingDeadline(new Date('2026-10-08T12:00:00Z'), undefined); // 2026-10-22T12:00:00Z
  *
  * @param seen When sync first saw the booking.
  * @param ttl The TTL of the transaction the coin was booked for, if it had one.

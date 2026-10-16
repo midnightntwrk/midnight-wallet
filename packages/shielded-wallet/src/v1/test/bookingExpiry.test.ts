@@ -21,10 +21,12 @@
  *   used without the facade is covered too.
  *
  *   A shielded spend cannot outlive the chain's `global_ttl`: an input is valid only while the Merkle root it was proven
- *   against is still in the chain's root history, and that history drops roots older than `global_ttl`. So a booking is
- *   given that lifetime, counted from the first sync update that sees it, and released strictly after it has passed —
- *   and only once sync has caught up, because while a replay is running a booked coin may already have been spent by a
- *   transaction the replay has not delivered yet.
+ *   against is still in the chain's root history, which drops roots older than `global_ttl`, and the ledger includes no
+ *   transaction whose TTL lies further ahead than that. The parameter is not exposed to the SDK, so a booking is given
+ *   mainnet's `global_ttl`, 14 days, the longest a shipped parameter set uses, or its transaction's TTL when that ends
+ *   sooner, counted from the first sync update that sees it, and released strictly after it has passed — and only once
+ *   sync has caught up, because while a replay is running a booked coin may already have been spent by a transaction
+ *   the replay has not delivered yet.
  */
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
@@ -50,8 +52,8 @@ const networkId = NetworkId.NetworkId.Undeployed;
 const keys = (): ledger.ZswapSecretKeys => ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 5));
 const activeRange = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion);
 
-/** The ledger's default `global_ttl`: the longest a shielded spend can stay valid after it is built. */
-const LIFETIME_MS = 60 * 60 * 1000;
+/** Mainnet's `global_ttl`, 14 days: the longest a shielded spend can stay valid after it is built. */
+const LIFETIME_MS = 14 * 24 * 60 * 60 * 1000;
 const bookedAt = new Date('2026-10-08T12:00:00Z');
 const after = (ms: number): Date => new Date(bookedAt.getTime() + ms);
 
@@ -140,6 +142,18 @@ const walletWithOneCoin = (): CoreWallet => {
   return caughtUp(CoreWallet.init(new ledger.ZswapLocalState().apply(mine, offer), mine, networkId));
 };
 
+/** A caught-up wallet holding two coins, nothing booked. */
+const walletWithTwoCoins = (): CoreWallet => {
+  const mine = keys();
+  const offerOf = (value: bigint): ledger.ZswapOffer<ledger.PreProof> => {
+    const coin = ledger.createShieldedCoinInfo(ledger.shieldedToken().raw, value);
+    const output = ledger.ZswapOutput.new(coin, 0, mine.coinPublicKey, mine.encryptionPublicKey);
+    return ledger.ZswapOffer.fromOutput<ledger.PreProof>(output, coin.type, coin.value);
+  };
+  const offer = offerOf(500n).merge(offerOf(700n));
+  return caughtUp(CoreWallet.init(new ledger.ZswapLocalState().apply(mine, offer), mine, networkId));
+};
+
 /**
  * Books the wallet's one coin for a transaction, with the transaction's TTL when it has one.
  *
@@ -149,6 +163,14 @@ const book = (wallet: CoreWallet, ttl?: Date): [ledger.UnprovenTransaction, Core
   const [offers, booked] = CoreWallet.spendCoins(wallet, keys(), [[...wallet.state.coins][0]], 0, ttl);
   return [ledger.Transaction.fromParts(networkId, offers[0]), booked];
 };
+
+/** Books `coin` for a transaction of its own, with the transaction's TTL when it has one. */
+const bookCoin = (wallet: CoreWallet, coin: ledger.QualifiedShieldedCoinInfo, ttl?: Date): CoreWallet =>
+  CoreWallet.spendCoins(wallet, keys(), [coin], 0, ttl)[1];
+
+/** The nonces of the coins the wallet could spend right now. */
+const availableNonces = (wallet: CoreWallet): readonly ledger.Nonce[] =>
+  coinsAndBalances.getAvailableCoins(wallet).map(({ coin }) => coin.nonce);
 
 /** A caught-up wallet holding one coin, which it has booked for a transaction it then abandoned. */
 const walletWithAbandonedBooking = (ttl?: Date): CoreWallet => pipe(book(walletWithOneCoin(), ttl), ([, w]) => w);
@@ -172,15 +194,17 @@ describe('A shielded booking nothing ever settles', () => {
 
   it("should be released by the source's heartbeat alone, so a chain with no shielded traffic and no new version still frees the coin", async () => {
     // The chain is already on the wallet's version and never pushes an event, so the source has neither a batch nor a
-    // version to report: its heartbeat is the only update the wallet receives.
-    const released = await runOnQuietChain(walletWithAbandonedBooking(), LIFETIME_MS + 4 * WATCH_INTERVAL_MS);
+    // version to report: its heartbeat is the only update the wallet receives. The test clock starts at the epoch, and a
+    // TTL ten minutes past it keeps the run to a handful of heartbeats rather than a lifetime of them.
+    const ttl = new Date(10 * 60 * 1000);
+    const released = await runOnQuietChain(walletWithAbandonedBooking(ttl), ttl.getTime() + 4 * WATCH_INTERVAL_MS);
 
     expect(isReleased(released)).toBe(true);
   });
 
   it('should be expired against the time its update was stamped with, not the machine clock, so the source alone decides when a booking has lapsed', () => {
-    // `bookedAt` lies days before any machine running this test: a sweep reading the machine's clock would first see
-    // the booking now and still hold it an hour later in update time, while one reading the stamp releases it.
+    // `bookedAt` lies well before any machine running this test: a sweep reading the machine's clock would first see
+    // the booking now and still hold it a lifetime later in update time, while one reading the stamp releases it.
     const seen = syncAt(walletWithAbandonedBooking(), bookedAt);
     expect(isBooked(syncAt(seen, after(LIFETIME_MS)))).toBe(true);
 
@@ -252,7 +276,7 @@ describe('A shielded booking taken for a transaction with a TTL', () => {
     expect(isBooked(syncAt(seen, ttl))).toBe(true);
   });
 
-  it('should keep the full lifetime when the TTL lies beyond it, because no shielded spend outlives the lifetime anyway', () => {
+  it('should keep the full lifetime when the TTL lies beyond it, because the ledger includes no transaction whose TTL lies further ahead than `global_ttl`', () => {
     const seen = syncAt(walletWithAbandonedBooking(after(5 * LIFETIME_MS)), bookedAt);
 
     expect(isBooked(syncAt(seen, after(LIFETIME_MS)))).toBe(true);
@@ -266,6 +290,21 @@ describe('A shielded booking taken for a transaction with a TTL', () => {
     expect(coinsAndBalances.getReservedCoins(syncAt(booked, bookedAt))).toEqual([
       expect.objectContaining({ coin, reservedSince: bookedAt, releasableAfter: ttl }),
     ]);
+  });
+});
+
+describe('Two shielded bookings on different deadlines', () => {
+  it('should release only the booking whose deadline has passed, so a coin booked for a transaction that can still be included stays booked', () => {
+    const wallet = walletWithTwoCoins();
+    const [expiring, lasting] = [...wallet.state.coins];
+    const ttl = after(10 * 60 * 1000);
+    const seen = syncAt(bookCoin(bookCoin(wallet, expiring, ttl), lasting), bookedAt);
+    expect(seen.state.pendingSpends.size).toBe(2);
+    expect(availableNonces(seen)).toEqual([]);
+
+    const swept = syncAt(seen, new Date(ttl.getTime() + 1));
+    expect(swept.state.pendingSpends.size).toBe(1);
+    expect(availableNonces(swept)).toEqual([expiring.nonce]);
   });
 });
 

@@ -414,7 +414,7 @@ const versionWatchIntervalMs = (config: DefaultSyncConfiguration): number =>
  *
  * @remarks
  *   Effect's `Clock`, not the machine's: whatever runs the source decides what time it is, which is also what lets a test
- *   make an hour pass without waiting for one.
+ *   make a booking's deadline pass without waiting for it.
  */
 const stamped = (
   updates: EventsSyncUpdate[],

@@ -26,7 +26,8 @@ What releases an abandoned shielded booking, and how does that stay the only thi
 - A wallet used without the facade has to be covered, as the unshielded wallet's is.
 - One mechanism releases a booking; two on different clocks can free a coin another transaction has since booked.
 - A coin must never be released while a transaction spending it could still be included.
-- No breaking change to any public API, and no new format version.
+- No breaking change to the API a wallet user calls, and no new format version; a custom sync source may be asked for
+  more.
 
 ## Considered Options
 
@@ -43,11 +44,18 @@ does for coins stranded by a fork. The sweep stands whether or not `clearPending
 
 - **Lifetime.** A booking lasts `min(transaction TTL, global_ttl)`. A shielded input is valid only while the Merkle root
   it was proven against is still in the chain's root history, and that history drops roots older than `global_ttl`
-  (`spec/zswap.md`, `apply_input`). So no shielded spend can be included later than `global_ttl` after it was built,
-  whatever TTL its transaction carries, and none after its own TTL either. `global_ttl` is the ledger's default, one
-  hour, since the parameter is not exposed to the SDK, and it is counted from when sync first saw the booking. The
-  wallet records the transaction's TTL itself when it books the coins: both ledger-v8 and ledger-v9 accept a TTL on
-  `spend` but store `undefined` in `pendingSpends`, so it cannot be read back from the ledger.
+  (`spec/zswap.md`, `apply_input`), and the ledger includes a transaction only while its `intent.ttl` is no more than
+  `global_ttl` past the block it lands in. So no shielded spend can be included later than `global_ttl` after it was
+  built, whatever TTL its transaction carries, and none after its own TTL either. The SDK cannot read `global_ttl` from
+  the chain, so the wallet uses 14 days: the `global_ttl` in both parameter sets the ledger ships
+  (`ledger/params/mainnet.json` and `ledger/params/rel-1.1-advisory.json`, 1209600 seconds), not the one hour of the
+  ledger's built-in `INITIAL_PARAMETERS` (`ledger/src/structure.rs`). With the shorter value, a coin released after an
+  hour on mainnet could be booked again while the transaction that first spent it can still land. The lifetime is
+  counted from when sync first saw the booking. The facade passes its own default TTL of one hour to every shielded
+  build, so a booking taken through the facade still lasts at most an hour; only a shielded wallet used directly, with
+  no TTL given, holds a coin for the full 14 days. The wallet records the transaction's TTL itself when it books the
+  coins: both ledger-v8 and ledger-v9 accept a TTL on `spend` but store `undefined` in `pendingSpends`, so it cannot be
+  read back from the ledger.
 - **Clock.** Every sync update carries the time its source stamped it: the system clock on the indexer path, the
   simulator's time on the simulator path. The sync capability expires bookings against that time and reads no clock of
   its own, so the start and the check come off the same clock, with no clock added to any API. A booking restored from a
@@ -73,8 +81,8 @@ does for coins stranded by a fork. The sweep stands whether or not `clearPending
 
 ### Negative Consequences
 
-- A chain configured with a `global_ttl` longer than the default could, in principle, still include a shielded spend
-  after the wallet released its coin. The worst case is that a later transaction spending the same coin fails on its
-  nullifier; no funds are lost.
+- A chain configured with a `global_ttl` longer than 14 days could, in principle, still include a shielded spend after
+  the wallet released its coin. The worst case is that a later transaction spending the same coin fails on its
+  nullifier; no funds are lost. A chain with a shorter `global_ttl` only keeps a coin booked longer than it needs to.
 - A booking is released up to one version-check interval later than its deadline, and its deadline starts up to one
   heartbeat interval after it was taken. Both err towards holding the coin.
