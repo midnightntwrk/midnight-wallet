@@ -311,6 +311,38 @@ describe('A builder that rejects at fee payment', () => {
       expectNothingLeftBooked(before, after, pending);
     }).pipe(Effect.scoped, Effect.runPromise));
 
+  it('should leave the caller’s own Night inputs booked when balancing an unproven transaction in place, because only the coins the wallet added are its booking to release', () =>
+    Effect.gen(function* () {
+      const { facade, keys } = yield* fundedFacade({ withDust: false });
+      // The caller has the unshielded wallet balance its transaction first, so the transaction the builder balances in
+      // place already spends coins the caller booked, and the wallet has none of its own to add.
+      const raw = callersTransaction(keys, { shielded: tokenValue(1n), night: tokenValue(1n) });
+      const tx = yield* Effect.promise(() => facade.unshielded.balanceUnprovenTransaction(unproven(raw))).pipe(
+        Effect.flatMap(Effect.fromNullable),
+      );
+      const callersInputs = [...(raw.intents?.values() ?? [])]
+        .flatMap((intent) => intent.guaranteedUnshieldedOffer?.inputs ?? [])
+        .map((input) => `${input.intentHash}#${input.outputNo}`);
+      expect(callersInputs).not.toEqual([]);
+      const booked: FacadeState = yield* Effect.promise(() =>
+        rx.firstValueFrom(
+          facade
+            .state()
+            .pipe(rx.filter((s) => s.unshielded.availableCoins.every((c) => !callersInputs.includes(utxoKey(c))))),
+        ),
+      );
+
+      const { after, pending } = yield* afterRejection(
+        facade,
+        () => facade.balanceUnprovenTransaction(tx, { ttl: hourFromNow() }),
+        NO_DUST,
+      );
+
+      expect(spendable(after).unshielded.filter((id) => callersInputs.includes(id))).toEqual([]);
+      expect(spendable(after)).toEqual(spendable(booked));
+      expect(pending.reservations).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
   it('should leave every coin balancing an unbound transaction booked spendable and no reservation behind, because the caller has no transaction to revert', () =>
     Effect.gen(function* () {
       const { facade, keys, before } = yield* fundedFacade({ withDust: false });

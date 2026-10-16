@@ -280,8 +280,9 @@ describe('Proving with the backend configured for the epoch a transaction belong
       (error: unknown) => error,
     );
 
-    // A transaction the prover refuses is one the wallets cannot read either, so releasing whatever it booked fails
-    // too, and a failed release is never silent: the refusal arrives first, with those failures behind it.
+    // Every wallet's revert ignores a transaction from another epoch, but this one wears ledger-v8's stamp over
+    // ledger-v9 bytes, so the V1 unshielded wallet's revert takes it and throws on an object it cannot read. A failed
+    // release is never silent: the refusal arrives first, with the release failure behind it.
     expect(failure).toBeInstanceOf(AggregateError);
     expect(reported(primary(failure))).toBeInstanceOf(ProvingEpochMismatchError);
   });

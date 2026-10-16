@@ -1,5 +1,5 @@
 ---
-'@midnightntwrk/wallet-sdk-facade': minor
+'@midnightntwrk/wallet-sdk-facade': major
 ---
 
 Release the coins a transaction builder booked when the builder fails part-way. `transferTransaction`, `initSwap`,
@@ -9,3 +9,9 @@ the caller had no transaction to revert. Each builder now releases what it booke
 rejecting. Balancing in place releases only the coins the wallet added. If a release itself fails, the builder throws
 an `AggregateError` with the original error first and each failed release after it; otherwise the original error is
 rethrown unchanged.
+
+BREAKING CHANGE for code that matches on the rejection's type: `transferTransaction`, `initSwap`,
+`balanceUnprovenTransaction`, `balanceUnboundTransaction`, `balanceFinalizedTransaction` and `finalizeTransaction` may
+now reject with an `AggregateError` instead of the failed step's own error, when releasing a booking fails after that
+step did. `errors[0]` is the original error and each later entry is a failed release. An `instanceof` check on the
+rejection must also look inside `errors[0]`.
