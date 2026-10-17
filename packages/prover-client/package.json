@@ -35,7 +35,7 @@
     "@midnight-ntwrk/zkir-v2": "^2.1.0",
     "@midnightntwrk/ledger-v9": "1.0.0-rc.5",
     "@midnightntwrk/wallet-sdk-utilities": "1.2.2-rc.0",
-    "effect": "^3.19.19",
+    "effect": "^4.0.0",
     "web-worker": "^1.5.0"
   },
   "scripts": {
