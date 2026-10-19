@@ -30,7 +30,7 @@ crate-type = ["cdylib", "rlib"]
 # (`tkerber/state-translation/v8-to-v9`), so the pin is explicit and survives a lockfile regeneration; swap to a plain
 # `version = "0.1.0"` once it is released to crates.io. To iterate against a local checkout instead, see the
 # `.cargo/config.toml` note in ./README.md rather than editing this line.
-v8-to-v9-state-translation = { git = "https://github.com/midnightntwrk/midnight-ledger", rev = "e2136df78d80ff795ac80a5e8d08640c4c4eaf75" }
+v8-to-v9-state-translation = { git = "https://github.com/midnightntwrk/midnight-ledger", rev = "2843a0ae821dc11ada03a8785207157600399488" }
 
 # Both ledgers, for the two `LedgerState` types the translation goes between. Feature sets mirror the translation
 # crate's own, so Cargo's feature unification does not silently widen either side.
