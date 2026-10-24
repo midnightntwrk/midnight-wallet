@@ -41,11 +41,11 @@ storage = { version = "2.0.1", package = "midnight-storage", features = ["state-
 serialize = { version = "1.1.0", package = "midnight-serialize" }
 base-crypto = { version = "1.0.0", package = "midnight-base-crypto" }
 
-wasm-bindgen = "=0.2.108"
+wasm-bindgen = "=0.2.129"
 js-sys = "^0.3.77"
 console_error_panic_hook = "^0.1.7"
 
 # Nothing here asks for randomness, but the crypto crates below do, and on wasm32-unknown-unknown `getrandom` needs to
 # be told where to find it.
-getrandom_2 = { package = "getrandom", version = "^0.2.16", features = ["js"] }
-getrandom_3 = { package = "getrandom", version = "^0.3.4", features = ["wasm_js"] }
+getrandom_2 = { package = "getrandom", version = "^0.4.0", features = ["js"] }
+getrandom_3 = { package = "getrandom", version = "^0.4.0", features = ["wasm_js"] }
