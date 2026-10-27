@@ -51,11 +51,11 @@ does for coins stranded by a fork. The sweep stands whether or not `clearPending
   (`ledger/params/mainnet.json` and `ledger/params/rel-1.1-advisory.json`, 1209600 seconds), not the one hour of the
   ledger's built-in `INITIAL_PARAMETERS` (`ledger/src/structure.rs`). With the shorter value, a coin released after an
   hour on mainnet could be booked again while the transaction that first spent it can still land. The lifetime is
-  counted from when sync first saw the booking. The facade passes its own default TTL of one hour to every shielded
-  build, so a booking taken through the facade still lasts at most an hour; only a shielded wallet used directly, with
-  no TTL given, holds a coin for the full 14 days. The wallet records the transaction's TTL itself when it books the
-  coins: both ledger-v8 and ledger-v9 accept a TTL on `spend` but store `undefined` in `pendingSpends`, so it cannot be
-  read back from the ledger.
+  counted from when sync first saw the booking. Every facade method that builds a shielded transaction takes its TTL
+  from the caller and passes it on, so a booking taken through the facade lasts until the caller's TTL, capped at 14
+  days; only a shielded wallet used directly, with no TTL given, holds a coin for the full 14 days. The wallet records
+  the transaction's TTL itself when it books the coins: both ledger-v8 and ledger-v9 accept a TTL on `spend` but store
+  `undefined` in `pendingSpends`, so it cannot be read back from the ledger.
 - **Clock.** Every sync update carries the time its source stamped it: the system clock on the indexer path, the
   simulator's time on the simulator path. The sync capability expires bookings against that time and reads no clock of
   its own, so the start and the check come off the same clock, with no clock added to any API. A booking restored from a
