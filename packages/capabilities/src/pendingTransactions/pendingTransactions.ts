@@ -15,7 +15,7 @@
 
 import { ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Buffer } from 'buffer';
-import { Array as Arr, DateTime, Either, Option, Order, ParseResult, pipe, Record as ERecord, Schema } from 'effect';
+import { Array as Arr, DateTime, Either, Option, Order, ParseResult, pipe, Schema } from 'effect';
 
 export type TransactionTrait<TTransaction> = {
   ids: (tx: TTransaction) => readonly string[];
@@ -623,32 +623,33 @@ const PendingItemSchema = <TTransaction>(
   );
 };
 
-export const SerializedSchema = <TTransaction>(
-  traits: VersionedTransactionTrait<TTransaction>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- it's pointless in this place as we don't care about the input data type really
-): Schema.Schema<Serialized<TTransaction>, any> =>
+/**
+ * The struct behind {@link SerializedSchema}. Its own `fields` are the top-level members the format declares; any other
+ * member of a payload is an unknown field, carried rather than read.
+ */
+const SerializedStruct = <TTransaction>(traits: VersionedTransactionTrait<TTransaction>) =>
   Schema.Struct({
     version: Schema.Literal('v1'),
     transactions: Schema.Array(PendingItemSchema(traits)),
     reservations: Schema.optionalWith(Schema.Array(ReservationSchema), { default: () => [] }),
   });
 
-/** The top-level members {@link SerializedSchema} declares; anything else in a payload is carried, not read. */
-const SERIALIZED_KEYS: ReadonlySet<string> = new Set(['version', 'transactions', 'reservations']);
-
-const isJsonObject = Schema.is(Schema.Record({ key: Schema.String, value: Schema.Unknown }));
-
-const undeclared = (fields: SnapshotFormat.UnknownFields): SnapshotFormat.UnknownFields =>
-  ERecord.filter(fields, (_, key) => !SERIALIZED_KEYS.has(key));
+export const SerializedSchema = <TTransaction>(
+  traits: VersionedTransactionTrait<TTransaction>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- it's pointless in this place as we don't care about the input data type really
+): Schema.Schema<Serialized<TTransaction>, any> => SerializedStruct(traits);
 
 export const serialize = <TTransaction>(
   state: PendingTransactions<TTransaction>,
   traits: VersionedTransactionTrait<TTransaction>,
-): string =>
-  JSON.stringify({
-    ...Schema.encodeSync(SerializedSchema(traits))(toSerialized(state)),
-    ...undeclared(state.unknownFields ?? {}),
+): string => {
+  const encoded: unknown = Schema.encodeSync(SerializedSchema(traits))(toSerialized(state));
+  const written = SnapshotFormat.isJsonObject(encoded) ? encoded : {};
+  return JSON.stringify({
+    ...written,
+    ...SnapshotFormat.unknownFieldsOf(state.unknownFields ?? {}, (key) => Object.hasOwn(written, key)),
   });
+};
 
 export const deserialize = <TTransaction>(
   serialized: string,
@@ -657,17 +658,20 @@ export const deserialize = <TTransaction>(
   return pipe(
     serialized,
     Schema.decodeUnknownEither(Schema.parseJson()),
-    Either.flatMap((json) =>
-      pipe(
-        Schema.decodeUnknownEither(SerializedSchema<TTransaction>(traits))(json),
+    Either.flatMap((json) => {
+      const schema = SerializedStruct<TTransaction>(traits);
+      return pipe(
+        Schema.decodeUnknownEither(schema)(json),
         Either.map((data) =>
           SnapshotFormat.withUnknownFields(
             fromSerialized<TTransaction>(data),
-            isJsonObject(json) ? undeclared(json) : {},
+            SnapshotFormat.isJsonObject(json)
+              ? SnapshotFormat.unknownFieldsOf(json, (key) => Object.hasOwn(schema.fields, key))
+              : {},
           ),
         ),
-      ),
-    ),
+      );
+    }),
   );
 };
 
