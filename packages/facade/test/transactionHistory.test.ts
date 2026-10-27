@@ -292,8 +292,9 @@ describe('mergeWalletEntries does not lose information', () => {
   });
 
   it('should keep the fields neither entry declares, incoming winning a shared name, so a later release finds them after any update', () => {
-    // A restored entry carries fields a later release wrote and this build does not know. A merge is how every later
-    // write to the same transaction lands, so dropping them here loses them as surely as a reader ignoring them.
+    // A storage that keeps fields this build does not know on the entry value hands them to the merge, and a merge is
+    // how every later write to the same transaction lands, so dropping them here loses them as surely as a reader
+    // ignoring them.
     const existing: WalletEntry = {
       ...pendingEntry('tx1'),
       ...{ onlyOnExisting: { kept: true }, onBoth: 'existing' },
