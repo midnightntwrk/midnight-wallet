@@ -57,6 +57,11 @@ carry that bag; the transaction history keeps them on its envelope and on each e
 state's `unknownFields`. A new reader or writer for any surface must do the same. Bumping on every added field was
 rejected: it would make rolling back impossible after any field is added, and owe a frozen fixture for each one.
 
+Only **top-level** fields are carried: of each snapshot, of the pending-transactions state, of the history envelope and
+of each history entry. So an optional field still needs a version bump when it is added **nested** below those levels
+(inside `shielded`, `dust`, `lifecycle` and the like), or when its value is derived from state an older build keeps
+changing — carried through unread, it would come back stale.
+
 Ledger blob internals are the ledger's concern, not a format version of ours.
 
 ## Writing an upgrade step

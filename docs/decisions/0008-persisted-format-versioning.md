@@ -69,11 +69,16 @@ sharing one storage — and the later release would find it gone with nothing ev
 snapshot's embedded `txHistory` was lost. So every reader keeps the top-level fields it does not know and every writer
 writes them back unchanged: a snapshot carries them on the core wallet's `unknownFields` through every rebuild,
 including the cross-ledger migration; the transaction history keeps them on its envelope and on each entry; pending
-transactions keep them on the state. The one exception is a field named `__proto__`, which is not carried on snapshots,
-the history envelope and entries, or the pending-transaction state: no schema will declare that name, and copying it out
-of untrusted JSON would invite prototype pollution. The alternative, bumping the version for every added field so that
-an older build refuses the payload, was rejected: it makes rollback impossible after any field is added, and every such
-field would then owe a frozen fixture for the version it leaves behind.
+transactions keep them on the state. A top-level `__proto__` is carried as an ordinary field, never applied as a
+prototype. The alternative, bumping the version for every added field so that an older build refuses the payload, was
+rejected: it makes rollback impossible after any field is added, and every such field would then owe a frozen fixture
+for the version it leaves behind.
+
+What is carried is exactly the top-level fields of each snapshot, of the pending-transactions state, of the history
+envelope and of each history entry. Two kinds of optional field still need a version bump: one added **nested** below
+those levels (inside a section such as `shielded`, `dust` or `lifecycle`), which an older build does not carry, and one
+whose value is derived from state an older build keeps changing, which would come back stale beside the state it
+describes.
 
 **Worked example: the unshielded snapshot on the V2 variant.** The V1 variant, on ledger-v8, stores the verifying key as
 a bare string, implicitly a schnorr key. The V2 variant, on ledger-v9, stores it as `{ tag, value }`, because that
