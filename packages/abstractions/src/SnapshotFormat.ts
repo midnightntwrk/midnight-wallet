@@ -140,7 +140,39 @@ export class SnapshotRestoreError extends Data.TaggedError(
   }
 }
 
-const isRecord = Schema.is(Schema.Record({ key: Schema.String, value: Schema.Unknown }));
+/**
+ * Narrow a parsed JSON value to a plain object, so an array or `null` is not mistaken for one.
+ *
+ * @example
+ *   ```ts
+ *   SnapshotFormat.isJsonObject(JSON.parse(serialized)); // true for `{...}`, false for `[...]` or `null`
+ *   ```;
+ *
+ * @param value - Any parsed JSON value.
+ * @returns Whether the value is a JSON object.
+ */
+export const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * The members of a JSON object whose names `isDeclared` does not claim, as a new plain object.
+ *
+ * Built with `Object.fromEntries`, which defines each member as an own field: a member named `__proto__` is carried
+ * like any other, never applied as the result's prototype.
+ *
+ * @example
+ *   ```ts
+ *   SnapshotFormat.unknownFieldsOf(json, (key) => Object.hasOwn(schema.fields, key));
+ *   ```;
+ *
+ * @param json - The object to take the members from.
+ * @param isDeclared - Whether a member name belongs to the reader or writer, and so is not an unknown field.
+ * @returns The undeclared members, exactly as they were.
+ */
+export const unknownFieldsOf = (
+  json: Readonly<Record<string, unknown>>,
+  isDeclared: (key: string) => boolean,
+): UnknownFields => Object.fromEntries(Object.entries(json).filter(([key]) => !isDeclared(key)));
 
 /**
  * Reads a serialized snapshot into its decoded shape, refusing with a {@link SnapshotRestoreError} that says why.
@@ -197,8 +229,7 @@ type StructSchema<A, I> = Schema.Schema<A, I> & { readonly fields: Schema.Struct
  * The unknown fields are taken from the payload after any upgrade step has run, so a field an upgrade renamed or
  * reshaped is the schema's, not a stranger to be written back beside its replacement.
  *
- * A top-level field named `__proto__` is not kept: no schema will declare that name, and copying it out of untrusted
- * JSON would invite prototype pollution.
+ * A top-level field named `__proto__` is kept as an ordinary own field, never applied as a prototype.
  *
  * @example
  *   ```ts
@@ -222,19 +253,19 @@ export const readSnapshotWithUnknownFields =
     readDecoded(options)(serialized).pipe(
       Either.map(({ decoded, json }) => ({
         snapshot: decoded,
-        unknownFields: ERecord.filter(json, (_, key) => !Object.hasOwn(options.schema.fields, key)),
+        unknownFields: unknownFieldsOf(json, (key) => Object.hasOwn(options.schema.fields, key)),
       })),
     );
 
 /**
  * Encodes a snapshot and writes back the unknown fields its wallet was read with.
  *
- * A field the schema declares is the schema's to write, so a bag entry under a declared name is dropped rather than
- * allowed to override or resurrect it: a wallet read by one variant and written by another can carry a name the writer
- * knows, and what the writer encodes for that name is the truth.
+ * A field the encoded snapshot writes is the writer's, so a bag entry under that name is dropped rather than allowed to
+ * override it: a wallet read by one variant and written by another can carry a name the writer knows, and what the
+ * writer encodes for that name is the truth. A bag entry under a name the schema declares but the snapshot left out is
+ * written back, because there is nothing it would override.
  *
- * A bag entry named `__proto__` is not written back either: no schema will declare that name, and copying it out of
- * untrusted JSON would invite prototype pollution.
+ * A bag entry named `__proto__` is written back as an ordinary own field.
  *
  * @example
  *   ```ts
@@ -250,11 +281,15 @@ export const writeSnapshot = <A, I>(
   schema: StructSchema<A, I>,
   snapshot: A,
   unknownFields: UnknownFields | undefined,
-): string =>
-  JSON.stringify({
-    ...Schema.encodeSync(schema)(snapshot),
-    ...ERecord.filter(unknownFields ?? {}, (_, key) => !Object.hasOwn(schema.fields, key)),
+): string => {
+  const encoded: unknown = Schema.encodeSync(schema)(snapshot);
+  // A struct schema encodes to an object; the fallback only satisfies the type.
+  const written = isJsonObject(encoded) ? encoded : {};
+  return JSON.stringify({
+    ...written,
+    ...unknownFieldsOf(unknownFields ?? {}, (key) => Object.hasOwn(written, key)),
   });
+};
 
 /**
  * Puts the unknown fields a snapshot was read with on the wallet restored from it, and leaves a wallet with none
@@ -307,7 +342,7 @@ const readDecoded =
           (cause) => new SnapshotRestoreError({ surface, reason: 'invalid-shape', detectedVersion: declared, cause }),
         ),
         // A payload that decoded against a struct schema was an object; the fallback only satisfies the type.
-        Either.map((decoded) => ({ decoded, json: isRecord(upgraded) ? upgraded : {} })),
+        Either.map((decoded) => ({ decoded, json: isJsonObject(upgraded) ? upgraded : {} })),
       );
     };
     return Either.try({
@@ -316,7 +351,7 @@ const readDecoded =
         new SnapshotRestoreError({ surface, reason: 'unparseable', detectedVersion: 'unrecognised', cause }),
     }).pipe(
       Either.flatMap((json) =>
-        isRecord(json)
+        isJsonObject(json)
           ? Either.right(json)
           : Either.left(
               new SnapshotRestoreError({
