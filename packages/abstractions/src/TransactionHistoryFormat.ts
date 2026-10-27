@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data, Either } from 'effect';
+import { type UnknownFields } from './SnapshotFormat.js';
 
 /**
  * Format `v2`: entries inside a `{ version, entries }` envelope, each carrying a `lifecycle`.
@@ -119,6 +120,8 @@ export type UpgradedTransactionHistory = {
   readonly version: string;
   /** The upgraded entries, still unvalidated. */
   readonly entries: unknown;
+  /** The upgraded envelope's members other than `version` and `entries`; none for a bare `v1` array. */
+  readonly envelopeUnknownFields?: UnknownFields;
 };
 
 /** Narrow to a plain JSON object, so an array or `null` is not mistaken for one. */
