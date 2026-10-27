@@ -10,7 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Either, Schema } from 'effect';
+import { Either, Record as ERecord, Schema } from 'effect';
+import { type UnknownFields } from './SnapshotFormat.js';
 import {
   CURRENT_FORMAT_VERSION,
   TRANSACTION_HISTORY_SURFACE,
@@ -47,6 +48,22 @@ const parseJson = (serialized: string): Either.Either<unknown, TransactionHistor
       }),
   });
 
+/** The members of a stored envelope other than the two this build writes; a bare `v1` array has none. */
+const envelopeUnknownFieldsOf = (payload: unknown): UnknownFields =>
+  isJsonObject(payload) ? ERecord.filter(payload, (_, key) => key !== 'version' && key !== 'entries') : {};
+
+const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * Read and write entries keeping every field the entry schema does not declare.
+ *
+ * Adding an optional field is not a format-version bump, so a history written by a later release carries a version this
+ * build reads. Dropping what it cannot interpret would hand the later release back a history with the field gone;
+ * keeping it costs nothing, because an entry is written back from the value it was read into.
+ */
+const keepUnknownFields = { onExcessProperty: 'preserve' } as const;
+
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
  *
@@ -70,6 +87,9 @@ export class InMemoryTransactionHistoryStorage<
   #storage: Map<TransactionHash, T>;
   readonly #schema: Schema.Schema<T, Encoded>;
   readonly #merge: (existing: T, incoming: T) => T;
+  // The envelope members a restored payload carried that this build does not write, written back with the next
+  // serialize. Set once, by `tryRestore`, on the storage it has just built; empty for a storage built any other way.
+  #envelopeUnknownFields: UnknownFields = {};
 
   constructor(schema: Schema.Schema<T, Encoded>, merge?: (existing: T, incoming: T) => T) {
     this.#storage = new Map<TransactionHash, T>();
@@ -124,8 +144,10 @@ export class InMemoryTransactionHistoryStorage<
 
   serialize(): Promise<SerializedTransactionHistory> {
     const allEntries = [...this.#storage.values()];
-    const encode = Schema.encodeSync(Schema.Array(this.#schema));
-    return Promise.resolve(JSON.stringify({ version: CURRENT_FORMAT_VERSION, entries: encode(allEntries) }));
+    const encode = Schema.encodeSync(Schema.Array(this.#schema), keepUnknownFields);
+    return Promise.resolve(
+      JSON.stringify({ version: CURRENT_FORMAT_VERSION, entries: encode(allEntries), ...this.#envelopeUnknownFields }),
+    );
   }
 
   /**
@@ -182,9 +204,16 @@ export class InMemoryTransactionHistoryStorage<
     merge?: (existing: T, incoming: T) => T,
   ): Either.Either<InMemoryTransactionHistoryStorage<T, Encoded>, TransactionHistoryRestoreError> {
     return parseJson(serialized).pipe(
-      Either.flatMap(upgradeToCurrentFormat),
-      Either.flatMap(({ version, entries }) =>
-        Schema.decodeUnknownEither(Schema.Array(schema))(entries).pipe(
+      Either.flatMap((payload) =>
+        upgradeToCurrentFormat(payload).pipe(
+          Either.map((upgraded) => ({ ...upgraded, envelopeUnknownFields: envelopeUnknownFieldsOf(payload) })),
+        ),
+      ),
+      Either.flatMap(({ version, entries, envelopeUnknownFields }) =>
+        Schema.decodeUnknownEither(
+          Schema.Array(schema),
+          keepUnknownFields,
+        )(entries).pipe(
           Either.mapLeft(
             (cause) =>
               new TransactionHistoryRestoreError({
@@ -194,11 +223,13 @@ export class InMemoryTransactionHistoryStorage<
                 cause,
               }),
           ),
+          Either.map((values) => ({ values, envelopeUnknownFields })),
         ),
       ),
-      Either.map((values) => {
+      Either.map(({ values, envelopeUnknownFields }) => {
         const storage = new InMemoryTransactionHistoryStorage<T, Encoded>(schema, merge);
         values.forEach((entry) => storage.#storage.set(entry.hash, entry));
+        storage.#envelopeUnknownFields = envelopeUnknownFields;
         return storage;
       }),
     );

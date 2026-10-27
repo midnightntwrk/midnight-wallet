@@ -13,9 +13,9 @@
  * limitations under the License.
  */
 
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Buffer } from 'buffer';
-import { Array as Arr, DateTime, Either, Option, Order, ParseResult, pipe, Schema } from 'effect';
+import { Array as Arr, DateTime, Either, Option, Order, ParseResult, pipe, Record as ERecord, Schema } from 'effect';
 
 export type TransactionTrait<TTransaction> = {
   ids: (tx: TTransaction) => readonly string[];
@@ -186,6 +186,11 @@ export type Reservation = Readonly<{
 export type PendingTransactions<TTransaction> = Readonly<{
   all: ReadonlyArray<PendingTransactionsItem<TTransaction>>;
   reservations: ReadonlyArray<Reservation>;
+  /**
+   * The top-level members of the stored payload this build does not declare, exactly as they were read, written back by
+   * {@link serialize} so a later release that wrote them still finds them. Absent when the payload carried none.
+   */
+  unknownFields?: SnapshotFormat.UnknownFields;
 }>;
 
 const traitOfItem = <TTransaction>(
@@ -628,10 +633,22 @@ export const SerializedSchema = <TTransaction>(
     reservations: Schema.optionalWith(Schema.Array(ReservationSchema), { default: () => [] }),
   });
 
+/** The top-level members {@link SerializedSchema} declares; anything else in a payload is carried, not read. */
+const SERIALIZED_KEYS: ReadonlySet<string> = new Set(['version', 'transactions', 'reservations']);
+
+const isJsonObject = Schema.is(Schema.Record({ key: Schema.String, value: Schema.Unknown }));
+
+const undeclared = (fields: SnapshotFormat.UnknownFields): SnapshotFormat.UnknownFields =>
+  ERecord.filter(fields, (_, key) => !SERIALIZED_KEYS.has(key));
+
 export const serialize = <TTransaction>(
   state: PendingTransactions<TTransaction>,
   traits: VersionedTransactionTrait<TTransaction>,
-): string => pipe(state, toSerialized, Schema.encodeSync(SerializedSchema(traits)), JSON.stringify);
+): string =>
+  JSON.stringify({
+    ...Schema.encodeSync(SerializedSchema(traits))(toSerialized(state)),
+    ...undeclared(state.unknownFields ?? {}),
+  });
 
 export const deserialize = <TTransaction>(
   serialized: string,
@@ -639,8 +656,18 @@ export const deserialize = <TTransaction>(
 ): Either.Either<PendingTransactions<TTransaction>, ParseResult.ParseError> => {
   return pipe(
     serialized,
-    Schema.decodeUnknownEither(Schema.parseJson(SerializedSchema<TTransaction>(traits))),
-    Either.map((data) => fromSerialized<TTransaction>(data)),
+    Schema.decodeUnknownEither(Schema.parseJson()),
+    Either.flatMap((json) =>
+      pipe(
+        Schema.decodeUnknownEither(SerializedSchema<TTransaction>(traits))(json),
+        Either.map((data) =>
+          SnapshotFormat.withUnknownFields(
+            fromSerialized<TTransaction>(data),
+            isJsonObject(json) ? undeclared(json) : {},
+          ),
+        ),
+      ),
+    ),
   );
 };
 

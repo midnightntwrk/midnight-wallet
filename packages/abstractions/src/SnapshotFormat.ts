@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Data, Either, Schema } from 'effect';
+import { Data, Either, Record as ERecord, Schema } from 'effect';
 
 const article = (noun: string): string => (/^[aeiou]/i.test(noun) ? 'an' : 'a');
 
@@ -173,7 +173,112 @@ export const readSnapshot =
     readonly schema: Schema.Schema<A, I>;
     readonly upgrade?: (json: unknown) => unknown;
   }) =>
-  (serialized: string): Either.Either<A, SnapshotRestoreError> => {
+  (serialized: string): Either.Either<A, SnapshotRestoreError> =>
+    readDecoded(options)(serialized).pipe(Either.map(({ decoded }) => decoded));
+
+/**
+ * The top-level fields of a stored snapshot that the reading build's schema does not declare, exactly as they were
+ * stored.
+ *
+ * Adding an optional field is not a format-version bump, so a snapshot written by a later release carries a version an
+ * earlier one reads. The earlier build cannot interpret the new field, but it must not lose it either: rolled back to,
+ * or sharing a storage with the later release, it would otherwise write the snapshot back without the field and the
+ * later release would find it gone. So the reader keeps every field it does not know here, the wallet carries the bag
+ * through every rebuild, and the writer writes it back.
+ */
+export type UnknownFields = Readonly<Record<string, unknown>>;
+
+/** A snapshot schema whose `fields` name every top-level field it declares, as a `Schema.Struct`'s do. */
+type StructSchema<A, I> = Schema.Schema<A, I> & { readonly fields: Schema.Struct.Fields };
+
+/**
+ * {@link readSnapshot}, also handing back every top-level field the schema does not declare.
+ *
+ * The unknown fields are taken from the payload after any upgrade step has run, so a field an upgrade renamed or
+ * reshaped is the schema's, not a stranger to be written back beside its replacement.
+ *
+ * @example
+ *   ```ts
+ *   const read = SnapshotFormat.readSnapshotWithUnknownFields({ surface: 'dust', reads: ['v1'], schema: SnapshotSchema });
+ *   read(serialized); // Either.Either<{ snapshot: Snapshot; unknownFields: UnknownFields }, SnapshotRestoreError>
+ *   ```;
+ *
+ * @param options - As for {@link readSnapshot}, with the schema a `Schema.Struct`, whose fields are what it declares.
+ * @returns A reader from the stored string to the decoded snapshot and its unknown fields, or the refusal.
+ */
+export const readSnapshotWithUnknownFields =
+  <A, I>(options: {
+    readonly surface: string;
+    readonly reads: readonly [string, ...string[]];
+    readonly schema: StructSchema<A, I>;
+    readonly upgrade?: (json: unknown) => unknown;
+  }) =>
+  (
+    serialized: string,
+  ): Either.Either<{ readonly snapshot: A; readonly unknownFields: UnknownFields }, SnapshotRestoreError> =>
+    readDecoded(options)(serialized).pipe(
+      Either.map(({ decoded, json }) => ({
+        snapshot: decoded,
+        unknownFields: ERecord.filter(json, (_, key) => !Object.hasOwn(options.schema.fields, key)),
+      })),
+    );
+
+/**
+ * Encodes a snapshot and writes back the unknown fields its wallet was read with.
+ *
+ * A field the schema declares is the schema's to write, so a bag entry under a declared name is dropped rather than
+ * allowed to override or resurrect it: a wallet read by one variant and written by another can carry a name the writer
+ * knows, and what the writer encodes for that name is the truth.
+ *
+ * @example
+ *   ```ts
+ *   SnapshotFormat.writeSnapshot(SnapshotSchema, buildSnapshot(wallet), wallet.unknownFields);
+ *   ```;
+ *
+ * @param schema - The snapshot schema the writer encodes with.
+ * @param snapshot - The snapshot to encode.
+ * @param unknownFields - The fields the wallet was read with that no schema of its reader declared, when it has any.
+ * @returns The serialized snapshot.
+ */
+export const writeSnapshot = <A, I>(
+  schema: StructSchema<A, I>,
+  snapshot: A,
+  unknownFields: UnknownFields | undefined,
+): string =>
+  JSON.stringify({
+    ...Schema.encodeSync(schema)(snapshot),
+    ...ERecord.filter(unknownFields ?? {}, (_, key) => !Object.hasOwn(schema.fields, key)),
+  });
+
+/**
+ * Puts the unknown fields a snapshot was read with on the wallet restored from it, and leaves a wallet with none
+ * exactly as it was, so a snapshot that carried nothing extra restores to the same value it always did.
+ *
+ * @example
+ *   ```ts
+ *   SnapshotFormat.withUnknownFields(CoreWallet.restore(...), unknownFields);
+ *   ```;
+ *
+ * @param wallet - The wallet restored from the snapshot.
+ * @param unknownFields - The fields {@link readSnapshotWithUnknownFields} found.
+ * @returns The wallet, carrying the fields when there are any.
+ */
+export const withUnknownFields = <W extends { readonly unknownFields?: UnknownFields }>(
+  wallet: W,
+  unknownFields: UnknownFields,
+): W => (ERecord.isEmptyRecord(unknownFields) ? wallet : { ...wallet, unknownFields });
+
+/** The one read path: parse, check the version, upgrade, decode — keeping the upgraded JSON the schema decoded. */
+const readDecoded =
+  <A, I>(options: {
+    readonly surface: string;
+    readonly reads: readonly [string, ...string[]];
+    readonly schema: Schema.Schema<A, I>;
+    readonly upgrade?: (json: unknown) => unknown;
+  }) =>
+  (
+    serialized: string,
+  ): Either.Either<{ readonly decoded: A; readonly json: Record<string, unknown> }, SnapshotRestoreError> => {
     const { surface, reads, schema } = options;
     const upgrade = options.upgrade ?? ((json: unknown): unknown => json);
     const current = reads[reads.length - 1] ?? reads[0];
@@ -186,12 +291,19 @@ export const readSnapshot =
           `Refusing ${article(surface)} ${surface} snapshot written in format version ${JSON.stringify(detectedVersion)}: this build reads ${current} and does not downgrade.`,
         ),
       });
-    const decodeAs = (declared: string, json: Record<string, unknown>): Either.Either<A, SnapshotRestoreError> =>
-      Schema.decodeUnknownEither(schema)(declared === current ? json : upgrade(json)).pipe(
+    const decodeAs = (
+      declared: string,
+      json: Record<string, unknown>,
+    ): Either.Either<{ readonly decoded: A; readonly json: Record<string, unknown> }, SnapshotRestoreError> => {
+      const upgraded = declared === current ? json : upgrade(json);
+      return Schema.decodeUnknownEither(schema)(upgraded).pipe(
         Either.mapLeft(
           (cause) => new SnapshotRestoreError({ surface, reason: 'invalid-shape', detectedVersion: declared, cause }),
         ),
+        // A payload that decoded against a struct schema was an object; the fallback only satisfies the type.
+        Either.map((decoded) => ({ decoded, json: isRecord(upgraded) ? upgraded : {} })),
       );
+    };
     return Either.try({
       try: () => JSON.parse(serialized) as unknown,
       catch: (cause) =>

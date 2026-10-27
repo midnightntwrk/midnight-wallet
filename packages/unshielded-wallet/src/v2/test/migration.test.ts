@@ -27,6 +27,7 @@ import {
   makeEmptyWalletMigration,
   type PreviousLedgerWallet,
 } from '../Migration.js';
+import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 import { UnshieldedState } from '../UnshieldedState.js';
 import { fixtureOwner, fixtureUtxo } from './syncFixtures.js';
 
@@ -250,6 +251,29 @@ describe('unshielded state migration', () => {
         const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(withVerdict(inSync)));
 
         expect(wallet.progress.indexerLiveness).toEqual(IndexerLiveness.Unknown());
+      });
+    });
+
+    describe('snapshot fields the previous wallet did not know', () => {
+      // A field written by a later release than the one the previous wallet was restored with: neither variant declares
+      // it, so the wallet is the only place it survives between the restore and the next save.
+      const unknownFields = { fieldFromALaterRelease: { kept: ['exactly', 'as', 'written'], count: 3 } };
+
+      it('should carry them across, so the first save after the crossing still writes them', async () => {
+        const previous = { ...previousWallet({ available: [], appliedId: 4n, protocolVersion: 7n }), unknownFields };
+
+        const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previous));
+
+        expect(wallet.unknownFields).toEqual(unknownFields);
+        expect(JSON.parse(makeDefaultV2SerializationCapability().serialize(wallet))).toMatchObject(unknownFields);
+      });
+
+      it('should not invent any for a wallet that carried none', async () => {
+        const previous = previousWallet({ available: [], appliedId: 4n, protocolVersion: 7n });
+
+        const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previous));
+
+        expect('unknownFields' in wallet).toBe(false);
       });
     });
   });
