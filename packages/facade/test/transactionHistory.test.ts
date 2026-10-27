@@ -11,7 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, it, expect } from 'vitest';
-import { type FinalizedWalletEntry, type WalletEntry, mergeWalletEntries } from '../src/index.js';
+import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type FinalizedWalletEntry, type WalletEntry, WalletEntrySchema, mergeWalletEntries } from '../src/index.js';
 
 const shieldedCoin = (type: string, nonce: string, value: bigint, mtIndex: bigint) => ({
   type,
@@ -289,6 +290,25 @@ describe('mergeWalletEntries does not lose information', () => {
 
     expect(merged.unshielded).toEqual({ id: 2, createdUtxos: [utxoB], spentUtxos: [] });
   });
+
+  it('should keep the fields neither entry declares, incoming winning a shared name, so a later release finds them after any update', () => {
+    // A restored entry carries fields a later release wrote and this build does not know. A merge is how every later
+    // write to the same transaction lands, so dropping them here loses them as surely as a reader ignoring them.
+    const existing: WalletEntry = {
+      ...pendingEntry('tx1'),
+      ...{ onlyOnExisting: { kept: true }, onBoth: 'existing' },
+    };
+    const incoming: WalletEntry = {
+      ...baseEntry('tx1', { status: 'SUCCESS' }),
+      ...{ onlyOnIncoming: [1, 2], onBoth: 'incoming' },
+    };
+
+    const merged = mergeWalletEntries(existing, incoming);
+
+    expect(merged).toMatchObject({ onlyOnExisting: { kept: true }, onlyOnIncoming: [1, 2], onBoth: 'incoming' });
+    expect(merged.lifecycle.status).toBe('finalized');
+    expect(merged.status).toBe('SUCCESS');
+  });
 });
 
 describe('mergeWalletEntries records lifecycle transitions', () => {
@@ -318,5 +338,48 @@ describe('mergeWalletEntries records lifecycle transitions', () => {
     const merged = mergeWalletEntries(existing, incoming);
 
     expect(merged.lifecycle.status).toBe('pending');
+  });
+});
+
+describe('a restored history keeps an entry field it does not know through a later update', () => {
+  const UNKNOWN_KEY = 'fieldFromALaterRelease';
+  const UNKNOWN_VALUE = { kept: ['exactly', 'as', 'written'], nested: { flag: true } };
+
+  const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+
+  const parseEnvelope = (serialized: string): Record<string, unknown> => {
+    const parsed: unknown = JSON.parse(serialized);
+    if (!isJsonObject(parsed)) throw new Error('expected a transaction history envelope');
+    return parsed;
+  };
+
+  const entriesOf = (envelope: Record<string, unknown>): readonly Record<string, unknown>[] => {
+    const entries = envelope['entries'];
+    if (!Array.isArray(entries)) throw new Error('expected a transaction history envelope with entries');
+    return entries.filter(isJsonObject);
+  };
+
+  it('should carry the field when a pending entry is finalized, so a later release reading the history back still finds it', async () => {
+    const writer = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
+    await writer.gotPending({ hash: 'tx1', identifiers: ['id-1'], protocolVersion: 1, submittedAt: new Date(0) });
+    const saved = parseEnvelope(await writer.serialize());
+    const withUnknownField = JSON.stringify({
+      ...saved,
+      entries: entriesOf(saved).map((entry) => ({ ...entry, [UNKNOWN_KEY]: UNKNOWN_VALUE })),
+    });
+
+    const restored = InMemoryTransactionHistoryStorage.restore(withUnknownField, WalletEntrySchema, mergeWalletEntries);
+    await restored.gotFinalized({
+      hash: 'tx1',
+      identifiers: ['id-1'],
+      protocolVersion: 1,
+      status: 'SUCCESS',
+      finalizedBlock: { hash: 'block-hash', height: 1, timestamp: new Date(1) },
+    });
+
+    const written = entriesOf(parseEnvelope(await restored.serialize()));
+    expect(written.map((entry) => [entry['hash'], entry[UNKNOWN_KEY]])).toEqual([['tx1', UNKNOWN_VALUE]]);
+    expect(written.map((entry) => entry['lifecycle'])).toMatchObject([{ status: 'finalized' }]);
   });
 });
