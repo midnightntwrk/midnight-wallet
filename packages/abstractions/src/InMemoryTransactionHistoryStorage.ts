@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Either, Record as ERecord, Schema } from 'effect';
-import { type UnknownFields } from './SnapshotFormat.js';
+import { Either, Schema } from 'effect';
+import { isJsonObject, type UnknownFields, unknownFieldsOf } from './SnapshotFormat.js';
 import {
   CURRENT_FORMAT_VERSION,
   TRANSACTION_HISTORY_SURFACE,
@@ -48,21 +48,17 @@ const parseJson = (serialized: string): Either.Either<unknown, TransactionHistor
       }),
   });
 
-/** The members of a stored envelope other than the two this build writes; a bare `v1` array has none. */
-const envelopeUnknownFieldsOf = (payload: unknown): UnknownFields =>
-  isJsonObject(payload) ? ERecord.filter(payload, (_, key) => key !== 'version' && key !== 'entries') : {};
-
-const isJsonObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
 /**
- * Read and write entries keeping every field the entry schema does not declare.
+ * The fields of a stored entry that the entry schema does not write back: every member of `raw` absent from `encoded`,
+ * the same entry decoded and encoded again.
  *
  * Adding an optional field is not a format-version bump, so a history written by a later release carries a version this
- * build reads. Dropping what it cannot interpret would hand the later release back a history with the field gone;
- * keeping it costs nothing, because an entry is written back from the value it was read into.
+ * build reads. Dropping what it cannot interpret would hand the later release back a history with the field gone.
+ * Comparing against the schema's own round trip, rather than a list of declared names, keeps this right for any entry
+ * schema a wallet extends the common one with.
  */
-const keepUnknownFields = { onExcessProperty: 'preserve' } as const;
+const entryUnknownFieldsOf = (raw: unknown, encoded: unknown): UnknownFields =>
+  isJsonObject(raw) ? unknownFieldsOf(raw, (key) => isJsonObject(encoded) && Object.hasOwn(encoded, key)) : {};
 
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
@@ -88,8 +84,13 @@ export class InMemoryTransactionHistoryStorage<
   readonly #schema: Schema.Schema<T, Encoded>;
   readonly #merge: (existing: T, incoming: T) => T;
   // The envelope members a restored payload carried that this build does not write, written back with the next
-  // serialize. Set once, by `tryRestore`, on the storage it has just built; empty for a storage built any other way.
+  // serialize. Set once, by `tryRestore`, on the storage it has just built; empty for a storage built any other way,
+  // and emptied by `reset`, since they described the history it discards.
   #envelopeUnknownFields: UnknownFields = {};
+  // The fields each restored entry carried that the entry schema does not write, by hash, written back beside that
+  // entry with the next serialize. Kept apart from the entry so no merge can drop them and none can reach a reader as
+  // a decoded field; only entries that carried at least one have a bag here, and an entry's bag goes when it does.
+  readonly #entryUnknownFields = new Map<TransactionHash, UnknownFields>();
 
   constructor(schema: Schema.Schema<T, Encoded>, merge?: (existing: T, incoming: T) => T) {
     this.#storage = new Map<TransactionHash, T>();
@@ -140,13 +141,16 @@ export class InMemoryTransactionHistoryStorage<
 
   reset(): void {
     this.#storage.clear();
+    this.#entryUnknownFields.clear();
+    this.#envelopeUnknownFields = {};
   }
 
   serialize(): Promise<SerializedTransactionHistory> {
     const allEntries = [...this.#storage.values()];
-    const encode = Schema.encodeSync(Schema.Array(this.#schema), keepUnknownFields);
+    const encoded = Schema.encodeSync(Schema.Array(this.#schema))(allEntries);
+    const entries = encoded.map((entry, index) => this.#withUnknownFields(entry, allEntries[index]?.hash));
     return Promise.resolve(
-      JSON.stringify({ version: CURRENT_FORMAT_VERSION, entries: encode(allEntries), ...this.#envelopeUnknownFields }),
+      JSON.stringify({ version: CURRENT_FORMAT_VERSION, entries, ...this.#envelopeUnknownFields }),
     );
   }
 
@@ -203,17 +207,14 @@ export class InMemoryTransactionHistoryStorage<
     schema: Schema.Schema<T, Encoded>,
     merge?: (existing: T, incoming: T) => T,
   ): Either.Either<InMemoryTransactionHistoryStorage<T, Encoded>, TransactionHistoryRestoreError> {
+    const entriesSchema = Schema.Array(schema);
     return parseJson(serialized).pipe(
-      Either.flatMap((payload) =>
-        upgradeToCurrentFormat(payload).pipe(
-          Either.map((upgraded) => ({ ...upgraded, envelopeUnknownFields: envelopeUnknownFieldsOf(payload) })),
-        ),
-      ),
+      Either.flatMap(upgradeToCurrentFormat),
       Either.flatMap(({ version, entries, envelopeUnknownFields }) =>
-        Schema.decodeUnknownEither(
-          Schema.Array(schema),
-          keepUnknownFields,
-        )(entries).pipe(
+        Schema.decodeUnknownEither(entriesSchema)(entries).pipe(
+          Either.flatMap((values) =>
+            Schema.encodeEither(entriesSchema)(values).pipe(Either.map((encoded) => ({ values, encoded }))),
+          ),
           Either.mapLeft(
             (cause) =>
               new TransactionHistoryRestoreError({
@@ -223,15 +224,20 @@ export class InMemoryTransactionHistoryStorage<
                 cause,
               }),
           ),
-          Either.map((values) => ({ values, envelopeUnknownFields })),
+          Either.map(({ values, encoded }) => {
+            // The array decode succeeded, so `entries` is an array aligned index for index with `values` and `encoded`.
+            const rawEntries: readonly unknown[] = Array.isArray(entries) ? entries : [];
+            const storage = new InMemoryTransactionHistoryStorage<T, Encoded>(schema, merge);
+            values.forEach((entry) => storage.#storage.set(entry.hash, entry));
+            values
+              .map((entry, index) => [entry.hash, entryUnknownFieldsOf(rawEntries[index], encoded[index])] as const)
+              .filter(([, unknownFields]) => Object.keys(unknownFields).length > 0)
+              .forEach(([hash, unknownFields]) => storage.#entryUnknownFields.set(hash, unknownFields));
+            storage.#envelopeUnknownFields = envelopeUnknownFields ?? {};
+            return storage;
+          }),
         ),
       ),
-      Either.map(({ values, envelopeUnknownFields }) => {
-        const storage = new InMemoryTransactionHistoryStorage<T, Encoded>(schema, merge);
-        values.forEach((entry) => storage.#storage.set(entry.hash, entry));
-        storage.#envelopeUnknownFields = envelopeUnknownFields;
-        return storage;
-      }),
     );
   }
 
@@ -256,6 +262,20 @@ export class InMemoryTransactionHistoryStorage<
           entry.hash !== finalized.hash &&
           coversTransaction(finalized, entry),
       )
-      .forEach((entry) => this.#storage.delete(entry.hash));
+      .forEach((entry) => {
+        this.#storage.delete(entry.hash);
+        this.#entryUnknownFields.delete(entry.hash);
+      });
+  }
+
+  /**
+   * One encoded entry with the unknown fields its hash was restored with written beside it. A field the entry schema
+   * wrote wins over a carried one of the same name, so a carried field never overwrites what this build encoded.
+   */
+  #withUnknownFields(encoded: unknown, hash: TransactionHash | undefined): unknown {
+    const unknownFields = hash === undefined ? undefined : this.#entryUnknownFields.get(hash);
+    return unknownFields === undefined || !isJsonObject(encoded)
+      ? encoded
+      : { ...encoded, ...unknownFieldsOf(unknownFields, (key) => Object.hasOwn(encoded, key)) };
   }
 }

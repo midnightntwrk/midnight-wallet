@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data, Either } from 'effect';
-import { type UnknownFields } from './SnapshotFormat.js';
+import { isJsonObject, type UnknownFields, unknownFieldsOf } from './SnapshotFormat.js';
 
 /**
  * Format `v2`: entries inside a `{ version, entries }` envelope, each carrying a `lifecycle`.
@@ -120,13 +120,24 @@ export type UpgradedTransactionHistory = {
   readonly version: string;
   /** The upgraded entries, still unvalidated. */
   readonly entries: unknown;
-  /** The upgraded envelope's members other than `version` and `entries`; none for a bare `v1` array. */
+  /**
+   * The upgraded envelope's members other than `version` and `entries`: fields a later release added to the envelope,
+   * which a reader carries and writes back unread. Absent when there are none, and always for a bare `v1` array, which
+   * had no envelope to carry them.
+   */
   readonly envelopeUnknownFields?: UnknownFields;
 };
 
-/** Narrow to a plain JSON object, so an array or `null` is not mistaken for one. */
-const isJsonObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+/**
+ * The members of an upgraded envelope other than `version` and `entries`, as the optional
+ * {@link UpgradedTransactionHistory.envelopeUnknownFields} member: present only when there is at least one.
+ */
+const envelopeUnknownFieldsOf = (envelope: unknown): Pick<UpgradedTransactionHistory, 'envelopeUnknownFields'> => {
+  const unknownFields = isJsonObject(envelope)
+    ? unknownFieldsOf(envelope, (key) => key === 'version' || key === 'entries')
+    : {};
+  return Object.keys(unknownFields).length > 0 ? { envelopeUnknownFields: unknownFields } : {};
+};
 
 /**
  * Bring one encoded entry up to `v2`: give it a `lifecycle` and an `identifiers` list if it has none, and leave every
@@ -202,8 +213,8 @@ export const upgradeV1ToV2 = (
  *   ```;
  *
  * @param payload - The parsed JSON of a stored history, in any format version this build knows.
- * @returns The upgraded entries and the version they were read from, or a {@link TransactionHistoryRestoreError} when
- *   the payload carries no format this build can read.
+ * @returns The upgraded entries, the version they were read from and any envelope members this build does not write, or
+ *   a {@link TransactionHistoryRestoreError} when the payload carries no format this build can read.
  */
 export const upgradeToCurrentFormat = (
   payload: unknown,
@@ -213,7 +224,11 @@ export const upgradeToCurrentFormat = (
     case 'v1':
       return Either.right({ version: V1_FORMAT_VERSION, entries: upgradeV1ToV2(detected.entries).entries });
     case 'v2':
-      return Either.right({ version: CURRENT_FORMAT_VERSION, entries: detected.entries });
+      return Either.right({
+        version: CURRENT_FORMAT_VERSION,
+        entries: detected.entries,
+        ...envelopeUnknownFieldsOf(payload),
+      });
     case 'unknown':
       return Either.left(
         new TransactionHistoryRestoreError({
