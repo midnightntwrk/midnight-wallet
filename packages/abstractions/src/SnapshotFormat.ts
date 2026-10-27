@@ -197,6 +197,9 @@ type StructSchema<A, I> = Schema.Schema<A, I> & { readonly fields: Schema.Struct
  * The unknown fields are taken from the payload after any upgrade step has run, so a field an upgrade renamed or
  * reshaped is the schema's, not a stranger to be written back beside its replacement.
  *
+ * A top-level field named `__proto__` is not kept: no schema will declare that name, and copying it out of untrusted
+ * JSON would invite prototype pollution.
+ *
  * @example
  *   ```ts
  *   const read = SnapshotFormat.readSnapshotWithUnknownFields({ surface: 'dust', reads: ['v1'], schema: SnapshotSchema });
@@ -229,6 +232,9 @@ export const readSnapshotWithUnknownFields =
  * A field the schema declares is the schema's to write, so a bag entry under a declared name is dropped rather than
  * allowed to override or resurrect it: a wallet read by one variant and written by another can carry a name the writer
  * knows, and what the writer encodes for that name is the truth.
+ *
+ * A bag entry named `__proto__` is not written back either: no schema will declare that name, and copying it out of
+ * untrusted JSON would invite prototype pollution.
  *
  * @example
  *   ```ts
