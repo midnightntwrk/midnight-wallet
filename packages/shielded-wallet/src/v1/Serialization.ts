@@ -128,13 +128,17 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         ...(w.bookings !== undefined ? { bookings: w.bookings } : {}),
       });
 
-      return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
+      return SnapshotFormat.writeSnapshot(SnapshotSchema, buildSnapshot(wallet), wallet.unknownFields);
     },
     deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError> => {
       return pipe(
         serialized,
-        SnapshotFormat.readSnapshot({ surface: 'shielded', reads: [SNAPSHOT_FORMAT_VERSION], schema: SnapshotSchema }),
-        Either.flatMap((snapshot: Snapshot) =>
+        SnapshotFormat.readSnapshotWithUnknownFields({
+          surface: 'shielded',
+          reads: [SNAPSHOT_FORMAT_VERSION],
+          schema: SnapshotSchema,
+        }),
+        Either.flatMap(({ snapshot, unknownFields }) =>
           pipe(
             CoreWallet.restoreWithCoinHashes(
               snapshot.publicKeys,
@@ -153,7 +157,10 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
               snapshot.coinHashesPending,
             ),
             Either.map((wallet: CoreWallet) =>
-              snapshot.bookings !== undefined ? { ...wallet, bookings: snapshot.bookings } : wallet,
+              SnapshotFormat.withUnknownFields(
+                snapshot.bookings !== undefined ? { ...wallet, bookings: snapshot.bookings } : wallet,
+                unknownFields,
+              ),
             ),
           ),
         ),

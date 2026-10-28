@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { ProtocolVersion, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, type SnapshotFormat, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
 import { InvalidCoinHashesError, type WalletError } from './WalletError.js';
@@ -126,6 +126,15 @@ export type CoreWallet = Readonly<{
    *   when there is none, so a snapshot of an idle wallet keeps the bytes it had.
    */
   bookings?: Readonly<Record<ledger.Nonce, Booking>>;
+  /**
+   * The snapshot fields this variant's schema does not declare, exactly as they were read, written back with the next
+   * snapshot so a later release that wrote them still finds them. Absent when the snapshot carried none.
+   *
+   * @remarks
+   *   {@link legacyTxHistory} is carried the same way but stays a named field: it predates this bag and is part of this
+   *   type's public shape, so folding it in would break callers that read it.
+   */
+  unknownFields?: SnapshotFormat.UnknownFields;
 }>;
 
 /**

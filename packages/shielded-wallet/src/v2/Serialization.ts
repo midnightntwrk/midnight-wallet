@@ -129,13 +129,17 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         ...(w.bookings !== undefined ? { bookings: w.bookings } : {}),
       });
 
-      return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
+      return SnapshotFormat.writeSnapshot(SnapshotSchema, buildSnapshot(wallet), wallet.unknownFields);
     },
     deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError> => {
       return pipe(
         serialized,
-        SnapshotFormat.readSnapshot({ surface: 'shielded', reads: [SNAPSHOT_FORMAT_VERSION], schema: SnapshotSchema }),
-        Either.flatMap((snapshot: Snapshot) => {
+        SnapshotFormat.readSnapshotWithUnknownFields({
+          surface: 'shielded',
+          reads: [SNAPSHOT_FORMAT_VERSION],
+          schema: SnapshotSchema,
+        }),
+        Either.flatMap(({ snapshot, unknownFields }) => {
           const progress = {
             appliedIndex: snapshot.offset ?? 0n,
             highestRelevantWalletIndex: 0n,
@@ -144,8 +148,11 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
             isConnected: false,
           };
 
-          const withBookings = (wallet: CoreWallet): CoreWallet =>
-            snapshot.bookings !== undefined ? { ...wallet, bookings: snapshot.bookings } : wallet;
+          const withStoredExtras = (wallet: CoreWallet): CoreWallet =>
+            SnapshotFormat.withUnknownFields(
+              snapshot.bookings !== undefined ? { ...wallet, bookings: snapshot.bookings } : wallet,
+              unknownFields,
+            );
 
           // A snapshot that declares its hashes pending is the one shape the validation below would wrongly refuse:
           // its state is full and its hash map is empty by construction, because the migration that wrote it had no
@@ -171,7 +178,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
                   snapshot.networkId,
                   snapshot.txHistory,
                 );
-          return Either.map(restored, withBookings);
+          return Either.map(restored, withStoredExtras);
         }),
       );
     },
