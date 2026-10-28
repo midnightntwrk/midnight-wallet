@@ -52,8 +52,9 @@ describe('Token transfer', () => {
   beforeEach(async () => {
     fixture = getFixture();
 
-    wallet = await utils.provideWallet(filenameWallet, fundedSeed, fixture);
-    wallet2 = await utils.provideWallet(filenameWallet2, receivingSeed, fixture);
+    const directoryPath = utils.syncCacheDirectory();
+    wallet = await utils.provideWallet(directoryPath, filenameWallet, fundedSeed, fixture);
+    wallet2 = await utils.provideWallet(directoryPath, filenameWallet2, receivingSeed, fixture);
 
     const [state1, state2] = await Promise.all([
       wallet.wallet.waitForSyncedState(),
@@ -77,8 +78,9 @@ describe('Token transfer', () => {
   afterEach(async (context) => {
     // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
     if (shouldPersistState(context)) {
-      await utils.saveState(wallet, filenameWallet);
-      await utils.saveState(wallet2, filenameWallet2);
+      const directoryPath = utils.syncCacheDirectory();
+      await utils.saveState(wallet, directoryPath, filenameWallet);
+      await utils.saveState(wallet2, directoryPath, filenameWallet2);
     }
     await sender.wallet.stop();
     await receiver.wallet.stop();

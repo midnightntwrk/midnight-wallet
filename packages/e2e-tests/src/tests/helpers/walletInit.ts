@@ -13,7 +13,6 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import * as rx from 'rxjs';
 import { existsSync } from 'node:fs';
-import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
@@ -55,6 +54,22 @@ export type WalletInit = {
    * it.
    */
   dustSyncModel: DustSnapshotModel;
+};
+
+/**
+ * The `SYNC_CACHE` directory: wallet snapshots kept between runs, so a test against a long-lived network can resume a
+ * wallet instead of syncing it from genesis. Only a remote suite has a use for it; an undeployed chain is new each run,
+ * so a snapshot left by a previous run describes a chain that no longer exists.
+ *
+ * Throws rather than exiting the process: a vitest worker that exits mid-test takes its file down unreported, so a
+ * missing setting would surface as an unexplained crashed worker instead of a failed test that names it.
+ */
+export const syncCacheDirectory = (): string => {
+  const directoryPath = process.env['SYNC_CACHE'];
+  if (!directoryPath) {
+    throw new Error('SYNC_CACHE env var not set: it must name the directory wallet snapshots are kept in');
+  }
+  return directoryPath;
 };
 
 const waitForSyncProgress = async (wallet: WalletFacade) =>
@@ -145,7 +160,12 @@ const restoreDustWallet = async (
   return undefined;
 };
 
+/**
+ * Restores a wallet from the snapshot `saveState` wrote to `directoryPath` under `filename`, falling back to building
+ * it from scratch when there is no usable snapshot.
+ */
 export const provideWallet = async (
+  directoryPath: string,
   filename: string,
   seed: string,
   fixture: TestContainersFixture,
@@ -164,12 +184,6 @@ export const provideWallet = async (
   const walletConfig = { ...fixture.getWalletConfig(), txHistoryStorage };
   const dustWalletConfig = { ...fixture.getDustWalletConfig(), txHistoryStorage };
   const Wallet = ShieldedWallet(walletConfig);
-
-  const directoryPath = process.env['SYNC_CACHE'];
-  if (!directoryPath) {
-    logger.warn('SYNC_CACHE env var not set');
-    exit(1);
-  }
 
   const seeds: WalletSeeds = {
     shielded: getShieldedSeed(seed),
@@ -237,18 +251,16 @@ export const provideWallet = async (
 };
 
 /**
- * Serializes all three sub-wallet states into `SYNC_CACHE`, keyed by `filename`.
+ * Serializes all three sub-wallet states into `directoryPath`, keyed by `filename`.
  *
  * Takes the whole {@link WalletInit} rather than the facade alone so the dust snapshot is always written to the
  * namespace of the sync model that produced it — a model and a facade passed separately could disagree.
  */
-export const saveState = async (walletInit: Pick<WalletInit, 'wallet' | 'dustSyncModel'>, filename: string) => {
-  const directoryPath = process.env['SYNC_CACHE'];
-  if (!directoryPath) {
-    logger.warn('SYNC_CACHE env var not set');
-    exit(1);
-  }
-
+export const saveState = async (
+  walletInit: Pick<WalletInit, 'wallet' | 'dustSyncModel'>,
+  directoryPath: string,
+  filename: string,
+) => {
   logger.info(`Saving state in ${directoryPath}/${filename}`);
 
   try {

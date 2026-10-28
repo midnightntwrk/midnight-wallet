@@ -19,6 +19,9 @@ import { logger } from './logger.js';
 import { type CombinedTokenTransfer, type FacadeState, type UtxoWithMeta } from '@midnightntwrk/wallet-sdk-facade';
 import { ArrayOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
+import * as fsAsync from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { carried } from './helpers/transactions.js';
 import { dustStatesEqual, rootsEqual, sameItems, stringifyWithBigInts } from './helpers/dustComparison.js';
 
@@ -387,44 +390,55 @@ describe('Projections-based synchronisation model', () => {
       const dustUtxosBeforeSnapshot = stateBeforeSnapshot.dust.state.state.utxos.length;
       expect(dustUtxosBeforeSnapshot).toBeGreaterThan(0);
 
-      // Snapshot the projections-synced wallet, then restore it into a fresh facade. Writing the snapshot inside
-      // the test keeps it hermetic: an undeployed chain is new each run, so a snapshot left behind by a previous
-      // run would describe a different chain.
-      const filename = `projections-restore-${seedFunded.substring(0, 7)}.state`;
-      await utils.saveState(funded, filename);
-      const restored = await utils.provideWallet(filename, seedFunded, fixture, utils.manualProjectionsDustSyncOptions);
-
+      // Snapshot the projections-synced wallet, then restore it into a fresh facade. The snapshot goes to a directory
+      // of this test's own, written and read within the test: an undeployed chain is new each run, so a snapshot
+      // left behind by a previous run — in `SYNC_CACHE` or anywhere else shared — would describe a different chain.
+      const directoryPath = await fsAsync.mkdtemp(path.join(os.tmpdir(), 'projections-restore-'));
       try {
-        // `provideWallet` silently falls back to building from scratch when a restore fails, which would leave this
-        // test asserting nothing about the resume path. The restored wallet is started with `manualSync`, so before
-        // the first `doSync` its Dust state is exactly what came off disk — a non-zero baseline proves the snapshot
-        // was actually used.
-        const restoredBeforeSync = await rx.firstValueFrom(restored.wallet.state());
-        const restoredDustState = restoredBeforeSync.dust.state.state;
-        expect(restoredDustState.utxos.length).toBe(dustUtxosBeforeSnapshot);
+        const filename = `projections-restore-${seedFunded.substring(0, 7)}.state`;
+        await utils.saveState(funded, directoryPath, filename);
+        const restored = await utils.provideWallet(
+          directoryPath,
+          filename,
+          seedFunded,
+          fixture,
+          utils.manualProjectionsDustSyncOptions,
+        );
 
-        // The two cursors the resumed pass keys off are ledger-v9 members — no published ledger-v8 exposes the
-        // generating or commitment tree's first free index — so reading them means naming the ledger version the
-        // state came from. This suite's chain runs ledger-v9 from its first block, so a state that is anything else
-        // is a broken harness rather than a failing assertion.
-        if (!(restoredDustState instanceof ledger.DustLocalState)) {
-          throw new Error('Expected the restored wallet to hold a ledger-v9 dust state');
+        try {
+          // `provideWallet` silently falls back to building from scratch when a restore fails, which would leave this
+          // test asserting nothing about the resume path. The restored wallet is started with `manualSync`, so before
+          // the first `doSync` its Dust state is exactly what came off disk — a non-zero baseline proves the snapshot
+          // was actually used.
+          const restoredBeforeSync = await rx.firstValueFrom(restored.wallet.state());
+          const restoredDustState = restoredBeforeSync.dust.state.state;
+          expect(restoredDustState.utxos.length).toBe(dustUtxosBeforeSnapshot);
+
+          // The two cursors the resumed pass keys off are ledger-v9 members — no published ledger-v8 exposes the
+          // generating or commitment tree's first free index — so reading them means naming the ledger version the
+          // state came from. This suite's chain runs ledger-v9 from its first block, so a state that is anything else
+          // is a broken harness rather than a failing assertion.
+          if (!(restoredDustState instanceof ledger.DustLocalState)) {
+            throw new Error('Expected the restored wallet to hold a ledger-v9 dust state');
+          }
+          expect(restoredDustState.commitmentTreeFirstFree).toBeGreaterThan(0n);
+          expect(restoredDustState.generatingTreeFirstFree).toBeGreaterThan(0n);
+
+          // Advance the chain so the resumed pass has a real delta to apply rather than short-circuiting on an
+          // unchanged tip.
+          await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+          await restored.wallet.doSync(restored.seeds);
+
+          const restoredState = await restored.wallet.waitForSyncedState();
+          const eventsState = await fundedEventsSynced.wallet.waitForSyncedState();
+
+          // The resumed wallet must land on the same Dust state as one that replayed the whole event history.
+          expectSameSyncState(eventsState, restoredState);
+        } finally {
+          await restored.wallet.stop();
         }
-        expect(restoredDustState.commitmentTreeFirstFree).toBeGreaterThan(0n);
-        expect(restoredDustState.generatingTreeFirstFree).toBeGreaterThan(0n);
-
-        // Advance the chain so the resumed pass has a real delta to apply rather than short-circuiting on an
-        // unchanged tip.
-        await utils.waitForBlockAdvancement(fixture.getIndexerUri());
-        await restored.wallet.doSync(restored.seeds);
-
-        const restoredState = await restored.wallet.waitForSyncedState();
-        const eventsState = await fundedEventsSynced.wallet.waitForSyncedState();
-
-        // The resumed wallet must land on the same Dust state as one that replayed the whole event history.
-        expectSameSyncState(eventsState, restoredState);
       } finally {
-        await restored.wallet.stop();
+        await fsAsync.rm(directoryPath, { recursive: true, force: true });
       }
     },
     timeout * 2,

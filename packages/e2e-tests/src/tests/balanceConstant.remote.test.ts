@@ -74,8 +74,9 @@ describe('Balance constant', () => {
     async () => {
       // Deliberate save inside the test body: this test's subject is save-then-restore, and it only reaches this line
       // on the passing path. It is not the `afterEach` persistence that the poisoning guard exists for.
-      await utils.saveState(wallet, filename);
-      const restoredWallet = await utils.provideWallet(filename, seed, fixture);
+      const directoryPath = utils.syncCacheDirectory();
+      await utils.saveState(wallet, directoryPath, filename);
+      const restoredWallet = await utils.provideWallet(directoryPath, filename, seed, fixture);
       const syncedState = await restoredWallet.wallet.waitForSyncedState();
 
       expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
