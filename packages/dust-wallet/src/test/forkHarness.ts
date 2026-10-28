@@ -329,6 +329,9 @@ export type ForkWalletConfig = Readonly<{
    *   Two of them, because `DustLocalState` is parameterised and the parameters are a WASM object of whichever ledger
    *   module produced them. The shipped wallet rebuilds the ledger-v8 set from the ledger-v9 one it is handed; this
    *   harness states both so a proof can assert what the migration was given.
+   *
+   *   Configuration only: the start is called without them, as `DustWallet(configuration).startWithSeed(seed)` is, so it
+   *   falls back to the class's default.
    */
   dustParameters: Readonly<{ v8: V8Parameters; v9: V9Parameters }>;
   /** The instant sync updates are valued at — at or after the last event's block time. */
@@ -433,6 +436,9 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     {
       networkId,
       forks: { v9: forkVersion },
+      // As `DustWallet` hands the wallet layer its whole configuration, the dust parameters its migration is built on
+      // included.
+      dustParameters: dustParameters.v9,
       ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}),
       ...(dustTimelineStartProbe !== undefined ? { dustTimelineStartProbe } : {}),
     },
@@ -459,9 +465,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
   );
 
   return Effect.promise(() =>
-    startFrom === 'keys'
-      ? WalletClass.startWithKeys({ v8: v8Key, v9: v9Key }, dustParameters.v9)
-      : WalletClass.startWithSeed(seed, dustParameters.v9),
+    startFrom === 'keys' ? WalletClass.startWithKeys({ v8: v8Key, v9: v9Key }) : WalletClass.startWithSeed(seed),
   ).pipe(
     Effect.map((wallet) => {
       const runtime = wallet.runtime;
