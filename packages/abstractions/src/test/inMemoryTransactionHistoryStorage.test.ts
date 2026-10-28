@@ -368,6 +368,18 @@ describe('InMemoryTransactionHistoryStorage fields the entry schema does not dec
 
     expect(Object.hasOwn(JSON.parse(await restored.serialize()) as object, 'laterEnvelopeField')).toBe(false);
   });
+
+  it('should not write back a field an entry was restored with once the storage is reset, because reset discarded that entry', async () => {
+    const payload = JSON.stringify({ version: 'v2', entries: [{ ...storedEntry, laterField: 'stale' }] });
+    const restored = InMemoryTransactionHistoryStorage.restore(payload, TransactionHistoryEntryCommonSchema);
+
+    // A resync after a reset writes the same transaction hashes again.
+    restored.reset();
+    await restored.gotFinalized(finalizedInput('tx', { identifiers: ['id-a'] }));
+
+    const [written] = parseEntries(await restored.serialize());
+    expect(written !== undefined && Object.hasOwn(written, 'laterField')).toBe(false);
+  });
 });
 
 describe('extendEntrySchema', () => {
