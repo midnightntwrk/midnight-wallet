@@ -9,9 +9,6 @@ env:
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
   NETWORK: 'undeployed'
   APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
-  # The snapshot-restore e2e writes and reads a wallet snapshot here. Nothing caches it between runs, so every run
-  # starts from an empty directory, which an undeployed chain needs: it is new each run.
-  SYNC_CACHE: ${{ github.workspace }}/packages/e2e-tests/.sync_cache
 
 permissions: {}
 

@@ -68,7 +68,7 @@
     },
     "test-undeployed": {
       "cache": false,
-      "env": ["NETWORK", "APP_INFRA_SECRET", "SYNC_CACHE"]
+      "env": ["NETWORK", "APP_INFRA_SECRET"]
     },
     "test-fork": {
       "cache": false,

@@ -13,6 +13,7 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import * as rx from 'rxjs';
 import { existsSync } from 'node:fs';
+import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
@@ -54,19 +55,6 @@ export type WalletInit = {
    * it.
    */
   dustSyncModel: DustSnapshotModel;
-};
-
-/**
- * The directory snapshots are read from and written to. Throws rather than exiting the process: a vitest worker that
- * exits mid-test takes its file down unreported, so a missing setting would surface as an unexplained crashed worker
- * instead of a failed test that names it.
- */
-const syncCacheDirectory = (): string => {
-  const directoryPath = process.env['SYNC_CACHE'];
-  if (!directoryPath) {
-    throw new Error('SYNC_CACHE env var not set: it must name the directory wallet snapshots are kept in');
-  }
-  return directoryPath;
 };
 
 const waitForSyncProgress = async (wallet: WalletFacade) =>
@@ -177,7 +165,11 @@ export const provideWallet = async (
   const dustWalletConfig = { ...fixture.getDustWalletConfig(), txHistoryStorage };
   const Wallet = ShieldedWallet(walletConfig);
 
-  const directoryPath = syncCacheDirectory();
+  const directoryPath = process.env['SYNC_CACHE'];
+  if (!directoryPath) {
+    logger.warn('SYNC_CACHE env var not set');
+    exit(1);
+  }
 
   const seeds: WalletSeeds = {
     shielded: getShieldedSeed(seed),
@@ -251,7 +243,11 @@ export const provideWallet = async (
  * namespace of the sync model that produced it — a model and a facade passed separately could disagree.
  */
 export const saveState = async (walletInit: Pick<WalletInit, 'wallet' | 'dustSyncModel'>, filename: string) => {
-  const directoryPath = syncCacheDirectory();
+  const directoryPath = process.env['SYNC_CACHE'];
+  if (!directoryPath) {
+    logger.warn('SYNC_CACHE env var not set');
+    exit(1);
+  }
 
   logger.info(`Saving state in ${directoryPath}/${filename}`);
 
