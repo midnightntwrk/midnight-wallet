@@ -66,6 +66,7 @@ import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-cap
 import { CoreWallet as V1CoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
 import { type WalletSyncUpdate as V1SyncUpdate } from './v1/Sync.js';
 import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
+import { type DustTimelineStart } from './v2/Sync.js';
 import { type WalletSyncUpdate as V2SyncUpdate } from './v2/SyncSchema.js';
 import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
 import { type UtxoWithMeta } from './v2/types/Dust.js';
@@ -157,7 +158,30 @@ export type ForkingDustConfiguration = {
    *   the wallet exactly where a wallet that never asked would be.
    */
   chainVersionProbe?: ChainVersionProbe;
+  /**
+   * Where the chain's dust event timeline reaches `forks.v9`, for a fresh start to begin on the V2 variant there
+   * instead of replaying the ledger-v8 dust history.
+   *
+   * @remarks
+   *   Setting it is the opt-in: `DustWallet` sets it to an indexer search when `skipLedgerV8DustHistory` is on. Asked by
+   *   a fresh start only, and before {@link chainVersionProbe}; a restore resumes from the cursor its snapshot carries.
+   *
+   *   An answer at a version the V2 variant owns starts the wallet there, with an empty state and its cursor on the event
+   *   the answer names: the state the hand-over at the boundary leaves a wallet in. Anything else, whether no answer, a
+   *   rejection, one that does not come in time or a version below the boundary, leaves the start as it would be
+   *   without it.
+   */
+  dustTimelineStartProbe?: DustTimelineStartProbe;
 };
+
+/**
+ * Asks where the chain's dust event timeline reaches `forks.v9`.
+ *
+ * @remarks
+ *   Promise-shaped like {@link ChainVersionProbe}, because it is a wallet-configuration field. Nothing is an ordinary
+ *   answer, from a chain still below the boundary or one born on ledger-v9.
+ */
+export type DustTimelineStartProbe = () => Promise<Option.Option<DustTimelineStart>>;
 
 /**
  * One ledger version's dust secret key per side of a protocol boundary.
