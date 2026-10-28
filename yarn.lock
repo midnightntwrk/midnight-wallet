@@ -2455,7 +2455,7 @@ __metadata:
     "@midnightntwrk/wallet-sdk-shielded": "workspace:^"
     "@midnightntwrk/wallet-sdk-unshielded-wallet": "workspace:^"
     "@midnightntwrk/wallet-sdk-utilities": "workspace:*"
-    effect: "npm:^3.22.2"
+    effect: "npm:3.22.2"
     typescript: "npm:5.9.3"
     wallet-sdk-abstractions-2.1.0: "npm:@midnightntwrk/wallet-sdk-abstractions@2.1.0"
   languageName: unknown
@@ -2593,7 +2593,7 @@ __metadata:
     graphql-http: "npm:^1.22.4"
     graphql-ws: "npm:^6.0.7"
     tsx: "npm:4.23.15"
-    yaml: "npm:^2.9.0"
+    yaml: "npm:2.9.1"
   languageName: unknown
   linkType: soft
 
@@ -2776,8 +2776,8 @@ __metadata:
     "@midnightntwrk/wallet-sdk-indexer-client": "npm:2.0.0-rc.1"
     "@midnightntwrk/wallet-sdk-runtime": "npm:2.0.0-rc.1"
     "@midnightntwrk/wallet-sdk-utilities": "npm:1.2.2-rc.0"
-    "@noble/curves": "npm:^1.9.7"
-    "@noble/hashes": "npm:^1.8.0"
+    "@noble/curves": "npm:1.9.7"
+    "@noble/hashes": "npm:1.8.0"
     effect: "npm:^3.19.19"
     rxjs: "npm:^7.8.2"
   languageName: unknown
@@ -2918,21 +2918,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@noble/curves@npm:1.9.7, @noble/curves@npm:^1.3.0, @noble/curves@npm:^1.8.1, @noble/curves@npm:~1.9.0, @noble/curves@npm:~1.9.2":
+  version: 1.9.7
+  resolution: "@noble/curves@npm:1.9.7"
+  dependencies:
+    "@noble/hashes": "npm:1.8.0"
+  checksum: 10c0/150014751ebe8ca06a8654ca2525108452ea9ee0be23430332769f06808cddabfe84f248b6dbf836916bc869c27c2092957eec62c7506d68a1ed0a624017c2a3
+  languageName: node
+  linkType: hard
+
 "@noble/curves@npm:2.4.0":
   version: 2.4.0
   resolution: "@noble/curves@npm:2.4.0"
   dependencies:
     "@noble/hashes": "npm:2.4.0"
   checksum: 10c0/b60b737f65cc4e128dd94fea467df1ed73c5c0c089ef1bdb61614a0897db1fa7151d7f95bb7205854a9030d3f80a879e00f3bb74990befde061184ae43dfaec6
-  languageName: node
-  linkType: hard
-
-"@noble/curves@npm:^1.3.0, @noble/curves@npm:^1.8.1, @noble/curves@npm:^1.9.7, @noble/curves@npm:~1.9.0, @noble/curves@npm:~1.9.2":
-  version: 1.9.7
-  resolution: "@noble/curves@npm:1.9.7"
-  dependencies:
-    "@noble/hashes": "npm:1.8.0"
-  checksum: 10c0/150014751ebe8ca06a8654ca2525108452ea9ee0be23430332769f06808cddabfe84f248b6dbf836916bc869c27c2092957eec62c7506d68a1ed0a624017c2a3
   languageName: node
   linkType: hard
 
@@ -2945,7 +2945,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@noble/hashes@npm:1.8.0, @noble/hashes@npm:^1.2.0, @noble/hashes@npm:^1.3.3, @noble/hashes@npm:^1.8.0, @noble/hashes@npm:~1.8.0":
+"@noble/hashes@npm:1.8.0, @noble/hashes@npm:^1.2.0, @noble/hashes@npm:^1.3.3, @noble/hashes@npm:~1.8.0":
   version: 1.8.0
   resolution: "@noble/hashes@npm:1.8.0"
   checksum: 10c0/06a0b52c81a6fa7f04d67762e08b2c476a00285858150caeaaff4037356dd5e119f45b2a530f638b77a5eeca013168ec1b655db41bae3236cb2e9d511484fc77
@@ -5979,7 +5979,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"effect@npm:^3.19.19, effect@npm:^3.22.2":
+"effect@npm:3.22.2":
+  version: 3.22.2
+  resolution: "effect@npm:3.22.2"
+  dependencies:
+    "@standard-schema/spec": "npm:^1.0.0"
+    fast-check: "npm:^3.23.1"
+  checksum: 10c0/4ada5ee284ec0eb058ec0713dc6ae5f6ca670cb995d08c0f4ae0f5eb2b27802d49cf3137c2e3d3469fac77b3910bef40fe17f933becf6ffc7aa234f735ba0e6e
+  languageName: node
+  linkType: hard
+
+"effect@npm:^3.19.19":
   version: 3.22.3
   resolution: "effect@npm:3.22.3"
   dependencies:
