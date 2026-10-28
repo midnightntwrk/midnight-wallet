@@ -18,5 +18,5 @@
 # `targets` is why neither CI nor a contributor needs `rustup target add`: rustup installs the toolchain and the wasm
 # target on the first `cargo` invocation in this workspace.
 [toolchain]
-channel = "1.99"
+channel = "1.97"
 targets = ["wasm32-unknown-unknown"]
