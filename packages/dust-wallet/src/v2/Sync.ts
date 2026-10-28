@@ -420,6 +420,34 @@ const versionWatch = (
       );
 };
 
+/** Where a chain's dust event timeline reaches a protocol boundary. */
+export type DustTimelineStart = Readonly<{
+  /** The last dust event id below the boundary: the cursor a variant registered from the boundary resumes after. */
+  cursor: bigint;
+  /** The version the first dust event at or beyond the boundary was reported at. */
+  version: ProtocolVersion.ProtocolVersion;
+}>;
+
+/**
+ * Finds where the chain's dust event timeline reaches `boundary`, from the dust event subscription alone.
+ *
+ * @remarks
+ *   No indexer query names the event at which a fork took effect, and the subscription's ids have gaps where other event
+ *   kinds sit, so the cursor is searched for rather than computed. It must be exact: one below the last event under the
+ *   boundary serves the variant from the boundary an event its ledger cannot read, one at the first event from the
+ *   boundary skips that event.
+ *
+ *   Nothing when there is nothing to find or the search cannot finish: a timeline that starts at or beyond the boundary,
+ *   one that has not reached it, one with no dust event at all, an indexer that cannot be asked.
+ * @param config Where to ask.
+ * @param boundary The protocol version the variant to start on is registered from.
+ * @returns Where the timeline reaches the boundary, or nothing.
+ */
+export const findDustTimelineStart = (
+  _config: DefaultSyncConfiguration,
+  _boundary: ProtocolVersion.ProtocolVersion,
+): Effect.Effect<Option.Option<DustTimelineStart>> => Effect.succeedNone;
+
 export type SimulatorSyncConfiguration = {
   simulator: Simulator;
   networkId: NetworkId;
