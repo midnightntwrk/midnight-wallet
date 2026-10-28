@@ -66,7 +66,7 @@ import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-cap
 import { CoreWallet as V1CoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
 import { type WalletSyncUpdate as V1SyncUpdate } from './v1/Sync.js';
 import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
-import { type DustTimelineStart } from './v2/Sync.js';
+import { type DustTimelineStart, findDustTimelineStart } from './v2/Sync.js';
 import { type WalletSyncUpdate as V2SyncUpdate } from './v2/SyncSchema.js';
 import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
 import { type UtxoWithMeta } from './v2/types/Dust.js';
@@ -563,6 +563,65 @@ export function CustomForkingDustWallet<
         );
 
   /**
+   * How long a fresh start waits for {@link ForkingDustConfiguration.dustTimelineStartProbe}.
+   *
+   * @remarks
+   *   Longer than {@link probeTimeout}, because the indexer search behind it opens one short subscription per halving of
+   *   the timeline rather than asking a single query. A ceiling, not a typical cost: on expiry the start proceeds as
+   *   one without the search.
+   */
+  const timelineStartTimeout = Duration.seconds(30);
+
+  /** Where a fresh start begins when the timeline search answered for it: the V2 variant, and where to park it. */
+  type TimelineStart = Readonly<{
+    start: DustTimelineStart;
+    variant: HList.Each<Variants>;
+  }>;
+
+  /**
+   * Where the dust event timeline reaches `forks.v9`, with the V2 variant that reads it from there, or nothing.
+   *
+   * @remarks
+   *   Nothing for every way the search can come back without a start, none of them distinguished: no probe configured, an
+   *   answer of nothing, a rejection, one that outlived {@link timelineStartTimeout}, or a version no V2 variant owns.
+   *   Each leaves the start to {@link probedStart}, as if no probe were configured.
+   */
+  const timelineStart: Effect.Effect<Option.Option<TimelineStart>> =
+    configuration.dustTimelineStartProbe === undefined
+      ? Effect.succeedNone
+      : pipe(
+          Effect.tryPromise(configuration.dustTimelineStartProbe),
+          Effect.timeout(timelineStartTimeout),
+          Effect.map(
+            Option.flatMap((start) =>
+              pipe(
+                BaseWallet.variantFor(start.version),
+                Option.filter((variant) => Variant.getVersionedVariantTag(variant) === V2Tag),
+                Option.map((variant): TimelineStart => ({ start, variant })),
+              ),
+            ),
+          ),
+          Effect.orElseSucceed(() => Option.none<TimelineStart>()),
+        );
+
+  /**
+   * An empty V2 state at the version and cursor the timeline search found.
+   *
+   * @remarks
+   *   The state the hand-over at the boundary leaves a wallet in, without the ledger-v8 replay that preceded it: the
+   *   migration empties the state and keeps the cursor, which on a timeline read to the boundary is the last event
+   *   below it.
+   */
+  const parkedStateAt = (keys: DustKeysByEpoch, rates: DustGenerationRates, start: DustTimelineStart): CoreWallet =>
+    CoreWallet.updateProgress(
+      CoreWallet.withProtocolVersion(
+        CoreWallet.initEmpty(asV9DustParameters(rates), keys.v9, configuration.networkId),
+        start.version,
+      ),
+      { appliedIndex: start.cursor },
+    );
+
+  /**
    * A fresh state of the variant a probed start begins at, recording the version the chain reported.
    *
    * @remarks
@@ -593,18 +652,22 @@ export function CustomForkingDustWallet<
     static readonly configuration: TConfiguration = configuration;
 
     /**
-     * Starts at the variant the chain says it is on, or at the head variant when it does not say.
+     * Starts where the dust event timeline reaches the boundary, else at the variant the chain says it is on, else at
+     * the head variant.
      *
      * @remarks
-     *   The second branch is the whole of this wallet's previous behaviour, unchanged and reached whenever the chain was
-     *   not asked or did not answer: the V1 variant, an empty state valued against the ledger-v8 rebuild of the rates
-     *   the caller named, and a hand-over on the first batch that reports a version it does not own.
+     *   The first is reached only by a wallet configured with a timeline search that found the boundary, and parks the V2
+     *   variant there with nothing read below it.
+     *
+     *   The last is the whole of this wallet's previous behaviour, unchanged and reached whenever the chain was not asked
+     *   or did not answer: the V1 variant, an empty state valued against the ledger-v8 rebuild of the rates the caller
+     *   named, and a hand-over on the first batch that reports a version it does not own.
      * @param keys One ledger version's dust key per side of the boundary, since either side may be the one that runs.
      * @param rates The rates the caller named, which whichever empty state is built is valued against.
      * @returns The started wallet.
      */
     static #startProbed(keys: DustKeysByEpoch, rates: DustGenerationRates): Promise<ForkingDustWalletImplementation> {
-      return pipe(
+      const fromChainVersion = pipe(
         probedStart,
         Effect.map(
           Option.match({
@@ -620,6 +683,23 @@ export function CustomForkingDustWallet<
                 ForkingDustWalletImplementation,
                 variant,
                 freshStateAt(variant, keys, rates, version),
+              ),
+          }),
+        ),
+      );
+
+      return pipe(
+        timelineStart,
+        Effect.flatMap(
+          Option.match({
+            onNone: () => fromChainVersion,
+            onSome: ({ start, variant }) =>
+              Effect.sync(() =>
+                ForkingDustWalletImplementation.startAtVariant(
+                  ForkingDustWalletImplementation,
+                  variant,
+                  parkedStateAt(keys, rates, start),
+                ),
               ),
           }),
         ),
@@ -1170,18 +1250,27 @@ export type DustWalletClass = ForkingDustWalletClass<V1SyncUpdate, V2SyncUpdate,
  *   over immediately. An application that would rather ask something else — a cache, a value it already holds —
  *   supplies its own `chainVersionProbe`; one whose chain cannot be reached loses nothing, because the answer is
  *   best-effort and its absence is the behaviour this wallet had before.
+ *
+ *   **With `skipLedgerV8DustHistory`, a fresh start first searches for where the dust timeline reaches the boundary**,
+ *   and on a chain that has crossed it starts the V2 variant there, never reading the ledger-v8 dust history. The
+ *   search is best-effort too: when it finds nothing, the start is the one described above.
  * @param configuration What the wallet and both its variants are built from, including where the boundary lies.
  * @returns The wallet class.
  */
 export function DustWallet(configuration: DefaultDustConfiguration): DustWalletClass {
   const dustParameters = configuration.dustParameters ?? ledgerV9.LedgerParameters.initialParameters().dust;
-  const withProbe: DefaultDustConfiguration = {
+  const withProbes: DefaultDustConfiguration & ForkingDustConfiguration = {
     ...configuration,
     chainVersionProbe: configuration.chainVersionProbe ?? makeIndexerChainVersionProbe(configuration),
+    ...(configuration.skipLedgerV8DustHistory === true
+      ? {
+          dustTimelineStartProbe: () => Effect.runPromise(findDustTimelineStart(configuration, configuration.forks.v9)),
+        }
+      : {}),
   };
 
   return CustomForkingDustWallet(
-    withProbe,
+    withProbes,
     {
       builder: new V1Builder().withDefaults(),
       // The one field that cannot be shared: `dustParameters` is a WASM object of whichever ledger module produced it,
