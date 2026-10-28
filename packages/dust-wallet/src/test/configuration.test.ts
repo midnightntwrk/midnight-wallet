@@ -36,6 +36,7 @@ describe('DefaultDustConfiguration', () => {
           transactionDetailsRetryWindow?: Duration.DurationInput;
           forks: ProtocolVersion.ForkSchedule;
           chainVersionProbe?: ChainVersionProbe;
+          skipLedgerV8DustHistory?: boolean;
         }
       >
     >;

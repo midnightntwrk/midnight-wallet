@@ -407,4 +407,29 @@ export type DefaultDustConfiguration = {
    *   where it started before there was a probe.
    */
   chainVersionProbe?: ChainVersionProbe;
+  /**
+   * Whether a fresh start on a chain that has crossed `forks.v9` skips the ledger-v8 dust history, beginning on the V2
+   * variant with the dust the chain re-emitted as ledger-v9 events when it crossed the v9 fork.
+   *
+   * @remarks
+   *   Fresh starts only. A restore resumes from the cursor its snapshot carries and is unaffected.
+   *
+   *   The start looks up the last dust event below `forks.v9` and parks the V2 variant's cursor there, with an empty
+   *   state: the state the hand-over at the boundary leaves a wallet in, minus the ledger-v8 replay it would have
+   *   thrown away. Synchronization then continues by event replay as usual. Read by `DustWallet` only: a wallet
+   *   composed with `CustomForkingDustWallet`, such as one whose V2 variant syncs with `makeEventLessSyncService`, does
+   *   not see it.
+   *
+   *   **The wallet's dust transaction history from ledger-v8 will be missing.** History is recorded as events are
+   *   applied, and a wallet started this way applies none below the boundary.
+   *
+   *   Dust only. In a facade configuration the shielded and unshielded wallets still read ledger-v8: the coins they hold
+   *   from it cross the fork with them and are found nowhere else.
+   *
+   *   Specific to the v9 fork rather than a mechanism for later ones: it rests on the chain having re-emitted its dust as
+   *   ledger-v9 events when it crossed, which happens once, for that fork. A chain still below `forks.v9`, one born on
+   *   ledger-v9, or an indexer that cannot be searched leaves the start as it is without this option.
+   * @default false
+   */
+  skipLedgerV8DustHistory?: boolean;
 };
