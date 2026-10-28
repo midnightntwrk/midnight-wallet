@@ -57,6 +57,7 @@ import { EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
 import { Duration, Effect, Either, Match, Option, Ref, type Scope, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { type PublicKey } from './KeyStore.js';
+import { runPromiseThrowingFailure } from './PromiseBoundary.js';
 import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
 import {
   type DefaultUnshieldedConfiguration,
@@ -427,7 +428,7 @@ export function CustomForkingUnshieldedWallet<
                   ),
               }),
             ),
-            Effect.runPromise,
+            runPromiseThrowingFailure,
           ),
         // An identity only ledger-v9 can express, so it starts on that variant and stays there —
         // and the chain is not asked, because there is nothing its answer could decide. Stamped with the boundary
@@ -571,7 +572,7 @@ export function CustomForkingUnshieldedWallet<
           [V1Tag]: (v1) => v1.startSyncInBackground(),
           [V2Tag]: (v2) => v2.startSyncInBackground(),
         });
-      }).pipe(Effect.runPromise);
+      }).pipe(runPromiseThrowingFailure);
     }
 
     /** Starts synchronization on a variant that has just become current, unless the wallet has been stopped. */
@@ -602,7 +603,7 @@ export function CustomForkingUnshieldedWallet<
               Effect.map(sealV9),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     /**
@@ -624,7 +625,7 @@ export function CustomForkingUnshieldedWallet<
               Effect.map((result) => (result === undefined ? undefined : resealAs(tx, 'Unbound')(result))),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     /**
@@ -646,7 +647,7 @@ export function CustomForkingUnshieldedWallet<
               Effect.map((result) => (result === undefined ? undefined : resealAs(tx, 'Unproven')(result))),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<UnprovenTx> {
@@ -661,7 +662,7 @@ export function CustomForkingUnshieldedWallet<
               .transferTransaction(outputs, ttl)
               .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp))),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     rotateUtxos(
@@ -682,7 +683,7 @@ export function CustomForkingUnshieldedWallet<
               .rotateUtxos(guaranteedUtxos, fallibleUtxos, nightVerifyingKey, ttl)
               .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp))),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     initSwap(
@@ -701,7 +702,7 @@ export function CustomForkingUnshieldedWallet<
               .initSwap(desiredInputs, desiredOutputs, ttl)
               .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp))),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     signUnprovenTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnprovenTx> {
@@ -718,7 +719,7 @@ export function CustomForkingUnshieldedWallet<
               Effect.map(resealAs(transaction, 'Unproven')),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     signUnboundTransaction(transaction: AnyTx, signSegment: SignSegment): Promise<UnboundTx> {
@@ -735,7 +736,7 @@ export function CustomForkingUnshieldedWallet<
               Effect.map(resealAs(transaction, 'Unbound')),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     /**
@@ -772,7 +773,7 @@ export function CustomForkingUnshieldedWallet<
               { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertTransaction(unwrapped) },
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void> {
@@ -781,7 +782,7 @@ export function CustomForkingUnshieldedWallet<
           [V1Tag]: (v1) => v1.revertUtxos(utxoIds),
           [V2Tag]: (v2) => v2.revertUtxos(utxoIds),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     releaseRestoredPending(coveredIds: ReadonlyArray<UtxoHash>): Promise<void> {
@@ -790,7 +791,7 @@ export function CustomForkingUnshieldedWallet<
           [V1Tag]: (v1) => v1.releaseRestoredPending(coveredIds),
           [V2Tag]: (v2) => v2.releaseRestoredPending(coveredIds),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<UnshieldedWalletState<string>> {

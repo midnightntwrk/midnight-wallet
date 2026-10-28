@@ -40,6 +40,7 @@ import {
 import { EitherOps, HList, Poly } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Either, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
+import { runPromiseThrowingFailure } from './PromiseBoundary.js';
 import { variantForSnapshot } from './Restore.js';
 import {
   type DefaultShieldedConfiguration,
@@ -294,7 +295,7 @@ export function CustomShieldedWallet<
         }
 
         yield* this.runtime.dispatch({ [V2Tag]: (v2) => v2.startSyncInBackground(secretKeys) });
-      }).pipe(Effect.runPromise);
+      }).pipe(runPromiseThrowingFailure);
     }
 
     async stop(): Promise<void> {
@@ -366,7 +367,7 @@ export function CustomShieldedWallet<
               ),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     transferTransaction(outputs: readonly TokenTransfer[], ttl?: Date): Promise<UnprovenTx> {
@@ -378,7 +379,7 @@ export function CustomShieldedWallet<
               Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, ProtocolVersion.MinSupportedVersion)),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     initSwap(
@@ -394,7 +395,7 @@ export function CustomShieldedWallet<
               Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, ProtocolVersion.MinSupportedVersion)),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     revertTransaction(transaction: AnyTx): Promise<void> {
@@ -408,7 +409,7 @@ export function CustomShieldedWallet<
               { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertTransaction(unwrapped) },
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<TSerialized>> {

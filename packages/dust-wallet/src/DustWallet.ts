@@ -599,7 +599,7 @@ export function CustomForkingDustWallet<
               ),
           }),
         ),
-        Effect.runPromise,
+        runPromiseThrowingFailure,
       );
     }
 
@@ -813,7 +813,7 @@ export function CustomForkingDustWallet<
         // chain that has not forked yet.
         yield* Ref.update(this.#retainedKeys, (retained) => ({ ...retained, v9: Option.some(secretKey) }));
         yield* this.#startSynchronizing();
-      }).pipe(Effect.runPromise);
+      }).pipe(runPromiseThrowingFailure);
     }
 
     startWithSeed(seed: Uint8Array): Promise<void> {
@@ -822,14 +822,14 @@ export function CustomForkingDustWallet<
         // has nothing left to contribute.
         yield* Ref.set(this.#retainedKeys, keysFromSeed(WalletSeed.WalletSeed(seed)));
         yield* this.#startSynchronizing();
-      }).pipe(Effect.runPromise);
+      }).pipe(runPromiseThrowingFailure);
     }
 
     startWithKeys(keys: DustKeysByEpoch): Promise<void> {
       return Effect.gen(this, function* () {
         yield* Ref.set(this.#retainedKeys, { v8: Option.some(keys.v8), v9: Option.some(keys.v9) });
         yield* this.#startSynchronizing();
-      }).pipe(Effect.runPromise);
+      }).pipe(runPromiseThrowingFailure);
     }
 
     async stop(): Promise<void> {
@@ -853,7 +853,7 @@ export function CustomForkingDustWallet<
           [V1Tag]: (v1) => this.#stepSyncOn(v1, v8Aux),
           [V2Tag]: (v2) => v2.sync(secretKey),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     /**
@@ -891,7 +891,7 @@ export function CustomForkingDustWallet<
               .createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress)
               .pipe(Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp))),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     /**
@@ -912,7 +912,7 @@ export function CustomForkingDustWallet<
           [V1Tag]: (v1) => v1.splitNightUtxosForDustRegistration(currentTime, nightUtxos, isRegistration),
           [V2Tag]: (v2) => v2.splitNightUtxosForDustRegistration(currentTime, nightUtxos, isRegistration),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     attachDustRegistration(
@@ -942,7 +942,7 @@ export function CustomForkingDustWallet<
               Effect.map(resealAs(transaction)),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     addDustGenerationSignature(transaction: UnprovenTx, signature: ledgerV9.Signature): Promise<UnprovenTx> {
@@ -962,7 +962,7 @@ export function CustomForkingDustWallet<
               Effect.map(resealAs(transaction)),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     addDustRegistrationSignature(transaction: UnprovenTx, signature: ledgerV9.Signature): Promise<UnprovenTx> {
@@ -982,7 +982,7 @@ export function CustomForkingDustWallet<
               Effect.map(resealAs(transaction)),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     calculateFee(transactions: ReadonlyArray<AnyTx>): Promise<bigint> {
@@ -993,7 +993,7 @@ export function CustomForkingDustWallet<
           [V2Tag]: (v2) =>
             Effect.forEach(transactions, v9Tx<AnyTransaction>).pipe(Effect.flatMap((txs) => v2.calculateFee(txs))),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     estimateFee(transactions: ReadonlyArray<AnyTx>, ttl?: Date, currentTime?: Date): Promise<bigint> {
@@ -1009,7 +1009,7 @@ export function CustomForkingDustWallet<
               Effect.flatMap(([key, txs]) => v2.estimateFee(key, txs, effectiveTtl, currentTime)),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     balanceTransactions(
@@ -1036,7 +1036,7 @@ export function CustomForkingDustWallet<
               })),
             ),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     /**
@@ -1063,7 +1063,7 @@ export function CustomForkingDustWallet<
               onRight: (tx) => v2.revertTransaction(tx),
             }),
         })
-        .pipe(Effect.runPromise);
+        .pipe(runPromiseThrowingFailure);
     }
 
     ensureFeeCoverage(
