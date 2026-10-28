@@ -90,15 +90,21 @@ describe('Token transfer', () => {
   };
 
   afterEach(async (context) => {
-    // Saved first, while the wallets still run, since saving serializes their live state. Then both are stopped
-    // whatever the save did, and together, so neither a failed save nor one wallet refusing to stop can leave a wallet
-    // running. The first failure is reported once everything has been attempted.
-    const [saved] = await Promise.allSettled([saveWallets(shouldPersistState(context))]);
+    // Saved first, while the wallets still run, since saving serializes their live state. A failed save is held back
+    // rather than thrown, so both wallets are still stopped, and together, so one refusing to stop cannot leave the
+    // other running. The first failure is reported once everything has been attempted.
+    const saveFailures = await saveWallets(shouldPersistState(context)).then(
+      (): unknown[] => [],
+      (error: unknown) => [error],
+    );
     const stopped = await Promise.allSettled([wallet?.wallet.stop(), wallet2?.wallet.stop()]);
     logger.info('Wallets stopped');
-    const failed = [saved, ...stopped].find((result) => result.status === 'rejected');
-    if (failed !== undefined) {
-      throw failed.reason;
+    const failures = [
+      ...saveFailures,
+      ...stopped.flatMap((result): unknown[] => (result.status === 'rejected' ? [result.reason] : [])),
+    ];
+    if (failures.length > 0) {
+      throw failures[0];
     }
   }, timeout);
 
