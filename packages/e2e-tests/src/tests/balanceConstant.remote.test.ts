@@ -16,6 +16,9 @@ import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
 import { inspect } from 'node:util';
+import * as fsAsync from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 /** Tests checking balance is constant */
 
@@ -74,18 +77,26 @@ describe('Balance constant', () => {
     async () => {
       // Deliberate save inside the test body: this test's subject is save-then-restore, and it only reaches this line
       // on the passing path. It is not the `afterEach` persistence that the poisoning guard exists for.
-      const directoryPath = utils.syncCacheDirectory();
-      await utils.saveState(wallet, directoryPath, filename);
-      const restoredWallet = await utils.provideWallet(directoryPath, filename, seed, fixture);
-      const syncedState = await restoredWallet.wallet.waitForSyncedState();
+      //
+      // The snapshot goes to a directory of this test's own rather than `SYNC_CACHE`: it is written and read within
+      // the test, so it has no business in the cache carried between runs, and nothing it leaves there can be restored
+      // by a later run in its place.
+      const directoryPath = await fsAsync.mkdtemp(path.join(os.tmpdir(), 'balance-constant-restore-'));
+      try {
+        await utils.saveState(wallet, directoryPath, filename);
+        const restoredWallet = await utils.provideWallet(directoryPath, filename, seed, fixture);
+        const syncedState = await restoredWallet.wallet.waitForSyncedState();
 
-      expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
-      expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);
-      expect(syncedState.shielded.balances[nativeTokenHash2]).toBe(expectedTokenTwoBalance);
-      expect(syncedState.unshielded.balances[unshieldedTokenRaw]).toBe(expectedUnshieldedBalance);
-      expect(syncedState.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
-      expect(syncedState.shielded.pendingCoins.length).toBe(0);
-      expect(syncedState.shielded.totalCoins.length).toBeGreaterThanOrEqual(3);
+        expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
+        expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);
+        expect(syncedState.shielded.balances[nativeTokenHash2]).toBe(expectedTokenTwoBalance);
+        expect(syncedState.unshielded.balances[unshieldedTokenRaw]).toBe(expectedUnshieldedBalance);
+        expect(syncedState.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
+        expect(syncedState.shielded.pendingCoins.length).toBe(0);
+        expect(syncedState.shielded.totalCoins.length).toBeGreaterThanOrEqual(3);
+      } finally {
+        await fsAsync.rm(directoryPath, { recursive: true, force: true });
+      }
     },
     syncTimeout,
   );

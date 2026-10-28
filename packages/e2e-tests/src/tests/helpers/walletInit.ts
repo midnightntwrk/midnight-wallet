@@ -161,8 +161,11 @@ const restoreDustWallet = async (
 };
 
 /**
- * Restores a wallet from the snapshot `saveState` wrote to `directoryPath` under `filename`, falling back to building
+ * Provides a wallet from the snapshot `saveState` wrote to `directoryPath` under `filename`, falling back to building
  * it from scratch when there is no usable snapshot.
+ *
+ * Only the shielded and dust wallets resume from their snapshots. The unshielded snapshot is checked for but not read:
+ * that wallet is started from its public key and synchronizes from genesis.
  */
 export const provideWallet = async (
   directoryPath: string,
