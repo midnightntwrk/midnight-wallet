@@ -39,18 +39,24 @@ export type BalancingResult = ledger.UnprovenTransaction | undefined;
 
 // This interface should abstract over the transaction types used
 // It does not do so now for historical reasons
+//
+// Every call that books coins takes the TTL of the transaction it books them for, when there is one. The TTL is
+// recorded with each booking, so a coin is held no longer than its transaction can still be included; without one, a
+// booking is held for the full booking lifetime (see `bookingDeadline` in `CoreWallet`).
 export interface TransactingCapability<TSecrets, TState, _TTransaction> {
   balanceTransaction(
     secrets: TSecrets,
     state: TState,
     // That's definitely fine for now, question is whether it is worth bastracting over in general case
     tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+    ttl?: Date,
   ): Either.Either<[BalancingResult, TState], WalletError>;
 
   makeTransfer(
     secrets: TSecrets,
     state: TState,
     outputs: ReadonlyArray<TokenTransfer>,
+    ttl?: Date,
   ): Either.Either<[ledger.UnprovenTransaction, TState], WalletError>;
 
   initSwap(
@@ -58,6 +64,7 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
     state: TState,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: ReadonlyArray<TokenTransfer>,
+    ttl?: Date,
   ): Either.Either<[ledger.UnprovenTransaction, TState], WalletError>;
 
   //These functions below do not exactly match here, but also seem to be somewhat good place to put
@@ -131,6 +138,7 @@ export class TransactingCapabilityImplementation<
     secretKeys: ledger.ZswapSecretKeys,
     state: CoreWallet,
     tx: TTransaction,
+    ttl?: Date,
   ): Either.Either<[BalancingResult, CoreWallet], WalletError> {
     return Either.gen(this, function* () {
       const coinSelection = this.getCoinSelection();
@@ -145,6 +153,7 @@ export class TransactingCapabilityImplementation<
         state,
         initialImbalances,
         coinSelection,
+        ttl,
       );
 
       const { newState: afterGuaranteed, offer: guaranteed } = yield* this.#balanceGuaranteedSection(
@@ -153,6 +162,7 @@ export class TransactingCapabilityImplementation<
         initialImbalances,
         coinSelection,
         Imbalances.empty(),
+        ttl,
       );
 
       const balancedTx = Array.from(fallibleOffers.entries()).reduce(
@@ -167,6 +177,7 @@ export class TransactingCapabilityImplementation<
     secretKeys: ledger.ZswapSecretKeys,
     state: CoreWallet,
     transfers: Arr.NonEmptyReadonlyArray<TokenTransfer>,
+    ttl?: Date,
   ): Either.Either<[ledger.UnprovenTransaction, CoreWallet], WalletError> {
     return Either.gen(this, function* () {
       const positiveTransfers = yield* pipe(
@@ -198,6 +209,7 @@ export class TransactingCapabilityImplementation<
         imbalances,
         this.getCoinSelection(),
         Imbalances.empty(),
+        ttl,
       );
       const finalState = CoreWallet.watchCoins(newState, secretKeys, selfCoins);
       const finalTx = unprovenTxToBalance.merge(ledger.Transaction.fromParts(networkId, offer));
@@ -211,6 +223,7 @@ export class TransactingCapabilityImplementation<
     state: CoreWallet,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: ReadonlyArray<TokenTransfer>,
+    ttl?: Date,
   ): Either.Either<[ledger.UnprovenTransaction, CoreWallet], WalletError> {
     return Either.gen(this, function* () {
       const outputsValid = desiredOutputs.every((output) => output.amount > 0n);
@@ -241,6 +254,7 @@ export class TransactingCapabilityImplementation<
         TransactionImbalances.empty(),
         this.getCoinSelection(),
         inputsParseResult,
+        ttl,
       );
       const finalState = CoreWallet.watchCoins(newState, secretKeys, outputsParseResult.selfCoins);
       const balancingTx = ledger.Transaction.fromParts(networkId, offer);
@@ -274,8 +288,9 @@ export class TransactingCapabilityImplementation<
     state: CoreWallet,
     recipe: BalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>,
     segment: number,
+    ttl: Date | undefined,
   ): Option.Option<{ newState: CoreWallet; offer: ledger.ZswapOffer<ledger.PreProof> }> {
-    const [inputOffers, stateAfterSpends] = CoreWallet.spendCoins(state, secretKeys, recipe.inputs, segment);
+    const [inputOffers, stateAfterSpends] = CoreWallet.spendCoins(state, secretKeys, recipe.inputs, segment, ttl);
     const stateAfterWatches = CoreWallet.watchCoins(stateAfterSpends, secretKeys, recipe.outputs);
     const outputOffers = recipe.outputs.map((coin) => {
       const output = ledger.ZswapOutput.new(
@@ -307,6 +322,7 @@ export class TransactingCapabilityImplementation<
     state: CoreWallet,
     imbalances: TransactionImbalances,
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
+    ttl?: Date,
   ): Either.Either<
     {
       fallibleOffers: Map<number, ledger.ZswapOffer<ledger.PreProof>>;
@@ -340,7 +356,7 @@ export class TransactingCapabilityImplementation<
                   // Distinct coins can share a type and a value; only the nonce tells them apart.
                   isCoinEqual: (a, b) => a.nonce === b.nonce,
                 });
-                return this.#prepareOffer(secretKeys, newState, fallibleBalanceRecipe, segment);
+                return this.#prepareOffer(secretKeys, newState, fallibleBalanceRecipe, segment, ttl);
               },
               catch: (err) => {
                 if (err instanceof BalancingInsufficientFundsError) {
@@ -380,6 +396,7 @@ export class TransactingCapabilityImplementation<
     imbalances: TransactionImbalances,
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
     targetImbalances: Imbalances,
+    ttl: Date | undefined,
   ): Either.Either<{ offer: ledger.ZswapOffer<ledger.PreProof> | undefined; newState: CoreWallet }, WalletError> {
     return Either.gen(this, function* () {
       const balanceRecipe = yield* Either.try({
@@ -415,7 +432,7 @@ export class TransactingCapabilityImplementation<
       // An empty recipe (e.g. the guaranteed section is already balanced) yields no offer.
       // Treat that as "nothing to add" rather than a failure, mirroring the fallible section.
       return pipe(
-        this.#prepareOffer(secretKeys, state, balanceRecipe, 0),
+        this.#prepareOffer(secretKeys, state, balanceRecipe, 0, ttl),
         Option.match({
           onNone: () => ({ offer: undefined, newState: state }),
           onSome: (result) => result,
