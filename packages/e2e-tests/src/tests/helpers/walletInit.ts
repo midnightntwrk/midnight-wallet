@@ -247,8 +247,9 @@ export const provideWallet = async (
  * Serializes all three sub-wallet states into `directoryPath`, keyed by `filename`.
  *
  * Rejects, naming every file it could not write, rather than logging and carrying on: a restore test would otherwise
- * fail later on an assertion about the restored state, and a cache left with some of a wallet's files from this run and
- * the rest from an earlier one would be restored as one wallet by the next.
+ * fail later on an assertion about the restored state. Before rejecting it removes all three of the wallet's files,
+ * those this call wrote included, because a directory left with some of them from this run and the rest from an earlier
+ * one would be restored as one wallet by the next. With none of them left, the next run builds from scratch.
  *
  * Takes the whole {@link WalletInit} rather than the facade alone so the dust snapshot is always written to the
  * namespace of the sync model that produced it — a model and a facade passed separately could disagree.
@@ -286,6 +287,8 @@ export const saveState = async (
     if (res.status === 'fulfilled') logger.info(`State written to file ${files[i].path}`);
   });
   if (failures.length > 0) {
+    // Best effort: a path that cannot be removed is no worse off than before, and the error below already names it.
+    await Promise.allSettled(files.map((f) => fsAsync.rm(f.path, { force: true })));
     throw new Error(`Failed to save wallet state: ${failures.join('; ')}`);
   }
 };

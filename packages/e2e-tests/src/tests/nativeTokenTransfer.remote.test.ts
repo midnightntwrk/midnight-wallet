@@ -81,17 +81,24 @@ describe('Token transfer', () => {
     }
   }, syncTimeout);
 
+  const saveWallets = async (testPassed: boolean): Promise<void> => {
+    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
+    if (syncCacheDir !== undefined && wallet !== undefined && wallet2 !== undefined && testPassed) {
+      await utils.saveState(wallet, syncCacheDir, filenameWallet);
+      await utils.saveState(wallet2, syncCacheDir, filenameWallet2);
+    }
+  };
+
   afterEach(async (context) => {
-    try {
-      // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
-      if (syncCacheDir !== undefined && wallet !== undefined && wallet2 !== undefined && shouldPersistState(context)) {
-        await utils.saveState(wallet, syncCacheDir, filenameWallet);
-        await utils.saveState(wallet2, syncCacheDir, filenameWallet2);
-      }
-    } finally {
-      await wallet?.wallet.stop();
-      await wallet2?.wallet.stop();
-      logger.info('Wallets stopped');
+    // Saved first, while the wallets still run, since saving serializes their live state. Then both are stopped
+    // whatever the save did, and together, so neither a failed save nor one wallet refusing to stop can leave a wallet
+    // running. The first failure is reported once everything has been attempted.
+    const [saved] = await Promise.allSettled([saveWallets(shouldPersistState(context))]);
+    const stopped = await Promise.allSettled([wallet?.wallet.stop(), wallet2?.wallet.stop()]);
+    logger.info('Wallets stopped');
+    const failed = [saved, ...stopped].find((result) => result.status === 'rejected');
+    if (failed !== undefined) {
+      throw failed.reason;
     }
   }, timeout);
 

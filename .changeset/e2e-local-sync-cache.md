@@ -10,5 +10,6 @@ crashed worker while the test report showed all tests passing.
 `provideWallet` and `saveState` now take the directory as an argument. The two restore tests (projections, and the
 remote balance-constant healthcheck) pass a temporary directory they remove afterwards, and stop the wallet they
 restore. `nativeTokenTransfer.remote` treats `SYNC_CACHE` as optional, as the testkit-based remote suites already do,
-and stops only the wallets its setup started. `saveState` now rejects when it cannot write a snapshot instead of
-logging and carrying on.
+and stops only the wallets its setup started. The e2e `saveState` now rejects when it cannot write a snapshot instead of
+logging and carrying on, and removes the snapshot's files first so a partly written one is never restored; the
+testkit's `saveState` is unchanged.
