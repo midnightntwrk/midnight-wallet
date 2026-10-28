@@ -39,10 +39,15 @@ describe('Token transfer', () => {
   const filenameWallet = `${fundedSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
   const filenameWallet2 = `${receivingSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
 
+  // Optional, as in the other remote suites: unset or empty, the wallets are built from scratch and nothing is saved.
+  const syncCacheDir = process.env['SYNC_CACHE'] || undefined;
+
   let sender: utils.WalletInit;
   let receiver: utils.WalletInit;
-  let wallet: utils.WalletInit;
-  let wallet2: utils.WalletInit;
+  // The wallets this test's `beforeEach` has started, for `afterEach` to stop. Reset first, so a `beforeEach` that
+  // fails part-way leaves exactly what it started here, and nothing from the test before.
+  let wallet: utils.WalletInit | undefined;
+  let wallet2: utils.WalletInit | undefined;
   let fixture: TestContainersFixture;
   // A remote sync from scratch takes tens of seconds and the transfer itself a couple of minutes, so a bound in the
   // tens of minutes only ever means something has wedged. An hour just turns one wedge into an hour of lane time.
@@ -51,10 +56,11 @@ describe('Token transfer', () => {
 
   beforeEach(async () => {
     fixture = getFixture();
+    wallet = undefined;
+    wallet2 = undefined;
 
-    const directoryPath = utils.syncCacheDirectory();
-    wallet = await utils.provideWallet(directoryPath, filenameWallet, fundedSeed, fixture);
-    wallet2 = await utils.provideWallet(directoryPath, filenameWallet2, receivingSeed, fixture);
+    wallet = await utils.provideWallet(syncCacheDir, filenameWallet, fundedSeed, fixture);
+    wallet2 = await utils.provideWallet(syncCacheDir, filenameWallet2, receivingSeed, fixture);
 
     const [state1, state2] = await Promise.all([
       wallet.wallet.waitForSyncedState(),
@@ -76,15 +82,17 @@ describe('Token transfer', () => {
   }, syncTimeout);
 
   afterEach(async (context) => {
-    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
-    if (shouldPersistState(context)) {
-      const directoryPath = utils.syncCacheDirectory();
-      await utils.saveState(wallet, directoryPath, filenameWallet);
-      await utils.saveState(wallet2, directoryPath, filenameWallet2);
+    try {
+      // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
+      if (syncCacheDir !== undefined && wallet !== undefined && wallet2 !== undefined && shouldPersistState(context)) {
+        await utils.saveState(wallet, syncCacheDir, filenameWallet);
+        await utils.saveState(wallet2, syncCacheDir, filenameWallet2);
+      }
+    } finally {
+      await wallet?.wallet.stop();
+      await wallet2?.wallet.stop();
+      logger.info('Wallets stopped');
     }
-    await sender.wallet.stop();
-    await receiver.wallet.stop();
-    logger.info('Wallets stopped');
   }, timeout);
 
   test(

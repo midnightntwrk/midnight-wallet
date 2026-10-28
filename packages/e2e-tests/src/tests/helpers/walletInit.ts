@@ -56,22 +56,6 @@ export type WalletInit = {
   dustSyncModel: DustSnapshotModel;
 };
 
-/**
- * The `SYNC_CACHE` directory: wallet snapshots kept between runs, so a test against a long-lived network can resume a
- * wallet instead of syncing it from genesis. Only a remote suite has a use for it; an undeployed chain is new each run,
- * so a snapshot left by a previous run describes a chain that no longer exists.
- *
- * Throws rather than exiting the process: a vitest worker that exits mid-test takes its file down unreported, so a
- * missing setting would surface as an unexplained crashed worker instead of a failed test that names it.
- */
-export const syncCacheDirectory = (): string => {
-  const directoryPath = process.env['SYNC_CACHE'];
-  if (!directoryPath) {
-    throw new Error('SYNC_CACHE env var not set: it must name the directory wallet snapshots are kept in');
-  }
-  return directoryPath;
-};
-
 const waitForSyncProgress = async (wallet: WalletFacade) =>
   await rx.firstValueFrom(
     wallet.state().pipe(
@@ -162,13 +146,14 @@ const restoreDustWallet = async (
 
 /**
  * Provides a wallet from the snapshot `saveState` wrote to `directoryPath` under `filename`, falling back to building
- * it from scratch when there is no usable snapshot.
+ * it from scratch when there is no usable snapshot. With no directory at all (a remote suite run without `SYNC_CACHE`)
+ * it builds from scratch without looking for one.
  *
  * Only the shielded and dust wallets resume from their snapshots. The unshielded snapshot is checked for but not read:
  * that wallet is started from its public key and synchronizes from genesis.
  */
 export const provideWallet = async (
-  directoryPath: string,
+  directoryPath: string | undefined,
   filename: string,
   seed: string,
   fixture: TestContainersFixture,
@@ -179,6 +164,11 @@ export const provideWallet = async (
   const dustWallet = customWallets.dustWallet ?? dustWalletFromEnv();
   const dustSyncModel = dustSyncModelOf(dustWallet);
   const resolvedWallets = { ...customWallets, dustWallet };
+
+  if (!directoryPath) {
+    logger.info('No sync cache directory given; building wallet facade from scratch');
+    return initWalletWithSeed(seed, fixture, 'schnorr', resolvedWallets);
+  }
 
   // Single shared tx-history storage so all three sub-wallets and the facade read/write
   // the same instance; otherwise shielded/unshielded writes go to a storage the facade
@@ -256,6 +246,10 @@ export const provideWallet = async (
 /**
  * Serializes all three sub-wallet states into `directoryPath`, keyed by `filename`.
  *
+ * Rejects, naming every file it could not write, rather than logging and carrying on: a restore test would otherwise
+ * fail later on an assertion about the restored state, and a cache left with some of a wallet's files from this run and
+ * the rest from an earlier one would be restored as one wallet by the next.
+ *
  * Takes the whole {@link WalletInit} rather than the facade alone so the dust snapshot is always written to the
  * namespace of the sync model that produced it — a model and a facade passed separately could disagree.
  */
@@ -266,42 +260,33 @@ export const saveState = async (
 ) => {
   logger.info(`Saving state in ${directoryPath}/${filename}`);
 
-  try {
-    await fsAsync.mkdir(directoryPath, { recursive: true });
+  await fsAsync.mkdir(directoryPath, { recursive: true });
 
-    // Serialize all three states
-    const [shieldedSerializedState, unshieldedSerializedState, dustSerializedState] = await Promise.all([
-      walletInit.wallet.shielded.serializeState(),
-      walletInit.wallet.unshielded.serializeState(),
-      walletInit.wallet.dust.serializeState(),
-    ]);
+  // Serialize all three states
+  const [shieldedSerializedState, unshieldedSerializedState, dustSerializedState] = await Promise.all([
+    walletInit.wallet.shielded.serializeState(),
+    walletInit.wallet.unshielded.serializeState(),
+    walletInit.wallet.dust.serializeState(),
+  ]);
 
-    const files = [
-      { path: `${directoryPath}/shielded-${filename}`, data: shieldedSerializedState },
-      { path: `${directoryPath}/unshielded-${filename}`, data: unshieldedSerializedState },
-      { path: dustSnapshotPath(directoryPath, filename, walletInit.dustSyncModel), data: dustSerializedState },
-    ];
+  const files = [
+    { path: `${directoryPath}/shielded-${filename}`, data: shieldedSerializedState },
+    { path: `${directoryPath}/unshielded-${filename}`, data: unshieldedSerializedState },
+    { path: dustSnapshotPath(directoryPath, filename, walletInit.dustSyncModel), data: dustSerializedState },
+  ];
 
-    const results = await Promise.allSettled(files.map((f) => fsAsync.writeFile(f.path, f.data, 'utf-8')));
+  const results = await Promise.allSettled(files.map((f) => fsAsync.writeFile(f.path, f.data, 'utf-8')));
 
-    for (const [i, res] of results.entries()) {
-      const pathWritten = files[i].path;
-      if (res.status === 'fulfilled') {
-        logger.info(`State written to file ${pathWritten}`);
-      } else {
-        logger.error(
-          `Failed to write ${pathWritten}: ${res.reason instanceof Error ? res.reason.message : String(res.reason)}`,
-        );
-      }
-    }
-  } catch (e) {
-    if (typeof e === 'string') {
-      logger.warn(e);
-    } else if (e instanceof Error) {
-      logger.warn(e.message);
-    } else {
-      logger.warn('Unknown error while saving state');
-    }
+  const failures = results.flatMap((res, i) =>
+    res.status === 'rejected'
+      ? [`${files[i].path}: ${res.reason instanceof Error ? res.reason.message : String(res.reason)}`]
+      : [],
+  );
+  results.forEach((res, i) => {
+    if (res.status === 'fulfilled') logger.info(`State written to file ${files[i].path}`);
+  });
+  if (failures.length > 0) {
+    throw new Error(`Failed to save wallet state: ${failures.join('; ')}`);
   }
 };
 

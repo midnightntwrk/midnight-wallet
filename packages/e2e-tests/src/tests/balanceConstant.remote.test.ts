@@ -85,15 +85,19 @@ describe('Balance constant', () => {
       try {
         await utils.saveState(wallet, directoryPath, filename);
         const restoredWallet = await utils.provideWallet(directoryPath, filename, seed, fixture);
-        const syncedState = await restoredWallet.wallet.waitForSyncedState();
+        try {
+          const syncedState = await restoredWallet.wallet.waitForSyncedState();
 
-        expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
-        expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);
-        expect(syncedState.shielded.balances[nativeTokenHash2]).toBe(expectedTokenTwoBalance);
-        expect(syncedState.unshielded.balances[unshieldedTokenRaw]).toBe(expectedUnshieldedBalance);
-        expect(syncedState.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
-        expect(syncedState.shielded.pendingCoins.length).toBe(0);
-        expect(syncedState.shielded.totalCoins.length).toBeGreaterThanOrEqual(3);
+          expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
+          expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);
+          expect(syncedState.shielded.balances[nativeTokenHash2]).toBe(expectedTokenTwoBalance);
+          expect(syncedState.unshielded.balances[unshieldedTokenRaw]).toBe(expectedUnshieldedBalance);
+          expect(syncedState.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
+          expect(syncedState.shielded.pendingCoins.length).toBe(0);
+          expect(syncedState.shielded.totalCoins.length).toBeGreaterThanOrEqual(3);
+        } finally {
+          await restoredWallet.wallet.stop();
+        }
       } finally {
         await fsAsync.rm(directoryPath, { recursive: true, force: true });
       }
