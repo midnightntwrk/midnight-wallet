@@ -183,6 +183,32 @@ describe('the cross-ledger migration', () => {
     expect('txHistory' in (JSON.parse(makeDefaultV2SerializationCapability().serialize(wallet)) as object)).toBe(false);
   });
 
+  it('carries the snapshot fields the previous wallet did not know, so the first save after the crossing still writes them', async () => {
+    // A field written by a later release than the one the previous wallet was restored with: neither variant declares
+    // it, so the wallet is the only place it survives between the restore and the next save.
+    const unknownFields = { fieldFromALaterRelease: { kept: ['exactly', 'as', 'written'], count: 3 } };
+
+    const wallet = await crossed({ ...previousWallet(), unknownFields });
+
+    expect(wallet.unknownFields).toEqual(unknownFields);
+    expect(JSON.parse(makeDefaultV2SerializationCapability().serialize(wallet))).toMatchObject(unknownFields);
+  });
+
+  it('keeps those fields through completing the crossing, which recomputes the coin hashes', async () => {
+    const unknownFields = { fieldFromALaterRelease: { kept: ['exactly', 'as', 'written'], count: 3 } };
+
+    const completed = CoreWallet.completeCrossing(await crossed({ ...previousWallet(), unknownFields }), keys());
+
+    expect(completed.unknownFields).toEqual(unknownFields);
+    expect(JSON.parse(makeDefaultV2SerializationCapability().serialize(completed))).toMatchObject(unknownFields);
+  });
+
+  it('does not invent unknown fields for a wallet that carried none', async () => {
+    const wallet = await crossed();
+
+    expect('unknownFields' in wallet).toBe(false);
+  });
+
   it('brings the whole local state across: coins at their indices, and the height the tree had reached', async () => {
     const source = v8State();
     const wallet = await crossed(previousWallet(source));

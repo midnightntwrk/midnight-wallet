@@ -171,6 +171,20 @@ describe('running a stored payload through every upgrade step', () => {
     });
   });
 
+  it('should hand back the members of a current-format envelope other than version and entries', () => {
+    const upgraded = EitherOps.getOrThrowLeft(
+      upgradeToCurrentFormat({ version: 'v2', entries: [], laterEnvelopeField: { note: 'kept' }, anotherField: 1 }),
+    );
+
+    expect(upgraded.envelopeUnknownFields).toEqual({ laterEnvelopeField: { note: 'kept' }, anotherField: 1 });
+  });
+
+  it('should hand back no envelope members for a bare v1 array, because it had no envelope', () => {
+    const upgraded = EitherOps.getOrThrowLeft(upgradeToCurrentFormat(firstFormat));
+
+    expect(upgraded.envelopeUnknownFields ?? {}).toEqual({});
+  });
+
   it.each([
     ['an empty object', {}],
     ['null', null],

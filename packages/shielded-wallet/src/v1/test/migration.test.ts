@@ -31,6 +31,7 @@ import {
   makeCrossLedgerMigration,
   makeEmptyWalletMigration,
 } from '../Migration.js';
+import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const seed = Buffer.alloc(32, 7);
@@ -150,5 +151,22 @@ describe('the cross-ledger migration', () => {
     // follows the migration is what reconnects it — and claiming otherwise would report a gap that nothing is closing.
     expect(previous.progress.isConnected).toBe(true);
     expect(wallet.progress.isConnected).toBe(false);
+  });
+
+  it('carries the snapshot fields the previous wallet did not know, so the first save after the crossing still writes them', async () => {
+    // A field written by a later release than the one the previous wallet was restored with: neither variant declares
+    // it, so the wallet is the only place it survives between the restore and the next save.
+    const unknownFields = { fieldFromALaterRelease: { kept: ['exactly', 'as', 'written'], count: 3 } };
+
+    const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate({ ...previousWallet(), unknownFields }));
+
+    expect(wallet.unknownFields).toEqual(unknownFields);
+    expect(JSON.parse(makeDefaultV1SerializationCapability().serialize(wallet))).toMatchObject(unknownFields);
+  });
+
+  it('does not invent unknown fields for a wallet that carried none', async () => {
+    const wallet = await Effect.runPromise(makeCrossLedgerMigration().migrate(previousWallet()));
+
+    expect('unknownFields' in wallet).toBe(false);
   });
 });

@@ -149,25 +149,25 @@ export const makeDefaultV1SerializationCapability = ({
         };
       };
 
-      return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
+      return SnapshotFormat.writeSnapshot(SnapshotSchema, buildSnapshot(wallet), wallet.unknownFields);
     },
     deserialize: (serialized): Either.Either<CoreWallet, WalletError> =>
       pipe(
         serialized,
-        SnapshotFormat.readSnapshot({
+        SnapshotFormat.readSnapshotWithUnknownFields({
           surface: 'unshielded',
           reads: [SNAPSHOT_FORMAT_VERSION],
           schema: SnapshotSchema,
         }),
         // The schema proves the snapshot's shape; this proves its key and address belong to each other.
-        Either.flatMap((snapshot) =>
+        Either.flatMap((read) =>
           pipe(
-            assertKeyAddressConsistency(snapshot.publicKey),
-            Either.map(() => snapshot),
+            assertKeyAddressConsistency(read.snapshot.publicKey),
+            Either.map(() => read),
           ),
         ),
-        Either.map((snapshot) => {
-          return CoreWallet.restore(
+        Either.map(({ snapshot, unknownFields }) => {
+          const restored = CoreWallet.restore(
             UnshieldedState.restore(
               snapshot.state.availableUtxos,
               snapshot.state.pendingUtxos.map(({ utxo, meta, ttl }) => ({
@@ -183,6 +183,7 @@ export const makeDefaultV1SerializationCapability = ({
             ProtocolVersion.ProtocolVersion(snapshot.protocolVersion),
             snapshot.networkId,
           );
+          return SnapshotFormat.withUnknownFields(restored, unknownFields);
         }),
       ),
   };

@@ -23,7 +23,7 @@ import {
   type Transaction,
   type Event,
 } from '@midnightntwrk/ledger-v9';
-import { ProtocolVersion, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, type SnapshotFormat, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Array as Arr, HashMap, Option, pipe } from 'effect';
 import { type Dust, type DustWithNullifier } from './types/Dust.js';
@@ -58,6 +58,11 @@ export type CoreWallet = Readonly<{
   progress: SyncProgress.SyncProgress;
   networkId: NetworkId;
   pendingDust: Array<DustWithNullifier>;
+  /**
+   * The snapshot fields this variant's schema does not declare, exactly as they were read, written back with the next
+   * snapshot so a later release that wrote them still finds them. Absent when the snapshot carried none.
+   */
+  unknownFields?: SnapshotFormat.UnknownFields;
 }>;
 
 export const CoreWallet = {
