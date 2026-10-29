@@ -68,7 +68,7 @@ describe('V2 dust snapshot format version', () => {
   it('should stamp the current format version into every snapshot it writes', () => {
     const written: unknown = JSON.parse(capability.serialize(emptyWallet()));
 
-    expect(written).toMatchObject({ version: 'v1' });
+    expect(written).toMatchObject({ version: 'v2' });
   });
 
   it('should read a snapshot that carries no version as the first format', () => {
@@ -80,7 +80,7 @@ describe('V2 dust snapshot format version', () => {
   it('should refuse a snapshot whose version this build does not know', () => {
     const fromANewerSdk = JSON.stringify({
       ...(JSON.parse(capability.serialize(emptyWallet())) as Record<string, unknown>),
-      version: 'v2',
+      version: 'v3',
     });
 
     const restored = capability.deserialize(null, fromANewerSdk);
@@ -91,14 +91,14 @@ describe('V2 dust snapshot format version', () => {
   it('should name the surface and the version it found when it refuses a snapshot', () => {
     const fromANewerSdk = JSON.stringify({
       ...(JSON.parse(capability.serialize(emptyWallet())) as Record<string, unknown>),
-      version: 'v2',
+      version: 'v3',
     });
 
     const restored = capability.deserialize(null, fromANewerSdk);
     const failure = Either.isLeft(restored) ? restored.left.message : 'the snapshot was restored';
 
     expect(failure).toContain(
-      'Refusing a dust snapshot written in format version "v2": this build reads v1 and does not downgrade.',
+      'Refusing a dust snapshot written in format version "v3": this build reads v2 and does not downgrade.',
     );
   });
 });

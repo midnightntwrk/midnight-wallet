@@ -156,4 +156,25 @@ describe('CoreWallet pending Dust', () => {
 
     expect(afterLock.pendingDust).toEqual([]);
   });
+
+  it('should keep a coin pending at the moment it was created, because the ledger keeps a coin worth nothing until time has passed', () => {
+    const [, spent] = CoreWallet.spendCoins(syncedWallet(), secretKey, [{ token: first.qdo, value: 0n }], created);
+
+    const [atCreation] = CoreWallet.applyEventsWithChanges(spent, secretKey, [], created);
+
+    expect(atCreation.pendingDust.map((coin) => coin.nonce)).toEqual([first.qdo.nonce]);
+  });
+
+  it('should stop counting a coin as pending when the state has no generation for it, because the ledger drops such a coin', () => {
+    const synced = syncedWallet();
+    const orphan = { ...second.qdo, backingNight: 'dd'.repeat(32), nonce: second.qdo.nonce + 1n };
+    const withOrphanPending: CoreWallet = {
+      ...synced,
+      pendingDust: [{ ...orphan, nullifier: dustNullifier(orphan, secretKey) }],
+    };
+
+    const [afterSync] = CoreWallet.applyEventsWithChanges(withOrphanPending, secretKey, [], spendTime);
+
+    expect(afterSync.pendingDust).toEqual([]);
+  });
 });
