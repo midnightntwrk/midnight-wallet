@@ -16,7 +16,7 @@
 // the connection flag follows the subscription, and the liveness feed lives at wallet scope.
 import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { StateChange, type Variant, VersionChangeType } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { Cause, Duration, Effect, Exit, Option, Schedule, Scope, Stream, SubscriptionRef } from 'effect';
+import { Cause, Deferred, Duration, Effect, Exit, Option, Schedule, Scope, Stream, SubscriptionRef } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
 import { RunningV2Variant } from '../RunningV2Variant.js';
@@ -371,6 +371,62 @@ describe('RunningV2Variant.startSync', () => {
     expect(progress.indexerLiveness).toStrictEqual(IndexerLiveness.Skipped({ reason: 'no-liveness-feed' }));
     // The user-visible symptom: connected, caught up, and still never "synced".
     expect(progress.isStrictlyComplete()).toBe(true);
+  });
+
+  it('should build the liveness feed from the verdict the wallet holds when sync starts, so a carried Behind survives', async () => {
+    // A hand-over starts the next variant on the state the migration carried, `Behind` included. The sync service seeds
+    // its feed from the state it is handed, so the variant must hand over that state as it stands: handed a fresh one,
+    // the feed would start at `Unknown`, and its first failed poll would publish `Unavailable`, which does not gate,
+    // releasing `waitForSyncedState` and the facade's `isSynced` over an indexer already proven stale.
+    const behind = IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n });
+
+    const program = Effect.gen(function* () {
+      const handed = yield* Deferred.make<IndexerLiveness.IndexerLiveness>();
+
+      const recordingSyncService: SyncService<CoreWallet, SyncUpdate> = {
+        updates: () => Stream.never,
+        livenessUpdates: (state) =>
+          Stream.fromEffect(Deferred.succeed(handed, state.progress.indexerLiveness)).pipe(
+            Stream.flatMap(() => Stream.never),
+          ),
+      };
+
+      // Set after the variant is built, as the runtime's state is by the time sync starts, so a variant that read the
+      // state any earlier would hand over the fresh wallet's `Unknown`.
+      const stateRef = yield* SubscriptionRef.make(CoreWallet.init(owner, 'undeployed'));
+      const scope = yield* Scope.make();
+
+      const variant = new RunningV2Variant(
+        scope,
+        { stateRef, activationRange },
+        // Type cast required because: the test exercises only the sync service and capability; building the full
+        // context would drag transacting, serialization and key material into a test about the feed's seed.
+        {
+          syncService: recordingSyncService,
+          syncCapability,
+          transactionHistoryService: noOpHistory,
+        } as unknown as RunningV2Variant.Context<string, SyncUpdate>,
+      );
+
+      yield* SubscriptionRef.update(stateRef, (wallet) =>
+        CoreWallet.updateProgress(wallet, { indexerLiveness: behind }),
+      );
+
+      yield* variant.startSyncInBackground().pipe(Effect.provideService(Scope.Scope, scope));
+
+      const seed = yield* Deferred.await(handed).pipe(
+        Effect.timeoutFailCause({
+          duration: Duration.seconds(3),
+          onTimeout: () => Cause.die(new Error('the liveness feed was never built')),
+        }),
+      );
+
+      yield* Scope.close(scope, Exit.void);
+
+      return seed;
+    });
+
+    expect(await Effect.runPromise(Effect.scoped(program))).toStrictEqual(behind);
   });
 
   it('should treat a subscription that ends cleanly as dropped, clearing isConnected and rebuilding it', async () => {
