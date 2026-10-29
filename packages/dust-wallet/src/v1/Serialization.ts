@@ -66,7 +66,7 @@ export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 import {
   PendingDustSchema,
   SNAPSHOT_FORMAT_VERSION,
-  V1_SNAPSHOT_FORMAT_VERSION,
+  SNAPSHOT_FORMAT_VERSIONS,
   upgradeSnapshotV1ToV2,
 } from '../SnapshotFormat.js';
 
@@ -108,7 +108,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         serialized,
         SnapshotFormat.readSnapshotWithUnknownFields({
           surface: 'dust',
-          reads: [V1_SNAPSHOT_FORMAT_VERSION, SNAPSHOT_FORMAT_VERSION],
+          reads: SNAPSHOT_FORMAT_VERSIONS,
           schema: SnapshotSchema,
           upgrade: upgradeSnapshotV1ToV2,
         }),

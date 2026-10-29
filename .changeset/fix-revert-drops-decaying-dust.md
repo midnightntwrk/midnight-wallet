@@ -1,5 +1,5 @@
 ---
-'@midnightntwrk/wallet-sdk-dust-wallet': patch
+'@midnightntwrk/wallet-sdk-dust-wallet': minor
 ---
 
 fix(dust-wallet): release only the reverted transaction's Dust, keep pending Dust until it settles, and keep it in the snapshot
@@ -16,4 +16,9 @@ paths.
 
 The dust snapshot now records the pending Dust, so a wallet restored from it can still release the coins its pending
 transactions spent. Its format version moves from `v1` to `v2`; this release reads `v1` snapshots, upgrading them with
-no pending Dust, but earlier releases refuse a `v2` snapshot.
+no pending Dust, but earlier releases refuse a `v2` snapshot. Once this release has written a snapshot, the stored
+snapshot cannot be rolled back to an earlier release: an application that downgrades must restore the wallet from its
+seed.
+
+`CoreWallet.settlePendingDust` is added: given the state before and after a TTL pass, it returns the pending coins that
+are still pending.

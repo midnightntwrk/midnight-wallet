@@ -165,8 +165,20 @@ export const CoreWallet = {
    *
    * @remarks
    *   A coin settles when the chain spends it, when its lock runs out and it is back among the unlocked utxos, or when
-   *   the pass drops it as worth nothing. That last test mirrors the ledger's own, valued on the state before the
-   *   pass.
+   *   the pass drops it as worth nothing. That last test mirrors the ledger's own: valued on the state before the pass,
+   *   with time counted in whole seconds, so a coin is never dropped within the second it was created.
+   * @example
+   *   ```ts
+   *   const afterTtls = beforeTtls.processTtls(time);
+   *   const pendingDust = CoreWallet.settlePendingDust(wallet.pendingDust, beforeTtls, afterTtls, spentNonces, time);
+   *   ```;
+   *
+   * @param pendingDust The coins pending transactions have spent, as held before the sync.
+   * @param beforeTtls The state with the sync's events applied, before the TTL pass.
+   * @param afterTtls The state after the TTL pass at `time`.
+   * @param spentNonces The nonces of the coins the sync's events spent.
+   * @param time The time the TTL pass ran at.
+   * @returns The coins of `pendingDust` still pending, in their original order.
    */
   settlePendingDust(
     pendingDust: Array<DustWithNullifier>,
@@ -175,17 +187,22 @@ export const CoreWallet = {
     spentNonces: ReadonlyArray<DustNonce>,
     time: Date,
   ): Array<DustWithNullifier> {
-    const settledNonces = new Set([...spentNonces, ...afterTtls.utxos.map((utxo) => utxo.nonce)]);
+    if (pendingDust.length === 0) return pendingDust;
+    const spent = new Set(spentNonces);
+    const wholeSeconds = (date: Date): number => Math.floor(date.getTime() / 1000);
+    const backUnlocked = (coin: DustWithNullifier): boolean =>
+      afterTtls.findUtxoByNullifier(coin.nullifier) !== undefined;
     const decayedAway = (coin: Dust): boolean =>
       pipe(
         Option.fromNullable(beforeTtls.generationInfo(coin)),
         Option.match({
           onNone: () => true,
           onSome: (genInfo) =>
-            time > coin.ctime && updatedValue(coin.ctime, coin.initialValue, genInfo, time, beforeTtls.params) === 0n,
+            wholeSeconds(time) > wholeSeconds(coin.ctime) &&
+            updatedValue(coin.ctime, coin.initialValue, genInfo, time, beforeTtls.params) === 0n,
         }),
       );
-    return pendingDust.filter((coin) => !settledNonces.has(coin.nonce) && !decayedAway(coin));
+    return pendingDust.filter((coin) => !spent.has(coin.nonce) && !backUnlocked(coin) && !decayedAway(coin));
   },
 
   /**

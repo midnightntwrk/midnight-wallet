@@ -18,7 +18,7 @@ import { CoreWallet } from './CoreWallet.js';
 import {
   PendingDustSchema,
   SNAPSHOT_FORMAT_VERSION,
-  V1_SNAPSHOT_FORMAT_VERSION,
+  SNAPSHOT_FORMAT_VERSIONS,
   upgradeSnapshotV1ToV2,
 } from '../SnapshotFormat.js';
 // Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.
@@ -107,7 +107,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         serialized,
         SnapshotFormat.readSnapshotWithUnknownFields({
           surface: 'dust',
-          reads: [V1_SNAPSHOT_FORMAT_VERSION, SNAPSHOT_FORMAT_VERSION],
+          reads: SNAPSHOT_FORMAT_VERSIONS,
           schema: SnapshotSchema,
           upgrade: upgradeSnapshotV1ToV2,
         }),

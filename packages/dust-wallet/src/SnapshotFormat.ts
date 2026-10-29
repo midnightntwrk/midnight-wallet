@@ -10,6 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Schema } from 'effect';
 
 /**
@@ -62,8 +63,6 @@ export const PendingDustSchema = Schema.Struct({
   nullifier: Schema.BigInt,
 });
 
-const isRecord = Schema.is(Schema.Record({ key: Schema.String, value: Schema.Unknown }));
-
 /**
  * Upgrades a decoded dust snapshot from format version `v1` to `v2`.
  *
@@ -77,7 +76,7 @@ const isRecord = Schema.is(Schema.Record({ key: Schema.String, value: Schema.Unk
  * @returns The same snapshot in format `v2`, or the input unchanged when the step does not apply.
  */
 export const upgradeSnapshotV1ToV2 = (json: unknown): unknown => {
-  if (!isRecord(json)) return json;
+  if (!SnapshotFormat.isJsonObject(json)) return json;
   const version = json['version'];
   return version === undefined || version === V1_SNAPSHOT_FORMAT_VERSION
     ? { pendingDust: [], ...json, version: V2_SNAPSHOT_FORMAT_VERSION }
