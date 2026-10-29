@@ -10,13 +10,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { DustSecretKey, LedgerParameters } from '@midnightntwrk/ledger-v9';
-import { NetworkId, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  DustLocalState,
+  DustSecretKey,
+  LedgerParameters,
+  type QualifiedDustOutput,
+  dustNullifier,
+} from '@midnightntwrk/ledger-v9';
+import { NetworkId, ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { CoreWallet } from '../CoreWallet.js';
+import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import { makeDefaultV2SerializationCapability } from '../Serialization.js';
+import { type DustWithNullifier } from '../types/Dust.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const dustParameters = LedgerParameters.initialParameters().dust;
@@ -93,5 +100,64 @@ describe('V2 dust snapshot format version', () => {
     expect(failure).toContain(
       'Refusing a dust snapshot written in format version "v2": this build reads v1 and does not downgrade.',
     );
+  });
+});
+
+describe('V2 dust snapshot pending Dust', () => {
+  const capability = makeDefaultV2SerializationCapability();
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const backingNight = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90';
+
+  const pendingCoin = (): DustWithNullifier => {
+    const qdo: QualifiedDustOutput = {
+      initialValue: 2_500_000_000_000n,
+      owner: secretKey.publicKey,
+      nonce: 0x1f2e3d4c5b6a79881f2e3d4c5b6a7988n,
+      seq: 3,
+      ctime: new Date('2026-09-14T10:20:30.000Z'),
+      backingNight,
+      mtIndex: 42n,
+    };
+    return { ...qdo, nullifier: dustNullifier(qdo, secretKey) };
+  };
+
+  /** A wallet whose pending transaction has spent one Dust coin that no sync has yet settled. */
+  const walletWithPendingDust = (): CoreWallet =>
+    CoreWallet.restore(
+      new DustLocalState(dustParameters),
+      PublicKey.fromSecretKey(secretKey),
+      [pendingCoin()],
+      { appliedIndex: 0n, highestRelevantWalletIndex: 0n, highestIndex: 0n, highestRelevantIndex: 0n },
+      ProtocolVersion.MinSupportedVersion,
+      networkId,
+    );
+
+  /** A snapshot as the first format wrote it: stamped 'v1', with no pending Dust recorded. */
+  const asFirstFormat = (serialized: string): string => {
+    const { pendingDust: _pendingDust, ...rest } = JSON.parse(serialized) as Record<string, unknown>;
+    return JSON.stringify({ ...rest, version: 'v1' });
+  };
+
+  it('should keep a pending Dust coin, nullifier included, through serialize then deserialize, so a restored wallet can still release it', () => {
+    const wallet = walletWithPendingDust();
+
+    const restored = pipe(capability.deserialize(null, capability.serialize(wallet)), EitherOps.getOrThrowLeft);
+
+    expect(restored.pendingDust).toEqual(wallet.pendingDust);
+  });
+
+  it('should stamp every snapshot it writes as format v2, because the snapshot now records pending Dust', () => {
+    const written: unknown = JSON.parse(capability.serialize(walletWithPendingDust()));
+
+    expect(written).toMatchObject({ version: 'v2' });
+  });
+
+  it('should read a v1 snapshot, which recorded no pending Dust, as holding no pending Dust', () => {
+    const restored = pipe(
+      capability.deserialize(null, asFirstFormat(capability.serialize(walletWithPendingDust()))),
+      EitherOps.getOrThrowLeft,
+    );
+
+    expect(restored.pendingDust).toEqual([]);
   });
 });
