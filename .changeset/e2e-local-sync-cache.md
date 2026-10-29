@@ -1,15 +1,24 @@
 ---
+'@midnightntwrk/wallet-sdk-testkit': minor
 ---
 
-test(e2e): stop the e2e snapshot helpers reading `SYNC_CACHE` themselves, and give the snapshot-restore tests a
-directory of their own. The undeployed projections restore test needs a snapshot only within itself, but it reached
-`SYNC_CACHE` — a cache of wallet state kept between runs, which the nightly local lane never sets — through
-`saveState`, whose `exit(1)` then killed the vitest worker mid-test: every nightly since the ledger-v9 merge failed on a
-crashed worker while the test report showed all tests passing.
+fix(testkit): save a wallet snapshot whole or not at all, report save failures, and never leave a test's wallet running
 
-`provideWallet` and `saveState` now take the directory as an argument. The two restore tests (projections, and the
-remote balance-constant healthcheck) pass a temporary directory they remove afterwards, and stop the wallet they
-restore. `nativeTokenTransfer.remote` treats `SYNC_CACHE` as optional, as the testkit-based remote suites already do,
-and stops only the wallets its setup started. The e2e `saveState` now rejects when it cannot write a snapshot instead of
-logging and carrying on, and when a write fails it first removes all of the snapshot's files, so the next run builds
-from scratch rather than restoring a mix of two runs; the testkit's `saveState` is unchanged.
+- `saveState` writes the shielded and dust states to one file per dust sync model (`snapshotPath`), under a temporary
+  name renamed over the previous snapshot. The unshielded state, which a restore never read, is no longer saved. A save that fails or is killed part-way leaves the previous snapshot intact,
+  so the next run can no longer restore one run's shielded state with another's dust. It now rejects when a state
+  cannot be serialized or written, instead of logging and carrying on. Snapshots in the earlier per-wallet layout are
+  ignored, so each carried cache builds from scratch once, and removed on the next save; `dustSnapshotPath` is
+  deprecated.
+- `provideWallet` returns `restored`, saying whether the wallet came from the snapshot: its fallback to a from-scratch
+  build is silent, and balances alone cannot tell the two apart. A restored facade that fails its sync check, or does
+  not catch up within ten minutes, is stopped before `provideWallet` falls back or rejects.
+- New `createWalletLifecycle`: wallets a `beforeEach` adopts are saved and stopped together on release, every failure
+  is reported, and a wallet that finishes starting after its test was torn down is stopped as it arrives. The dust and
+  token-transfer scenarios use it.
+- New `parseMidnightNetwork` rejects an unrecognized `NETWORK` by name, instead of failing later on endpoints there is
+  no preset for.
+
+The e2e suites drop their own copies of these helpers for the testkit's. The snapshot-restore tests save to a
+temporary directory of their own rather than `SYNC_CACHE`, which the nightly local lane never sets and whose absence
+crashed its vitest worker on every run since the ledger-v9 merge.

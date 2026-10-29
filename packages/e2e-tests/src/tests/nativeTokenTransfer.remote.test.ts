@@ -11,10 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as rx from 'rxjs';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import * as utils from './utils.js';
-import { shouldPersistState } from '@midnightntwrk/wallet-sdk-testkit/core';
+import {
+  createWalletLifecycle,
+  parseMidnightNetwork,
+  provideWallet,
+  shouldPersistState,
+  useWalletTestEnvironment,
+  type WalletInit,
+  type WalletLifecycle,
+} from '@midnightntwrk/wallet-sdk-testkit';
+import { createTestContainersEnvironment } from '@midnightntwrk/wallet-sdk-testkit/testcontainers';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
@@ -28,7 +36,9 @@ describe('Token transfer', () => {
     logger.info('NT_SEED or NT_SEED2 env vars not set');
     exit(1);
   }
-  const getFixture = useTestContainersFixture();
+  const getEnv = useWalletTestEnvironment(() =>
+    createTestContainersEnvironment({ network: parseMidnightNetwork(process.env['NETWORK']) }),
+  );
   const receivingSeed = process.env['NT_SEED2'];
   const fundedSeed = process.env['NT_SEED'];
   const outputValue = 10n;
@@ -36,31 +46,34 @@ describe('Token transfer', () => {
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const nativeToken1Raw = '0000000000000000000000000000000000000000000000000000000000000001';
   const nativeToken2Raw = '0000000000000000000000000000000000000000000000000000000000000002';
-  const filenameWallet = `${fundedSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
-  const filenameWallet2 = `${receivingSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
 
   // Optional, as in the other remote suites: unset or empty, the wallets are built from scratch and nothing is saved.
-  const syncCacheDir = process.env['SYNC_CACHE'] || undefined;
+  const syncCacheDir = process.env['SYNC_CACHE'];
 
-  let sender: utils.WalletInit;
-  let receiver: utils.WalletInit;
-  // The wallets this test's `beforeEach` has started, for `afterEach` to stop. Reset first, so a `beforeEach` that
-  // fails part-way leaves exactly what it started here, and nothing from the test before.
-  let wallet: utils.WalletInit | undefined;
-  let wallet2: utils.WalletInit | undefined;
-  let fixture: TestContainersFixture;
+  let sender: WalletInit;
+  let receiver: WalletInit;
+  let lifecycle: WalletLifecycle;
   // A remote sync from scratch takes tens of seconds and the transfer itself a couple of minutes, so a bound in the
   // tens of minutes only ever means something has wedged. An hour just turns one wedge into an hour of lane time.
   const syncTimeout = 15 * 60 * 1000; // 15 minutes
   const timeout = 600_000;
 
   beforeEach(async () => {
-    fixture = getFixture();
-    wallet = undefined;
-    wallet2 = undefined;
+    // This hook's own lifecycle, so a wallet that finishes starting after `afterEach` has run is stopped by it.
+    const own = createWalletLifecycle();
+    lifecycle = own;
+    const env = getEnv();
+    const filenameWallet = `${fundedSeed.substring(0, 7)}-${env.network}.state`;
+    const filenameWallet2 = `${receivingSeed.substring(0, 7)}-${env.network}.state`;
 
-    wallet = await utils.provideWallet(syncCacheDir, filenameWallet, fundedSeed, fixture);
-    wallet2 = await utils.provideWallet(syncCacheDir, filenameWallet2, receivingSeed, fixture);
+    const wallet = await own.adopt(
+      provideWallet(env, { seed: fundedSeed, syncCacheDir, filename: filenameWallet }),
+      filenameWallet,
+    );
+    const wallet2 = await own.adopt(
+      provideWallet(env, { seed: receivingSeed, syncCacheDir, filename: filenameWallet2 }),
+      filenameWallet2,
+    );
 
     const [state1, state2] = await Promise.all([
       wallet.wallet.waitForSyncedState(),
@@ -81,31 +94,9 @@ describe('Token transfer', () => {
     }
   }, syncTimeout);
 
-  const saveWallets = async (testPassed: boolean): Promise<void> => {
-    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
-    if (syncCacheDir !== undefined && wallet !== undefined && wallet2 !== undefined && testPassed) {
-      await utils.saveState(wallet, syncCacheDir, filenameWallet);
-      await utils.saveState(wallet2, syncCacheDir, filenameWallet2);
-    }
-  };
-
   afterEach(async (context) => {
-    // Saved first, while the wallets still run, since saving serializes their live state. A failed save is held back
-    // rather than thrown, so both wallets are still stopped, and together, so one refusing to stop cannot leave the
-    // other running. The first failure is reported once everything has been attempted.
-    const saveFailures = await saveWallets(shouldPersistState(context)).then(
-      (): unknown[] => [],
-      (error: unknown) => [error],
-    );
-    const stopped = await Promise.allSettled([wallet?.wallet.stop(), wallet2?.wallet.stop()]);
-    logger.info('Wallets stopped');
-    const failures = [
-      ...saveFailures,
-      ...stopped.flatMap((result): unknown[] => (result.status === 'rejected' ? [result.reason] : [])),
-    ];
-    if (failures.length > 0) {
-      throw failures[0];
-    }
+    // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
+    await lifecycle.release({ syncCacheDir, persist: shouldPersistState(context) });
   }, timeout);
 
   test(

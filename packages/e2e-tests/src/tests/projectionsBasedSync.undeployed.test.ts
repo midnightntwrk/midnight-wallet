@@ -22,6 +22,7 @@ import { inspect } from 'node:util';
 import * as fsAsync from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { provideWallet, saveState } from '@midnightntwrk/wallet-sdk-testkit/core';
 import { carried } from './helpers/transactions.js';
 import { dustStatesEqual, rootsEqual, sameItems, stringifyWithBigInts } from './helpers/dustComparison.js';
 
@@ -396,20 +397,21 @@ describe('Projections-based synchronisation model', () => {
       const directoryPath = await fsAsync.mkdtemp(path.join(os.tmpdir(), 'projections-restore-'));
       try {
         const filename = `projections-restore-${seedFunded.substring(0, 7)}.state`;
-        await utils.saveState(funded, directoryPath, filename);
-        const restored = await utils.provideWallet(
-          directoryPath,
+        await saveState(funded, directoryPath, filename);
+        const restored = await provideWallet(utils.asWalletTestEnvironment(fixture), {
+          ...utils.manualProjectionsDustSyncOptions,
+          seed: seedFunded,
+          syncCacheDir: directoryPath,
           filename,
-          seedFunded,
-          fixture,
-          utils.manualProjectionsDustSyncOptions,
-        );
+        });
 
         try {
-          // `provideWallet` silently falls back to building from scratch when a restore fails, which would leave this
-          // test asserting nothing about the resume path. The restored wallet is started with `manualSync`, so before
-          // the first `doSync` its Dust state is exactly what came off disk — a non-zero baseline proves the snapshot
-          // was actually used.
+          // `provideWallet` falls back to building from scratch when a restore fails, which would leave this test
+          // asserting nothing about the resume path.
+          expect(restored.restored).toBe(true);
+
+          // The restored wallet is started with `manualSync`, so before the first `doSync` its Dust state is exactly
+          // what came off disk: the resumed pass starts from this baseline.
           const restoredBeforeSync = await rx.firstValueFrom(restored.wallet.state());
           const restoredDustState = restoredBeforeSync.dust.state.state;
           expect(restoredDustState.utxos.length).toBe(dustUtxosBeforeSnapshot);
