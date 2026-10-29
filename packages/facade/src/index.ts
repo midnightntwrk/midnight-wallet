@@ -116,6 +116,9 @@ export { finalizedTransactionTraits } from './transaction.js';
  */
 const rejectionReason = (result: PendingTransactions.TransactionResult): string | undefined =>
   result.status === 'ORPHANED_BY_FORK' ? 'orphaned-by-protocol-upgrade' : undefined;
+/** The fallible segments a verdict says the chain did not apply; none for a verdict that carries no segments. */
+const failedSegmentsOf = (result: PendingTransactions.TransactionResult): ReadonlyArray<number> =>
+  'segments' in result ? result.segments.filter((segment) => !segment.success).map((segment) => segment.id) : [];
 import {
   type DustAddress,
   type ShieldedAddress,
@@ -1119,8 +1122,12 @@ export class WalletFacade {
       .pipe(
         concatMap((pending) => PendingTransactions.allRejected(pending)),
         concatMap(async (item) => {
-          if (!(await this.reconcileFinalizedTransaction(item.tx, await this.#txHistoryStorage.getAll()))) {
-            await this.revert(item.tx, rejectionReason(item.result));
+          if (
+            !(await this.reconcileFinalizedTransaction(item.tx, item.result, await this.#txHistoryStorage.getAll()))
+          ) {
+            await (item.result.status === 'PARTIAL_SUCCESS'
+              ? this.#revertFailedSegments(item.tx, failedSegmentsOf(item.result))
+              : this.revert(item.tx, rejectionReason(item.result)));
           }
         }),
       )
@@ -2455,11 +2462,17 @@ export class WalletFacade {
   }
 
   /** Sync can record inclusion before the independent pending-status poller observes it. */
-  private async reconcileFinalizedTransaction(tx: FinalizedTx, history: readonly WalletEntry[]): Promise<boolean> {
+  private async reconcileFinalizedTransaction(
+    tx: FinalizedTx,
+    result: PendingTransactions.TransactionResult,
+    history: readonly WalletEntry[],
+  ): Promise<boolean> {
     const entry = this.finalizedEntryFor(tx, history);
     if (entry === undefined) return false;
     // Included failures still need their unexecuted coin reservations released.
-    if (entry.status === 'FAILURE' || entry.status === 'PARTIAL_SUCCESS') {
+    if (entry.status === 'PARTIAL_SUCCESS') {
+      await this.#revertFailedSegments(tx, failedSegmentsOf(result));
+    } else if (entry.status === 'FAILURE') {
       await this.revertTransaction(tx);
     } else {
       await this.pendingTransactionsService.clear(tx);
@@ -2472,29 +2485,48 @@ export class WalletFacade {
       this.shielded.revertTransaction(tx),
       this.unshielded.revertTransaction(tx),
       this.dust.revertTransaction(tx),
-    ]).then(async () => {
-      // Reverting is total over the stages: a transaction at any of them may have booked coins, and the pending set
-      // recognises only the finalized ones. Narrowing rather than casting is what says so.
-      await this.pendingTransactionsService.clear(tx as FinalizedTx);
-      // Read at the epoch the transaction was built for, not the one the facade now acts at. A verdict on a
-      // transaction submitted before a protocol boundary can only arrive after it — a chain rejection, a TTL run out,
-      // or the wallet giving up on bytes that can never be included — and by then the facade has crossed. The pending
-      // entry that verdict has to land on was written by this same session before the crossing, and it is the only
-      // record an application has that the transaction will never be included; keying it against the current epoch
-      // would leave it saying `pending` for the rest of the session. The stamp is what chooses the reader, which is
-      // what the stamp is for.
-      const key = Option.match(
-        Either.getRight(WalletTransaction.unwrapWithin<Carried>(tx, this.epochOf(tx.protocolVersion))),
-        { onNone: () => undefined, onSome: revertTxHistoryKey },
-      );
-      if (key !== undefined) {
-        await this.#txHistoryStorage.gotRejected({
-          ...key,
-          rejectedAt: this.clock.now(),
-          ...(reason !== undefined ? { reason } : {}),
-        });
-      }
-    });
+    ]).then(() => this.#recordRejection(tx, reason));
+  }
+
+  /**
+   * Releases what a transaction that landed as a partial success booked in its failed segments, and records it as
+   * rejected.
+   *
+   * @remarks
+   *   Its guaranteed segment and every fallible segment that succeeded spent their coins on chain, and each wallet's sync
+   *   settles those; releasing them would offer spent coins again. Every Dust spend sits in the guaranteed segment, so
+   *   the dust wallet has nothing to release.
+   */
+  async #revertFailedSegments(tx: FinalizedTx, failedSegments: ReadonlyArray<number>): Promise<void> {
+    await Promise.all([
+      this.shielded.revertFailedSegments(tx, failedSegments),
+      this.unshielded.revertFailedSegments(tx, failedSegments),
+    ]).then(() => this.#recordRejection(tx));
+  }
+
+  /** Drops a released transaction from the pending set and records it as rejected in the history. */
+  async #recordRejection(tx: AnyTx, reason?: string): Promise<void> {
+    // Reverting is total over the stages: a transaction at any of them may have booked coins, and the pending set
+    // recognises only the finalized ones. Narrowing rather than casting is what says so.
+    await this.pendingTransactionsService.clear(tx as FinalizedTx);
+    // Read at the epoch the transaction was built for, not the one the facade now acts at. A verdict on a
+    // transaction submitted before a protocol boundary can only arrive after it — a chain rejection, a TTL run out,
+    // or the wallet giving up on bytes that can never be included — and by then the facade has crossed. The pending
+    // entry that verdict has to land on was written by this same session before the crossing, and it is the only
+    // record an application has that the transaction will never be included; keying it against the current epoch
+    // would leave it saying `pending` for the rest of the session. The stamp is what chooses the reader, which is
+    // what the stamp is for.
+    const key = Option.match(
+      Either.getRight(WalletTransaction.unwrapWithin<Carried>(tx, this.epochOf(tx.protocolVersion))),
+      { onNone: () => undefined, onSome: revertTxHistoryKey },
+    );
+    if (key !== undefined) {
+      await this.#txHistoryStorage.gotRejected({
+        ...key,
+        rejectedAt: this.clock.now(),
+        ...(reason !== undefined ? { reason } : {}),
+      });
+    }
   }
 
   /**
