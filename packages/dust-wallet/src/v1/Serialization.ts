@@ -63,9 +63,16 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
 // The format version lives beside the twins, not in either of them, so the V2 variant can read it without loading
 // ledger-v8. Re-exported here because the version is part of this variant's serialization surface.
 export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
-import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import {
+  PendingDustSchema,
+  SNAPSHOT_FORMAT_VERSION,
+  V1_SNAPSHOT_FORMAT_VERSION,
+  upgradeSnapshotV1ToV2,
+} from '../SnapshotFormat.js';
 
 const SnapshotSchema = Schema.Struct({
+  // Both variants write this shape; a `v1` payload is upgraded in one step before this schema sees it
+  // (`upgradeSnapshotV1ToV2` in `../SnapshotFormat.ts`).
   version: SnapshotFormat.versionField('dust', SNAPSHOT_FORMAT_VERSION),
   writtenBy: SnapshotFormat.writtenByField(),
   publicKey: Schema.Struct({
@@ -75,6 +82,7 @@ const SnapshotSchema = Schema.Struct({
   protocolVersion: Schema.BigInt,
   networkId: Schema.String,
   offset: Schema.optional(Schema.BigInt),
+  pendingDust: Schema.Array(PendingDustSchema),
 });
 
 type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
@@ -90,6 +98,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
         offset: w.progress?.appliedIndex,
+        pendingDust: w.pendingDust,
       });
 
       return SnapshotFormat.writeSnapshot(SnapshotSchema, buildSnapshot(wallet), wallet.unknownFields);
@@ -99,8 +108,9 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         serialized,
         SnapshotFormat.readSnapshotWithUnknownFields({
           surface: 'dust',
-          reads: [SNAPSHOT_FORMAT_VERSION],
+          reads: [V1_SNAPSHOT_FORMAT_VERSION, SNAPSHOT_FORMAT_VERSION],
           schema: SnapshotSchema,
+          upgrade: upgradeSnapshotV1ToV2,
         }),
         Either.flatMap(({ snapshot, unknownFields }) =>
           Either.try({
@@ -109,7 +119,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
                 CoreWallet.restore(
                   snapshot.state,
                   snapshot.publicKey,
-                  [],
+                  [...snapshot.pendingDust],
                   {
                     appliedIndex: snapshot.offset ?? 0n,
                     highestRelevantWalletIndex: 0n,

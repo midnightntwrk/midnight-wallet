@@ -13,6 +13,7 @@
 import {
   type Bindingish,
   DustLocalState,
+  type DustNonce,
   type DustNullifier,
   type DustParameters,
   type DustPublicKey,
@@ -22,6 +23,7 @@ import {
   type Signaturish,
   type Transaction,
   type Event,
+  updatedValue,
 } from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, type SnapshotFormat, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Option, pipe } from 'effect';
@@ -142,19 +144,48 @@ export const CoreWallet = {
     // TODO: replace currentTime with `updatedState.syncTime` introduced in ledger-6.2.0-rc.1
     const stateWithChanges = wallet.state.replayEventsWithChanges(secretKey, events);
     const updatedState = stateWithChanges.state.processTtls(currentTime);
-    // A coin stays pending until the chain spends it, or its lock runs out and it is back among the unlocked utxos.
-    const settledNonces = new Set([
-      ...stateWithChanges.changes.flatMap((change) => change.spentUtxos.map((utxo) => utxo.nonce)),
-      ...updatedState.utxos.map((utxo) => utxo.nonce),
-    ]);
     return [
       {
         ...wallet,
         state: updatedState,
-        pendingDust: wallet.pendingDust.filter((coin) => !settledNonces.has(coin.nonce)),
+        pendingDust: CoreWallet.settlePendingDust(
+          wallet.pendingDust,
+          stateWithChanges.state,
+          updatedState,
+          stateWithChanges.changes.flatMap((change) => change.spentUtxos.map((utxo) => utxo.nonce)),
+          currentTime,
+        ),
       },
       stateWithChanges.changes,
     ];
+  },
+
+  /**
+   * The pending coins still held after a TTL pass at `time` took the state from `beforeTtls` to `afterTtls`.
+   *
+   * @remarks
+   *   A coin settles when the chain spends it, when its lock runs out and it is back among the unlocked utxos, or when
+   *   the pass drops it as worth nothing. That last test mirrors the ledger's own, valued on the state before the
+   *   pass.
+   */
+  settlePendingDust(
+    pendingDust: Array<DustWithNullifier>,
+    beforeTtls: DustLocalState,
+    afterTtls: DustLocalState,
+    spentNonces: ReadonlyArray<DustNonce>,
+    time: Date,
+  ): Array<DustWithNullifier> {
+    const settledNonces = new Set([...spentNonces, ...afterTtls.utxos.map((utxo) => utxo.nonce)]);
+    const decayedAway = (coin: Dust): boolean =>
+      pipe(
+        Option.fromNullable(beforeTtls.generationInfo(coin)),
+        Option.match({
+          onNone: () => true,
+          onSome: (genInfo) =>
+            time > coin.ctime && updatedValue(coin.ctime, coin.initialValue, genInfo, time, beforeTtls.params) === 0n,
+        }),
+      );
+    return pendingDust.filter((coin) => !settledNonces.has(coin.nonce) && !decayedAway(coin));
   },
 
   /**
