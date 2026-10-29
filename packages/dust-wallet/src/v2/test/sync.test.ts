@@ -306,6 +306,67 @@ describe('V2 projections sync of pending Dust', () => {
     expect(synced.state.walletBalance(afterDecay)).toBe(0n);
     expect(synced.pendingDust).toEqual([]);
   });
+
+  describe('a coin that keeps its value', () => {
+    // An own coin created with no value whose backing Night is never spent: it keeps generating, so it never decays.
+    const generatingNight = 'bb'.repeat(32);
+    const generatingQdo = {
+      initialValue: 0n,
+      owner: secretKey.publicKey,
+      nonce: dustFirstNonce(generatingNight, secretKey.publicKey),
+      seq: 0,
+      ctime: created,
+      backingNight: generatingNight,
+      mtIndex: 0n,
+    };
+    const generating: NewDustGeneration = {
+      dustNullifier: dustNullifier(generatingQdo, secretKey),
+      genInfo: { value: 5_000_000_000_000n, owner: secretKey.publicKey, nonce: generatingNight, dtime: undefined },
+      generationMtIndex: 0,
+      qdo: generatingQdo,
+      transactionId: 7,
+      transactionHash: 'cd'.repeat(32),
+    };
+
+    const syncedGeneratingWallet = (): CoreWallet => {
+      const utxos = DustUtxoMap.create([generating]);
+      const withUtxos = CoreWallet.applyNewDustUtxos(CoreWallet.initEmpty(dustParameters, secretKey, networkId), utxos);
+      return CoreWallet.applyDustGenerations(
+        CoreWallet.applyDustCommitments(withUtxos, utxos, []),
+        [],
+        [generating],
+        [],
+      );
+    };
+
+    const spendTime = secondsAfterCreation(150);
+    const lockEnd = new Date(spendTime.getTime() + Number(dustParameters.dustGracePeriodSeconds) * 1000);
+    const spentGenerating = (): CoreWallet =>
+      CoreWallet.spendCoins(syncedGeneratingWallet(), secretKey, [{ token: generating.qdo, value: 1n }], spendTime)[1];
+
+    it('should stop counting a pending coin once its lock runs out, so a coin back among the utxos is not also pending', () => {
+      const spent = spentGenerating();
+      expect(spent.pendingDust.map((coin) => coin.nonce)).toEqual([generating.qdo.nonce]);
+      expect(spent.state.utxos).toEqual([]);
+
+      const [synced] = makeEventLessSyncCapability().applyUpdate(spent, emptyUpdateAt(spent, lockEnd), fullSpan);
+
+      expect(synced.state.utxos.map((utxo) => utxo.nonce)).toEqual([generating.qdo.nonce]);
+      expect(synced.pendingDust).toEqual([]);
+    });
+
+    it('should keep a coin pending while its lock holds and it still has value, because the transaction that spent it may yet land', () => {
+      const spent = spentGenerating();
+      const withinLock = new Date(lockEnd.getTime() - 1000);
+      expect(withinLock.getTime()).toBeGreaterThan(spendTime.getTime());
+
+      const [synced] = makeEventLessSyncCapability().applyUpdate(spent, emptyUpdateAt(spent, withinLock), fullSpan);
+
+      expect(synced.state.utxos).toEqual([]);
+      expect(synced.state.walletBalance(withinLock)).toBe(0n);
+      expect(synced.pendingDust.map((coin) => coin.nonce)).toEqual([generating.qdo.nonce]);
+    });
+  });
 });
 
 describe('V2 projections nullifier subscription', () => {
