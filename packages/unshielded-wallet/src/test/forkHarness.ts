@@ -183,7 +183,14 @@ type SourceConfiguration = Readonly<{
   networkId: NetworkId.NetworkId;
   /** The single timeline both variants read, each decoding it as its own ledger version's update. */
   timeline: readonly TimelineItem[];
-  /** The verdicts the liveness feed reports, in place of the single `Skipped` an in-memory timeline gives by default. */
+  /**
+   * The verdicts the liveness feed reports, in place of the single `Skipped` an in-memory timeline gives by default.
+   *
+   * @remarks
+   *   Replayed as given, whatever verdict the wallet starts from: unlike the shipped feed, it is not seeded from the
+   *   wallet's own state. Both variants also share this one stream, so a verdict offered while one variant hands over
+   *   to the other can reach either.
+   */
   liveness?: Stream.Stream<IndexerLiveness.IndexerLiveness>;
   /** Whether the source stays open after the timeline, as a live subscription does, instead of ending. */
   openEnded?: boolean;
@@ -273,7 +280,14 @@ export type ForkWalletConfig = {
    * variant and learns the version from the first message it sees.
    */
   readonly chainVersionProbe?: ChainVersionProbe;
-  /** The verdicts the liveness feed reports. Absent means the single `Skipped` an in-memory timeline gives. */
+  /**
+   * The verdicts the liveness feed reports. Absent means the single `Skipped` an in-memory timeline gives.
+   *
+   * @remarks
+   *   Only for a wallet that stays on one variant. The feed is not seeded from the verdict a migration carries, and both
+   *   variants read the one stream, so a test that crosses `forkVersion` cannot observe what the hand-over does to a
+   *   verdict through it. That carry is pinned by the sync service's own tests, which do seed from the wallet's state.
+   */
   readonly liveness?: Stream.Stream<IndexerLiveness.IndexerLiveness>;
   /** Whether the source stays open after the timeline, as a live subscription does. Absent means it ends. */
   readonly openEnded?: boolean;
