@@ -265,6 +265,24 @@ export type ShieldedWalletAPI<
 
   revertTransaction(transaction: AnyTx): Promise<void>;
 
+  /**
+   * Releases the coins a transaction booked in the fallible segments the chain did not apply.
+   *
+   * @remarks
+   *   For a transaction that landed as a partial success: its guaranteed section and its successful fallible segments
+   *   were applied, so the coins they spent stay booked until sync settles them. Only the coins spent in the fallible
+   *   offers of `failedSegments` were never spent, and only those become available again. A segment id the transaction
+   *   has no fallible offer for is ignored, and a transaction of a ledger version the wallet is not running resolves
+   *   having done nothing.
+   * @example
+   *   await wallet.revertFailedSegments(transaction, [1, 3]);
+   *
+   * @param transaction The transaction whose failed segments to release.
+   * @param failedSegments The ids of the fallible segments the chain did not apply.
+   * @returns A promise that resolves once the coins are released.
+   */
+  revertFailedSegments(transaction: AnyTx, failedSegments: ReadonlyArray<number>): Promise<void>;
+
   stop(): Promise<void>;
 };
 

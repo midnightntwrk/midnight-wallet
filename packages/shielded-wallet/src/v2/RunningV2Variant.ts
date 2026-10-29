@@ -285,6 +285,18 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     });
   }
 
+  revertFailedSegments(
+    transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+    failedSegments: ReadonlyArray<number>,
+  ): Effect.Effect<void, WalletError> {
+    return SubscriptionRef.updateEffect(this.#context.stateRef, (state) => {
+      return pipe(
+        this.#v2Context.transactingCapability.revertFailedSegments(state, transaction, failedSegments),
+        EitherOps.toEffect,
+      );
+    });
+  }
+
   serializeState(state: CoreWallet): TSerialized {
     return this.#v2Context.serializationCapability.serialize(state);
   }

@@ -854,6 +854,45 @@ export function CustomForkingShieldedWallet<
         .pipe(Effect.runPromise);
     }
 
+    /**
+     * Releases the coins a transaction booked in the fallible segments the chain did not apply.
+     *
+     * @remarks
+     *   For a transaction that landed as a partial success: its guaranteed section and its successful fallible segments
+     *   were applied, so the coins they spent stay booked until sync settles them. Only the coins spent in the fallible
+     *   offers of `failedSegments` were never spent, and only those become available again. A segment id the
+     *   transaction has no fallible offer for is ignored.
+     *
+     *   As with {@link revertTransaction}, a transaction built on the other side of the boundary is not one the current
+     *   variant could have booked coins for, so this resolves having done nothing.
+     * @example
+     *   await wallet.revertFailedSegments(transaction, [1, 3]);
+     *
+     * @param transaction The transaction whose failed segments to release.
+     * @param failedSegments The ids of the fallible segments the chain did not apply.
+     * @returns A promise that resolves once the coins are released.
+     */
+    revertFailedSegments(transaction: AnyTx, failedSegments: ReadonlyArray<number>): Promise<void> {
+      return this.runtime
+        .dispatch<void, TransactingError>({
+          [V1Tag]: (v1) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledgerV8.Transaction<ledgerV8.Signaturish, ledgerV8.Proofish, ledgerV8.Bindingish>
+              >(transaction, v8Epoch),
+              { onLeft: () => Effect.void, onRight: (unwrapped) => v1.revertFailedSegments(unwrapped, failedSegments) },
+            ),
+          [V2Tag]: (v2) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledgerV9.Transaction<ledgerV9.Signaturish, ledgerV9.Proofish, ledgerV9.Bindingish>
+              >(transaction, v9Epoch),
+              { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertFailedSegments(unwrapped, failedSegments) },
+            ),
+        })
+        .pipe(Effect.runPromise);
+    }
+
     waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<string>> {
       return rx.firstValueFrom(
         this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
