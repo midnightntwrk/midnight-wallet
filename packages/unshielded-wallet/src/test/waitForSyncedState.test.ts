@@ -70,14 +70,14 @@ const isCaughtUpButBehind = (state: UnshieldedWalletState): boolean =>
 const settleWithin = Duration.seconds(5);
 
 /**
- * Waits on `promise`, failing with what was awaited if it does not settle in time.
+ * Waits on `effect`, failing with what was awaited if it does not complete in time.
  *
  * @remarks
  *   A wallet that never gets there must fail the test with that, not hang it: an unbounded wait ends only at the test
  *   timeout, reported as a timeout rather than a failed expectation, and never closes the scope that stops the wallet.
  */
-const awaitWithin = <A>(awaited: string, promise: () => Promise<A>): Effect.Effect<A, Error> =>
-  Effect.promise(promise).pipe(
+const awaitWithin = <A>(awaited: string, effect: Effect.Effect<A>): Effect.Effect<A, Error> =>
+  effect.pipe(
     Effect.timeoutFail({
       duration: settleWithin,
       onTimeout: () => new Error(`${awaited} did not happen within ${Duration.format(settleWithin)}`),
@@ -107,8 +107,9 @@ const waitsUntilInSync = (
 
     // Reached before the call is made, so a predicate ignoring liveness would find its answer in the current state and
     // resolve at once — the 100 ms grace below is not what the check depends on.
-    yield* awaitWithin('The wallet reaching the tip with the indexer behind', () =>
-      rx.firstValueFrom(wallet.state.pipe(rx.filter(isCaughtUpButBehind))),
+    yield* awaitWithin(
+      'The wallet reaching the tip with the indexer behind',
+      Effect.promise(() => rx.firstValueFrom(wallet.state.pipe(rx.filter(isCaughtUpButBehind)))),
     );
 
     const synced = wallet.waitForSyncedState();
@@ -116,7 +117,10 @@ const waitsUntilInSync = (
     expect(yield* Effect.promise(() => isStillPending(synced))).toBe(true);
 
     yield* Queue.offer(verdicts, inSync);
-    const resolved = yield* awaitWithin('waitForSyncedState resolving once the indexer is in sync', () => synced);
+    const resolved = yield* awaitWithin(
+      'waitForSyncedState resolving once the indexer is in sync',
+      Effect.promise(() => synced),
+    );
 
     expect(resolved.state.progress.indexerLiveness).toStrictEqual(inSync);
   });
@@ -134,7 +138,7 @@ describe('waitForSyncedState', () => {
         openEnded: true,
       });
       yield* Effect.addFinalizer(() => wallet.stop);
-      yield* wallet.start;
+      yield* awaitWithin('The forking wallet starting', wallet.start);
 
       yield* waitsUntilInSync(wallet.unshielded, verdicts);
     }).pipe(Effect.scoped, Effect.runPromise);
@@ -150,7 +154,10 @@ describe('waitForSyncedState', () => {
         openEnded: true,
       });
       yield* Effect.addFinalizer(() => Effect.promise(() => wallet.stop()));
-      yield* Effect.promise(() => wallet.start());
+      yield* awaitWithin(
+        'The single-variant wallet starting',
+        Effect.promise(() => wallet.start()),
+      );
 
       yield* waitsUntilInSync(wallet, verdicts);
     }).pipe(Effect.scoped, Effect.runPromise);
