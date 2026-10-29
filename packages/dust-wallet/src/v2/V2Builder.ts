@@ -71,12 +71,8 @@ export type BaseV2Configuration = {
    *   is parameterised where shielded's is not: generation and decay rates live on the state, so an empty dust wallet
    *   cannot be built without a set of them. Optional, and defaulting to `LedgerParameters.initialParameters().dust`,
    *   because it is the empty-wallet fallback that needs it, and that fallback is what every builder written before
-   *   migrations were configurable silently relies on.
-   *
-   *   A variant registered as the target of a real fork does not use it for the hand-over:
-   *   {@link makeCrossLedgerMigration} carries its own, required, parameters. `CustomForkingDustWallet` does read it,
-   *   for the empty state a start at the dust timeline's boundary builds in the hand-over's place, so a forking
-   *   composition hands this field the same set it builds that migration on.
+   *   migrations were configurable silently relies on. A variant registered as the target of a real fork does not use
+   *   this field at all: {@link makeCrossLedgerMigration} carries its own, required, parameters.
    */
   dustParameters?: DustParameters;
 };
