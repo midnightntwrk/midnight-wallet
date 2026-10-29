@@ -16,10 +16,13 @@ import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/c
 import { type CanAssign, type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { type Duration } from 'effect';
 import { describe, it } from 'vitest';
+import { type CustomForkingDustWallet } from '../DustWallet.js';
 import { type DefaultDustConfiguration } from '../DustWalletAPI.js';
+import { type WalletSyncUpdate as V1SyncUpdate } from '../v1/Sync.js';
 import { type DefaultV1Configuration } from '../v1/V1Builder.js';
 import { type TransactionHistory as V2TransactionHistory } from '../v2/index.js';
 import { type NetworkId, type TotalCostParameters } from '../v2/types/index.js';
+import { type WalletSyncUpdate as V2SyncUpdate } from '../v2/SyncSchema.js';
 import { type DefaultV2Configuration } from '../v2/V2Builder.js';
 
 describe('DefaultDustConfiguration', () => {
@@ -63,5 +66,13 @@ describe('DefaultDustConfiguration', () => {
     // one has no use for the answer.
     type _5 = Expect<Equal<'chainVersionProbe' extends keyof DefaultV1Configuration ? true : false, false>>;
     type _6 = Expect<Equal<'chainVersionProbe' extends keyof DefaultV2Configuration ? true : false, false>>;
+  });
+});
+
+describe('CustomForkingDustWallet', () => {
+  it('composes a V2 variant built from a configuration of its own, which need not state dust parameters', () => {
+    // A builder implementing `VariantBuilder` is configured with whatever it asks for, and may build its cross-ledger
+    // migration on dust parameters it supplies itself; the wallet layer only hands each builder its configuration.
+    type _1 = typeof CustomForkingDustWallet<V1SyncUpdate, V2SyncUpdate, object, { endpoint: string }>;
   });
 });
