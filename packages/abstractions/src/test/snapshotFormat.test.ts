@@ -20,6 +20,8 @@ import {
   versionField,
   writtenByField,
   readSnapshot,
+  readSnapshotWithUnknownFields,
+  writeSnapshot,
   SnapshotRestoreError,
 } from '../SnapshotFormat.js';
 
@@ -184,5 +186,45 @@ describe('reading a snapshot', () => {
     expect(readNewer(JSON.stringify({ version: 'v2', key: { tag: 'schnorr' } }))).toEqual(
       Either.right({ version: 'v2', key: { tag: 'schnorr' } }),
     );
+  });
+});
+
+describe('the unknown fields of a snapshot', () => {
+  const Snapshot = Schema.Struct({
+    version: versionField('dust', 'v1'),
+    payload: Schema.String,
+    foo: Schema.optional(Schema.Number),
+  });
+  const read = readSnapshotWithUnknownFields({ surface: 'dust', reads: ['v1'], schema: Snapshot });
+  // In a JSON text, `__proto__` is an ordinary member; JSON.parse makes it an own field, not the prototype.
+  const withProtoMember = '{"version":"v1","payload":"x","__proto__":{"later":"release"}}';
+
+  it('should keep a top-level __proto__ member as an ordinary own field, so it is carried like any other unknown field and never becomes the prototype', () => {
+    const unknownFields = Either.getOrThrow(read(withProtoMember)).unknownFields;
+
+    expect(Object.hasOwn(unknownFields, '__proto__')).toBe(true);
+    expect(Object.getOwnPropertyDescriptor(unknownFields, '__proto__')?.value).toEqual({ later: 'release' });
+    expect(Object.getPrototypeOf(unknownFields)).toBe(Object.prototype);
+  });
+
+  it('should write a __proto__ unknown field back as an own member, so a later release finds it where it left it', () => {
+    // Object.fromEntries defines `__proto__` as an own field, as a JSON text read without loss would.
+    const unknownFields = Object.fromEntries([['__proto__', { later: 'release' }]]);
+    const written: unknown = JSON.parse(writeSnapshot(Snapshot, { version: 'v1', payload: 'x' }, unknownFields));
+
+    expect(typeof written === 'object' && written !== null && Object.hasOwn(written, '__proto__')).toBe(true);
+    expect(Object.getOwnPropertyDescriptor(written, '__proto__')?.value).toEqual({ later: 'release' });
+  });
+
+  it('should write back an unknown field under a declared name the snapshot left out, because the writer encoded nothing to supersede it', () => {
+    const written: unknown = JSON.parse(writeSnapshot(Snapshot, { version: 'v1', payload: 'x' }, { foo: 1 }));
+
+    expect(written).toEqual({ version: 'v1', payload: 'x', foo: 1 });
+  });
+
+  it('should write what the snapshot encodes under a declared name over the unknown field of that name, because the encoded value is the truth', () => {
+    const written: unknown = JSON.parse(writeSnapshot(Snapshot, { version: 'v1', payload: 'x', foo: 2 }, { foo: 1 }));
+
+    expect(written).toEqual({ version: 'v1', payload: 'x', foo: 2 });
   });
 });

@@ -95,27 +95,34 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         offset: w.progress?.appliedIndex,
       });
 
-      return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
+      return SnapshotFormat.writeSnapshot(SnapshotSchema, buildSnapshot(wallet), wallet.unknownFields);
     },
     deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError> => {
       return pipe(
         serialized,
-        SnapshotFormat.readSnapshot({ surface: 'dust', reads: [SNAPSHOT_FORMAT_VERSION], schema: SnapshotSchema }),
-        Either.flatMap((snapshot: Snapshot) =>
+        SnapshotFormat.readSnapshotWithUnknownFields({
+          surface: 'dust',
+          reads: [SNAPSHOT_FORMAT_VERSION],
+          schema: SnapshotSchema,
+        }),
+        Either.flatMap(({ snapshot, unknownFields }) =>
           Either.try({
             try: () =>
-              CoreWallet.restore(
-                snapshot.state,
-                snapshot.publicKey,
-                [],
-                {
-                  appliedIndex: snapshot.offset ?? 0n,
-                  highestRelevantWalletIndex: 0n,
-                  highestIndex: 0n,
-                  highestRelevantIndex: 0n,
-                },
-                snapshot.protocolVersion,
-                snapshot.networkId,
+              SnapshotFormat.withUnknownFields(
+                CoreWallet.restore(
+                  snapshot.state,
+                  snapshot.publicKey,
+                  [],
+                  {
+                    appliedIndex: snapshot.offset ?? 0n,
+                    highestRelevantWalletIndex: 0n,
+                    highestIndex: 0n,
+                    highestRelevantIndex: 0n,
+                  },
+                  snapshot.protocolVersion,
+                  snapshot.networkId,
+                ),
+                unknownFields,
               ),
             catch: (err) => new OtherWalletError({ message: 'Error while restoring core wallet', cause: err }),
           }),
