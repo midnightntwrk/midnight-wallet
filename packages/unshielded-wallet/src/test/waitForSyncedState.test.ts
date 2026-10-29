@@ -26,7 +26,7 @@
  */
 import { IndexerLiveness, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import { Effect, Queue, Stream } from 'effect';
+import { Duration, Effect, Queue, Stream } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { type UnshieldedWalletState } from '../UnshieldedWalletAPI.js';
@@ -66,6 +66,24 @@ const isCaughtUpButBehind = (state: UnshieldedWalletState): boolean =>
   state.state.progress.highestTransactionId === 1n &&
   IndexerLiveness.isBehind(state.state.progress.indexerLiveness);
 
+/** Far longer than an in-memory wallet takes to get anywhere, and well inside the test's own timeout. */
+const settleWithin = Duration.seconds(5);
+
+/**
+ * Waits on `promise`, failing with what was awaited if it does not settle in time.
+ *
+ * @remarks
+ *   A wallet that never gets there must fail the test with that, not hang it: an unbounded wait ends only at the test
+ *   timeout, reported as a timeout rather than a failed expectation, and never closes the scope that stops the wallet.
+ */
+const awaitWithin = <A>(awaited: string, promise: () => Promise<A>): Effect.Effect<A, Error> =>
+  Effect.promise(promise).pipe(
+    Effect.timeoutFail({
+      duration: settleWithin,
+      onTimeout: () => new Error(`${awaited} did not happen within ${Duration.format(settleWithin)}`),
+    }),
+  );
+
 /** Whether `promise` is still pending once everything already queued has run. */
 const isStillPending = (promise: Promise<unknown>): Promise<boolean> =>
   Promise.race([promise.then(() => false), new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 100))]);
@@ -83,20 +101,22 @@ type StartedWallet = {
 const waitsUntilInSync = (
   wallet: StartedWallet,
   verdicts: Queue.Queue<IndexerLiveness.IndexerLiveness>,
-): Effect.Effect<void> =>
+): Effect.Effect<void, Error> =>
   Effect.gen(function* () {
     yield* Queue.offer(verdicts, behind);
 
     // Reached before the call is made, so a predicate ignoring liveness would find its answer in the current state and
     // resolve at once — the 100 ms grace below is not what the check depends on.
-    yield* Effect.promise(() => rx.firstValueFrom(wallet.state.pipe(rx.filter(isCaughtUpButBehind))));
+    yield* awaitWithin('The wallet reaching the tip with the indexer behind', () =>
+      rx.firstValueFrom(wallet.state.pipe(rx.filter(isCaughtUpButBehind))),
+    );
 
     const synced = wallet.waitForSyncedState();
 
     expect(yield* Effect.promise(() => isStillPending(synced))).toBe(true);
 
     yield* Queue.offer(verdicts, inSync);
-    const resolved = yield* Effect.promise(() => synced);
+    const resolved = yield* awaitWithin('waitForSyncedState resolving once the indexer is in sync', () => synced);
 
     expect(resolved.state.progress.indexerLiveness).toStrictEqual(inSync);
   });
