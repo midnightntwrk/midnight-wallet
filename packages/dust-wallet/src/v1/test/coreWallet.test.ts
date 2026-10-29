@@ -142,4 +142,18 @@ describe('CoreWallet pending Dust', () => {
     expect(backingNightsOf(afterLock)).toContain(first.qdo.backingNight);
     expect(afterLock.pendingDust).toEqual([]);
   });
+
+  it('should stop counting a coin as pending once it decays to nothing, because the state no longer holds it to spend or release', () => {
+    const [, spent] = spendInTransaction(syncedWallet(), decaying, spendTime);
+    const lockEnd = new Date(spendTime.getTime() + Number(dustParameters.dustGracePeriodSeconds) * 1000);
+
+    const [afterDecay] = CoreWallet.applyEventsWithChanges(spent, secretKey, [], secondsAfterCreation(300));
+
+    expect(backingNightsOf(afterDecay)).not.toContain(decaying.qdo.backingNight);
+    expect(afterDecay.pendingDust).toEqual([]);
+
+    const [afterLock] = CoreWallet.applyEventsWithChanges(afterDecay, secretKey, [], lockEnd);
+
+    expect(afterLock.pendingDust).toEqual([]);
+  });
 });
