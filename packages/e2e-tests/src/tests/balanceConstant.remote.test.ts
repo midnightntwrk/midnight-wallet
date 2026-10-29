@@ -10,12 +10,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnightntwrk/ledger-v9';
+import {
+  createWalletLifecycle,
+  initWalletWithSeed,
+  parseMidnightNetwork,
+  provideWallet,
+  saveState,
+  useWalletTestEnvironment,
+  type WalletInit,
+  type WalletLifecycle,
+  type WalletTestEnvironment,
+} from '@midnightntwrk/wallet-sdk-testkit';
+import { createTestContainersEnvironment } from '@midnightntwrk/wallet-sdk-testkit/testcontainers';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
 import { inspect } from 'node:util';
+import * as fsAsync from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 /** Tests checking balance is constant */
 
@@ -24,7 +38,9 @@ describe('Balance constant', () => {
     logger.info('SEED_STABLE not set');
     exit(1);
   }
-  const getFixture = useTestContainersFixture();
+  const getEnv = useWalletTestEnvironment(() =>
+    createTestContainersEnvironment({ network: parseMidnightNetwork(process.env['NETWORK']) }),
+  );
   const seed = process.env['SEED_STABLE'];
   const shieldedTokenRaw = ledger.shieldedToken().raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
@@ -35,21 +51,24 @@ describe('Balance constant', () => {
   const expectedTokenTwoBalance = utils.tNightAmount(50n);
   const expectedUnshieldedBalance = utils.tNightAmount(10n);
   const expectedDustBalance = expectedShieldedBalance;
-  const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.network}.state`;
   const syncTimeout = 15 * 60 * 1000; // 15 minutes; a longer bound only converts a wedge into lane time
 
-  let wallet: utils.WalletInit;
-  let fixture: TestContainersFixture;
+  let wallet: WalletInit;
+  let env: WalletTestEnvironment;
+  let lifecycle: WalletLifecycle;
 
   beforeEach(async () => {
-    fixture = getFixture();
+    // This hook's own lifecycle, so a wallet that finishes starting after `afterEach` has run is stopped by it.
+    const own = createWalletLifecycle();
+    lifecycle = own;
+    env = getEnv();
 
-    wallet = await utils.initWalletWithSeed(seed, fixture);
+    wallet = await own.adopt(initWalletWithSeed(env, seed));
   }, syncTimeout);
 
   afterEach(async () => {
-    // await utils.saveState(walletFacade, filename);
-    await wallet.wallet.stop();
+    // Nothing is carried between runs from here: the restore test saves to a directory of its own.
+    await lifecycle.release({ persist: false });
   }, syncTimeout);
 
   test(
@@ -74,17 +93,37 @@ describe('Balance constant', () => {
     async () => {
       // Deliberate save inside the test body: this test's subject is save-then-restore, and it only reaches this line
       // on the passing path. It is not the `afterEach` persistence that the poisoning guard exists for.
-      await utils.saveState(wallet, filename);
-      const restoredWallet = await utils.provideWallet(filename, seed, fixture);
-      const syncedState = await restoredWallet.wallet.waitForSyncedState();
+      //
+      // The snapshot goes to a directory of this test's own rather than `SYNC_CACHE`: it is written and read within
+      // the test, so it has no business in the cache carried between runs, and nothing it leaves there can be restored
+      // by a later run in its place.
+      const filename = `stable-${seed.substring(seed.length - 7)}-${env.network}.state`;
+      const directoryPath = await fsAsync.mkdtemp(path.join(os.tmpdir(), 'balance-constant-restore-'));
+      try {
+        // Synced first, so the snapshot holds the balances under test rather than a wallet that has seen nothing; a
+        // restore of that would just be a sync from genesis, which the test above already covers.
+        await wallet.wallet.waitForSyncedState();
+        await saveState(wallet, directoryPath, filename);
+        const restoredWallet = await provideWallet(env, { seed, syncCacheDir: directoryPath, filename });
+        try {
+          // `provideWallet` falls back to building from scratch when a restore fails, and a wallet built from scratch
+          // reaches the same balances, so they alone cannot tell the two apart.
+          expect(restoredWallet.restored).toBe(true);
+          const syncedState = await restoredWallet.wallet.waitForSyncedState();
 
-      expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
-      expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);
-      expect(syncedState.shielded.balances[nativeTokenHash2]).toBe(expectedTokenTwoBalance);
-      expect(syncedState.unshielded.balances[unshieldedTokenRaw]).toBe(expectedUnshieldedBalance);
-      expect(syncedState.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
-      expect(syncedState.shielded.pendingCoins.length).toBe(0);
-      expect(syncedState.shielded.totalCoins.length).toBeGreaterThanOrEqual(3);
+          expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
+          expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);
+          expect(syncedState.shielded.balances[nativeTokenHash2]).toBe(expectedTokenTwoBalance);
+          expect(syncedState.unshielded.balances[unshieldedTokenRaw]).toBe(expectedUnshieldedBalance);
+          expect(syncedState.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
+          expect(syncedState.shielded.pendingCoins.length).toBe(0);
+          expect(syncedState.shielded.totalCoins.length).toBeGreaterThanOrEqual(3);
+        } finally {
+          await restoredWallet.wallet.stop();
+        }
+      } finally {
+        await fsAsync.rm(directoryPath, { recursive: true, force: true });
+      }
     },
     syncTimeout,
   );

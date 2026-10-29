@@ -99,6 +99,9 @@ beforeAll(async () => {
   expect(() => ledger.Event.deserialize(Buffer.from(otherLedgerEventHex, 'hex'))).toThrow();
 });
 
+/** When the source stamped every batch here. Nothing in this file is booked, so the time itself is immaterial. */
+const stampedAt = new Date('2026-10-08T12:00:00Z');
+
 /** Builds a batch of sync updates, one per `(id, protocolVersion)` pair, each carrying its own event, encoded. */
 const batch = (items: readonly (readonly [id: number, protocolVersion: number])[]): WalletSyncUpdate =>
   WalletSyncUpdate.create(
@@ -110,6 +113,7 @@ const batch = (items: readonly (readonly [id: number, protocolVersion: number])[
       raw: eventHex[id - 1],
     })),
     secretKeys(),
+    stampedAt,
   );
 
 /** A single update carrying bytes this ledger version cannot read, reported at `protocolVersion`. */
@@ -251,6 +255,7 @@ describe('makeEventsSyncCapability.applyUpdate boundary handling', () => {
           unreadable(3, 7, 3),
         ],
         secretKeys(),
+        stampedAt,
       ),
       activeRange,
     );
@@ -282,6 +287,7 @@ describe('makeEventsSyncCapability.applyUpdate boundary handling', () => {
       WalletSyncUpdate.create(
         [unreadable(2, 3, 3), { _tag: 'EventsSyncUpdate', id: 3, protocolVersion: 3, maxId: 3, raw: eventHex[2] }],
         secretKeys(),
+        stampedAt,
       ),
       activeRange,
     );
@@ -321,7 +327,11 @@ describe('makeEventsSyncCapability.applyUpdate boundary handling', () => {
 
   it('leaves the state untouched for an empty batch', () => {
     const initial = freshWallet();
-    const [state, result] = capability.applyUpdate(initial, WalletSyncUpdate.create([], secretKeys()), activeRange);
+    const [state, result] = capability.applyUpdate(
+      initial,
+      WalletSyncUpdate.create([], secretKeys(), stampedAt),
+      activeRange,
+    );
 
     expect(state.progress.appliedIndex).toBe(0n);
     expect(state.protocolVersion).toBe(ProtocolVersion.MinSupportedVersion);
@@ -363,6 +373,7 @@ describe('shielded sync capability ordering', () => {
         raw: eventHex[eventIndex],
       })),
       secretKeys(),
+      stampedAt,
     );
 
   it('applies a batch whose ids skip ahead, since the gaps belong to other event groupings', () => {

@@ -375,3 +375,32 @@ describe('V2 shielded snapshot carrying an embedded transaction history', () => 
     expect('txHistory' in rewritten).toBe(false);
   });
 });
+
+describe('V2 shielded snapshot carrying what the wallet recorded about each booking', () => {
+  const capability = makeDefaultV2SerializationCapability();
+  const keys = ledger.ZswapSecretKeys.fromSeed(
+    Buffer.from('0000000000000000000000000000000000000000000000000000000000000002', 'hex'),
+  );
+  const emptyWallet = () => CoreWallet.initEmpty(keys, NetworkId.NetworkId.Undeployed);
+  const seenAndTimed = '4c33283181a6b75c30e28d8178563763ddc61ac05a20b615bae6b70fab560a10';
+  const timedOnly = '9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7';
+  const bookings = {
+    [seenAndTimed]: { seen: new Date('2026-10-08T12:00:00Z'), ttl: new Date('2026-10-08T12:10:00Z') },
+    [timedOnly]: { ttl: new Date('2026-10-08T12:20:00Z') },
+  };
+
+  it('should restore when each booking was first seen and its TTL, so a restart neither extends nor shortens how long a coin stays locked', () => {
+    const restored = pipe(
+      capability.deserialize(null, capability.serialize({ ...emptyWallet(), bookings })),
+      EitherOps.getOrThrowLeft,
+    );
+
+    expect(restored.bookings).toEqual(bookings);
+  });
+
+  it('should write no field for a wallet with nothing booked, so an idle wallet keeps the bytes it had', () => {
+    const rewritten = JSON.parse(capability.serialize(emptyWallet())) as Record<string, unknown>;
+
+    expect('bookings' in rewritten).toBe(false);
+  });
+});

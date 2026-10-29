@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { type NetworkId, type SyncProgress, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type NetworkId, SnapshotFormat, type SyncProgress, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
 import { EitherOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Either, pipe } from 'effect';
 import { CoreWallet, PublicKeys } from './CoreWallet.js';
@@ -97,6 +97,8 @@ export type PreviousLedgerWallet = Readonly<{
   state: Readonly<{ serialize: () => Uint8Array }>;
   /** The transaction history a 1.0.0 snapshot embedded, when the previous wallet was restored from one. */
   legacyTxHistory?: readonly string[];
+  /** The snapshot fields the previous wallet was restored with and did not declare, when it carried any. */
+  unknownFields?: SnapshotFormat.UnknownFields;
 }>;
 
 /**
@@ -140,14 +142,18 @@ export const makeCrossLedgerMigration = (): StateMigration<PreviousLedgerWallet>
     pipe(
       LedgerOps.ledgerTry(() => ledger.ZswapLocalState.deserialize(previousState.state.serialize())),
       Either.map((state) =>
-        CoreWallet.fromPreviousVersion({
-          state,
-          publicKeys: previousState.publicKeys,
-          networkId: previousState.networkId,
-          protocolVersion: previousState.protocolVersion,
-          progress: previousState.progress,
-          ...(previousState.legacyTxHistory === undefined ? {} : { legacyTxHistory: previousState.legacyTxHistory }),
-        }),
+        // Snapshot fields neither variant declares cross with the wallet, so its first save on this side writes them.
+        SnapshotFormat.withUnknownFields(
+          CoreWallet.fromPreviousVersion({
+            state,
+            publicKeys: previousState.publicKeys,
+            networkId: previousState.networkId,
+            protocolVersion: previousState.protocolVersion,
+            progress: previousState.progress,
+            ...(previousState.legacyTxHistory === undefined ? {} : { legacyTxHistory: previousState.legacyTxHistory }),
+          }),
+          previousState.unknownFields ?? {},
+        ),
       ),
       EitherOps.toEffect,
     ),

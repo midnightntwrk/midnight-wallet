@@ -263,4 +263,25 @@ describe('DefaultCoinsAndBalancesCapability', () => {
       { numRuns: 10 },
     );
   });
+
+  it('should leave out of the reserved coins a booked coin whose hashes are not yet known, so listing them never throws', () => {
+    // A coin cannot be named by its nullifier until the wallet has computed its hashes, which needs the secret keys. A
+    // booked coin without its hash entry is therefore not yet listable, and the coins that are must still be listed.
+    const secretKeys = ledger.ZswapSecretKeys.fromSeed(new Uint8Array(32).fill(1));
+    const coins = [
+      toAvailableCoin({ tokenType: ledger.shieldedToken(), value: 10n }, secretKeys),
+      toAvailableCoin({ tokenType: ledger.shieldedToken(), value: 20n }, secretKeys),
+    ];
+    const booked = CoreWallet.init(
+      issueSpendingOfCoins(createInitialState(secretKeys, coins), secretKeys, coins),
+      secretKeys,
+      NetworkId.NetworkId.Undeployed,
+    );
+    const [unhashed, hashed] = [...booked.state.pendingSpends.values()].map(([coin]) => coin);
+    const awaitingHashes: CoreWallet = { ...booked, coinHashes: Record.remove(booked.coinHashes, unhashed.nonce) };
+
+    const reserved = makeDefaultCoinsAndBalancesCapability().getReservedCoins(awaitingHashes);
+
+    expect(reserved.map(({ coin }) => coin.nonce)).toEqual([hashed.nonce]);
+  });
 });

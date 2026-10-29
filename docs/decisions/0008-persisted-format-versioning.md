@@ -62,6 +62,24 @@ runtime already uses it for moving live wallet state across a hard fork. These a
 one new fixture folder. An optional field added → no bump; re-record the drift baseline. The internals of a ledger blob
 are the ledger's concern, not a format version of ours.
 
+**Unknown fields are carried, not dropped.** Not bumping for an optional field means a payload written by a later
+release carries a version an earlier one reads. Effect Schema ignores keys a schema does not declare, so the earlier
+build would read such a payload, drop the field, and write it back without it — after a rollback, or with two builds
+sharing one storage — and the later release would find it gone with nothing ever refused. That is how the shielded
+snapshot's embedded `txHistory` was lost. So every reader keeps the top-level fields it does not know and every writer
+writes them back unchanged: a snapshot carries them on the core wallet's `unknownFields` through every rebuild,
+including the cross-ledger migration; the transaction history keeps them on its envelope and on each entry; pending
+transactions keep them on the state. A top-level `__proto__` is carried as an ordinary field, never applied as a
+prototype. The alternative, bumping the version for every added field so that an older build refuses the payload, was
+rejected: it makes rollback impossible after any field is added, and every such field would then owe a frozen fixture
+for the version it leaves behind.
+
+What is carried is exactly the top-level fields of each snapshot, of the pending-transactions state, of the history
+envelope and of each history entry. Two kinds of optional field still need a version bump: one added **nested** below
+those levels (inside a section such as `shielded`, `dust` or `lifecycle`), which an older build does not carry, and one
+whose value is derived from state an older build keeps changing, which would come back stale beside the state it
+describes.
+
 **Worked example: the unshielded snapshot on the V2 variant.** The V1 variant, on ledger-v8, stores the verifying key as
 a bare string, implicitly a schnorr key. The V2 variant, on ledger-v9, stores it as `{ tag, value }`, because that
 ledger signs with more than one scheme. That is a retyped field, so the V2 writer writes `version: 'v2'`, and one step —
@@ -83,7 +101,9 @@ refuses the same way: a tagged error carrying the surface, the version detected,
 all four in its message. The transaction history raises `TransactionHistoryRestoreError`; the three snapshot surfaces
 raise `SnapshotRestoreError`, through one shared reader (`SnapshotFormat.readSnapshot`) so the rule lives in one place.
 The reason — not JSON, a version this build does not read, a shape it cannot decode — is a field, so an application
-tells "written by a newer SDK" from "corrupt" without reading the text.
+tells "written by a newer SDK" from "corrupt" without reading the text. A field the reader does not declare is not a
+failure: it is carried through unread and written back (see the bump rule above), so being loud about what cannot be
+read never means discarding what can merely not be interpreted.
 
 ### How it is enforced
 

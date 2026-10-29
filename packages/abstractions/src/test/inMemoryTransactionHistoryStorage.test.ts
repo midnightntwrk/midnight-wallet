@@ -288,6 +288,100 @@ describe('InMemoryTransactionHistoryStorage serialize / restore', () => {
   });
 });
 
+describe('InMemoryTransactionHistoryStorage fields the entry schema does not declare', () => {
+  const storedEntry = {
+    hash: 'tx',
+    identifiers: ['id-a'],
+    lifecycle: { status: 'finalized' },
+  };
+
+  const parseEntries = (serialized: string): readonly Record<string, unknown>[] =>
+    (JSON.parse(serialized) as { entries: readonly Record<string, unknown>[] }).entries;
+
+  it('should restore an entry carrying a __proto__ member with no inherited fields, and write the member back as its own field', async () => {
+    // Written as JSON text so `__proto__` is an own member of the stored entry, exactly as `JSON.parse` yields it.
+    const payload = `{"version":"v2","entries":[{"hash":"tx","identifiers":["id-a"],"lifecycle":{"status":"finalized"},"__proto__":{"fees":"x"}}]}`;
+
+    const restored = InMemoryTransactionHistoryStorage.restore(payload, TransactionHistoryEntryCommonSchema);
+    const entry = await restored.get('tx');
+
+    expect(entry).toBeDefined();
+    expect(Object.getPrototypeOf(entry)).toBe(Object.prototype);
+    expect(entry !== undefined && 'fees' in entry).toBe(false);
+
+    const serialized = await restored.serialize();
+    const [written] = parseEntries(serialized);
+    expect(written !== undefined && Object.hasOwn(written, '__proto__')).toBe(true);
+    expect(written?.['__proto__']).toEqual({ fees: 'x' });
+  });
+
+  it('should serialize without throwing and leave out a section a writer added that the schema does not declare, because the storage cannot encode it', async () => {
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
+    const undeclared = { shielded: { received: 5n } };
+
+    // A spread section escapes the excess-property check, standing in for a caller whose own entry type is wider than
+    // the schema this storage was built with.
+    await storage.gotPending({ ...pendingInput('pending-tx', ['id-p']), ...undeclared });
+    await storage.gotFinalized({ ...finalizedInput('finalized-tx', { identifiers: ['id-f'] }), ...undeclared });
+
+    const serialized = await storage.serialize();
+
+    expect(parseEntries(serialized).map((entry) => Object.hasOwn(entry, 'shielded'))).toEqual([false, false]);
+  });
+
+  it('should keep a restored entry field the schema does not declare through a merge that rebuilds the entry field by field', async () => {
+    const rebuildEntry = (
+      existing: TransactionHistoryEntryCommon,
+      incoming: TransactionHistoryEntryCommon,
+    ): TransactionHistoryEntryCommon => ({
+      hash: incoming.hash,
+      identifiers: [...new Set([...existing.identifiers, ...incoming.identifiers])],
+      lifecycle: incoming.lifecycle,
+    });
+    const payload = JSON.stringify({ version: 'v2', entries: [{ ...storedEntry, laterField: 'kept' }] });
+    const restored = InMemoryTransactionHistoryStorage.restore(
+      payload,
+      TransactionHistoryEntryCommonSchema,
+      rebuildEntry,
+    );
+
+    await restored.gotFinalized(finalizedInput('tx', { identifiers: ['id-b'] }));
+
+    const [written] = parseEntries(await restored.serialize());
+    expect(written?.['laterField']).toBe('kept');
+    expect(written?.['identifiers']).toEqual(['id-a', 'id-b']);
+  });
+
+  it('should write back an envelope member a current-format payload carried, so a later release gets it back', async () => {
+    const payload = JSON.stringify({ version: 'v2', entries: [storedEntry], laterEnvelopeField: { note: 'kept' } });
+
+    const restored = InMemoryTransactionHistoryStorage.restore(payload, TransactionHistoryEntryCommonSchema);
+
+    expect(JSON.parse(await restored.serialize())).toMatchObject({ laterEnvelopeField: { note: 'kept' } });
+  });
+
+  it('should drop the envelope members a restored payload carried once the storage is reset, because they described the history reset discarded', async () => {
+    const payload = JSON.stringify({ version: 'v2', entries: [storedEntry], laterEnvelopeField: { note: 'kept' } });
+    const restored = InMemoryTransactionHistoryStorage.restore(payload, TransactionHistoryEntryCommonSchema);
+
+    restored.reset();
+
+    expect(Object.hasOwn(JSON.parse(await restored.serialize()) as object, 'laterEnvelopeField')).toBe(false);
+  });
+
+  it('should not write back a field an entry was restored with once the storage is reset, because reset discarded that entry', async () => {
+    const payload = JSON.stringify({ version: 'v2', entries: [{ ...storedEntry, laterField: 'stale' }] });
+    const restored = InMemoryTransactionHistoryStorage.restore(payload, TransactionHistoryEntryCommonSchema);
+
+    // A resync after a reset writes the same transaction hashes again.
+    restored.reset();
+    await restored.gotFinalized(finalizedInput('tx', { identifiers: ['id-a'] }));
+
+    const [written] = parseEntries(await restored.serialize());
+    expect(written !== undefined && Object.hasOwn(written, 'laterField')).toBe(false);
+  });
+});
+
 describe('extendEntrySchema', () => {
   it('combines the common entry fields with the extension and round-trips the extension section', async () => {
     const SectionSchema = Schema.Struct({ note: Schema.String });
