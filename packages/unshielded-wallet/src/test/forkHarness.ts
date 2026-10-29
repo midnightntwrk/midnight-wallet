@@ -286,7 +286,10 @@ export type ForkWalletConfig = {
    * @remarks
    *   Only for a wallet that stays on one variant. The feed is not seeded from the verdict a migration carries, and both
    *   variants read the one stream, so a test that crosses `forkVersion` cannot observe what the hand-over does to a
-   *   verdict through it. That carry is pinned by the sync service's own tests, which do seed from the wallet's state.
+   *   verdict through it. That carry is pinned link by link instead: the migration keeps the verdict
+   *   (`migration.test.ts`), the running variant hands the state it holds to the sync service when sync starts
+   *   (`runningV1Variant.test.ts`, `runningV2Variant.test.ts`), and the sync service seeds its feed from that state
+   *   (`Sync.liveness.test.ts`).
    */
   readonly liveness?: Stream.Stream<IndexerLiveness.IndexerLiveness>;
   /** Whether the source stays open after the timeline, as a live subscription does. Absent means it ends. */
