@@ -436,9 +436,6 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
     {
       networkId,
       forks: { v9: forkVersion },
-      // As `DustWallet` hands the wallet layer its whole configuration, the dust parameters its migration is built on
-      // included.
-      dustParameters: dustParameters.v9,
       ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}),
       ...(dustTimelineStartProbe !== undefined ? { dustTimelineStartProbe } : {}),
     },

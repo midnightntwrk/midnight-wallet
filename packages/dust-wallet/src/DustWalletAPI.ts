@@ -416,9 +416,10 @@ export type DefaultDustConfiguration = {
    *
    *   The start looks up the last dust event below `forks.v9` and parks the V2 variant's cursor there, with an empty
    *   state: the state the hand-over at the boundary leaves a wallet in, minus the ledger-v8 replay it would have
-   *   thrown away. Synchronization then continues by event replay as usual. Read by `DustWallet` only: a wallet
-   *   composed with `CustomForkingDustWallet`, such as one whose V2 variant syncs with `makeEventLessSyncService`, does
-   *   not see it.
+   *   thrown away. That state is valued against `dustParameters`, as the hand-over values it, and not against dust
+   *   parameters a start is called with. Synchronization then continues by event replay as usual. Read by `DustWallet`
+   *   only: a wallet composed with `CustomForkingDustWallet`, such as one whose V2 variant syncs with
+   *   `makeEventLessSyncService`, does not see it.
    *
    *   **The wallet's dust transaction history from ledger-v8 will be missing.** History is recorded as events are
    *   applied, and a wallet started this way applies none below the boundary.

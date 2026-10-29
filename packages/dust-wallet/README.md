@@ -43,11 +43,15 @@ the empty state a wallet crossing the boundary is handed. From there it syncs by
 
 - **The wallet's ledger-v8 dust transaction history will be missing**, because no event below the boundary is applied.
 - Fresh starts only: a restored wallet resumes from the cursor its snapshot carries.
+- Its dust is valued against the configured `dustParameters`, as a wallet crossing the boundary values it, and not
+  against dust parameters passed to the start.
 - Best-effort: a chain still below `forks.v9`, one born on ledger-v9, or an indexer that cannot be searched leaves the
   start as it is without the option.
 - Dust only. The shielded and unshielded wallets have to read ledger-v8 to find the coins they hold from it.
 - A `CustomForkingDustWallet` composition opts in by setting `dustTimelineStartProbe`, for example to
-  `() => Effect.runPromise(findDustTimelineStart(configuration, configuration.forks.v9))`.
+  `() => Effect.runPromise(findDustTimelineStart(configuration, configuration.forks.v9))`. The start values its state
+  against the V2 variant's `dustParameters`, so the composition hands that variant the set its V2 migration is built on,
+  as `DustWallet` does.
 
 ### Observing State
 

@@ -65,7 +65,7 @@ import { runPromiseThrowingFailure } from './PromiseBoundary.js';
 import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import { CoreWallet as V1CoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
 import { type WalletSyncUpdate as V1SyncUpdate } from './v1/Sync.js';
-import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
+import { type BaseV2Configuration, CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
 import { type DustTimelineStart, findDustTimelineStart } from './v2/Sync.js';
 import { type WalletSyncUpdate as V2SyncUpdate } from './v2/SyncSchema.js';
 import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
@@ -166,10 +166,10 @@ export type ForkingDustConfiguration = {
    *   Setting it is the opt-in: `DustWallet` sets it to an indexer search when `skipLedgerV8DustHistory` is on. Asked by
    *   a fresh start only, and before {@link chainVersionProbe}; a restore resumes from the cursor its snapshot carries.
    *
-   *   An answer at a version the V2 variant owns starts the wallet there, with an empty state and its cursor on the event
-   *   the answer names: the state the hand-over at the boundary leaves a wallet in. Anything else, whether no answer, a
-   *   rejection, one that does not come in time or a version below the boundary, leaves the start as it would be
-   *   without it.
+   *   An answer at a version the V2 variant owns starts the wallet there, with an empty state valued against the V2
+   *   variant's `dustParameters` and its cursor on the event the answer names: the state the hand-over at the boundary
+   *   leaves a wallet in. Anything else, whether no answer, a rejection, one that does not come in time or a version
+   *   below the boundary, leaves the start as it would be without it.
    */
   dustTimelineStartProbe?: DustTimelineStartProbe;
 };
@@ -272,7 +272,8 @@ export interface ForkingDustWalletClass<
    *   Without one, or when the question goes unanswered, it begins on the V1 variant and is handed over when the chain
    *   reports a version the V2 variant owns — on a chain that has already forked, the first batch it sees.
    * @param seed The seed to derive both ledger versions' dust keys from.
-   * @param dustParameters The ledger-v9's dust parameters, which an empty ledger-v9 state is valued against.
+   * @param dustParameters The ledger-v9's dust parameters, which an empty ledger-v9 state is valued against. A start at
+   *   the dust timeline's boundary uses the V2 variant's `dustParameters` instead, as the hand-over does.
    * @returns A wallet started at the variant the chain is on, or on the V1 variant when the chain was not asked or did
    *   not say.
    */
@@ -290,7 +291,8 @@ export interface ForkingDustWalletClass<
    *   alone could not read the other side of the chain. It costs the caller an import of both ledger packages and the
    *   same derivation done twice; a seed costs neither.
    * @param keys One ledger version's dust secret key per side of the boundary.
-   * @param dustParameters The ledger-v9's dust parameters.
+   * @param dustParameters The ledger-v9's dust parameters. A start at the dust timeline's boundary uses the V2
+   *   variant's `dustParameters` instead, as the hand-over does.
    * @returns A wallet started at the variant the chain is on, or on the V1 variant — where a wallet with no history
    *   belongs — when the chain was not asked or did not say.
    */
@@ -405,7 +407,7 @@ export function CustomForkingDustWallet<
   TV1SyncUpdate,
   TV2SyncUpdate,
   TV1Config extends object,
-  TV2Config extends object,
+  TV2Config extends Pick<BaseV2Configuration, 'dustParameters'>,
   TConfiguration extends ForkingDustConfiguration = ForkingDustConfiguration,
 >(
   configuration: TConfiguration,
@@ -605,17 +607,25 @@ export function CustomForkingDustWallet<
         );
 
   /**
+   * What the V2 variant values a state built from nothing against — see `BaseV2Configuration.dustParameters` — with the
+   * same fallback its builder takes.
+   */
+  const v2Rates: DustGenerationRates = v2.configuration.dustParameters ?? defaultRates;
+
+  /**
    * An empty V2 state at the version and cursor the timeline search found.
    *
    * @remarks
    *   The state the hand-over at the boundary leaves a wallet in, without the ledger-v8 replay that preceded it: the
    *   migration empties the state and keeps the cursor, which on a timeline read to the boundary is the last event
-   *   below it.
+   *   below it. Valued against the V2 variant's own dust parameters, the set a composition builds its cross-ledger
+   *   migration on, and not against the ones the start was called with, which only ever value the ledger-v8 state the
+   *   hand-over discards.
    */
-  const parkedStateAt = (keys: DustKeysByEpoch, rates: DustGenerationRates, start: DustTimelineStart): CoreWallet =>
+  const parkedStateAt = (keys: DustKeysByEpoch, start: DustTimelineStart): CoreWallet =>
     CoreWallet.updateProgress(
       CoreWallet.withProtocolVersion(
-        CoreWallet.initEmpty(asV9DustParameters(rates), keys.v9, configuration.networkId),
+        CoreWallet.initEmpty(asV9DustParameters(v2Rates), keys.v9, configuration.networkId),
         start.version,
       ),
       { appliedIndex: start.cursor },
@@ -663,7 +673,8 @@ export function CustomForkingDustWallet<
      *   or did not answer: the V1 variant, an empty state valued against the ledger-v8 rebuild of the rates the caller
      *   named, and a hand-over on the first batch that reports a version it does not own.
      * @param keys One ledger version's dust key per side of the boundary, since either side may be the one that runs.
-     * @param rates The rates the caller named, which whichever empty state is built is valued against.
+     * @param rates The rates the caller named, which the empty state of a start at a variant is valued against. A start
+     *   at the timeline's boundary does not use them, as {@link parkedStateAt} explains.
      * @returns The started wallet.
      */
     static #startProbed(keys: DustKeysByEpoch, rates: DustGenerationRates): Promise<ForkingDustWalletImplementation> {
@@ -698,7 +709,7 @@ export function CustomForkingDustWallet<
                 ForkingDustWalletImplementation.startAtVariant(
                   ForkingDustWalletImplementation,
                   variant,
-                  parkedStateAt(keys, rates, start),
+                  parkedStateAt(keys, start),
                 ),
               ),
           }),

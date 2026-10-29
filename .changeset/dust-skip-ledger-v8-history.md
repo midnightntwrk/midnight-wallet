@@ -6,8 +6,9 @@ feat(dust-wallet): let a new wallet skip the ledger-v8 dust history
 
 `DustWallet` takes a new `skipLedgerV8DustHistory` option. On a chain that crossed `forks.v9` with ledger-v8 history
 behind it, a fresh start with the option set searches the indexer for the last dust event below `forks.v9` and starts
-the V2 variant there, with the empty state a wallet crossing the boundary is handed. The ledger-v8 dust events, which
-that hand-over would discard, are never replayed. Synchronization then continues by event replay as usual.
+the V2 variant there, with the empty state a wallet crossing the boundary is handed, valued against the same configured
+`dustParameters`. The ledger-v8 dust events, which that hand-over would discard, are never replayed. Synchronization
+then continues by event replay as usual.
 
 **The wallet's dust transaction history from ledger-v8 will be missing**, because no event below the boundary is
 applied. The option is off by default and affects fresh starts only: a restored wallet resumes from the cursor its
