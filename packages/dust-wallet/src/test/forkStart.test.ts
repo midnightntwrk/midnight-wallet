@@ -316,14 +316,22 @@ describe('a dust wallet that skips the ledger-v8 dust history', () => {
         expect(parked.version).toBe(v9Version);
         expect(parked.state.progress.appliedIndex).toBe(lastV8Id);
         expect(dustCount(parked.state)).toBe(0);
+        // Built as the hand-over builds it, by the V2 variant's own migration, from an empty state at the version and
+        // cursor the search found, so it is valued against whatever dust parameters that migration was built on.
+        expect(Option.map(yield* wallet.migration, ({ from }) => from)).toStrictEqual(
+          Option.some({
+            dustPublicKey: parked.state.publicKey.publicKey,
+            networkId,
+            protocolVersion: v9Version,
+            appliedIndex: lastV8Id,
+          }),
+        );
 
         yield* wallet.start;
         const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
         expect(yield* wallet.activeTag).toBe(V2Tag);
         expect(synced.state.progress.appliedIndex).toBe(BigInt(history.length + replay.length));
         expect(balanceAt(synced.state, chain.syncTime)).toBeGreaterThan(0n);
-        // Nothing was handed over, because the V1 variant never ran.
-        expect(yield* wallet.migration).toStrictEqual(Option.none());
       }).pipe(Effect.scoped, Effect.runPromise),
   );
 
