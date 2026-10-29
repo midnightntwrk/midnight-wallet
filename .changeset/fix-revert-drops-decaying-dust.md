@@ -2,23 +2,11 @@
 '@midnightntwrk/wallet-sdk-dust-wallet': minor
 ---
 
-fix(dust-wallet): release only the reverted transaction's Dust, keep pending Dust until it settles, and keep it in the snapshot
+fix(dust-wallet): release only a reverted transaction's Dust, and keep pending Dust until it settles
 
-Reverting a transaction no longer drops Dust coins it never spent. A decaying coin in its last three hours (the Dust
-grace period) used to vanish from the wallet, including from its serialized state, until a fresh wallet was restored
-from the seed. Reverting also no longer releases coins that other pending transactions still hold.
+Reverting a transaction no longer drops decaying Dust coins it never spent, or releases coins other pending
+transactions hold. A coin a pending transaction spent now stays pending through syncs, and in the snapshot, until the
+chain spends it, its lock runs out or it decays to nothing. Adds `CoreWallet.settlePendingDust`.
 
-A coin spent by a pending transaction now stays pending through a sync until it settles: the chain spends it, its lock
-runs out, or it decays to nothing. Before, the first event sync after balancing stopped counting it as pending, so
-reverting that transaction left the coin locked for the grace period; a sync that first ran after the lock ran out hid
-the coin from the available coins for good; and a coin that decayed to nothing stayed pending forever, in both sync
-paths.
-
-The dust snapshot now records the pending Dust, so a wallet restored from it can still release the coins its pending
-transactions spent. Its format version moves from `v1` to `v2`; this release reads `v1` snapshots, upgrading them with
-no pending Dust, but earlier releases refuse a `v2` snapshot. Once this release has written a snapshot, the stored
-snapshot cannot be rolled back to an earlier release: an application that downgrades must restore the wallet from its
-seed.
-
-`CoreWallet.settlePendingDust` is added: given the state before and after a TTL pass, it returns the pending coins that
-are still pending.
+The dust snapshot format moves to `v2`. This release reads `v1`, but earlier releases refuse `v2`: downgrading after
+this release has written a snapshot means restoring the wallet from its seed.
