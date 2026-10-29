@@ -83,26 +83,34 @@ const noProofs = {
   lookupKey: () => Promise.resolve(undefined),
 };
 
+/**
+ * The stages an in-place call is handed a transaction at. Narrower than {@link TransactionStage}, so an operation added
+ * at the finalized stage cannot be handed unproven bytes under that label.
+ */
+type InPlaceStage = Extract<TransactionStage, 'Unproven' | 'Unbound'>;
+
 /** A transaction as it is handed over at `stage`. */
-type AtStage = (stage: TransactionStage) => Promise<{ serialize: () => Uint8Array }>;
+type AtStage = (stage: InPlaceStage) => Promise<{ serialize: () => Uint8Array }>;
 
 /**
  * An unproven transaction, or the same one proved and not yet bound when it is handed over unbound — the shape a dApp
  * hands an unbound transaction over in, so the unbound calls are given a real unbound transaction to change.
  */
-const atV8Stage =
-  (transaction: ledgerV8.UnprovenTransaction): AtStage =>
-  (stage) =>
-    stage === 'Unbound'
-      ? transaction.prove(noProofs, ledgerV8.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel)
-      : Promise.resolve(transaction);
+const atV8Stage = (
+  transaction: ledgerV8.UnprovenTransaction,
+  stage: InPlaceStage,
+): Promise<{ serialize: () => Uint8Array }> =>
+  stage === 'Unbound'
+    ? transaction.prove(noProofs, ledgerV8.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel)
+    : Promise.resolve(transaction);
 
-const atV9Stage =
-  (transaction: ledgerV9.UnprovenTransaction): AtStage =>
-  (stage) =>
-    stage === 'Unbound'
-      ? transaction.prove(noProofs, ledgerV9.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel)
-      : Promise.resolve(transaction);
+const atV9Stage = (
+  transaction: ledgerV9.UnprovenTransaction,
+  stage: InPlaceStage,
+): Promise<{ serialize: () => Uint8Array }> =>
+  stage === 'Unbound'
+    ? transaction.prove(noProofs, ledgerV9.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel)
+    : Promise.resolve(transaction);
 
 /** Each ledger version's own transactions to hand in, so each variant is handed bytes it can read. */
 type LedgerTransactions = Readonly<{
@@ -114,7 +122,7 @@ type LedgerTransactions = Readonly<{
 
 const v8Transactions: LedgerTransactions = {
   toSign: (stage) =>
-    atV8Stage(ledgerV8.Transaction.fromParts(networkId, undefined, undefined, ledgerV8.Intent.new(ttl())))(stage),
+    atV8Stage(ledgerV8.Transaction.fromParts(networkId, undefined, undefined, ledgerV8.Intent.new(ttl())), stage),
   toBalance: (stage) => {
     const intent = ledgerV8.Intent.new(ttl());
     // Mutated in place because the ledger's intents are built that way; this is test setup, not wallet code.
@@ -123,13 +131,13 @@ const v8Transactions: LedgerTransactions = {
       [{ value: payout, owner: owner.addressHex, type: timelineTokenType }],
       [],
     );
-    return atV8Stage(ledgerV8.Transaction.fromParts(networkId, undefined, undefined, intent))(stage);
+    return atV8Stage(ledgerV8.Transaction.fromParts(networkId, undefined, undefined, intent), stage);
   },
 };
 
 const v9Transactions: LedgerTransactions = {
   toSign: (stage) =>
-    atV9Stage(ledgerV9.Transaction.fromParts(networkId, undefined, undefined, ledgerV9.Intent.new(ttl())))(stage),
+    atV9Stage(ledgerV9.Transaction.fromParts(networkId, undefined, undefined, ledgerV9.Intent.new(ttl())), stage),
   toBalance: (stage) => {
     const intent = ledgerV9.Intent.new(ttl());
     // Mutated in place because the ledger's intents are built that way; this is test setup, not wallet code.
@@ -138,7 +146,7 @@ const v9Transactions: LedgerTransactions = {
       [{ value: payout, owner: owner.addressHex, type: timelineTokenType }],
       [],
     );
-    return atV9Stage(ledgerV9.Transaction.fromParts(networkId, undefined, undefined, intent))(stage);
+    return atV9Stage(ledgerV9.Transaction.fromParts(networkId, undefined, undefined, intent), stage);
   },
 };
 
@@ -150,7 +158,7 @@ type InPlaceWallet = Pick<
 
 const inPlaceOperations: readonly Readonly<{
   operation: string;
-  stage: TransactionStage;
+  stage: InPlaceStage;
   input: keyof LedgerTransactions;
   call: (wallet: InPlaceWallet, transaction: AnyTx) => Promise<AnyTx | undefined>;
 }>[] = [
