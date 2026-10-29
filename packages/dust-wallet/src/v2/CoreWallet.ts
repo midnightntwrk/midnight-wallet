@@ -308,31 +308,35 @@ export const CoreWallet = {
   },
 
   /**
-   * Releases the pending Dust coins a failed transaction spent, and only those.
+   * Releases the pending Dust coins a reverted transaction spent, and only those.
    *
    * @remarks
-   *   Each coin is put back unlocked. `processTtls` cannot target coins: run at the end of the grace period, it would
-   *   also drop every coin that decays to nothing by then and release coins other pending transactions hold.
+   *   Only for a transaction whose Dust spends never ran on chain: one never included, or one that failed outright. A
+   *   partially successful transaction ran its guaranteed segment, where every Dust spend sits, so its coins are spent
+   *   and are settled by sync instead. Each coin is put back unlocked. `processTtls` cannot target coins: run at the
+   *   end of the grace period, it would also drop every coin that decays to nothing by then and release coins other
+   *   pending transactions hold.
+   * @example
+   *   ```ts
+   *   const released = CoreWallet.applyFailed(wallet, neverIncludedTransaction);
+   *   ```;
+   *
+   * @param wallet The wallet holding the pending coins.
+   * @param tx The transaction whose Dust spends are released.
+   * @returns The wallet with those coins unlocked and no longer pending; every other coin as it was.
    */
   applyFailed(wallet: CoreWallet, tx: Transaction<Signaturish, Proofish, Bindingish>): CoreWallet {
-    const pendingSpendsMap = CoreWallet.pendingDustToMap(wallet.pendingDust);
-
-    const releasedCoins = pipe(
-      [...(tx.intents?.values() ?? [])],
-      Arr.flatMap((intent) => intent.dustActions?.spends ?? []),
-      Arr.filterMap((spend) =>
-        pipe(
-          Option.fromNullable(pendingSpendsMap.get(spend.oldNullifier)),
-          Option.map((coin) => ({ nullifier: spend.oldNullifier, coin })),
-        ),
+    const spentNullifiers = new Set(
+      [...(tx.intents?.values() ?? [])].flatMap((intent) =>
+        (intent.dustActions?.spends ?? []).map((spend) => spend.oldNullifier),
       ),
     );
-    const releasedNullifiers = releasedCoins.map(({ nullifier }) => nullifier);
+    const [kept, released] = Arr.partition(wallet.pendingDust, (coin) => spentNullifiers.has(coin.nullifier));
 
     return {
       ...wallet,
-      state: releasedCoins.reduce((state, { nullifier, coin }) => state.addUtxo(nullifier, coin), wallet.state),
-      pendingDust: wallet.pendingDust.filter((coin) => !releasedNullifiers.includes(coin.nullifier)),
+      state: released.reduce((state, { nullifier, ...coin }) => state.addUtxo(nullifier, coin), wallet.state),
+      pendingDust: kept,
     };
   },
 
