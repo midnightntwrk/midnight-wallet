@@ -26,11 +26,11 @@ import { type WalletTestEnvironment } from '../types.js';
 import {
   provideWallet,
   type ProvideWalletOptions,
-  saveState,
   shouldPersistState,
   type WalletInit,
   withProjectionsDefault,
 } from '../wallet.js';
+import { createWalletLifecycle, type WalletLifecycle } from '../lifecycle.js';
 import { tNightAmount } from '../primitives.js';
 import { getShieldedAddress, getUnshieldedAddress } from '../addresses.js';
 import { waitForFacadePendingClear, waitForTxInHistory } from '../state-waiters.js';
@@ -102,27 +102,35 @@ export function useTokenTransferWallets({
   let wallet: WalletInit;
   let wallet2: WalletInit;
   let networkId: NetworkId.NetworkId;
-  let filenameWallet: string;
-  let filenameWallet2: string;
+  let lifecycle: WalletLifecycle;
 
   beforeEach(async () => {
+    // This hook's own lifecycle, so a wallet that finishes starting after `afterEach` has run is stopped by it.
+    const own = createWalletLifecycle();
+    lifecycle = own;
     const env = getEnv();
     networkId = env.endpoints.networkId;
-    filenameWallet = `${fundedSeed.substring(0, 7)}-${env.network}.state`;
-    filenameWallet2 = `${secondSeed.substring(0, 7)}-${env.network}.state`;
+    const filenameWallet = `${fundedSeed.substring(0, 7)}-${env.network}.state`;
+    const filenameWallet2 = `${secondSeed.substring(0, 7)}-${env.network}.state`;
 
-    wallet = await provideWallet(env, {
-      ...withProjectionsDefault(walletOptions),
-      seed: fundedSeed,
-      syncCacheDir,
-      filename: filenameWallet,
-    });
-    wallet2 = await provideWallet(env, {
-      ...withProjectionsDefault(walletOptions),
-      seed: secondSeed,
-      syncCacheDir,
-      filename: filenameWallet2,
-    });
+    wallet = await own.adopt(
+      provideWallet(env, {
+        ...withProjectionsDefault(walletOptions),
+        seed: fundedSeed,
+        syncCacheDir,
+        filename: filenameWallet,
+      }),
+      filenameWallet,
+    );
+    wallet2 = await own.adopt(
+      provideWallet(env, {
+        ...withProjectionsDefault(walletOptions),
+        seed: secondSeed,
+        syncCacheDir,
+        filename: filenameWallet2,
+      }),
+      filenameWallet2,
+    );
     logger.info('Two wallets started');
 
     const [state1, state2] = await Promise.all([
@@ -146,13 +154,7 @@ export function useTokenTransferWallets({
 
   afterEach(async (context) => {
     // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
-    if (syncCacheDir && shouldPersistState(context)) {
-      await saveState(wallet, syncCacheDir, filenameWallet);
-      await saveState(wallet2, syncCacheDir, filenameWallet2);
-    }
-    await sender.wallet.stop();
-    await receiver.wallet.stop();
-    logger.info('Wallets stopped');
+    await lifecycle.release({ syncCacheDir, persist: shouldPersistState(context) });
   }, timeout);
 
   const requireWallet = (w: WalletInit | undefined, label: string): WalletInit => {
