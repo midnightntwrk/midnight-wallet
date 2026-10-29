@@ -343,9 +343,9 @@ describe('makeDefaultSyncService liveness feed', () => {
     const pollInterval = Duration.seconds(5);
 
     // Neither endpoint parses, so every poll fails before any request is made, and at once on `TestClock`: the indexer
-    // read throws while the poll is building it, so the node read is never built at all. Both must be unparseable for
-    // the test to stay off the network: a poll stops at its first failed read, so a bad node URL alone still fails it
-    // on time while the indexer read sends its request.
+    // read throws while the poll is building it, so the node read is never built at all. The indexer URL must not
+    // parse, or its request goes out before a failing node read stops the poll. The node URL does not parse either, so
+    // the test stays off the network even if the indexer read one day fails as an effect instead of throwing.
     const unparseable = {
       indexerClientConnection: { indexerHttpUrl: 'not an indexer url' },
       nodeClientConnection: { nodeURL: 'not a node url' },
