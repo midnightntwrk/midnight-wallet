@@ -340,29 +340,39 @@ describe('makeDefaultSyncService liveness feed', () => {
   });
 
   describe('when no poll can complete', () => {
-    // Every read fails at once and opens no socket: the indexer port refuses, and the node endpoint does not parse, so
-    // the node client is never built. Each poll therefore ends in a failure well inside the observation window.
-    const unreachable = {
-      indexerClientConnection: { indexerHttpUrl: 'http://127.0.0.1:1/api/v1/graphql' },
+    const pollInterval = Duration.seconds(5);
+
+    // Neither endpoint parses, so each read fails while it is being built, before any request is made, and every poll
+    // fails at once on `TestClock`. Both must be unparseable for the test to stay off the network: a poll stops at its
+    // first failed read, so a bad node URL alone still fails it on time while the indexer read sends its request.
+    const unparseable = {
+      indexerClientConnection: { indexerHttpUrl: 'not an indexer url' },
       nodeClientConnection: { nodeURL: 'not a node url' },
+      livenessPollInterval: pollInterval,
     };
 
-    /** Every verdict the wallet's liveness feed publishes in its first second. */
-    const verdictsInFirstSecond = (wallet: CoreWallet): Promise<readonly IndexerLiveness.IndexerLiveness[]> =>
-      Effect.runPromise(
-        makeDefaultSyncService(unreachable)
-          .livenessUpdates(wallet)
-          .pipe(
-            Stream.interruptAfter(Duration.seconds(1)),
-            Stream.runCollect,
-            Effect.map((updates) =>
-              Chunk.toReadonlyArray(updates).flatMap((update) =>
-                update.type === 'IndexerLiveness' ? [update.verdict] : [],
+    /** Every verdict the wallet's liveness feed publishes over its first two polls. */
+    const verdictsOverTwoPolls = (wallet: CoreWallet): Promise<readonly IndexerLiveness.IndexerLiveness[]> =>
+      Effect.gen(function* () {
+        const published = yield* Ref.make<readonly IndexerLiveness.IndexerLiveness[]>([]);
+
+        yield* Effect.forkScoped(
+          makeDefaultSyncService(unparseable)
+            .livenessUpdates(wallet)
+            .pipe(
+              Stream.runForEach((update) =>
+                update.type === 'IndexerLiveness'
+                  ? Ref.update(published, (verdicts) => [...verdicts, update.verdict])
+                  : Effect.void,
               ),
             ),
-            Effect.scoped,
-          ),
-      );
+        );
+
+        // The first poll runs at once; the second waits one interval.
+        yield* TestClock.adjust(pollInterval);
+
+        return yield* Ref.get(published);
+      }).pipe(Effect.scoped, Effect.provide(TestContext.TestContext), Effect.runPromise);
 
     it('should start from the wallet’s own verdict, so a failed poll cannot turn Behind into Unavailable', async () => {
       // The feed is built from the state the variant starts with — after a hand-over, the state the migration carried.
@@ -371,12 +381,14 @@ describe('makeDefaultSyncService liveness feed', () => {
       const behind = IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n });
       const wallet = CoreWallet.updateProgress(CoreWallet.init(publicKey, 'undeployed'), { indexerLiveness: behind });
 
-      // A wallet with no verdict yet shows that a poll does fail inside the window, so a `Behind` that survives the
-      // window has survived a failed poll rather than outrun it.
-      const fromNothing = await verdictsInFirstSecond(CoreWallet.init(publicKey, 'undeployed'));
-      const fromBehind = await verdictsInFirstSecond(wallet);
+      // A wallet with no verdict yet shows that both polls ran and failed, so a `Behind` that survives them has survived
+      // two failed polls rather than gone unpolled.
+      const fromNothing = await verdictsOverTwoPolls(CoreWallet.init(publicKey, 'undeployed'));
+      const fromBehind = await verdictsOverTwoPolls(wallet);
 
-      expect(fromNothing.some(IndexerLiveness.isUnavailable)).toBe(true);
+      expect(
+        fromNothing.filter(IndexerLiveness.isUnavailable).map((verdict) => verdict.consecutiveFailures),
+      ).toStrictEqual([1, 2]);
       expect(fromBehind.length).toBeGreaterThan(0);
       expect(fromBehind.every((verdict) => IndexerLiveness.equivalent(verdict, behind))).toBe(true);
     });
