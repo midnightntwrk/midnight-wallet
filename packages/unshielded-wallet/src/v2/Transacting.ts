@@ -106,6 +106,33 @@ export interface TransactingCapability<TState> {
   ): Either.Either<CoreWallet, WalletError>;
 
   /**
+   * Releases the coins a partially successful transaction booked but never spent: the own inputs of the fallible offers
+   * in the segments that failed.
+   *
+   * @remarks
+   *   A transaction that lands as a partial success had its guaranteed section applied, and with it every intent's
+   *   guaranteed offer, all of which run in segment 0; it also had every fallible segment applied that it does not list
+   *   as failed. The intent at segment `s` (key `s` in `transaction.intents`) runs its fallible offer in segment `s`.
+   *   So only the own inputs of the fallible offers of the intents whose segment is in `failedSegments` go from pending
+   *   back to available. Guaranteed-offer inputs and the inputs of segments not listed stay pending until sync settles
+   *   them as spent; releasing them would offer a spent coin again. Prefer
+   *   {@link TransactingCapability.revertTransaction} for a transaction that was not applied at all.
+   * @example
+   *   const released = capability.revertFailedSegments(wallet, transaction, [2]);
+   *
+   * @param wallet - The wallet holding the bookings
+   * @param transaction - The transaction that landed as a partial success
+   * @param failedSegments - Ids of the fallible segments the chain did not apply. A segment the transaction has no
+   *   intent at is ignored, and a segment listed twice is released once
+   * @returns The wallet with those coins available again, or the error that stopped a coin being released
+   */
+  revertFailedSegments(
+    wallet: CoreWallet,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    failedSegments: ReadonlyArray<number>,
+  ): Either.Either<CoreWallet, WalletError>;
+
+  /**
    * Releases booked coins by id, for a caller that holds a record of the ids rather than the transaction.
    *
    * An implementation must move each named coin back to the available side and leave the rest alone. Prefer
@@ -496,6 +523,30 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   ): Either.Either<CoreWallet, WalletError> {
     return pipe(
       this.txOps.extractOwnInputs(transaction, wallet.publicKey.publicKey),
+      Arr.reduce(Either.right(wallet), (walletAcc: Either.Either<CoreWallet, WalletError>, utxo: ledger.Utxo) =>
+        pipe(
+          walletAcc,
+          Either.flatMap((w) => CoreWallet.rollbackUtxo(w, utxo)),
+        ),
+      ),
+    );
+  }
+
+  /**
+   * Releases the bookings of the fallible offers in a partially successful transaction's failed segments.
+   *
+   * @param wallet - The wallet holding the bookings
+   * @param transaction - The transaction that landed as a partial success
+   * @param failedSegments - Ids of the fallible segments the chain did not apply
+   * @returns The wallet with those coins available again, or the error that stopped a coin being released
+   */
+  revertFailedSegments(
+    wallet: CoreWallet,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    failedSegments: ReadonlyArray<number>,
+  ): Either.Either<CoreWallet, WalletError> {
+    return pipe(
+      this.txOps.extractOwnFailedFallibleInputs(transaction, wallet.publicKey.publicKey, failedSegments),
       Arr.reduce(Either.right(wallet), (walletAcc: Either.Either<CoreWallet, WalletError>, utxo: ledger.Utxo) =>
         pipe(
           walletAcc,
