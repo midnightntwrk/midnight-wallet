@@ -12,21 +12,34 @@
 // limitations under the License.
 
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolVersion,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
+import { PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { Effect, Either } from 'effect';
 import * as rx from 'rxjs';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type CombinedSwapInputs,
   type CombinedSwapOutputs,
+  type DefaultConfiguration,
   type UnprovenTransactionRecipe,
-  type WalletFacade,
+  WalletEntrySchema,
+  WalletFacade,
+  mergeWalletEntries,
 } from '../src/index.js';
 import {
   createSimulatorWalletFactories,
+  createV8MockProvingService,
   deriveWalletKeys,
   makeSimulatorFacade,
+  SilentPendingTransactions,
   tokenValue,
   waitForShieldedCoins,
   waitForUnshieldedBalance,
@@ -38,6 +51,7 @@ vi.setConfig({ testTimeout: 60_000 });
 const NETWORK_ID = NetworkId.NetworkId.Undeployed;
 const FEE_BLOCKS_MARGIN = 5;
 const SEED = '0000000000000000000000000000000000000000000000000000000000000001';
+const KEYS = deriveWalletKeys(SEED, NETWORK_ID);
 
 const shieldedTokenType = ledger.shieldedToken().raw;
 const nightTokenType = ledger.nativeToken().raw;
@@ -78,18 +92,15 @@ const swapImbalances = (tx: ledger.UnprovenTransaction): Record<string, bigint> 
 const dustImbalanceAfterFee = (tx: ledger.UnprovenTransaction, fee: bigint): bigint =>
   [...tx.imbalances(0, fee).entries()].find(([token]) => token.tag === 'dust')?.[1] ?? 0n;
 
-type MakerKeys = ReturnType<typeof deriveWalletKeys>;
-
 /**
  * Boots a simulator with the given genesis funds, starts a maker facade, and runs `assert` against it. The facade is
  * torn down when the scope closes.
  */
 const runWithMaker = (
   genesisMints: [GenesisMint, ...GenesisMint[]],
-  assert: (facade: WalletFacade, env: { simulator: Simulator; keys: MakerKeys }) => Promise<void>,
+  assert: (facade: WalletFacade, env: { simulator: Simulator }) => Promise<void>,
 ) =>
   Effect.gen(function* () {
-    const keys = deriveWalletKeys(SEED, NETWORK_ID);
     const simulator = yield* Simulator.init({ genesisMints, blockProducer: immediateBlockProducer() });
     const config: SimulatorConfig = {
       simulator,
@@ -97,118 +108,95 @@ const runWithMaker = (
       costParameters: { feeBlocksMargin: FEE_BLOCKS_MARGIN },
     };
     const factories = createSimulatorWalletFactories(config);
-    const facade = yield* makeSimulatorFacade(config, keys, factories);
-    yield* Effect.promise(() => assert(facade, { simulator, keys }));
+    const facade = yield* makeSimulatorFacade(config, KEYS, factories);
+    yield* Effect.promise(() => assert(facade, { simulator }));
   }).pipe(Effect.scoped, Effect.runPromise);
 
 const shieldedGenesis = (amount: bigint): GenesisMint => ({
   type: 'shielded',
   tokenType: shieldedTokenType,
   amount,
-  recipient: deriveWalletKeys(SEED, NETWORK_ID).shieldedKeys,
+  recipient: KEYS.shieldedKeys,
 });
 
 const nightGenesis = (amount: bigint): GenesisMint => ({
   type: 'unshielded',
   tokenType: nightTokenType,
   amount,
-  recipient: deriveWalletKeys(SEED, NETWORK_ID).userAddress,
-  verifyingKey: deriveWalletKeys(SEED, NETWORK_ID).signatureVerifyingKey,
+  recipient: KEYS.userAddress,
+  verifyingKey: KEYS.signatureVerifyingKey,
 });
 
 describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
   it('shielded give -> unshielded want: keeps the unshielded want output', async () =>
-    runWithMaker(
-      [
-        {
-          type: 'shielded',
-          tokenType: shieldedTokenType,
-          amount: tokenValue(10n),
-          recipient: deriveWalletKeys(SEED, NETWORK_ID).shieldedKeys,
-        },
-      ],
-      async (facade) => {
-        await waitForShieldedCoins(facade).pipe(Effect.runPromise);
+    runWithMaker([shieldedGenesis(tokenValue(10n))], async (facade) => {
+      await waitForShieldedCoins(facade).pipe(Effect.runPromise);
 
-        const ttl = new Date(Date.now() + 60 * 60 * 1000);
-        const wantAmount = tokenValue(1n);
-        const unshieldedAddress = await facade.unshielded.getAddress();
+      const ttl = new Date(Date.now() + 60 * 60 * 1000);
+      const wantAmount = tokenValue(1n);
+      const unshieldedAddress = await facade.unshielded.getAddress();
 
-        const desiredInputs: CombinedSwapInputs = { shielded: { [shieldedTokenType]: tokenValue(1n) } };
-        const desiredOutputs: CombinedSwapOutputs[] = [
-          {
-            type: 'unshielded',
-            outputs: [{ type: nightTokenType, amount: wantAmount, receiverAddress: unshieldedAddress }],
-          },
-        ];
-
-        const recipe = await facade.initSwap(desiredInputs, desiredOutputs, { ttl });
-        const tx = builtTransaction(recipe);
-
-        // Give side (shielded input) is represented: the single genesis coin is selected.
-        expect(tx.guaranteedOffer).toBeDefined();
-        expect(tx.guaranteedOffer?.inputs.length).toBe(1);
-
-        // Want side: the requested unshielded output must be present with the exact amount and token.
-        const wantOutputs = [...(tx.intents?.values() ?? [])]
-          .flatMap((intent) => [
-            ...(intent.guaranteedUnshieldedOffer?.outputs ?? []),
-            ...(intent.fallibleUnshieldedOffer?.outputs ?? []),
-          ])
-          .filter((output) => output.type === nightTokenType && output.value === wantAmount);
-        expect(wantOutputs).toHaveLength(1);
-
-        // Exactly the requested amounts: the shielded give is offered, the unshielded want is asked for.
-        expect(swapImbalances(tx)).toEqual({
-          [`shielded:${shieldedTokenType}`]: tokenValue(1n),
-          [`unshielded:${nightTokenType}`]: -wantAmount,
-        });
-      },
-    ));
-
-  it('unshielded give -> shielded want: keeps the shielded want output', async () =>
-    runWithMaker(
-      [
+      const desiredInputs: CombinedSwapInputs = { shielded: { [shieldedTokenType]: tokenValue(1n) } };
+      const desiredOutputs: CombinedSwapOutputs[] = [
         {
           type: 'unshielded',
-          tokenType: nightTokenType,
-          amount: tokenValue(100n),
-          recipient: deriveWalletKeys(SEED, NETWORK_ID).userAddress,
-          verifyingKey: deriveWalletKeys(SEED, NETWORK_ID).signatureVerifyingKey,
+          outputs: [{ type: nightTokenType, amount: wantAmount, receiverAddress: unshieldedAddress }],
         },
-      ],
-      async (facade) => {
-        await waitForUnshieldedBalance(facade, nightTokenType, tokenValue(1n)).pipe(Effect.runPromise);
+      ];
 
-        const ttl = new Date(Date.now() + 60 * 60 * 1000);
-        const wantAmount = tokenValue(1n);
-        const shieldedAddress = await facade.shielded.getAddress();
+      const recipe = await facade.initSwap(desiredInputs, desiredOutputs, { ttl });
+      const tx = builtTransaction(recipe);
 
-        const desiredInputs: CombinedSwapInputs = { unshielded: { [nightTokenType]: tokenValue(1n) } };
-        const desiredOutputs: CombinedSwapOutputs[] = [
-          {
-            type: 'shielded',
-            outputs: [{ type: shieldedTokenType, amount: wantAmount, receiverAddress: shieldedAddress }],
-          },
-        ];
+      // Give side (shielded input) is represented: the single genesis coin is selected.
+      expect(tx.guaranteedOffer).toBeDefined();
+      expect(tx.guaranteedOffer?.inputs.length).toBe(1);
 
-        const recipe = await facade.initSwap(desiredInputs, desiredOutputs, { ttl });
-        const tx = builtTransaction(recipe);
+      // Want side: the requested unshielded output must be present with the exact amount and token, in the
+      // guaranteed offer, which is the section the imbalances below read.
+      const wantOutputs = [...(tx.intents?.values() ?? [])]
+        .flatMap((intent) => intent.guaranteedUnshieldedOffer?.outputs ?? [])
+        .filter((output) => output.type === nightTokenType && output.value === wantAmount);
+      expect(wantOutputs).toHaveLength(1);
 
-        // Give side (unshielded input) is represented as a single intent.
-        expect(tx.intents?.size).toBe(1);
+      // Exactly the requested amounts: the shielded give is offered, the unshielded want is asked for.
+      expect(swapImbalances(tx)).toEqual({
+        [`shielded:${shieldedTokenType}`]: tokenValue(1n),
+        [`unshielded:${nightTokenType}`]: -wantAmount,
+      });
+    }));
 
-        // Want side: the requested shielded output (output-only leg, no change) must be present.
-        expect(tx.guaranteedOffer).toBeDefined();
-        expect(tx.guaranteedOffer?.outputs.length).toBe(1);
+  it('unshielded give -> shielded want: keeps the shielded want output', async () =>
+    runWithMaker([nightGenesis(tokenValue(100n))], async (facade) => {
+      await waitForUnshieldedBalance(facade, nightTokenType, tokenValue(1n)).pipe(Effect.runPromise);
 
-        // Exactly the requested amounts: the unshielded give is offered, the shielded want is asked for.
-        expect(swapImbalances(tx)).toEqual({
-          [`unshielded:${nightTokenType}`]: tokenValue(1n),
-          [`shielded:${shieldedTokenType}`]: -wantAmount,
-        });
-      },
-    ));
+      const ttl = new Date(Date.now() + 60 * 60 * 1000);
+      const wantAmount = tokenValue(1n);
+      const shieldedAddress = await facade.shielded.getAddress();
+
+      const desiredInputs: CombinedSwapInputs = { unshielded: { [nightTokenType]: tokenValue(1n) } };
+      const desiredOutputs: CombinedSwapOutputs[] = [
+        {
+          type: 'shielded',
+          outputs: [{ type: shieldedTokenType, amount: wantAmount, receiverAddress: shieldedAddress }],
+        },
+      ];
+
+      const recipe = await facade.initSwap(desiredInputs, desiredOutputs, { ttl });
+      const tx = builtTransaction(recipe);
+
+      // Give side (unshielded input) is represented as a single intent.
+      expect(tx.intents?.size).toBe(1);
+
+      // Want side: the requested shielded output (output-only leg, no change) must be present.
+      expect(tx.guaranteedOffer).toBeDefined();
+      expect(tx.guaranteedOffer?.outputs.length).toBe(1);
+
+      // Exactly the requested amounts: the unshielded give is offered, the shielded want is asked for.
+      expect(swapImbalances(tx)).toEqual({
+        [`unshielded:${nightTokenType}`]: tokenValue(1n),
+        [`shielded:${shieldedTokenType}`]: -wantAmount,
+      });
+    }));
 
   it('keeps every want of either kind, however the outputs are grouped', async () =>
     runWithMaker([shieldedGenesis(tokenValue(10n))], async (facade) => {
@@ -274,8 +262,8 @@ describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
       );
       const registration = await facade.registerNightUtxosForDustGeneration(
         unshielded.availableCoins.filter((coin) => coin.utxo.type === nightTokenType),
-        env.keys.signatureVerifyingKey,
-        env.keys.unshieldedKeystore.signDataAsync,
+        KEYS.signatureVerifyingKey,
+        KEYS.unshieldedKeystore.signDataAsync,
       );
       await facade.submitTransaction(await facade.finalizeRecipe(registration));
       await rx.firstValueFrom(facade.state().pipe(rx.filter((state) => state.dust.availableCoins.length > 0)));
@@ -312,23 +300,53 @@ describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
 
 // A swap with no part of either kind has nothing to offer and nothing to ask for, so there is no transaction to build.
 describe('WalletFacade.initSwap rejects a swap with no legs', () => {
-  const ttl = () => new Date(Date.now() + 60 * 60 * 1000);
+  const facades: WalletFacade[] = [];
 
-  it('rejects a swap with no inputs and no outputs, however the emptiness is spelled', async () =>
-    runWithMaker([shieldedGenesis(tokenValue(10n))], async (facade) => {
-      await expect(facade.initSwap({}, [], { ttl: ttl() })).rejects.toThrow(
-        'At least one shielded or unshielded swap is required.',
-      );
-      // Empty input records and empty output groups name a kind without giving or asking for any of it.
-      await expect(
-        facade.initSwap(
-          { shielded: {}, unshielded: {} },
-          [
-            { type: 'shielded', outputs: [] },
-            { type: 'unshielded', outputs: [] },
-          ],
-          { ttl: ttl() },
-        ),
-      ).rejects.toThrow('At least one shielded or unshielded swap is required.');
-    }));
+  afterEach(async () => {
+    await Promise.allSettled(facades.splice(0).map((facade) => facade.stop()));
+  });
+
+  /**
+   * A facade over the shipped wallets, never started. The emptiness is decided from the arguments alone, before any
+   * wallet is reached, so there is no chain to sync and nothing to fund.
+   */
+  const unstartedFacade = async (): Promise<WalletFacade> => {
+    const facade = await WalletFacade.init({
+      configuration: {
+        networkId: NETWORK_ID,
+        relayURL: new URL('http://localhost:9944'),
+        indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
+        provingServerUrl: new URL('http://localhost:6300'),
+        costParameters: { feeBlocksMargin: FEE_BLOCKS_MARGIN },
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+      } satisfies DefaultConfiguration,
+      shielded: (config) => ShieldedWallet(config).startWithSeed(KEYS.seeds.shielded),
+      unshielded: (config) =>
+        UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(KEYS.unshieldedKeystore)),
+      dust: (config) => DustWallet(config).startWithSeed(KEYS.seeds.dust),
+      provingService: () => createV8MockProvingService(),
+      pendingTransactionsService: () => new SilentPendingTransactions(),
+    });
+    facades.push(facade);
+    return facade;
+  };
+
+  it.each<{ spelling: string; inputs: CombinedSwapInputs; outputs: CombinedSwapOutputs[] }>([
+    { spelling: 'nothing at all', inputs: {}, outputs: [] },
+    {
+      // Each kind is named without giving or asking for any of it.
+      spelling: 'empty input records and empty output groups',
+      inputs: { shielded: {}, unshielded: {} },
+      outputs: [
+        { type: 'shielded', outputs: [] },
+        { type: 'unshielded', outputs: [] },
+      ],
+    },
+  ])('rejects a swap with no inputs and no outputs, spelled as $spelling', async ({ inputs, outputs }) => {
+    const facade = await unstartedFacade();
+
+    await expect(facade.initSwap(inputs, outputs, { ttl: new Date(Date.now() + 60 * 60 * 1000) })).rejects.toThrow(
+      'At least one shielded or unshielded swap is required.',
+    );
+  });
 });
