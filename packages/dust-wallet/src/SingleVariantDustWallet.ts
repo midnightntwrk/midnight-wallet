@@ -69,7 +69,7 @@ export type CustomizedDustWallet<
   TTransaction = FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-> = DustWalletAPI<TStartAux, TSerialized> &
+> = DustWalletAPI<Readonly<{ v9: TStartAux }>, TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
 export interface CustomizedDustWalletClass<
@@ -220,7 +220,15 @@ export function CustomDustWallet<
       );
     }
 
-    start(secretKey: TStartAux): Promise<void> {
+    /**
+     * Starts background synchronization from the ledger-v9 key, the only side the one variant runs on.
+     *
+     * @remarks
+     *   Takes it out of a product rather than bare, so a caller holding keys for more ledger versions — a facade, which
+     *   derives one per side of every boundary — hands this wallet the same value it hands one that spans them.
+     * @param keys The ledger-v9's dust secret key, under `v9`.
+     */
+    start({ v9: secretKey }: Readonly<{ v9: TStartAux }>): Promise<void> {
       return Effect.gen(this, function* () {
         yield* Ref.set(this.#retainedAux, Option.some(secretKey));
 
@@ -252,7 +260,13 @@ export function CustomDustWallet<
       await super.stop();
     }
 
-    stepSync(secretKey: TStartAux): Promise<void> {
+    /**
+     * Runs one synchronization pass with the ledger-v9 key, taken out of a product for the same reason {@link start}
+     * takes it so.
+     *
+     * @param keys The ledger-v9's dust secret key, under `v9`.
+     */
+    stepSync({ v9: secretKey }: Readonly<{ v9: TStartAux }>): Promise<void> {
       return this.runtime.dispatch({ [V2Tag]: (v2) => v2.sync(secretKey) }).pipe(Effect.runPromise);
     }
 

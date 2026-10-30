@@ -64,7 +64,7 @@ export type CustomizedShieldedWallet<
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-> = ShieldedWalletAPI<TStartAux, TTransaction, TSerialized> &
+> = ShieldedWalletAPI<Readonly<{ v9: TStartAux }>, TTransaction, TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
 export interface CustomizedShieldedWalletClass<
@@ -266,7 +266,15 @@ export function CustomShieldedWallet<
       );
     }
 
-    start(secretKeys: TStartAux): Promise<void> {
+    /**
+     * Starts background synchronization from the ledger-v9 keys, the only side the one variant runs on.
+     *
+     * @remarks
+     *   Takes them out of a product rather than bare, so a caller holding keys for more ledger versions — a facade, which
+     *   derives one per side of every boundary — hands this wallet the same value it hands one that spans them.
+     * @param keys The ledger-v9's Zswap secret keys, under `v9`.
+     */
+    start({ v9: secretKeys }: Readonly<{ v9: TStartAux }>): Promise<void> {
       return Effect.gen(this, function* () {
         const current = yield* this.runtime.currentVariant;
         yield* Ref.update(this.#retainedStartMaterial, (retained) =>

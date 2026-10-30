@@ -24,9 +24,23 @@ provides:
 ### Starting the Wallet
 
 ```typescript
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 
-await dustWallet.start(dustSecretKey);
+// One ledger version's dust key per side of the boundary, each derived from the dust seed by its own ledger version:
+// the wallet reads the chain with whichever side it is on, and keeps the other for the hand-over
+const keys = {
+  v8: ledgerV8.DustSecretKey.fromSeed(dustSeed),
+  v9: ledgerV9.DustSecretKey.fromSeed(dustSeed),
+};
+
+const dustWallet = await DustWallet(configuration).startWithKeys(keys);
+await dustWallet.start(keys);
+
+// A wallet restored from a snapshot carries no key material, so it is started with its keys again
+const restored = DustWallet(configuration).restore(serializedState);
+await restored.start(keys);
 ```
 
 ### Observing State

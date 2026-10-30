@@ -180,14 +180,31 @@ export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.Fi
  */
 export type ShieldedBalancingResult = UnprovenTx | undefined;
 
-export type ShieldedWalletAPI<
-  TStartAux extends ledger.ZswapSecretKeys = ledger.ZswapSecretKeys,
-  TTransaction = ledger.FinalizedTransaction,
-  TSerialized = string,
-> = {
+export type ShieldedWalletAPI<TKeys = never, TTransaction = ledger.FinalizedTransaction, TSerialized = string> = {
   readonly state: rx.Observable<ShieldedWalletState<TSerialized, TTransaction>>;
 
-  start(secretKeys: TStartAux): Promise<void>;
+  /**
+   * Starts background synchronization from the given ledger keys, and keeps them for every variant that follows.
+   *
+   * @remarks
+   *   Which keys those are is the composition's to declare, not this contract's: a wallet spanning a protocol boundary
+   *   takes one ledger version's keys per side of it, a single-variant one only the side its variant runs on. So a hard
+   *   fork changes what a composition asks for, never this signature.
+   *
+   *   A property rather than a method so the compiler checks it in the direction that matters: code holding this type
+   *   with its own `TKeys` — a facade with the keys it derives — accepts only wallets those keys can start. `never` by
+   *   default, so the bare type stands for any shielded wallet, whose start cannot be called without saying which keys
+   *   it takes.
+   * @example
+   *   ```typescript
+   *   const wallet = ShieldedWallet(configuration).restore(snapshot);
+   *   await wallet.start({ v8: v8Keys, v9: v9Keys });
+   *   ```;
+   *
+   * @param keys The ledger keys this wallet synchronizes with.
+   * @returns Nothing; resolves once synchronization has been started on whichever variant is current.
+   */
+  readonly start: (keys: TKeys) => Promise<void>;
 
   /**
    * Balances a transaction with shielded coins.

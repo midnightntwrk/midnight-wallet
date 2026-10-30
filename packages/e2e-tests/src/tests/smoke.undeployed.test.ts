@@ -231,7 +231,7 @@ describe('Smoke tests', () => {
         txHistoryStorage: restoredTxHistoryStorage,
       });
       const restoredWallet = RestoredWallet.restore(serializedState);
-      await restoredWallet.start(funded.shieldedSecretKeys);
+      await restoredWallet.start(utils.shieldedKeysFromSeed(funded.seeds.shielded));
       try {
         await restoredWallet.waitForSyncedState();
         const restoredSerializedTxHistory = await restoredTxHistoryStorage.serialize();
@@ -321,7 +321,7 @@ describe('Smoke tests', () => {
 
       logger.info('Restoring wallet from serialized state...');
       const restoredWallet = Dust.restore(serialized);
-      await restoredWallet.start(funded.dustSecretKey);
+      await restoredWallet.start(utils.dustKeysFromSeed(funded.seeds.dust));
       const restoredState = await restoredWallet.waitForSyncedState();
       logger.info(restoredState);
       expect(restoredState.publicKey).toBe(publicKey);

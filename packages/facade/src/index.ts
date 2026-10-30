@@ -492,60 +492,32 @@ export type FacadeStartOptions = Readonly<{
 }>;
 
 /**
- * The ledger-v9 key objects the wallets' own `start` takes, from whichever material the caller supplied.
+ * One ledger version's shielded keys per side of the boundary, from whichever material the caller supplied.
  *
  * @remarks
- *   What a wallet composed for ledger-v9 alone is started from. A wallet composed for both ledger versions is started
- *   from the material itself instead (see {@link startsOnEitherSide}), because these keys answer for its V2 variant
- *   only.
+ *   What the shielded wallet is started with, whatever its composition: one spanning the boundary takes both sides, one
+ *   composed for ledger-v9 alone takes the `v9` side. A seed is turned into keys here, with each ledger version's own
+ *   derivation, because a wallet takes keys and never a seed.
  */
-const v9KeysOf = (
-  material: FacadeStartMaterial,
-): Readonly<{ shielded: ledgerV9.ZswapSecretKeys; dust: ledgerV9.DustSecretKey }> =>
+const shieldedKeysOf = (material: FacadeStartMaterial): ShieldedKeysByEpoch =>
   'v9' in material
-    ? material.v9
+    ? { v8: material.v8.shielded, v9: material.v9.shielded }
     : {
-        shielded: ledgerV9.ZswapSecretKeys.fromSeed(material.shielded),
-        dust: ledgerV9.DustSecretKey.fromSeed(material.dust),
+        v8: ledgerV8.ZswapSecretKeys.fromSeed(material.shielded),
+        v9: ledgerV9.ZswapSecretKeys.fromSeed(material.shielded),
       };
 
-/** A wallet that can be started from material answering for either side of a protocol boundary. */
-type StartsOnEitherSide<TKeysByEpoch> = Readonly<{
-  startWithSeed: (seed: Uint8Array) => Promise<void>;
-  startWithKeys: (keys: TKeysByEpoch) => Promise<void>;
-}>;
-
 /**
- * Whether a wallet can be started from material answering for either side of a protocol boundary.
+ * One ledger version's dust key per side of the boundary, from whichever material the caller supplied.
  *
  * @remarks
- *   The forking compositions — `ShieldedWallet` and `DustWallet` — can, and must be: a snapshot carries no key material,
- *   so one restored below the boundary resumes on its V1 variant holding nothing that variant can use, and only the
- *   seed or the ledger-v8 keys can start it there. A wallet composed for one ledger version alone cannot, and needs
- *   nothing beyond that version's keys.
+ *   What the dust wallet is started and stepped with, whatever its composition, for the same reasons as
+ *   {@link shieldedKeysOf}.
  */
-const startsOnEitherSide = <TKeysByEpoch>(wallet: object): wallet is StartsOnEitherSide<TKeysByEpoch> =>
-  'startWithSeed' in wallet && 'startWithKeys' in wallet;
-
-/** Starts the shielded wallet from the facade's material, handing a forking wallet both sides of it. */
-const startShielded = (wallet: ShieldedWalletAPI, material: FacadeStartMaterial): Promise<void> => {
-  if (!startsOnEitherSide<ShieldedKeysByEpoch>(wallet)) {
-    return wallet.start(v9KeysOf(material).shielded);
-  }
-  return 'v9' in material
-    ? wallet.startWithKeys({ v8: material.v8.shielded, v9: material.v9.shielded })
-    : wallet.startWithSeed(material.shielded);
-};
-
-/** Starts the dust wallet from the facade's material, handing a forking wallet both sides of it. */
-const startDust = (wallet: DustWalletAPI, material: FacadeStartMaterial): Promise<void> => {
-  if (!startsOnEitherSide<DustKeysByEpoch>(wallet)) {
-    return wallet.start(v9KeysOf(material).dust);
-  }
-  return 'v9' in material
-    ? wallet.startWithKeys({ v8: material.v8.dust, v9: material.v9.dust })
-    : wallet.startWithSeed(material.dust);
-};
+const dustKeysOf = (material: FacadeStartMaterial): DustKeysByEpoch =>
+  'v9' in material
+    ? { v8: material.v8.dust, v9: material.v9.dust }
+    : { v8: ledgerV8.DustSecretKey.fromSeed(material.dust), v9: ledgerV9.DustSecretKey.fromSeed(material.dust) };
 
 /** Which of the three wallets a reading is about. */
 export type WalletKind = keyof WalletProtocolVersions;
@@ -882,9 +854,9 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
     config: ResolvedConfiguration<TConfig>,
     deps: { fetchBlockData: BlockDataFetcher; clock: Clock.Clock },
   ) => MaybePromise<VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>>;
-  shielded: (config: ResolvedConfiguration<TConfig>) => MaybePromise<ShieldedWalletAPI>;
+  shielded: (config: ResolvedConfiguration<TConfig>) => MaybePromise<ShieldedWalletAPI<ShieldedKeysByEpoch>>;
   unshielded: (config: ResolvedConfiguration<TConfig>) => MaybePromise<UnshieldedWalletAPI>;
-  dust: (config: ResolvedConfiguration<TConfig>) => MaybePromise<DustWalletAPI>;
+  dust: (config: ResolvedConfiguration<TConfig>) => MaybePromise<DustWalletAPI<DustKeysByEpoch>>;
 };
 
 // `BlockData` is not re-exported from the facade to avoid a name collision with the
@@ -1000,13 +972,18 @@ export class WalletFacade {
    *   factory below is handed a {@link ResolvedConfiguration}, which always has it — what
    *   {@link WalletFacade.resolveConfiguration} returns
    * - `shielded` - a function taking the configuration and returning shielded wallet (or a promise with such)
-   *   implementing {@link ShieldedWalletAPI}
+   *   implementing {@link ShieldedWalletAPI} for {@link ShieldedKeysByEpoch}: the facade starts it with one ledger
+   *   version's keys per side of the boundary, of which a wallet composed for ledger-v9 alone takes the `v9` side. Such
+   *   a single-variant wallet (`CustomShieldedWallet`, `CustomDustWallet`) stamps what it builds at the minimum
+   *   supported version, so it belongs only in a facade whose `forks.v9` is at that minimum — a chain on ledger-v9 from
+   *   its genesis, such as the in-memory simulator — where that stamp reads as ledger-v9
    * - `unshielded` - a function taking the configuration and returning unshielded wallet (or a promise with such)
    *   implementing {@link UnshieldedWalletAPI}
    * - `dust` - a function taking the configuration and returning Dust wallet (or a promise with such) implementing
-   *   {@link DustWalletAPI} There are some optional services/abstractions to provide, too. If not provided - default
-   *   implementations will be used, each of them is initialized by a function taking the configuration and returning
-   *   proper implementation (wrapped in a {@link Promise} or not).
+   *   {@link DustWalletAPI} for {@link DustKeysByEpoch}, started and stepped like the shielded one. There are some
+   *   optional services/abstractions to provide, too. If not provided - default implementations will be used, each of
+   *   them is initialized by a function taking the configuration and returning proper implementation (wrapped in a
+   *   {@link Promise} or not).
    * - `submissionService` - needs to implement {@link SubmissionService} for a {@link ledgerV9.FinalizedTransaction} to
    *   submit transactions to the network, default uses Node RPC connection
    * - `pendingTransactionsService` - needs to implement {@link PendingTransactionsService} for a
@@ -1065,9 +1042,9 @@ export class WalletFacade {
     );
   }
 
-  readonly shielded: ShieldedWalletAPI;
+  readonly shielded: ShieldedWalletAPI<ShieldedKeysByEpoch>;
   readonly unshielded: UnshieldedWalletAPI;
-  readonly dust: DustWalletAPI;
+  readonly dust: DustWalletAPI<DustKeysByEpoch>;
   readonly submissionService: SubmissionService<FinalizedTx>;
   readonly pendingTransactionsService: PendingTransactionsService<FinalizedTx>;
   readonly provingService: VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>;
@@ -1097,9 +1074,9 @@ export class WalletFacade {
    * @private
    */
   private constructor(
-    shieldedWallet: ShieldedWalletAPI,
+    shieldedWallet: ShieldedWalletAPI<ShieldedKeysByEpoch>,
     unshieldedWallet: UnshieldedWalletAPI,
-    dustWallet: DustWalletAPI,
+    dustWallet: DustWalletAPI<DustKeysByEpoch>,
     submissionService: SubmissionService<FinalizedTx>,
     pendingTransactionsService: PendingTransactionsService<FinalizedTx>,
     provingService: VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>,
@@ -2382,9 +2359,9 @@ export class WalletFacade {
       await this.#refuseManualSyncBelowFork();
     }
     await Promise.all([
-      startShielded(this.shielded, material),
+      this.shielded.start(shieldedKeysOf(material)),
       this.unshielded.start(),
-      !options.manualSync ? startDust(this.dust, material) : undefined,
+      !options.manualSync ? this.dust.start(dustKeysOf(material)) : undefined,
       this.pendingTransactionsService.start(),
     ]);
   }
@@ -2419,7 +2396,7 @@ export class WalletFacade {
    *   sync service, which only ledger-v9 supports.
    */
   async doSync(material: FacadeStartMaterial): Promise<void> {
-    await this.dust.stepSync(v9KeysOf(material).dust);
+    await this.dust.stepSync(dustKeysOf(material));
   }
 
   async stop(): Promise<void> {
