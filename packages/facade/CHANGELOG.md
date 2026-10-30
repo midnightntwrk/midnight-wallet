@@ -1,5 +1,99 @@
 # @midnightntwrk/wallet-sdk-facade
 
+## 5.0.0-rc.2
+
+### Major Changes
+
+- a400d37: fix(shielded,dust,facade)!: start wallets with keys for every ledger version they run
+
+  `facade.start()` reduced its material to ledger-v9 keys, so a shielded or dust wallet restored from a snapshot written
+  below `forks.v9`, which resumes on its V1 variant, failed with `MissingStartAuxError`. The facade now hands every
+  wallet one ledger version's keys per side of the boundary — derived from the seeds, or taken from `FacadeKeysByEpoch`
+  — and each wallet takes the side it runs on. `facade.start()` and `facade.doSync()` take the same material as before.
+
+  BREAKING CHANGE: `ShieldedWalletAPI` and `DustWalletAPI` no longer name a key type. `start`, and the dust wallet's
+  `stepSync`, take the wallet's own keys type — the first type parameter, `never` by default:
+
+  | Wallet instance                                  | Before                                                              | Now                                           |
+  | ------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+  | `ShieldedWallet(…)`                              | `start(v9Keys)`, `startWithSeed(seed)`, `startWithKeys({ v8, v9 })` | `start({ v8, v9 })`                           |
+  | `DustWallet(…)`                                  | `start(v9Key)`, `startWithSeed(seed)`, `startWithKeys({ v8, v9 })`  | `start({ v8, v9 })`                           |
+  | `DustWallet(…)`                                  | `stepSync(v9Key)`                                                   | `stepSync({ v8, v9 })`                        |
+  | `CustomShieldedWallet(…)`, `CustomDustWallet(…)` | `start(key)`, `stepSync(key)`                                       | `start({ v9: key })`, `stepSync({ v9: key })` |
+
+  A restored wallet is started with `start({ v8, v9 })` whichever side its snapshot was written on; a caller holding a
+  seed derives both keys with each ledger version's `fromSeed`. The class-level `startWithSeed` and `startWithKeys` are
+  unchanged. A wallet typed as a bare `ShieldedWalletAPI` or `DustWalletAPI` cannot be started; give its keys type, such
+  as `ShieldedWalletAPI<ShieldedKeysByEpoch>`. `InitParams.shielded` and `InitParams.dust` now return
+  `ShieldedWalletAPI<ShieldedKeysByEpoch>` and `DustWalletAPI<DustKeysByEpoch>`, and the testkit's `DustWalletFactory`
+  returns `DustWalletAPI<DustKeysByEpoch>`.
+
+- c805a25: Release the coins a transaction builder booked when the builder fails part-way. `transferTransaction`,
+  `initSwap`, `balanceUnprovenTransaction`, `balanceUnboundTransaction` and `balanceFinalizedTransaction` book coins in
+  up to three wallets in turn; when a later step failed (for example, not enough Dust for the fee) the earlier bookings
+  stayed, and the caller had no transaction to revert. Each builder now releases what it booked, and its reservation
+  record, before rejecting. Balancing in place releases only the coins the wallet added. If a release itself fails, the
+  builder throws an `AggregateError` with the original error first and each failed release after it; otherwise the
+  original error is rethrown unchanged.
+
+  BREAKING CHANGE for code that matches on the rejection's type: `transferTransaction`, `initSwap`,
+  `balanceUnprovenTransaction`, `balanceUnboundTransaction`, `balanceFinalizedTransaction` and `finalizeTransaction` may
+  now reject with an `AggregateError` instead of the failed step's own error, when releasing a booking fails after that
+  step did. `errors[0]` is the original error and each later entry is a failed release. An `instanceof` check on the
+  rejection must also look inside `errors[0]`.
+
+### Minor Changes
+
+- a400d37: fix(dust,facade): refuse manual sync of a dust wallet below `forks.v9`
+
+  A dust wallet below `forks.v9` runs its V1 variant, which has no stepped synchronization whatever sync service it was
+  built with, so it cannot be synchronized by hand. `facade.start(material, { manualSync: true })` used to accept such a
+  wallet and leave nothing to move it: `doSync()` returned without stepping, or hung on the indexer's event subscription
+  if the wallet held keys.
+
+  `start()` now rejects with the new `ManualSyncUnsupportedError` before starting anything, so starting again without
+  `manualSync` syncs the dust wallet in the background. `DustWallet.stepSync()` and `facade.doSync()` below `forks.v9`
+  reject with it too. Each rejects with the error itself, carrying the dust wallet's protocol version, so `instanceof`
+  recognises it. So does the new `isManualSyncUnsupportedError` guard; the facade re-exports both, so a caller does not
+  need the dust wallet package to recognise it.
+
+### Patch Changes
+
+- 60e35b6: fix(facade): declare `@midnightntwrk/wallet-sdk-utilities` and `@midnightntwrk/wallet-sdk-hd` as
+  dependencies. The facade re-exports `Clock` from the first at runtime and names `WalletSeeds` from the second in its
+  public `FacadeStartMaterial` type, so a consumer needs both installed rather than reached through another package.
+- 60e35b6: fix(facade): declare the `@midnight-ntwrk/ledger-v8` dependency the facade imports, so it resolves under
+  strict package managers (pnpm, Yarn PnP) without relying on a sibling package to pull it in
+- c9bb839: Keep the fields a transaction-history entry carries that this build does not know when a later update merges
+  into it. `mergeWalletEntries` rebuilt the entry from the fields it declares, so a transaction-history storage that
+  keeps such fields on the entry value lost them the first time the entry was updated, such as when a pending
+  transaction was finalized.
+- c805a25: Make shielded bookings visible and recorded. `ShieldedWalletState.reservedCoins` lists the coins booked for a
+  transaction that has not settled, each with `reservedSince` and `releasableAfter`; the coins capability gains an
+  optional `getReservedCoins`. Not to be confused with `pendingCoins`, which are coins the wallet expects to receive.
+  The facade records a reservation for every shielded booking, naming the coins by nullifier in the new optional
+  `inputs.shielded` of the pending-transactions record; stored sets keep loading unchanged. `balanceTransaction`,
+  `transferTransaction` and `initSwap` on the shielded wallet API take an optional trailing `ttl?: Date`, which caps how
+  long the coins they book stay booked; the facade passes the TTL it already holds.
+- Updated dependencies [e678342]
+- Updated dependencies [a400d37]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [a400d37]
+- Updated dependencies [c805a25]
+- Updated dependencies [c805a25]
+- Updated dependencies [a400d37]
+- Updated dependencies [60e35b6]
+- Updated dependencies [a400d37]
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-rc.2
+
 ## 5.0.0-rc.1
 
 ### Major Changes

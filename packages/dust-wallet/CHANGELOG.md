@@ -1,5 +1,96 @@
 # @midnightntwrk/wallet-sdk-dust-wallet
 
+## 5.0.0-rc.2
+
+### Major Changes
+
+- a400d37: fix(shielded,dust,facade)!: start wallets with keys for every ledger version they run
+
+  `facade.start()` reduced its material to ledger-v9 keys, so a shielded or dust wallet restored from a snapshot written
+  below `forks.v9`, which resumes on its V1 variant, failed with `MissingStartAuxError`. The facade now hands every
+  wallet one ledger version's keys per side of the boundary — derived from the seeds, or taken from `FacadeKeysByEpoch`
+  — and each wallet takes the side it runs on. `facade.start()` and `facade.doSync()` take the same material as before.
+
+  BREAKING CHANGE: `ShieldedWalletAPI` and `DustWalletAPI` no longer name a key type. `start`, and the dust wallet's
+  `stepSync`, take the wallet's own keys type — the first type parameter, `never` by default:
+
+  | Wallet instance                                  | Before                                                              | Now                                           |
+  | ------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+  | `ShieldedWallet(…)`                              | `start(v9Keys)`, `startWithSeed(seed)`, `startWithKeys({ v8, v9 })` | `start({ v8, v9 })`                           |
+  | `DustWallet(…)`                                  | `start(v9Key)`, `startWithSeed(seed)`, `startWithKeys({ v8, v9 })`  | `start({ v8, v9 })`                           |
+  | `DustWallet(…)`                                  | `stepSync(v9Key)`                                                   | `stepSync({ v8, v9 })`                        |
+  | `CustomShieldedWallet(…)`, `CustomDustWallet(…)` | `start(key)`, `stepSync(key)`                                       | `start({ v9: key })`, `stepSync({ v9: key })` |
+
+  A restored wallet is started with `start({ v8, v9 })` whichever side its snapshot was written on; a caller holding a
+  seed derives both keys with each ledger version's `fromSeed`. The class-level `startWithSeed` and `startWithKeys` are
+  unchanged. A wallet typed as a bare `ShieldedWalletAPI` or `DustWalletAPI` cannot be started; give its keys type, such
+  as `ShieldedWalletAPI<ShieldedKeysByEpoch>`. `InitParams.shielded` and `InitParams.dust` now return
+  `ShieldedWalletAPI<ShieldedKeysByEpoch>` and `DustWalletAPI<DustKeysByEpoch>`, and the testkit's `DustWalletFactory`
+  returns `DustWalletAPI<DustKeysByEpoch>`.
+
+### Minor Changes
+
+- e678342: feat(dust-wallet): let a new wallet skip the ledger-v8 dust history
+
+  `DustWallet` takes a new `skipLedgerV8DustHistory` option. On a chain that crossed `forks.v9` with ledger-v8 history
+  behind it, a fresh start with the option set searches the indexer for the last dust event below `forks.v9` and starts
+  the V2 variant there, with the empty state a wallet crossing the boundary is handed, valued against the same
+  configured `dustParameters`. The ledger-v8 dust events, which that hand-over would discard, are never replayed.
+  Synchronization then continues by event replay as usual.
+
+  **The wallet's dust transaction history from ledger-v8 will be missing**, because no event below the boundary is
+  applied. The option is off by default and affects fresh starts only: a restored wallet resumes from the cursor its
+  snapshot carries. It is best-effort, so a chain still below `forks.v9`, one born on ledger-v9, or an indexer that
+  cannot be searched leaves the start as it is without it. It concerns the dust wallet only; the shielded and unshielded
+  wallets still read ledger-v8, where the coins they hold from it are found.
+
+  The search is a binary search over the dust event subscription, which shares its ids with zswap events, so it steps
+  over the gaps they leave. It is exported as `findDustTimelineStart`, returning a `DustTimelineStart` (the cursor and
+  the version of the first ledger-v9 dust event). A `CustomForkingDustWallet` composition opts in by setting the new
+  `ForkingDustConfiguration.dustTimelineStartProbe` (a `DustTimelineStartProbe`), which a fresh start asks before
+  `chainVersionProbe`. Purely additive.
+
+- c9bb839: Keep the snapshot fields this build does not declare. Both variants put them on the new optional
+  `CoreWallet.unknownFields` when restoring, carry them through every change to the wallet, including the cross-ledger
+  migration (`PreviousLedgerWallet` gains the same optional field), and write them back unchanged on the next save. A
+  field written by a later release therefore survives a rollback. Snapshots without unknown fields are read and written
+  exactly as before.
+- a400d37: fix(dust,facade): refuse manual sync of a dust wallet below `forks.v9`
+
+  A dust wallet below `forks.v9` runs its V1 variant, which has no stepped synchronization whatever sync service it was
+  built with, so it cannot be synchronized by hand. `facade.start(material, { manualSync: true })` used to accept such a
+  wallet and leave nothing to move it: `doSync()` returned without stepping, or hung on the indexer's event subscription
+  if the wallet held keys.
+
+  `start()` now rejects with the new `ManualSyncUnsupportedError` before starting anything, so starting again without
+  `manualSync` syncs the dust wallet in the background. `DustWallet.stepSync()` and `facade.doSync()` below `forks.v9`
+  reject with it too. Each rejects with the error itself, carrying the dust wallet's protocol version, so `instanceof`
+  recognises it. So does the new `isManualSyncUnsupportedError` guard; the facade re-exports both, so a caller does not
+  need the dust wallet package to recognise it.
+
+### Patch Changes
+
+- a400d37: fix(shielded,dust): report a wallet syncing from a simulator as synced once it reaches the tip
+
+  The simulator sync services advanced only `appliedIndex`, so a shielded or dust wallet syncing from a `Simulator`
+  never reported `isConnected` or the chain tip, and `isStrictlyComplete()` (and the facade's `isSynced`) never became
+  true. They now record both, as the indexer sync does. A variant still waiting on blocks beyond its range is not
+  reported synced.
+
+- a400d37: refactor(dust): remove `RunningV1Variant.sync`
+
+  The V1 variant now synchronizes in the background only. `sync` ran one pass and waited for it to end, which only a
+  sync service whose passes end allows, and the only one the SDK ships is the projections service, which needs
+  ledger-v9. A V1 variant built with a custom finite service through `withSync` can no longer be stepped. The method was
+  added during the 5.0.0 pre-releases and never shipped in a stable release.
+
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c805a25]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-runtime@2.0.0-rc.2
+
 ## 5.0.0-rc.1
 
 ### Major Changes

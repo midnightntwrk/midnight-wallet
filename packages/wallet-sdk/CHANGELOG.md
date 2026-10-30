@@ -1,5 +1,35 @@
 # @midnightntwrk/wallet-sdk
 
+## 2.0.0-rc.2
+
+### Patch Changes
+
+- Updated dependencies [e678342]
+- Updated dependencies [60e35b6]
+- Updated dependencies [60e35b6]
+- Updated dependencies [a400d37]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [a400d37]
+- Updated dependencies [c805a25]
+- Updated dependencies [c805a25]
+- Updated dependencies [c805a25]
+- Updated dependencies [a400d37]
+- Updated dependencies [60e35b6]
+- Updated dependencies [a400d37]
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-facade@5.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-node-client@2.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-runtime@2.0.0-rc.2
+
 ## 2.0.0-rc.1
 
 ### Major Changes
