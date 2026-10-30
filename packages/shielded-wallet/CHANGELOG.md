@@ -1,5 +1,77 @@
 # @midnightntwrk/wallet-sdk-shielded
 
+## 4.0.0-rc.2
+
+### Major Changes
+
+- a400d37: fix(shielded,dust,facade)!: start wallets with keys for every ledger version they run
+
+  `facade.start()` reduced its material to ledger-v9 keys, so a shielded or dust wallet restored from a snapshot written
+  below `forks.v9`, which resumes on its V1 variant, failed with `MissingStartAuxError`. The facade now hands every
+  wallet one ledger version's keys per side of the boundary — derived from the seeds, or taken from `FacadeKeysByEpoch`
+  — and each wallet takes the side it runs on. `facade.start()` and `facade.doSync()` take the same material as before.
+
+  BREAKING CHANGE: `ShieldedWalletAPI` and `DustWalletAPI` no longer name a key type. `start`, and the dust wallet's
+  `stepSync`, take the wallet's own keys type — the first type parameter, `never` by default:
+
+  | Wallet instance                                  | Before                                                              | Now                                           |
+  | ------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+  | `ShieldedWallet(…)`                              | `start(v9Keys)`, `startWithSeed(seed)`, `startWithKeys({ v8, v9 })` | `start({ v8, v9 })`                           |
+  | `DustWallet(…)`                                  | `start(v9Key)`, `startWithSeed(seed)`, `startWithKeys({ v8, v9 })`  | `start({ v8, v9 })`                           |
+  | `DustWallet(…)`                                  | `stepSync(v9Key)`                                                   | `stepSync({ v8, v9 })`                        |
+  | `CustomShieldedWallet(…)`, `CustomDustWallet(…)` | `start(key)`, `stepSync(key)`                                       | `start({ v9: key })`, `stepSync({ v9: key })` |
+
+  A restored wallet is started with `start({ v8, v9 })` whichever side its snapshot was written on; a caller holding a
+  seed derives both keys with each ledger version's `fromSeed`. The class-level `startWithSeed` and `startWithKeys` are
+  unchanged. A wallet typed as a bare `ShieldedWalletAPI` or `DustWalletAPI` cannot be started; give its keys type, such
+  as `ShieldedWalletAPI<ShieldedKeysByEpoch>`. `InitParams.shielded` and `InitParams.dust` now return
+  `ShieldedWalletAPI<ShieldedKeysByEpoch>` and `DustWalletAPI<DustKeysByEpoch>`, and the testkit's `DustWalletFactory`
+  returns `DustWalletAPI<DustKeysByEpoch>`.
+
+- c805a25: Release shielded coins booked for a transaction that is never submitted or never included. Such a booking was
+  saved with the wallet and never cleared, so an abandoned transaction locked its coins for good, across restarts. The
+  wallet now expires its own bookings during sync, with or without the facade: once the lesser of the transaction's TTL
+  and mainnet's `global_ttl` (14 days) has passed since sync first saw the booking, and only once sync has caught up. A
+  facade build passes on the TTL its caller gives, so the booking lasts until that TTL, capped at 14 days. The sync
+  source checks in every version-watch interval, so a chain with no shielded traffic still releases. Each booking's
+  first-seen time and TTL are saved in the snapshot as an optional `bookings` field; older snapshots still load and
+  their bookings get a full lifetime from the first update.
+
+  BREAKING CHANGE for custom sync sources only: every events update now carries `now`, the instant the source stamped
+  it. `EventsWalletSyncUpdate` gains a required `now: Date` and `WalletSyncUpdate.create` takes it as a third argument,
+  in both the `v1` and `v2` subpaths. The default indexer and simulator services already stamp their updates.
+
+### Minor Changes
+
+- c9bb839: Keep the snapshot fields this build does not declare. Both variants put them on the new optional
+  `CoreWallet.unknownFields` when restoring, carry them through every change to the wallet, including the cross-ledger
+  migration (`PreviousLedgerWallet` gains the same optional field) and completing the crossing, and write them back
+  unchanged on the next save. A field written by a later release therefore survives a rollback. Snapshots without
+  unknown fields are read and written exactly as before.
+- c805a25: Make shielded bookings visible and recorded. `ShieldedWalletState.reservedCoins` lists the coins booked for a
+  transaction that has not settled, each with `reservedSince` and `releasableAfter`; the coins capability gains an
+  optional `getReservedCoins`. Not to be confused with `pendingCoins`, which are coins the wallet expects to receive.
+  The facade records a reservation for every shielded booking, naming the coins by nullifier in the new optional
+  `inputs.shielded` of the pending-transactions record; stored sets keep loading unchanged. `balanceTransaction`,
+  `transferTransaction` and `initSwap` on the shielded wallet API take an optional trailing `ttl?: Date`, which caps how
+  long the coins they book stay booked; the facade passes the TTL it already holds.
+
+### Patch Changes
+
+- a400d37: fix(shielded,dust): report a wallet syncing from a simulator as synced once it reaches the tip
+
+  The simulator sync services advanced only `appliedIndex`, so a shielded or dust wallet syncing from a `Simulator`
+  never reported `isConnected` or the chain tip, and `isStrictlyComplete()` (and the facade's `isSynced`) never became
+  true. They now record both, as the indexer sync does. A variant still waiting on blocks beyond its range is not
+  reported synced.
+
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c805a25]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-runtime@2.0.0-rc.2
+
 ## 4.0.0-rc.1
 
 ### Major Changes

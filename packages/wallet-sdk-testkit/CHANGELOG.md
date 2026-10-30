@@ -1,5 +1,83 @@
 # @midnightntwrk/wallet-sdk-testkit
 
+## 1.0.0-rc.2
+
+### Major Changes
+
+- a400d37: fix(shielded,dust,facade)!: start wallets with keys for every ledger version they run
+
+  `facade.start()` reduced its material to ledger-v9 keys, so a shielded or dust wallet restored from a snapshot written
+  below `forks.v9`, which resumes on its V1 variant, failed with `MissingStartAuxError`. The facade now hands every
+  wallet one ledger version's keys per side of the boundary — derived from the seeds, or taken from `FacadeKeysByEpoch`
+  — and each wallet takes the side it runs on. `facade.start()` and `facade.doSync()` take the same material as before.
+
+  BREAKING CHANGE: `ShieldedWalletAPI` and `DustWalletAPI` no longer name a key type. `start`, and the dust wallet's
+  `stepSync`, take the wallet's own keys type — the first type parameter, `never` by default:
+
+  | Wallet instance                                  | Before                                                              | Now                                           |
+  | ------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------- |
+  | `ShieldedWallet(…)`                              | `start(v9Keys)`, `startWithSeed(seed)`, `startWithKeys({ v8, v9 })` | `start({ v8, v9 })`                           |
+  | `DustWallet(…)`                                  | `start(v9Key)`, `startWithSeed(seed)`, `startWithKeys({ v8, v9 })`  | `start({ v8, v9 })`                           |
+  | `DustWallet(…)`                                  | `stepSync(v9Key)`                                                   | `stepSync({ v8, v9 })`                        |
+  | `CustomShieldedWallet(…)`, `CustomDustWallet(…)` | `start(key)`, `stepSync(key)`                                       | `start({ v9: key })`, `stepSync({ v9: key })` |
+
+  A restored wallet is started with `start({ v8, v9 })` whichever side its snapshot was written on; a caller holding a
+  seed derives both keys with each ledger version's `fromSeed`. The class-level `startWithSeed` and `startWithKeys` are
+  unchanged. A wallet typed as a bare `ShieldedWalletAPI` or `DustWalletAPI` cannot be started; give its keys type, such
+  as `ShieldedWalletAPI<ShieldedKeysByEpoch>`. `InitParams.shielded` and `InitParams.dust` now return
+  `ShieldedWalletAPI<ShieldedKeysByEpoch>` and `DustWalletAPI<DustKeysByEpoch>`, and the testkit's `DustWalletFactory`
+  returns `DustWalletAPI<DustKeysByEpoch>`.
+
+### Minor Changes
+
+- 055517d: fix(testkit): save a wallet snapshot whole or not at all, report save failures, and never leave a test's
+  wallet running
+
+  - `saveState` writes the shielded and dust states to one file per dust sync model (`snapshotPath`), under a temporary
+    name renamed over the previous snapshot. The unshielded state, which a restore never read, is no longer saved. A
+    save that fails or is killed part-way leaves the previous snapshot intact, so the next run can no longer restore one
+    run's shielded state with another's dust. It now rejects when a state cannot be serialized or written, instead of
+    logging and carrying on. Snapshots in the earlier per-wallet layout are ignored, so each carried cache builds from
+    scratch once, and removed on the next save; `dustSnapshotPath` is deprecated.
+  - `provideWallet` returns `restored`, saying whether the wallet came from the snapshot: its fallback to a from-scratch
+    build is silent, and balances alone cannot tell the two apart. A restored facade that fails its sync check, or does
+    not catch up within ten minutes, is stopped before `provideWallet` falls back or rejects.
+  - New `createWalletLifecycle`: wallets a `beforeEach` adopts are saved and stopped together on release, every failure
+    is reported, and a wallet that finishes starting after its test was torn down is stopped as it arrives. The dust and
+    token-transfer scenarios use it.
+  - New `parseMidnightNetwork` rejects an unrecognized `NETWORK` by name, instead of failing later on endpoints there is
+    no preset for.
+
+  The e2e suites drop their own copies of these helpers for the testkit's. The snapshot-restore tests save to a
+  temporary directory of their own rather than `SYNC_CACHE`, which the nightly local lane never sets and whose absence
+  crashed its vitest worker on every run since the ledger-v9 merge.
+
+### Patch Changes
+
+- Updated dependencies [e678342]
+- Updated dependencies [60e35b6]
+- Updated dependencies [60e35b6]
+- Updated dependencies [a400d37]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [c9bb839]
+- Updated dependencies [a400d37]
+- Updated dependencies [c805a25]
+- Updated dependencies [c805a25]
+- Updated dependencies [c805a25]
+- Updated dependencies [a400d37]
+- Updated dependencies [60e35b6]
+- Updated dependencies [a400d37]
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-facade@5.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-rc.2
+
 ## 1.0.0-rc.1
 
 ### Patch Changes

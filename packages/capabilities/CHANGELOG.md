@@ -1,5 +1,27 @@
 # @midnightntwrk/wallet-sdk-capabilities
 
+## 4.0.0-rc.2
+
+### Minor Changes
+
+- c9bb839: Keep the top-level fields of a stored pending-transactions payload that this build does not declare.
+  `deserialize` puts them on the new optional `PendingTransactions.unknownFields`, every state transition carries them,
+  and `serialize` writes them back unchanged, so a field written by a later release survives a rollback. Payloads
+  without unknown fields are read and written exactly as before.
+- c805a25: Make shielded bookings visible and recorded. `ShieldedWalletState.reservedCoins` lists the coins booked for a
+  transaction that has not settled, each with `reservedSince` and `releasableAfter`; the coins capability gains an
+  optional `getReservedCoins`. Not to be confused with `pendingCoins`, which are coins the wallet expects to receive.
+  The facade records a reservation for every shielded booking, naming the coins by nullifier in the new optional
+  `inputs.shielded` of the pending-transactions record; stored sets keep loading unchanged. `balanceTransaction`,
+  `transferTransaction` and `initSwap` on the shielded wallet API take an optional trailing `ttl?: Date`, which caps how
+  long the coins they book stay booked; the facade passes the TTL it already holds.
+
+### Patch Changes
+
+- Updated dependencies [c9bb839]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-node-client@2.0.0-rc.2
+
 ## 4.0.0-rc.1
 
 ### Major Changes
