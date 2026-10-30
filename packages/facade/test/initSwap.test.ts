@@ -279,8 +279,8 @@ describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
         [`shielded:${shieldedTokenType}`]: tokenValue(1n),
         [`unshielded:${nightTokenType}`]: -wantAmount,
       });
-      // The Dust spent must cover the whole fee, not merely be some: the fee as the balancer prices it, on the
-      // proof-erased transaction with the block margin the facade is configured with.
+      // The Dust spent must cover the whole fee, not merely be some: at least the fee the ledger charges this
+      // transaction once its proofs are erased, with the block margin the facade is configured with.
       const ledgerParams = await env.simulator.query((state) => state.ledger.parameters).pipe(Effect.runPromise);
       const fee = tx.eraseProofs().feesWithMargin(ledgerParams, FEE_BLOCKS_MARGIN);
       expect(fee).toBeGreaterThan(0n);
@@ -298,7 +298,8 @@ describe('WalletFacade.initSwap rejects a swap with no legs', () => {
 
   /**
    * A facade over the shipped wallets, never started. The emptiness is decided from the arguments alone, before any
-   * wallet is reached, so there is no chain to sync and nothing to fund.
+   * wallet is reached, so there is no chain to sync and nothing to fund. The services that would reach a node are
+   * stubbed, since the default submission service connects as soon as it is built.
    */
   const unstartedFacade = async (): Promise<WalletFacade> => {
     const facade = await WalletFacade.init({
@@ -316,6 +317,11 @@ describe('WalletFacade.initSwap rejects a swap with no legs', () => {
       dust: (config) => DustWallet(config).startWithSeed(KEYS.seeds.dust),
       provingService: () => createV8MockProvingService(),
       pendingTransactionsService: () => new SilentPendingTransactions(),
+      submissionService: () => ({
+        submitTransaction: (): Promise<never> => Promise.reject(new Error('not under test')),
+        close: () => Promise.resolve(),
+      }),
+      fetchBlockData: () => () => Promise.reject(new Error('not under test')),
     });
     facades.push(facade);
     return facade;
