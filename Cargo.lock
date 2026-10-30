@@ -1499,7 +1499,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 [[package]]
 name = "midnight-base-crypto"
 version = "1.1.0"
-source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=base-crypto-1.1.0-rc.3#dc87cc8f3778d152dbf703fa56d174f7a48e64cf"
+source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=base-crypto-1.1.0-rc.4#65a4ab66f4bd7b064099e9ae5900fc425ec03f66"
 dependencies = [
  "anyhow",
  "atomic-write-file",
@@ -1722,7 +1722,7 @@ dependencies = [
 [[package]]
 name = "midnight-ledger-static"
 version = "10.0.0"
-source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=crate-ledger-9.1.0.0-rc.5#6abe9b16f1a2a9965a3317729cd72fd1f7fbfc03"
+source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=crate-ledger-9.1.0.0-rc.6#48a978d7fc4342e8f5536eb95f47139477e1a0e8"
 dependencies = [
  "proc-macro2",
  "quote 1.0.47",
@@ -1731,7 +1731,7 @@ dependencies = [
 [[package]]
 name = "midnight-ledger-v9"
 version = "1.0.0"
-source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=crate-ledger-9.1.0.0-rc.5#6abe9b16f1a2a9965a3317729cd72fd1f7fbfc03"
+source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=crate-ledger-9.1.0.0-rc.6#48a978d7fc4342e8f5536eb95f47139477e1a0e8"
 dependencies = [
  "anyhow",
  "derive-where",
@@ -1751,8 +1751,8 @@ dependencies = [
  "midnight-storage",
  "midnight-transient-crypto 2.2.0",
  "midnight-transient-crypto 3.0.0",
- "midnight-zkir",
- "midnight-zkir-v3",
+ "midnight-zkir 2.2.0",
+ "midnight-zkir 3.1.0-rc.1",
  "midnight-zswap 9.0.0",
  "rand 0.8.7",
  "rayon",
@@ -1794,7 +1794,7 @@ dependencies = [
 [[package]]
 name = "midnight-onchain-runtime"
 version = "4.0.0"
-source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=onchain-runtime-4.0.0-rc.4#f1683fd5b3444e484b5b493e5eddf73db4f1bd99"
+source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=crate-onchain-runtime-4.0.0-rc.5#70f195d6418dd86434cd29d50db7be576ee6f50c"
 dependencies = [
  "derive-where",
  "enum_index",
@@ -1838,7 +1838,7 @@ dependencies = [
 [[package]]
 name = "midnight-onchain-state"
 version = "4.0.0"
-source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=onchain-state-4.0.0-rc.4#401810507f8282626c27186a6de7a21e1581010a"
+source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=onchain-state-4.0.0-rc.5#400e40b92550638831486cecc71861f9b4e56642"
 dependencies = [
  "derive-where",
  "fake",
@@ -1879,7 +1879,7 @@ dependencies = [
 [[package]]
 name = "midnight-onchain-vm"
 version = "4.0.0"
-source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=onchain-vm-4.0.0-rc.3#54a4e01372a17ad9f9e536028d898c766c9f34b2"
+source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=onchain-vm-4.0.0-rc.4#18964db1a0783cc9a2e349a7f31c5c24bc423eec"
 dependencies = [
  "derive-where",
  "fake",
@@ -2169,9 +2169,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "midnight-zkir-v3"
-version = "3.0.0"
-source = "git+https://github.com/midnightntwrk/midnight-ledger?tag=zkir-v3-3.0.0-rc.1#9c54da5569a10e76d78b6239998ebb6f33e50111"
+name = "midnight-zkir"
+version = "3.1.0-rc.1"
+source = "git+https://github.com/midnightntwrk/midnight-zkir?tag=zkir-3.1.0-rc.1#e82d81d25aabcc5f5092e2bd559083487f577914"
 dependencies = [
  "anyhow",
  "const-hex",
@@ -2242,7 +2242,7 @@ dependencies = [
  "midnight-storage",
  "midnight-transient-crypto 2.2.0",
  "midnight-transient-crypto 3.0.0",
- "midnight-zkir",
+ "midnight-zkir 2.2.0",
  "rand 0.8.7",
  "serde",
  "tracing",
