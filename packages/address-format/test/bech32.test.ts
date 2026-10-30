@@ -77,10 +77,12 @@ describe('the specification test vectors', () => {
     });
 
     it('should encode each pair of keys to exactly the specified Bech32m string', () => {
+      // The address is the coin public key followed by the encryption public key, two hex digits per byte.
+      const coinKeyHexLength = ShieldedCoinPublicKey.keyLength * 2;
       vectors.forEach((vector) => {
         const address = new ShieldedAddress(
-          ShieldedCoinPublicKey.fromHexString(vector.shieldedAddress.hex.slice(0, 64)),
-          ShieldedEncryptionPublicKey.fromHexString(vector.shieldedAddress.hex.slice(64)),
+          ShieldedCoinPublicKey.fromHexString(vector.shieldedAddress.hex.slice(0, coinKeyHexLength)),
+          ShieldedEncryptionPublicKey.fromHexString(vector.shieldedAddress.hex.slice(coinKeyHexLength)),
         );
 
         expect(ShieldedAddress.codec.encode(networkOf(vector), address).asString(), describeVector(vector)).toBe(
@@ -304,7 +306,7 @@ describe('decoding rejects', () => {
       );
       expect(() =>
         DustAddress.codec.decode('testnet', withPayload('dust', 'testnet', Buffer.concat([valid, Buffer.from([0])]))),
-      ).toThrow();
+      ).toThrow('Unprocessed data left');
     });
   });
 });
