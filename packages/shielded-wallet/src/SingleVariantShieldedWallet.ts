@@ -64,7 +64,7 @@ export type CustomizedShieldedWallet<
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-> = ShieldedWalletAPI<Readonly<{ v9: TStartAux }>, TTransaction, TSerialized> &
+> = ShieldedWalletAPI<Readonly<{ v9: TStartAux }>, TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
 export interface CustomizedShieldedWalletClass<
@@ -420,9 +420,7 @@ export function CustomShieldedWallet<
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<TSerialized>> {
-      return rx.firstValueFrom(
-        this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
-      );
+      return rx.firstValueFrom(this.state.pipe(rx.filter((state) => state.progress.isCompleteWithin(allowedGap))));
     }
 
     /**

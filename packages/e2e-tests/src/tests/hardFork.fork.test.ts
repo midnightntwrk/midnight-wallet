@@ -39,6 +39,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import {
   asV8DustParameters,
+  asV9DustParameters,
   CustomForkingDustWallet,
   type DefaultDustConfiguration,
   type DustKeysByEpoch,
@@ -58,7 +59,7 @@ import {
 import { type ForkFixture, useForkFixture } from './fork-fixture.js';
 import * as utils from './utils.js';
 import { carried } from './helpers/transactions.js';
-import { rootsEqual, sameDustCoins } from './helpers/dustComparison.js';
+import { rootsEqual, sameDustCoins, dustLocalStateOf } from './helpers/dustComparison.js';
 import { logger } from './logger.js';
 
 /** The dev preset's funded account. */
@@ -250,14 +251,15 @@ const trackPhases = (facade: WalletFacade): rx.Observable<Tracked> =>
  *   starts on. Leaving it out keeps the crossing this test is about the only thing being tested.
  */
 const projectionsTwinDustWallet = (configuration: DefaultDustConfiguration) => {
-  const dustParameters = configuration.dustParameters ?? ledgerV9.LedgerParameters.initialParameters().dust;
+  const rates = configuration.dustParameters ?? ledgerV9.LedgerParameters.initialParameters().dust;
+  const v9DustParameters = asV9DustParameters(rates);
   return CustomForkingDustWallet(
     configuration,
     {
       builder: new V1Builder().withDefaults(),
-      // The one field that cannot be shared, exactly as the shipped composition handles it: `dustParameters` is a WASM
-      // object of whichever ledger module produced it, so the V1 variant gets the ledger-v8 rebuild of the rates.
-      configuration: { ...configuration, dustParameters: asV8DustParameters(dustParameters) },
+      // The one field not handed over as it is, exactly as the shipped composition handles it: a variant's
+      // `dustParameters` is a WASM object of its own ledger module, so each is made from the configured rates.
+      configuration: { ...configuration, dustParameters: asV8DustParameters(rates) },
     },
     {
       builder: new V2Builder()
@@ -268,8 +270,8 @@ const projectionsTwinDustWallet = (configuration: DefaultDustConfiguration) => {
         // `DustSecretKey` the default one is, and a two-variant wallet needs the derivation by name — it is how a
         // start from a seed answers for both sides of the boundary at once.
         .withStartAuxDefaults()
-        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters })),
-      configuration,
+        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters: v9DustParameters })),
+      configuration: { ...configuration, dustParameters: v9DustParameters },
     },
   );
 };
@@ -337,12 +339,16 @@ describe.sequential('Hard fork crossing @fork', () => {
    */
   const logDustCounts = (label: string, eventsState: FacadeState, twinState: FacadeState): void => {
     logger.info(
-      `${label} dust coins: events=${eventsState.dust.state.state.utxos.length}` +
-        ` projections=${twinState.dust.state.state.utxos.length};` +
-        ` seq events=[${eventsState.dust.state.state.utxos.map((utxo) => utxo.seq).join(',')}]` +
-        ` projections=[${twinState.dust.state.state.utxos.map((utxo) => utxo.seq).join(',')}];` +
-        ` highestIndex events=${eventsState.dust.state.progress.highestIndex}` +
-        ` projections=${twinState.dust.state.progress.highestIndex}`,
+      `${label} dust coins: events=${dustLocalStateOf(eventsState.dust).utxos.length}` +
+        ` projections=${dustLocalStateOf(twinState.dust).utxos.length};` +
+        ` seq events=[${dustLocalStateOf(eventsState.dust)
+          .utxos.map((utxo) => utxo.seq)
+          .join(',')}]` +
+        ` projections=[${dustLocalStateOf(twinState.dust)
+          .utxos.map((utxo) => utxo.seq)
+          .join(',')}];` +
+        ` highestIndex events=${eventsState.dust.progress.highestIndex}` +
+        ` projections=${twinState.dust.progress.highestIndex}`,
     );
   };
 
@@ -494,12 +500,12 @@ describe.sequential('Hard fork crossing @fork', () => {
       logDustCounts('A ledger-v8', eventsState, twinState);
       logger.info(
         'A the cursor the twin will carry across the fork, and the one its first projections pass will resume from:' +
-          ` ${twinState.dust.state.progress.highestIndex}`,
+          ` ${twinState.dust.progress.highestIndex}`,
       );
 
       expect(twinState.protocolVersion.dust).toBeLessThan(ProtocolVersion.V9NativeForkVersion);
-      expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
-      expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(sameDustCoins(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
+      expect(rootsEqual(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
     },
     CROSSING_TIMEOUT_MS,
   );
@@ -618,7 +624,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       expect(twinState.isSynced).toBe(true);
       // The twin's V2 variant has exactly one synchronization — the projections one — so a settled ledger-v9
       // state is itself the proof that the projections path ran, and ran on a state produced by the migration.
-      expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(sameDustCoins(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
     },
     CROSSING_TIMEOUT_MS + 60_000,
   );
@@ -744,9 +750,9 @@ describe.sequential('Hard fork crossing @fork', () => {
         `C dust balances: events=${eventsState.dust.balance(now)} projections=${twinState.dust.balance(now)}`,
       );
 
-      expect(eventsState.dust.state.state.utxos.length).toBeGreaterThan(0);
-      expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
-      expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(dustLocalStateOf(eventsState.dust).utxos.length).toBeGreaterThan(0);
+      expect(sameDustCoins(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
+      expect(rootsEqual(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
       expect(twinState.dust.balance(now)).toBe(eventsState.dust.balance(now));
     },
     DUST_TIMEOUT_MS + 60_000,
@@ -932,9 +938,9 @@ describe.sequential('Hard fork crossing @fork', () => {
         `D dust balances: events=${eventsState.dust.balance(now)} projections=${twinState.dust.balance(now)}`,
       );
 
-      expect(eventsState.dust.state.state.utxos.length).toBeGreaterThan(0);
-      expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
-      expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
+      expect(dustLocalStateOf(eventsState.dust).utxos.length).toBeGreaterThan(0);
+      expect(sameDustCoins(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
+      expect(rootsEqual(dustLocalStateOf(eventsState.dust), dustLocalStateOf(twinState.dust))).toBe(true);
       expect(twinState.dust.balance(now)).toBe(eventsState.dust.balance(now));
     },
     DUST_TIMEOUT_MS + 60_000,
@@ -954,7 +960,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       const first = await rx.firstValueFrom(withoutV8History.state);
       logger.info(
         `E start without ledger-v8 dust history: protocol version ${first.protocolVersion},` +
-          ` cursor ${first.state.progress.appliedIndex}`,
+          ` cursor ${first.progress.appliedIndex}`,
       );
       expect(Number(first.protocolVersion)).toBeGreaterThanOrEqual(Number(ProtocolVersion.V9NativeForkVersion));
 
@@ -967,9 +973,9 @@ describe.sequential('Hard fork crossing @fork', () => {
       const eventsState = await wallet.waitForSyncedState();
       const now = new Date();
 
-      expect(eventsState.dust.state.state.utxos.length).toBeGreaterThan(0);
-      expect(sameDustCoins(eventsState.dust.state.state, synced.state.state)).toBe(true);
-      expect(rootsEqual(eventsState.dust.state.state, synced.state.state)).toBe(true);
+      expect(dustLocalStateOf(eventsState.dust).utxos.length).toBeGreaterThan(0);
+      expect(sameDustCoins(dustLocalStateOf(eventsState.dust), dustLocalStateOf(synced))).toBe(true);
+      expect(rootsEqual(dustLocalStateOf(eventsState.dust), dustLocalStateOf(synced))).toBe(true);
       expect(synced.balance(now)).toBe(eventsState.dust.balance(now));
     },
     DUST_TIMEOUT_MS + 60_000,

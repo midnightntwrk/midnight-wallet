@@ -10,25 +10,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Effect, Schema } from 'effect';
+import { type TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Effect, type Schema } from 'effect';
 import { type UnshieldedUpdate } from './SyncSchema.js';
-import { SafeBigInt } from '@midnightntwrk/wallet-sdk-utilities';
 import { TransactionHistoryError } from './WalletError.js';
-
-const UtxoSchema = Schema.Struct({
-  value: SafeBigInt.SafeBigInt,
-  owner: Schema.String,
-  tokenType: Schema.String,
-  intentHash: Schema.String,
-  outputIndex: Schema.Number,
-});
-
-export const UnshieldedSectionSchema = Schema.Struct({
-  id: Schema.Number,
-  createdUtxos: Schema.Array(UtxoSchema),
-  spentUtxos: Schema.Array(UtxoSchema),
-});
+import {
+  type UnshieldedSectionSchema,
+  type UnshieldedHistoryStorage,
+  type UnshieldedTransactionHistoryEntry,
+} from '../UnshieldedWalletTypes.js';
 
 type UnshieldedSection = Schema.Schema.Type<typeof UnshieldedSectionSchema>;
 
@@ -40,24 +30,16 @@ export const mergeUnshieldedSections = (
   ...incoming,
 });
 
-/**
- * Unshielded entry schema. Extends the common entry shape with an optional `unshielded` section. Tightening — required
- * `unshielded` plus required `protocolVersion`/`status`/`timestamp` — happens at the writer-input type, not on the
- * stored shape. Fees are not unshielded's concern (dust pays them); unshielded never writes `fees`.
- */
-export const UnshieldedTransactionHistoryEntrySchema = TransactionHistoryStorage.extendEntrySchema({
-  unshielded: Schema.optional(UnshieldedSectionSchema),
-});
-
-export type UnshieldedTransactionHistoryEntry = Schema.Schema.Type<typeof UnshieldedTransactionHistoryEntrySchema>;
-
 export type TransactionHistoryService = {
   put(update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError>;
 };
 
-export type UnshieldedHistoryStorage =
-  TransactionHistoryStorage.TransactionHistoryReader<TransactionHistoryStorage.TransactionHistoryEntryWithHash> &
-    TransactionHistoryStorage.TransactionHistoryWriter<UnshieldedTransactionHistoryEntry>;
+export {
+  UnshieldedSectionSchema,
+  UnshieldedTransactionHistoryEntrySchema,
+  type UnshieldedHistoryStorage,
+  type UnshieldedTransactionHistoryEntry,
+} from '../UnshieldedWalletTypes.js';
 
 /**
  * Writer input for unshielded's `gotFinalized`. The stored shape leaves fields optional, but at write time we know

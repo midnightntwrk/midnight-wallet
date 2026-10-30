@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Sink, Console } from 'effect';
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type Option, Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Sink, Console } from 'effect';
+import { ProtocolVersion, VariantState } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type WalletRuntimeError,
   type Variant,
@@ -98,6 +98,19 @@ export declare namespace RunningV1Variant {
 }
 
 export const V1Tag: unique symbol = Symbol('V1');
+
+/**
+ * This variant's core state, when this variant produced the wallet state it is read from.
+ *
+ * @remarks
+ *   A unshielded wallet's state carries its core state sealed, because that state is made of one ledger version's
+ *   objects. This is how the variant — or a test or tool that needs its ledger-level detail — reads it back. A state
+ *   another variant produced gives nothing, since this variant's ledger version could not read it.
+ * @param walletState A state, as a unshielded wallet emits it.
+ * @returns This variant's core state, or nothing when another variant produced the state.
+ */
+export const coreStateOf = (walletState: Readonly<{ state: VariantState }>): Option.Option<CoreWallet> =>
+  VariantState.unwrapFor<CoreWallet>(walletState.state, V1Tag);
 
 // `SyncUpdate`, matching `DefaultV1Variant` and `UnshieldedWallet`: the default sync stream carries liveness verdicts
 // alongside the indexer's own updates, so an alias still naming `WalletSyncUpdate` would describe no wallet the

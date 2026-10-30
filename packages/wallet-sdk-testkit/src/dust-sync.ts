@@ -14,6 +14,7 @@ import { type DustParameters, LedgerParameters } from '@midnightntwrk/ledger-v9'
 import { makeIndexerChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import {
   asV8DustParameters,
+  asV9DustParameters,
   CustomForkingDustWallet,
   type DefaultDustConfiguration,
   DustWallet,
@@ -65,14 +66,15 @@ export type DustWalletFactory = (config: DefaultDustConfiguration) => {
  * while syncing their Dust from projections.
  */
 export const eventLessDustWallet: DustWalletFactory = (config) => {
-  const dustParameters = config.dustParameters ?? LedgerParameters.initialParameters().dust;
+  const rates = config.dustParameters ?? LedgerParameters.initialParameters().dust;
+  const v9DustParameters = asV9DustParameters(rates);
   return CustomForkingDustWallet(
     { ...config, chainVersionProbe: config.chainVersionProbe ?? makeIndexerChainVersionProbe(config) },
     {
       builder: new V1Builder().withDefaults(),
-      // The one field that cannot be shared: `dustParameters` is a WASM object of whichever ledger module produced it,
-      // so the V1 variant is handed the ledger-v8 rebuild of the same rates rather than the object itself.
-      configuration: { ...config, dustParameters: asV8DustParameters(dustParameters) },
+      // The one field not handed over as it is: a variant's `dustParameters` is a WASM object of its own ledger module,
+      // so each variant is given its own ledger version's parameters made from the configured rates.
+      configuration: { ...config, dustParameters: asV8DustParameters(rates) },
     },
     {
       builder: new V2Builder()
@@ -80,8 +82,8 @@ export const eventLessDustWallet: DustWalletFactory = (config) => {
         .withSync(makeEventLessSyncService, makeEventLessSyncCapability)
         // Restated because `withSync` drops it: the seed-to-key derivation a start from a seed needs.
         .withStartAuxDefaults()
-        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters })),
-      configuration: config,
+        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters: v9DustParameters })),
+      configuration: { ...config, dustParameters: v9DustParameters },
     },
   );
 };

@@ -110,7 +110,7 @@ describe('Syncing', () => {
         const index = facades.indexOf(facade);
         const syncedState = await firstValueFrom(facade.state());
         logger.info(`Wallet ${index}: ${syncedState.shielded.balances[rawNativeTokenType ?? 0n]}`);
-        expect(syncedState.shielded.state.progress.isStrictlyComplete()).toBeTruthy();
+        expect(syncedState.shielded.progress.isStrictlyComplete()).toBeTruthy();
         expect(syncedState.unshielded.progress.isStrictlyComplete()).toBeTruthy();
       }
     },

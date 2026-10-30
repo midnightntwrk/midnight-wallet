@@ -10,40 +10,29 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 import { Duration, Array as EArray, Effect, Schedule, Schema } from 'effect';
 import { TransactionHistoryDetail } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { BlocklessFinalizedEntryError, TransactionHistoryError } from './WalletError.js';
 
-export const QualifiedShieldedCoinInfoSchema = Schema.Struct({
-  type: Schema.String,
-  nonce: Schema.String,
-  value: Schema.BigInt,
-  mtIndex: Schema.BigInt,
-});
+import {
+  QualifiedShieldedCoinInfoSchema,
+  type ShieldedSectionSchema,
+  type ShieldedHistoryStorage,
+  type ShieldedTransactionHistoryEntry,
+} from '../ShieldedWalletTypes.js';
 
-export const ShieldedSectionSchema = Schema.Struct({
-  receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
-  spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
-});
+export {
+  QualifiedShieldedCoinInfoSchema,
+  ShieldedSectionSchema,
+  ShieldedTransactionHistoryEntrySchema,
+  type ShieldedHistoryStorage,
+  type ShieldedTransactionHistoryEntry,
+} from '../ShieldedWalletTypes.js';
 
 type ShieldedSection = Schema.Schema.Type<typeof ShieldedSectionSchema>;
-
-/**
- * Shielded entry schema. Extends the common entry shape with an optional `shielded` section. Tightening — required
- * `shielded` plus required `protocolVersion`/`status` — happens at the writer-input type, not on the stored shape.
- */
-export const ShieldedTransactionHistoryEntrySchema = TransactionHistoryStorage.extendEntrySchema({
-  shielded: Schema.optional(ShieldedSectionSchema),
-});
-
-export type ShieldedTransactionHistoryEntry = Schema.Schema.Type<typeof ShieldedTransactionHistoryEntrySchema>;
-
-export type ShieldedHistoryStorage =
-  TransactionHistoryStorage.TransactionHistoryReader<TransactionHistoryStorage.TransactionHistoryEntryWithHash> &
-    TransactionHistoryStorage.TransactionHistoryWriter<ShieldedTransactionHistoryEntry>;
 
 /**
  * Writer input for shielded's `gotFinalized`. The stored shape leaves fields optional, but at write time we know

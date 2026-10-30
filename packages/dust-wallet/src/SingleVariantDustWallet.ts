@@ -49,12 +49,7 @@ import {
 import { type Clock, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Either, Option, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
-import {
-  claimableFeePayment,
-  type DefaultDustConfiguration,
-  type DustWalletAPI,
-  DustWalletState,
-} from './DustWalletAPI.js';
+import { claimableFeePayment, type DustWalletAPI, DustWalletState } from './DustWalletAPI.js';
 import { runPromiseThrowingFailure } from './PromiseBoundary.js';
 import { CoreWallet } from './v2/CoreWallet.js';
 import { type RunningV2Variant, V2Tag } from './v2/RunningV2Variant.js';
@@ -62,7 +57,7 @@ import { type WalletSyncUpdate } from './v2/SyncSchema.js';
 import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
 import { type UtxoWithMeta } from './v2/types/Dust.js';
 import { type AnyTransaction } from './v2/types/ledger.js';
-import { type BaseV2Configuration, type V2Variant } from './v2/V2Builder.js';
+import { type BaseV2Configuration, type DefaultV2Configuration, type V2Variant } from './v2/V2Builder.js';
 
 export type CustomizedDustWallet<
   TStartAux = DustSecretKey,
@@ -77,7 +72,7 @@ export interface CustomizedDustWalletClass<
   TTransaction = FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-  TConfig extends BaseV2Configuration = DefaultDustConfiguration,
+  TConfig extends BaseV2Configuration = DefaultV2Configuration,
 > extends WalletLike.BaseWalletClass<
   [Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
 > {
@@ -94,7 +89,7 @@ export interface CustomizedDustWalletClass<
 }
 
 export function CustomDustWallet<
-  TConfig extends BaseV2Configuration = DefaultDustConfiguration,
+  TConfig extends BaseV2Configuration = DefaultV2Configuration,
   TStartAux extends DustSecretKey = DustSecretKey,
   TTransaction = FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
@@ -431,9 +426,7 @@ export function CustomDustWallet<
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<DustWalletState<TSerialized>> {
-      return rx.firstValueFrom(
-        this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
-      );
+      return rx.firstValueFrom(this.state.pipe(rx.filter((state) => state.progress.isCompleteWithin(allowedGap))));
     }
 
     async waitForGeneratedDust(

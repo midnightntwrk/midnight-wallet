@@ -59,7 +59,14 @@ import {
   v8Payment,
   translationStub,
 } from './translationStub.js';
-import { awaitingCoinHashes, coinIndices, coinValues, totalValue, treeSize } from './forkWalletAssertions.js';
+import {
+  awaitingCoinHashes,
+  coinIndices,
+  coinValues,
+  eitherCoreStateOf,
+  totalValue,
+  treeSize,
+} from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -211,8 +218,8 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       const state = yield* restoredState(restored);
       // Not merely on the right side of the boundary: at the version the snapshot recorded, which is where the chain was.
       expect(state.protocolVersion).toBe(Option.getOrThrow(peekProtocolVersion(snapshot)));
-      expect(coinValues(state.state)).toEqual([...walletValues]);
-      expect(state.state.publicKeys).toStrictEqual(synced.state.publicKeys);
+      expect(coinValues(eitherCoreStateOf(state))).toEqual([...walletValues]);
+      expect(eitherCoreStateOf(state).publicKeys).toStrictEqual(synced.state.publicKeys);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('restores a snapshot written at or past the boundary onto the V2 variant, with what it held', async () =>
@@ -247,8 +254,8 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       const state = yield* restoredState(restored);
       // Not merely on the right side of the boundary: at the version the snapshot recorded, which is where the chain was.
       expect(state.protocolVersion).toBe(Option.getOrThrow(peekProtocolVersion(snapshot)));
-      expect(coinValues(state.state)).toEqual([...walletValues]);
-      expect(state.state.publicKeys).toStrictEqual(synced.state.publicKeys);
+      expect(coinValues(eitherCoreStateOf(state))).toEqual([...walletValues]);
+      expect(eitherCoreStateOf(state).publicKeys).toStrictEqual(synced.state.publicKeys);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('restores a snapshot written mid-crossing, and completes it on resume', async () =>

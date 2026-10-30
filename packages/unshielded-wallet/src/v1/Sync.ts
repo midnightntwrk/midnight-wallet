@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type Duration, Effect, type Scope, Stream, Schema, pipe, Either, HashMap, Match, Option } from 'effect';
+import { Effect, type Scope, Stream, Schema, pipe, Either, HashMap, Match, Option } from 'effect';
 import { IndexerLiveness, ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import { CoreWallet } from './CoreWallet.js';
 import { UtxoWithMeta } from './UnshieldedState.js';
@@ -21,8 +21,6 @@ import { V8 as Simulation } from '@midnightntwrk/wallet-sdk-capabilities/simulat
 import {
   DEFAULT_LIVENESS_CONFIGURATION,
   DEFAULT_POLL_INTERVAL,
-  type DefaultSubmissionConfiguration,
-  type LivenessConfiguration,
   type LivenessReads,
   type LivenessReadsConfiguration,
   LivenessServiceImpl,
@@ -44,6 +42,7 @@ import {
   type WalletSyncUpdate,
   WalletSyncUpdateSchema,
 } from './SyncSchema.js';
+import { type DefaultSyncConfiguration, type NodeClientConnection } from '../UnshieldedWalletTypes.js';
 
 export interface SyncService<TState, TUpdate> {
   /**
@@ -116,73 +115,11 @@ export const isBeyondActiveRange = (version: number, activeRange: ProtocolVersio
 export const annotateVersion = (state: CoreWallet, version: number): CoreWallet =>
   CoreWallet.withProtocolVersion(state, ProtocolVersion.ProtocolVersion(BigInt(version)));
 
-export type IndexerClientConnection = {
-  indexerHttpUrl: string;
-  indexerWsUrl?: string;
-  keepAlive?: number;
-};
-
-export type NodeClientConnection = {
-  /** The node's WebSocket RPC endpoint, used only to read the finalized head. */
-  nodeURL: string;
-};
-
-/**
- * The node transactions are submitted through, borrowed from the submission configuration as the default source of a
- * finalized head.
- *
- * @remarks
- *   Every wallet configured to submit already names a node, and demanding that same endpoint a second time would leave
- *   the cross-check switched off for anyone who did not know to opt in.
- *
- *   Taken from `DefaultSubmissionConfiguration` rather than redeclared, so that renaming or retyping the field there
- *   fails to compile here. Declared independently it would merely stop matching, and the check would go quiet — the
- *   class of silent failure this feature exists to prevent.
- */
-type SubmissionNodeFallback = Partial<Pick<DefaultSubmissionConfiguration, 'relayURL'>>;
-
-export type DefaultSyncConfiguration = {
-  indexerClientConnection: IndexerClientConnection;
-  /**
-   * The clock the booking sweep expires against. Defaults to system time; inject one to pin the expiry boundary in a
-   * test, or to follow a simulated chain.
-   */
-  clock?: Clock.Clock;
-  /**
-   * Where to read the node's finalized head, for cross-checking the indexer's reported position.
-   *
-   * @remarks
-   *   Synchronizing needs a node as well as an indexer, and this is where sync says so. Optional only because a wallet
-   *   may run without one, in which case no cross-check happens and the wallet reports {@link IndexerLiveness.Skipped}.
-   *
-   *   A wallet configured for transaction submission need not set it: the endpoint named by `relayURL` is used, so the
-   *   same node is not configured twice. Set this to name the node explicitly — a wallet built without submission
-   *   configuration has no `relayURL` to borrow.
-   */
-  nodeClientConnection?: NodeClientConnection;
-  /**
-   * How far the indexer may drift from the node's finalized head before the difference is reported.
-   *
-   * @remarks
-   *   Defaults to {@link DEFAULT_LIVENESS_CONFIGURATION}, whose tolerances suit a chain producing blocks seconds apart.
-   *   Set this for a chain with a different block time, or to tighten the staleness allowance a caller is willing to
-   *   treat as current.
-   */
-  livenessConfiguration?: LivenessConfiguration;
-  /**
-   * How often to compare the indexer against the node.
-   *
-   * @remarks
-   *   Defaults to {@link DEFAULT_POLL_INTERVAL}. Each poll costs one request to the indexer and one to a node the wallet
-   *   does not own, so shortening this trades load for how quickly a stalled indexer is noticed. Polling faster than
-   *   blocks are produced only re-reads the same block.
-   *
-   *   Polls never overlap: each one is awaited before the next tick is taken. An interval shorter than the time a read
-   *   takes — a read of the node is given ten seconds before it is abandoned — therefore slows the effective cadence to
-   *   the speed of the reads rather than running two at once.
-   */
-  livenessPollInterval?: Duration.DurationInput;
-} & SubmissionNodeFallback;
+export type {
+  DefaultSyncConfiguration,
+  IndexerClientConnection,
+  NodeClientConnection,
+} from '../UnshieldedWalletTypes.js';
 
 export type DefaultSyncContext = {
   transactionHistoryService: TransactionHistoryService;

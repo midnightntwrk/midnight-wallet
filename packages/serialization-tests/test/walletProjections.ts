@@ -10,7 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Either } from 'effect';
+import { type VariantState } from '@midnightntwrk/wallet-sdk-abstractions';
+import { coreStateOf as v1DustCoreStateOf } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import { coreStateOf as v2DustCoreStateOf } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { coreStateOf as v1ShieldedCoreStateOf } from '@midnightntwrk/wallet-sdk-shielded/v1';
+import { coreStateOf as v2ShieldedCoreStateOf } from '@midnightntwrk/wallet-sdk-shielded/v2';
+import { coreStateOf as v1UnshieldedCoreStateOf } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+import { coreStateOf as v2UnshieldedCoreStateOf } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
+import { Either, Option } from 'effect';
 import { firstValueFrom, type Observable } from 'rxjs';
 import { type Fixture } from './fixtures.js';
 
@@ -103,12 +110,7 @@ export const project = (fixture: Fixture, value: (key: string) => unknown): Reco
 export type ShieldedState = {
   readonly balances: Record<string, bigint>;
   readonly availableCoins: readonly { readonly coin: { readonly type: string; readonly value: bigint } }[];
-  readonly state: {
-    readonly networkId: string;
-    // Type cast required because: the ledger's `ZswapLocalState` is not re-exported by this package, and `firstFree`
-    // is the only member read here.
-    readonly state: { readonly firstFree: bigint; readonly pendingSpends: ReadonlyMap<unknown, unknown> };
-  };
+  readonly state: VariantState;
 };
 
 export type UnshieldedState = {
@@ -120,14 +122,30 @@ export type UnshieldedState = {
   readonly pendingCoins: readonly { readonly utxo: { readonly value: bigint } }[];
   readonly address: { readonly hexString: string };
   readonly progress: { readonly appliedId: bigint };
-  readonly state: { readonly networkId: string };
+  readonly state: VariantState;
 };
 
 export type DustState = {
   readonly publicKey: bigint;
   readonly totalCoins: readonly unknown[];
-  readonly state: { readonly networkId: string };
+  readonly state: VariantState;
 };
+
+/**
+ * A restored wallet's core state, read back by whichever variant opened the snapshot.
+ *
+ * The wallet state carries it sealed, because it is one ledger version's objects; the network and the ledger-level
+ * readings below are only reachable through the variant that owns them, which is the route an application would take.
+ */
+const coreOf = <TV1, TV2>(
+  state: Readonly<{ state: VariantState }>,
+  v2: (state: Readonly<{ state: VariantState }>) => Option.Option<TV2>,
+  v1: (state: Readonly<{ state: VariantState }>) => Option.Option<TV1>,
+): TV1 | TV2 => Option.getOrThrow(Option.orElse<TV2, TV1>(v2(state), () => v1(state)));
+
+const shieldedCoreOf = (state: ShieldedState) => coreOf(state, v2ShieldedCoreStateOf, v1ShieldedCoreStateOf);
+const unshieldedCoreOf = (state: UnshieldedState) => coreOf(state, v2UnshieldedCoreStateOf, v1UnshieldedCoreStateOf);
+const dustCoreOf = (state: DustState) => coreOf(state, v2DustCoreStateOf, v1DustCoreStateOf);
 
 /** Coin values of one token, as the fixtures record them. */
 const shieldedValuesOf = (state: ShieldedState, token: unknown): readonly string[] =>
@@ -157,7 +175,7 @@ export const shieldedValue =
   (key: string): unknown => {
     switch (key) {
       case 'networkId':
-        return state.state.networkId;
+        return shieldedCoreOf(state).networkId;
       // The token keys are what the value keys below look up, so asserting them is not bookkeeping: it says the
       // restored wallet still holds a balance under the very token the payload was written with. A token that did not
       // survive the restore reports itself here rather than silently turning every balance under it into zero.
@@ -178,9 +196,9 @@ export const shieldedValue =
       case 'coinCount':
         return state.availableCoins.length;
       case 'firstFree':
-        return String(state.state.state.firstFree);
+        return String(shieldedCoreOf(state).state.firstFree);
       case 'pendingSpendCount':
-        return state.state.state.pendingSpends.size;
+        return shieldedCoreOf(state).state.pendingSpends.size;
       // The field a 1.0.0 snapshot embedded its history in. It is not projected onto the wallet state — nothing in the
       // SDK reads it — so the only honest place to see it is the snapshot the wallet writes back, which is also the
       // write that used to lose it.
@@ -196,7 +214,7 @@ export const unshieldedValue =
   (key: string): unknown => {
     switch (key) {
       case 'networkId':
-        return state.state.networkId;
+        return unshieldedCoreOf(state).networkId;
       case 'nightToken':
       case 'customToken':
         return fixture.expected[key];
@@ -226,7 +244,7 @@ export const dustValue =
   (key: string): unknown => {
     switch (key) {
       case 'networkId':
-        return state.state.networkId;
+        return dustCoreOf(state).networkId;
       case 'publicKey':
         return String(state.publicKey);
       case 'dustUtxoCount':

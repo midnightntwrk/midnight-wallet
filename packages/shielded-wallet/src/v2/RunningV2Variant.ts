@@ -11,8 +11,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import type * as ledger from '@midnightntwrk/ledger-v9';
-import { Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  type Option,
+  Effect,
+  pipe,
+  type Record,
+  Scope,
+  Stream,
+  SubscriptionRef,
+  Schedule,
+  Duration,
+  Sink,
+  Console,
+} from 'effect';
+import { ProtocolVersion, VariantState } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type WalletRuntimeError,
   type Variant,
@@ -91,6 +103,19 @@ export declare namespace RunningV2Variant {
 }
 
 export const V2Tag: unique symbol = Symbol('V2');
+
+/**
+ * This variant's core state, when this variant produced the wallet state it is read from.
+ *
+ * @remarks
+ *   A shielded wallet's state carries its core state sealed, because that state is made of one ledger version's objects.
+ *   This is how the variant — or a test or tool that needs its ledger-level detail — reads it back. A state another
+ *   variant produced gives nothing, since this variant's ledger version could not read it.
+ * @param walletState A state, as a shielded wallet emits it.
+ * @returns This variant's core state, or nothing when another variant produced the state.
+ */
+export const coreStateOf = (walletState: Readonly<{ state: VariantState }>): Option.Option<CoreWallet> =>
+  VariantState.unwrapFor<CoreWallet>(walletState.state, V2Tag);
 
 export type DefaultRunningV2 = RunningV2Variant<
   string,

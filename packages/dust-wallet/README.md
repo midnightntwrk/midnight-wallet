@@ -71,7 +71,7 @@ the empty state a wallet crossing the boundary is handed. From there it syncs by
 
 ```typescript
 dustWallet.state.subscribe((state) => {
-  console.log('Progress:', state.state.progress);
+  console.log('Progress:', state.progress);
   console.log('Balance:', state.state.balance);
   console.log('Dust Address:', state.dustAddress);
 });

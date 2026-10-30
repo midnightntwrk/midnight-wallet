@@ -15,6 +15,7 @@ import {
   type DefaultConfiguration,
   type DefaultDustConfiguration,
   asV8DustParameters,
+  asV9DustParameters,
   CustomForkingDustWallet,
   InMemoryTransactionHistoryStorage,
   WalletEntrySchema,
@@ -80,7 +81,8 @@ const configuration: DefaultConfiguration = {
 // (`makeCrossLedgerMigration`) and every pass after that reads projections; on a chain past the fork since genesis —
 // like the one this runs against — the probe starts it on the projections side from the first block.
 const fastSyncDustWallet = (config: DefaultDustConfiguration) => {
-  const dustParameters = config.dustParameters ?? ledger.LedgerParameters.initialParameters().dust;
+  const rates = config.dustParameters ?? ledger.LedgerParameters.initialParameters().dust;
+  const v9DustParameters = asV9DustParameters(rates);
   const withProbe: DefaultDustConfiguration = {
     ...config,
     chainVersionProbe: config.chainVersionProbe ?? makeIndexerChainVersionProbe(config),
@@ -89,9 +91,9 @@ const fastSyncDustWallet = (config: DefaultDustConfiguration) => {
     withProbe,
     {
       builder: new V1Builder().withDefaults(),
-      // `dustParameters` is a WASM object of whichever ledger produced it, so the ledger-v8 variant is handed the
-      // ledger-v8 rebuild of the same rates rather than the object itself.
-      configuration: { ...config, dustParameters: asV8DustParameters(dustParameters) },
+      // The configured `dustParameters` are plain rates, and each variant is handed its own ledger version's
+      // parameters made from them, since a ledger object belongs to the WASM module that made it.
+      configuration: { ...config, dustParameters: asV8DustParameters(rates) },
     },
     {
       builder: new V2Builder()
@@ -101,8 +103,8 @@ const fastSyncDustWallet = (config: DefaultDustConfiguration) => {
         // one un-chooses the derivation from a seed the defaults had set. This service is started with the same
         // `DustSecretKey` the default one is, and a start from a seed needs the derivation by name on both sides.
         .withStartAuxDefaults()
-        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters })),
-      configuration: { ...config, anonymityLevel: 7 },
+        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters: v9DustParameters })),
+      configuration: { ...config, dustParameters: v9DustParameters, anonymityLevel: 7 },
     },
   );
 };

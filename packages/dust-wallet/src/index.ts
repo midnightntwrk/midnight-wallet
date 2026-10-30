@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 export * from './DustWalletAPI.js';
+export type { BlockData } from './v2/SyncSchema.js';
 export * from './SingleVariantDustWallet.js';
 export * from './DustWallet.js';
 export { UnsupportedSnapshotVersionError, peekProtocolVersion } from './Restore.js';

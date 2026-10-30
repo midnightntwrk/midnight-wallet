@@ -794,9 +794,7 @@ export function CustomForkingUnshieldedWallet<
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<UnshieldedWalletState<string>> {
-      return rx.firstValueFrom(
-        this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
-      );
+      return rx.firstValueFrom(this.state.pipe(rx.filter((state) => state.progress.isCompleteWithin(allowedGap))));
     }
 
     /**

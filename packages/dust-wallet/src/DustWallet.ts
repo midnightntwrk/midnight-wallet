@@ -59,6 +59,7 @@ import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Rest
 import {
   claimableFeePayment,
   type DefaultDustConfiguration,
+  type DustGenerationRates,
   type DustWalletAPI,
   DustWalletState,
 } from './DustWalletAPI.js';
@@ -322,32 +323,13 @@ export interface ForkingDustWalletClass<
 }
 
 /**
- * The rates dust is generated and decays at, as plain data.
- *
- * @remarks
- *   Structurally what both ledger versions' `DustParameters` are — three scalars and nothing else — which is why the
- *   ledger classes remain assignable to this and a caller who already holds one can go on passing it. What it removes
- *   is the reason to obtain one: three numbers do not need a ledger version to express, and asking for a
- *   `LedgerParameters.initialParameters().dust` made an application import a ledger to start a wallet.
- */
-export type DustGenerationRates = Readonly<{
-  /** How much dust one Night generates, at the cap. */
-  nightDustRatio: bigint;
-  /** How fast dust decays once its Night is spent. */
-  generationDecayRate: bigint;
-  /** How long dust survives after its Night is spent. */
-  dustGracePeriodSeconds: bigint;
-}>;
-
-/**
  * The same dust parameters, rebuilt by the ledger-v8.
  *
  * @remarks
  *   Dust's own departure from shielded, and the one place this wallet has to translate anything. `DustLocalState` is
  *   parameterised, so an empty ledger-v8 state cannot be built without a ledger-v8 `DustParameters` — and the
- *   application hands over a ledger-v9 one, because that is the ledger version this wallet's public API speaks. What
- *   crosses is therefore the three numbers, not the object: they are plain `bigint`s, and the ledger-v8 class takes
- *   exactly them.
+ *   application hands over plain rates, because the wallet's public API speaks neither ledger version. What crosses is
+ *   therefore the three numbers, not an object: they are plain `bigint`s, and the ledger-v8 class takes exactly them.
  * @param parameters The rates to express.
  * @returns The same generation and decay rates, as a ledger-v8 `DustParameters`.
  */
@@ -1163,9 +1145,7 @@ export function CustomForkingDustWallet<
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<DustWalletState<string>> {
-      return rx.firstValueFrom(
-        this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
-      );
+      return rx.firstValueFrom(this.state.pipe(rx.filter((state) => state.progress.isCompleteWithin(allowedGap))));
     }
 
     async waitForGeneratedDust(
@@ -1213,8 +1193,8 @@ export type DustWalletClass = ForkingDustWalletClass<V1SyncUpdate, V2SyncUpdate,
  * @remarks
  *   Both variants read the chain through the indexer's dust event subscription and record transaction history in the same
  *   storage. Each is built from the same application configuration, because what they ask for happens to coincide —
- *   with one exception the type system cannot police: `dustParameters` names a ledger type, and the two ledgers'
- *   `DustParameters` are structurally identical, so it is passed only to the variant it belongs to.
+ *   with one exception: `dustParameters` is plain rates, and each variant is handed its own ledger version's
+ *   `DustParameters` made from them.
  *
  *   **The V1 variant syncs by event replay only.** The projections fast-sync path is a ledger-v9 capability: it needs
  *   four `DustLocalState` APIs that no published ledger-v8 has. That is a permanent property of the V1 variant, not a
@@ -1236,7 +1216,8 @@ export type DustWalletClass = ForkingDustWalletClass<V1SyncUpdate, V2SyncUpdate,
  * @returns The wallet class.
  */
 export function DustWallet(configuration: DefaultDustConfiguration): DustWalletClass {
-  const dustParameters = configuration.dustParameters ?? ledgerV9.LedgerParameters.initialParameters().dust;
+  const rates = configuration.dustParameters ?? ledgerV9.LedgerParameters.initialParameters().dust;
+  const v9DustParameters = asV9DustParameters(rates);
   const withProbes: DefaultDustConfiguration & ForkingDustConfiguration = {
     ...configuration,
     chainVersionProbe: configuration.chainVersionProbe ?? makeIndexerChainVersionProbe(configuration),
@@ -1251,15 +1232,15 @@ export function DustWallet(configuration: DefaultDustConfiguration): DustWalletC
     withProbes,
     {
       builder: new V1Builder().withDefaults(),
-      // The one field that cannot be shared: `dustParameters` is a WASM object of whichever ledger module produced it,
-      // so the V1 variant is handed the ledger-v8 rebuild of the same rates rather than the object itself.
-      configuration: { ...configuration, dustParameters: asV8DustParameters(dustParameters) },
+      // The one field not handed over as it is: a variant's `dustParameters` is a WASM object of its own ledger
+      // module, so each is given its own ledger version's parameters made from the configured rates.
+      configuration: { ...configuration, dustParameters: asV8DustParameters(rates) },
     },
     {
       builder: new V2Builder()
         .withDefaults()
-        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters })),
-      configuration,
+        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters: v9DustParameters })),
+      configuration: { ...configuration, dustParameters: v9DustParameters },
     },
   );
 }

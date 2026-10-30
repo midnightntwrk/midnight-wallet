@@ -10,44 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import {
-  type DustInitialNonce,
-  type DustNullifier,
-  type DustNonce,
-  type DustPublicKey,
-  type Utxo,
-} from '@midnight-ntwrk/ledger-v8';
+import { type DustNullifier } from '@midnight-ntwrk/ledger-v8';
+import { type Dust, type DustInitialNonce, type DustPublicKey } from '../../DustWalletTypes.js';
 
-export type Dust = {
-  initialValue: bigint;
-  owner: DustPublicKey;
-  nonce: DustNonce;
-  seq: number;
-  ctime: Date;
-  backingNight: DustInitialNonce;
-  mtIndex: bigint;
-};
+export type { Dust, DustFullInfo, DustGenerationDetails, UtxoWithMeta } from '../../DustWalletTypes.js';
 
 export type DustWithNullifier = Dust & {
   nullifier: DustNullifier;
-};
-
-export type DustFullInfo = DustGenerationDetails & {
-  token: Dust;
-};
-
-/** Details of Dust generation/decay */
-export type DustGenerationDetails = {
-  /** When the backing Night UTxO was spent */
-  dtime: Date | undefined;
-  /** Maximum capacity (in Specks) `gen.value * night_dust_ratio` */
-  maxCap: bigint;
-  /** When the maximum capacity is reached. `ctime + timeToCapSeconds` */
-  maxCapReachedAt: Date;
-  /** Current amount of Dust available (in Specks) */
-  generatedNow: bigint;
-  /** The slope of generation and decay for this specific Dust UTxO (`gen.value * generation_decay_rate`) */
-  rate: bigint;
 };
 
 export type DustGenerationInfo = {
@@ -56,5 +25,3 @@ export type DustGenerationInfo = {
   nonce: DustInitialNonce;
   dtime: Date | undefined;
 };
-
-export type UtxoWithMeta = Utxo & { ctime: Date; registeredForDustGeneration: boolean };

@@ -80,7 +80,7 @@ await shieldedWallet.start(keys);
 
 ```typescript
 wallet.state.subscribe((state) => {
-  console.log('Progress:', state.state.progress);
+  console.log('Progress:', state.progress);
   console.log('Coins:', state.state.coins);
 });
 ```

@@ -11,41 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { bookingDeadline, type CoreWallet } from './CoreWallet.js';
-import type * as ledger from '@midnightntwrk/ledger-v9';
 import { pipe, Array, Option } from 'effect';
 import { RecordOps } from '@midnightntwrk/wallet-sdk-utilities';
 
-export type AvailableCoin = {
-  coin: ledger.QualifiedShieldedCoinInfo;
-  commitment: ledger.CoinCommitment;
-  nullifier: ledger.Nullifier;
-};
+import {
+  type AvailableCoin,
+  type Balances,
+  type Coin,
+  type PendingCoin,
+  type ReservedCoin,
+} from '../ShieldedWalletTypes.js';
 
-export type PendingCoin = {
-  coin: ledger.ShieldedCoinInfo;
-  ttl: Date | undefined;
-  commitment: ledger.CoinCommitment;
-  nullifier: ledger.Nullifier;
-};
-
-export type Coin = AvailableCoin | PendingCoin;
-
-/**
- * A coin booked for a transaction that has not settled, so it is in the wallet but not spendable.
- *
- * @remarks
- *   Not to be confused with {@link PendingCoin}, which is a coin the wallet expects to receive. `reservedSince` is when
- *   sync first saw the booking and `releasableAfter` when the wallet will release it if nothing settles it first; both
- *   are `undefined` until sync has seen it.
- */
-export type ReservedCoin = {
-  coin: ledger.QualifiedShieldedCoinInfo;
-  nullifier: ledger.Nullifier;
-  reservedSince: Date | undefined;
-  releasableAfter: Date | undefined;
-};
-
-export type Balances = Record<ledger.RawTokenType, bigint>;
+export type { AvailableCoin, Balances, Coin, PendingCoin, ReservedCoin } from '../ShieldedWalletTypes.js';
 
 export type CoinsAndBalancesCapability<TState> = {
   getAvailableBalances(state: TState): Balances;

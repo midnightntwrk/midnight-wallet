@@ -31,9 +31,9 @@ const facadeState = (complete: { shielded: boolean; unshielded: boolean; dust: b
   new FacadeState(
     // Type cast required because: `isSynced` reads nothing else from these states, and a real one needs a running
     // wallet and the ledger WASM runtime.
-    { state: progressing(complete.shielded) } as unknown as ShieldedWalletState,
+    progressing(complete.shielded) as unknown as ShieldedWalletState,
     progressing(complete.unshielded) as unknown as UnshieldedWalletState,
-    { state: progressing(complete.dust) } as unknown as DustWalletState,
+    progressing(complete.dust) as unknown as DustWalletState,
     PendingTransactions.empty(),
   );
 

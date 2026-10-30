@@ -10,41 +10,29 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Duration, Array as EArray, Effect, Schedule, Schema } from 'effect';
 import { TransactionHistoryDetail } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { BlocklessFinalizedEntryError, TransactionHistoryError } from './WalletError.js';
 
-export const DustUtxoInfoSchema = Schema.Struct({
-  initialValue: Schema.BigInt,
-  nonce: Schema.BigInt,
-  seq: Schema.Number,
-  backingNight: Schema.String,
-  mtIndex: Schema.BigInt,
-});
+import {
+  type DustSectionSchema,
+  DustUtxoInfoSchema,
+  type DustHistoryStorage,
+  type DustTransactionHistoryEntry,
+} from '../DustWalletTypes.js';
 
-export const DustSectionSchema = Schema.Struct({
-  receivedUtxos: Schema.Array(DustUtxoInfoSchema),
-  spentUtxos: Schema.Array(DustUtxoInfoSchema),
-});
+export {
+  DustSectionSchema,
+  DustTransactionHistoryEntrySchema,
+  DustUtxoInfoSchema,
+  type DustHistoryStorage,
+  type DustTransactionHistoryEntry,
+} from '../DustWalletTypes.js';
 
 type DustSection = Schema.Schema.Type<typeof DustSectionSchema>;
-
-/**
- * Dust entry schema. Extends the common entry shape with an optional `dust` section. Tightening — required `dust` plus
- * required `protocolVersion`/`status`/`fees` — happens at the writer-input type, not on the stored shape.
- */
-export const DustTransactionHistoryEntrySchema = TransactionHistoryStorage.extendEntrySchema({
-  dust: Schema.optional(DustSectionSchema),
-});
-
-export type DustTransactionHistoryEntry = Schema.Schema.Type<typeof DustTransactionHistoryEntrySchema>;
-
-export type DustHistoryStorage =
-  TransactionHistoryStorage.TransactionHistoryReader<TransactionHistoryStorage.TransactionHistoryEntryWithHash> &
-    TransactionHistoryStorage.TransactionHistoryWriter<DustTransactionHistoryEntry>;
 
 /**
  * Writer input for dust's `gotFinalized`. The stored shape leaves most fields optional, but at write time we know

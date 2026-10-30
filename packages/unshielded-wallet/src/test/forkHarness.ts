@@ -33,6 +33,7 @@ import {
   NetworkId,
   type ProtocolState,
   type ProtocolVersion,
+  type VariantState,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
@@ -45,12 +46,14 @@ import {
 import { type PublicKey } from '../KeyStore.js';
 import { CustomUnshieldedWallet, type CustomizedUnshieldedWallet } from '../SingleVariantUnshieldedWallet.js';
 import { type CoreWallet as V1CoreWallet } from '../v1/CoreWallet.js';
+import { coreStateOf as v1CoreStateOf } from '../v1/RunningV1Variant.js';
 import * as V1Migration from '../v1/Migration.js';
 import * as V1Sync from '../v1/Sync.js';
 import { type SyncUpdate as V1Update } from '../v1/SyncSchema.js';
 import { type TransactionHistoryService as V1History } from '../v1/TransactionHistory.js';
 import { V1Builder } from '../v1/V1Builder.js';
 import { type CoreWallet as V2CoreWallet } from '../v2/CoreWallet.js';
+import { coreStateOf as v2CoreStateOf } from '../v2/RunningV2Variant.js';
 import * as V2Migration from '../v2/Migration.js';
 import * as V2Sync from '../v2/Sync.js';
 import { type IndexerLivenessUpdate, type SyncUpdate as V2Update } from '../v2/SyncSchema.js';
@@ -137,6 +140,10 @@ export const utxosOf = (wallet: V1CoreWallet | V2CoreWallet): readonly CarriedUt
  */
 export const bookedUtxosOf = (wallet: V1CoreWallet | V2CoreWallet): readonly CarriedUtxo[] =>
   sortedCarried(Array.from(HashMap.values(wallet.state.pendingUtxos), ({ utxo }) => plainUtxo(utxo)));
+
+/** The core state an unshielded wallet state carries, read back by whichever variant produced it. */
+export const eitherCoreStateOf = (walletState: Readonly<{ state: VariantState }>): V1CoreWallet | V2CoreWallet =>
+  Option.getOrThrow(Option.orElse(v2CoreStateOf(walletState), () => v1CoreStateOf(walletState)));
 
 /** Wraps the real cross-ledger migration so the test can see exactly what crossed. */
 const capturingCrossLedgerMigration = (

@@ -19,50 +19,36 @@
  *   (`DustWallet.ts`), and kept apart from both so that neither has to import the other to speak the same API. Nothing
  *   here knows how many variants are running: a state emission arrives already bound to the capabilities of the variant
  *   that produced it, and everything below that binding is plain data.
+ *
+ *   Nor does anything here name a ledger version. The data it speaks is declared in `DustWalletTypes.ts`, which both
+ *   variants are stated in, and a variant's own core state travels sealed, readable only by that variant.
  */
 import {
-  type DustParameters,
-  type DustPublicKey,
-  type Signature,
-  type SignatureVerifyingKey,
-} from '@midnightntwrk/ledger-v9';
-import {
   type AnyTx,
+  type NetworkId,
   type ProtocolState,
   type ProtocolVersion,
   type SyncProgress,
   type UnprovenTx,
+  VariantState,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
+import { type Signing } from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import { type Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { type Duration } from 'effect';
 import type * as rx from 'rxjs';
-import { type CoreWallet as V1CoreWallet } from './v1/CoreWallet.js';
-import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './v2/CoinsAndBalances.js';
-import { type CoreWallet } from './v2/CoreWallet.js';
-import { type KeysCapability } from './v2/Keys.js';
-import { type SerializationCapability } from './v2/Serialization.js';
-import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
-import { type DustHistoryStorage, type TransactionHistoryService } from './v2/TransactionHistory.js';
-import { type DustFullInfo, type UtxoWithMeta } from './v2/types/Dust.js';
-import { type NetworkId, type TotalCostParameters } from './v2/types/index.js';
-
-export type { BlockData } from './v2/SyncSchema.js';
-
-export type DustWalletCapabilities<TSerialized = string> = {
-  serialization: SerializationCapability<CoreWallet, null, TSerialized>;
-  coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
-  keys: KeysCapability<CoreWallet>;
-};
-
-export type DustWalletServices = {
-  transactionHistory: TransactionHistoryService;
-};
-
-/** The core state of whichever dust variant produced an emission. */
-export type DustCoreState = V1CoreWallet | CoreWallet;
+import {
+  type Balance,
+  type DustFullInfo,
+  type DustHistoryStorage,
+  type DustPublicKey,
+  type NightUtxoSplitForDustRegistration,
+  type TotalCostParameters,
+  type UtxoWithFullDustDetails,
+  type UtxoWithMeta,
+} from './DustWalletTypes.js';
 
 /**
  * Everything a state emission projects, already bound to the variant that produced it.
@@ -75,6 +61,7 @@ export type DustCoreState = V1CoreWallet | CoreWallet;
  *   `bigint`, times are `Date`, keys and nonces are `bigint`/`string`, and the address is the SDK's own type.
  */
 type DustProjections<TSerialized> = Readonly<{
+  progress: () => SyncProgress.SyncProgress;
   totalCoins: () => readonly DustFullInfo[];
   availableCoins: () => readonly DustFullInfo[];
   pendingCoins: () => readonly DustFullInfo[];
@@ -92,11 +79,32 @@ type DustProjections<TSerialized> = Readonly<{
   serialize: () => TSerialized;
 }>;
 
-/** The capability set a variant exposes for reading and serializing its own state. */
-type DustStateCapabilities<TState, TSerialized> = Readonly<{
-  serialization: SerializationCapability<TState, null, TSerialized>;
-  coinsAndBalances: CoinsAndBalancesCapability<TState>;
-  keys: KeysCapability<TState>;
+/**
+ * What a variant reads its own state through, stated in the API's types.
+ *
+ * @remarks
+ *   The part of a variant's capability set the wallet state projects, and no more. Each variant's capabilities are typed
+ *   in its ledger version's terms; they fit this because the data they report is the plain data this API declares,
+ *   which is what `fromVariant` checks at every call.
+ */
+type DustStateReaders<TState, TSerialized> = Readonly<{
+  serialization: Readonly<{ serialize(state: TState): TSerialized }>;
+  coinsAndBalances: Readonly<{
+    getTotalCoins(state: TState): readonly DustFullInfo[];
+    getAvailableCoins(state: TState): readonly DustFullInfo[];
+    getPendingCoins(state: TState): readonly DustFullInfo[];
+    getWalletBalance(state: TState, time: Date): Balance;
+    estimateDustGeneration(
+      state: TState,
+      nightUtxos: ReadonlyArray<UtxoWithMeta>,
+      currentTime: Date,
+    ): ReadonlyArray<UtxoWithFullDustDetails>;
+    splitNightUtxos(nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>): {
+      guaranteed: ReadonlyArray<UtxoWithFullDustDetails>;
+      fallible: ReadonlyArray<UtxoWithFullDustDetails>;
+    };
+  }>;
+  keys: Readonly<{ getPublicKey(state: TState): DustPublicKey; getAddress(state: TState): DustAddress }>;
 }>;
 
 export class DustWalletState<TSerialized = string> {
@@ -105,13 +113,18 @@ export class DustWalletState<TSerialized = string> {
    *
    * @remarks
    *   Call this inside a branch that has narrowed on the emission's `variantTag`, so `variant` and `state` are known to
-   *   belong together. It is generic over the state type precisely so that pairing is checked.
+   *   belong together. It is generic over the state type precisely so that pairing is checked. The state itself is
+   *   sealed under that tag, so the producing variant is the only one that can read it back.
    */
-  static readonly fromVariant = <TState, TSerialized = string>(
-    variant: DustStateCapabilities<TState, TSerialized>,
+  static readonly fromVariant = <
+    TState extends Readonly<{ progress: SyncProgress.SyncProgress }>,
+    TSerialized = string,
+  >(
+    variant: DustStateReaders<TState, TSerialized>,
     state: ProtocolState.ProtocolState<TState>,
   ): DustWalletState<TSerialized> =>
-    new DustWalletState<TSerialized>(state.version, state.state as DustCoreState, {
+    new DustWalletState<TSerialized>(state.version, VariantState.seal(state.variantTag, state.state), {
+      progress: () => state.state.progress,
       totalCoins: () => variant.coinsAndBalances.getTotalCoins(state.state),
       availableCoins: () => variant.coinsAndBalances.getAvailableCoins(state.state),
       pendingCoins: () => variant.coinsAndBalances.getPendingCoins(state.state),
@@ -125,7 +138,16 @@ export class DustWalletState<TSerialized = string> {
     });
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
-  readonly state: DustCoreState;
+
+  /**
+   * The producing variant's own state, sealed.
+   *
+   * @remarks
+   *   It is made of that variant's ledger version's objects, so only that variant reads it: `coreStateOf` from the `/v1`
+   *   or `/v2` subpath hands it over when that variant produced this emission, and nothing otherwise.
+   */
+  readonly state: VariantState;
+
   readonly #projections: DustProjections<TSerialized>;
 
   get totalCoins(): readonly DustFullInfo[] {
@@ -140,7 +162,7 @@ export class DustWalletState<TSerialized = string> {
     return this.#projections.pendingCoins();
   }
 
-  get publicKey(): DustPublicKey {
+  get publicKey(): bigint {
     return this.#projections.publicKey();
   }
 
@@ -149,12 +171,12 @@ export class DustWalletState<TSerialized = string> {
   }
 
   get progress(): SyncProgress.SyncProgress {
-    return this.state.progress;
+    return this.#projections.progress();
   }
 
   constructor(
     protocolVersion: ProtocolVersion.ProtocolVersion,
-    state: DustCoreState,
+    state: VariantState,
     projections: DustProjections<TSerialized>,
   ) {
     this.protocolVersion = protocolVersion;
@@ -268,7 +290,7 @@ export type DustWalletAPI<TKeys = never, TSerialized = string> = {
     currentTime: Date | undefined,
     ttl: Date,
     nightUtxos: Array<UtxoWithMeta>,
-    nightVerifyingKey: SignatureVerifyingKey,
+    nightVerifyingKey: Signing.SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
   ): Promise<UnprovenTx>;
 
@@ -281,12 +303,12 @@ export type DustWalletAPI<TKeys = never, TSerialized = string> = {
   attachDustRegistration(
     transaction: UnprovenTx,
     currentTime: Date,
-    nightVerifyingKey: SignatureVerifyingKey,
+    nightVerifyingKey: Signing.SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
     feePayment: bigint,
   ): Promise<UnprovenTx>;
 
-  addDustGenerationSignature(transaction: UnprovenTx, signature: Signature): Promise<UnprovenTx>;
+  addDustGenerationSignature(transaction: UnprovenTx, signature: Signing.Signature): Promise<UnprovenTx>;
 
   /**
    * Attaches a signature to the DustRegistration in segment 1's `dustActions` only. Unlike
@@ -294,7 +316,7 @@ export type DustWalletAPI<TKeys = never, TSerialized = string> = {
    * via the unshielded-wallet signing path. Use this when the caller orchestrates signing across both packages (e.g.
    * the facade's `signRecipe`).
    */
-  addDustRegistrationSignature(transaction: UnprovenTx, signature: Signature): Promise<UnprovenTx>;
+  addDustRegistrationSignature(transaction: UnprovenTx, signature: Signing.Signature): Promise<UnprovenTx>;
 
   calculateFee(transactions: ReadonlyArray<AnyTx>): Promise<bigint>;
 
@@ -313,12 +335,16 @@ export type DustWalletAPI<TKeys = never, TSerialized = string> = {
    *   The block data returned is the block the fee was priced against, stated in the terms every ledger version reports
    *   identically — the parameters, the height, and the version they were read at. Each variant's own `BlockData`
    *   carries dust index and root fields besides, which are the variant's business and not a caller's.
+   *
+   *   The parameters are the pricing variant's own ledger object, of whichever ledger version that is, and so are
+   *   `unknown` here: a caller that needs them checks which ledger version's object it holds, and `protocolVersion`
+   *   says which to expect.
    */
   balanceTransactions(
     transactions: ReadonlyArray<AnyTx>,
     ttl: Date,
     currentTime?: Date,
-  ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData }>;
+  ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData<unknown> }>;
 
   serializeState(): Promise<TSerialized>;
 
@@ -391,6 +417,24 @@ export type DustWalletAPI<TKeys = never, TSerialized = string> = {
 };
 
 /**
+ * The rates dust is generated and decays at, as plain data.
+ *
+ * @remarks
+ *   Structurally what both ledger versions' `DustParameters` are — three scalars and nothing else — which is why the
+ *   ledger classes remain assignable to this and a caller who already holds one can go on passing it. What it removes
+ *   is the reason to obtain one: three numbers do not need a ledger version to express, and asking for a
+ *   `LedgerParameters.initialParameters().dust` made an application import a ledger to start a wallet.
+ */
+export type DustGenerationRates = Readonly<{
+  /** How much dust one Night generates, at the cap. */
+  nightDustRatio: bigint;
+  /** How fast dust decays once its Night is spent. */
+  generationDecayRate: bigint;
+  /** How long dust survives after its Night is spent. */
+  dustGracePeriodSeconds: bigint;
+}>;
+
+/**
  * The configuration a default {@link DustWallet} is built from.
  *
  * @remarks
@@ -398,14 +442,14 @@ export type DustWalletAPI<TKeys = never, TSerialized = string> = {
  *   built from more than one variant, so no single variant's configuration can be the wallet's public contract: the
  *   package states what it asks an application for, and maps it onto whichever variants it registers.
  *
- *   `dustParameters` is the one field here that names a ledger type. It is version-agnostic only because the two ledgers'
- *   `DustParameters` are structurally identical; `configuration.test.ts` asserts that, so a divergence surfaces as a
- *   compile error here instead of as a wallet that cannot be built for one of its variants.
+ *   `dustParameters` is the one field a variant is not handed as it is. It is plain rates here, and each variant is built
+ *   with its own ledger version's `DustParameters` made from them, since a ledger object belongs to the WASM module
+ *   that made it. Left unset, the rates are ledger-v9's initial ones.
  */
 export type DefaultDustConfiguration = {
-  networkId: NetworkId;
+  networkId: NetworkId.NetworkId;
   costParameters: TotalCostParameters;
-  dustParameters?: DustParameters;
+  dustParameters?: DustGenerationRates;
   txHistoryStorage: DustHistoryStorage;
   indexerClientConnection: { indexerHttpUrl: string };
   transactionDetailsRetryWindow?: Duration.DurationInput;

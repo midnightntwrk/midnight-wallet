@@ -15,7 +15,7 @@ import { LedgerParameters } from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Effect, Either, pipe } from 'effect';
+import { Effect, Either, Option, pipe } from 'effect';
 import { LedgerParametersCodec } from '../codecs/index.js';
 import { getLastBlock, type Simulator } from '../simulation/index.js';
 import type { AnyLedgerParameters, BlockData } from './validationService.js';
@@ -110,6 +110,24 @@ export const blockDataFrom = (
       timestamp: new Date(block.timestamp),
     })),
   );
+
+/**
+ * Reads block data whose parameters arrived untyped back as one ledger version's.
+ *
+ * @remarks
+ *   A wallet that priced a fee hands back the block it priced against with its parameters as `unknown`, because they are
+ *   the pricing variant's own object and its API names no ledger version. Validation needs them typed, so this asks the
+ *   object itself which ledger version made it; parameters of neither are refused rather than passed on, and the caller
+ *   validates against a block it fetches.
+ * @param blockData The block data, with parameters of unknown type.
+ * @returns The same block data with its parameters typed, or nothing when they are neither ledger version's.
+ */
+export const withLedgerParameters = (blockData: BlockData<unknown>): Option.Option<BlockData<AnyLedgerParameters>> => {
+  const { ledgerParameters } = blockData;
+  return ledgerParameters instanceof LedgerParameters || ledgerParameters instanceof V8LedgerParameters
+    ? Option.some({ ...blockData, ledgerParameters })
+    : Option.none();
+};
 
 /**
  * Builds a `BlockDataFetcher` that queries the indexer over HTTP for the latest block.

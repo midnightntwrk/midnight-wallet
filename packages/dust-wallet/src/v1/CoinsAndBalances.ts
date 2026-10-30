@@ -24,22 +24,14 @@ import {
   type DustFullInfo,
   type UtxoWithMeta,
 } from './types/Dust.js';
+import { type Balance, type UtxoWithFullDustDetails } from '../DustWalletTypes.js';
 
-export type Balance = bigint;
+export type { Balance, UtxoWithFullDustDetails } from '../DustWalletTypes.js';
 
 export type CoinWithValue<TToken> = {
   token: TToken;
   value: Balance;
 };
-
-/**
- * Type describing a Night UTxO together with details of estimated Dust generation. It is meant to be primarily used for
- * fee estimation of Dust registration transaction
- */
-export type UtxoWithFullDustDetails = Readonly<{
-  utxo: UtxoWithMeta;
-  dust: DustGenerationDetails;
-}>;
 
 export type CoinSelection = <TCoin extends CoinRecipe>(coins: readonly TCoin[]) => TCoin | undefined;
 
