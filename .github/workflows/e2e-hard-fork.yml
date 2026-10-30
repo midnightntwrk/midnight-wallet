@@ -75,8 +75,7 @@ env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   # PACKAGES_READ, not PACKAGES_WRITE: this lane only ever reads — `yarn install` of the @midnight-ntwrk scoped packages
   # from the GitHub npm registry, and `docker pull` of the node/indexer/proof-server images from ghcr. It publishes
-  # nothing. ci.yml's build and e2e-smoke jobs do the same two things with this token, so it is known to be sufficient;
-  # the nightly's PACKAGES_WRITE is more than the job needs.
+  # nothing. ci.yml's build and e2e-smoke jobs do the same two things with this token, so it is known to be sufficient.
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
   NETWORK: undeployed
   APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
