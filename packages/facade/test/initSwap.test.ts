@@ -23,7 +23,6 @@ import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { Effect, Either } from 'effect';
-import * as rx from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type CombinedSwapInputs,
@@ -39,6 +38,7 @@ import {
   createV8MockProvingService,
   deriveWalletKeys,
   makeSimulatorFacade,
+  registerForDust,
   SilentPendingTransactions,
   tokenValue,
   waitForShieldedCoins,
@@ -255,18 +255,8 @@ describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
       await waitForShieldedCoins(facade).pipe(Effect.runPromise);
       await waitForUnshieldedBalance(facade, nightTokenType, 1n).pipe(Effect.runPromise);
 
-      // Dust to pay with: let the Night accrue some, register it (paying from what it accrued), wait to see the Dust.
-      await env.simulator.fastForward(10_000n).pipe(Effect.runPromise);
-      const { unshielded } = await rx.firstValueFrom(
-        facade.state().pipe(rx.filter((state) => state.unshielded.availableCoins.length > 0)),
-      );
-      const registration = await facade.registerNightUtxosForDustGeneration(
-        unshielded.availableCoins.filter((coin) => coin.utxo.type === nightTokenType),
-        KEYS.signatureVerifyingKey,
-        KEYS.unshieldedKeystore.signDataAsync,
-      );
-      await facade.submitTransaction(await facade.finalizeRecipe(registration));
-      await rx.firstValueFrom(facade.state().pipe(rx.filter((state) => state.dust.availableCoins.length > 0)));
+      // Dust to pay the fee with.
+      await registerForDust(facade, KEYS, env.simulator).pipe(Effect.runPromise);
 
       const simulatorTime = await env.simulator.query((state) => state.currentTime).pipe(Effect.runPromise);
       const ttl = new Date(simulatorTime.getTime() + 60 * 60 * 1000);
