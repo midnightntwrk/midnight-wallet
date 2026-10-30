@@ -16,7 +16,7 @@ import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractio
 import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
 import { ArrayOps, DateOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { Array as Arr, Cause, Effect, Exit, HashMap, Option, pipe, Record as Rec } from 'effect';
+import { Array as Arr, Cause, Effect, Exit, HashMap, Number as ENumber, Option, pipe, Record as Rec } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, PublicKey } from '../KeyStore.js';
@@ -569,6 +569,75 @@ describe('Unshielded wallet transacting', () => {
         .pipe(EitherOps.getOrThrowRight);
 
       expect(error).toBeInstanceOf(TransactingError);
+    });
+  });
+
+  // A partial success applied every guaranteed offer (all in segment 0) and every fallible segment it does not list as
+  // failed; the fallible offer of the intent at segment s ran in segment s. Only the coins those failed fallible offers
+  // spent are still the wallet's to spend, so only they may leave pending.
+  describe('revertFailedSegments', () => {
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    const ttl = DateOps.addSeconds(new Date(), 1800);
+
+    const idOf = (coin: UtxoWithMeta): string => `${coin.utxo.intentHash}#${coin.utxo.outputNo}`;
+    const isAvailable = (wallet: CoreWallet, coin: UtxoWithMeta): boolean =>
+      HashMap.has(wallet.state.availableUtxos, idOf(coin));
+    const isPending = (wallet: CoreWallet, coin: UtxoWithMeta): boolean =>
+      HashMap.has(wallet.state.pendingUtxos, idOf(coin));
+
+    it('should release the coin a failed fallible offer spent and keep its guaranteed offer coin pending, so a coin spent in segment 0 is never offered again', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(2);
+      const [guaranteedCoin, fallibleCoin] = utxos;
+      const { newState: booked, transaction } = transacting
+        .rotateUtxos(wallet, [guaranteedCoin], [fallibleCoin], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      // The single intent sits at segment 1, so both coins start out pending.
+      expect(Arr.fromIterable(transaction.intents!.keys())).toEqual([1]);
+      expect(isPending(booked, guaranteedCoin) && isPending(booked, fallibleCoin)).toBe(true);
+
+      const reverted = transacting.revertFailedSegments(booked, transaction, [1]).pipe(EitherOps.getOrThrowLeft);
+
+      expect(isAvailable(reverted, fallibleCoin)).toBe(true);
+      expect(isPending(reverted, fallibleCoin)).toBe(false);
+      expect(isPending(reverted, guaranteedCoin)).toBe(true);
+      expect(isAvailable(reverted, guaranteedCoin)).toBe(false);
+    });
+
+    it('should release only the coins of the listed failed segments, because a fallible segment not listed was applied', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(2);
+      const [segmentOneCoin, segmentTwoCoin] = utxos;
+      const { newState: afterFirst, transaction: first } = transacting
+        .rotateUtxos(wallet, [], [segmentOneCoin], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+      const { newState: booked, transaction: second } = transacting
+        .rotateUtxos(afterFirst, [], [segmentTwoCoin], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+      const transaction = first.addIntent({ tag: 'specific', value: 2 }, second.intents!.get(1));
+
+      expect(Arr.sort(Arr.fromIterable(transaction.intents!.keys()), ENumber.Order)).toEqual([1, 2]);
+      expect(isPending(booked, segmentOneCoin) && isPending(booked, segmentTwoCoin)).toBe(true);
+
+      const reverted = transacting.revertFailedSegments(booked, transaction, [2]).pipe(EitherOps.getOrThrowLeft);
+
+      expect(isAvailable(reverted, segmentTwoCoin)).toBe(true);
+      expect(isPending(reverted, segmentTwoCoin)).toBe(false);
+      expect(isPending(reverted, segmentOneCoin)).toBe(true);
+      expect(isAvailable(reverted, segmentOneCoin)).toBe(false);
+    });
+
+    it('should release nothing when no segment failed, because every coin the transaction spent was applied', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(2);
+      const [guaranteedCoin, fallibleCoin] = utxos;
+      const { newState: booked, transaction } = transacting
+        .rotateUtxos(wallet, [guaranteedCoin], [fallibleCoin], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const reverted = transacting.revertFailedSegments(booked, transaction, []).pipe(EitherOps.getOrThrowLeft);
+
+      expect(isPending(reverted, guaranteedCoin)).toBe(true);
+      expect(isPending(reverted, fallibleCoin)).toBe(true);
+      expect(HashMap.size(reverted.state.availableUtxos)).toBe(0);
     });
   });
 

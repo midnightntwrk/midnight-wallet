@@ -13,6 +13,7 @@
 import {
   type Bindingish,
   DustLocalState,
+  type DustNonce,
   type DustNullifier,
   type DustParameters,
   type DustPublicKey,
@@ -22,9 +23,9 @@ import {
   type Signaturish,
   type Transaction,
   type Event,
+  updatedValue,
 } from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion, type SnapshotFormat, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
-import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Array as Arr, HashMap, Option, pipe } from 'effect';
 import { type Dust, type DustWithNullifier } from './types/Dust.js';
 import { type CoinWithValue } from './CoinsAndBalances.js';
@@ -152,15 +153,65 @@ export const CoreWallet = {
     // TODO: replace currentTime with `updatedState.syncTime` introduced in ledger-6.2.0-rc.1
     const stateWithChanges = wallet.state.replayEventsWithChanges(secretKey, events);
     const updatedState = stateWithChanges.state.processTtls(currentTime);
-    const availableNonces = updatedState.utxos.map((utxo) => utxo.nonce);
     return [
       {
         ...wallet,
         state: updatedState,
-        pendingDust: wallet.pendingDust.filter((t) => availableNonces.includes(t.nonce)),
+        pendingDust: CoreWallet.settlePendingDust(
+          wallet.pendingDust,
+          stateWithChanges.state,
+          updatedState,
+          stateWithChanges.changes.flatMap((change) => change.spentUtxos.map((utxo) => utxo.nonce)),
+          currentTime,
+        ),
       },
       stateWithChanges.changes,
     ];
+  },
+
+  /**
+   * The pending coins still held after a TTL pass at `time` took the state from `beforeTtls` to `afterTtls`.
+   *
+   * @remarks
+   *   A coin settles when the chain spends it, when its lock runs out and it is back among the unlocked utxos, or when
+   *   the pass drops it as worth nothing. That last test mirrors the ledger's own: valued on the state before the pass,
+   *   with time counted in whole seconds, so a coin is never dropped within the second it was created.
+   * @example
+   *   ```ts
+   *   const afterTtls = beforeTtls.processTtls(time);
+   *   const pendingDust = CoreWallet.settlePendingDust(wallet.pendingDust, beforeTtls, afterTtls, spentNonces, time);
+   *   ```;
+   *
+   * @param pendingDust The coins pending transactions have spent, as held before the sync.
+   * @param beforeTtls The state with the sync's events applied, before the TTL pass.
+   * @param afterTtls The state after the TTL pass at `time`.
+   * @param spentNonces The nonces of the coins the sync's events spent.
+   * @param time The time the TTL pass ran at.
+   * @returns The coins of `pendingDust` still pending, in their original order.
+   */
+  settlePendingDust(
+    pendingDust: Array<DustWithNullifier>,
+    beforeTtls: DustLocalState,
+    afterTtls: DustLocalState,
+    spentNonces: ReadonlyArray<DustNonce>,
+    time: Date,
+  ): Array<DustWithNullifier> {
+    if (pendingDust.length === 0) return pendingDust;
+    const spent = new Set(spentNonces);
+    const wholeSeconds = (date: Date): number => Math.floor(date.getTime() / 1000);
+    const backUnlocked = (coin: DustWithNullifier): boolean =>
+      afterTtls.findUtxoByNullifier(coin.nullifier) !== undefined;
+    const decayedAway = (coin: Dust): boolean =>
+      pipe(
+        Option.fromNullable(beforeTtls.generationInfo(coin)),
+        Option.match({
+          onNone: () => true,
+          onSome: (genInfo) =>
+            wholeSeconds(time) > wholeSeconds(coin.ctime) &&
+            updatedValue(coin.ctime, coin.initialValue, genInfo, time, beforeTtls.params) === 0n,
+        }),
+      );
+    return pendingDust.filter((coin) => !spent.has(coin.nonce) && !backUnlocked(coin) && !decayedAway(coin));
   },
 
   applyDustGenerations(
@@ -256,38 +307,36 @@ export const CoreWallet = {
     };
   },
 
+  /**
+   * Releases the pending Dust coins a reverted transaction spent, and only those.
+   *
+   * @remarks
+   *   Only for a transaction whose Dust spends never ran on chain: one never included, or one that failed outright. A
+   *   partially successful transaction ran its guaranteed segment, where every Dust spend sits, so its coins are spent
+   *   and are settled by sync instead. Each coin is put back unlocked. `processTtls` cannot target coins: run at the
+   *   end of the grace period, it would also drop every coin that decays to nothing by then and release coins other
+   *   pending transactions hold.
+   * @example
+   *   ```ts
+   *   const released = CoreWallet.applyFailed(wallet, neverIncludedTransaction);
+   *   ```;
+   *
+   * @param wallet The wallet holding the pending coins.
+   * @param tx The transaction whose Dust spends are released.
+   * @returns The wallet with those coins unlocked and no longer pending; every other coin as it was.
+   */
   applyFailed(wallet: CoreWallet, tx: Transaction<Signaturish, Proofish, Bindingish>): CoreWallet {
-    const pendingSpendsMap = CoreWallet.pendingDustToMap(wallet.pendingDust);
-
-    const relevantSpends = pipe(
-      [...(tx.intents?.values() ?? [])],
-      Arr.flatMap((intent) => {
-        const spendTime = intent.dustActions?.ctime;
-        return (intent.dustActions?.spends ?? []).map((spend) => ({ spend, spendTime }));
-      }),
-      Arr.filterMap(({ spend, spendTime }) =>
-        pipe(
-          Option.fromNullable(pendingSpendsMap.get(spend.oldNullifier)),
-          Option.map(() => ({ spend, spendTime })),
-        ),
+    const spentNullifiers = new Set(
+      [...(tx.intents?.values() ?? [])].flatMap((intent) =>
+        (intent.dustActions?.spends ?? []).map((spend) => spend.oldNullifier),
       ),
     );
-
-    const [updatedState, removedNullifiers] = pipe(
-      relevantSpends,
-      Arr.reduce(
-        [wallet.state, [] as DustNullifier[]] as [DustLocalState, DustNullifier[]],
-        ([state, removed], { spend, spendTime }): [DustLocalState, DustNullifier[]] => [
-          state.processTtls(DateOps.addSeconds(spendTime!, wallet.state.params.dustGracePeriodSeconds)),
-          Arr.append(removed, spend.oldNullifier),
-        ],
-      ),
-    );
+    const [kept, released] = Arr.partition(wallet.pendingDust, (coin) => spentNullifiers.has(coin.nullifier));
 
     return {
       ...wallet,
-      state: updatedState,
-      pendingDust: wallet.pendingDust.filter((coin) => !removedNullifiers.includes(coin.nullifier)),
+      state: released.reduce((state, { nullifier, ...coin }) => state.addUtxo(nullifier, coin), wallet.state),
+      pendingDust: kept,
     };
   },
 

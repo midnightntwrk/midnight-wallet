@@ -411,6 +411,20 @@ export function CustomShieldedWallet<
         .pipe(Effect.runPromise);
     }
 
+    revertFailedSegments(transaction: AnyTx, failedSegments: ReadonlyArray<number>): Promise<void> {
+      return this.runtime
+        .dispatch<void, WalletError>({
+          [V2Tag]: (v2) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>
+              >(transaction, CustomShieldedWalletImplementation.#epoch),
+              { onLeft: () => Effect.void, onRight: (unwrapped) => v2.revertFailedSegments(unwrapped, failedSegments) },
+            ),
+        })
+        .pipe(Effect.runPromise);
+    }
+
     waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<TSerialized>> {
       return rx.firstValueFrom(
         this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),

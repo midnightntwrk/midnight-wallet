@@ -16,6 +16,7 @@ import {
   Event,
   LedgerParameters,
   type ProofErasedTransaction,
+  type Signature,
   type SignatureVerifyingKey,
   type UserAddress,
   addressFromKey,
@@ -80,7 +81,13 @@ export const dustSeed = (): Uint8Array => {
  *   Local rather than imported from the package's `test/` directory: that copy speaks ledger-v9's tagged signing keys,
  *   while this tree needs ledger-v8's plain hex-string form of the same thing.
  */
-const keystoreOf = (seed: Uint8Array) => {
+export const keystoreOf = (
+  seed: Uint8Array,
+): {
+  publicKey: () => SignatureVerifyingKey;
+  address: () => UserAddress;
+  sign: (data: Uint8Array) => Signature;
+} => {
   const signingKey = Buffer.from(seed).toString('hex');
   const publicKey = (): SignatureVerifyingKey => signatureVerifyingKey(signingKey);
   return {
@@ -90,7 +97,7 @@ const keystoreOf = (seed: Uint8Array) => {
   };
 };
 
-const nightWithMeta = (state: V8.SimulatorState, address: UserAddress): UtxoWithMeta[] =>
+export const nightWithMeta = (state: V8.SimulatorState, address: UserAddress): UtxoWithMeta[] =>
   [...state.ledger.utxo.filter(address)]
     .filter((utxo) => utxo.type === NIGHT_TOKEN_TYPE)
     .flatMap((utxo) => {

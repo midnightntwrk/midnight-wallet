@@ -15,7 +15,12 @@ import { SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
-import { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
+import {
+  PendingDustSchema,
+  SNAPSHOT_FORMAT_VERSION,
+  SNAPSHOT_FORMAT_VERSIONS,
+  upgradeSnapshotV1ToV2,
+} from '../SnapshotFormat.js';
 // Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.
 export { SNAPSHOT_FORMAT_VERSION } from '../SnapshotFormat.js';
 
@@ -64,11 +69,9 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
 );
 
 const SnapshotSchema = Schema.Struct({
-  // The version names the snapshot's shape, not the variant that wrote it, and the constant lives in
-  // `../SnapshotFormat.ts` so the twins cannot drift apart. Both variants write this shape — the V2 variant adds only
-  // optional fields to it, which is not a new version. A V1 reader never meets a V2 snapshot anyway: `../Restore.ts`
-  // routes each snapshot to the variant it names as its writer, and by the variant that owns its `protocolVersion`
-  // when it names none.
+  // The version names the snapshot's shape, not the variant that wrote it, and the constants live in
+  // `../SnapshotFormat.ts` so the twins cannot drift apart. Both variants write this shape; a `v1` payload is upgraded
+  // in one step before this schema sees it (`upgradeSnapshotV1ToV2`).
   version: SnapshotFormat.versionField('dust', SNAPSHOT_FORMAT_VERSION),
   writtenBy: SnapshotFormat.writtenByField(),
   publicKey: Schema.Struct({
@@ -78,6 +81,7 @@ const SnapshotSchema = Schema.Struct({
   protocolVersion: Schema.BigInt,
   networkId: Schema.String,
   offset: Schema.optional(Schema.BigInt),
+  pendingDust: Schema.Array(PendingDustSchema),
 });
 
 type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
@@ -93,6 +97,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
         offset: w.progress?.appliedIndex,
+        pendingDust: w.pendingDust,
       });
 
       return SnapshotFormat.writeSnapshot(SnapshotSchema, buildSnapshot(wallet), wallet.unknownFields);
@@ -102,8 +107,9 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         serialized,
         SnapshotFormat.readSnapshotWithUnknownFields({
           surface: 'dust',
-          reads: [SNAPSHOT_FORMAT_VERSION],
+          reads: SNAPSHOT_FORMAT_VERSIONS,
           schema: SnapshotSchema,
+          upgrade: upgradeSnapshotV1ToV2,
         }),
         Either.flatMap(({ snapshot, unknownFields }) =>
           Either.try({
@@ -112,7 +118,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
                 CoreWallet.restore(
                   snapshot.state,
                   snapshot.publicKey,
-                  [],
+                  [...snapshot.pendingDust],
                   {
                     appliedIndex: snapshot.offset ?? 0n,
                     highestRelevantWalletIndex: 0n,

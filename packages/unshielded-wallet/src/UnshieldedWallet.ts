@@ -775,6 +775,48 @@ export function CustomForkingUnshieldedWallet<
         .pipe(Effect.runPromise);
     }
 
+    /**
+     * Un-books the UTxOs that the failed fallible segments of a partially successful transaction had reserved,
+     * returning them to the available set.
+     *
+     * @remarks
+     *   A partial success applied every intent's guaranteed offer (all in segment 0) and every fallible segment not in
+     *   `failedSegments`; the intent at segment `s` runs its fallible offer in segment `s`. So only the own inputs of
+     *   the fallible offers of the intents in `failedSegments` are released. Coins the guaranteed offers and the
+     *   successful segments spent stay pending until sync settles them.
+     *
+     *   As with {@link revertTransaction}, a transaction built on the other side of the boundary has nothing booked in the
+     *   running variant, so this resolves having done nothing rather than failing.
+     * @param transaction The transaction that landed as a partial success.
+     * @param failedSegments Ids of the fallible segments the chain did not apply.
+     */
+    revertFailedSegments(transaction: AnyTx, failedSegments: ReadonlyArray<number>): Promise<void> {
+      return this.runtime
+        .dispatch<void, WalletError>({
+          [V1Tag]: (v1) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledgerV8.Transaction<ledgerV8.SignatureEnabled, ledgerV8.Proofish, ledgerV8.Bindingish>
+              >(transaction, v8Epoch),
+              {
+                onLeft: () => Effect.void,
+                onRight: (unwrapped) => v1.revertFailedSegments(unwrapped, failedSegments),
+              },
+            ),
+          [V2Tag]: (v2) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledgerV9.Transaction<ledgerV9.SignatureEnabled, ledgerV9.Proofish, ledgerV9.Bindingish>
+              >(transaction, v9Epoch),
+              {
+                onLeft: () => Effect.void,
+                onRight: (unwrapped) => v2.revertFailedSegments(unwrapped, failedSegments),
+              },
+            ),
+        })
+        .pipe(Effect.runPromise);
+    }
+
     revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void> {
       return this.runtime
         .dispatch<void, WalletError>({

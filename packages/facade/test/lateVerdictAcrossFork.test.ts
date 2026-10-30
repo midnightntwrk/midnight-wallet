@@ -262,6 +262,7 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
         finalizedBlock: { hash: 'ledger-v8-block', height: 10, timestamp: new Date() },
       });
       const revert = vi.spyOn(facade.shielded, 'revertTransaction');
+      const revertFailedSegments = vi.spyOn(facade.shielded, 'revertFailedSegments');
       await verdictArrives(
         tx,
         verdict === 'orphan'
@@ -274,8 +275,9 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
       expect(entries[0].hash).toBe('aggregated-chain-hash');
       expect(entries[0].lifecycle.status).toBe('finalized');
       expect(pending.cleared).toContain(tx);
-      if (verdict === 'partial success') expect(revert).toHaveBeenCalledWith(tx);
-      else expect(revert).not.toHaveBeenCalled();
+      expect(revert).not.toHaveBeenCalled();
+      if (verdict === 'partial success') expect(revertFailedSegments).toHaveBeenCalledWith(tx, []);
+      else expect(revertFailedSegments).not.toHaveBeenCalled();
     },
   );
 

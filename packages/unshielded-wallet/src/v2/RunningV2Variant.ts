@@ -314,6 +314,18 @@ export class RunningV2Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     });
   }
 
+  revertFailedSegments(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    failedSegments: ReadonlyArray<number>,
+  ): Effect.Effect<void, WalletError> {
+    return SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
+      pipe(
+        this.#v2Context.transactingCapability.revertFailedSegments(state, transaction, failedSegments),
+        EitherOps.toEffect,
+      ),
+    );
+  }
+
   revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Effect.Effect<void, WalletError> {
     return SubscriptionRef.update(this.#context.stateRef, (state) =>
       this.#v2Context.transactingCapability.revertUtxos(state, utxoIds),

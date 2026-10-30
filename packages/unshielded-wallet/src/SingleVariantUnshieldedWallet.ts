@@ -310,6 +310,23 @@ export function CustomUnshieldedWallet<
         .pipe(Effect.runPromise);
     }
 
+    revertFailedSegments(transaction: AnyTx, failedSegments: ReadonlyArray<number>): Promise<void> {
+      return this.runtime
+        .dispatch({
+          [V2Tag]: (v2) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>
+              >(transaction, wholeTimeline),
+              {
+                onLeft: () => Effect.void,
+                onRight: (unwrapped) => v2.revertFailedSegments(unwrapped, failedSegments),
+              },
+            ),
+        })
+        .pipe(Effect.runPromise);
+    }
+
     revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void> {
       return this.runtime.dispatch({ [V2Tag]: (v2) => v2.revertUtxos(utxoIds) }).pipe(Effect.runPromise);
     }

@@ -35,6 +35,22 @@ export type SignableSegment = { readonly segment: number; readonly data: Uint8Ar
 /** A signature produced for a specific transaction segment, ready to be attached. */
 export type SegmentSignature = { readonly segment: number; readonly signature: ledger.Signature };
 
+/**
+ * The inputs among `inputs` that `signatureVerifyingKey` owns, as the wallet's own `Utxo`s. Intent inputs are
+ * `UtxoSpend`s owned by a verifying key; a `Utxo` is owned by the address derived from it. Under ledger-v8 both are hex
+ * strings, so returning the spend unchanged would typecheck while handing back a `Utxo` whose `owner` is a key — unlike
+ * every other Utxo the wallet holds.
+ */
+const ownUtxosOf = (
+  inputs: ReadonlyArray<ledger.UtxoSpend>,
+  signatureVerifyingKey: ledger.SignatureVerifyingKey,
+): ledger.Utxo[] => {
+  const ownerAddress = addressFromKey(signatureVerifyingKey);
+  return inputs
+    .filter((input) => input.owner === signatureVerifyingKey)
+    .map((input) => ({ ...input, owner: ownerAddress }));
+};
+
 export type TransactionOps = {
   getSignatureData: (
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>,
@@ -70,6 +86,15 @@ export type TransactionOps = {
   extractOwnInputs(
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
     signatureVerifyingKey: ledger.SignatureVerifyingKey,
+  ): ledger.Utxo[];
+  /**
+   * The own inputs of the fallible offers of the intents whose segment is in `failedSegments`. Guaranteed-offer inputs
+   * are never among them: every guaranteed offer runs in segment 0, which a partial success applied.
+   */
+  extractOwnFailedFallibleInputs(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    signatureVerifyingKey: ledger.SignatureVerifyingKey,
+    failedSegments: ReadonlyArray<number>,
   ): ledger.Utxo[];
 };
 
@@ -215,34 +240,30 @@ export const TransactionOps: TransactionOps = {
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
     signatureVerifyingKey: ledger.SignatureVerifyingKey,
   ): ledger.Utxo[] {
-    const segments = TransactionOps.getSegments(transaction);
-    const ownerAddress = addressFromKey(signatureVerifyingKey);
-    // Intent inputs are UtxoSpends owned by a verifying key; a Utxo is owned by the derived address. Under ledger-v8
-    // both are hex strings, so returning the spend unchanged would typecheck while handing back a `Utxo` whose
-    // `owner` is a key — unlike every other Utxo the wallet holds.
-    const toUtxo = (input: ledger.UtxoSpend): ledger.Utxo => ({ ...input, owner: ownerAddress });
-
     return pipe(
-      segments,
+      TransactionOps.getSegments(transaction),
       Arr.flatMap((segment) => {
         const intent = transaction.intents?.get(segment);
-
-        if (!intent) {
-          return [];
-        }
-
-        const { guaranteedUnshieldedOffer, fallibleUnshieldedOffer } = intent;
-
-        const ownedInputsfromGuaranteedSection = guaranteedUnshieldedOffer?.inputs
-          ? guaranteedUnshieldedOffer.inputs.filter((input) => input.owner === signatureVerifyingKey)
-          : [];
-
-        const ownedInputsfromFallibleSection = fallibleUnshieldedOffer
-          ? fallibleUnshieldedOffer.inputs.filter((input) => input.owner === signatureVerifyingKey)
-          : [];
-
-        return [...ownedInputsfromGuaranteedSection, ...ownedInputsfromFallibleSection].map(toUtxo);
+        return [
+          ...(intent?.guaranteedUnshieldedOffer?.inputs ?? []),
+          ...(intent?.fallibleUnshieldedOffer?.inputs ?? []),
+        ];
       }),
+      (inputs) => ownUtxosOf(inputs, signatureVerifyingKey),
+    );
+  },
+  extractOwnFailedFallibleInputs(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    signatureVerifyingKey: ledger.SignatureVerifyingKey,
+    failedSegments: ReadonlyArray<number>,
+  ): ledger.Utxo[] {
+    // Walking the transaction's own segments, not `failedSegments`, visits each intent once however often a segment
+    // is listed, so no coin is released twice.
+    return pipe(
+      TransactionOps.getSegments(transaction),
+      Arr.filter((segment) => failedSegments.includes(segment)),
+      Arr.flatMap((segment) => transaction.intents?.get(segment)?.fallibleUnshieldedOffer?.inputs ?? []),
+      (inputs) => ownUtxosOf(inputs, signatureVerifyingKey),
     );
   },
 };

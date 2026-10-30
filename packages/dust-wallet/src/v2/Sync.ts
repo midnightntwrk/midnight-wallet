@@ -1248,7 +1248,18 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
       // changing the input state when an update contains no tree or UTXO changes.
       const updatedDustState = walletWithAppliedUpdates.state.processTtls(latestBlock.timestamp);
       updatedDustState.syncTime = latestBlock.timestamp;
-      const walletAtLatestBlock = { ...walletWithAppliedUpdates, state: updatedDustState };
+      // Coins the chain spent already left `pendingDust` with their nullifiers above, so none are passed as spent here.
+      const walletAtLatestBlock = {
+        ...walletWithAppliedUpdates,
+        state: updatedDustState,
+        pendingDust: CoreWallet.settlePendingDust(
+          walletWithAppliedUpdates.pendingDust,
+          walletWithAppliedUpdates.state,
+          updatedDustState,
+          [],
+          latestBlock.timestamp,
+        ),
+      };
 
       const newCommitmentTreeRoot =
         walletAtLatestBlock.state.commitmentTreeRoot() !== undefined

@@ -46,12 +46,14 @@ import {
   type BlockData,
   type CollapsedMerkleTree,
   type DustGenerationsSubscription,
+  type NewDustGeneration,
   DustGenerationsSyncUpdate,
   type NullifierRegularTransaction,
   type DustSpendProcessedEvent,
   DustUtxoMap,
   StateUpdate,
 } from '../SyncSchema.js';
+import { leBigintToHex } from '../Utils.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -222,6 +224,148 @@ describe('V2 projections sync capability', () => {
     expect(state.state.syncTime).toEqual(inputSyncTime);
     expect(state.state.serialize()).toEqual(serializedInput);
     expect(state.progress).toBe(inputProgress);
+  });
+});
+
+describe('V2 projections sync of pending Dust', () => {
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const created = new Date(1_000_000_000);
+  const secondsAfterCreation = (seconds: number): Date => new Date(created.getTime() + seconds * 1000);
+
+  // An own coin created with no value whose backing Night was spent 100 s later: it generates for 100 s, then decays
+  // back to nothing over the same span, so it is worth nothing 200 s after creation.
+  const backingNight = 'aa'.repeat(32);
+  const decayingQdo = {
+    initialValue: 0n,
+    owner: secretKey.publicKey,
+    nonce: dustFirstNonce(backingNight, secretKey.publicKey),
+    seq: 0,
+    ctime: created,
+    backingNight,
+    mtIndex: 0n,
+  };
+  const decaying: NewDustGeneration = {
+    dustNullifier: dustNullifier(decayingQdo, secretKey),
+    genInfo: {
+      value: 5_000_000_000_000n,
+      owner: secretKey.publicKey,
+      nonce: backingNight,
+      dtime: secondsAfterCreation(100),
+    },
+    generationMtIndex: 0,
+    qdo: decayingQdo,
+    transactionId: 7,
+    transactionHash: 'cd'.repeat(32),
+  };
+
+  const syncedWallet = (): CoreWallet => {
+    const utxos = DustUtxoMap.create([decaying]);
+    const withUtxos = CoreWallet.applyNewDustUtxos(CoreWallet.initEmpty(dustParameters, secretKey, networkId), utxos);
+    return CoreWallet.applyDustGenerations(CoreWallet.applyDustCommitments(withUtxos, utxos, []), [], [decaying], []);
+  };
+
+  const rootHex = (root: bigint | undefined): string => (root !== undefined ? leBigintToHex(root) : '');
+
+  // A projections update that adds and spends nothing, at `timestamp`, carrying the roots the wallet already holds.
+  const emptyUpdateAt = (wallet: CoreWallet, timestamp: Date) =>
+    StateUpdate({
+      dustGenerations: { rawUpdates: [], newGenerations: [], generationDtimeUpdates: [] },
+      newUtxos: DustUtxoMap.create([]),
+      spentUtxos: DustUtxoMap.create([]),
+      collapsedCommitments: [],
+      latestBlock: {
+        height: 2,
+        hash: '00'.repeat(32),
+        protocolVersion: V9_NATIVE,
+        ledgerParameters: LedgerParameters.initialParameters(),
+        timestamp,
+        zswapEndIndex: 0,
+        dustCommitmentEndIndex: 1,
+        dustGenerationEndIndex: 1,
+        dustCommitmentMerkleTreeRoot: rootHex(wallet.state.commitmentTreeRoot()),
+        dustGenerationMerkleTreeRoot: rootHex(wallet.state.generatingTreeRoot()),
+      },
+    });
+
+  it('should stop counting a pending coin once the ledger drops it as worth nothing, so a decayed coin does not stay pending for good', () => {
+    const spendTime = secondsAfterCreation(150);
+    const [, spent] = CoreWallet.spendCoins(syncedWallet(), secretKey, [{ token: decaying.qdo, value: 1n }], spendTime);
+    // Well past the point the coin is worth nothing, and still inside the lock taken at `spendTime`.
+    const afterDecay = secondsAfterCreation(400);
+
+    expect(spent.pendingDust.map((coin) => coin.nonce)).toEqual([decaying.qdo.nonce]);
+    const lockEnd = new Date(spendTime.getTime() + Number(dustParameters.dustGracePeriodSeconds) * 1000);
+    expect(afterDecay.getTime()).toBeLessThan(lockEnd.getTime());
+
+    const [synced] = makeEventLessSyncCapability().applyUpdate(spent, emptyUpdateAt(spent, afterDecay), fullSpan);
+
+    // The ledger has dropped the coin from the state as worth nothing, so nothing is left for it to be pending against:
+    // a locked coin comes back among the utxos once its lock ends, and this one does not.
+    expect(synced.state.processTtls(lockEnd).utxos).toEqual([]);
+    expect(synced.state.utxos).toEqual([]);
+    expect(synced.state.walletBalance(afterDecay)).toBe(0n);
+    expect(synced.pendingDust).toEqual([]);
+  });
+
+  describe('a coin that keeps its value', () => {
+    // An own coin created with no value whose backing Night is never spent: it keeps generating, so it never decays.
+    const generatingNight = 'bb'.repeat(32);
+    const generatingQdo = {
+      initialValue: 0n,
+      owner: secretKey.publicKey,
+      nonce: dustFirstNonce(generatingNight, secretKey.publicKey),
+      seq: 0,
+      ctime: created,
+      backingNight: generatingNight,
+      mtIndex: 0n,
+    };
+    const generating: NewDustGeneration = {
+      dustNullifier: dustNullifier(generatingQdo, secretKey),
+      genInfo: { value: 5_000_000_000_000n, owner: secretKey.publicKey, nonce: generatingNight, dtime: undefined },
+      generationMtIndex: 0,
+      qdo: generatingQdo,
+      transactionId: 7,
+      transactionHash: 'cd'.repeat(32),
+    };
+
+    const syncedGeneratingWallet = (): CoreWallet => {
+      const utxos = DustUtxoMap.create([generating]);
+      const withUtxos = CoreWallet.applyNewDustUtxos(CoreWallet.initEmpty(dustParameters, secretKey, networkId), utxos);
+      return CoreWallet.applyDustGenerations(
+        CoreWallet.applyDustCommitments(withUtxos, utxos, []),
+        [],
+        [generating],
+        [],
+      );
+    };
+
+    const spendTime = secondsAfterCreation(150);
+    const lockEnd = new Date(spendTime.getTime() + Number(dustParameters.dustGracePeriodSeconds) * 1000);
+    const spentGenerating = (): CoreWallet =>
+      CoreWallet.spendCoins(syncedGeneratingWallet(), secretKey, [{ token: generating.qdo, value: 1n }], spendTime)[1];
+
+    it('should stop counting a pending coin once its lock runs out, so a coin back among the utxos is not also pending', () => {
+      const spent = spentGenerating();
+      expect(spent.pendingDust.map((coin) => coin.nonce)).toEqual([generating.qdo.nonce]);
+      expect(spent.state.utxos).toEqual([]);
+
+      const [synced] = makeEventLessSyncCapability().applyUpdate(spent, emptyUpdateAt(spent, lockEnd), fullSpan);
+
+      expect(synced.state.utxos.map((utxo) => utxo.nonce)).toEqual([generating.qdo.nonce]);
+      expect(synced.pendingDust).toEqual([]);
+    });
+
+    it('should keep a coin pending while its lock holds and it still has value, because the transaction that spent it may yet land', () => {
+      const spent = spentGenerating();
+      const withinLock = new Date(lockEnd.getTime() - 1000);
+      expect(withinLock.getTime()).toBeGreaterThan(spendTime.getTime());
+
+      const [synced] = makeEventLessSyncCapability().applyUpdate(spent, emptyUpdateAt(spent, withinLock), fullSpan);
+
+      expect(synced.state.utxos).toEqual([]);
+      expect(synced.state.walletBalance(withinLock)).toBe(0n);
+      expect(synced.pendingDust.map((coin) => coin.nonce)).toEqual([generating.qdo.nonce]);
+    });
   });
 });
 

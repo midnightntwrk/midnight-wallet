@@ -250,6 +250,30 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
   revertTransaction(transaction: AnyTx): Promise<void>;
 
   /**
+   * Releases the coins `transaction` booked in the fallible segments the chain did not apply, making them spendable
+   * again.
+   *
+   * Use this for a transaction that landed as a partial success. Such a transaction had its guaranteed section applied,
+   * and with it every intent's guaranteed unshielded offer, all of which run in segment 0; it also had every fallible
+   * segment applied that is not in `failedSegments`. The intent at segment `s` runs its fallible unshielded offer in
+   * segment `s`, so only the wallet's own inputs of the fallible offers of the intents in `failedSegments` are
+   * released. Coins the guaranteed offers and the successful segments spent stay pending until sync settles them. For a
+   * transaction that was not applied at all, use {@link revertTransaction}.
+   *
+   * @example
+   *   ```typescript
+   *   // The transaction landed as a partial success with segment 2 failed
+   *   await wallet.revertFailedSegments(transaction, [2]);
+   *   ```;
+   *
+   * @param transaction - The transaction that landed as a partial success
+   * @param failedSegments - Ids of the fallible segments the chain did not apply. A segment the transaction has no
+   *   intent at is ignored.
+   * @returns A promise that resolves once the wallet state has been updated
+   */
+  revertFailedSegments(transaction: AnyTx, failedSegments: ReadonlyArray<number>): Promise<void>;
+
+  /**
    * Releases the booked coins named by `utxoIds`, making them spendable again.
    *
    * Use this when the transaction that booked them is not to hand — a caller tracking only the ids it reserved, or a
