@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { createSyncProgress, type SyncProgress, type SyncProgressData } from './SyncProgress.js';
 import { type PublicKey } from '../KeyStore.js';
 import { UnshieldedState, type UnshieldedUpdate, type UtxoHash } from './UnshieldedState.js';
@@ -24,6 +24,11 @@ export type CoreWallet = Readonly<{
   protocolVersion: ProtocolVersion.ProtocolVersion;
   progress: SyncProgress;
   networkId: string;
+  /**
+   * The snapshot fields this variant's schema does not declare, exactly as they were read, written back with the next
+   * snapshot so a later release that wrote them still finds them. Absent when the snapshot carried none.
+   */
+  unknownFields?: SnapshotFormat.UnknownFields;
 }>;
 
 export const CoreWallet = {

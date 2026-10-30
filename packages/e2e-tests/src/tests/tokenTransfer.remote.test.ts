@@ -20,7 +20,7 @@ import { inspect } from 'node:util';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
 import {
-  type MidnightNetwork,
+  parseMidnightNetwork,
   useWalletTestEnvironment,
   tNightAmount,
   waitForFacadePending,
@@ -37,7 +37,7 @@ import {
 import { carried, sealed } from './helpers/transactions.js';
 
 const getEnv = useWalletTestEnvironment(() =>
-  createTestContainersEnvironment({ network: process.env['NETWORK'] as MidnightNetwork }),
+  createTestContainersEnvironment({ network: parseMidnightNetwork(process.env['NETWORK']) }),
 );
 
 const deps = {

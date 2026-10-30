@@ -23,11 +23,11 @@ import { type WalletTestEnvironment } from '../types.js';
 import {
   provideWallet,
   type ProvideWalletOptions,
-  saveState,
   shouldPersistState,
   type WalletInit,
   withProjectionsDefault,
 } from '../wallet.js';
+import { createWalletLifecycle, type WalletLifecycle } from '../lifecycle.js';
 import { logger } from '../logger.js';
 
 /** Dependencies the dust scenarios need from the consumer. */
@@ -64,26 +64,28 @@ export function registerDustHealthchecks({
   describe('Dust tests', () => {
     const unshieldedTokenRaw = ledger.unshieldedToken().raw;
     let wallet: WalletInit;
-    let filenameWallet: string;
+    let lifecycle: WalletLifecycle;
 
     beforeEach(async () => {
+      // This hook's own lifecycle, so a wallet that finishes starting after `afterEach` has run is stopped by it.
+      const own = createWalletLifecycle();
+      lifecycle = own;
       const env = getEnv();
-      filenameWallet = `${seed.substring(0, 7)}-${env.network}.state`;
-      wallet = await provideWallet(env, {
-        ...withProjectionsDefault(walletOptions),
-        seed,
-        syncCacheDir,
-        filename: filenameWallet,
-      });
+      const filenameWallet = `${seed.substring(0, 7)}-${env.network}.state`;
+      wallet = await own.adopt(
+        provideWallet(env, {
+          ...withProjectionsDefault(walletOptions),
+          seed,
+          syncCacheDir,
+          filename: filenameWallet,
+        }),
+        filenameWallet,
+      );
     });
 
     afterEach(async (context) => {
       // Only a passing test leaves its wallets in a resumable position; see `shouldPersistState`.
-      if (syncCacheDir && shouldPersistState(context)) {
-        await saveState(wallet, syncCacheDir, filenameWallet);
-      }
-      await wallet.wallet.stop();
-      logger.info('Wallet stopped');
+      await lifecycle.release({ syncCacheDir, persist: shouldPersistState(context) });
     });
 
     test(

@@ -171,6 +171,9 @@ const mergeOptionalSection = <T>(
  * - **`lifecycle`** — incoming wins, except that a late rejection cannot overwrite recorded on-chain inclusion.
  * - **Wallet sections** (`shielded`, `unshielded`, `dust`) — combined via per-section merge when both sides have them;
  *   otherwise whichever side is present is used.
+ * - **Fields this build does not declare** — kept from both sides, incoming winning a shared name. A storage that keeps
+ *   such fields on the entry value itself hands them to this merge on every later write to the same transaction, so
+ *   dropping them here would lose them as surely as a reader ignoring them.
  */
 export function mergeWalletEntries(existing: WalletEntry, incoming: WalletEntry): WalletEntry {
   // identifiers: each wallet may surface a different subset, so union them
@@ -182,6 +185,9 @@ export function mergeWalletEntries(existing: WalletEntry, incoming: WalletEntry)
   const dust = mergeOptionalSection(existing.dust, incoming.dust, mergeDustSections);
 
   return {
+    // fields this build does not declare: both sides spread first, so every declared field below overrides them
+    ...existing,
+    ...incoming,
     hash: existing.hash,
     identifiers,
     // shared scalar facts about the on-chain tx — first writer wins (same value across all wallets)

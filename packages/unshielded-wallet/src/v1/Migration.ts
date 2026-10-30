@@ -10,7 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { IndexerLiveness, type NetworkId, ProtocolVersion, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  IndexerLiveness,
+  type NetworkId,
+  ProtocolVersion,
+  SnapshotFormat,
+  WalletSeed,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, HashMap } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { type SyncProgressData } from './SyncProgress.js';
@@ -103,6 +109,8 @@ export type PreviousLedgerWallet = Readonly<{
   networkId: string;
   protocolVersion: bigint;
   progress: SyncProgressData;
+  /** The snapshot fields the previous wallet was restored with and did not declare, when it carried any. */
+  unknownFields?: SnapshotFormat.UnknownFields;
 }>;
 
 /** A UTXO of the previous ledger version, as plain data. */
@@ -185,28 +193,32 @@ export type BookingLike = {
 export const makeCrossLedgerMigration = (): StateMigration<PreviousLedgerWallet> => ({
   migrate: (previousState) =>
     Effect.succeed(
-      CoreWallet.updateProgress(
-        CoreWallet.restore(
-          UnshieldedState.restore(
-            [
-              ...Array.from(HashMap.values(previousState.state.availableUtxos), carryUtxo),
-              ...Array.from(HashMap.values(previousState.state.pendingUtxos), (booking) => carryUtxo(booking.utxo)),
-            ],
-            [],
+      // Snapshot fields neither variant declares cross with the wallet, so its first save on this side writes them.
+      SnapshotFormat.withUnknownFields(
+        CoreWallet.updateProgress(
+          CoreWallet.restore(
+            UnshieldedState.restore(
+              [
+                ...Array.from(HashMap.values(previousState.state.availableUtxos), carryUtxo),
+                ...Array.from(HashMap.values(previousState.state.pendingUtxos), (booking) => carryUtxo(booking.utxo)),
+              ],
+              [],
+            ),
+            {
+              publicKey: previousState.publicKey.publicKey,
+              addressHex: previousState.publicKey.addressHex,
+              address: previousState.publicKey.address,
+            },
+            {
+              appliedId: previousState.progress.appliedId,
+              highestTransactionId: previousState.progress.highestTransactionId,
+            },
+            ProtocolVersion.ProtocolVersion(previousState.protocolVersion),
+            previousState.networkId,
           ),
-          {
-            publicKey: previousState.publicKey.publicKey,
-            addressHex: previousState.publicKey.addressHex,
-            address: previousState.publicKey.address,
-          },
-          {
-            appliedId: previousState.progress.appliedId,
-            highestTransactionId: previousState.progress.highestTransactionId,
-          },
-          ProtocolVersion.ProtocolVersion(previousState.protocolVersion),
-          previousState.networkId,
+          { indexerLiveness: carriedVerdict(previousState.progress.indexerLiveness) },
         ),
-        { indexerLiveness: carriedVerdict(previousState.progress.indexerLiveness) },
+        previousState.unknownFields ?? {},
       ),
     ),
 });
