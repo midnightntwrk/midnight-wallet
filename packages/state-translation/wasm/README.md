@@ -55,7 +55,7 @@ target is byte-identical.
 
 `../scripts/build-wasm.sh` applies it: it fetches `storage/` from the midnight-ledger commit in its `storage_rev` (the
 commit `storage_tag` points at), patches it into `.vendor/midnight-storage` (gitignored), and the root `Cargo.toml`'s
-`[patch.crates-io]` points there. The source is a git tag because ledger-v9 rc.5 needs `midnight-storage` 2.0.4, which
+`[patch.crates-io]` points there. The source is a git tag because ledger-v9 rc.6 needs `midnight-storage` 2.0.4, which
 is not on crates.io. The git `Cargo.toml` inherits `license` and `repository` from the upstream workspace, so the patch
 spells those out as well. **Drive cargo through the script**; a bare `cargo build` fails on the missing directory, which
 is deliberate — the alternative is silently producing a wasm that traps.
