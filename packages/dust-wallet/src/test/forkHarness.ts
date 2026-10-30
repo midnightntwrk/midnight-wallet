@@ -49,7 +49,12 @@ import { type NetworkId, type ProtocolState, type ProtocolVersion } from '@midni
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, Option, Stream, pipe } from 'effect';
-import { CustomForkingDustWallet, type ForkingDustWallet, type ForkingDustWalletClass } from '../DustWallet.js';
+import {
+  CustomForkingDustWallet,
+  type DustTimelineStartProbe,
+  type ForkingDustWallet,
+  type ForkingDustWalletClass,
+} from '../DustWallet.js';
 import { CustomDustWallet, type CustomizedDustWallet } from '../SingleVariantDustWallet.js';
 import { type CoreWallet as V1CoreWallet } from '../v1/CoreWallet.js';
 import * as V1Sync from '../v1/Sync.js';
@@ -324,6 +329,9 @@ export type ForkWalletConfig = Readonly<{
    *   Two of them, because `DustLocalState` is parameterised and the parameters are a WASM object of whichever ledger
    *   module produced them. The shipped wallet rebuilds the ledger-v8 set from the ledger-v9 one it is handed; this
    *   harness states both so a proof can assert what the migration was given.
+   *
+   *   Configuration only: the start is called without them, as `DustWallet(configuration).startWithSeed(seed)` is, so it
+   *   falls back to the class's default.
    */
   dustParameters: Readonly<{ v8: V8Parameters; v9: V9Parameters }>;
   /** The instant sync updates are valued at — at or after the last event's block time. */
@@ -335,6 +343,12 @@ export type ForkWalletConfig = Readonly<{
    * variant and learns the version from the first event it sees.
    */
   chainVersionProbe?: ChainVersionProbe;
+  /**
+   * Where a fresh start is told the chain's dust event timeline reaches the boundary.
+   *
+   * Absent means it is not told, which is every wallet built without `skipLedgerV8DustHistory`.
+   */
+  dustTimelineStartProbe?: DustTimelineStartProbe;
 }>;
 
 /** A state emission, whichever variant produced it. */
@@ -387,7 +401,18 @@ export type ForkWallet = Readonly<{
  * @returns The running wallet and its observation channels.
  */
 export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWallet> => {
-  const { v8, replayed, networkId, forkVersion, seed, startFrom, dustParameters, syncTime, chainVersionProbe } = config;
+  const {
+    v8,
+    replayed,
+    networkId,
+    forkVersion,
+    seed,
+    startFrom,
+    dustParameters,
+    syncTime,
+    chainVersionProbe,
+    dustTimelineStartProbe,
+  } = config;
 
   const v8Key = V8SecretKey.fromSeed(seed);
   const v9Key = V9SecretKey.fromSeed(seed);
@@ -408,7 +433,12 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
   const v2Builder = timelineV2Builder().withMigration(() => capturingCrossLedgerMigration(dustParameters.v9, captured));
 
   const WalletClass = CustomForkingDustWallet(
-    { networkId, forks: { v9: forkVersion }, ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}) },
+    {
+      networkId,
+      forks: { v9: forkVersion },
+      ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}),
+      ...(dustTimelineStartProbe !== undefined ? { dustTimelineStartProbe } : {}),
+    },
     {
       builder: v1Builder,
       configuration: {
@@ -432,9 +462,7 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
   );
 
   return Effect.promise(() =>
-    startFrom === 'keys'
-      ? WalletClass.startWithKeys({ v8: v8Key, v9: v9Key }, dustParameters.v9)
-      : WalletClass.startWithSeed(seed, dustParameters.v9),
+    startFrom === 'keys' ? WalletClass.startWithKeys({ v8: v8Key, v9: v9Key }) : WalletClass.startWithSeed(seed),
   ).pipe(
     Effect.map((wallet) => {
       const runtime = wallet.runtime;
