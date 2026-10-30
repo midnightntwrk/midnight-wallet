@@ -17,6 +17,7 @@ import {
   CustomForkingDustWallet,
   type DefaultDustConfiguration,
   DustWallet,
+  type DustKeysByEpoch,
   type DustWalletAPI,
   makeEventLessSyncCapability,
   makeEventLessSyncService,
@@ -35,9 +36,12 @@ import { Migration, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
  * it picks a variant.
  */
 export type DustWalletFactory = (config: DefaultDustConfiguration) => {
-  startWithSeed(seed: Uint8Array, dustParameters?: DustParameters): DustWalletAPI | Promise<DustWalletAPI>;
+  startWithSeed(
+    seed: Uint8Array,
+    dustParameters?: DustParameters,
+  ): DustWalletAPI<DustKeysByEpoch> | Promise<DustWalletAPI<DustKeysByEpoch>>;
   /** Also required, because `provideWallet` restores a snapshot into whatever composition it was given. */
-  restore(serializedState: string): DustWalletAPI;
+  restore(serializedState: string): DustWalletAPI<DustKeysByEpoch>;
 };
 
 /**

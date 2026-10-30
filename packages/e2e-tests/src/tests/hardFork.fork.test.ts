@@ -41,6 +41,7 @@ import {
   asV8DustParameters,
   CustomForkingDustWallet,
   type DefaultDustConfiguration,
+  type DustKeysByEpoch,
   DustWallet,
   type DustWalletAPI,
   makeEventLessSyncCapability,
@@ -323,7 +324,7 @@ describe.sequential('Hard fork crossing @fork', () => {
   let twin: utils.WalletInit;
   let twinTracked: rx.Observable<Tracked>;
   let twinSubscription: rx.Subscription;
-  let withoutV8History: DustWalletAPI | undefined;
+  let withoutV8History: DustWalletAPI<DustKeysByEpoch> | undefined;
 
   /**
    * Both wallets' dust holdings at one of the comparison points, so a failure has the numbers next to it.
@@ -957,7 +958,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       );
       expect(Number(first.protocolVersion)).toBeGreaterThanOrEqual(Number(ProtocolVersion.V9NativeForkVersion));
 
-      await withoutV8History.start(ledgerV9.DustSecretKey.fromSeed(seeds.dust));
+      await withoutV8History.start(utils.dustKeysFromSeed(seeds.dust));
       const synced = await within(
         'the wallet that skipped ledger-v8 to sync',
         DUST_TIMEOUT_MS,

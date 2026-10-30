@@ -10,7 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   InMemoryTransactionHistoryStorage,
   NetworkId,
@@ -19,7 +20,12 @@ import {
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Scope, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { type DefaultShieldedConfiguration, V9_NATIVE_FORK_VERSION } from '../ShieldedWalletAPI.js';
+import { type ShieldedKeysByEpoch } from '../ShieldedWallet.js';
+import {
+  type DefaultShieldedConfiguration,
+  type ShieldedWalletAPI,
+  V9_NATIVE_FORK_VERSION,
+} from '../ShieldedWalletAPI.js';
 import { CustomShieldedWallet, type CustomizedShieldedWallet } from '../SingleVariantShieldedWallet.js';
 import { TransactionHistory, V2Builder, V2Tag } from '../v2/index.js';
 
@@ -44,12 +50,12 @@ const configuration: DefaultShieldedConfiguration = {
  */
 type RuntimeRecorder = {
   /** The start-aux each `dispatch` to `startSyncInBackground` was given, in order. */
-  readonly dispatched: ledger.ZswapSecretKeys[];
+  readonly dispatched: ledgerV9.ZswapSecretKeys[];
   /** The start-aux the activation watcher restarted sync with, in order. */
-  readonly resumed: ledger.ZswapSecretKeys[];
+  readonly resumed: ledgerV9.ZswapSecretKeys[];
   /** One entry per `onVariantActivation` registration. */
   readonly watchers: ((variant: {
-    startSyncInBackground: (aux: ledger.ZswapSecretKeys) => Effect.Effect<void>;
+    startSyncInBackground: (aux: ledgerV9.ZswapSecretKeys) => Effect.Effect<void>;
   }) => Effect.Effect<void>)[];
   /** The TTL each transaction-building call reached the variant with, by call, in order. */
   readonly ttls: (readonly [call: string, ttl: Date | undefined])[];
@@ -58,7 +64,8 @@ type RuntimeRecorder = {
 const makeRecorder = (): RuntimeRecorder => ({ dispatched: [], resumed: [], watchers: [], ttls: [] });
 
 /** What the stubbed variant hands back for every transaction it is asked to build: an empty transaction. */
-const builtTransaction = (): ledger.UnprovenTransaction => ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed);
+const builtTransaction = (): ledgerV9.UnprovenTransaction =>
+  ledgerV9.Transaction.fromParts(NetworkId.NetworkId.Undeployed);
 
 const walletWith = (
   recorder: RuntimeRecorder,
@@ -72,21 +79,21 @@ const walletWith = (
 
     const runningVariant = {
       __polyTag__: V2Tag,
-      startSyncInBackground: (aux: ledger.ZswapSecretKeys) =>
+      startSyncInBackground: (aux: ledgerV9.ZswapSecretKeys) =>
         Effect.sync(() => {
           recorder.dispatched.push(aux);
         }),
-      balanceTransaction: (_keys: ledger.ZswapSecretKeys, _tx: unknown, ttl?: Date) =>
+      balanceTransaction: (_keys: ledgerV9.ZswapSecretKeys, _tx: unknown, ttl?: Date) =>
         Effect.sync(() => {
           recorder.ttls.push(['balanceTransaction', ttl]);
           return builtTransaction();
         }),
-      transferTransaction: (_keys: ledger.ZswapSecretKeys, _outputs: unknown, ttl?: Date) =>
+      transferTransaction: (_keys: ledgerV9.ZswapSecretKeys, _outputs: unknown, ttl?: Date) =>
         Effect.sync(() => {
           recorder.ttls.push(['transferTransaction', ttl]);
           return builtTransaction();
         }),
-      initSwap: (_keys: ledger.ZswapSecretKeys, _inputs: unknown, _outputs: unknown, ttl?: Date) =>
+      initSwap: (_keys: ledgerV9.ZswapSecretKeys, _inputs: unknown, _outputs: unknown, ttl?: Date) =>
         Effect.sync(() => {
           recorder.ttls.push(['initSwap', ttl]);
           return builtTransaction();
@@ -128,7 +135,7 @@ const activate = (recorder: RuntimeRecorder): Effect.Effect<void> =>
     { discard: true },
   );
 
-const keysFrom = (seed: number): ledger.ZswapSecretKeys => ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, seed));
+const keysFrom = (seed: number): ledgerV9.ZswapSecretKeys => ledgerV9.ZswapSecretKeys.fromSeed(Buffer.alloc(32, seed));
 
 describe('CustomShieldedWallet post-migration sync restart', () => {
   it('registers the activation watcher exactly once, however often start is called', async () => {
@@ -138,8 +145,8 @@ describe('CustomShieldedWallet post-migration sync restart', () => {
 
     await Effect.gen(function* () {
       const { wallet } = yield* walletWith(recorder);
-      yield* Effect.promise(() => wallet.start(first));
-      yield* Effect.promise(() => wallet.start(second));
+      yield* Effect.promise(() => wallet.start({ v9: first }));
+      yield* Effect.promise(() => wallet.start({ v9: second }));
     }).pipe(Effect.runPromise);
 
     // Registering per call would restart sync once per historical start on the next activation.
@@ -155,9 +162,9 @@ describe('CustomShieldedWallet post-migration sync restart', () => {
 
     await Effect.gen(function* () {
       const { wallet } = yield* walletWith(recorder);
-      yield* Effect.promise(() => wallet.start(first));
+      yield* Effect.promise(() => wallet.start({ v9: first }));
       yield* activate(recorder);
-      yield* Effect.promise(() => wallet.start(second));
+      yield* Effect.promise(() => wallet.start({ v9: second }));
       yield* activate(recorder);
     }).pipe(Effect.runPromise);
 
@@ -170,7 +177,7 @@ describe('CustomShieldedWallet post-migration sync restart', () => {
 
     await Effect.gen(function* () {
       const { wallet } = yield* walletWith(recorder);
-      yield* Effect.promise(() => wallet.start(keys));
+      yield* Effect.promise(() => wallet.start({ v9: keys }));
       yield* Effect.promise(() => wallet.stop());
       yield* activate(recorder);
     }).pipe(Effect.runPromise);
@@ -191,6 +198,24 @@ describe('CustomShieldedWallet post-migration sync restart', () => {
   });
 });
 
+describe('CustomShieldedWallet start', () => {
+  it('starts from the ledger-v9 side of keys given for both ledger versions, as a facade hands them over', async () => {
+    const recorder = makeRecorder();
+    const v8Keys = ledgerV8.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+    const v9Keys = keysFrom(1);
+
+    await Effect.gen(function* () {
+      const { wallet } = yield* walletWith(recorder);
+      // Held the way a facade holds it: a wallet it starts with one ledger version's keys per side of the boundary,
+      // of which a single-variant wallet needs only the side its one variant runs on.
+      const heldByFacade: ShieldedWalletAPI<ShieldedKeysByEpoch> = wallet;
+      yield* Effect.promise(() => heldByFacade.start({ v8: v8Keys, v9: v9Keys }));
+    }).pipe(Effect.runPromise);
+
+    expect(recorder.dispatched).toEqual([v9Keys]);
+  });
+});
+
 describe('CustomShieldedWallet building a transaction with a TTL', () => {
   it("should hand the transaction's TTL to the variant on every call that books coins, so the coins are held no longer than the transaction lives", async () => {
     const recorder = makeRecorder();
@@ -199,7 +224,7 @@ describe('CustomShieldedWallet building a transaction with a TTL', () => {
 
     await Effect.gen(function* () {
       const { wallet } = yield* walletWith(recorder);
-      yield* Effect.promise(() => wallet.start(keysFrom(1)));
+      yield* Effect.promise(() => wallet.start({ v9: keysFrom(1) }));
       yield* Effect.promise(() => wallet.balanceTransaction(tx, ttl));
       yield* Effect.promise(() => wallet.transferTransaction([], ttl));
       yield* Effect.promise(() => wallet.initSwap({}, [], ttl));
@@ -218,7 +243,7 @@ describe('CustomShieldedWallet building a transaction with a TTL', () => {
 
     await Effect.gen(function* () {
       const { wallet } = yield* walletWith(recorder);
-      yield* Effect.promise(() => wallet.start(keysFrom(1)));
+      yield* Effect.promise(() => wallet.start({ v9: keysFrom(1) }));
       yield* Effect.promise(() => wallet.balanceTransaction(tx));
       yield* Effect.promise(() => wallet.transferTransaction([]));
       yield* Effect.promise(() => wallet.initSwap({}, []));

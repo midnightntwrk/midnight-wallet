@@ -17,20 +17,16 @@
  * @remarks
  *   `forkRestore.test.ts` says which variant a snapshot lands on. This is the question that follows it: a restored wallet
  *   holds no key material at all — snapshots deliberately contain none — so it synchronizes nothing until it is started
- *   again, and what it can be started _with_ is decided by the variant the snapshot put it on.
+ *   again, and which keys it needs is decided by the variant the snapshot put it on.
  *
- *   A snapshot written below the boundary restores onto the V1 variant, whose synchronization needs the ledger-v8 ledger
- *   version's keys. The ledger-v9 key objects `start` takes are the ones this wallet's public API speaks, and they are
- *   the wrong runtime's for that variant — so the two starts that answer for _both_ sides are the instance's
- *   `startWithSeed` and `startWithKeys`, and they are what a wallet restored below the boundary is started with. Doing
- *   so is the whole of the fix: the wallet finishes the ledger-v8 stretch it had not read and crosses the fork on its
- *   own, carrying the state the caller restored it for.
+ *   The caller cannot be asked to know which variant that is, so a wallet spanning the boundary is started with one
+ *   ledger version's keys per side of it, wherever its snapshot was written. A snapshot written below the boundary
+ *   restores onto the V1 variant, which takes the ledger-v8 keys from them: the wallet finishes the ledger-v8 stretch
+ *   it had not read and crosses the fork on its own, carrying the state the caller restored it for. One written at or
+ *   past the boundary restores onto the V2 variant, which takes the ledger-v9 keys from the same start.
  *
- *   The refusal is kept as a permanent negative beside them. A single ledger-v9 key cannot serve a V1 variant and must
- *   not appear to: the wallet says so by name, and names the two instance starts that would have worked.
- *
- *   The last case is the one that already worked and must go on working: a snapshot written at or past the boundary
- *   restores onto the V2 variant, whose ledger version is the one `start` speaks, so a single key is all it needs.
+ *   The negative is kept beside them, at compile time: one side of the boundary alone is not something this wallet can be
+ *   started with, so a start that would leave a restored wallet unable to synchronize cannot be written.
  */
 
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
@@ -43,8 +39,8 @@ import {
   genesisStrictness,
   immediateBlockProducer,
 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { StartMaterial } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { Cause, Effect, Option, Runtime, type Scope, Stream, pipe } from 'effect';
+import { type CanAssign, type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
+import { Effect, Option, type Scope, Stream, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { peekProtocolVersion } from '../Restore.js';
 import { V1Tag } from '../v1/index.js';
@@ -139,25 +135,6 @@ const restoredStates = (wallet: ForkWallet['shielded'], predicate: (state: Forke
     Effect.map(Option.getOrThrow),
   );
 
-/**
- * The typed failure a wallet call rejected with.
- *
- * @remarks
- *   The wallet's API is promise-shaped and its failures are effect failures, so a rejection carries the cause rather than
- *   the error itself. A call that resolves reports `None`, which fails the assertion below rather than reading a
- *   property off nothing.
- */
-const failureOf = (call: Promise<unknown>): Effect.Effect<Option.Option<unknown>> =>
-  Effect.promise(() =>
-    call.then(
-      () => Option.none<unknown>(),
-      (rejection: unknown) =>
-        Runtime.isFiberFailure(rejection)
-          ? Cause.failureOption(rejection[Runtime.FiberFailureCauseId])
-          : Option.some(rejection),
-    ),
-  );
-
 /** A wallet paid the first of the crossing coins, and the snapshot it wrote there — below the boundary. */
 type SnapshotBelow = Readonly<{
   fork: ForkSimulator;
@@ -211,8 +188,8 @@ const snapshotBelowTheBoundary = (coins: readonly MintedCoin[]): Effect.Effect<S
  *
  * @remarks
  *   Both halves matter and neither implies the other. First it finishes the ledger-v8 stretch — proving it was started at
- *   all, on a variant whose ledger version the wallet's own API does not speak. Then it crosses, carrying what the
- *   snapshot held plus what it has just read, onto a chain that re-announces none of it.
+ *   all, on the variant that takes the ledger-v8 side of its keys. Then it crosses, carrying what the snapshot held
+ *   plus what it has just read, onto a chain that re-announces none of it.
  */
 const finishesTheV8StretchAndCrosses = (
   restored: ForkWallet['shielded'],
@@ -259,55 +236,24 @@ describe('a shielded wallet restored from a snapshot written below the boundary'
       const asRestored = yield* restoredStates(restored, () => true);
       expect(totalValue(asRestored.state)).toBe(walletValues[0]);
 
-      yield* Effect.promise(() => restored.startWithKeys({ v8: wallet.keys.v8, v9: wallet.keys.v9 }));
+      yield* Effect.promise(() => restored.start(wallet.keys));
 
       yield* finishesTheV8StretchAndCrosses(restored, fork, coins);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('finishes its ledger-v8 history and crosses the fork when started from the seed', async () =>
-    Effect.gen(function* () {
-      const coins = crossingCoins();
-      const { fork, wallet, snapshot } = yield* snapshotBelowTheBoundary(coins);
-
-      const restored = wallet.walletClass.restore(snapshot);
-      yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
-
-      yield* Effect.promise(() => restored.startWithSeed(seed));
-
-      yield* finishesTheV8StretchAndCrosses(restored, fork, coins);
-    }).pipe(Effect.scoped, Effect.runPromise));
-
-  it('refuses a single ledger-v9 key, naming the instance starts that would have worked', async () =>
-    Effect.gen(function* () {
-      const coins = crossingCoins();
-      const { wallet, snapshot } = yield* snapshotBelowTheBoundary(coins);
-
-      const restored = wallet.walletClass.restore(snapshot);
-      yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
-
-      // Refused rather than accepted and left silently unsynchronized: the keys belong to the ledger version this
-      // wallet's API speaks, and the variant the snapshot restored onto is the other one. Read as the error it must be,
-      // so this fails both when the call resolves and when it rejects with anything else.
-      const failure = Option.getOrThrow(
-        Option.filter(
-          yield* failureOf(restored.start(wallet.keys.v9)),
-          (thrown): thrown is StartMaterial.MissingStartAuxError =>
-            thrown instanceof StartMaterial.MissingStartAuxError,
-        ),
-      );
-      expect(failure.variantTag).toBe(V1Tag);
-      // And the remedies it names are ones this instance has. The class-level starts of the same names build a *fresh*
-      // wallet, so pointing a restored wallet at those would be pointing it at discarding the state it was restored for.
-      expect(failure.message).toContain('startWithSeed(seed)');
-      expect(failure.message).toContain('startWithKeys({ v8, v9 })');
-    }).pipe(Effect.scoped, Effect.runPromise));
+  it('cannot be started with a single ledger-v9 key, which the V1 variant it restored onto could not use', () => {
+    // Refused by the compiler rather than at run time: one side of the boundary is not something a wallet spanning it
+    // takes, so there is no start a wallet restored below the boundary could accept and then not synchronize from.
+    type Keys = Parameters<ForkWallet['shielded']['start']>[0];
+    type _1 = Expect<Equal<CanAssign<ledgerV9.ZswapSecretKeys, Keys>, false>>;
+    type _2 = Expect<Equal<CanAssign<Readonly<{ v9: ledgerV9.ZswapSecretKeys }>, Keys>, false>>;
+  });
 });
 
 describe('a shielded wallet restored from a snapshot written at or past the boundary', () => {
-  it('synchronizes from the single ledger-v9 key its own API speaks', async () =>
+  it('synchronizes when started with both versions’ keys, taking the ledger-v9 side', async () =>
     Effect.gen(function* () {
-      // Unchanged by any of the above, and the reason `start` keeps its shape: on the V2 variant the key a
-      // caller holds is the key the running variant needs, so one is enough.
+      // The same start as below the boundary, because the caller does not know which side a snapshot was written on.
       const coins = chainCoins();
       const chain = yield* V8.Simulator.init({
         networkId,
@@ -346,7 +292,7 @@ describe('a shielded wallet restored from a snapshot written at or past the boun
       yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
       expect(yield* runningTag(restored)).toBe(V2Tag);
 
-      yield* Effect.promise(() => restored.start(wallet.keys.v9));
+      yield* Effect.promise(() => restored.start(wallet.keys));
 
       // Started, and demonstrably synchronizing: a payment made after the restore lands on the tree the snapshot
       // carried.
@@ -393,7 +339,7 @@ describe('a shielded wallet restored from a snapshot the V2 variant wrote before
 
       const restored = host.walletClass.restore(snapshot);
       yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
-      yield* Effect.promise(() => restored.startWithKeys({ v8: host.keys.v8, v9: host.keys.v9 }));
+      yield* Effect.promise(() => restored.start(host.keys));
 
       expect(yield* runningTag(restored)).toBe(V1Tag);
 

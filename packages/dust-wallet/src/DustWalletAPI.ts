@@ -23,7 +23,6 @@
 import {
   type DustParameters,
   type DustPublicKey,
-  type DustSecretKey,
   type Signature,
   type SignatureVerifyingKey,
 } from '@midnightntwrk/ledger-v9';
@@ -222,12 +221,48 @@ export const claimableFeePayment = <TSerialized>(
     .filter((estimate) => !estimate.utxo.registeredForDustGeneration)
     .reduce((max, estimate) => (estimate.dust.generatedNow > max ? estimate.dust.generatedNow : max), 0n);
 
-export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
+export type DustWalletAPI<TKeys = never, TSerialized = string> = {
   readonly state: rx.Observable<DustWalletState<TSerialized>>;
 
-  start(secretKey: TStartAux): Promise<void>;
+  /**
+   * Starts background synchronization from the given ledger keys, and keeps them for every variant that follows.
+   *
+   * @remarks
+   *   Which keys those are is the composition's to declare, not this contract's: a wallet spanning a protocol boundary
+   *   takes one ledger version's `DustSecretKey` per side of it, a single-variant one only the side its variant runs
+   *   on. So a hard fork changes what a composition asks for, never this signature.
+   *
+   *   A property rather than a method so the compiler checks it in the direction that matters: code holding this type
+   *   with its own `TKeys` — a facade with the keys it derives — accepts only wallets those keys can start. `never` by
+   *   default, so the bare type stands for any dust wallet, whose start cannot be called without saying which keys it
+   *   takes.
+   * @example
+   *   ```typescript
+   *   const wallet = DustWallet(configuration).restore(snapshot);
+   *   await wallet.start({ v8: v8Key, v9: v9Key });
+   *   ```;
+   *
+   * @param keys The ledger keys this wallet synchronizes with.
+   * @returns Nothing; resolves once synchronization has been started on whichever variant is current.
+   */
+  readonly start: (keys: TKeys) => Promise<void>;
 
-  stepSync(secretKey: TStartAux): Promise<void>;
+  /**
+   * Runs one synchronization pass with the given ledger keys, for a wallet driven by hand rather than started.
+   *
+   * @remarks
+   *   Takes the same keys {@link start} does, for the same reason: the caller does not know which variant the wallet is
+   *   on, so it hands over what every variant could need and the one running takes its own side. A property for the
+   *   same reason too.
+   * @example
+   *   ```typescript
+   *   await wallet.stepSync({ v8: v8Key, v9: v9Key });
+   *   ```;
+   *
+   * @param keys The ledger keys this pass synchronizes with.
+   * @returns Nothing; resolves once the pass has finished.
+   */
+  readonly stepSync: (keys: TKeys) => Promise<void>;
 
   createDustGenerationTransaction(
     currentTime: Date | undefined,

@@ -327,10 +327,9 @@ export const makeForkWallet = (config: ForkWalletConfig): Effect.Effect<ForkWall
 
         keys: { v8: v8Keys, v9: v9Keys },
 
-        // The keys handed over are ledger-v9's, which is what the wallet's API speaks. The ledger-v8
-        // variant running underneath is started from the seed the wallet retained instead — the seam a wallet crossing
-        // a boundary rests on.
-        start: Effect.promise(() => wallet.start(v9Keys)),
+        // One ledger version's keys per side: the variant running now takes its own, and the other is kept for the
+        // hand-over — the seam a wallet crossing a boundary rests on.
+        start: Effect.promise(() => wallet.start({ v8: v8Keys, v9: v9Keys })),
 
         awaitMigration: Deferred.await(captured),
 

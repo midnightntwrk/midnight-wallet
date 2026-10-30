@@ -10,7 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { HDWallet, Roles, type Role } from '@midnightntwrk/wallet-sdk-hd';
+import { type DustKeysByEpoch } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { type ShieldedKeysByEpoch } from '@midnightntwrk/wallet-sdk-shielded';
 
 type UnshieldedSeedRole = typeof Roles.NightExternal | typeof Roles.EcdsaUnshielded;
 
@@ -40,3 +44,21 @@ export const getUnshieldedSeed = (
 ): Uint8Array<ArrayBufferLike> => deriveKey(seed, role);
 
 export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => deriveKey(seed, Roles.Dust);
+
+/**
+ * One ledger version's shielded keys per side of the boundary, each derived from the seed by its own ledger version —
+ * what a shielded wallet spanning the boundary is started with.
+ */
+export const shieldedKeysFromSeed = (seed: Uint8Array): ShieldedKeysByEpoch => ({
+  v8: ledgerV8.ZswapSecretKeys.fromSeed(seed),
+  v9: ledgerV9.ZswapSecretKeys.fromSeed(seed),
+});
+
+/**
+ * One ledger version's dust key per side of the boundary, each derived from the seed by its own ledger version — what a
+ * dust wallet spanning the boundary is started and stepped with.
+ */
+export const dustKeysFromSeed = (seed: Uint8Array): DustKeysByEpoch => ({
+  v8: ledgerV8.DustSecretKey.fromSeed(seed),
+  v9: ledgerV9.DustSecretKey.fromSeed(seed),
+});

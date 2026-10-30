@@ -14,13 +14,13 @@ import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { HDWallet, Roles, type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import { WalletFacade, type Clock } from '../../src/index.js';
-import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
+import { CustomShieldedWallet, type CustomizedShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   Sync as ShieldedSync,
   TransactionHistory as ShieldedTransactionHistory,
   V2Builder as ShieldedV2Builder,
 } from '@midnightntwrk/wallet-sdk-shielded/v2';
-import { CustomDustWallet, type DustWalletAPI } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { CustomDustWallet, type CustomizedDustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import {
   SyncService as DustSyncService,
   TransactionHistory as DustTransactionHistory,
@@ -187,8 +187,8 @@ export const createSimulatorSubmissionService = (simulator: Simulator): Submissi
 
 /** Wallet factory type for simulation mode. */
 export type SimulatorWalletFactories = {
-  createShieldedWallet: (keys: ledgerV9.ZswapSecretKeys) => ShieldedWalletAPI;
-  createDustWallet: (key: ledgerV9.DustSecretKey, params: ledgerV9.DustParameters) => DustWalletAPI;
+  createShieldedWallet: (keys: ledgerV9.ZswapSecretKeys) => CustomizedShieldedWallet;
+  createDustWallet: (key: ledgerV9.DustSecretKey, params: ledgerV9.DustParameters) => CustomizedDustWallet;
   createUnshieldedWallet: (keystore: ReturnType<typeof createKeystore>) => UnshieldedWalletAPI;
 };
 

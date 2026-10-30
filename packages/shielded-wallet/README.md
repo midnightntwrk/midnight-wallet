@@ -27,7 +27,8 @@ while maintaining verifiability. It provides:
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { TransactionHistory } from '@midnightntwrk/wallet-sdk-shielded/v2';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { randomBytes } from 'node:crypto';
 
 // Configuration for the wallet
@@ -43,31 +44,36 @@ const configuration = {
   forks: ProtocolVersion.V9NativeForkSchedule,
 };
 
-// Create secret keys from a shielded seed
+// One ledger version's secret keys per side of the boundary, each derived from the shielded seed by its own ledger
+// version: the wallet reads the chain with whichever side it is on, and keeps the other for the hand-over
 const seed = randomBytes(32);
-const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(seed);
+const keys = {
+  v8: ledgerV8.ZswapSecretKeys.fromSeed(seed),
+  v9: ledgerV9.ZswapSecretKeys.fromSeed(seed),
+};
 
-// Create and start the wallet
-const shieldedWallet = ShieldedWallet(configuration).startWithSecretKeys(shieldedSecretKeys);
+// Build the wallet from those keys
+const shieldedWallet = await ShieldedWallet(configuration).startWithKeys(keys);
 
 // Start syncing with the network
-await shieldedWallet.start(shieldedSecretKeys);
+await shieldedWallet.start(keys);
 ```
 
 ### Alternative: Start with Seed Directly
 
 ```typescript
-// Start directly with a shielded seed
-const shieldedWallet = ShieldedWallet(configuration).startWithSeed(seed);
-await shieldedWallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
+// Build the wallet from a shielded seed, which it derives both ledger versions' keys from
+const shieldedWallet = await ShieldedWallet(configuration).startWithSeed(seed);
+await shieldedWallet.start(keys);
 ```
 
 ### Restoring from Serialized State
 
 ```typescript
-// Restore a wallet from previously serialized state
+// Restore a wallet from previously serialized state. A snapshot carries no key material, so the restored wallet is
+// started with its keys again — both sides, because the snapshot may have been written on either side of the boundary
 const shieldedWallet = ShieldedWallet(configuration).restore(serializedState);
-await shieldedWallet.start(shieldedSecretKeys);
+await shieldedWallet.start(keys);
 ```
 
 ### Observing State
@@ -84,7 +90,7 @@ wallet.state.subscribe((state) => {
 ```typescript
 // tokenType: the shielded token type (raw hex) of a token you hold,
 // e.g. one minted by a contract — NIGHT is unshielded and cannot appear here
-const tx = await wallet.transferTransaction(shieldedSecretKeys, [
+const tx = await wallet.transferTransaction([
   { type: tokenType, receiverAddress: 'mn_shield-addr1...', amount: 1000n },
 ]);
 ```
@@ -92,7 +98,7 @@ const tx = await wallet.transferTransaction(shieldedSecretKeys, [
 ### Balancing Transactions
 
 ```typescript
-const balancingTx = await wallet.balanceTransaction(shieldedSecretKeys, transactionToBalance);
+const balancingTx = await wallet.balanceTransaction(transactionToBalance);
 ```
 
 ### Creating Swap Offers
@@ -101,7 +107,6 @@ const balancingTx = await wallet.balanceTransaction(shieldedSecretKeys, transact
 // tokenTypeA / tokenTypeB: shielded token types (raw hex) — both sides of a
 // shielded swap are shielded tokens; NIGHT is unshielded and cannot appear here
 const swapTx = await wallet.initSwap(
-  shieldedSecretKeys,
   { [tokenTypeA]: 500n }, // inputs
   [{ type: tokenTypeB, receiverAddress: shieldedAddress, amount: 100n }], // outputs
 );
