@@ -118,6 +118,26 @@ export class ManualSyncUnsupportedError extends Data.TaggedError(
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
 }> {}
 
+/**
+ * Whether a rejection is the refusal a dust wallet below `forks.v9` meets when asked to synchronize by hand.
+ *
+ * @remarks
+ *   The same test as `instanceof`, for a caller that would rather not import the class — the way
+ *   `isInsufficientDustForFeeError` recognises the other error a caller is expected to handle.
+ * @example
+ *   ```ts
+ *   await facade.doSync(seeds).catch((error: unknown) => {
+ *   if (isManualSyncUnsupportedError(error)) console.warn(`below forks.v9 at ${error.protocolVersion}`);
+ *   throw error;
+ *   });
+ *   ```
+ *
+ * @param error The rejection to test.
+ * @returns `true` for a {@link ManualSyncUnsupportedError}, narrowing `error` to it.
+ */
+export const isManualSyncUnsupportedError = (error: unknown): error is ManualSyncUnsupportedError =>
+  error instanceof ManualSyncUnsupportedError;
+
 /** The V1 variant a forking dust wallet registers: the one that reads the chain before the boundary. */
 export type V1DustVariant<TSyncUpdate> = V1Variant<
   string,
@@ -788,8 +808,8 @@ export function CustomForkingDustWallet<
                 new ManualSyncUnsupportedError({
                   message:
                     `This dust wallet is at protocol version ${protocolVersion}, below forks.v9, where it cannot be ` +
-                    `synchronized by hand: manual sync needs the projections sync service, which needs ledger-v9. ` +
-                    `Start the wallet, and it synchronizes in the background until it crosses forks.v9.`,
+                    `synchronized by hand: its V1 variant has no stepped synchronization, whatever sync service it ` +
+                    `was built with. Start the wallet instead, and it synchronizes in the background.`,
                   protocolVersion,
                 }),
               ),

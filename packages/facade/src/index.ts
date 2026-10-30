@@ -871,6 +871,10 @@ export {
   type WellFormedStrictnessFlags,
 };
 
+// What `start` with `manualSync`, and `doSync`, reject with below `forks.v9`, so a caller can recognise it without
+// depending on the dust wallet package. The dust wallet's own, so `instanceof` agrees with what is thrown.
+export { ManualSyncUnsupportedError, isManualSyncUnsupportedError } from '@midnightntwrk/wallet-sdk-dust-wallet';
+
 export class WalletFacade {
   private static makeDefaultSubmissionService<TConfig extends DefaultSubmissionConfiguration>(
     config: TConfig,
@@ -2379,8 +2383,8 @@ export class WalletFacade {
       throw new ManualSyncUnsupportedError({
         message:
           `The dust wallet is at protocol version ${protocolVersion}, below forks.v9 (${this.#forkVersion}), where it ` +
-          `cannot be synchronized by hand: manual sync needs the projections sync service, which needs ledger-v9. ` +
-          `Start the facade without manualSync, and the dust wallet synchronizes in the background.`,
+          `cannot be synchronized by hand: its V1 variant has no stepped synchronization, whatever sync service it ` +
+          `was built with. Start the facade without manualSync, and the dust wallet synchronizes in the background.`,
         protocolVersion,
       });
     }
@@ -2392,8 +2396,8 @@ export class WalletFacade {
    *
    * @param material The same material {@link start} was given.
    * @returns Nothing; resolves once the pass has finished.
-   * @throws `ManualSyncUnsupportedError` While the dust wallet is below `forks.v9`: manual sync steps the projections
-   *   sync service, which only ledger-v9 supports.
+   * @throws `ManualSyncUnsupportedError` While the dust wallet is below `forks.v9`: its V1 variant has no stepped
+   *   synchronization, whatever sync service it was built with.
    */
   async doSync(material: FacadeStartMaterial): Promise<void> {
     await this.dust.stepSync(dustKeysOf(material));
