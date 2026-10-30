@@ -36,6 +36,7 @@ import {
 vi.setConfig({ testTimeout: 60_000 });
 
 const NETWORK_ID = NetworkId.NetworkId.Undeployed;
+const FEE_BLOCKS_MARGIN = 5;
 const SEED = '0000000000000000000000000000000000000000000000000000000000000001';
 
 const shieldedTokenType = ledger.shieldedToken().raw;
@@ -70,9 +71,12 @@ const swapImbalances = (tx: ledger.UnprovenTransaction): Record<string, bigint> 
     ),
   );
 
-/** The guaranteed section's Dust imbalance: positive once Dust is spent towards the fee, zero when nothing pays it. */
-const dustImbalance = (tx: ledger.UnprovenTransaction): bigint =>
-  [...tx.imbalances(0).entries()].find(([token]) => token.tag === 'dust')?.[1] ?? 0n;
+/**
+ * The guaranteed section's Dust imbalance once `fee` is charged against it: negative when the Dust spent falls short of
+ * the fee, zero or more when it covers it.
+ */
+const dustImbalanceAfterFee = (tx: ledger.UnprovenTransaction, fee: bigint): bigint =>
+  [...tx.imbalances(0, fee).entries()].find(([token]) => token.tag === 'dust')?.[1] ?? 0n;
 
 type MakerKeys = ReturnType<typeof deriveWalletKeys>;
 
@@ -87,7 +91,11 @@ const runWithMaker = (
   Effect.gen(function* () {
     const keys = deriveWalletKeys(SEED, NETWORK_ID);
     const simulator = yield* Simulator.init({ genesisMints, blockProducer: immediateBlockProducer() });
-    const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
+    const config: SimulatorConfig = {
+      simulator,
+      networkId: NETWORK_ID,
+      costParameters: { feeBlocksMargin: FEE_BLOCKS_MARGIN },
+    };
     const factories = createSimulatorWalletFactories(config);
     const facade = yield* makeSimulatorFacade(config, keys, factories);
     yield* Effect.promise(() => assert(facade, { simulator, keys }));
@@ -211,7 +219,8 @@ describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
       const unshieldedAddress = await facade.unshielded.getAddress();
       const shieldedAddress = await facade.shielded.getAddress();
 
-      // Two unshielded groups around a shielded one: a want in any group, of either kind, must survive.
+      // Groups of each kind interleaved, two of each: a want in any group, of either kind, must survive.
+      const thirdShieldedTokenType = ledger.sampleRawTokenType();
       const desiredOutputs: CombinedSwapOutputs[] = [
         {
           type: 'unshielded',
@@ -225,17 +234,32 @@ describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
           type: 'unshielded',
           outputs: [{ type: nightTokenType, amount: tokenValue(3n), receiverAddress: unshieldedAddress }],
         },
+        {
+          type: 'shielded',
+          outputs: [{ type: thirdShieldedTokenType, amount: tokenValue(5n), receiverAddress: shieldedAddress }],
+        },
       ];
 
       const recipe = await facade.initSwap({ shielded: { [shieldedTokenType]: tokenValue(1n) } }, desiredOutputs, {
         ttl,
       });
 
-      expect(swapImbalances(builtTransaction(recipe))).toEqual({
+      const tx = builtTransaction(recipe);
+
+      expect(swapImbalances(tx)).toEqual({
         [`shielded:${shieldedTokenType}`]: tokenValue(1n),
         [`shielded:${otherShieldedTokenType}`]: -tokenValue(2n),
+        [`shielded:${thirdShieldedTokenType}`]: -tokenValue(5n),
         [`unshielded:${nightTokenType}`]: -tokenValue(4n),
       });
+      // The imbalance sums a token's wants, so it cannot tell two outputs from one merged output of the same total:
+      // each requested output must be there as asked. The ledger keeps an offer's outputs in its own order.
+      const nightOutputs = [...(tx.intents?.values() ?? [])]
+        .flatMap((intent) => intent.guaranteedUnshieldedOffer?.outputs ?? [])
+        .filter((output) => output.type === nightTokenType)
+        .map((output) => output.value);
+      expect(nightOutputs).toHaveLength(2);
+      expect(nightOutputs).toEqual(expect.arrayContaining([tokenValue(1n), tokenValue(3n)]));
     }));
 
   it('keeps both legs when it also pays the fee, adding a Dust spend beside them', async () =>
@@ -277,7 +301,12 @@ describe('WalletFacade.initSwap builds both legs of a mixed swap', () => {
         [`shielded:${shieldedTokenType}`]: tokenValue(1n),
         [`unshielded:${nightTokenType}`]: -wantAmount,
       });
-      expect(dustImbalance(tx)).toBeGreaterThan(0n);
+      // The Dust spent must cover the whole fee, not merely be some: the fee as the balancer prices it, on the
+      // proof-erased transaction with the block margin the facade is configured with.
+      const ledgerParams = await env.simulator.query((state) => state.ledger.parameters).pipe(Effect.runPromise);
+      const fee = tx.eraseProofs().feesWithMargin(ledgerParams, FEE_BLOCKS_MARGIN);
+      expect(fee).toBeGreaterThan(0n);
+      expect(dustImbalanceAfterFee(tx, fee)).toBeGreaterThanOrEqual(0n);
     }));
 });
 
