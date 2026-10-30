@@ -19,8 +19,9 @@
  *   produced it; from the boundary the V2 variant does, having been handed identity and a place in the timeline and
  *   nothing else — the dust itself is re-discovered from the indexer's replay, which is what
  *   `test/forkSimulation.test.ts` proves. Which variant is running is the runtime's business, not the application's:
- *   the wallet's public API speaks ledger-v9 throughout, and where the two sides genuinely differ — the key material
- *   each variant's synchronization needs — the wallet resolves it per variant from what it retained.
+ *   the wallet's public API speaks ledger-v9 throughout except for the keys it is started with — one ledger version's
+ *   per side of the boundary, since that is where the two sides genuinely differ — and each variant takes its own side
+ *   from what the wallet retained.
  *
  *   `DustWallet(configuration)` at the bottom is how this package ships it. `CustomForkingDustWallet` is the same wallet
  *   over builders the caller chooses, and `SingleVariantDustWallet.ts` is the composition that gives up the crossing to

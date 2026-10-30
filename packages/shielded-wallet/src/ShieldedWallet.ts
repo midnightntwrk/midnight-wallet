@@ -18,8 +18,8 @@
  *   One wallet, two ledger versions. Before the boundary the V1 variant reads the chain with the ledger version that
  *   produced it; from the boundary the V2 variant does, having been handed identity and a place in the timeline and
  *   nothing else. Which one is running is the runtime's business, not the application's: the wallet's public API speaks
- *   ledger-v9 throughout, and where the two sides genuinely differ — the key material each variant's synchronization
- *   needs — the wallet resolves it per variant from what it retained.
+ *   ledger-v9 throughout except for the keys it is started with — one ledger version's per side of the boundary, since
+ *   that is where the two sides genuinely differ — and each variant takes its own side from what the wallet retained.
  *
  *   `ShieldedWallet(configuration)` at the bottom is how this package ships it. `CustomForkingShieldedWallet` is the same
  *   wallet over builders the caller chooses, and `SingleVariantShieldedWallet.ts` is the composition that gives up the
