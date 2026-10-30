@@ -1,9 +1,5 @@
 name: CD
 
-env:
-  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
-  MIDNIGHTCI_GPG_PRIVATE_KEY: ${{ secrets.MIDNIGHTCI_GPG_PRIVATE_KEY }}
-
 on:
   push:
     branches:
@@ -39,7 +35,7 @@ jobs:
 
       # No registry-url/scope here: this job only opens the release PR, it never
       # runs `npm publish` (those are set on the publish-stable/canary jobs).
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.nvmrc'
           cache: 'yarn'
@@ -49,16 +45,18 @@ jobs:
         run: corepack enable
 
       - name: Configure yarn (install-time auth for GH Packages)
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
         run: |
           # Upstream @midnight-ntwrk deps (ledger-v8, zkir-v2, etc.)
           # still live on GH Packages, so install needs that token.
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Import GPG key
         id: gpg
         uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd #v7.0.0
         with:
-          gpg_private_key: ${{ env.MIDNIGHTCI_GPG_PRIVATE_KEY }}
+          gpg_private_key: ${{ secrets.MIDNIGHTCI_GPG_PRIVATE_KEY }}
           git_user_signingkey: true
           git_commit_gpgsign: true
 
@@ -107,7 +105,7 @@ jobs:
           # No `publish` here — publishing is the gated publish-stable job.
           setupGitUser: false
         env:
-          GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
 
       # Collapse the two signals into one mutually-exclusive mode (see the
       # `mode` job output above). hasChangesets == 'false' wins as 'stable':
@@ -150,9 +148,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          token: ${{ env.MIDNIGHT_GH_TOKEN }} # so the release-tag push is authenticated
+          token: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }} # so the release-tag push is authenticated
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.nvmrc'
           cache: 'yarn'
@@ -164,14 +162,16 @@ jobs:
         run: corepack enable
 
       - name: Configure yarn (install-time auth for GH Packages)
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Import GPG key
         id: gpg
         uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd #v7.0.0
         with:
-          gpg_private_key: ${{ env.MIDNIGHTCI_GPG_PRIVATE_KEY }}
+          gpg_private_key: ${{ secrets.MIDNIGHTCI_GPG_PRIVATE_KEY }}
           git_user_signingkey: true
           git_commit_gpgsign: true
 
@@ -200,7 +200,7 @@ jobs:
           publish: yarn changeset publish
           setupGitUser: false
         env:
-          GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
           NPM_CONFIG_PROVENANCE: 'true'
 
       # Mirror the transitional @midnight-ntwrk alias (dashed scope). The
@@ -234,7 +234,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.nvmrc'
           cache: 'yarn'
@@ -246,16 +246,19 @@ jobs:
         run: corepack enable
 
       - name: Configure yarn (install-time auth for GH Packages)
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Install dependencies
         run: yarn install --immutable
 
       - name: Snapshot version + publish canary
         env:
-          GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
           NPM_CONFIG_PROVENANCE: 'true'
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
 
@@ -308,10 +311,10 @@ jobs:
 
           # Publish under a branch-specific dist-tag: "canary" on main,
           # "canary-<branch>" elsewhere.
-          if [ "${{ github.ref_name }}" = "main" ]; then
+          if [ "$REF_NAME" = "main" ]; then
             CANARY_TAG="canary"
           else
-            CANARY_TAG="canary-${{ github.ref_name }}"
+            CANARY_TAG="canary-$REF_NAME"
           fi
 
           # Canonical @midnightntwrk scope: `changeset publish` (OIDC +
