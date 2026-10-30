@@ -20,8 +20,14 @@ import {
   finalizedTransactionTraits,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
-import { Serialization as ShieldedV1Serialization } from '@midnightntwrk/wallet-sdk-shielded/v1';
-import { Serialization as ShieldedV2Serialization } from '@midnightntwrk/wallet-sdk-shielded/v2';
+import {
+  CoreWallet as ShieldedV1CoreWallet,
+  Serialization as ShieldedV1Serialization,
+} from '@midnightntwrk/wallet-sdk-shielded/v1';
+import {
+  CoreWallet as ShieldedV2CoreWallet,
+  Serialization as ShieldedV2Serialization,
+} from '@midnightntwrk/wallet-sdk-shielded/v2';
 import { Serialization as UnshieldedV1Serialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
 import { Serialization as UnshieldedV2Serialization } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -103,8 +109,95 @@ const parseOrigin = (origin: string): { readonly version: readonly number[]; rea
 };
 
 /** A baseline filename is `<surface>.json` or `<surface>-<variant>.json`. */
-const variantOfBaseline = (surface: Surface, file: string): string =>
+export const variantOfBaseline = (surface: Surface, file: string): string =>
   file.replace(/\.json$/, '') === surface ? '' : file.replace(/\.json$/, '').slice(surface.length + 1);
+
+/**
+ * A baseline derived from a frozen fixture by one state step a running wallet takes, so that a shape only a running
+ * wallet writes is frozen too.
+ *
+ * A plain rewrite records only what a stored payload already held. Some fields are written by the wallet after it has
+ * been restored and nothing published has ever stored them, so no frozen fixture carries them and a rewrite can never
+ * show them. The step is pure and runs at the pinned instant, so the capture is as deterministic as a rewrite.
+ */
+export type DerivedBaseline = Readonly<{
+  surface: Surface;
+  /** The baseline's own variant: the file is `<surface>-<variant>.json`. */
+  variant: string;
+  /** The frozen fixture variant the step starts from. */
+  from: string;
+  /** What the step does, recorded in the baseline file so a reader knows what it is looking at. */
+  step: string;
+}>;
+
+/**
+ * A booked coin's record — when sync first saw the booking, and its transaction's TTL — is written only once a sync
+ * update has seen it, so no stored payload carries it before the wallet has run. The `pending` fixture holds the
+ * booking itself; one sweep with no keys dates it without releasing it, which is exactly what a wallet writes after its
+ * first update on a quiet chain.
+ */
+export const DERIVED_BASELINES: readonly DerivedBaseline[] = [
+  {
+    surface: 'shielded',
+    variant: 'booked',
+    from: 'pending',
+    step: `one booking sweep with no keys at ${frozenClock.now().toISOString()}`,
+  },
+];
+
+/** The derived baseline a filename names, if it names one. */
+export const derivedBaselineFor = (surface: Surface, baselineFile: string): DerivedBaseline | undefined =>
+  DERIVED_BASELINES.find(
+    (derived) => derived.surface === surface && derived.variant === variantOfBaseline(surface, baselineFile),
+  );
+
+/** The one state step each derived baseline applies, per writer. Keyed by `<surface>-<variant>`. */
+const derivedSteps: Record<Writer, Record<string, (serialized: string) => string>> = {
+  v1: {
+    'shielded-booked': (s) =>
+      shieldedV1.serialize(
+        ShieldedV1CoreWallet.expireBookings(
+          EitherOps.getOrThrowLeft(shieldedV1.deserialize(null, s)),
+          undefined,
+          frozenClock.now(),
+        ),
+      ),
+  },
+  v2: {
+    'shielded-booked': (s) =>
+      shieldedV2.serialize(
+        ShieldedV2CoreWallet.expireBookings(
+          EitherOps.getOrThrowLeft(shieldedV2.deserialize(null, s)),
+          undefined,
+          frozenClock.now(),
+        ),
+      ),
+  },
+};
+
+/**
+ * What a writer records for a baseline file: a plain rewrite, or the derived step when the file names a derived
+ * baseline.
+ *
+ * @param writer - The variant doing the reading and writing.
+ * @param surface - The persisted surface the payload belongs to.
+ * @param baselineFile - The baseline filename, e.g. `shielded-booked.json`.
+ * @param serialized - The stored payload the baseline is captured from.
+ * @returns What that writer writes for that baseline.
+ */
+export const captureWithCurrentCode = (
+  writer: Writer,
+  surface: Surface,
+  baselineFile: string,
+  serialized: string,
+): Promise<string> | string => {
+  const derived = derivedBaselineFor(surface, baselineFile);
+  const step = derived === undefined ? undefined : derivedSteps[writer][`${surface}-${derived.variant}`];
+  if (derived !== undefined && step === undefined) {
+    throw new Error(`derived baseline '${surface}-${derived.variant}' has no step for writer '${writer}'`);
+  }
+  return step === undefined ? rewriteWithCurrentCode(writer, surface, serialized) : step(serialized);
+};
 
 /**
  * The frozen payload a baseline is captured from: the newest fixture for the same surface and variant.
@@ -118,7 +211,8 @@ const variantOfBaseline = (surface: Surface, file: string): string =>
  * @throws When no frozen fixture matches, which means the baseline has nothing to be captured from.
  */
 export const sourceForBaseline = (surface: Surface, baselineFile: string): Fixture => {
-  const wanted = variantOfBaseline(surface, baselineFile);
+  // A derived baseline is captured from the frozen fixture its step starts from.
+  const wanted = derivedBaselineFor(surface, baselineFile)?.from ?? variantOfBaseline(surface, baselineFile);
   const candidates = fixturesFor(surface)
     .filter((fixture) => parseOrigin(fixture.origin).variant === wanted)
     .sort((a, b) => {

@@ -161,13 +161,28 @@ export const dustWalletFromEnv = (
 ): DustWalletFactory => dustWalletFor(dustSyncModelFromEnv(env, fallback));
 
 /**
- * Where the dust sub-wallet's snapshot lives, namespaced by the sync model that wrote it.
+ * Where a wallet's snapshot lives, namespaced by the dust sync model that wrote it.
  *
- * The two models disagree on the meaning of the one progress value a snapshot carries, so a snapshot must never be
+ * The two models disagree on the meaning of the one progress value a dust state carries, so a snapshot must never be
  * restored into the other model — see {@link eventBasedDustWallet}. Keeping them in separate files makes a model switch
  * degrade to a from-scratch build rather than to a wrong resume position, with no cache-clearing step to remember.
  *
- * The shielded and unshielded snapshots are model-independent and are not namespaced.
+ * The whole snapshot is namespaced, not only its dust state, because a wallet's sub-wallet states are saved and
+ * restored as one: a wallet whose dust state cannot be restored is built from scratch anyway.
+ *
+ * @param syncCacheDir The directory snapshots are saved to.
+ * @param filename The name the wallet is saved under.
+ * @param model The dust sync model that produced the snapshot.
+ * @returns The snapshot's path.
+ */
+export const snapshotPath = (syncCacheDir: string, filename: string, model: DustSnapshotModel): string =>
+  `${syncCacheDir}/snapshot-${model}-${filename}`;
+
+/**
+ * Where the dust sub-wallet's snapshot lived when each sub-wallet was saved to a file of its own.
+ *
+ * @deprecated A wallet is now saved to the one file {@link snapshotPath} names, so that a save replaces the previous one
+ *   whole. Kept so the earlier per-wallet files can be found and removed.
  */
 export const dustSnapshotPath = (syncCacheDir: string, filename: string, model: DustSnapshotModel): string =>
   `${syncCacheDir}/dust-${model}-${filename}`;

@@ -41,7 +41,9 @@ import {
   asV8DustParameters,
   CustomForkingDustWallet,
   type DefaultDustConfiguration,
+  type DustKeysByEpoch,
   DustWallet,
+  type DustWalletAPI,
   makeEventLessSyncCapability,
   makeEventLessSyncService,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
@@ -322,6 +324,7 @@ describe.sequential('Hard fork crossing @fork', () => {
   let twin: utils.WalletInit;
   let twinTracked: rx.Observable<Tracked>;
   let twinSubscription: rx.Subscription;
+  let withoutV8History: DustWalletAPI<DustKeysByEpoch> | undefined;
 
   /**
    * Both wallets' dust holdings at one of the comparison points, so a failure has the numbers next to it.
@@ -454,6 +457,7 @@ describe.sequential('Hard fork crossing @fork', () => {
     await twin?.wallet.stop();
     await receiver?.wallet.stop();
     await v8Receiver?.wallet.stop();
+    await withoutV8History?.stop();
   }, 60_000);
 
   test('syncs to the ledger-v8 tip on ledger-v8', async () => {
@@ -932,6 +936,41 @@ describe.sequential('Hard fork crossing @fork', () => {
       expect(sameDustCoins(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
       expect(rootsEqual(eventsState.dust.state.state, twinState.dust.state.state)).toBe(true);
       expect(twinState.dust.balance(now)).toBe(eventsState.dust.balance(now));
+    },
+    DUST_TIMEOUT_MS + 60_000,
+  );
+
+  test(
+    'starts a new wallet without the ledger-v8 dust history, holding the dust the wallet that crossed holds',
+    async () => {
+      // The hand-over empties a crossing wallet's state, so one started at the ledger-v9 dust timeline must reach the
+      // same coins and trees as the wallet that replayed everything.
+      withoutV8History = await DustWallet({ ...makeConfiguration(), skipLedgerV8DustHistory: true }).startWithSeed(
+        seeds.dust,
+      );
+
+      // Read before sync starts, so it is the start the wallet chose. Numbers, not bigints: the HTML reporter cannot
+      // serialize a failed bigint assertion.
+      const first = await rx.firstValueFrom(withoutV8History.state);
+      logger.info(
+        `E start without ledger-v8 dust history: protocol version ${first.protocolVersion},` +
+          ` cursor ${first.state.progress.appliedIndex}`,
+      );
+      expect(Number(first.protocolVersion)).toBeGreaterThanOrEqual(Number(ProtocolVersion.V9NativeForkVersion));
+
+      await withoutV8History.start(utils.dustKeysFromSeed(seeds.dust));
+      const synced = await within(
+        'the wallet that skipped ledger-v8 to sync',
+        DUST_TIMEOUT_MS,
+        withoutV8History.waitForSyncedState(),
+      );
+      const eventsState = await wallet.waitForSyncedState();
+      const now = new Date();
+
+      expect(eventsState.dust.state.state.utxos.length).toBeGreaterThan(0);
+      expect(sameDustCoins(eventsState.dust.state.state, synced.state.state)).toBe(true);
+      expect(rootsEqual(eventsState.dust.state.state, synced.state.state)).toBe(true);
+      expect(synced.balance(now)).toBe(eventsState.dust.balance(now));
     },
     DUST_TIMEOUT_MS + 60_000,
   );

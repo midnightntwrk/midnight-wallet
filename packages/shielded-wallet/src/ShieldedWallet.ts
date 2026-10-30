@@ -657,9 +657,10 @@ export function CustomForkingShieldedWallet<
      * Balances a transaction with shielded coins, on whichever side of the boundary it was built.
      *
      * @param tx The transaction to balance, which must have been built in the epoch this wallet is currently in.
+     * @param ttl The transaction's TTL, which caps how long the coins it spends stay booked.
      * @returns The balancing transaction, stamped with the version it was built at, or nothing when none is needed.
      */
-    balanceTransaction(tx: AnyTx): Promise<ShieldedBalancingResult> {
+    balanceTransaction(tx: AnyTx, ttl?: Date): Promise<ShieldedBalancingResult> {
       return this.runtime
         .dispatch<ShieldedBalancingResult, TransactingError>({
           [V1Tag]: (v1) =>
@@ -671,7 +672,7 @@ export function CustomForkingShieldedWallet<
                 >(tx, v8Epoch),
               ),
             ]).pipe(
-              Effect.flatMap(([keys, unwrapped]) => v1.balanceTransaction(keys, unwrapped)),
+              Effect.flatMap(([keys, unwrapped]) => v1.balanceTransaction(keys, unwrapped, ttl)),
               Effect.map(sealV8),
             ),
           [V2Tag]: (v2) =>
@@ -683,24 +684,24 @@ export function CustomForkingShieldedWallet<
                 >(tx, v9Epoch),
               ),
             ]).pipe(
-              Effect.flatMap(([keys, unwrapped]) => v2.balanceTransaction(keys, unwrapped)),
+              Effect.flatMap(([keys, unwrapped]) => v2.balanceTransaction(keys, unwrapped, ttl)),
               Effect.map(sealV9),
             ),
         })
         .pipe(Effect.runPromise);
     }
 
-    transferTransaction(outputs: readonly TokenTransfer[]): Promise<UnprovenTx> {
+    transferTransaction(outputs: readonly TokenTransfer[], ttl?: Date): Promise<UnprovenTx> {
       return this.runtime
         .dispatch<UnprovenTx, TransactingError>({
           [V1Tag]: (v1) =>
             this.#requireAux(v8Aux).pipe(
-              Effect.flatMap((keys) => v1.transferTransaction(keys, outputs)),
+              Effect.flatMap((keys) => v1.transferTransaction(keys, outputs, ttl)),
               Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v8Stamp)),
             ),
           [V2Tag]: (v2) =>
             this.#requireAux(v9Aux).pipe(
-              Effect.flatMap((keys) => v2.transferTransaction(keys, outputs)),
+              Effect.flatMap((keys) => v2.transferTransaction(keys, outputs, ttl)),
               Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp)),
             ),
         })
@@ -710,17 +711,18 @@ export function CustomForkingShieldedWallet<
     initSwap(
       desiredInputs: Record<ledgerV9.RawTokenType, bigint>,
       desiredOutputs: readonly TokenTransfer[],
+      ttl?: Date,
     ): Promise<UnprovenTx> {
       return this.runtime
         .dispatch<UnprovenTx, TransactingError>({
           [V1Tag]: (v1) =>
             this.#requireAux(v8Aux).pipe(
-              Effect.flatMap((keys) => v1.initSwap(keys, desiredInputs, desiredOutputs)),
+              Effect.flatMap((keys) => v1.initSwap(keys, desiredInputs, desiredOutputs, ttl)),
               Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v8Stamp)),
             ),
           [V2Tag]: (v2) =>
             this.#requireAux(v9Aux).pipe(
-              Effect.flatMap((keys) => v2.initSwap(keys, desiredInputs, desiredOutputs)),
+              Effect.flatMap((keys) => v2.initSwap(keys, desiredInputs, desiredOutputs, ttl)),
               Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, v9Stamp)),
             ),
         })

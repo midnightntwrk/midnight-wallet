@@ -39,7 +39,12 @@ import type { V9UnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilitie
 import { type Duration } from 'effect';
 import type * as rx from 'rxjs';
 import { type CoreWallet as V1CoreWallet } from './v1/CoreWallet.js';
-import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v2/CoinsAndBalances.js';
+import {
+  type AvailableCoin,
+  type CoinsAndBalancesCapability,
+  type PendingCoin,
+  type ReservedCoin,
+} from './v2/CoinsAndBalances.js';
 import { type CoreWallet } from './v2/index.js';
 import { type KeysCapability } from './v2/Keys.js';
 import { type SerializationCapability } from './v2/Serialization.js';
@@ -83,6 +88,8 @@ type ShieldedProjections<TSerialized> = Readonly<{
   totalCoins: () => readonly (AvailableCoin | PendingCoin)[];
   availableCoins: () => readonly AvailableCoin[];
   pendingCoins: () => readonly PendingCoin[];
+  /** Optional so that a state built by hand, without this projection, still constructs; it then reports none. */
+  reservedCoins?: () => readonly ReservedCoin[];
   coinPublicKey: () => ShieldedCoinPublicKey;
   encryptionPublicKey: () => ShieldedEncryptionPublicKey;
   address: () => ShieldedAddress;
@@ -113,6 +120,7 @@ export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.Fi
       totalCoins: () => variant.coinsAndBalances.getTotalCoins(state.state),
       availableCoins: () => variant.coinsAndBalances.getAvailableCoins(state.state),
       pendingCoins: () => variant.coinsAndBalances.getPendingCoins(state.state),
+      reservedCoins: () => variant.coinsAndBalances.getReservedCoins?.(state.state) ?? [],
       coinPublicKey: () => variant.keys.getCoinPublicKey(state.state),
       encryptionPublicKey: () => variant.keys.getEncryptionPublicKey(state.state),
       address: () => variant.keys.getAddress(state.state),
@@ -137,6 +145,14 @@ export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.Fi
 
   get pendingCoins(): readonly PendingCoin[] {
     return this.#projections.pendingCoins();
+  }
+
+  /**
+   * Coins booked for a transaction that has not settled: in the wallet, but not spendable until the transaction is
+   * included, reverted, or the wallet releases the booking once no transaction spending it can still be included.
+   */
+  get reservedCoins(): readonly ReservedCoin[] {
+    return this.#projections.reservedCoins?.() ?? [];
   }
 
   get coinPublicKey(): ShieldedCoinPublicKey {
@@ -213,15 +229,49 @@ export type ShieldedWalletAPI<TKeys = never, TTransaction = ledger.FinalizedTran
    *   No key material is passed: the wallet derives what its current variant needs from what it was started with. A
    *   caller-supplied key object could only ever belong to one ledger version, which is exactly what a wallet spanning
    *   a protocol boundary cannot assume.
+   * @example
+   *   const ttl = new Date(Date.now() + 10 * 60 * 1000);
+   *   const balancing = await wallet.balanceTransaction(tx, ttl);
+   *
+   * @param tx The transaction to balance.
+   * @param ttl The transaction's TTL. It caps how long the coins it spends stay booked, since no spend can be included
+   *   after it; without it the booking lasts mainnet's `global_ttl`, 14 days.
+   * @returns The balancing transaction, or nothing when none is needed.
    */
   // we can balance bound and unbound txs
-  balanceTransaction(tx: AnyTx): Promise<ShieldedBalancingResult>;
+  balanceTransaction(tx: AnyTx, ttl?: Date): Promise<ShieldedBalancingResult>;
 
-  transferTransaction(outputs: readonly TokenTransfer[]): Promise<UnprovenTx>;
+  /**
+   * Builds a transaction paying `outputs` from the wallet's shielded coins.
+   *
+   * @example
+   *   const ttl = new Date(Date.now() + 10 * 60 * 1000);
+   *   const transfer = await wallet.transferTransaction([{ type, amount: 100n, receiverAddress }], ttl);
+   *
+   * @param outputs The payments to make.
+   * @param ttl The transaction's TTL. It caps how long the coins it spends stay booked, since no spend can be included
+   *   after it; without it the booking lasts mainnet's `global_ttl`, 14 days.
+   * @returns The unproven transfer.
+   */
+  transferTransaction(outputs: readonly TokenTransfer[], ttl?: Date): Promise<UnprovenTx>;
 
+  /**
+   * Builds one side of a swap: the wallet's coins offered for `desiredInputs`, and `desiredOutputs` asked in return.
+   *
+   * @example
+   *   const ttl = new Date(Date.now() + 10 * 60 * 1000);
+   *   const swap = await wallet.initSwap({ [offeredType]: 50n }, [{ type, amount: 100n, receiverAddress }], ttl);
+   *
+   * @param desiredInputs What the wallet offers, by token type.
+   * @param desiredOutputs What the wallet wants to receive.
+   * @param ttl The transaction's TTL. It caps how long the coins it spends stay booked, since no spend can be included
+   *   after it; without it the booking lasts mainnet's `global_ttl`, 14 days.
+   * @returns The unproven swap offer.
+   */
   initSwap(
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: readonly TokenTransfer[],
+    ttl?: Date,
   ): Promise<UnprovenTx>;
 
   serializeState(): Promise<TSerialized>;

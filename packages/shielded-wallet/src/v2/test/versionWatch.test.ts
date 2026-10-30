@@ -44,7 +44,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { type SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Chunk, Effect, Ref, Stream } from 'effect';
+import { Chunk, Duration, Effect, Fiber, Ref, Stream, TestClock, TestContext } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
 import { VersionSignalSyncUpdate, makeEventsSyncCapability, makeEventsSyncService } from '../Sync.js';
@@ -385,5 +385,41 @@ describe('watching the chain for a version the events never mention', () => {
 
     expect(closedWhenSignalled).toEqual([true]);
     expect(Effect.runSync(Ref.get(pulled))).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('the source on a chain with no shielded traffic and no new version', () => {
+  it('should still send a heartbeat on every interval with the keys and the time, because releasing an expired booking needs both and nothing else arrives', async () => {
+    // The tip is on the version the wallet already holds, so there is no signal to send and no event to batch: the
+    // heartbeat is the only thing the wallet hears. The test clock stands in for time passing, so what arrives is
+    // exactly what the elapsed intervals produce.
+    const intervalMs = 20;
+    const intervals = 5;
+    const elapsed = Duration.millis(intervals * intervalMs + intervalMs / 2);
+
+    const collected = await Effect.gen(function* () {
+      const listening = yield* service(intervalMs)
+        .updates(syncedWallet(41n), keys())
+        .pipe(Stream.interruptAfter(elapsed), Stream.runCollect, Effect.fork);
+      yield* TestClock.adjust(elapsed);
+      return yield* Fiber.join(listening);
+    }).pipe(
+      Effect.provideService(BlockHash.tag, servingTip(tipBlock(v8Version, 42), recorder<BlockHashQueryVariables>())),
+      Effect.provideService(ZswapEventTip.tag, servingEventTip(41, recorder<ZswapEventTipSubscriptionVariables>())),
+      Effect.provideService(ZswapEvents.tag, quietChain),
+      Effect.scoped,
+      Effect.provide(TestContext.TestContext),
+      Effect.runPromise,
+    );
+
+    const updates = Chunk.toArray(collected);
+    expect(updates.map((update) => update._tag)).toEqual(Array.from({ length: intervals }, () => 'Events'));
+    const heartbeats = updates.flatMap((update) => (update._tag === 'Events' ? [update] : []));
+    expect(heartbeats.map((heartbeat) => heartbeat.updates)).toEqual(heartbeats.map(() => []));
+    expect(heartbeats.every((heartbeat) => heartbeat.secretKeys instanceof ledger.ZswapSecretKeys)).toBe(true);
+    // Each carries the source's time at its own interval: the clock a booking's lifetime is measured against.
+    expect(heartbeats.map((heartbeat) => heartbeat.now.getTime())).toEqual(
+      Array.from({ length: intervals }, (_, index) => (index + 1) * intervalMs),
+    );
   });
 });

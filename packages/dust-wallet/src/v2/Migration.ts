@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type DustParameters, DustSecretKey } from '@midnightntwrk/ledger-v9';
-import { type SyncProgress, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
+import { SnapshotFormat, type SyncProgress, WalletSeed } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from './types/ledger.js';
@@ -99,6 +99,8 @@ export type PreviousLedgerWallet = Readonly<{
   networkId: string;
   protocolVersion: bigint;
   progress: SyncProgress.SyncProgressData;
+  /** The snapshot fields the previous wallet was restored with and did not declare, when it carried any. */
+  unknownFields?: SnapshotFormat.UnknownFields;
 }>;
 
 export type CrossLedgerMigrationConfiguration = {
@@ -139,12 +141,16 @@ export const makeCrossLedgerMigration = (
 ): StateMigration<PreviousLedgerWallet> => ({
   migrate: (previousState) =>
     Effect.succeed(
-      CoreWallet.fromPreviousVersion({
-        publicKey: { publicKey: previousState.publicKey.publicKey },
-        networkId: previousState.networkId,
-        protocolVersion: previousState.protocolVersion,
-        progress: previousState.progress,
-        dustParameters: configuration.dustParameters,
-      }),
+      // Snapshot fields neither variant declares cross with the wallet, so its first save on this side writes them.
+      SnapshotFormat.withUnknownFields(
+        CoreWallet.fromPreviousVersion({
+          publicKey: { publicKey: previousState.publicKey.publicKey },
+          networkId: previousState.networkId,
+          protocolVersion: previousState.protocolVersion,
+          progress: previousState.progress,
+          dustParameters: configuration.dustParameters,
+        }),
+        previousState.unknownFields ?? {},
+      ),
     ),
 });

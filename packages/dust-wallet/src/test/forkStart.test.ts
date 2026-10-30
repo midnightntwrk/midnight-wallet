@@ -42,16 +42,17 @@ import {
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import { Cause, Deferred, Effect, Option, Queue, Runtime, type Scope, Stream } from 'effect';
+import { Cause, Deferred, Effect, Option, Queue, Ref, Runtime, type Scope, Stream } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import { type DustTimelineStartProbe, asV8DustParameters } from '../DustWallet.js';
 import { V1Tag } from '../v1/RunningV1Variant.js';
 import * as V1Sync from '../v1/Sync.js';
 import { DUST_EVENT_COUNT, type DustChain, buildDustChain, dustSeed } from '../v1/test/dustEvents.js';
 import { V2Tag } from '../v2/RunningV2Variant.js';
 import * as V2Sync from '../v2/Sync.js';
 import { dustParameters as v9DustParameters } from '../v2/test/dustEvents.js';
-import { type ForkWallet, makeForkWallet } from './forkHarness.js';
+import { type ForkWallet, type ForkWalletConfig, makeForkWallet } from './forkHarness.js';
 import { type TimelineEvent, numberedFrom } from './forkReplay.js';
 import { balanceAt, dustCount } from './forkWalletAssertions.js';
 
@@ -84,6 +85,7 @@ const walletOnChainAt = (
   chain: DustChain,
   version: ProtocolVersion.ProtocolVersion,
   chainVersionProbe?: ChainVersionProbe,
+  dustTimelineStartProbe?: DustTimelineStartProbe,
 ): Effect.Effect<ForkWallet, never, Scope.Scope> =>
   Effect.gen(function* () {
     const history: readonly TimelineEvent[] = numberedFrom(chain.eventBytes, 1, Number(version));
@@ -99,6 +101,7 @@ const walletOnChainAt = (
       dustParameters,
       syncTime: chain.syncTime,
       ...(chainVersionProbe !== undefined ? { chainVersionProbe } : {}),
+      ...(dustTimelineStartProbe !== undefined ? { dustTimelineStartProbe } : {}),
     });
     yield* Effect.addFinalizer(() => wallet.stop);
     yield* wallet.start;
@@ -272,6 +275,155 @@ describe('a dust wallet that asks the chain where it is starting', () => {
 
       expect(yield* wallet.activeTag).toBe(V1Tag);
       expect(yield* wallet.migration).toStrictEqual(Option.none());
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/** A search answering that the chain's dust event timeline reaches the boundary after event `cursor`. */
+const timelineReaching =
+  (cursor: bigint, version: ProtocolVersion.ProtocolVersion): DustTimelineStartProbe =>
+  () =>
+    Promise.resolve(Option.some({ cursor, version }));
+
+describe('a dust wallet that skips the ledger-v8 dust history', () => {
+  it.each(['seed', 'keys'] as const)(
+    'starts from %s on the V2 variant at the last ledger-v8 dust event, and syncs the replay from there',
+    async (startFrom) =>
+      Effect.gen(function* () {
+        const chain = yield* Effect.promise(() => buildDustChain());
+        // A chain that forked over its history: the ledger-v8 events, then the replay continuing their ids.
+        const history = numberedFrom(chain.eventBytes, 1, Number(v8Version));
+        const replay = numberedFrom(chain.eventBytes, history.length + 1, Number(v9Version));
+        const lastV8Id = BigInt(history.length);
+
+        const wallet = yield* makeForkWallet({
+          v8: Stream.make(history),
+          replayed: Effect.succeed(replay),
+          networkId,
+          forkVersion,
+          seed: dustSeed(),
+          startFrom,
+          dustParameters,
+          syncTime: chain.syncTime,
+          // What the default probe reports on such a chain: the version of its first block.
+          chainVersionProbe: chainReporting(v8Version),
+          dustTimelineStartProbe: timelineReaching(lastV8Id, v9Version),
+        });
+        yield* Effect.addFinalizer(() => wallet.stop);
+
+        // Before any sync: empty, on the V2 variant, and parked where the hand-over would have parked it.
+        const parked = yield* wallet.currentState;
+        expect(yield* wallet.activeTag).toBe(V2Tag);
+        expect(parked.version).toBe(v9Version);
+        expect(parked.state.progress.appliedIndex).toBe(lastV8Id);
+        expect(dustCount(parked.state)).toBe(0);
+        // Built as the hand-over builds it, by the V2 variant's own migration, from an empty state at the version and
+        // cursor the search found, so it is valued against whatever dust parameters that migration was built on.
+        expect(Option.map(yield* wallet.migration, ({ from }) => from)).toStrictEqual(
+          Option.some({
+            dustPublicKey: parked.state.publicKey.publicKey,
+            networkId,
+            protocolVersion: v9Version,
+            appliedIndex: lastV8Id,
+          }),
+        );
+
+        yield* wallet.start;
+        const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
+        expect(yield* wallet.activeTag).toBe(V2Tag);
+        expect(synced.state.progress.appliedIndex).toBe(BigInt(history.length + replay.length));
+        expect(balanceAt(synced.state, chain.syncTime)).toBeGreaterThan(0n);
+      }).pipe(Effect.scoped, Effect.runPromise),
+  );
+
+  it('values the dust it parks against the dust parameters its migration is configured with, holding what a wallet that crossed holds', async () =>
+    Effect.gen(function* () {
+      const chain = yield* Effect.promise(() => buildDustChain());
+      const history = numberedFrom(chain.eventBytes, 1, Number(v8Version));
+      const replay = numberedFrom(chain.eventBytes, history.length + 1, Number(v9Version));
+      // Dust parameters an application configured, which are not the ledger's initial ones a start called without any
+      // falls back to. The decay rate is the field that moves a balance, as `migrationDustParameters.test.ts` measures.
+      const initial = v9DustParameters();
+      const configured = new ledgerV9.DustParameters(
+        initial.nightDustRatio,
+        initial.generationDecayRate * 4n,
+        initial.dustGracePeriodSeconds,
+      );
+      // The configured dust parameters reach the migration; the start, as the harness calls it, is given none.
+      const configuredWallet = (
+        sources: Pick<ForkWalletConfig, 'v8' | 'chainVersionProbe' | 'dustTimelineStartProbe'>,
+      ): Effect.Effect<ForkWallet> =>
+        makeForkWallet({
+          replayed: Effect.succeed(replay),
+          networkId,
+          forkVersion,
+          seed: dustSeed(),
+          dustParameters: { v8: asV8DustParameters(configured), v9: configured },
+          syncTime: chain.syncTime,
+          ...sources,
+        });
+
+      // What the option stands in for: the ledger-v8 history read, and the hand-over at the boundary event.
+      const crossing = yield* configuredWallet({ v8: Stream.make(history, [replay[0]]) });
+      yield* Effect.addFinalizer(() => crossing.stop);
+      yield* crossing.start;
+      const crossed = yield* crossing.awaitState(
+        (state) => state.version >= forkVersion && dustCount(state.state) === DUST_EVENT_COUNT,
+      );
+      expect(crossed.state.state.params.generationDecayRate).toBe(configured.generationDecayRate);
+
+      const skipping = yield* configuredWallet({
+        v8: Stream.make(history),
+        chainVersionProbe: chainReporting(v8Version),
+        dustTimelineStartProbe: timelineReaching(BigInt(history.length), v9Version),
+      });
+      yield* Effect.addFinalizer(() => skipping.stop);
+      expect(yield* skipping.activeTag).toBe(V2Tag);
+      const parked = yield* skipping.currentState;
+      expect(parked.state.state.params.generationDecayRate).toBe(configured.generationDecayRate);
+
+      yield* skipping.start;
+      const synced = yield* skipping.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
+      expect(balanceAt(synced.state, chain.syncTime)).toBe(balanceAt(crossed.state, chain.syncTime));
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it.each<{ outcome: string; probe: DustTimelineStartProbe }>([
+    { outcome: 'finds nothing', probe: () => Promise.resolve(Option.none()) },
+    { outcome: 'fails', probe: () => Promise.reject(new Error('the indexer cannot be reached')) },
+    { outcome: 'answers a version below the boundary', probe: timelineReaching(2n, v8Version) },
+  ])('starts as a wallet without the option would when the search $outcome', async ({ probe }) =>
+    Effect.gen(function* () {
+      const chain = yield* Effect.promise(() => buildDustChain());
+      const wallet = yield* walletOnChainAt(chain, v8Version, chainReporting(v8Version), probe);
+
+      // Every event read, from the first: nothing was skipped on the strength of an answer that was not one.
+      const synced = yield* wallet.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
+      expect(yield* wallet.activeTag).toBe(V1Tag);
+      expect(synced.state.protocolVersion).toBeLessThan(forkVersion);
+      expect(synced.state.progress.appliedIndex).toBe(BigInt(DUST_EVENT_COUNT));
+      expect(yield* wallet.migration).toStrictEqual(Option.none());
+    }).pipe(Effect.scoped, Effect.runPromise),
+  );
+
+  it('is asked by a fresh start and never by a restore, which resumes from its snapshot’s cursor', async () =>
+    Effect.gen(function* () {
+      const chain = yield* Effect.promise(() => buildDustChain());
+      const asked = yield* Ref.make(0);
+      const counting: DustTimelineStartProbe = () =>
+        Effect.runPromise(Ref.update(asked, (count) => count + 1).pipe(Effect.as(Option.none())));
+
+      const writer = yield* walletOnChainAt(chain, v8Version, chainReporting(v8Version), counting);
+      yield* writer.awaitState((state) => dustCount(state.state) === DUST_EVENT_COUNT);
+      expect(yield* Ref.get(asked)).toBe(1);
+      const snapshot = yield* Effect.promise(() => writer.dust.serializeState());
+      yield* writer.stop;
+
+      const restored = writer.walletClass.restore(snapshot);
+      yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
+      yield* Effect.promise(() => restored.start(writer.keys));
+
+      expect(yield* Ref.get(asked)).toBe(1);
+      const current = yield* restored.runtime.currentVariant;
+      expect(current.runningVariant.__polyTag__).toBe(V1Tag);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 

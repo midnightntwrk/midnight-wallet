@@ -319,6 +319,61 @@ describe('Staying readable by an older reader', () => {
   });
 });
 
+describe('Carrying the top-level members this build does not declare', () => {
+  // A payload written by a later release can carry members this build does not declare. Each is kept exactly as it was
+  // read, under its own name, and written back; the members the format declares always come from the state itself.
+  const empty = PendingTransactions.empty<FakeTransaction>();
+  const STORED_VALUE = { kept: ['exactly', 'as', 'written'], nested: { flag: true } };
+
+  // Written as JSON text, so `__proto__` is an own member of the payload; an object literal would set the prototype.
+  const withProtoMember = `{"version":"v1","transactions":[],"__proto__":${JSON.stringify(STORED_VALUE)}}`;
+
+  const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+
+  /** Parses JSON text as an object, keeping every member own, `__proto__` included. */
+  const parseObject = (text: string): Readonly<Record<string, unknown>> => {
+    const parsed: unknown = JSON.parse(text);
+    if (!isJsonObject(parsed)) throw new Error(`expected a JSON object, found ${text.slice(0, 80)}`);
+    return parsed;
+  };
+
+  it('should keep a member named __proto__ as an own field with its stored value, so the bag neither loses it nor takes it as a prototype', () => {
+    const restored = Either.getOrThrow(PendingTransactions.deserialize<FakeTransaction>(withProtoMember, traits));
+    const unknownFields = restored.unknownFields ?? {};
+
+    expect(Object.hasOwn(unknownFields, '__proto__')).toBe(true);
+    expect(Object.getOwnPropertyDescriptor(unknownFields, '__proto__')?.value).toEqual(STORED_VALUE);
+    expect(Object.getPrototypeOf(unknownFields)).toBe(Object.prototype);
+  });
+
+  it('should write a carried __proto__ field back as an own member, so a later release reading the payload still finds it', () => {
+    const unknownFields = parseObject(`{"__proto__":${JSON.stringify(STORED_VALUE)}}`);
+    const state: PendingTransactions.PendingTransactions<FakeTransaction> = { ...empty, unknownFields };
+
+    const written = parseObject(PendingTransactions.serialize(state, traits));
+
+    expect(Object.hasOwn(written, '__proto__')).toBe(true);
+    expect(Object.getOwnPropertyDescriptor(written, '__proto__')?.value).toEqual(STORED_VALUE);
+  });
+
+  it('should write the declared members from the state even when the bag names them, because the bag only carries what the format does not declare', () => {
+    const tracked = PendingTransactions.addReservation(
+      PendingTransactions.addPendingTransaction(empty, { ids: ['id-tx'] }, CREATED_AT, traits, Option.none()),
+      reservation({ identifiers: ['id-reserved'] }),
+    );
+    const expected = parseObject(PendingTransactions.serialize(tracked, traits));
+    const state: PendingTransactions.PendingTransactions<FakeTransaction> = {
+      ...tracked,
+      unknownFields: { version: 'v99', transactions: 'not transactions', reservations: 42, kept: STORED_VALUE },
+    };
+
+    const written = parseObject(PendingTransactions.serialize(state, traits));
+
+    expect(written).toEqual({ ...expected, kept: STORED_VALUE });
+  });
+});
+
 describe('Sweeping when nothing has changed', () => {
   // The sweep runs on a timer, so it visits a state where nothing has expired far more often than one where something
   // has. Handing back the state it was given, rather than a rebuilt copy, is what lets a caller tell the two apart.

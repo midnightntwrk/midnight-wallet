@@ -339,6 +339,62 @@ describe('makeDefaultSyncService liveness feed', () => {
     expect(updates[0]).toStrictEqual(livenessUpdate(IndexerLiveness.Skipped({ reason: 'no-node-configured' })));
   });
 
+  describe('when no poll can complete', () => {
+    const pollInterval = Duration.seconds(5);
+
+    // Neither endpoint parses, so every poll fails before any request is made, and at once on `TestClock`: the indexer
+    // read throws while the poll is building it, so the node read is never built at all. The indexer URL must not
+    // parse, or its request goes out before a failing node read stops the poll. The node URL does not parse either, so
+    // the test stays off the network even if the indexer read one day fails as an effect instead of throwing.
+    const unparseable = {
+      indexerClientConnection: { indexerHttpUrl: 'not an indexer url' },
+      nodeClientConnection: { nodeURL: 'not a node url' },
+      livenessPollInterval: pollInterval,
+    };
+
+    /** Every verdict the wallet's liveness feed publishes over its first two polls. */
+    const verdictsOverTwoPolls = (wallet: CoreWallet): Promise<readonly IndexerLiveness.IndexerLiveness[]> =>
+      Effect.gen(function* () {
+        const published = yield* Ref.make<readonly IndexerLiveness.IndexerLiveness[]>([]);
+
+        yield* Effect.forkScoped(
+          makeDefaultSyncService(unparseable)
+            .livenessUpdates(wallet)
+            .pipe(
+              Stream.runForEach((update) =>
+                update.type === 'IndexerLiveness'
+                  ? Ref.update(published, (verdicts) => [...verdicts, update.verdict])
+                  : Effect.void,
+              ),
+            ),
+        );
+
+        // The first poll runs at once; the second waits one interval.
+        yield* TestClock.adjust(pollInterval);
+
+        return yield* Ref.get(published);
+      }).pipe(Effect.scoped, Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    it('should start from the wallet’s own verdict, so a failed poll cannot turn Behind into Unavailable', async () => {
+      // The feed is built from the state the variant starts with — after a hand-over, the state the migration carried.
+      // Seeded at `Unknown` instead, the first failed poll would publish `Unavailable`, which does not gate, and release
+      // `waitForSyncedState` and the facade's `isSynced` over an indexer already proven stale.
+      const behind = IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n });
+      const wallet = CoreWallet.updateProgress(CoreWallet.init(publicKey, 'undeployed'), { indexerLiveness: behind });
+
+      // A wallet with no verdict yet shows that both polls ran and failed, so a `Behind` that survives them has survived
+      // two failed polls rather than gone unpolled.
+      const fromNothing = await verdictsOverTwoPolls(CoreWallet.init(publicKey, 'undeployed'));
+      const fromBehind = await verdictsOverTwoPolls(wallet);
+
+      expect(
+        fromNothing.filter(IndexerLiveness.isUnavailable).map((verdict) => verdict.consecutiveFailures),
+      ).toStrictEqual([1, 2]);
+      expect(fromBehind.length).toBeGreaterThan(0);
+      expect(fromBehind.every((verdict) => IndexerLiveness.equivalent(verdict, behind))).toBe(true);
+    });
+  });
+
   it('should keep verdicts out of the indexer subscription, whose lifetime is retry-bound', () => {
     // The indexer stream is rebuilt by the variant's retry on every failure; the liveness feed is forked once at
     // wallet scope. A verdict emitted through `updates()` would silently re-tie the poller to the retry loop.

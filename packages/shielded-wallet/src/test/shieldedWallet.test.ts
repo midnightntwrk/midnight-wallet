@@ -12,7 +12,12 @@
 // limitations under the License.
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
-import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolVersion,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Scope, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { type ShieldedKeysByEpoch } from '../ShieldedWallet.js';
@@ -52,9 +57,15 @@ type RuntimeRecorder = {
   readonly watchers: ((variant: {
     startSyncInBackground: (aux: ledgerV9.ZswapSecretKeys) => Effect.Effect<void>;
   }) => Effect.Effect<void>)[];
+  /** The TTL each transaction-building call reached the variant with, by call, in order. */
+  readonly ttls: (readonly [call: string, ttl: Date | undefined])[];
 };
 
-const makeRecorder = (): RuntimeRecorder => ({ dispatched: [], resumed: [], watchers: [] });
+const makeRecorder = (): RuntimeRecorder => ({ dispatched: [], resumed: [], watchers: [], ttls: [] });
+
+/** What the stubbed variant hands back for every transaction it is asked to build: an empty transaction. */
+const builtTransaction = (): ledgerV9.UnprovenTransaction =>
+  ledgerV9.Transaction.fromParts(NetworkId.NetworkId.Undeployed);
 
 const walletWith = (
   recorder: RuntimeRecorder,
@@ -71,6 +82,21 @@ const walletWith = (
       startSyncInBackground: (aux: ledgerV9.ZswapSecretKeys) =>
         Effect.sync(() => {
           recorder.dispatched.push(aux);
+        }),
+      balanceTransaction: (_keys: ledgerV9.ZswapSecretKeys, _tx: unknown, ttl?: Date) =>
+        Effect.sync(() => {
+          recorder.ttls.push(['balanceTransaction', ttl]);
+          return builtTransaction();
+        }),
+      transferTransaction: (_keys: ledgerV9.ZswapSecretKeys, _outputs: unknown, ttl?: Date) =>
+        Effect.sync(() => {
+          recorder.ttls.push(['transferTransaction', ttl]);
+          return builtTransaction();
+        }),
+      initSwap: (_keys: ledgerV9.ZswapSecretKeys, _inputs: unknown, _outputs: unknown, ttl?: Date) =>
+        Effect.sync(() => {
+          recorder.ttls.push(['initSwap', ttl]);
+          return builtTransaction();
         }),
     };
 
@@ -187,6 +213,47 @@ describe('CustomShieldedWallet start', () => {
     }).pipe(Effect.runPromise);
 
     expect(recorder.dispatched).toEqual([v9Keys]);
+  });
+});
+
+describe('CustomShieldedWallet building a transaction with a TTL', () => {
+  it("should hand the transaction's TTL to the variant on every call that books coins, so the coins are held no longer than the transaction lives", async () => {
+    const recorder = makeRecorder();
+    const ttl = new Date('2026-10-08T12:10:00Z');
+    const tx = WalletTransaction.adopt('Unproven', builtTransaction(), ProtocolVersion.MinSupportedVersion);
+
+    await Effect.gen(function* () {
+      const { wallet } = yield* walletWith(recorder);
+      yield* Effect.promise(() => wallet.start({ v9: keysFrom(1) }));
+      yield* Effect.promise(() => wallet.balanceTransaction(tx, ttl));
+      yield* Effect.promise(() => wallet.transferTransaction([], ttl));
+      yield* Effect.promise(() => wallet.initSwap({}, [], ttl));
+    }).pipe(Effect.runPromise);
+
+    expect(recorder.ttls).toEqual([
+      ['balanceTransaction', ttl],
+      ['transferTransaction', ttl],
+      ['initSwap', ttl],
+    ]);
+  });
+
+  it('should hand the variant no TTL when the caller gives none, so the booking keeps its full lifetime', async () => {
+    const recorder = makeRecorder();
+    const tx = WalletTransaction.adopt('Unproven', builtTransaction(), ProtocolVersion.MinSupportedVersion);
+
+    await Effect.gen(function* () {
+      const { wallet } = yield* walletWith(recorder);
+      yield* Effect.promise(() => wallet.start({ v9: keysFrom(1) }));
+      yield* Effect.promise(() => wallet.balanceTransaction(tx));
+      yield* Effect.promise(() => wallet.transferTransaction([]));
+      yield* Effect.promise(() => wallet.initSwap({}, []));
+    }).pipe(Effect.runPromise);
+
+    expect(recorder.ttls).toEqual([
+      ['balanceTransaction', undefined],
+      ['transferTransaction', undefined],
+      ['initSwap', undefined],
+    ]);
   });
 });
 

@@ -10,18 +10,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-import * as rx from 'rxjs';
-import { existsSync } from 'node:fs';
-import { exit } from 'node:process';
-import * as fsAsync from 'node:fs/promises';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
-import {
-  InMemoryTransactionHistoryStorage,
-  type TransactionHistoryStorage,
-} from '@midnightntwrk/wallet-sdk-abstractions';
-import { ShieldedWallet, type ShieldedWalletClass } from '@midnightntwrk/wallet-sdk-shielded';
+import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { WalletFacade, WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import {
   createKeystore,
@@ -31,16 +23,29 @@ import {
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import {
   type DustSnapshotModel,
-  dustSnapshotPath,
   dustSyncModelOf,
   type DustWalletFactory,
   dustWalletFromEnv,
+  makeEnvironment,
+  type WalletTestEnvironment,
 } from '@midnightntwrk/wallet-sdk-testkit/core';
-import { type DefaultDustConfiguration } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { Roles } from '@midnightntwrk/wallet-sdk-hd';
-import { type TestContainersFixture } from '../test-fixture.js';
-import { logger } from '../logger.js';
+import { TestContainersFixture } from '../test-fixture.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed } from './seeds.js';
+
+/**
+ * The testkit's view of this suite's fixture, so a suite that runs on the fixture's stack can use the testkit's
+ * `provideWallet` and `saveState` without starting a second one.
+ */
+export const asWalletTestEnvironment = (fixture: TestContainersFixture): WalletTestEnvironment =>
+  // No `down`: the fixture's own hooks tear its stack down, and the view must not do it a second time.
+  makeEnvironment(TestContainersFixture.network, {
+    networkId: fixture.getNetworkId(),
+    proverUrl: fixture.getProverUri(),
+    indexerHttpUrl: fixture.getIndexerUri(),
+    indexerWsUrl: fixture.getIndexerWsUri(),
+    nodeUrl: fixture.getNodeUri(),
+  });
 
 export type WalletInit = {
   /** The three per-wallet seeds, which is what the facade is started and stepped with. */
@@ -51,243 +56,10 @@ export type WalletInit = {
   unshieldedKeystore: UnshieldedKeystore;
   /**
    * The dust sync model this wallet was actually built with, whether it came from an explicit option or from the
-   * environment. {@link saveState} reads it so a snapshot is always written to the namespace of the model that produced
-   * it.
+   * environment. The testkit's `saveState` reads it so a snapshot is always written to the namespace of the model that
+   * produced it.
    */
   dustSyncModel: DustSnapshotModel;
-};
-
-const waitForSyncProgress = async (wallet: WalletFacade) =>
-  await rx.firstValueFrom(
-    wallet.state().pipe(
-      rx.throttleTime(5000),
-      rx.tap((state) => {
-        const applyGap = state.unshielded.progress.highestTransactionId - state.unshielded.progress.appliedId;
-        logger.info(`Wallet facade behind by ${applyGap}`);
-      }),
-      rx.filter((state) => state.unshielded.progress.isStrictlyComplete()),
-    ),
-  );
-
-const restoreShieldedWallet = async (
-  path: string,
-  Wallet: ShieldedWalletClass,
-  readIfExists: (path: string) => Promise<string | undefined>,
-) => {
-  try {
-    const serialized = await readIfExists(path);
-    if (serialized) {
-      const wallet = Wallet.restore(serialized);
-      logger.info(`Restored shielded wallet from ${path}`);
-      return wallet;
-    }
-    logger.warn('Unable to restore shielded wallet.');
-  } catch (err: unknown) {
-    logger.error(`Failed to restore shielded wallet: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  return undefined;
-};
-
-const restoreUnshieldedWallet = async (
-  path: string,
-  seed: string,
-  fixture: TestContainersFixture,
-  readIfExists: (path: string) => Promise<string | undefined>,
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage,
-) => {
-  try {
-    const serialized = await readIfExists(path);
-    if (serialized) {
-      const keyStore = createKeystore({ kind: 'schnorr', secret: getUnshieldedSeed(seed) }, fixture.getNetworkId());
-      const wallet = await UnshieldedWallet({
-        networkId: fixture.getNetworkId(),
-        indexerClientConnection: {
-          indexerHttpUrl: fixture.getIndexerUri(),
-          indexerWsUrl: fixture.getIndexerWsUri(),
-        },
-        txHistoryStorage,
-        // The same boundary the shielded configuration names, taken from the one place this fixture defines it.
-        forks: fixture.getWalletConfig().forks,
-      }).startWithPublicKey(PublicKey.fromKeyStore(keyStore));
-      logger.info(`Restored unshielded wallet from ${path}`);
-      return wallet;
-    }
-    logger.warn('Unable to restore unshielded wallet.');
-  } catch (err: unknown) {
-    logger.error(`Failed to restore unshielded wallet: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  return undefined;
-};
-
-const restoreDustWallet = async (
-  path: string,
-  walletConfig: DefaultDustConfiguration,
-  readIfExists: (path: string) => Promise<string | undefined>,
-  dustWallet: DustWalletFactory,
-) => {
-  try {
-    const serialized = await readIfExists(path);
-    if (serialized) {
-      const DustInstance = dustWallet({
-        ...walletConfig,
-        costParameters: walletConfig?.costParameters ?? {
-          feeBlocksMargin: 5,
-        },
-      });
-      const wallet = DustInstance.restore(serialized);
-      logger.info(`Restored dust wallet from ${path}`);
-      return wallet;
-    }
-    logger.warn('Unable to restore dust wallet.');
-  } catch (err: unknown) {
-    logger.error(`Failed to restore dust wallet: ${err instanceof Error ? err.message : String(err)}`);
-  }
-  return undefined;
-};
-
-export const provideWallet = async (
-  filename: string,
-  seed: string,
-  fixture: TestContainersFixture,
-  customWallets: CustomWallets = {},
-): Promise<WalletInit> => {
-  // Resolved once, here, so the restore path, the snapshot namespace and every from-scratch fallback below all agree on
-  // which sync model was asked for.
-  const dustWallet = customWallets.dustWallet ?? dustWalletFromEnv();
-  const dustSyncModel = dustSyncModelOf(dustWallet);
-  const resolvedWallets = { ...customWallets, dustWallet };
-
-  // Single shared tx-history storage so all three sub-wallets and the facade read/write
-  // the same instance; otherwise shielded/unshielded writes go to a storage the facade
-  // never queries.
-  const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
-  const walletConfig = { ...fixture.getWalletConfig(), txHistoryStorage };
-  const dustWalletConfig = { ...fixture.getDustWalletConfig(), txHistoryStorage };
-  const Wallet = ShieldedWallet(walletConfig);
-
-  const directoryPath = process.env['SYNC_CACHE'];
-  if (!directoryPath) {
-    logger.warn('SYNC_CACHE env var not set');
-    exit(1);
-  }
-
-  const seeds: WalletSeeds = {
-    shielded: getShieldedSeed(seed),
-    unshielded: getUnshieldedSeed(seed),
-    dust: getDustSeed(seed),
-  };
-  const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
-  const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
-  const unshieldedKeystore = createKeystore(
-    { kind: 'schnorr', secret: getUnshieldedSeed(seed) },
-    fixture.getNetworkId(),
-  );
-
-  const readIfExists = async (p: string): Promise<string | undefined> => {
-    try {
-      if (!existsSync(p)) return undefined;
-      return await fsAsync.readFile(p, 'utf-8');
-    } catch (err: unknown) {
-      logger.error(`Failed to read ${p}: ${err instanceof Error ? err.message : String(err)}`);
-      return undefined;
-    }
-  };
-
-  const [restoredShielded, restoredUnshielded, restoredDust] = await Promise.all([
-    restoreShieldedWallet(`${directoryPath}/shielded-${filename}`, Wallet, readIfExists),
-    restoreUnshieldedWallet(`${directoryPath}/unshielded-${filename}`, seed, fixture, readIfExists, txHistoryStorage),
-    restoreDustWallet(
-      dustSnapshotPath(directoryPath, filename, dustSyncModel),
-      { ...walletConfig, ...dustWalletConfig },
-      readIfExists,
-      dustWallet,
-    ),
-  ]);
-
-  if (!restoredShielded || !restoredUnshielded || !restoredDust) {
-    // A cold cache must not silently downgrade to the default sync — the caller asked for a specific one.
-    logger.info('Building wallet facade from scratch');
-    return initWalletWithSeed(seed, fixture, 'schnorr', resolvedWallets);
-  } else {
-    const restoredWallet = await WalletFacade.init({
-      configuration: {
-        ...walletConfig,
-        ...dustWalletConfig,
-      },
-      shielded: () => restoredShielded,
-      unshielded: () => restoredUnshielded,
-      dust: () => restoredDust,
-    });
-    await restoredWallet.start(seeds, { manualSync: customWallets.manualSync ?? false });
-    // check if wallet is syncing correctly
-    await waitForSyncProgress(restoredWallet);
-    const restoredWalletState = await rx.firstValueFrom(restoredWallet.state());
-    const applyGap =
-      restoredWalletState.unshielded.progress.highestTransactionId - restoredWalletState.unshielded.progress.appliedId;
-    logger.info(`Apply gap: ${applyGap}`);
-    if ((applyGap ?? 0) < 0) {
-      logger.warn('Unable to sync restored wallet. Building wallet facade from scratch');
-      await restoredWallet.stop();
-      return initWalletWithSeed(seed, fixture, 'schnorr', resolvedWallets);
-    } else {
-      logger.info('Successfully restored wallet facade.');
-      return { wallet: restoredWallet, shieldedSecretKeys, dustSecretKey, seeds, unshieldedKeystore, dustSyncModel };
-    }
-  }
-};
-
-/**
- * Serializes all three sub-wallet states into `SYNC_CACHE`, keyed by `filename`.
- *
- * Takes the whole {@link WalletInit} rather than the facade alone so the dust snapshot is always written to the
- * namespace of the sync model that produced it — a model and a facade passed separately could disagree.
- */
-export const saveState = async (walletInit: Pick<WalletInit, 'wallet' | 'dustSyncModel'>, filename: string) => {
-  const directoryPath = process.env['SYNC_CACHE'];
-  if (!directoryPath) {
-    logger.warn('SYNC_CACHE env var not set');
-    exit(1);
-  }
-
-  logger.info(`Saving state in ${directoryPath}/${filename}`);
-
-  try {
-    await fsAsync.mkdir(directoryPath, { recursive: true });
-
-    // Serialize all three states
-    const [shieldedSerializedState, unshieldedSerializedState, dustSerializedState] = await Promise.all([
-      walletInit.wallet.shielded.serializeState(),
-      walletInit.wallet.unshielded.serializeState(),
-      walletInit.wallet.dust.serializeState(),
-    ]);
-
-    const files = [
-      { path: `${directoryPath}/shielded-${filename}`, data: shieldedSerializedState },
-      { path: `${directoryPath}/unshielded-${filename}`, data: unshieldedSerializedState },
-      { path: dustSnapshotPath(directoryPath, filename, walletInit.dustSyncModel), data: dustSerializedState },
-    ];
-
-    const results = await Promise.allSettled(files.map((f) => fsAsync.writeFile(f.path, f.data, 'utf-8')));
-
-    for (const [i, res] of results.entries()) {
-      const pathWritten = files[i].path;
-      if (res.status === 'fulfilled') {
-        logger.info(`State written to file ${pathWritten}`);
-      } else {
-        logger.error(
-          `Failed to write ${pathWritten}: ${res.reason instanceof Error ? res.reason.message : String(res.reason)}`,
-        );
-      }
-    }
-  } catch (e) {
-    if (typeof e === 'string') {
-      logger.warn(e);
-    } else if (e instanceof Error) {
-      logger.warn(e.message);
-    } else {
-      logger.warn('Unknown error while saving state');
-    }
-  }
 };
 
 export type CustomWallets = {
