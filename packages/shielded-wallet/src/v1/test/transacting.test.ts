@@ -887,7 +887,6 @@ describe('V1 Wallet Transacting', () => {
       const initialCoinValues = [shieldedValue(1), shieldedValue(2), shieldedValue(3)];
       const wallets = prepareWallets({
         A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const proving = makeSimulatorProvingServiceEffect();

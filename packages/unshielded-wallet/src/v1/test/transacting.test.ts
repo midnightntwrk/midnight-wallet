@@ -766,9 +766,12 @@ describe('Unshielded wallet transacting', () => {
       );
       expect(intent?.fallibleUnshieldedOffer).toBeUndefined();
 
+      // None of its coins is booked, and none is swapped for another: what is still available is exactly what it held.
       const { availableUtxos, pendingUtxos } = UnshieldedState.toArrays(newState.state);
+      const utxoId = ({ utxo }: UtxoWithMeta) => `${utxo.intentHash}#${utxo.outputNo}`;
       expect(pendingUtxos).toEqual([]);
       expect(availableUtxos).toHaveLength(utxos.length);
+      expect(new Set(availableUtxos.map(utxoId))).toEqual(new Set(utxos.map(utxoId)));
     });
   });
 });
