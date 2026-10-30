@@ -43,7 +43,7 @@
     "effect": "^3.19.19"
   },
   "peerDependencies": {
-    "@midnightntwrk/ledger-v9": "1.0.0-rc.5",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.6",
     "@midnightntwrk/wallet-sdk-prover-client": "2.0.0-rc.0"
   },
   "peerDependenciesMeta": {
@@ -62,7 +62,7 @@
     "@effect/rpc": "0.76.2",
     "@effect/sql": "0.52.1",
     "@effect/workflow": "0.19.1",
-    "@midnightntwrk/ledger-v9": "1.0.0-rc.5",
+    "@midnightntwrk/ledger-v9": "1.0.0-rc.6",
     "@midnightntwrk/wallet-sdk-prover-client": "^2.0.0-rc.0",
     "tar-stream": "3.2.2",
     "tsx": "4.23.15"
