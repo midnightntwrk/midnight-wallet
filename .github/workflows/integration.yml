@@ -8,12 +8,15 @@ name: Integration
 # aggregate gate: green only if every file passed.
 on:
   workflow_call:
+    secrets:
+      MIDNIGHTCI_PACKAGES_READ:
+        required: true
+      APP_INFRA_SECRET:
+        required: true
 
 env:
-  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
   NETWORK: undeployed
   DEPLOYMENT: local
-  APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
   # For the files that rebuild the translation WASM. Ubuntu's clang can target wasm32 (Apple's cannot), and the stack
   # protector pulls in OS code that does not exist there.
   CC_wasm32_unknown_unknown: clang
@@ -79,7 +82,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          token: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Enable corepack
         run: corepack enable
@@ -95,11 +98,13 @@ jobs:
         with:
           registry: 'https://ghcr.io'
           username: ${{ github.actor }}
-          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+          password: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Configure yarn
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Install dependencies
         run: yarn install --immutable
@@ -185,6 +190,7 @@ jobs:
       - name: Run integration test file
         env:
           WALLET_TEST_FILE: ${{ matrix.test-file }}
+          APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
         run: |
           pkg_dir="$(echo "$WALLET_TEST_FILE" | cut -d/ -f1-2)"
           base="$(basename "$WALLET_TEST_FILE")"

@@ -1,10 +1,8 @@
 name: CI
 
 env:
-  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
   NETWORK: undeployed
   DEPLOYMENT: local
-  APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
 
 on:
   workflow_dispatch:
@@ -34,7 +32,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          token: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Enable corepack
         run: corepack enable
@@ -50,11 +48,13 @@ jobs:
         with:
           registry: 'https://ghcr.io'
           username: ${{ github.actor }}
-          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+          password: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Configure yarn
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Install dependencies
         run: yarn install --immutable
@@ -100,14 +100,16 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          token: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Enable corepack
         run: corepack enable
 
       - name: Configure yarn
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Install dependencies
         run: yarn install --immutable
@@ -197,7 +199,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          token: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Enable corepack
         run: corepack enable
@@ -213,11 +215,13 @@ jobs:
         with:
           registry: 'https://ghcr.io'
           username: ${{ github.actor }}
-          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+          password: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Configure yarn
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Install dependencies
         run: yarn install --immutable
@@ -284,7 +288,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          token: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Enable corepack
         run: corepack enable
@@ -296,8 +300,10 @@ jobs:
           yarn --version
 
       - name: Configure yarn
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Install dependencies
         run: yarn install --immutable
@@ -337,7 +343,6 @@ jobs:
   # here as a single job. GitHub nests the matrix jobs under this one caller in
   # the checks UI (many parallel runners, one tidy collapsible check), and this
   # job's status is the aggregate gate — green only if every file passed.
-  # secrets: inherit passes APP_INFRA_SECRET and the GH tokens to the called workflow.
   integration:
     name: Integration Tests
     # Runs in parallel with test-unit and e2e-smoke. build-wasm is gated only on build, so it runs alongside
@@ -350,7 +355,9 @@ jobs:
       contents: read
       checks: write
     uses: ./.github/workflows/integration.yml
-    secrets: inherit
+    secrets:
+      MIDNIGHTCI_PACKAGES_READ: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
+      APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
 
   e2e-smoke:
     name: Smoke E2E
@@ -368,7 +375,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          token: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Enable corepack
         run: corepack enable
@@ -384,11 +391,13 @@ jobs:
         with:
           registry: 'https://ghcr.io'
           username: ${{ github.actor }}
-          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+          password: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Configure yarn
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Install dependencies
         run: yarn install --immutable
@@ -415,6 +424,8 @@ jobs:
         run: docker compose -f infra/compose/docker-compose-dynamic.yml pull
 
       - name: Run smoke e2e tests
+        env:
+          APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
         run: |
           yarn dlx turbo test-undeployed -- -t @smoke
 
@@ -487,7 +498,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          token: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Enable corepack
         run: corepack enable
@@ -503,11 +514,13 @@ jobs:
         with:
           registry: 'https://ghcr.io'
           username: ${{ github.actor }}
-          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+          password: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Configure yarn
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Install dependencies
         run: yarn install --immutable
@@ -546,7 +559,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          token: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Enable corepack
         run: corepack enable
@@ -562,11 +575,13 @@ jobs:
         with:
           registry: 'https://ghcr.io'
           username: ${{ github.actor }}
-          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+          password: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Configure yarn
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Install dependencies
         run: yarn install --immutable

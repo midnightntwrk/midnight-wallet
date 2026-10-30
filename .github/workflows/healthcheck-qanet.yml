@@ -11,12 +11,26 @@ on:
   schedule:
     - cron: '0 7,16 * * *'
 
+permissions: {}
+
 jobs:
   test:
     name: Healthcheck tests
+    # The called workflow's token is capped by these, so they must cover what e2e-tests.yml requests.
+    permissions:
+      contents: read
+      actions: read
+      checks: write
     uses: ./.github/workflows/e2e-tests.yml
     with:
       network: qanet
       modifier: '-t @healthcheck'
       skip_cache: ${{ inputs.skip_cache || false }}
-    secrets: inherit
+    secrets:
+      MIDNIGHTCI_PACKAGES_READ: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
+      APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
+      E2E_TESTS_SEED: ${{ secrets.E2E_TESTS_SEED }}
+      E2E_TESTS_SEED2: ${{ secrets.E2E_TESTS_SEED2 }}
+      E2E_TESTS_SEED_STABLE: ${{ secrets.E2E_TESTS_SEED_STABLE }}
+      E2E_TESTS_NT_SEED: ${{ secrets.E2E_TESTS_NT_SEED }}
+      E2E_TESTS_NT_SEED2: ${{ secrets.E2E_TESTS_NT_SEED2 }}

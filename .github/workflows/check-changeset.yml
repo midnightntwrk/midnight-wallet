@@ -1,7 +1,5 @@
 name: Check for Changeset
 
-env:
-  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 on:
   pull_request:
     branches: [main]
@@ -32,7 +30,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          token: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Enable corepack
         run: corepack enable
@@ -44,12 +42,16 @@ jobs:
           yarn --version
 
       - name: Configure yarn
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Install dependencies
         run: yarn install --immutable
 
       - name: Verify that a changeset exists
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          yarn changeset status --since=origin/${{ github.base_ref }} --verbose
+          yarn changeset status --since="origin/$BASE_REF" --verbose
