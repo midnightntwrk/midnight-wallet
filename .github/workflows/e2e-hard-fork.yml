@@ -75,8 +75,7 @@ env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   # PACKAGES_READ, not PACKAGES_WRITE: this lane only ever reads — `yarn install` of the @midnight-ntwrk scoped packages
   # from the GitHub npm registry, and `docker pull` of the node/indexer/proof-server images from ghcr. It publishes
-  # nothing. ci.yml's build and e2e-smoke jobs do the same two things with this token, so it is known to be sufficient;
-  # the nightly's PACKAGES_WRITE is more than the job needs.
+  # nothing. ci.yml's build and e2e-smoke jobs do the same two things with this token, so it is known to be sufficient.
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
   NETWORK: undeployed
   APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
@@ -105,9 +104,9 @@ jobs:
       PROOF_SERVER_TAG: ${{ inputs.proof_server_tag || '9.0.0-rc.7' }}
       PROOF_SERVER_V8_TAG: ${{ inputs.proof_server_v8_tag || '8.1.0' }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -128,7 +127,7 @@ jobs:
       # Covers the node, indexer-standalone and proof-server images. The toolkit image is Docker Hub
       # (`midnightntwrk/midnight-node-toolkit`) and is pulled anonymously — see the header note on rate limits.
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
@@ -152,7 +151,7 @@ jobs:
         run: yarn turbo test-fork
 
       - name: Publish hard-fork e2e test report
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3
         if: always()
         with:
           name: Hard-fork Junit Test Report
@@ -165,7 +164,7 @@ jobs:
       # the test would find nothing left to read. Uploading the whole reports/ directory therefore gets both the junit
       # XML and the container logs a post-mortem actually needs.
       - name: Upload reports and container logs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: hard-fork-reports-${{ github.run_id }}

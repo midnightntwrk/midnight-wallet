@@ -57,6 +57,8 @@ import {
   shieldedAt,
   SilentPendingTransactions,
   unshieldedAt,
+  v8UnboundOf,
+  v9UnboundOf,
 } from './utils/index.js';
 
 const NETWORK_ID = NetworkId.NetworkId.Undeployed;
@@ -77,29 +79,12 @@ const v8Bytes = (): Uint8Array => ledgerV8.Transaction.fromParts(NETWORK_ID).ser
 
 const v9Bytes = (): Uint8Array => ledgerV9.Transaction.fromParts(NETWORK_ID).serialize();
 
-/** A prover that is never asked anything: a transaction with nothing in it has nothing to prove. */
-const noProofs = {
-  check: () => Promise.resolve([]),
-  prove: () => Promise.reject(new Error('A transaction with nothing in it should have nothing to prove')),
-  lookupKey: () => Promise.resolve(undefined),
-};
-
 /** The same transaction at the unbound stage: proved, which is how a dApp hands one over, and not yet bound. */
 const v8UnboundBytes = async (): Promise<Uint8Array> =>
-  (
-    await ledgerV8.Transaction.fromParts(NETWORK_ID).prove(
-      noProofs,
-      ledgerV8.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
-    )
-  ).serialize();
+  (await v8UnboundOf(ledgerV8.Transaction.fromParts(NETWORK_ID))).serialize();
 
 const v9UnboundBytes = async (): Promise<Uint8Array> =>
-  (
-    await ledgerV9.Transaction.fromParts(NETWORK_ID).prove(
-      noProofs,
-      ledgerV9.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
-    )
-  ).serialize();
+  (await v9UnboundOf(ledgerV9.Transaction.fromParts(NETWORK_ID))).serialize();
 
 const noSignatureExpected = (): never => {
   throw new Error('No signature segment should be requested for a transaction with no intents');

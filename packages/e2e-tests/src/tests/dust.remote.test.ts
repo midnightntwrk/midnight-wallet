@@ -13,12 +13,12 @@
 //
 // Thin shim: the dust scenario bodies live in @midnightntwrk/wallet-sdk-testkit. This file only
 // wires the testcontainers environment + seeds and registers the suite.
-import { type MidnightNetwork, useWalletTestEnvironment } from '@midnightntwrk/wallet-sdk-testkit';
+import { parseMidnightNetwork, useWalletTestEnvironment } from '@midnightntwrk/wallet-sdk-testkit';
 import { createTestContainersEnvironment } from '@midnightntwrk/wallet-sdk-testkit/testcontainers';
 import { registerDustHealthchecks } from '@midnightntwrk/wallet-sdk-testkit/scenarios';
 
 const getEnv = useWalletTestEnvironment(() =>
-  createTestContainersEnvironment({ network: process.env['NETWORK'] as MidnightNetwork }),
+  createTestContainersEnvironment({ network: parseMidnightNetwork(process.env['NETWORK']) }),
 );
 
 registerDustHealthchecks({

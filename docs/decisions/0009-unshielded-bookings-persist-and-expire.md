@@ -164,17 +164,18 @@ neither leaves mechanism 2 as the only rule, which is where this started.
 All three wallets reserve coins while balancing, and all three have to decide when a reservation is no longer valid. The
 ledger owns that state for shielded and dust; the SDK owns it for unshielded.
 
-| Concept            | Unshielded                      | Shielded                                  | Dust                         |
-| ------------------ | ------------------------------- | ----------------------------------------- | ---------------------------- |
-| Coins owned        | `availableUtxos` + `pending`    | `state.coins`                             | `state.coins`                |
-| Reservations held  | `pendingUtxos`                  | `pendingSpends` (ledger)                  | `pendingDust` (SDK) + ledger |
-| Reservation expiry | `ttl`, required                 | `Date \| undefined`, never set by the SDK | ledger's `processTtls`       |
-| Reaped by          | the wallet, on each sync update | nothing — `clearPending` is a no-op       | the ledger                   |
+| Concept            | Unshielded                      | Shielded                        | Dust                         |
+| ------------------ | ------------------------------- | ------------------------------- | ---------------------------- |
+| Coins owned        | `availableUtxos` + `pending`    | `state.coins`                   | `state.coins`                |
+| Reservations held  | `pendingUtxos`                  | `pendingSpends` (ledger)        | `pendingDust` (SDK) + ledger |
+| Reservation expiry | `ttl`, required                 | `bookings` (SDK, ADR-0010)      | ledger's `processTtls`       |
+| Reaped by          | the wallet, on each sync update | the wallet, on each sync update | the ledger                   |
 
 Shielded has the same leak and cannot use the same fix directly: `pendingSpends` is the ledger's own field, serialized
-with its state, and the ledger's expiry endpoint is documented as non-functional. That is tracked separately. What
-transfers is the shape rather than the code: the TTL as the expiry language, and the reservation record, whose `inputs`
-is split per wallet precisely so shielded can add its own ids without another format change.
+with its state, and the ledger's expiry endpoint is documented as non-functional. That is decided in
+[ADR-0010](0010-shielded-bookings-expire-in-the-wallet.md). What transfers is the shape rather than the code: the TTL as
+the expiry language, and the reservation record, whose `inputs` is split per wallet precisely so shielded can add its
+own ids without another format change.
 
 **One trap worth stating plainly**, because no rename fixes it: `pendingCoins` means different things on two wallets. On
 the unshielded wallet it is coins reserved by an outgoing spend; on the shielded wallet it is coins _expected to
@@ -182,9 +183,8 @@ arrive_. Both accessors predate this decision.
 
 ## Follow-ups
 
-- **Shielded reservations** have no expiry and nothing sweeps them, so the same leak exists there. The issue tracking it
-  describes a facade accessor this decision did not build; the reservation list is the equivalent, and that issue's
-  wording should be corrected to match.
+- **Shielded reservations** had no expiry and nothing swept them, so the same leak existed there. Resolved by
+  [ADR-0010](0010-shielded-bookings-expire-in-the-wallet.md).
 - **Transaction history.** Tracking booked coins and tracking transaction history are closely related, and a reservation
   is arguably the first moment a transaction becomes worth recording. History is still written from submission onwards,
   and moving that earlier is a visible behaviour change for consumers, so it was left alone.

@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Buffer } from 'buffer';
 import { Array as Arr, DateTime, Either, Option, Order, ParseResult, pipe, Schema } from 'effect';
 
@@ -171,8 +171,12 @@ export type RejectedTransactionItem<TTransaction> = PendingTransactionsItem<TTra
 export type Reservation = Readonly<{
   identifiers: readonly string[];
   intentHashes: readonly string[];
-  /** Ids of the coins this transaction reserved, per wallet, so each wallet can release its own. */
-  inputs: Readonly<{ unshielded: readonly string[] }>;
+  /**
+   * Ids of the coins this transaction reserved, per wallet: unshielded coins as `intentHash#outputNo`, shielded coins
+   * by nullifier. The shielded wallet releases its own bookings once they expire, so its ids here are a record of who
+   * holds the coins, not a release instruction.
+   */
+  inputs: Readonly<{ unshielded: readonly string[]; shielded?: readonly string[] }>;
   /** The transaction's TTL: from this instant the ledger rejects it, so the reservation cannot still be valid. */
   ttl: Date;
   createdAt: DateTime.Utc;
@@ -182,6 +186,11 @@ export type Reservation = Readonly<{
 export type PendingTransactions<TTransaction> = Readonly<{
   all: ReadonlyArray<PendingTransactionsItem<TTransaction>>;
   reservations: ReadonlyArray<Reservation>;
+  /**
+   * The top-level members of the stored payload this build does not declare, exactly as they were read, written back by
+   * {@link serialize} so a later release that wrote them still finds them. Absent when the payload carried none.
+   */
+  unknownFields?: SnapshotFormat.UnknownFields;
 }>;
 
 const traitOfItem = <TTransaction>(
@@ -529,7 +538,12 @@ const hasEpochEnded = <TTransaction>(
 const ReservationSchema = Schema.Struct({
   identifiers: Schema.Array(Schema.String),
   intentHashes: Schema.Array(Schema.String),
-  inputs: Schema.Struct({ unshielded: Schema.Array(Schema.String) }),
+  // `shielded` is optional: it arrived after the format was in the field, and is absent when nothing shielded was
+  // booked, so a reservation that books only unshielded coins keeps the bytes it had.
+  inputs: Schema.Struct({
+    unshielded: Schema.Array(Schema.String),
+    shielded: Schema.optionalWith(Schema.Array(Schema.String), { exact: true }),
+  }),
   ttl: Schema.Date,
   createdAt: Schema.DateTimeUtc,
   expired: Schema.Boolean,
@@ -609,20 +623,33 @@ const PendingItemSchema = <TTransaction>(
   );
 };
 
-export const SerializedSchema = <TTransaction>(
-  traits: VersionedTransactionTrait<TTransaction>,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- it's pointless in this place as we don't care about the input data type really
-): Schema.Schema<Serialized<TTransaction>, any> =>
+/**
+ * The struct behind {@link SerializedSchema}. Its own `fields` are the top-level members the format declares; any other
+ * member of a payload is an unknown field, carried rather than read.
+ */
+const SerializedStruct = <TTransaction>(traits: VersionedTransactionTrait<TTransaction>) =>
   Schema.Struct({
     version: Schema.Literal('v1'),
     transactions: Schema.Array(PendingItemSchema(traits)),
     reservations: Schema.optionalWith(Schema.Array(ReservationSchema), { default: () => [] }),
   });
 
+export const SerializedSchema = <TTransaction>(
+  traits: VersionedTransactionTrait<TTransaction>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- it's pointless in this place as we don't care about the input data type really
+): Schema.Schema<Serialized<TTransaction>, any> => SerializedStruct(traits);
+
 export const serialize = <TTransaction>(
   state: PendingTransactions<TTransaction>,
   traits: VersionedTransactionTrait<TTransaction>,
-): string => pipe(state, toSerialized, Schema.encodeSync(SerializedSchema(traits)), JSON.stringify);
+): string => {
+  const encoded: unknown = Schema.encodeSync(SerializedSchema(traits))(toSerialized(state));
+  const written = SnapshotFormat.isJsonObject(encoded) ? encoded : {};
+  return JSON.stringify({
+    ...written,
+    ...SnapshotFormat.unknownFieldsOf(state.unknownFields ?? {}, (key) => Object.hasOwn(written, key)),
+  });
+};
 
 export const deserialize = <TTransaction>(
   serialized: string,
@@ -630,8 +657,21 @@ export const deserialize = <TTransaction>(
 ): Either.Either<PendingTransactions<TTransaction>, ParseResult.ParseError> => {
   return pipe(
     serialized,
-    Schema.decodeUnknownEither(Schema.parseJson(SerializedSchema<TTransaction>(traits))),
-    Either.map((data) => fromSerialized<TTransaction>(data)),
+    Schema.decodeUnknownEither(Schema.parseJson()),
+    Either.flatMap((json) => {
+      const schema = SerializedStruct<TTransaction>(traits);
+      return pipe(
+        Schema.decodeUnknownEither(schema)(json),
+        Either.map((data) =>
+          SnapshotFormat.withUnknownFields(
+            fromSerialized<TTransaction>(data),
+            SnapshotFormat.isJsonObject(json)
+              ? SnapshotFormat.unknownFieldsOf(json, (key) => Object.hasOwn(schema.fields, key))
+              : {},
+          ),
+        ),
+      );
+    }),
   );
 };
 
