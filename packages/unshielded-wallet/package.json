@@ -60,7 +60,7 @@
   },
   "devDependencies": {
     "@midnightntwrk/wallet-sdk-hd": "^3.1.0-rc.0",
-    "@noble/curves": "^1.9.7",
-    "@noble/hashes": "^1.8.0"
+    "@noble/curves": "1.9.7",
+    "@noble/hashes": "1.8.0"
   }
 }

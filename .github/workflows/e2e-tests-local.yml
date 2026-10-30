@@ -6,9 +6,7 @@ on:
     - cron: '0 0 * * *'
 
 env:
-  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
   NETWORK: 'undeployed'
-  APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
 
 permissions: {}
 
@@ -17,29 +15,35 @@ jobs:
     name: E2E tests
     runs-on: ubuntu-latest-8-core-x64
     timeout-minutes: 80
-    permissions: write-all
+    # The scopes dorny/test-reporter documents for publishing the junit check-run.
+    permissions:
+      contents: read
+      actions: read
+      checks: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          token: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Log in to GitHub Container registry
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0
         with:
           registry: 'https://ghcr.io'
           username: ${{ github.actor }}
-          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+          password: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 
       - name: Configure yarn
+        env:
+          NPM_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$NPM_AUTH_TOKEN"
 
       - name: Build wallet and install dependencies
         run: |
@@ -47,11 +51,13 @@ jobs:
           yarn turbo dist
 
       - name: Run e2e tests
+        env:
+          APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
         run: |
           yarn turbo test-undeployed
 
       - name: Publish wallet TS Test Report
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
+        uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3
         if: success() || failure()
         with:
           name: Wallet TS packages Junit Tests Report

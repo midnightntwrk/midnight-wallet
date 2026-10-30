@@ -420,6 +420,117 @@ const versionWatch = (
       );
 };
 
+/** Where a chain's dust event timeline reaches a protocol boundary. */
+export type DustTimelineStart = Readonly<{
+  /** The last dust event id below the boundary: the cursor a variant registered from the boundary resumes after. */
+  cursor: bigint;
+  /** The version the first dust event at or beyond the boundary was reported at. */
+  version: ProtocolVersion.ProtocolVersion;
+}>;
+
+/** A dust event's place on the timeline: all a search for the boundary reads of it. */
+type DustEventPosition = Readonly<{
+  id: number;
+  version: ProtocolVersion.ProtocolVersion;
+  /** The highest dust event id the indexer holds, which any event it serves reports. */
+  maxId: number;
+}>;
+
+/**
+ * The first dust event from `id` on, or the timeline's first for `null`.
+ *
+ * @remarks
+ *   That is the event at `id` only if a dust event holds it. Dust and zswap ledger events share one id sequence, so an id
+ *   may be a zswap event's, and the answer is then the next dust event.
+ *
+ *   Bounded by {@link EVENT_TIP_PROBE_TIMEOUT}, because the indexer keeps a subscription with nothing from `id` on open
+ *   and never writes to it: on a chain with no dust event at all, the bound is what ends the lookup.
+ */
+const firstDustEventFrom = (id: number | null): Effect.Effect<DustEventPosition, SyncWalletError, SubscriptionClient> =>
+  pipe(
+    DustLedgerEvents.run({ id }),
+    Stream.runHead,
+    Effect.scoped,
+    Effect.timeout(EVENT_TIP_PROBE_TIMEOUT),
+    Effect.mapError(
+      (cause) => new SyncWalletError({ message: `Could not read the dust event at ${id ?? 'the start'}`, cause }),
+    ),
+    Effect.flatMap(
+      Option.match({
+        onNone: () =>
+          Effect.fail(new SyncWalletError({ message: `The indexer closed the dust events at ${id ?? 'the start'}` })),
+        onSome: ({ dustLedgerEvents }) =>
+          Effect.succeed({
+            id: dustLedgerEvents.id,
+            version: ProtocolVersion.ProtocolVersion(BigInt(dustLedgerEvents.protocolVersion)),
+            maxId: dustLedgerEvents.maxId,
+          }),
+      }),
+    ),
+  );
+
+/**
+ * Narrows ids `[low, high]` down to the one at which the timeline reaches `boundary`.
+ *
+ * @remarks
+ *   Holds throughout that every event below `low` is below the boundary, that `low - 1` is one of them, and that
+ *   `atHigh`, the first event from `high`, is not. Versions only rise along the timeline, so a probe halves the range;
+ *   one that lands below the boundary moves `low` past the event it found, not the midpoint, stepping over the gaps
+ *   zswap events leave. When the range closes, `low - 1` is the last event below the boundary and `atHigh` the first
+ *   from it.
+ */
+const narrowToBoundary = (
+  low: number,
+  high: number,
+  atHigh: DustEventPosition,
+  boundary: ProtocolVersion.ProtocolVersion,
+): Effect.Effect<DustTimelineStart, SyncWalletError, SubscriptionClient> => {
+  const middle = Math.floor((low + high) / 2);
+  return low >= high
+    ? Effect.succeed({ cursor: BigInt(low - 1), version: atHigh.version })
+    : Effect.flatMap(firstDustEventFrom(middle), (probed) =>
+        probed.version >= boundary
+          ? narrowToBoundary(low, middle, probed, boundary)
+          : narrowToBoundary(probed.id + 1, high, atHigh, boundary),
+      );
+};
+
+/**
+ * Finds where the chain's dust event timeline reaches `boundary`, from the dust event subscription alone.
+ *
+ * @remarks
+ *   No indexer query names the event at which a fork took effect, and the subscription's ids have gaps where zswap ledger
+ *   events sit, so the cursor is searched for rather than computed. It must be exact: one below the last event under
+ *   the boundary serves the variant from the boundary an event its ledger cannot read, one at the first event from the
+ *   boundary skips that event.
+ *
+ *   Nothing when there is nothing to find or the search cannot finish: a timeline that starts at or beyond the boundary,
+ *   one that has not reached it, one with no dust event at all, an indexer that cannot be asked.
+ *
+ *   V2-only, with no V1 twin: only a variant registered from a boundary can start at one, and the V1 variant starts at
+ *   the beginning of the timeline.
+ * @param config Where to ask.
+ * @param boundary The protocol version the variant to start on is registered from.
+ * @returns Where the timeline reaches the boundary, or nothing.
+ */
+export const findDustTimelineStart = (
+  config: DefaultSyncConfiguration,
+  boundary: ProtocolVersion.ProtocolVersion,
+): Effect.Effect<Option.Option<DustTimelineStart>> =>
+  pipe(
+    Effect.gen(function* () {
+      const first = yield* firstDustEventFrom(null);
+      const last = yield* firstDustEventFrom(first.maxId);
+      if (first.version >= boundary || last.version < boundary) {
+        return Option.none<DustTimelineStart>();
+      }
+      return Option.some(yield* narrowToBoundary(first.id + 1, last.id, last, boundary));
+    }),
+    Effect.provide(makeIndexerSyncService(config).connectionLayer()),
+    Effect.scoped,
+    Effect.orElseSucceed(() => Option.none<DustTimelineStart>()),
+  );
+
 export type SimulatorSyncConfiguration = {
   simulator: Simulator;
   networkId: NetworkId;
