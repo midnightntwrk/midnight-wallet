@@ -80,7 +80,7 @@ describe('a forking dust wallet stepped by hand on its V1 variant', () => {
       const { protocolVersion } = (yield* currentState(restored)).state;
       expect(protocolVersion).toBeLessThan(forkVersion);
 
-      const rejection = yield* rejectionOf(restored.stepSync(writer.keys.v9));
+      const rejection = yield* rejectionOf(restored.stepSync(writer.keys));
 
       expect(rejection).toBeInstanceOf(ManualSyncUnsupportedError);
       expect(rejection).toMatchObject({ protocolVersion });
@@ -94,7 +94,7 @@ describe('a forking dust wallet stepped by hand on its V1 variant', () => {
       const { protocolVersion } = (yield* currentState(wallet.dust)).state;
       expect(protocolVersion).toBeLessThan(forkVersion);
 
-      const rejection = yield* rejectionOf(wallet.dust.stepSync(wallet.keys.v9));
+      const rejection = yield* rejectionOf(wallet.dust.stepSync(wallet.keys));
 
       expect(rejection).toBeInstanceOf(ManualSyncUnsupportedError);
       expect(rejection).toMatchObject({ protocolVersion });
