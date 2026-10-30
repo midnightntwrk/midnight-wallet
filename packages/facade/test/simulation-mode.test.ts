@@ -34,11 +34,12 @@ import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightnt
 import { Effect, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { type CombinedTokenTransfer, type UnprovenTransactionRecipe, type FacadeState } from '../src/index.js';
+import { type CombinedTokenTransfer, type UnprovenTransactionRecipe } from '../src/index.js';
 import {
   createSimulatorWalletFactories,
   deriveWalletKeys,
   makeSimulatorFacade,
+  registerForDust,
   tokenValue,
   waitForShieldedCoins,
   waitForUnshieldedBalance,
@@ -116,38 +117,9 @@ describe('WalletFacade in simulation mode', () => {
       yield* waitForShieldedCoins(senderFacade);
       yield* waitForUnshieldedBalance(senderFacade, nightTokenType, 1n);
 
-      // Step 6: Fast-forward time so Night UTXOs accumulate "would-be" Dust.
-      // Registration pays its own fee via allowFeePayment, which is derived from
-      // the Dust that would be generated from the unregistered Night UTXOs.
-      // Without elapsed time, generatedNow=0 and registration can't cover its fee.
-      yield* simulator.fastForward(10_000n);
-
-      // Step 7: Register Night tokens for Dust generation
-      const senderState: FacadeState = yield* Effect.promise(() =>
-        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0))),
-      );
-
-      const nightUtxos = senderState.unshielded.availableCoins.filter(
-        (coin) => coin.utxo.type === nightTokenType && coin.meta.registeredForDustGeneration === false,
-      );
-
-      expect(nightUtxos.length).toBeGreaterThan(0);
-
-      // Registration transaction's fee is covered by allowFeePayment (would-be generated Dust)
-      const dustRegistrationRecipe = yield* Effect.promise(() =>
-        senderFacade.registerNightUtxosForDustGeneration(
-          nightUtxos,
-          senderKeys.signatureVerifyingKey,
-          senderKeys.unshieldedKeystore.signDataAsync,
-        ),
-      );
-      const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
-      yield* Effect.promise(() => senderFacade.submitTransaction(registrationTx));
-
-      // Step 8: Wait for Dust wallet to sync and see accumulated Dust
-      yield* Effect.promise(() =>
-        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.dust.availableCoins.length > 0))),
-      );
+      // Steps 6-8: Let the Night accrue Dust, register it for Dust generation (the registration pays its own fee out
+      // of the Dust that Night would have generated), and wait for the Dust wallet to see the Dust.
+      yield* registerForDust(senderFacade, senderKeys, simulator);
 
       // Step 9: Get receiver address and create transfer
       const receiverAddress = yield* Effect.promise(() => receiverFacade.shielded.getAddress());
@@ -266,31 +238,8 @@ describe('WalletFacade in simulation mode', () => {
       // Wait for sender to see Night balance from genesis
       yield* waitForUnshieldedBalance(senderFacade, nightTokenType, 1n);
 
-      // Fast-forward for Dust generation, then register Night tokens
-      yield* simulator.fastForward(10_000n);
-
-      const senderState: FacadeState = yield* Effect.promise(() =>
-        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0))),
-      );
-      const nightUtxos = senderState.unshielded.availableCoins.filter(
-        (coin) => coin.utxo.type === nightTokenType && coin.meta.registeredForDustGeneration === false,
-      );
-      expect(nightUtxos.length).toBeGreaterThan(0);
-
-      const dustRegistrationRecipe = yield* Effect.promise(() =>
-        senderFacade.registerNightUtxosForDustGeneration(
-          nightUtxos,
-          senderKeys.signatureVerifyingKey,
-          senderKeys.unshieldedKeystore.signDataAsync,
-        ),
-      );
-      const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
-      yield* Effect.promise(() => senderFacade.submitTransaction(registrationTx));
-
-      // Wait for Dust to be available
-      yield* Effect.promise(() =>
-        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.dust.availableCoins.length > 0))),
-      );
+      // Register Night tokens for Dust generation and wait for the Dust
+      yield* registerForDust(senderFacade, senderKeys, simulator);
 
       // Create and submit Night transfer with fee payment
       const receiverAddress = yield* Effect.promise(() => receiverFacade.unshielded.getAddress());
@@ -363,31 +312,8 @@ describe('WalletFacade in simulation mode', () => {
       // Wait for sender to see Night balance from genesis at its ECDSA address
       yield* waitForUnshieldedBalance(senderFacade, nightTokenType, 1n);
 
-      // Fast-forward for Dust generation, then register Night tokens (signed with the ECDSA keystore)
-      yield* simulator.fastForward(10_000n);
-
-      const senderState: FacadeState = yield* Effect.promise(() =>
-        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0))),
-      );
-      const nightUtxos = senderState.unshielded.availableCoins.filter(
-        (coin) => coin.utxo.type === nightTokenType && coin.meta.registeredForDustGeneration === false,
-      );
-      expect(nightUtxos.length).toBeGreaterThan(0);
-
-      const dustRegistrationRecipe = yield* Effect.promise(() =>
-        senderFacade.registerNightUtxosForDustGeneration(
-          nightUtxos,
-          senderKeys.signatureVerifyingKey,
-          senderKeys.unshieldedKeystore.signDataAsync,
-        ),
-      );
-      const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
-      yield* Effect.promise(() => senderFacade.submitTransaction(registrationTx));
-
-      // Wait for Dust to be available
-      yield* Effect.promise(() =>
-        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.dust.availableCoins.length > 0))),
-      );
+      // Register Night tokens for Dust generation, signed with the ECDSA keystore
+      yield* registerForDust(senderFacade, senderKeys, simulator);
 
       // Create and submit Night transfer with fee payment, spending ECDSA-owned UTXOs
       const receiverAddress = yield* Effect.promise(() => receiverFacade.unshielded.getAddress());
@@ -452,31 +378,8 @@ describe('WalletFacade in simulation mode', () => {
       // Wait for sender to see Night balance from genesis
       yield* waitForUnshieldedBalance(senderFacade, nightTokenType, 1n);
 
-      // Fast-forward for Dust generation, then register Night tokens
-      yield* simulator.fastForward(10_000n);
-
-      const senderState: FacadeState = yield* Effect.promise(() =>
-        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0))),
-      );
-      const nightUtxos = senderState.unshielded.availableCoins.filter(
-        (coin) => coin.utxo.type === nightTokenType && coin.meta.registeredForDustGeneration === false,
-      );
-      expect(nightUtxos.length).toBeGreaterThan(0);
-
-      const dustRegistrationRecipe = yield* Effect.promise(() =>
-        senderFacade.registerNightUtxosForDustGeneration(
-          nightUtxos,
-          senderKeys.signatureVerifyingKey,
-          senderKeys.unshieldedKeystore.signDataAsync,
-        ),
-      );
-      const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
-      yield* Effect.promise(() => senderFacade.submitTransaction(registrationTx));
-
-      // Wait for Dust to be available
-      yield* Effect.promise(() =>
-        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.dust.availableCoins.length > 0))),
-      );
+      // Register Night tokens for Dust generation and wait for the Dust
+      yield* registerForDust(senderFacade, senderKeys, simulator);
 
       // Create and submit Night transfer to the ECDSA wallet's address
       const receiverAddress = yield* Effect.promise(() => receiverFacade.unshielded.getAddress());
