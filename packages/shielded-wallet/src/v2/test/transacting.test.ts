@@ -1346,4 +1346,93 @@ describe('V2 Wallet Transacting', () => {
       expect(afterRevert).toBe(newState);
     });
   });
+
+  describe('when the transaction has a TTL', () => {
+    // A booking can never need to outlast the transaction it was taken for, so the wallet records that transaction's TTL
+    // against every coin a call books, which is what lets it release the coin once the transaction can no longer be
+    // included.
+    const ttl = new Date('2026-10-08T12:10:00Z');
+    /** The TTL the wallet recorded against each coin it holds booked. */
+    const bookedTtls = (state: CoreWallet): readonly (Date | undefined)[] =>
+      [...state.state.pendingSpends.values()].map(([coin]) => state.bookings?.[coin.nonce]?.ttl);
+    const walletsWithCoins = () =>
+      prepareWallets({
+        A: {
+          keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)),
+          coins: [shieldedValue(1), shieldedValue(2), shieldedValue(3)],
+        },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+      });
+
+    it('should book the coins a balance spends with the TTL, so they are held no longer than the transaction lives', () => {
+      const wallets = walletsWithCoins();
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+      const tx = ledger.Transaction.fromParts(
+        NetworkId.NetworkId.Undeployed,
+        makeOutputOffer({ recipient: wallets.B, coin: shieldedValue(2) }),
+        makeOutputOffer({ recipient: wallets.B, coin: shieldedValue(1), segment: 1 }),
+      ).eraseProofs();
+
+      const [, newState] = EitherOps.getOrThrowLeft(
+        transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, ttl),
+      );
+
+      expect(bookedTtls(newState).length).toBeGreaterThan(1);
+      expect(bookedTtls(newState)).toEqual(bookedTtls(newState).map(() => ttl));
+    });
+
+    it('should book the coins a transfer spends with the TTL, so they are held no longer than the transaction lives', () => {
+      const wallets = walletsWithCoins();
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+
+      const [, newState] = EitherOps.getOrThrowLeft(
+        transacting.makeTransfer(
+          wallets.A.keys,
+          wallets.A.wallet,
+          [makeTransferOutput({ recipient: wallets.B, coin: shieldedValue(2) })],
+          ttl,
+        ),
+      );
+
+      expect(bookedTtls(newState).length).toBeGreaterThan(0);
+      expect(bookedTtls(newState)).toEqual(bookedTtls(newState).map(() => ttl));
+    });
+
+    it('should book the coins a swap offers with the TTL, so they are held no longer than the transaction lives', () => {
+      const wallets = walletsWithCoins();
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+
+      const [, newState] = EitherOps.getOrThrowLeft(
+        transacting.initSwap(
+          wallets.A.keys,
+          wallets.A.wallet,
+          { [rawShieldedTokenType]: shieldedValue(1) },
+          [
+            makeTransferOutput({
+              recipient: wallets.A,
+              coin: { tokenType: ledger.sampleRawTokenType(), value: 10_000n },
+            }),
+          ],
+          ttl,
+        ),
+      );
+
+      expect(bookedTtls(newState).length).toBeGreaterThan(0);
+      expect(bookedTtls(newState)).toEqual(bookedTtls(newState).map(() => ttl));
+    });
+
+    it('should book without a TTL when the call names none, so a booking without one keeps the full lifetime', () => {
+      const wallets = walletsWithCoins();
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+
+      const [, newState] = EitherOps.getOrThrowLeft(
+        transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+          makeTransferOutput({ recipient: wallets.B, coin: shieldedValue(2) }),
+        ]),
+      );
+
+      expect(bookedTtls(newState).length).toBeGreaterThan(0);
+      expect(bookedTtls(newState)).toEqual(bookedTtls(newState).map(() => undefined));
+    });
+  });
 });

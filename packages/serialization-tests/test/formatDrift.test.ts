@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BASELINE_DIR, SURFACES, WRITERS, baseline, baselineFilesFor, type Writer } from './fixtures.js';
-import { rewriteWithCurrentCode, sourceForBaseline } from './rewrite.js';
+import { DERIVED_BASELINES, captureWithCurrentCode, derivedBaselineFor, sourceForBaseline } from './rewrite.js';
 
 const FIXTURES_DIR = fileURLToPath(new URL('../fixtures', import.meta.url));
 
@@ -24,11 +24,14 @@ const CAPTURING = process.env['CAPTURE_BASELINE'] === '1';
 
 /**
  * One case per writer and baseline file. A writer with no baselines yet is given the other writer's file names, so the
- * first capture for it has something to record; after that its own folder is the list.
+ * first capture for it has something to record; after that its own folder is the list. A derived baseline is always a
+ * case, so the first capture after it is declared records it.
  */
 const baselineNamesFor = (writer: Writer, surface: (typeof SURFACES)[number]): readonly string[] => {
   const own = baselineFilesFor(writer, surface);
-  return own.length > 0 ? own : WRITERS.flatMap((other) => baselineFilesFor(other, surface));
+  const recorded = own.length > 0 ? own : WRITERS.flatMap((other) => baselineFilesFor(other, surface));
+  const derived = DERIVED_BASELINES.filter((d) => d.surface === surface).map((d) => `${surface}-${d.variant}.json`);
+  return [...new Set([...recorded, ...derived])].sort();
 };
 
 const cases = WRITERS.flatMap((writer) =>
@@ -63,20 +66,31 @@ describe('what the current code writes, against the recorded baseline', () => {
   it.each(cases)('should still write $name exactly as the baseline records it', async ({ writer, surface, file }) => {
     const source = sourceForBaseline(surface, file);
 
-    const rewritten = await rewriteWithCurrentCode(writer, surface, source.serialized);
+    const rewritten = await captureWithCurrentCode(writer, surface, file, source.serialized);
 
     if (CAPTURING) {
       const dir = join(FIXTURES_DIR, BASELINE_DIR, writer);
       const path = join(dir, file);
       // A baseline never captured before starts from the source fixture's own record of what it holds, so the file
-      // says where its payload came from the same way an older one does.
+      // says where its payload came from the same way an older one does. A derived baseline also names its step.
       const existing = existsSync(path)
         ? (JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>)
         : { name: source.writtenBy.name, version: source.writtenBy.version, expected: source.expected };
+      const derived = derivedBaselineFor(surface, file);
       mkdirSync(dir, { recursive: true });
       writeFileSync(
         path,
-        `${JSON.stringify({ ...existing, writer, capturedFrom: source.id, serialized: rewritten }, null, 2)}\n`,
+        `${JSON.stringify(
+          {
+            ...existing,
+            writer,
+            capturedFrom: source.id,
+            ...(derived === undefined ? {} : { step: derived.step }),
+            serialized: rewritten,
+          },
+          null,
+          2,
+        )}\n`,
       );
       return;
     }

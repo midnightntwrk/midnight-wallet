@@ -402,7 +402,9 @@ migration**, the runtime's existing term for moving live wallet state across a h
 
 **Drift baseline** — a recording of what the current build writes, kept under `fixtures/_baseline/<writer>/`, one folder
 per wallet variant because both variants write the snapshot surfaces. It carries no compatibility promise; it exists so
-that a change to what we _write_ cannot pass unnoticed.
+that a change to what we _write_ cannot pass unnoticed. A baseline is ordinarily a frozen fixture rewritten by the
+current code; a **derived baseline** applies one pure state step first, at a pinned instant, to freeze a shape only a
+running wallet writes (`serialization-tests/test/rewrite.ts`, `DERIVED_BASELINES`).
 
 **Compatibility promise** — every format version shipped in a stable release loads in every later stable release. There
 is no downgrade: a reader meeting a version it does not know refuses the payload and names the version it found. A

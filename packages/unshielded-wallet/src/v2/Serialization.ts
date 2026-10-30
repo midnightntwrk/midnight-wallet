@@ -129,14 +129,14 @@ export const makeDefaultV2SerializationCapability = ({
         };
       };
 
-      return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
+      return SnapshotFormat.writeSnapshot(SnapshotSchema, buildSnapshot(wallet), wallet.unknownFields);
     },
     deserialize: (serialized): Either.Either<CoreWallet, WalletError> =>
       pipe(
         serialized,
         // Parse, upgrade, then decode: the upgrade step is a pure function on the JSON and runs before any schema, so
         // the schema describes exactly one shape and a `v1` payload arrives at it already in `v2`.
-        SnapshotFormat.readSnapshot({
+        SnapshotFormat.readSnapshotWithUnknownFields({
           surface: 'unshielded',
           reads: [V1_SNAPSHOT_FORMAT_VERSION, SNAPSHOT_FORMAT_VERSION],
           schema: SnapshotSchema,
@@ -147,14 +147,14 @@ export const makeDefaultV2SerializationCapability = ({
         // relabelled or spliced snapshots — a key whose encoding does not match
         // its scheme tag fails to decode (SnapshotRestoreError), and a key/address
         // scheme mismatch is reported as a SchemeMismatchError.
-        Either.flatMap((snapshot) =>
+        Either.flatMap((read) =>
           pipe(
-            assertKeyAddressConsistency(snapshot.publicKey),
-            Either.map(() => snapshot),
+            assertKeyAddressConsistency(read.snapshot.publicKey),
+            Either.map(() => read),
           ),
         ),
-        Either.map((snapshot) => {
-          return CoreWallet.restore(
+        Either.map(({ snapshot, unknownFields }) => {
+          const restored = CoreWallet.restore(
             UnshieldedState.restore(
               snapshot.state.availableUtxos,
               snapshot.state.pendingUtxos.map(({ utxo, meta, ttl }) => ({
@@ -170,6 +170,7 @@ export const makeDefaultV2SerializationCapability = ({
             ProtocolVersion.ProtocolVersion(snapshot.protocolVersion),
             snapshot.networkId,
           );
+          return SnapshotFormat.withUnknownFields(restored, unknownFields);
         }),
       ),
   };

@@ -343,7 +343,7 @@ export function CustomShieldedWallet<
       ProtocolVersion.MinSupportedVersion,
     );
 
-    balanceTransaction(tx: AnyTx): Promise<ShieldedBalancingResult> {
+    balanceTransaction(tx: AnyTx, ttl?: Date): Promise<ShieldedBalancingResult> {
       return this.runtime
         .dispatch<
           ShieldedBalancingResult,
@@ -358,7 +358,7 @@ export function CustomShieldedWallet<
                 >(tx, CustomShieldedWalletImplementation.#epoch),
               ),
             ]).pipe(
-              Effect.flatMap(([keys, unwrapped]) => v2.balanceTransaction(keys, unwrapped)),
+              Effect.flatMap(([keys, unwrapped]) => v2.balanceTransaction(keys, unwrapped, ttl)),
               Effect.map((result) =>
                 result === undefined
                   ? undefined
@@ -369,12 +369,12 @@ export function CustomShieldedWallet<
         .pipe(Effect.runPromise);
     }
 
-    transferTransaction(outputs: readonly TokenTransfer[]): Promise<UnprovenTx> {
+    transferTransaction(outputs: readonly TokenTransfer[], ttl?: Date): Promise<UnprovenTx> {
       return this.runtime
         .dispatch<UnprovenTx, WalletError | StartMaterial.MissingStartAuxError>({
           [V2Tag]: (v2) =>
             this.#requireAux().pipe(
-              Effect.flatMap((keys) => v2.transferTransaction(keys, outputs)),
+              Effect.flatMap((keys) => v2.transferTransaction(keys, outputs, ttl)),
               Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, ProtocolVersion.MinSupportedVersion)),
             ),
         })
@@ -384,12 +384,13 @@ export function CustomShieldedWallet<
     initSwap(
       desiredInputs: Record<ledger.RawTokenType, bigint>,
       desiredOutputs: readonly TokenTransfer[],
+      ttl?: Date,
     ): Promise<UnprovenTx> {
       return this.runtime
         .dispatch<UnprovenTx, WalletError | StartMaterial.MissingStartAuxError>({
           [V2Tag]: (v2) =>
             this.#requireAux().pipe(
-              Effect.flatMap((keys) => v2.initSwap(keys, desiredInputs, desiredOutputs)),
+              Effect.flatMap((keys) => v2.initSwap(keys, desiredInputs, desiredOutputs, ttl)),
               Effect.map((tx) => WalletTransaction.adopt('Unproven', tx, ProtocolVersion.MinSupportedVersion)),
             ),
         })

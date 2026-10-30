@@ -64,8 +64,11 @@ const parkedProgress: SyncProgress.SyncProgressData = {
 const capability = makeEventsSyncCapability();
 const coinsAndBalances = makeDefaultCoinsAndBalancesCapability();
 
-/** An empty batch, which is the case that matters: a quiet timeline must not skip the release. */
-const emptyUpdate = (): WalletSyncUpdate => WalletSyncUpdate.create([], keys());
+/**
+ * An empty batch, which is the case that matters: a quiet timeline must not skip the release. Every one is stamped at
+ * the same instant, so no booking under test ever outlives its lifetime here.
+ */
+const emptyUpdate = (): WalletSyncUpdate => WalletSyncUpdate.create([], keys(), new Date('2026-10-08T12:00:00Z'));
 
 /** One payment of `value` to this wallet, on the ledger the chain ran below `forks.v9`. */
 const v8Payment = (): Readonly<{

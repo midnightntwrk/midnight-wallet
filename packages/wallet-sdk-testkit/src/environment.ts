@@ -24,6 +24,38 @@ import {
 /** Public service endpoints for each remote network, minus the (caller-supplied) prover URL. */
 export type RemoteNetworkPreset = Omit<ResolvedEndpoints, 'proverUrl'>;
 
+// A record rather than a list, so a network added to `MidnightNetwork` fails to compile here until it is listed.
+const midnightNetworks: Record<MidnightNetwork, true> = {
+  undeployed: true,
+  qanet: true,
+  devnet: true,
+  preview: true,
+  preprod: true,
+  stagenet: true,
+};
+
+const isMidnightNetwork = (raw: string): raw is MidnightNetwork => Object.hasOwn(midnightNetworks, raw);
+
+/**
+ * Reads a network name, such as the `NETWORK` environment variable, as a {@link MidnightNetwork}.
+ *
+ * @example
+ *   ```ts
+ *   const env = createTestContainersEnvironment({ network: parseMidnightNetwork(process.env['NETWORK']) });
+ *   ```;
+ *
+ * @param raw The name to read.
+ * @returns The network it names.
+ * @throws When `raw` names no network, so a mistyped or missing name is reported as such rather than surfacing later as
+ *   a failure on endpoints there is no preset for.
+ */
+export const parseMidnightNetwork = (raw: string | undefined): MidnightNetwork => {
+  if (raw === undefined || !isMidnightNetwork(raw)) {
+    throw new Error(`Unrecognized network: ${String(raw)}`);
+  }
+  return raw;
+};
+
 /**
  * Endpoint presets lifted verbatim from the old `TestContainersFixture` getters. The proof server is intentionally
  * absent — there is no public prover, so every remote environment must be told where to find one.

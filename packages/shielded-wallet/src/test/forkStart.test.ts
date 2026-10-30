@@ -64,7 +64,7 @@ import { Cause, Effect, Option, Runtime, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { V1Tag } from '../v1/index.js';
 import { V2Tag } from '../v2/index.js';
-import { type ForkWallet, makeForkWallet } from './forkHarness.js';
+import { type ForkWallet, type ForkedState, makeForkWallet } from './forkHarness.js';
 import { type MintedCoin, makePayingV9Chain, mintable, v8Payment, translationStub } from './translationStub.js';
 import { awaitingCoinHashes, carried, coinValues, totalValue } from './forkWalletAssertions.js';
 
@@ -696,4 +696,87 @@ describe('a shielded wallet built from both ledger versions’ keys rather than 
       expect(coinValues(crossed.state)).toEqual([...walletValues]);
       expect(yield* v9.query((state) => state.blocks.flatMap((block) => block.transactions))).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/** A wallet on a chain that forked at its genesis, synchronized on the V2 variant and holding its coins. */
+const syncedV2Wallet: Effect.Effect<ForkWallet, LedgerOps.LedgerError | WalletRuntimeError, Scope.Scope> = Effect.gen(
+  function* () {
+    const coins = chainCoins();
+    const chain = yield* chainAt(v9Version, coins);
+    const v9 = yield* payingChainFor(coins, chain);
+
+    const wallet = yield* makeForkWallet({
+      v8: chain,
+      v9: Effect.succeed(v9),
+      networkId,
+      forkVersion,
+      seed,
+    });
+    yield* Effect.addFinalizer(() => wallet.stop);
+    yield* wallet.start;
+
+    yield* wallet.awaitMigration;
+    yield* wallet.awaitState((state) => totalValue(state.state) === walletTotal);
+    expect(yield* wallet.activeTag).toBe(V2Tag);
+
+    return wallet;
+  },
+);
+
+/** A transaction paying a stranger out of nothing, so balancing it has to spend the wallet's coins. */
+const v8PaymentToBalance = (): AnyTx => {
+  const stranger = ledgerV8.ZswapSecretKeys.fromSeed(otherSeed);
+  const coin = ledgerV8.createShieldedCoinInfo(ledgerV8.shieldedToken().raw, 50n);
+  const output = ledgerV8.ZswapOutput.new(coin, 0, stranger.coinPublicKey, stranger.encryptionPublicKey);
+  const offer = ledgerV8.ZswapOffer.fromOutput(output, coin.type, coin.value);
+  return WalletTransaction.adopt('Unproven', ledgerV8.Transaction.fromParts(networkId, offer), v8Version);
+};
+
+/** The ledger-v9 twin of {@link v8PaymentToBalance}. */
+const v9PaymentToBalance = (): AnyTx => {
+  const stranger = ledgerV9.ZswapSecretKeys.fromSeed(otherSeed);
+  const coin = ledgerV9.createShieldedCoinInfo(ledgerV9.shieldedToken().raw, 50n);
+  const output = ledgerV9.ZswapOutput.new(coin, 0, stranger.coinPublicKey, stranger.encryptionPublicKey);
+  const offer = ledgerV9.ZswapOffer.fromOutput(output, coin.type, coin.value);
+  return WalletTransaction.adopt('Unproven', ledgerV9.Transaction.fromParts(networkId, offer), forkVersion);
+};
+
+/** The TTL the wallet recorded against each coin it holds booked. */
+const bookedTtls = (state: ForkedState): readonly (Date | undefined)[] =>
+  [...state.state.state.pendingSpends.values()].map(([coin]) => state.state.bookings?.[coin.nonce]?.ttl);
+
+describe('a shielded wallet building a transaction with a TTL', () => {
+  const ttl = new Date('2026-10-08T12:10:00Z');
+
+  /** Every call that books coins, given `ttl`, on the ledger version `toBalance` was built for. */
+  const bookingCalls = (
+    wallet: ForkWallet,
+    toBalance: () => AnyTx,
+  ): readonly (readonly [string, () => Promise<AnyTx | undefined>])[] => {
+    const transfer = { amount: 50n, type: ledgerV9.shieldedToken().raw, receiverAddress: strangerAddress() };
+    return [
+      ['balanceTransaction', () => wallet.shielded.balanceTransaction(toBalance(), ttl)],
+      ['transferTransaction', () => wallet.shielded.transferTransaction([transfer], ttl)],
+      ['initSwap', () => wallet.shielded.initSwap({ [ledgerV9.shieldedToken().raw]: 50n }, [transfer], ttl)],
+    ];
+  };
+
+  describe.each([
+    ['V1', () => syncedV1Wallet, v8PaymentToBalance],
+    ['V2', () => syncedV2Wallet, v9PaymentToBalance],
+  ] as const)('on the %s variant', (_variant, synced, toBalance) => {
+    it.each(['balanceTransaction', 'transferTransaction', 'initSwap'])(
+      'should book the coins %s spends with the TTL, so they are held no longer than the transaction lives',
+      async (operation) =>
+        Effect.gen(function* () {
+          const wallet = yield* synced();
+
+          const call = bookingCalls(wallet, toBalance).find(([name]) => name === operation)!;
+          yield* Effect.promise(call[1]);
+
+          const booked = yield* wallet.awaitState((state) => state.state.state.pendingSpends.size > 0);
+          expect(bookedTtls(booked)).toEqual(bookedTtls(booked).map(() => ttl));
+        }).pipe(Effect.scoped, Effect.runPromise),
+    );
+  });
 });
