@@ -11,21 +11,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Two things about the running variant. The version signals it puts on its state stream: an ordinary transition, and
-// the healing emission that rescues a snapshot restored at a version this variant does not own. And how it runs sync:
-// the connection flag follows the subscription, and the liveness feed lives at wallet scope.
+// Three things about the running variant. The version signals it puts on its state stream: an ordinary transition,
+// and the healing emission that rescues a snapshot restored at a version this variant does not own. How it runs sync:
+// the connection flag follows the subscription, and the liveness feed lives at wallet scope. And that balancing keeps
+// the coins it books, so calls queued on the same wallet never select the same coin.
+import * as ledger from '@midnightntwrk/ledger-v9';
 import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
 import { StateChange, type Variant, VersionChangeType } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
-import { Cause, Duration, Effect, Exit, Option, Schedule, Scope, Stream, SubscriptionRef } from 'effect';
+import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
+import {
+  Array as Arr,
+  Cause,
+  Deferred,
+  Duration,
+  Effect,
+  Either,
+  Exit,
+  HashMap,
+  Option,
+  Schedule,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { describe, expect, it } from 'vitest';
+import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
+import { makeDefaultKeysCapability } from '../Keys.js';
 import { RunningV2Variant } from '../RunningV2Variant.js';
 import { makeDefaultSyncCapability, type SyncService } from '../Sync.js';
 import { type SyncUpdate } from '../SyncSchema.js';
+import { makeDefaultTransactingCapability } from '../Transacting.js';
 import { type TransactionHistoryService } from '../TransactionHistory.js';
 import { UnshieldedState } from '../UnshieldedState.js';
-import { SyncWalletError } from '../WalletError.js';
-import { fixtureOwner } from './syncFixtures.js';
+import { InsufficientFundsError, SyncWalletError, type WalletError } from '../WalletError.js';
+import { fixtureOwner, fixtureUtxo } from './syncFixtures.js';
 
 const owner = fixtureOwner();
 
@@ -373,6 +394,62 @@ describe('RunningV2Variant.startSync', () => {
     expect(progress.isStrictlyComplete()).toBe(true);
   });
 
+  it('should build the liveness feed from the verdict the wallet holds when sync starts, so a carried Behind survives', async () => {
+    // A hand-over starts the next variant on the state the migration carried, `Behind` included. The sync service seeds
+    // its feed from the state it is handed, so the variant must hand over that state as it stands: handed a fresh one,
+    // the feed would start at `Unknown`, and its first failed poll would publish `Unavailable`, which does not gate,
+    // releasing `waitForSyncedState` and the facade's `isSynced` over an indexer already proven stale.
+    const behind = IndexerLiveness.Behind({ indexerHeight: 900n, finalizedHeight: 1_000n, lag: 100n });
+
+    const program = Effect.gen(function* () {
+      const handed = yield* Deferred.make<IndexerLiveness.IndexerLiveness>();
+
+      const recordingSyncService: SyncService<CoreWallet, SyncUpdate> = {
+        updates: () => Stream.never,
+        livenessUpdates: (state) =>
+          Stream.fromEffect(Deferred.succeed(handed, state.progress.indexerLiveness)).pipe(
+            Stream.flatMap(() => Stream.never),
+          ),
+      };
+
+      // Set after the variant is built, as the runtime's state is by the time sync starts, so a variant that read the
+      // state any earlier would hand over the fresh wallet's `Unknown`.
+      const stateRef = yield* SubscriptionRef.make(CoreWallet.init(owner, 'undeployed'));
+      const scope = yield* Scope.make();
+
+      const variant = new RunningV2Variant(
+        scope,
+        { stateRef, activationRange },
+        // Type cast required because: the test exercises only the sync service and capability; building the full
+        // context would drag transacting, serialization and key material into a test about the feed's seed.
+        {
+          syncService: recordingSyncService,
+          syncCapability,
+          transactionHistoryService: noOpHistory,
+        } as unknown as RunningV2Variant.Context<string, SyncUpdate>,
+      );
+
+      yield* SubscriptionRef.update(stateRef, (wallet) =>
+        CoreWallet.updateProgress(wallet, { indexerLiveness: behind }),
+      );
+
+      yield* variant.startSyncInBackground().pipe(Effect.provideService(Scope.Scope, scope));
+
+      const seed = yield* Deferred.await(handed).pipe(
+        Effect.timeoutFailCause({
+          duration: Duration.seconds(3),
+          onTimeout: () => Cause.die(new Error('the liveness feed was never built')),
+        }),
+      );
+
+      yield* Scope.close(scope, Exit.void);
+
+      return seed;
+    });
+
+    expect(await Effect.runPromise(Effect.scoped(program))).toStrictEqual(behind);
+  });
+
   it('should treat a subscription that ends cleanly as dropped, clearing isConnected and rebuilding it', async () => {
     // The indexer closes a subscription with a graphql-ws `complete` when its own stream ends; the client turns that
     // into a clean stream end. A live wallet's update source has no legitimate end — every source is open-ended — so an
@@ -431,5 +508,135 @@ describe('RunningV2Variant.startSync', () => {
     expect(observed.builds).toBeGreaterThanOrEqual(2);
     expect(observed.progress.isConnected).toBe(false);
     expect(observed.progress.isStrictlyComplete()).toBe(false);
+  });
+});
+
+describe('RunningV2Variant balancing', () => {
+  const NIGHT = ledger.nativeToken().raw;
+  const ttl = DateOps.addSeconds(new Date(), 1800);
+  const receiver = Buffer.alloc(32, 7).toString('hex');
+
+  /** A transaction whose fallible section owes `value` Night, so balancing it must select a coin. */
+  const payment = (value: bigint): ledger.UnprovenTransaction => {
+    const intent = ledger.Intent.new(ttl);
+    intent.fallibleUnshieldedOffer = ledger.UnshieldedOffer.new([], [{ owner: receiver, type: NIGHT, value }], []);
+    return ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, undefined, undefined, intent);
+  };
+
+  const inputIdsOf = (
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish> | undefined,
+  ): ReadonlyArray<string> =>
+    Arr.fromIterable(transaction?.intents?.values() ?? []).flatMap((intent) =>
+      (intent.fallibleUnshieldedOffer?.inputs ?? []).map((input) => `${input.intentHash}#${input.outputNo}`),
+    );
+
+  /**
+   * A prover for transactions with no shielded or contract parts, which have no proofs to make. Proving through it
+   * leaves the intent unbound, so the result can still be balanced in place, unlike `mockProve`, which binds it.
+   */
+  const noProofsToMake: ledger.ProvingProvider = {
+    check: () => Promise.reject(new Error('an unshielded-only transaction has nothing to check')),
+    prove: () => Promise.reject(new Error('an unshielded-only transaction has nothing to prove')),
+    lookupKey: () => Promise.resolve(undefined),
+  };
+
+  type BalanceCall = (
+    variant: RunningV2Variant<string, SyncUpdate>,
+  ) => Effect.Effect<
+    ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish> | undefined,
+    WalletError
+  >;
+
+  /** Each way to balance in place, with the transaction it takes built up front so only the balancing is queued. */
+  const balancings: ReadonlyArray<{ method: string; prepare: (value: bigint) => Promise<BalanceCall> }> = [
+    {
+      method: 'balanceUnprovenTransaction',
+      prepare: (value) => Promise.resolve((variant) => variant.balanceUnprovenTransaction(payment(value))),
+    },
+    {
+      method: 'balanceUnboundTransaction',
+      prepare: (value) =>
+        payment(value)
+          .prove(noProofsToMake, ledger.CostModel.initialCostModel())
+          .then((unbound) => (variant) => variant.balanceUnboundTransaction(unbound)),
+    },
+  ];
+
+  /** Runs `use` against a variant holding one 100-Night coin per entry of `coinCount`, and returns its final state. */
+  const withVariantHolding = <A, E>(
+    coinCount: number,
+    use: (variant: RunningV2Variant<string, SyncUpdate>) => Effect.Effect<A, E>,
+  ): Promise<{ result: Exit.Exit<A, E>; finalState: CoreWallet }> =>
+    Effect.gen(function* () {
+      const utxos = Arr.makeBy(coinCount, (outputNo) => fixtureUtxo(owner, 100n, outputNo));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.restore(
+          UnshieldedState.restore(utxos, []),
+          owner,
+          { appliedId: 0n, highestTransactionId: 0n },
+          ProtocolVersion.ProtocolVersion(1n),
+          NetworkId.NetworkId.Undeployed,
+        ),
+      );
+      const scope = yield* Scope.make();
+      const transactingCapability = makeDefaultTransactingCapability(
+        { networkId: NetworkId.NetworkId.Undeployed },
+        () => ({
+          coinSelection: chooseCoin,
+          coinsAndBalancesCapability: makeDefaultCoinsAndBalancesCapability(),
+          keysCapability: makeDefaultKeysCapability(),
+        }),
+      );
+      const variant = new RunningV2Variant(
+        scope,
+        { stateRef, activationRange },
+        // Type cast required because: balancing reads only the transacting capability; building the full context
+        // would drag sync, serialization and signing into a test about bookings.
+        { transactingCapability } as unknown as RunningV2Variant.Context<string, SyncUpdate>,
+      );
+      const result = yield* Effect.exit(use(variant));
+      const finalState = yield* SubscriptionRef.get(stateRef);
+      yield* Scope.close(scope, Exit.void);
+      return { result, finalState };
+    }).pipe(Effect.runPromise);
+
+  describe.each(balancings)('through $method', ({ prepare }) => {
+    it('should keep the coins each balance books, so two balances queued on one wallet never spend the same coin', async () => {
+      const [first, second] = await Promise.all([prepare(50n), prepare(50n)]);
+      const { result, finalState } = await withVariantHolding(2, (variant) =>
+        Effect.all([first(variant), second(variant)], { concurrency: 'unbounded' }),
+      );
+
+      const [firstBalanced, secondBalanced] = Exit.getOrElse(result, (cause) => {
+        throw Cause.squash(cause);
+      });
+      const firstIds = inputIdsOf(firstBalanced);
+      const secondIds = inputIdsOf(secondBalanced);
+
+      // Both balances must have selected a coin, or an empty intersection would prove nothing.
+      expect(firstIds).toHaveLength(1);
+      expect(secondIds).toHaveLength(1);
+      expect(Arr.intersection(firstIds, secondIds)).toEqual([]);
+      expect(HashMap.size(finalState.state.availableUtxos)).toBe(0);
+      expect(HashMap.size(finalState.state.pendingUtxos)).toBe(2);
+    });
+
+    it('should fail a queued balance with insufficient funds once the other has booked the only coin', async () => {
+      const [first, second] = await Promise.all([prepare(50n), prepare(50n)]);
+      const { result, finalState } = await withVariantHolding(1, (variant) =>
+        Effect.all([first(variant), second(variant)], { concurrency: 'unbounded', mode: 'either' }),
+      );
+
+      const outcomes = Exit.getOrElse(result, (cause) => {
+        throw Cause.squash(cause);
+      });
+
+      expect(outcomes.filter(Either.isRight)).toHaveLength(1);
+      expect(outcomes.filter(Either.isLeft).map((outcome) => outcome.left)).toEqual([
+        expect.any(InsufficientFundsError),
+      ]);
+      expect(HashMap.size(finalState.state.availableUtxos)).toBe(0);
+      expect(HashMap.size(finalState.state.pendingUtxos)).toBe(1);
+    });
   });
 });

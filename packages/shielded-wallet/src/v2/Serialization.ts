@@ -95,6 +95,19 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
     // The transaction history a 1.0.0 snapshot embedded. Read back and written out untouched, never added to; absent
     // for every snapshot written since, and kept absent for them. See `CoreWallet.legacyTxHistory`.
     txHistory: Schema.optional(Schema.Array(Schema.String)),
+    // For each booked coin, when sync first saw the booking and its transaction's TTL (see `CoreWallet.bookings`), from
+    // which its deadline is derived, so a restart neither extends nor shortens how long a coin stays locked. Optional:
+    // absent when nothing is recorded, and absent from every snapshot written before it existed, whose bookings are
+    // counted as first seen by the first update after loading.
+    bookings: Schema.optional(
+      Schema.Record({
+        key: Schema.String,
+        value: Schema.Struct({
+          seen: Schema.optionalWith(Schema.Date, { exact: true }),
+          ttl: Schema.optionalWith(Schema.Date, { exact: true }),
+        }),
+      }),
+    ),
   });
 
   type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
@@ -113,15 +126,20 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         ...(w.progress?.appliedIndex !== undefined ? { offset: w.progress.appliedIndex } : {}),
         ...(w.legacyTxHistory !== undefined ? { txHistory: w.legacyTxHistory } : {}),
         ...(w.coinHashesPending !== undefined ? { coinHashesPending: w.coinHashesPending } : {}),
+        ...(w.bookings !== undefined ? { bookings: w.bookings } : {}),
       });
 
-      return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
+      return SnapshotFormat.writeSnapshot(SnapshotSchema, buildSnapshot(wallet), wallet.unknownFields);
     },
     deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError> => {
       return pipe(
         serialized,
-        SnapshotFormat.readSnapshot({ surface: 'shielded', reads: [SNAPSHOT_FORMAT_VERSION], schema: SnapshotSchema }),
-        Either.flatMap((snapshot: Snapshot) => {
+        SnapshotFormat.readSnapshotWithUnknownFields({
+          surface: 'shielded',
+          reads: [SNAPSHOT_FORMAT_VERSION],
+          schema: SnapshotSchema,
+        }),
+        Either.flatMap(({ snapshot, unknownFields }) => {
           const progress = {
             appliedIndex: snapshot.offset ?? 0n,
             highestRelevantWalletIndex: 0n,
@@ -130,29 +148,37 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
             isConnected: false,
           };
 
+          const withStoredExtras = (wallet: CoreWallet): CoreWallet =>
+            SnapshotFormat.withUnknownFields(
+              snapshot.bookings !== undefined ? { ...wallet, bookings: snapshot.bookings } : wallet,
+              unknownFields,
+            );
+
           // A snapshot that declares its hashes pending is the one shape the validation below would wrongly refuse:
           // its state is full and its hash map is empty by construction, because the migration that wrote it had no
           // secret keys. Every other snapshot goes on being checked against its own state.
-          return snapshot.coinHashesPending === true
-            ? Either.right(
-                CoreWallet.restoreWithPendingCoinHashes(
+          const restored =
+            snapshot.coinHashesPending === true
+              ? Either.right(
+                  CoreWallet.restoreWithPendingCoinHashes(
+                    snapshot.publicKeys,
+                    snapshot.state,
+                    progress,
+                    snapshot.protocolVersion,
+                    snapshot.networkId,
+                    snapshot.txHistory,
+                  ),
+                )
+              : CoreWallet.restoreWithCoinHashes(
                   snapshot.publicKeys,
                   snapshot.state,
+                  snapshot.coinHashes,
                   progress,
                   snapshot.protocolVersion,
                   snapshot.networkId,
                   snapshot.txHistory,
-                ),
-              )
-            : CoreWallet.restoreWithCoinHashes(
-                snapshot.publicKeys,
-                snapshot.state,
-                snapshot.coinHashes,
-                progress,
-                snapshot.protocolVersion,
-                snapshot.networkId,
-                snapshot.txHistory,
-              );
+                );
+          return Either.map(restored, withStoredExtras);
         }),
       );
     },
