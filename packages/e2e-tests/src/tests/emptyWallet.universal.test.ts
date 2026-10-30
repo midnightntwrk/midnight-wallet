@@ -18,7 +18,6 @@ import { ShieldedWallet, type ShieldedWalletClass } from '@midnightntwrk/wallet-
 import * as KeyManagement from '@cardano-sdk/key-management';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as utils from './utils.js';
-import * as ledger from '@midnightntwrk/ledger-v9';
 import { type NetworkId, InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,
@@ -26,7 +25,7 @@ import {
   UnshieldedWallet,
   type UnshieldedWalletClass,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import type { DustWalletAPI } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import type { DustKeysByEpoch, DustWalletAPI } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { type DustWalletFactory } from '@midnightntwrk/wallet-sdk-testkit/core';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import { logger } from './logger.js';
@@ -37,8 +36,8 @@ import { inspect } from 'node:util';
 describe('Fresh wallet with empty state', () => {
   const getFixture = useTestContainersFixture();
   const walletSeed = '0000000000000000000000000000000000000000000000000000000000000009';
-  const walletSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(walletSeed));
-  const dustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(walletSeed));
+  const walletKeys = utils.shieldedKeysFromSeed(utils.getShieldedSeed(walletSeed));
+  const dustKeys = utils.dustKeysFromSeed(utils.getDustSeed(walletSeed));
   const timeout = 120_000;
 
   let Wallet: ShieldedWalletClass;
@@ -46,7 +45,7 @@ describe('Fresh wallet with empty state', () => {
   let Unshielded: UnshieldedWalletClass;
   let shieldedWallet: ShieldedWallet;
   let unshieldedWallet: UnshieldedWallet;
-  let dustWallet: DustWalletAPI;
+  let dustWallet: DustWalletAPI<DustKeysByEpoch>;
   let wallet: utils.WalletInit;
   let networkId: NetworkId.NetworkId;
   let fixture: TestContainersFixture;
@@ -73,9 +72,9 @@ describe('Fresh wallet with empty state', () => {
     shieldedWallet = await Wallet.startWithSeed(utils.getShieldedSeed(walletSeed));
     unshieldedWallet = await Unshielded.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
     dustWallet = await Dust.startWithSeed(utils.getDustSeed(walletSeed));
-    await shieldedWallet.start(walletSecretKey);
+    await shieldedWallet.start(walletKeys);
     await unshieldedWallet.start();
-    await dustWallet.start(dustSecretKey);
+    await dustWallet.start(dustKeys);
     wallet = await utils.initWalletWithSeed(walletSeed, fixture);
   });
 
@@ -199,7 +198,7 @@ describe('Fresh wallet with empty state', () => {
       expect(stateObject.networkId).toBe(networkId);
 
       const restoredWallet = Dust.restore(serialized);
-      await restoredWallet.start(dustSecretKey);
+      await restoredWallet.start(dustKeys);
       const restoredState = await firstValueFrom(restoredWallet.state);
       expect(publicKey).toBe(restoredState.publicKey);
       expect(address.equals(restoredState.address)).toEqual(true);

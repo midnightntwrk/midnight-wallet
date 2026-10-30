@@ -419,7 +419,7 @@ describe('a dust wallet that skips the ledger-v8 dust history', () => {
 
       const restored = writer.walletClass.restore(snapshot);
       yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
-      yield* Effect.promise(() => restored.startWithSeed(dustSeed()));
+      yield* Effect.promise(() => restored.start(writer.keys));
 
       expect(yield* Ref.get(asked)).toBe(1);
       const current = yield* restored.runtime.currentVariant;

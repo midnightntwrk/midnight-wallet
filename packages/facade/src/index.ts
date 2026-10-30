@@ -25,12 +25,15 @@ import {
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import {
   type DefaultDustConfiguration,
+  type DustKeysByEpoch,
   type DustWalletAPI,
   type DustWalletState,
+  ManualSyncUnsupportedError,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { type CoinsAndBalances as DustCoinsAndBalances } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
   type DefaultShieldedConfiguration,
+  type ShieldedKeysByEpoch,
   type ShieldedWalletAPI,
   type ShieldedWalletState,
   ShieldedSectionSchema,
@@ -487,27 +490,40 @@ export type FacadeStartOptions = Readonly<{
    * Leaves the dust wallet unstarted in the background, to be driven a step at a time with `doSync`.
    *
    * @remarks
-   *   Requires a dust wallet built with the projections sync service; see `makeEventLessSyncService`.
+   *   Requires a dust wallet built with the projections sync service; see `makeEventLessSyncService`. That service needs
+   *   ledger-v9, so while the dust wallet is below `forks.v9` `start` refuses this option, before starting anything:
+   *   start without it there, and the dust wallet synchronizes in the background.
    */
   manualSync?: boolean;
 }>;
 
 /**
- * The ledger-v9 key objects the wallets' own `start` takes, from whichever material the caller supplied.
+ * One ledger version's shielded keys per side of the boundary, from whichever material the caller supplied.
  *
  * @remarks
- *   Only the ledger-v9 side is needed here: a wallet built from seeds or from both versions' keys already holds what its
- *   V1 variant needs, retained when it was built. What `start` supplies is the side the wallet's own API speaks.
+ *   What the shielded wallet is started with, whatever its composition: one spanning the boundary takes both sides, one
+ *   composed for ledger-v9 alone takes the `v9` side. A seed is turned into keys here, with each ledger version's own
+ *   derivation, because a wallet takes keys and never a seed.
  */
-const v9KeysOf = (
-  material: FacadeStartMaterial,
-): Readonly<{ shielded: ledgerV9.ZswapSecretKeys; dust: ledgerV9.DustSecretKey }> =>
+const shieldedKeysOf = (material: FacadeStartMaterial): ShieldedKeysByEpoch =>
   'v9' in material
-    ? material.v9
+    ? { v8: material.v8.shielded, v9: material.v9.shielded }
     : {
-        shielded: ledgerV9.ZswapSecretKeys.fromSeed(material.shielded),
-        dust: ledgerV9.DustSecretKey.fromSeed(material.dust),
+        v8: ledgerV8.ZswapSecretKeys.fromSeed(material.shielded),
+        v9: ledgerV9.ZswapSecretKeys.fromSeed(material.shielded),
       };
+
+/**
+ * One ledger version's dust key per side of the boundary, from whichever material the caller supplied.
+ *
+ * @remarks
+ *   What the dust wallet is started and stepped with, whatever its composition, for the same reasons as
+ *   {@link shieldedKeysOf}.
+ */
+const dustKeysOf = (material: FacadeStartMaterial): DustKeysByEpoch =>
+  'v9' in material
+    ? { v8: material.v8.dust, v9: material.v9.dust }
+    : { v8: ledgerV8.DustSecretKey.fromSeed(material.dust), v9: ledgerV9.DustSecretKey.fromSeed(material.dust) };
 
 /** Which of the three wallets a reading is about. */
 export type WalletKind = keyof WalletProtocolVersions;
@@ -878,9 +894,9 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
     config: ResolvedConfiguration<TConfig>,
     deps: { fetchBlockData: BlockDataFetcher; clock: Clock.Clock },
   ) => MaybePromise<VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>>;
-  shielded: (config: ResolvedConfiguration<TConfig>) => MaybePromise<ShieldedWalletAPI>;
+  shielded: (config: ResolvedConfiguration<TConfig>) => MaybePromise<ShieldedWalletAPI<ShieldedKeysByEpoch>>;
   unshielded: (config: ResolvedConfiguration<TConfig>) => MaybePromise<UnshieldedWalletAPI>;
-  dust: (config: ResolvedConfiguration<TConfig>) => MaybePromise<DustWalletAPI>;
+  dust: (config: ResolvedConfiguration<TConfig>) => MaybePromise<DustWalletAPI<DustKeysByEpoch>>;
 };
 
 // `BlockData` is not re-exported from the facade to avoid a name collision with the
@@ -894,6 +910,10 @@ export {
   WellFormedError,
   type WellFormedStrictnessFlags,
 };
+
+// What `start` with `manualSync`, and `doSync`, reject with below `forks.v9`, so a caller can recognise it without
+// depending on the dust wallet package. The dust wallet's own, so `instanceof` agrees with what is thrown.
+export { ManualSyncUnsupportedError, isManualSyncUnsupportedError } from '@midnightntwrk/wallet-sdk-dust-wallet';
 
 export class WalletFacade {
   private static makeDefaultSubmissionService<TConfig extends DefaultSubmissionConfiguration>(
@@ -996,13 +1016,18 @@ export class WalletFacade {
    *   factory below is handed a {@link ResolvedConfiguration}, which always has it — what
    *   {@link WalletFacade.resolveConfiguration} returns
    * - `shielded` - a function taking the configuration and returning shielded wallet (or a promise with such)
-   *   implementing {@link ShieldedWalletAPI}
+   *   implementing {@link ShieldedWalletAPI} for {@link ShieldedKeysByEpoch}: the facade starts it with one ledger
+   *   version's keys per side of the boundary, of which a wallet composed for ledger-v9 alone takes the `v9` side. Such
+   *   a single-variant wallet (`CustomShieldedWallet`, `CustomDustWallet`) stamps what it builds at the minimum
+   *   supported version, so it belongs only in a facade whose `forks.v9` is at that minimum — a chain on ledger-v9 from
+   *   its genesis, such as the in-memory simulator — where that stamp reads as ledger-v9
    * - `unshielded` - a function taking the configuration and returning unshielded wallet (or a promise with such)
    *   implementing {@link UnshieldedWalletAPI}
    * - `dust` - a function taking the configuration and returning Dust wallet (or a promise with such) implementing
-   *   {@link DustWalletAPI} There are some optional services/abstractions to provide, too. If not provided - default
-   *   implementations will be used, each of them is initialized by a function taking the configuration and returning
-   *   proper implementation (wrapped in a {@link Promise} or not).
+   *   {@link DustWalletAPI} for {@link DustKeysByEpoch}, started and stepped like the shielded one. There are some
+   *   optional services/abstractions to provide, too. If not provided - default implementations will be used, each of
+   *   them is initialized by a function taking the configuration and returning proper implementation (wrapped in a
+   *   {@link Promise} or not).
    * - `submissionService` - needs to implement {@link SubmissionService} for a {@link ledgerV9.FinalizedTransaction} to
    *   submit transactions to the network, default uses Node RPC connection
    * - `pendingTransactionsService` - needs to implement {@link PendingTransactionsService} for a
@@ -1061,9 +1086,9 @@ export class WalletFacade {
     );
   }
 
-  readonly shielded: ShieldedWalletAPI;
+  readonly shielded: ShieldedWalletAPI<ShieldedKeysByEpoch>;
   readonly unshielded: UnshieldedWalletAPI;
-  readonly dust: DustWalletAPI;
+  readonly dust: DustWalletAPI<DustKeysByEpoch>;
   readonly submissionService: SubmissionService<FinalizedTx>;
   readonly pendingTransactionsService: PendingTransactionsService<FinalizedTx>;
   readonly provingService: VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>;
@@ -1093,9 +1118,9 @@ export class WalletFacade {
    * @private
    */
   private constructor(
-    shieldedWallet: ShieldedWalletAPI,
+    shieldedWallet: ShieldedWalletAPI<ShieldedKeysByEpoch>,
     unshieldedWallet: UnshieldedWalletAPI,
-    dustWallet: DustWalletAPI,
+    dustWallet: DustWalletAPI<DustKeysByEpoch>,
     submissionService: SubmissionService<FinalizedTx>,
     pendingTransactionsService: PendingTransactionsService<FinalizedTx>,
     provingService: VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>,
@@ -2519,15 +2544,39 @@ export class WalletFacade {
    * @param options `manualSync` leaves the dust wallet unstarted in the background; drive it explicitly with
    *   {@link doSync} instead (requires a dust wallet built with the projections sync service, see
    *   `makeEventLessSyncService`).
+   * @throws `ManualSyncUnsupportedError` When `manualSync` is asked for while the dust wallet is below `forks.v9`.
+   *   Nothing has been started then, so starting again without it is a first start.
    */
   async start(material: FacadeStartMaterial, options: FacadeStartOptions = {}): Promise<void> {
-    const keys = v9KeysOf(material);
+    if (options.manualSync) {
+      await this.#refuseManualSyncBelowFork();
+    }
     await Promise.all([
-      this.shielded.start(keys.shielded),
+      this.shielded.start(shieldedKeysOf(material)),
       this.unshielded.start(),
-      !options.manualSync ? this.dust.start(keys.dust) : undefined,
+      !options.manualSync ? this.dust.start(dustKeysOf(material)) : undefined,
       this.pendingTransactionsService.start(),
     ]);
+  }
+
+  /**
+   * Refuses manual synchronization while the dust wallet is below `forks.v9`.
+   *
+   * @remarks
+   *   There the dust wallet is on its V1 variant, which cannot be stepped, so a dust wallet left to `doSync` would never
+   *   move. Asked before any wallet is started, so a refusal leaves the facade exactly as it was.
+   */
+  async #refuseManualSyncBelowFork(): Promise<void> {
+    const { protocolVersion } = await firstValueFrom(this.dust.state);
+    if (protocolVersion < this.#forkVersion) {
+      throw new ManualSyncUnsupportedError({
+        message:
+          `The dust wallet is at protocol version ${protocolVersion}, below forks.v9 (${this.#forkVersion}), where it ` +
+          `cannot be synchronized by hand: its V1 variant has no stepped synchronization, whatever sync service it ` +
+          `was built with. Start the facade without manualSync, and the dust wallet synchronizes in the background.`,
+        protocolVersion,
+      });
+    }
   }
 
   /**
@@ -2535,9 +2584,12 @@ export class WalletFacade {
    * the shielded and unshielded wallets keep syncing in the background via {@link start}.
    *
    * @param material The same material {@link start} was given.
+   * @returns Nothing; resolves once the pass has finished.
+   * @throws `ManualSyncUnsupportedError` While the dust wallet is below `forks.v9`: its V1 variant has no stepped
+   *   synchronization, whatever sync service it was built with.
    */
   async doSync(material: FacadeStartMaterial): Promise<void> {
-    await this.dust.stepSync(v9KeysOf(material).dust);
+    await this.dust.stepSync(dustKeysOf(material));
   }
 
   async stop(): Promise<void> {

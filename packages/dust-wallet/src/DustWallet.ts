@@ -19,8 +19,9 @@
  *   produced it; from the boundary the V2 variant does, having been handed identity and a place in the timeline and
  *   nothing else — the dust itself is re-discovered from the indexer's replay, which is what
  *   `test/forkSimulation.test.ts` proves. Which variant is running is the runtime's business, not the application's:
- *   the wallet's public API speaks ledger-v9 throughout, and where the two sides genuinely differ — the key material
- *   each variant's synchronization needs — the wallet resolves it per variant from what it retained.
+ *   the wallet's public API speaks ledger-v9 throughout except for the keys it is started with — one ledger version's
+ *   per side of the boundary, since that is where the two sides genuinely differ — and each variant takes its own side
+ *   from what the wallet retained.
  *
  *   `DustWallet(configuration)` at the bottom is how this package ships it. `CustomForkingDustWallet` is the same wallet
  *   over builders the caller chooses, and `SingleVariantDustWallet.ts` is the composition that gives up the crossing to
@@ -52,7 +53,7 @@ import {
   type WalletRuntimeError,
 } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type Clock, EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
-import { Duration, Effect, Either, Match, Option, Ref, type Scope, pipe } from 'effect';
+import { Data, Duration, Effect, Either, Match, Option, Ref, type Scope, Stream, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
 import {
@@ -100,6 +101,44 @@ type TransactingError =
   | StartMaterial.MissingStartAuxError
   | ProtocolVersionMismatchError
   | Signatures.UnsupportedSignatureKindError;
+
+/**
+ * Raised when a dust wallet below `forks.v9` is asked to synchronize by hand.
+ *
+ * @remarks
+ *   A step runs one pass of a sync service and waits for it to end. The only dust sync service the SDK ships whose passes
+ *   end is the projections one, which rests on `DustLocalState` members only ledger-v9 has; the ledger-v8 one follows
+ *   the chain and never ends a pass. So the V1 variant has no stepped synchronization, whatever service it was built
+ *   with, and below `forks.v9` a dust wallet synchronizes in the background once started.
+ *
+ *   Carries the protocol version the wallet was at, so an application can say where it stands.
+ */
+export class ManualSyncUnsupportedError extends Data.TaggedError(
+  '@midnightntwrk/wallet-sdk-dust-wallet/DustWallet/ManualSyncUnsupportedError',
+)<{
+  readonly message: string;
+  readonly protocolVersion: ProtocolVersion.ProtocolVersion;
+}> {}
+
+/**
+ * Whether a rejection is the refusal a dust wallet below `forks.v9` meets when asked to synchronize by hand.
+ *
+ * @remarks
+ *   The same test as `instanceof`, for a caller that would rather not import the class — the way
+ *   `isInsufficientDustForFeeError` recognises the other error a caller is expected to handle.
+ * @example
+ *   ```ts
+ *   await facade.doSync(seeds).catch((error: unknown) => {
+ *   if (isManualSyncUnsupportedError(error)) console.warn(`below forks.v9 at ${error.protocolVersion}`);
+ *   throw error;
+ *   });
+ *   ```
+ *
+ * @param error The rejection to test.
+ * @returns `true` for a {@link ManualSyncUnsupportedError}, narrowing `error` to it.
+ */
+export const isManualSyncUnsupportedError = (error: unknown): error is ManualSyncUnsupportedError =>
+  error instanceof ManualSyncUnsupportedError;
 
 /** The V1 variant a forking dust wallet registers: the one that reads the chain before the boundary. */
 export type V1DustVariant<TSyncUpdate> = V1Variant<
@@ -203,55 +242,12 @@ export type DustKeysByEpoch = Readonly<{
  * A running dust wallet that spans a protocol boundary.
  *
  * @remarks
- *   Its two extra starts are the instance counterparts of the class-level ones, and they are here rather than on
- *   {@link DustWalletAPI} because only a wallet with a variant either side of a boundary has anything to do with them: a
- *   single-variant wallet speaks one ledger version, and the key `start` takes is always the right one.
+ *   Started, and stepped, with one ledger version's `DustSecretKey` per side of the boundary, because either side may be
+ *   the one that runs: a wallet restored from a snapshot is on whichever variant wrote it, which its caller cannot be
+ *   asked to know, and a wallet below the boundary hands over to the other variant when the chain forks.
  */
-export type ForkingDustWallet<TV1SyncUpdate, TV2SyncUpdate> = DustWalletAPI<ledgerV9.DustSecretKey, string> &
-  WalletLike.WalletLike<ForkingDustVariants<TV1SyncUpdate, TV2SyncUpdate>> & {
-    /**
-     * Starts this wallet from a seed, which answers for the variant either side of the boundary.
-     *
-     * @remarks
-     *   The instance counterpart of {@link ForkingDustWalletClass.startWithSeed}, and what a wallet restored from a
-     *   snapshot written below the boundary is started with. A snapshot carries no key material by design, and the
-     *   variant it restores onto is the ledger-v8 one, whose synchronization the ledger-v9 key
-     *   {@link DustWalletAPI.start} takes cannot serve. The class-level start answers for both sides too — but it builds
-     *   a _fresh_ wallet, which is the opposite of what a caller who has just restored one wants.
-     *
-     *   No dust parameters are asked for, because a restored wallet needs none: they parameterise an _empty_ state, which
-     *   is what a fresh build has to construct and a restored one already brought back from its snapshot.
-     *
-     *   The seed itself is not kept: both ledger versions' dust keys are derived from it here and retained instead, which
-     *   is the same capability with a shorter-lived secret.
-     * @example
-     *   ```typescript
-     *   const wallet = DustWallet(configuration).restore(snapshot);
-     *   await wallet.startWithSeed(seed);
-     *   ```;
-     *
-     * @param seed The seed to derive both ledger versions' dust keys from.
-     * @returns Nothing; resolves once synchronization has been started on whichever variant is current.
-     */
-    startWithSeed(seed: Uint8Array): Promise<void>;
-    /**
-     * Starts this wallet from dust keys of both ledger versions.
-     *
-     * @remarks
-     *   The instance counterpart of {@link ForkingDustWalletClass.startWithKeys}, for a caller that will not part with a
-     *   seed. Both sides are required for the same reason they are there: a `DustSecretKey` belongs to one ledger
-     *   version's runtime, so a wallet given one side alone could not read the other side of the chain.
-     * @example
-     *   ```typescript
-     *   const wallet = DustWallet(configuration).restore(snapshot);
-     *   await wallet.startWithKeys({ v8: v8Key, v9: v9Key });
-     *   ```;
-     *
-     * @param keys One ledger version's dust secret key per side of the boundary.
-     * @returns Nothing; resolves once synchronization has been started on whichever variant is current.
-     */
-    startWithKeys(keys: DustKeysByEpoch): Promise<void>;
-  };
+export type ForkingDustWallet<TV1SyncUpdate, TV2SyncUpdate> = DustWalletAPI<DustKeysByEpoch, string> &
+  WalletLike.WalletLike<ForkingDustVariants<TV1SyncUpdate, TV2SyncUpdate>>;
 
 /** The class a forking dust wallet is started from. */
 export interface ForkingDustWalletClass<
@@ -435,64 +431,47 @@ export function CustomForkingDustWallet<
   const defaultRates: DustGenerationRates = ledgerV9.LedgerParameters.initialParameters().dust;
 
   /**
-   * The key material this wallet holds, one entry per side of the protocol boundary.
+   * The key material this wallet holds: one ledger version's `DustSecretKey` per side of the boundary, or none.
    *
    * @remarks
-   *   The two ledger versions' `DustSecretKey` belong to different runtimes and each declares a private constructor, so
-   *   neither can be made from the other and the type system agrees. "The key this wallet holds" is therefore two
-   *   questions, and the type says so: each side is present or it is not, independently.
+   *   Both sides or neither, because every start hands over both: the two ledger versions' `DustSecretKey` belong to
+   *   different runtimes and each declares a private constructor, so neither can be made from the other, a wallet
+   *   holding one side alone could not read the other side of the chain, and there is no way to give it one.
    *
    *   A seed is not among them. A seed can produce either side, so a wallet given one derives both at once and keeps the
    *   results — the same capability with a shorter-lived secret, since from that moment the seed is not this wallet's
    *   to hold.
    */
-  type RetainedKeys = Readonly<{
-    v8: Option.Option<ledgerV8.DustSecretKey>;
-    v9: Option.Option<ledgerV9.DustSecretKey>;
-  }>;
-
-  /** Nothing retained: never started, or stopped. */
-  const noKeys: RetainedKeys = { v8: Option.none(), v9: Option.none() };
+  type RetainedKeys = Option.Option<DustKeysByEpoch>;
 
   /** Both sides, derived from one seed. */
-  const keysFromSeed = (seed: WalletSeed.WalletSeed): RetainedKeys => ({
-    v8: Option.some(variants[V1Tag].variant.startAux.fromSeed(seed)),
-    v9: Option.some(variants[V2Tag].variant.startAux.fromSeed(seed)),
+  const keysFromSeed = (seed: WalletSeed.WalletSeed): DustKeysByEpoch => ({
+    v8: variants[V1Tag].variant.startAux.fromSeed(seed),
+    v9: variants[V2Tag].variant.startAux.fromSeed(seed),
   });
 
-  /**
-   * What a variant can be started with, or why it cannot be.
-   *
-   * @remarks
-   *   Two different failures, deliberately distinguished: a wallet that was never started (or has been stopped) holds
-   *   nothing at all, while one started with the other side's key object holds something it must not use here.
-   */
+  /** One side of what a wallet holds, or the reason it holds nothing: never started, or stopped. */
   const auxFor = <TAux>(
     retained: RetainedKeys,
-    side: Option.Option<TAux>,
+    side: (keys: DustKeysByEpoch) => TAux,
     variantTag: symbol,
   ): Either.Either<TAux, StartMaterial.MissingStartAuxError> =>
     Either.fromOption(
-      side,
+      Option.map(retained, side),
       () =>
         new StartMaterial.MissingStartAuxError({
           message:
-            Option.isNone(retained.v8) && Option.isNone(retained.v9)
-              ? `This wallet holds no key material: it has not been started, or it has been stopped. Start it before ` +
-                `asking it to synchronize or to pay a fee.`
-              : `This wallet holds key material of the other protocol version only, which the variant ` +
-                `${String(variantTag)} cannot use: a Dust secret key belongs to one ledger version's runtime. Start ` +
-                `this wallet with material that answers for either side — startWithSeed(seed), or ` +
-                `startWithKeys({ v8, v9 }).`,
+            `This wallet holds no key material: it has not been started, or it has been stopped. Start it before ` +
+            `asking it to synchronize or to pay a fee.`,
           variantTag,
         }),
     );
 
   const v8Aux = (retained: RetainedKeys): Either.Either<ledgerV8.DustSecretKey, StartMaterial.MissingStartAuxError> =>
-    auxFor(retained, retained.v8, V1Tag);
+    auxFor(retained, (keys) => keys.v8, V1Tag);
 
   const v9Aux = (retained: RetainedKeys): Either.Either<ledgerV9.DustSecretKey, StartMaterial.MissingStartAuxError> =>
-    auxFor(retained, retained.v9, V2Tag);
+    auxFor(retained, (keys) => keys.v9, V2Tag);
 
   /**
    * The protocol versions each variant owns, and the version a transaction it builds is stamped with.
@@ -728,10 +707,7 @@ export function CustomForkingDustWallet<
       dustParameters: DustGenerationRates = defaultRates,
     ): Promise<ForkingDustWalletImplementation> {
       const derived = keysFromSeed(WalletSeed.WalletSeed(seed));
-      const wallet = await ForkingDustWalletImplementation.#startProbed(
-        { v8: Option.getOrThrow(derived.v8), v9: Option.getOrThrow(derived.v9) },
-        dustParameters,
-      );
+      const wallet = await ForkingDustWalletImplementation.#startProbed(derived, dustParameters);
       // Both sides derived here and now, and the seed reference dropped with this frame: from this point the wallet
       // holds key objects only, which is strictly less than it held before and does the same work.
       wallet.#retainKeys(derived);
@@ -743,7 +719,7 @@ export function CustomForkingDustWallet<
       dustParameters: DustGenerationRates = defaultRates,
     ): Promise<ForkingDustWalletImplementation> {
       const wallet = await ForkingDustWalletImplementation.#startProbed(keys, dustParameters);
-      wallet.#retainKeys({ v8: Option.some(keys.v8), v9: Option.some(keys.v9) });
+      wallet.#retainKeys(keys);
       return wallet;
     }
 
@@ -810,15 +786,14 @@ export function CustomForkingDustWallet<
      *
      * @remarks
      *   A migration starts a fresh variant whose sync has never run, and sync needs key material that is deliberately
-     *   absent from anything the wallet serializes. A retained seed answers for both variants; a retained key object
-     *   answers only for the ledger-v9 one, which is the ledger version this wallet's public API speaks. Cleared by
-     *   {@link stop} so a stopped wallet cannot be resurrected by a late activation.
+     *   absent from anything the wallet serializes — so both sides are kept, the one the next variant takes among them.
+     *   Cleared by {@link stop} so a stopped wallet cannot be resurrected by a late activation.
      */
-    readonly #retainedKeys = Ref.unsafeMake<RetainedKeys>(noKeys);
+    readonly #retainedKeys = Ref.unsafeMake<RetainedKeys>(Option.none());
 
     /** Remembers key material for both sides of the boundary. */
-    #retainKeys(keys: RetainedKeys): void {
-      Ref.set(this.#retainedKeys, keys).pipe(Effect.runSync);
+    #retainKeys(keys: DustKeysByEpoch): void {
+      Ref.set(this.#retainedKeys, Option.some(keys)).pipe(Effect.runSync);
     }
 
     /**
@@ -834,23 +809,9 @@ export function CustomForkingDustWallet<
       return Ref.get(this.#retainedKeys).pipe(
         Effect.flatMap((retained) =>
           // Stopped, or never started: there is nothing to resume and nothing to resume it with.
-          Option.isNone(retained.v8) && Option.isNone(retained.v9)
+          Option.isNone(retained)
             ? Effect.void
             : EitherOps.toEffect(keysFor(retained)).pipe(Effect.flatMap((aux) => running.startSyncInBackground(aux))),
-        ),
-      );
-    }
-
-    /** One synchronization step on a variant, with key material it can use. */
-    #stepSyncOn<TStartAux, TError>(
-      running: { sync: (aux: TStartAux) => Effect.Effect<void, TError> },
-      keysFor: (retained: RetainedKeys) => Either.Either<TStartAux, StartMaterial.MissingStartAuxError>,
-    ): Effect.Effect<void, TError | StartMaterial.MissingStartAuxError> {
-      return Ref.get(this.#retainedKeys).pipe(
-        Effect.flatMap((retained) =>
-          Option.isNone(retained.v8) && Option.isNone(retained.v9)
-            ? Effect.void
-            : EitherOps.toEffect(keysFor(retained)).pipe(Effect.flatMap((aux) => running.sync(aux))),
         ),
       );
     }
@@ -885,11 +846,9 @@ export function CustomForkingDustWallet<
      * one.
      *
      * @remarks
-     *   The same work whichever start was called — what the three differ in is only what they retained a moment earlier —
-     *   so it is stated once. The watcher is registered before the first dispatch and only once per wallet:
-     *   `onVariantActivation` resolves only after its subscription is live, so an activation racing a start is queued
-     *   rather than missed, and watchers accumulate, so registering per call would restart synchronization once per
-     *   historical start.
+     *   The watcher is registered before the first dispatch and only once per wallet: `onVariantActivation` resolves only
+     *   after its subscription is live, so an activation racing a start is queued rather than missed, and watchers
+     *   accumulate, so registering per call would restart synchronization once per historical start.
      *
      *   Both branches of the dispatch resolve their key from what was retained rather than from what the caller passed,
      *   because the variant that is current is not the caller's to know: a wallet restored below the boundary is on the
@@ -913,41 +872,18 @@ export function CustomForkingDustWallet<
     }
 
     /**
-     * Starts background synchronization on whichever variant is current, and keeps the key for the next one.
+     * Starts background synchronization on whichever variant is current, and keeps the keys for the next one.
      *
      * @remarks
-     *   The key is ledger-v9's, so it is retained against that variant alone and answers for it alone. A wallet still on
-     *   the V1 variant is started from whatever it holds for _that_ side — which a wallet built from a seed, or from
-     *   both versions' keys, can always answer and one holding only this cannot.
-     *
-     *   That is the position of a wallet restored from a snapshot written below the boundary: a snapshot carries no key
-     *   material, so this key leaves it with nothing the running variant can use, and it says so rather than pretending
-     *   to have started. {@link ForkingDustWallet.startWithSeed} and {@link ForkingDustWallet.startWithKeys} are the same
-     *   wallet started with material that answers for either side.
-     * @param secretKey The ledger-v9's dust secret key.
+     *   Both sides are retained, replacing whatever the wallet held before: the variant that is current takes its own
+     *   side now, and the other is there for the hand-over. A wallet restored from a snapshot written below the
+     *   boundary is on the V1 variant whatever its caller holds, so the ledger-v8 side is what lets it finish that
+     *   stretch.
+     * @param keys One ledger version's dust secret key per side of the boundary.
      */
-    start(secretKey: ledgerV9.DustSecretKey): Promise<void> {
+    start(keys: DustKeysByEpoch): Promise<void> {
       return Effect.gen(this, function* () {
-        // The ledger-v9 side only: this key belongs to that ledger version's runtime. Whatever the wallet already
-        // holds for the ledger-v8 side is left as it is, so a wallet built from a seed keeps the ability to read a
-        // chain that has not forked yet.
-        yield* Ref.update(this.#retainedKeys, (retained) => ({ ...retained, v9: Option.some(secretKey) }));
-        yield* this.#startSynchronizing();
-      }).pipe(Effect.runPromise);
-    }
-
-    startWithSeed(seed: Uint8Array): Promise<void> {
-      return Effect.gen(this, function* () {
-        // Replaced rather than merged: a seed answers for every variant, so whatever partial material the wallet held
-        // has nothing left to contribute.
-        yield* Ref.set(this.#retainedKeys, keysFromSeed(WalletSeed.WalletSeed(seed)));
-        yield* this.#startSynchronizing();
-      }).pipe(Effect.runPromise);
-    }
-
-    startWithKeys(keys: DustKeysByEpoch): Promise<void> {
-      return Effect.gen(this, function* () {
-        yield* Ref.set(this.#retainedKeys, { v8: Option.some(keys.v8), v9: Option.some(keys.v9) });
+        yield* Ref.set(this.#retainedKeys, Option.some(keys));
         yield* this.#startSynchronizing();
       }).pipe(Effect.runPromise);
     }
@@ -955,7 +891,7 @@ export function CustomForkingDustWallet<
     async stop(): Promise<void> {
       // Released before the runtime is torn down: the key material outlives neither the wallet nor an in-flight
       // activation.
-      Ref.set(this.#retainedKeys, noKeys).pipe(Effect.runSync);
+      Ref.set(this.#retainedKeys, Option.none()).pipe(Effect.runSync);
       await super.stop();
     }
 
@@ -963,17 +899,44 @@ export function CustomForkingDustWallet<
      * Runs one synchronization step on whichever variant is current.
      *
      * @remarks
-     *   Available on both sides of the boundary: the V1 variant is stepped with a key derived from what the wallet
-     *   retained, exactly as background synchronization is.
-     * @param secretKey The ledger-v9's dust secret key.
+     *   From `forks.v9` only. Below it the wallet is on its V1 variant, which has no stepped synchronization whatever
+     *   keys the wallet holds, and the step is refused with a {@link ManualSyncUnsupportedError}: there the wallet
+     *   synchronizes in the background once started. A refusal rejects with the error itself, so `instanceof` tells it
+     *   apart. From it, the V2 variant steps with the ledger-v9 side of the keys.
+     * @param keys One ledger version's dust secret key per side of the boundary.
      */
-    stepSync(secretKey: ledgerV9.DustSecretKey): Promise<void> {
-      return this.runtime
-        .dispatch<void, WalletError | StartMaterial.MissingStartAuxError>({
-          [V1Tag]: (v1) => this.#stepSyncOn(v1, v8Aux),
-          [V2Tag]: (v2) => v2.sync(secretKey),
-        })
-        .pipe(Effect.runPromise);
+    stepSync(keys: DustKeysByEpoch): Promise<void> {
+      return runPromiseThrowingFailure(
+        this.runtime.dispatch<void, WalletError | ManualSyncUnsupportedError | WalletRuntimeError>({
+          [V1Tag]: () => this.#refuseStep(),
+          [V2Tag]: (v2) => v2.sync(keys.v9),
+        }),
+      );
+    }
+
+    /** The refusal a step meets on the V1 variant, naming the protocol version the wallet is at. */
+    #refuseStep(): Effect.Effect<never, ManualSyncUnsupportedError | WalletRuntimeError> {
+      return pipe(
+        this.runtime.stateChanges,
+        Stream.take(1),
+        Stream.runHead,
+        Effect.flatMap(
+          Option.match({
+            // The runtime's state is a ref, so its changes open on the state it holds; ending first is not a refusal.
+            onNone: () => Effect.dieMessage('The wallet runtime ended its state changes before emitting any'),
+            onSome: ({ state: { protocolVersion } }) =>
+              Effect.fail(
+                new ManualSyncUnsupportedError({
+                  message:
+                    `This dust wallet is at protocol version ${protocolVersion}, below forks.v9, where it cannot be ` +
+                    `synchronized by hand: its V1 variant has no stepped synchronization, whatever sync service it ` +
+                    `was built with. Start the wallet instead, and it synchronizes in the background.`,
+                  protocolVersion,
+                }),
+              ),
+          }),
+        ),
+      );
     }
 
     /**
@@ -981,8 +944,7 @@ export function CustomForkingDustWallet<
      *
      * @remarks
      *   Fee payment selects dust the wallet owns, so it needs the same secret synchronization does. A wallet that was
-     *   never started, or one holding a key object of the other ledger version, has none the current variant can use
-     *   and says so by name.
+     *   never started, or has been stopped, has none and says so by name.
      */
     #requireAux<TAux>(
       keysFor: (retained: RetainedKeys) => Either.Either<TAux, StartMaterial.MissingStartAuxError>,

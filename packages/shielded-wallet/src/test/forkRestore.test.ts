@@ -310,7 +310,12 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
 
       // The chain answers, and the resumed wallet finishes what the snapshot interrupted.
       yield* Deferred.succeed(answering, v9);
-      yield* Effect.promise(() => restored.start(ledgerV9.ZswapSecretKeys.fromSeed(seed)));
+      yield* Effect.promise(() =>
+        restored.start({
+          v8: ledgerV8.ZswapSecretKeys.fromSeed(seed),
+          v9: ledgerV9.ZswapSecretKeys.fromSeed(seed),
+        }),
+      );
 
       const resumed = yield* restoredStates(restored, (state) => !awaitingCoinHashes(state.state));
       expect(coinValues(resumed.state)).toEqual([...walletValues]);
@@ -374,7 +379,12 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
 
       const restored = wallet.walletClass.restore(snapshot);
       yield* Effect.addFinalizer(() => Effect.promise(() => restored.stop()));
-      yield* Effect.promise(() => restored.start(ledgerV9.ZswapSecretKeys.fromSeed(seed)));
+      yield* Effect.promise(() =>
+        restored.start({
+          v8: ledgerV8.ZswapSecretKeys.fromSeed(seed),
+          v9: ledgerV9.ZswapSecretKeys.fromSeed(seed),
+        }),
+      );
 
       yield* pipe(
         runningTag(restored),

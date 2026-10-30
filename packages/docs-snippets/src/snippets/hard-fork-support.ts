@@ -46,6 +46,8 @@ import {
   WalletFacade,
   WalletSeeds,
 } from '@midnightntwrk/wallet-sdk';
+import * as ledgerV8 from '@midnightntwrk/wallet-sdk/ledger/v8';
+import * as ledgerV9 from '@midnightntwrk/wallet-sdk/ledger/v9';
 import { Buffer } from 'buffer';
 import { Either } from 'effect';
 
@@ -175,12 +177,13 @@ const restored = ShieldedWallet(configuration).tryRestore(snapshot);
 console.log('Restored the snapshot this wallet just wrote?', Either.isRight(restored));
 if (Either.isRight(restored)) {
   // A restored wallet holds no key material — a snapshot deliberately carries none — so it synchronizes nothing until
-  // it is started again. Which start depends on where the snapshot was written: `startWithSeed` (and its sibling
-  // `startWithKeys({ v8, v9 })`) answers for the variant either side of the boundary, so it works whichever side the
-  // snapshot came from; `start(secretKeys)` takes ledger-v9's key alone and so serves only a
-  // snapshot written at or past the boundary. Neither is the class-level start of the same name: those build a fresh
-  // wallet, which would discard the state just restored.
-  await restored.right.startWithSeed(seeds.shielded);
+  // it is started again, with one ledger version's keys per side of the boundary: the variant the snapshot restored
+  // onto takes its own side, whichever that is, and the other is kept for the hand-over. A wallet is started with keys,
+  // never a seed, so a caller holding a seed derives them first, each with its own ledger version.
+  await restored.right.start({
+    v8: ledgerV8.ZswapSecretKeys.fromSeed(seeds.shielded),
+    v9: ledgerV9.ZswapSecretKeys.fromSeed(seeds.shielded),
+  });
   await restored.right.stop();
 }
 

@@ -524,3 +524,40 @@ describe('makeSimulatorSyncCapability.applyUpdate boundary handling', () => {
     expect(result.changes).toEqual([]);
   });
 });
+
+// The simulator is the chain itself, so reaching it is being connected, and its last block is the tip. Progress is
+// read in the cursor's own unit — the next block to process — so a wallet that has applied everything is exactly at it.
+describe('makeSimulatorSyncCapability.applyUpdate progress', () => {
+  const capability = makeSimulatorSyncCapability();
+
+  it('should report the wallet synced once it has applied every block the simulator holds', async () => {
+    const simulatorState = await simulatorStateAt(ProtocolVersion.ProtocolVersion(3n));
+
+    const [state] = capability.applyUpdate(
+      freshWallet(),
+      SimulatorSyncUpdate.create(simulatorState, secretKeys()),
+      activeRange,
+    );
+
+    // One genesis block, so the next block to process past the simulator's tip is 1.
+    expect(state.progress.appliedIndex).toBe(1n);
+    expect(state.progress.highestRelevantWalletIndex).toBe(1n);
+    expect(state.progress.isConnected).toBe(true);
+    expect(state.progress.isStrictlyComplete()).toBe(true);
+  });
+
+  it("should not report the wallet synced while the simulator holds blocks beyond the active range, because those are the next variant's to apply", async () => {
+    const simulatorState = await simulatorStateAt(ProtocolVersion.ProtocolVersion(9n));
+
+    const [state] = capability.applyUpdate(
+      freshWallet(),
+      SimulatorSyncUpdate.create(simulatorState, secretKeys()),
+      activeRange,
+    );
+
+    expect(state.progress.appliedIndex).toBe(0n);
+    expect(state.progress.highestRelevantWalletIndex).toBe(1n);
+    expect(state.progress.isConnected).toBe(true);
+    expect(state.progress.isStrictlyComplete()).toBe(false);
+  });
+});
