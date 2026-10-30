@@ -57,6 +57,16 @@
     {
       "groupName": "Midnight libraries and docker images",
       "matchPackageNames": ["@midnightntwrk/**", "@midnight-ntwrk/**", "ghcr.io/midnight-ntwrk/**"]
+    },
+    {
+      "description": [
+        "Never move the v8-to-v9-state-translation commit pin. The crate lives only on a midnight-ledger feature branch (tkerber/state-translation/v8-to-v9), and a bare `rev` names no branch, so Renovate compares it against the head of the repository's default branch — a commit that does not contain the crate, which fails the WASM build with 'no matching package named v8-to-v9-state-translation found'.",
+        "Move the pin by hand, to a commit on that branch. Only digest updates are matched, so once the crate is released and pinned by version this rule stops applying and can be deleted."
+      ],
+      "matchManagers": ["cargo"],
+      "matchDepNames": ["v8-to-v9-state-translation"],
+      "matchUpdateTypes": ["digest"],
+      "enabled": false
     }
   ]
 }
