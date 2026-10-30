@@ -27,7 +27,7 @@
     }
   },
   "dependencies": {
-    "effect": "^3.19.19"
+    "effect": "^4.0.0"
   },
   "devDependencies": {
     "@midnightntwrk/wallet-sdk-utilities": "workspace:*"
