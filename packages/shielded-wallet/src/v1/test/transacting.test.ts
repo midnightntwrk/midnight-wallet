@@ -22,6 +22,7 @@ import { describe, expect, it } from 'vitest';
 import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
+import { makeV8SimulatorProvingServiceEffect } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { CoreWallet } from '../CoreWallet.js';
 import {
   type DefaultTransactingConfiguration,
@@ -33,14 +34,6 @@ import { getNonDustImbalance } from '../../test/testUtils.js';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { OtherWalletError } from '../WalletError.js';
 import { Either } from 'effect';
-
-// Local ledger-v8 twin of capabilities' makeV9SimulatorProvingServiceEffect, which capabilities does not publish for
-// ledger-v8.
-const makeV8SimulatorProvingServiceEffect = (): {
-  prove(transaction: ledger.UnprovenTransaction): Effect.Effect<ledger.ProofErasedTransaction>;
-} => ({
-  prove: (transaction) => Effect.succeed(transaction.eraseProofs()),
-});
 
 const shieldedValue = (value: number): bigint => BigInt(value * 10 ** 6);
 

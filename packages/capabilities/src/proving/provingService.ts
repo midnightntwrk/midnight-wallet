@@ -144,6 +144,9 @@ export type V9UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, l
 /** A proving backend written against ledger-v9. */
 export type V9ProvingServiceEffect = ProvingServiceEffect<V9UnboundTransaction, V9UnprovenTransaction>;
 
+/** The promise-facing surface of a {@link V9ProvingServiceEffect}. */
+export type V9ProvingService = ProvingService<V9UnboundTransaction, V9UnprovenTransaction>;
+
 const wrapEffectService = <TProven, TUnproven>(
   effectService: ProvingServiceEffect<TProven, TUnproven>,
 ): ProvingService<TProven, TUnproven> => ({
@@ -324,15 +327,46 @@ export const makeV9SimulatorProvingServiceEffect = (): ProvingServiceEffect<
   };
 };
 
-export const makeV9ServerProvingService = (
-  configuration: ServerProvingConfiguration,
-): ProvingService<V9UnboundTransaction, V9UnprovenTransaction> =>
+/**
+ * The promise-facing surface of {@link makeV9ServerProvingServiceEffect}.
+ *
+ * @example
+ *   ```typescript
+ *   const proving = makeV9ServerProvingService({ provingServerUrl: new URL('http://localhost:6300') });
+ *   const unbound = await proving.prove(unprovenTransaction);
+ *   ```;
+ *
+ * @param configuration The proof server to send ledger-v9 proving requests to.
+ * @returns A backend that proves ledger-v9 transactions over HTTP.
+ */
+export const makeV9ServerProvingService = (configuration: ServerProvingConfiguration): V9ProvingService =>
   wrapEffectService(makeV9ServerProvingServiceEffect(configuration));
 
-export const makeV9WasmProvingService = (
-  configuration?: WasmProvingConfiguration,
-): ProvingService<V9UnboundTransaction, V9UnprovenTransaction> =>
+/**
+ * The promise-facing surface of {@link makeV9WasmProvingServiceEffect}.
+ *
+ * @example
+ *   ```typescript
+ *   const proving = makeV9WasmProvingService();
+ *   const unbound = await proving.prove(unprovenTransaction);
+ *   ```;
+ *
+ * @param configuration Optional key material override.
+ * @returns A backend that proves ledger-v9 transactions in-process.
+ */
+export const makeV9WasmProvingService = (configuration?: WasmProvingConfiguration): V9ProvingService =>
   wrapEffectService(makeV9WasmProvingServiceEffect(configuration));
 
+/**
+ * The promise-facing surface of {@link makeV9SimulatorProvingServiceEffect}.
+ *
+ * @example
+ *   ```typescript
+ *   const proving = makeV9SimulatorProvingService();
+ *   const proofErased = await proving.prove(unprovenTransaction);
+ *   ```;
+ *
+ * @returns A backend that hands back each ledger-v9 transaction proof-erased, which the simulator accepts.
+ */
 export const makeV9SimulatorProvingService = (): ProvingService<ledger.ProofErasedTransaction, V9UnprovenTransaction> =>
   wrapEffectService(makeV9SimulatorProvingServiceEffect());
