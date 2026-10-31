@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Either } from 'effect';
-import type { V8UnboundTransaction } from '../proving/v8ProvingService.js';
+import type { V8UnboundTransaction, V8UnprovenTransaction } from '../proving/v8ProvingService.js';
 import {
   LedgerParametersMismatchError,
   makeValidationServiceEffect,
@@ -29,8 +29,7 @@ import {
  * `AnyV9ValidatableTransaction`, and a genuinely different type from it: these are the other ledger version's classes,
  * and neither ledger can read the other's.
  */
-export type AnyV8ValidatableTransaction =
-  ledger.FinalizedTransaction | V8UnboundTransaction | ledger.UnprovenTransaction;
+export type AnyV8ValidatableTransaction = ledger.FinalizedTransaction | V8UnboundTransaction | V8UnprovenTransaction;
 
 const buildStrictness = (flags: WellFormedStrictnessFlags): ledger.WellFormedStrictness => {
   const strictness = new ledger.WellFormedStrictness();
