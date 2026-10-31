@@ -12,6 +12,7 @@
 // limitations under the License.
 import { Option } from 'effect';
 import { describe, expect, it } from 'vitest';
+import type * as VariantStateModule from '../VariantState.js';
 import { VariantState } from '../VariantState.js';
 
 /** Two variants' tags, as a wallet package declares them: one unique symbol per variant. */
@@ -25,6 +26,14 @@ const ledgerLikeState = (ledgerVersion: string): LedgerLikeState => ({
   ledgerVersion,
   commitmentTreeRoot: () => `root-of-${ledgerVersion}`,
 });
+
+/** This module loaded a second time, as an application with two installed copies of this package loads it. */
+const anotherCopy = async (): Promise<typeof VariantStateModule> => {
+  const specifier = '../VariantState.js?another-copy';
+  // Type cast required because: a specifier the bundler is told not to analyse is imported untyped, and it is this
+  // very module.
+  return (await import(/* @vite-ignore */ specifier)) as typeof VariantStateModule;
+};
 
 describe('VariantState', () => {
   describe('seal', () => {
@@ -60,6 +69,14 @@ describe('VariantState', () => {
       const handle = VariantState.seal(v2Tag, ledgerLikeState('v9'));
 
       expect(VariantState.unwrapFor<LedgerLikeState>(handle, anotherPackagesV2Tag)).toStrictEqual(Option.none());
+    });
+
+    it('hands nothing, rather than throwing, for a state another copy of this class sealed', async () => {
+      // Its private fields are that copy's own, so this class cannot read them, however alike the two are.
+      const { VariantState: AnotherCopysVariantState } = await anotherCopy();
+      const handle = AnotherCopysVariantState.seal(v2Tag, ledgerLikeState('v9'));
+
+      expect(VariantState.unwrapFor<LedgerLikeState>(handle, v2Tag)).toStrictEqual(Option.none());
     });
   });
 
