@@ -40,6 +40,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type V9UnboundTransaction,
+  type V9UnprovenTransaction,
   type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { DustWallet, type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
@@ -93,7 +94,7 @@ const deferred = (): { readonly promise: Promise<void>; readonly settle: () => v
 };
 
 /** A prover that holds every transaction until the suite releases it, then proves it as the mock prover would. */
-class PausableProving implements VersionedProvingService<V9UnboundTransaction> {
+class PausableProving implements VersionedProvingService<V9UnboundTransaction, V9UnprovenTransaction> {
   readonly #proving = createV8MockProvingService();
   readonly #reached = deferred();
   readonly #released = deferred();

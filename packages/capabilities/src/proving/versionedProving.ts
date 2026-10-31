@@ -44,13 +44,11 @@ import {
   type ProvingServiceEffect,
   type ProvingServices,
   type V9UnboundTransaction,
+  type V9UnprovenTransaction,
   type VersionedProvingService,
   type VersionedProvingServiceEffect,
   type WasmProvingConfiguration,
 } from './provingService.js';
-
-/** Ledger-v9's unproven transaction, named for symmetry with {@link V8UnprovenTransaction}. */
-export type V9UnprovenTransaction = ledgerV9.UnprovenTransaction;
 
 /**
  * Every unproven transaction either ledger version can be asked to prove.
@@ -102,7 +100,7 @@ const onlyFrom = <TUnproven extends AnyVersionUnprovenTransaction, TUnbound exte
 const isV8Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is V8UnprovenTransaction =>
   transaction instanceof ledgerV8.Transaction;
 
-const isV9Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is ledgerV9.UnprovenTransaction =>
+const isV9Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is V9UnprovenTransaction =>
   transaction instanceof ledgerV9.Transaction;
 
 /** The in-process backend's configuration, with a key material override only when one was named. */

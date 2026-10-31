@@ -47,13 +47,14 @@ import {
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import {
-  makeSimulatorProvingServiceEffect,
+  makeV9SimulatorProvingServiceEffect,
   type ProvingService,
   type V9UnboundTransaction,
+  type V9UnprovenTransaction,
   type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { type V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { makeSimulatorBlockDataFetcher } from '@midnightntwrk/wallet-sdk-capabilities/validation';
+import { makeV9SimulatorBlockDataFetcher } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
@@ -147,8 +148,8 @@ export type SimulatorConfig = {
  * simulator proving returns ProofErasedTransaction but facade expects V9UnboundTransaction - they are compatible at
  * runtime.
  */
-export const createSimulatorProvingService = (): ProvingService<V9UnboundTransaction> => {
-  const effectService = makeSimulatorProvingServiceEffect();
+export const createSimulatorProvingService = (): ProvingService<V9UnboundTransaction, V9UnprovenTransaction> => {
+  const effectService = makeV9SimulatorProvingServiceEffect();
   return {
     prove: (tx: ledgerV9.UnprovenTransaction) =>
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return
@@ -341,7 +342,7 @@ export const makeSimulatorFacade = (
         dust: () => factories.createDustWallet(keys.dustKey, dustParameters),
         provingService: () => provingService,
         submissionService: () => submissionService,
-        fetchBlockData: () => makeSimulatorBlockDataFetcher(config.simulator),
+        fetchBlockData: () => makeV9SimulatorBlockDataFetcher(config.simulator),
         clock: () => simulatorClock(config.simulator),
         ...overrides,
       });
@@ -387,7 +388,7 @@ export const waitForUnshieldedBalance = (
  *   one, and hands back something the facade can bind: the proving contract is proved-but-not-yet-bound, and
  *   `mockProve` binds as it proves.
  */
-export const createV8MockProvingService = (): VersionedProvingService<V9UnboundTransaction> => ({
+export const createV8MockProvingService = (): VersionedProvingService<V9UnboundTransaction, V9UnprovenTransaction> => ({
   prove: (tx: unknown) => {
     const proven = (tx as ledgerV8.UnprovenTransaction).mockProve();
     return Promise.resolve({
