@@ -34,7 +34,7 @@ import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
-import { Cause, Either, Option, Runtime } from 'effect';
+import { Either } from 'effect';
 import * as rx from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -238,19 +238,6 @@ describe('Proving with the backend configured for the epoch a transaction belong
       V8_VERSION,
     );
 
-  /**
-   * The error a rejected facade call actually reports.
-   *
-   * @remarks
-   *   Proving is the one facade path whose failures come back through an Effect runtime, so they arrive wrapped rather
-   *   than as themselves. What the caller is entitled to is inside; this is where the test looks for it, rather than
-   *   loosening what it asserts about the failure.
-   */
-  const reported = (error: unknown): unknown =>
-    Runtime.isFiberFailure(error)
-      ? Option.getOrElse(Cause.failureOption(error[Runtime.FiberFailureCauseId]), () => error)
-      : error;
-
   /** The failure a build reports first: its own, ahead of any release of its bookings that failed with it. */
   const primary = (error: unknown): unknown => (error instanceof AggregateError ? error.errors[0] : error);
 
@@ -296,7 +283,7 @@ describe('Proving with the backend configured for the epoch a transaction belong
     // ledger-v9 bytes, so the V1 unshielded wallet's revert takes it and throws on an object it cannot read. A failed
     // release is never silent: the refusal arrives first, with the release failure behind it.
     expect(failure).toBeInstanceOf(AggregateError);
-    expect(reported(primary(failure))).toBeInstanceOf(ProvingEpochMismatchError);
+    expect(primary(failure)).toBeInstanceOf(ProvingEpochMismatchError);
   });
 
   it('refuses a transaction from a version no backend was configured for, naming that version', async () => {
@@ -309,8 +296,8 @@ describe('Proving with the backend configured for the epoch a transaction belong
       (error: unknown) => error,
     );
 
-    expect(reported(failure)).toBeInstanceOf(UnsupportedProvingVersionError);
-    expect((reported(failure) as UnsupportedProvingVersionError).protocolVersion).toStrictEqual(V8_VERSION);
+    expect(failure).toBeInstanceOf(UnsupportedProvingVersionError);
+    expect((failure as UnsupportedProvingVersionError).protocolVersion).toStrictEqual(V8_VERSION);
   });
 });
 

@@ -16,7 +16,12 @@ import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as Proving from '../index.js';
 import {
+  makeV9ServerProvingService,
   makeV9SimulatorProvingServiceEffect,
+  makeVersionedProvingServiceEffect,
+  ProvingError,
+  UnsupportedProvingVersionError,
+  wrapVersionedEffectService,
   type ProvingService,
   type ProvingServiceEffect,
   type ProvingServices,
@@ -36,7 +41,7 @@ import {
   type AnyVersionUnprovenTransaction,
   type VersionProvingServiceEffect,
 } from '../versionedProving.js';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 
 const getNonDustImbalance = (imbalances: Map<ledger.TokenType, bigint>, rawTokenType: ledger.RawTokenType): bigint => {
   const [, value] = Array.from(imbalances.entries()).find(([t, value]) =>
@@ -153,5 +158,31 @@ describe('Telling a backend over one ledger version from one over both', () => {
 
   it('names the promise-facing ledger-v9 backend as it names the effect one', () => {
     type _1 = Expect<Equal<Proving.V9ProvingService, ProvingService<V9UnboundTransaction, V9UnprovenTransaction>>>;
+  });
+});
+
+describe('Proving behind a promise', () => {
+  /** What a promise was rejected with, or nothing when it resolved. */
+  const rejectionOf = (promise: Promise<unknown>): Promise<unknown> =>
+    promise.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+  it('rejects with the failure itself, so a caller can catch the class the backend names', async () => {
+    // A proof server URL no HTTP client can dial fails before any request is made.
+    const proving = makeV9ServerProvingService({ provingServerUrl: new URL('ftp://localhost:6300') });
+
+    expect(await rejectionOf(proving.prove(makeTransaction()))).toBeInstanceOf(ProvingError);
+  });
+
+  it('rejects a version-routed proof with the failure itself too', async () => {
+    const proving = wrapVersionedEffectService(
+      makeVersionedProvingServiceEffect<V9UnboundTransaction, V9UnprovenTransaction>({ entries: [] }),
+    );
+
+    const rejection = await rejectionOf(proving.prove(makeTransaction(), ProtocolVersion.MinSupportedVersion));
+
+    expect(rejection).toBeInstanceOf(UnsupportedProvingVersionError);
   });
 });

@@ -11,8 +11,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
-import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { type CanAssign, type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
+import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { describe, expect, it } from 'vitest';
 import { type V8UnboundTransaction, type V9UnboundTransaction } from '../../proving/index.js';
 import * as Submission from '../index.js';
@@ -61,5 +62,21 @@ describe('Naming the ledger version a submission service is written against', ()
   it("names the simulator's ledger version on the submission service that reads one", () => {
     expect(Submission).toHaveProperty('makeV9SimulatorSubmissionService');
     expect(Submission).not.toHaveProperty('makeSimulatorSubmissionService');
+  });
+});
+
+describe('Submitting behind a promise', () => {
+  it('rejects with the failure itself, so a caller can catch the class the service names', async () => {
+    // A relay URL that is not a WebSocket endpoint fails before any connection is attempted.
+    const submission = makeDefaultSubmissionService({ relayURL: new URL('http://localhost:9944') });
+
+    const rejection = await submission
+      .submitTransaction(ledgerV9.Transaction.fromParts(NetworkId.NetworkId.Undeployed).mockProve())
+      .then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+
+    expect(rejection).toBeInstanceOf(Submission.SubmissionError);
   });
 });
