@@ -39,8 +39,8 @@ import {
   type UnprovenTx,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
-  type V9UnboundTransaction,
-  type V9UnprovenTransaction,
+  type V8UnboundTransaction,
+  type V8UnprovenTransaction,
   type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { DustWallet, type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
@@ -94,7 +94,7 @@ const deferred = (): { readonly promise: Promise<void>; readonly settle: () => v
 };
 
 /** A prover that holds every transaction until the suite releases it, then proves it as the mock prover would. */
-class PausableProving implements VersionedProvingService<V9UnboundTransaction, V9UnprovenTransaction> {
+class PausableProving implements VersionedProvingService<V8UnboundTransaction, V8UnprovenTransaction> {
   readonly #proving = createV8MockProvingService();
   readonly #reached = deferred();
   readonly #released = deferred();
@@ -108,9 +108,9 @@ class PausableProving implements VersionedProvingService<V9UnboundTransaction, V
   }
 
   async prove(
-    transaction: ledgerV9.UnprovenTransaction,
+    transaction: V8UnprovenTransaction,
     protocolVersion: ProtocolVersion.ProtocolVersion,
-  ): Promise<V9UnboundTransaction> {
+  ): Promise<V8UnboundTransaction> {
     this.#reached.settle();
     await this.#released.promise;
     return await this.#proving.prove(transaction, protocolVersion);
