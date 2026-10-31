@@ -2,72 +2,52 @@
 '@midnightntwrk/wallet-sdk-dust-wallet': major
 '@midnightntwrk/wallet-sdk-shielded': major
 '@midnightntwrk/wallet-sdk-unshielded-wallet': major
-'@midnightntwrk/wallet-sdk-abstractions': minor
-'@midnightntwrk/wallet-sdk-capabilities': minor
+'@midnightntwrk/wallet-sdk-abstractions': major
+'@midnightntwrk/wallet-sdk-capabilities': major
+'@midnightntwrk/wallet-sdk-testkit': major
+'@midnightntwrk/wallet-sdk': major
+'@midnightntwrk/wallet-sdk-utilities': minor
 '@midnightntwrk/wallet-sdk-facade': patch
-'@midnightntwrk/wallet-sdk-testkit': patch
 ---
 
 fix(dust,shielded,unshielded)!: name no ledger version in the wallet APIs, and configure dust rates as plain numbers
 
-The shielded, dust and unshielded wallet APIs no longer name a ledger version. The data they speak — coins, nullifiers,
-commitments, dust, UTxOs, transfers, signatures, sync settings and history storage — is declared in types the SDK owns,
-which both variants are stated in; each `/v1` and `/v2` subpath still exports the same names. A wallet state's core
-state is sealed, readable only by the variant that produced it, and everything an application reads is projected beside
-it as before.
+The shielded, dust and unshielded wallet APIs speak only SDK-owned types, exported per wallet as `ShieldedWalletTypes`,
+`DustWalletTypes` and `UnshieldedWalletTypes`; each `/v1` and `/v2` subpath still exports the same names. A wallet
+state's core state is sealed, readable only through its variant's `coreStateOf`.
 
-`DefaultDustConfiguration.dustParameters` now takes the plain `DustGenerationRates` the changelog already promised. It
-was typed as ledger-v9's `DustParameters` class, and a plain object passed anyway failed with
-`expected instance of DustParameters` once the wallet crossed `forks.v9`. `DustWallet` now gives each variant its own
-ledger version's parameters made from the rates. Either ledger version's `DustParameters` is still accepted.
-
-A fresh start that names no rates now values its empty state against the configured ones, on whichever variant it
-begins. It used the ledger's initial rates instead, so a wallet started past `forks.v9` kept them for good and one
-started below it until it crossed. `ForkingDustConfiguration` gains the optional `dustParameters` a
-`CustomForkingDustWallet` start falls back to, which `DustWallet` fills from its configuration, and a single-variant
-`CustomDustWallet` start falls back to its configuration's `dustParameters` the same way. Rates passed to a start still
-win.
+Dust rates are plain `DustGenerationRates`, and each variant gets its own ledger version's parameters made from them
+(`dustVariantConfigurations`). A fresh start that names no rates now uses the configured ones rather than the ledger's
+initial ones, in `DustWallet`, `CustomForkingDustWallet` (new `ForkingDustConfiguration.dustParameters`) and
+`CustomDustWallet`.
 
 Also:
 
-- Each wallet package exports those types under its own name — `ShieldedWalletTypes`, `DustWalletTypes`,
-  `UnshieldedWalletTypes` — together with the capability contracts both of its variants implement, so an application names `ShieldedWalletTypes.AvailableCoin` or `UnshieldedWalletTypes.TokenTransfer`
-  without reaching into `/v1` or `/v2`. Namespaced because two wallets can declare the same name, and the umbrella
-  package re-exports every wallet into one barrel.
-- `@midnightntwrk/wallet-sdk-abstractions` adds `VariantState`, a variant's core state sealed under its tag, and
-  `UnshieldedUtxo`, the UTxO shape the unshielded and dust wallets share.
-- `@midnightntwrk/wallet-sdk-capabilities/validation` adds `withLedgerParameters`, which types block data whose
-  parameters arrived as `unknown` by asking which ledger version's object they are.
-- `UnshieldedWalletState.verifyingKey` reports the wallet's key in the SDK's signature shape on either side of the
-  boundary, ledger-v8's bare key lifted into it.
-- The testkit's `DustWalletFactory` starts a wallet against plain `DustGenerationRates`.
-- `dustVariantConfigurations` makes, from one configuration's rates, each variant's configuration with its own ledger
-  version's dust parameters and the V2 variant's cross-ledger migration valued against the same rates: everything a
-  `CustomForkingDustWallet` composition hands its two builders. `DustWallet` is composed with it.
+- abstractions adds `VariantState` and `UnshieldedUtxo`, and `WalletTransaction.unwrapWithin` refuses a handle sealed
+  by another copy of the package with a `ForeignTransactionHandleError` instead of throwing.
+- capabilities adds `withLedgerParameters`, which types block data whose parameters arrive as `unknown`.
+- `UnshieldedWalletState.verifyingKey` reports the key in the SDK's signature shape on both sides of `forks.v9`.
+- utilities adds `eitherCoreStateOf` on `/testing/variants`, and the testkit's `DustWalletFactory` takes plain rates.
 
 BREAKING CHANGE:
 
-- `ShieldedWalletState.state`, `DustWalletState.state` and `UnshieldedWalletState.state` are a sealed `VariantState`.
-  Read a variant's core state with `coreStateOf` from that package's `/v1` or `/v2` subpath, which returns it when that
-  variant produced the state and nothing otherwise. `progress` is read from the wallet state itself, as before.
-- The wallet state constructors take a `progress` projection, and `UnshieldedWalletState`'s a `verifyingKey` one.
+- `ShieldedWalletState.state`, `DustWalletState.state` and `UnshieldedWalletState.state` are a sealed `VariantState`;
+  read it with `coreStateOf` from `/v1` or `/v2`. The state constructors take a `progress` projection, and
+  `UnshieldedWalletState`'s a `verifyingKey` one.
 - Removed: `ShieldedWalletCapabilities`, `ShieldedWalletServices`, `DustWalletCapabilities`, `DustWalletServices`,
-  `ShieldedCoreState`, `DustCoreState`, `UnshieldedCoreState`, and the shielded package's `V9UnboundTransaction`
-  re-export, which `@midnightntwrk/wallet-sdk-capabilities/proving` still exports.
-- `ShieldedWalletAPI<TKeys, TTransaction, TSerialized>` is now `ShieldedWalletAPI<TKeys, TSerialized>`, and
-  `ShieldedWalletState<TSerialized, TTransaction>` is now `ShieldedWalletState<TSerialized>`. The transaction parameter
-  was never used.
-- `DustWalletAPI.balanceTransactions` returns `blockData` whose `ledgerParameters` is `unknown`: they are the pricing
-  variant's own ledger object. `withLedgerParameters` types them again.
-- Reading `DefaultDustConfiguration.dustParameters` gives `DustGenerationRates`, not a ledger object. A composition
-  that hands the configuration to a variant builder passes it `asV8DustParameters(rates)` or
-  `asV9DustParameters(rates)`, as `DustWallet` does.
-- `CustomDustWallet` and `CustomizedDustWalletClass` default their configuration to the V2 variant's
-  `DefaultV2Configuration` (from `/v2`) instead of `DefaultDustConfiguration`, as the unshielded wallet's already do.
-- The dust package root no longer re-exports the V2 variant's sync module or its `BlockData`, which named ledger-v9 and
-  claimed generic names such as `IndexerClientConnection` and `DefaultSyncConfiguration` in the umbrella package. They
-  stay on `/v2`: the eventless fast sync is `SyncService.makeEventLessSyncService` and
-  `SyncService.makeEventLessSyncCapability` from there, and the dust timeline search
-  `SyncService.findDustTimelineStart`. Its answer, `DustTimelineStart`, is `DustWalletTypes.DustTimelineStart`.
-- `Simulator` from each wallet's `/v2` subpath is the ledger-v9 simulator alone, as `/v1`'s is the ledger-v8 one. It no
-  longer carries `V8`, `ForkSimulator` and the rest of the capabilities simulation entry.
+  `ShieldedCoreState`, `DustCoreState`, `UnshieldedCoreState`, and the shielded `V9UnboundTransaction` re-export (still
+  exported by `@midnightntwrk/wallet-sdk-capabilities/proving`).
+- `ShieldedWalletAPI` and `ShieldedWalletState` drop their unused transaction type parameter.
+- `DustWalletAPI.balanceTransactions` returns `blockData` with `unknown` parameters; `withLedgerParameters` types them.
+- `DefaultDustConfiguration.dustParameters` reads as `DustGenerationRates`, and `CustomDustWallet` defaults its
+  configuration to `/v2`'s `DefaultV2Configuration`.
+- The dust root, and so the umbrella package, no longer re-exports the V2 sync module: use `SyncService` from `/v2`
+  (`makeEventLessSyncService`, `makeEventLessSyncCapability`, `findDustTimelineStart`). `DustTimelineStart` is
+  `DustWalletTypes.DustTimelineStart`.
+- The ledger-v9 simulator is no longer exported unqualified from the capabilities root or `/simulation`: use
+  `V9.Simulator` (`Capabilities.V9.Simulator` in the umbrella package). A wallet's `/v2` `Simulator` is that simulator
+  alone.
+- `WalletTransaction.unwrapWithin` returns `Either<T, WalletTransactionUnwrapError>`.
+- Removed deprecated aliases: the shielded `V9_NATIVE_FORK_VERSION` (use `ProtocolVersion.V9NativeForkVersion`), the
+  simulators' `getBlockEventsSince` (use `getBlockEventsFrom`), and the testkit's `dustSnapshotPath`; saving a snapshot
+  no longer deletes files earlier snapshot layouts left behind.
