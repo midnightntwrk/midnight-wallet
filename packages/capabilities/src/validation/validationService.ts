@@ -34,10 +34,11 @@ export type AnyLedgerParameters = ledgerV8.LedgerParameters | ledgerV9.LedgerPar
  * — a separate declaration here keeps the validation service decoupled from dust-wallet. The two can be passed
  * interchangeably via structural typing.
  *
- * @typeParam TParameters The `LedgerParameters` type of the ledger version the parameters were decoded at. Defaults to
- *   ledger-v9's, so `BlockData` unqualified still names exactly what it always did.
+ * @typeParam TParameters The `LedgerParameters` type of the ledger version the parameters were decoded at. It has no
+ *   default: the two ledger versions' parameters are indistinguishable to the compiler, so a default would label either
+ *   ledger version's as ledger-v9's without a word of complaint.
  */
-export interface BlockData<TParameters = ledgerV9.LedgerParameters> {
+export interface BlockData<TParameters> {
   hash: string;
   height: number;
   /** The protocol version the indexer reported this block under, and so the ledger version its parameters are in. */
@@ -60,7 +61,7 @@ export type WellFormedStrictnessFlags = Pick<
  * @typeParam TParameters The `LedgerParameters` type of the ledger version `blockData` was decoded at — necessarily the
  *   version the validator being called speaks, since well-formedness is checked against a state built from them.
  */
-export type ValidateTxOptions<TParameters = ledgerV9.LedgerParameters> = {
+export type ValidateTxOptions<TParameters> = {
   flags: WellFormedStrictnessFlags;
   blockData?: BlockData<TParameters> | undefined;
 };
@@ -85,25 +86,20 @@ export type AnyV9ValidatableTransaction =
 /**
  * Checks a transaction for well-formedness.
  *
- * @typeParam TTransaction The transactions this validator accepts. Defaults to ledger-v9's, because a validator is only
- *   ever written against one ledger version — which is exactly why choosing between validators is
- *   {@link VersionedValidationServiceEffect}'s job and not this interface's.
- * @typeParam TParameters The `LedgerParameters` type of that same ledger version.
+ * @typeParam TTransaction The transactions this validator accepts, and so the one ledger version it is written against.
+ *   Choosing between validators for different ledger versions is {@link VersionedValidationServiceEffect}'s job, not
+ *   this interface's.
+ * @typeParam TParameters The `LedgerParameters` type of that same ledger version. Neither has a default: a validator
+ *   that left them out would be ledger-v9's without saying so.
  */
-export interface ValidationServiceEffect<
-  TTransaction = AnyV9ValidatableTransaction,
-  TParameters = ledgerV9.LedgerParameters,
-> {
+export interface ValidationServiceEffect<TTransaction, TParameters> {
   validateTx(
     tx: TTransaction,
     options: ValidateTxOptions<TParameters>,
   ): Effect.Effect<void, WellFormedError | ValidationFetchError>;
 }
 
-export interface ValidationService<
-  TTransaction = AnyV9ValidatableTransaction,
-  TParameters = ledgerV9.LedgerParameters,
-> {
+export interface ValidationService<TTransaction, TParameters> {
   validateTx(tx: TTransaction, options: ValidateTxOptions<TParameters>): Promise<void>;
 }
 
@@ -125,10 +121,7 @@ export class UnsupportedValidationVersionError extends Data.TaggedError(
  *   fork landing between authoring and validation does not rewrite the bytes, so it cannot change the answer or who
  *   gives it.
  */
-export interface VersionedValidationServiceEffect<
-  TTransaction = AnyV9ValidatableTransaction,
-  TParameters = ledgerV9.LedgerParameters,
-> {
+export interface VersionedValidationServiceEffect<TTransaction, TParameters> {
   validateTx(
     tx: TTransaction,
     protocolVersion: ProtocolVersion.ProtocolVersion,
@@ -136,10 +129,7 @@ export interface VersionedValidationServiceEffect<
   ): Effect.Effect<void, WellFormedError | ValidationFetchError | UnsupportedValidationVersionError>;
 }
 
-export interface VersionedValidationService<
-  TTransaction = AnyV9ValidatableTransaction,
-  TParameters = ledgerV9.LedgerParameters,
-> {
+export interface VersionedValidationService<TTransaction, TParameters> {
   validateTx(
     tx: TTransaction,
     protocolVersion: ProtocolVersion.ProtocolVersion,
@@ -157,10 +147,9 @@ export interface VersionedValidationService<
  *   range therefore means "this transaction belongs to a different variant", and the router says so with
  *   {@link UnsupportedValidationVersionError} instead of handing the bytes to a checker that could only reject them.
  */
-export type ValidationServices<
-  TTransaction = AnyV9ValidatableTransaction,
-  TParameters = ledgerV9.LedgerParameters,
-> = ProtocolVersion.Registry<ValidationServiceEffect<TTransaction, TParameters>>;
+export type ValidationServices<TTransaction, TParameters> = ProtocolVersion.Registry<
+  ValidationServiceEffect<TTransaction, TParameters>
+>;
 
 /**
  * Builds a validation service that routes on the version a transaction was authored for.
@@ -208,7 +197,7 @@ export type DefaultValidationConfiguration = {
  * @typeParam TParameters The `LedgerParameters` type of the ledger version this validator speaks, and so the version
  *   its `fetchBlockData` must decode at.
  */
-export type ValidationServiceDependencies<TParameters = ledgerV9.LedgerParameters> = {
+export type ValidationServiceDependencies<TParameters> = {
   fetchBlockData: () => Promise<BlockData<TParameters>>;
   networkId: string;
   clock: Clock.Clock;

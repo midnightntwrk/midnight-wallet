@@ -29,7 +29,7 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { makeSimulatorProvingServiceEffect } from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import { makeV9SimulatorProvingServiceEffect } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
@@ -152,7 +152,7 @@ const walletWithOneGeneratingDustCoin = Effect.gen(function* () {
     registration,
     keyStore.signData(registration.intents!.get(1)!.signatureData(1)),
   );
-  yield* submission.submitTransaction(yield* makeSimulatorProvingServiceEffect().prove(signed), 'InBlock');
+  yield* submission.submitTransaction(yield* makeV9SimulatorProvingServiceEffect().prove(signed), 'InBlock');
   yield* waitForBlock(2n);
 
   const registered = yield* simulator.getLatestState();

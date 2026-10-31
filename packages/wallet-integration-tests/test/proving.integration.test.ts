@@ -68,7 +68,10 @@ const proofServerContainerResource = Effect.acquireRelease(
 );
 
 function runInterfaceTests<
-  T extends ProvingServiceEffect<ledgerV9.Transaction<ledgerV9.SignatureEnabled, ledgerV9.Proof, ledgerV9.PreBinding>>,
+  T extends ProvingServiceEffect<
+    ledgerV9.Transaction<ledgerV9.SignatureEnabled, ledgerV9.Proof, ledgerV9.PreBinding>,
+    ledgerV9.UnprovenTransaction
+  >,
 >(implName: string, makeService: () => Effect.Effect<T, unknown, Scope.Scope>) {
   describe(`${implName} implementation of ProvingServiceEffect`, () => {
     const testUnprovenTx = makeTransaction();

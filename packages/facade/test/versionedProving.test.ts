@@ -27,6 +27,7 @@ import {
   UnsupportedProvingVersionError,
   type ProvingBackends,
   type V9UnboundTransaction,
+  type V9UnprovenTransaction,
   type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
@@ -51,7 +52,7 @@ vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 const V8_VERSION = ProtocolVersion.ProtocolVersion(1_000n);
 
 /** Records the version each transaction is routed to a prover with; erases proofs so the facade can carry on. */
-class RecordingProver implements VersionedProvingService<V9UnboundTransaction> {
+class RecordingProver implements VersionedProvingService<V9UnboundTransaction, V9UnprovenTransaction> {
   readonly askedFor: ProtocolVersion.ProtocolVersion[] = [];
 
   prove(

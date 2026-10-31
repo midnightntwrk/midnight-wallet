@@ -22,7 +22,7 @@ import {
   type UserAddress,
 } from '@midnightntwrk/ledger-v9';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
-import { makeSimulatorProvingServiceEffect } from '@midnightntwrk/wallet-sdk-capabilities/proving';
+import { makeV9SimulatorProvingServiceEffect } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { beforeEach, describe, it } from '@vitest/runner';
 import { Effect, Scope, Stream, SubscriptionRef } from 'effect';
@@ -108,7 +108,7 @@ describe('DustWallet', () => {
   let simulator: V9.Simulator;
   let keyStore: UnshieldedKeystore;
   let submissionService: Submission.SubmissionServiceEffect<ProofErasedTransaction>;
-  const provingService = makeSimulatorProvingServiceEffect();
+  const provingService = makeV9SimulatorProvingServiceEffect();
 
   const registerNightTokens = (
     wallet: RunningWallet,

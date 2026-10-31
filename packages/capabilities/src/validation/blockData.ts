@@ -164,7 +164,7 @@ export const makeDefaultBlockDataFetcher = (config: DefaultBlockDataFetcherConfi
  * Builds a `BlockDataFetcher` backed by a {@link V9.Simulator}. Returns the simulator's latest block, using its
  * `currentTime` for the timestamp (so fast-forwarded simulator clocks are respected).
  */
-export const makeSimulatorBlockDataFetcher = (simulator: V9.Simulator): BlockDataFetcher => {
+export const makeV9SimulatorBlockDataFetcher = (simulator: V9.Simulator): BlockDataFetcher => {
   return () =>
     Effect.runPromise(
       Effect.gen(function* () {
