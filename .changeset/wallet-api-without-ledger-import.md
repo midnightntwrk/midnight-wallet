@@ -17,9 +17,10 @@ The shielded, dust and unshielded wallet APIs speak only SDK-owned types, export
 state's core state is sealed, readable only through its variant's `coreStateOf`.
 
 Dust rates are plain `DustGenerationRates`, and each variant gets its own ledger version's parameters made from them
-(`dustVariantConfigurations`). A fresh start that names no rates now uses the configured ones rather than the ledger's
-initial ones, in `DustWallet`, `CustomForkingDustWallet` (new `ForkingDustConfiguration.dustParameters`) and
-`CustomDustWallet`.
+(`dustVariantConfigurations`). This fixes `expected instance of DustParameters` after `forks.v9` when plain rates were
+configured; either ledger version's `DustParameters` is still accepted. A fresh start that names no rates now uses the
+configured ones rather than the ledger's initial ones, in `DustWallet`, `CustomForkingDustWallet` (new
+`ForkingDustConfiguration.dustParameters`) and `CustomDustWallet`.
 
 Also:
 
