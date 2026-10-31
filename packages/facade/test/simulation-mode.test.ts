@@ -173,6 +173,9 @@ describe('WalletFacade in simulation mode', () => {
       const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
         senderFacade.transferTransaction(transferOutputs, { ttl }),
       );
+      // The recipe carries the block the fee was priced against, so validation checks the transaction against the same
+      // parameters rather than fetching a block of its own.
+      expect(transferRecipe.blockData?.ledgerParameters).toBeInstanceOf(ledger.LedgerParameters);
 
       const finalizedTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(transferRecipe));
       const txHash = yield* Effect.promise(() => senderFacade.submitTransaction(finalizedTx));
