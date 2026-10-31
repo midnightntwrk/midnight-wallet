@@ -13,9 +13,8 @@
 //
 // The ledger-v8 keystore. It lives inside the variant rather than at the package root because the two ledger
 // versions disagree about what a key *is*: v8 signing and verifying keys are bare hex strings, v9's are `{tag, value}`
-// records naming a signature scheme. The root `KeyStore.ts` is the v9 one, and is what the package's root entry point
-// exports; this copy exists so the v8 variant can keep speaking v8 without either version's key shape leaking into the
-// other's WASM calls.
+// records naming a signature scheme. Its twin is `../v2/KeyStore.ts`; the package root states keys in the SDK's own
+// shapes instead (`types/`), so neither version's key shape leaks into the other's WASM calls or into the root.
 import { UnshieldedAddress, type MidnightBech32m } from '@midnightntwrk/wallet-sdk-address-format';
 import {
   addressFromKey,

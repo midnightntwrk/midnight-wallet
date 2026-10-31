@@ -27,7 +27,7 @@ import {
   type TokenType,
   type UnshieldedUtxo,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { type MidnightBech32m, type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import {
   type DefaultSubmissionConfiguration,
   type LivenessConfiguration,
@@ -72,6 +72,59 @@ export interface TokenTransfer {
  *   from, so one signer serves a wallet on either side of the boundary.
  */
 export type SignSegment = (data: Uint8Array) => Promise<Signing.Signature>;
+
+/** An unshielded secret key, and the signature scheme it signs under. */
+export type UnshieldedSecretKey = {
+  kind: Signing.SignatureKind;
+  secret: Uint8Array<ArrayBufferLike>;
+};
+
+/**
+ * An unshielded identity, as a wallet is started with it: the verifying key, and the address derived from it, as hex
+ * and as Bech32m.
+ */
+export type PublicKey = {
+  publicKey: Signing.SignatureVerifyingKey;
+  addressHex: string;
+  address: string;
+};
+
+/** One unshielded secret key's verifying key, address and signatures. */
+export interface UnshieldedKeystore {
+  getSecretKey(): Buffer;
+  getBech32Address(): MidnightBech32m;
+  getPublicKey(): Signing.SignatureVerifyingKey;
+  getAddress(): string;
+  /** The synchronous in-process signing primitive. */
+  signData(data: Uint8Array): Signing.Signature;
+  /**
+   * Async counterpart of {@link signData} that conforms to the SDK's signer callback shape (`(data) =>
+   * Promise<Signature>`), so the keystore can be passed directly to `signRecipe`/`signUnprovenTransaction`/… without
+   * wrapping each call site. It simply resolves the synchronous {@link signData}; out-of-process backends (MPC, HSM)
+   * supply their own async signer.
+   */
+  signDataAsync: (data: Uint8Array) => Promise<Signing.Signature>;
+}
+
+export const PublicKey = {
+  /**
+   * Reads the identity a wallet is started with off a keystore.
+   *
+   * @example
+   *   ```typescript
+   *   const keystore = createKeystore({ kind: 'schnorr', secret }, NetworkId.NetworkId.Undeployed);
+   *   const wallet = await UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(keystore));
+   *   ```;
+   *
+   * @param keystore The keystore holding the secret key.
+   * @returns Its verifying key and the address derived from it.
+   */
+  fromKeyStore: (keystore: UnshieldedKeystore): PublicKey => ({
+    publicKey: keystore.getPublicKey(),
+    addressHex: keystore.getAddress(),
+    address: keystore.getBech32Address().asString(),
+  }),
+};
 export type IndexerClientConnection = {
   indexerHttpUrl: string;
   indexerWsUrl?: string;

@@ -56,7 +56,6 @@ import { Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wa
 import { EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
 import { Duration, Effect, Either, Match, Option, Ref, type Scope, pipe } from 'effect';
 import * as rx from 'rxjs';
-import { type PublicKey } from './KeyStore.js';
 import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
 import {
   type DefaultUnshieldedConfiguration,
@@ -73,7 +72,14 @@ import { type SignSegment } from './v2/Signing.js';
 import { type SyncUpdate as V2SyncUpdate } from './v2/SyncSchema.js';
 import { type TokenTransfer } from './v2/Transacting.js';
 import { type UnboundTransaction } from './v2/TransactionOps.js';
-import { type UtxoHash, type UtxoWithMeta } from './types/UnshieldedWalletTypes.js';
+import {
+  type PublicKey,
+  type UnshieldedKeystore,
+  type UnshieldedSecretKey,
+  type UtxoHash,
+  type UtxoWithMeta,
+} from './types/UnshieldedWalletTypes.js';
+import { createKeystore as createV2Keystore } from './v2/KeyStore.js';
 import { type WalletError as V1WalletError } from './v1/WalletError.js';
 import { type WalletError } from './v2/WalletError.js';
 
@@ -229,6 +235,26 @@ export const asV1PublicKey = (publicKey: PublicKey): Option.Option<V1PublicKey> 
         address: publicKey.address,
       })
     : Option.none();
+
+/**
+ * Makes the keystore an unshielded wallet signs with, on either side of `forks.v9`, from a secret key.
+ *
+ * @remarks
+ *   The keys are derived by ledger-v9, whose keys name their signature scheme: the V2 variant reads them as they are, and
+ *   the V1 variant reaches the same identity through {@link asV1PublicKey}. The keystore is stated in the SDK's own
+ *   shapes, so neither ledger version's key type reaches the package root.
+ * @example
+ *   ```typescript
+ *   const keystore = createKeystore({ kind: 'schnorr', secret }, NetworkId.NetworkId.Undeployed);
+ *   const wallet = await UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(keystore));
+ *   ```;
+ *
+ * @param secretKey The secret key, and the signature scheme it signs under.
+ * @param networkId The network the Bech32m address is encoded for.
+ * @returns The keystore over that key.
+ */
+export const createKeystore = (secretKey: UnshieldedSecretKey, networkId: NetworkId.NetworkId): UnshieldedKeystore =>
+  createV2Keystore(secretKey, networkId);
 
 /**
  * Builds an unshielded wallet class over a variant either side of a protocol boundary.

@@ -16,7 +16,7 @@ import { NetworkId, ProtocolVersion, SnapshotFormat } from '@midnightntwrk/walle
 import { makeDefaultV2SerializationCapability, LEGACY_BOOKING_LIFETIME_MS } from '../Serialization.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { type PendingUtxo, UnshieldedState, type UtxoWithMeta } from '../UnshieldedState.js';
-import { createKeystore, PublicKey } from '../../KeyStore.js';
+import { createKeystore, PublicKey } from '../KeyStore.js';
 import { OtherWalletError, SchemeMismatchError } from '../WalletError.js';
 import { generateMockUtxoWithMeta, utxoHash } from './testUtils.js';
 

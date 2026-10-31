@@ -28,6 +28,9 @@ Also:
   by another copy of the package with a `ForeignTransactionHandleError` instead of throwing.
 - capabilities adds `withLedgerParameters`, which types block data whose parameters arrive as `unknown`.
 - `UnshieldedWalletState.verifyingKey` reports the key in the SDK's signature shape on both sides of `forks.v9`.
+- The unshielded root's `PublicKey`, `UnshieldedKeystore` and `UnshieldedSecretKey` are stated in the SDK's signature
+  shapes, also as `UnshieldedWalletTypes.*`. The ledger-v9 keystore moved into `/v2`, beside `/v1`'s ledger-v8 one, and
+  the root's `createKeystore` derives its keys there.
 - utilities adds `eitherCoreStateOf` on `/testing/variants`, and the testkit's `DustWalletFactory` takes plain rates.
 - utilities' `HttpURL.make` and `WsURL.make` refuse a URL with the wrong scheme with a message that names it, such as
   `Invalid protocol scheme 'ftp:'. Expected 'http:' or 'https:'`, rather than `[object Object]`.

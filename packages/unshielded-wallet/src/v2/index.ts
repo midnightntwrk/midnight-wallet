@@ -27,5 +27,6 @@ export * from './RunningV2Variant.js';
 export { V9 as Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 export * as WalletError from './WalletError.js';
 export * from './CoreWallet.js';
+export * from './KeyStore.js';
 export * from './TransactionOps.js';
 export * as UnshieldedState from './UnshieldedState.js';

@@ -13,7 +13,7 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { describe, expect, it } from 'vitest';
-import { createKeystore } from '../src/KeyStore.js';
+import { createKeystore } from '../src/index.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const secret = Buffer.alloc(32, 7);
