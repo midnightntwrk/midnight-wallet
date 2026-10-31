@@ -370,6 +370,50 @@ export const asV9DustParameters = (parameters: DustGenerationRates): ledgerV9.Du
     parameters.dustGracePeriodSeconds,
   );
 
+/** What {@link dustVariantConfigurations} makes of a wallet configuration. */
+export type DustVariantConfigurations<TConfiguration> = Readonly<{
+  /** The V1 variant's configuration: the wallet's, with ledger-v8's parameters made from its rates. */
+  v1: Omit<TConfiguration, 'dustParameters'> & Readonly<{ dustParameters: ledgerV8.DustParameters }>;
+  /** The V2 variant's configuration: the wallet's, with ledger-v9's parameters made from its rates. */
+  v2: Omit<TConfiguration, 'dustParameters'> & Readonly<{ dustParameters: ledgerV9.DustParameters }>;
+  /** The V2 variant's cross-ledger migration, valued against the same ledger-v9 parameters. */
+  migration: () => Migration.StateMigration<Migration.PreviousLedgerWallet>;
+}>;
+
+/**
+ * Each variant's configuration, made from one wallet configuration whose dust rates are plain numbers.
+ *
+ * @remarks
+ *   A variant's `dustParameters` is a WASM object of its own ledger module, so the rates are the one field not handed
+ *   over as they are: the V1 variant is given ledger-v8's parameters made from them, the V2 variant ledger-v9's, and
+ *   the V2 variant's cross-ledger migration values a crossing wallet against the same ledger-v9 parameters. With no
+ *   rates configured, all three use ledger-v9's initial ones. Every composition of the two variants needs exactly this,
+ *   and making it in one place keeps a composition from valuing one side against rates the other never saw.
+ * @example
+ *   ```typescript
+ *   const { v1, v2, migration } = dustVariantConfigurations(configuration);
+ *   const Wallet = CustomForkingDustWallet(
+ *     configuration,
+ *     { builder: new V1Builder().withDefaults(), configuration: v1 },
+ *     { builder: new V2Builder().withDefaults().withMigration(migration), configuration: v2 },
+ *   );
+ *   ```;
+ *
+ * @param configuration The wallet's configuration, with its rates as plain numbers.
+ * @returns The V1 and V2 variants' configurations, and the V2 variant's cross-ledger migration.
+ */
+export const dustVariantConfigurations = <TConfiguration extends Readonly<{ dustParameters?: DustGenerationRates }>>(
+  configuration: TConfiguration,
+): DustVariantConfigurations<TConfiguration> => {
+  const rates = configuration.dustParameters ?? ledgerV9.LedgerParameters.initialParameters().dust;
+  const v9DustParameters = asV9DustParameters(rates);
+  return {
+    v1: { ...configuration, dustParameters: asV8DustParameters(rates) },
+    v2: { ...configuration, dustParameters: v9DustParameters },
+    migration: () => Migration.makeCrossLedgerMigration({ dustParameters: v9DustParameters }),
+  };
+};
+
 /**
  * Builds a dust wallet class over a variant either side of a protocol boundary.
  *
@@ -1230,8 +1274,7 @@ export type DustWalletClass = ForkingDustWalletClass<V1SyncUpdate, V2SyncUpdate,
  * @returns The wallet class.
  */
 export function DustWallet(configuration: DefaultDustConfiguration): DustWalletClass {
-  const rates = configuration.dustParameters ?? ledgerV9.LedgerParameters.initialParameters().dust;
-  const v9DustParameters = asV9DustParameters(rates);
+  const { v1, v2, migration } = dustVariantConfigurations(configuration);
   const withProbes: DefaultDustConfiguration & ForkingDustConfiguration = {
     ...configuration,
     chainVersionProbe: configuration.chainVersionProbe ?? makeIndexerChainVersionProbe(configuration),
@@ -1244,17 +1287,7 @@ export function DustWallet(configuration: DefaultDustConfiguration): DustWalletC
 
   return CustomForkingDustWallet(
     withProbes,
-    {
-      builder: new V1Builder().withDefaults(),
-      // The one field not handed over as it is: a variant's `dustParameters` is a WASM object of its own ledger
-      // module, so each is given its own ledger version's parameters made from the configured rates.
-      configuration: { ...configuration, dustParameters: asV8DustParameters(rates) },
-    },
-    {
-      builder: new V2Builder()
-        .withDefaults()
-        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters: v9DustParameters })),
-      configuration: { ...configuration, dustParameters: v9DustParameters },
-    },
+    { builder: new V1Builder().withDefaults(), configuration: v1 },
+    { builder: new V2Builder().withDefaults().withMigration(migration), configuration: v2 },
   );
 }

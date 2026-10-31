@@ -14,8 +14,7 @@ import {
   WalletSeeds,
   type DefaultConfiguration,
   type DefaultDustConfiguration,
-  asV8DustParameters,
-  asV9DustParameters,
+  dustVariantConfigurations,
   CustomForkingDustWallet,
   InMemoryTransactionHistoryStorage,
   WalletEntrySchema,
@@ -28,8 +27,7 @@ import {
 } from '@midnightntwrk/wallet-sdk';
 import { makeIndexerChainVersionProbe } from '@midnightntwrk/wallet-sdk/capabilities';
 import { V1Builder } from '@midnightntwrk/wallet-sdk/dust/v1';
-import { Migration, SyncService, V2Builder } from '@midnightntwrk/wallet-sdk/dust/v2';
-import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
+import { SyncService, V2Builder } from '@midnightntwrk/wallet-sdk/dust/v2';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
 
@@ -79,20 +77,17 @@ const configuration: DefaultConfiguration = {
 // (`makeCrossLedgerMigration`) and every pass after that reads projections; on a chain past the fork since genesis —
 // like the one this runs against — the probe starts it on the projections side from the first block.
 const fastSyncDustWallet = (config: DefaultDustConfiguration) => {
-  const rates = config.dustParameters ?? ledger.LedgerParameters.initialParameters().dust;
-  const v9DustParameters = asV9DustParameters(rates);
+  // The configured `dustParameters` are plain rates, and each variant is handed its own ledger version's parameters
+  // made from them, since a ledger object belongs to the WASM module that made it; the migration is valued against
+  // the same rates.
+  const { v1, v2, migration } = dustVariantConfigurations(config);
   const withProbe: DefaultDustConfiguration = {
     ...config,
     chainVersionProbe: config.chainVersionProbe ?? makeIndexerChainVersionProbe(config),
   };
   return CustomForkingDustWallet(
     withProbe,
-    {
-      builder: new V1Builder().withDefaults(),
-      // The configured `dustParameters` are plain rates, and each variant is handed its own ledger version's
-      // parameters made from them, since a ledger object belongs to the WASM module that made it.
-      configuration: { ...config, dustParameters: asV8DustParameters(rates) },
-    },
+    { builder: new V1Builder().withDefaults(), configuration: v1 },
     {
       builder: new V2Builder()
         .withDefaults()
@@ -101,8 +96,8 @@ const fastSyncDustWallet = (config: DefaultDustConfiguration) => {
         // one un-chooses the derivation from a seed the defaults had set. This service is started with the same
         // `DustSecretKey` the default one is, and a start from a seed needs the derivation by name on both sides.
         .withStartAuxDefaults()
-        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters: v9DustParameters })),
-      configuration: { ...config, dustParameters: v9DustParameters, anonymityLevel: 7 },
+        .withMigration(migration),
+      configuration: { ...v2, anonymityLevel: 7 },
     },
   );
 };

@@ -27,6 +27,7 @@ import {
   asV9DustParameters,
   CustomForkingDustWallet,
   DustWallet,
+  dustVariantConfigurations,
   type DustWalletClass,
 } from '../DustWallet.js';
 import { type DefaultDustConfiguration, type DustWalletState } from '../DustWalletAPI.js';
@@ -101,6 +102,50 @@ describe('CustomForkingDustWallet', () => {
     // A builder implementing `VariantBuilder` is configured with whatever it asks for, and may build its cross-ledger
     // migration on dust parameters it supplies itself; the wallet layer only hands each builder its configuration.
     type _1 = typeof CustomForkingDustWallet<V1SyncUpdate, V2SyncUpdate, object, { endpoint: string }>;
+  });
+});
+
+describe('dustVariantConfigurations', () => {
+  const rates: DustGenerationRates = {
+    nightDustRatio: 4_000_000_000n,
+    generationDecayRate: 9_000n,
+    dustGracePeriodSeconds: 7_200n,
+  };
+  const ratesOf = ({ nightDustRatio, generationDecayRate, dustGracePeriodSeconds }: DustGenerationRates) => ({
+    nightDustRatio,
+    generationDecayRate,
+    dustGracePeriodSeconds,
+  });
+
+  it("gives each variant its own ledger version's parameters made from the configured rates, and the rest as it is", () => {
+    const { v1, v2 } = dustVariantConfigurations({ networkId: 'undeployed', dustParameters: rates });
+
+    expect(v1.dustParameters).toBeInstanceOf(ledgerV8.DustParameters);
+    expect(ratesOf(v1.dustParameters)).toEqual(rates);
+    expect(v2.dustParameters).toBeInstanceOf(ledgerV9.DustParameters);
+    expect(ratesOf(v2.dustParameters)).toEqual(rates);
+    expect([v1.networkId, v2.networkId]).toEqual(['undeployed', 'undeployed']);
+  });
+
+  it('values a crossing wallet against the same rates', async () => {
+    const { migration } = dustVariantConfigurations({ dustParameters: rates });
+    const belowBoundary = V1CoreWallet.initEmpty(
+      asV8DustParameters(rates),
+      ledgerV8.DustSecretKey.fromSeed(Buffer.alloc(32, 1)),
+      Networks.NetworkId.Undeployed,
+    );
+
+    const crossed = await Effect.runPromise(migration().migrate(belowBoundary));
+
+    expect(ratesOf(crossed.state.params)).toEqual(rates);
+  });
+
+  it("values both sides against ledger-v9's initial rates when none are configured", () => {
+    const { v1, v2 } = dustVariantConfigurations({});
+    const initial = ratesOf(ledgerV9.LedgerParameters.initialParameters().dust);
+
+    expect(ratesOf(v1.dustParameters)).toEqual(initial);
+    expect(ratesOf(v2.dustParameters)).toEqual(initial);
   });
 });
 

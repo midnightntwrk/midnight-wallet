@@ -41,6 +41,9 @@ Also:
 - `UnshieldedWalletState.verifyingKey` reports the wallet's key in the SDK's signature shape on either side of the
   boundary, ledger-v8's bare key lifted into it.
 - The testkit's `DustWalletFactory` starts a wallet against plain `DustGenerationRates`.
+- `dustVariantConfigurations` makes, from one configuration's rates, each variant's configuration with its own ledger
+  version's dust parameters and the V2 variant's cross-ledger migration valued against the same rates: everything a
+  `CustomForkingDustWallet` composition hands its two builders. `DustWallet` is composed with it.
 
 BREAKING CHANGE:
 

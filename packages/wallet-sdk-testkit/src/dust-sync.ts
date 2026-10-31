@@ -10,20 +10,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { LedgerParameters } from '@midnightntwrk/ledger-v9';
 import { makeIndexerChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import {
-  asV8DustParameters,
-  asV9DustParameters,
   CustomForkingDustWallet,
   type DefaultDustConfiguration,
   DustWallet,
   type DustGenerationRates,
   type DustKeysByEpoch,
+  dustVariantConfigurations,
   type DustWalletAPI,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
-import { Migration, SyncService, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { SyncService, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 
 /**
  * The factory shape {@link provideWallet} and the scenarios accept for the dust sub-wallet.
@@ -65,24 +63,18 @@ export type DustWalletFactory = (config: DefaultDustConfiguration) => {
  * while syncing their Dust from projections.
  */
 export const eventLessDustWallet: DustWalletFactory = (config) => {
-  const rates = config.dustParameters ?? LedgerParameters.initialParameters().dust;
-  const v9DustParameters = asV9DustParameters(rates);
+  const { v1, v2, migration } = dustVariantConfigurations(config);
   return CustomForkingDustWallet(
     { ...config, chainVersionProbe: config.chainVersionProbe ?? makeIndexerChainVersionProbe(config) },
-    {
-      builder: new V1Builder().withDefaults(),
-      // The one field not handed over as it is: a variant's `dustParameters` is a WASM object of its own ledger module,
-      // so each variant is given its own ledger version's parameters made from the configured rates.
-      configuration: { ...config, dustParameters: asV8DustParameters(rates) },
-    },
+    { builder: new V1Builder().withDefaults(), configuration: v1 },
     {
       builder: new V2Builder()
         .withDefaults()
         .withSync(SyncService.makeEventLessSyncService, SyncService.makeEventLessSyncCapability)
         // Restated because `withSync` drops it: the seed-to-key derivation a start from a seed needs.
         .withStartAuxDefaults()
-        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters: v9DustParameters })),
-      configuration: { ...config, dustParameters: v9DustParameters },
+        .withMigration(migration),
+      configuration: v2,
     },
   );
 };

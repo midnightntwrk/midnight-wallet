@@ -38,16 +38,15 @@ import {
   UnshieldedWallet,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import {
-  asV8DustParameters,
-  asV9DustParameters,
   CustomForkingDustWallet,
   type DefaultDustConfiguration,
   type DustKeysByEpoch,
+  dustVariantConfigurations,
   DustWallet,
   type DustWalletAPI,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
-import { Migration, SyncService, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { SyncService, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
   type DefaultConfiguration,
   type FacadeState,
@@ -240,7 +239,7 @@ const trackPhases = (facade: WalletFacade): rx.Observable<Tracked> =>
  *   The one composition no other suite reaches. `projectionsBasedSync.undeployed.test.ts` exercises projections on a
  *   chain that is on ledger-v9 from its first block, so it can use a single-variant wallet and never crosses anything;
  *   the shipped `DustWallet` crosses but syncs by events on both sides. This one does both: the V1 variant reads the
- *   chain by event replay, hands its state to {@link Migration.makeCrossLedgerMigration}, and everything after the
+ *   chain by event replay, hands its state to the V2 variant's cross-ledger migration, and everything after the
  *   boundary is read by `makeEventLessSyncService` — which means a synced ledger-v9 state _is_ the proof that the
  *   projections path ran on a migrated state.
  *
@@ -249,16 +248,12 @@ const trackPhases = (facade: WalletFacade): rx.Observable<Tracked> =>
  *   starts on. Leaving it out keeps the crossing this test is about the only thing being tested.
  */
 const projectionsTwinDustWallet = (configuration: DefaultDustConfiguration) => {
-  const rates = configuration.dustParameters ?? ledgerV9.LedgerParameters.initialParameters().dust;
-  const v9DustParameters = asV9DustParameters(rates);
+  // Each variant's own ledger version's dust parameters, made from the configured rates as the shipped composition makes
+  // them.
+  const { v1, v2, migration } = dustVariantConfigurations(configuration);
   return CustomForkingDustWallet(
     configuration,
-    {
-      builder: new V1Builder().withDefaults(),
-      // The one field not handed over as it is, exactly as the shipped composition handles it: a variant's
-      // `dustParameters` is a WASM object of its own ledger module, so each is made from the configured rates.
-      configuration: { ...configuration, dustParameters: asV8DustParameters(rates) },
-    },
+    { builder: new V1Builder().withDefaults(), configuration: v1 },
     {
       builder: new V2Builder()
         .withDefaults()
@@ -268,8 +263,8 @@ const projectionsTwinDustWallet = (configuration: DefaultDustConfiguration) => {
         // `DustSecretKey` the default one is, and a two-variant wallet needs the derivation by name — it is how a
         // start from a seed answers for both sides of the boundary at once.
         .withStartAuxDefaults()
-        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters: v9DustParameters })),
-      configuration: { ...configuration, dustParameters: v9DustParameters },
+        .withMigration(migration),
+      configuration: v2,
     },
   );
 };
