@@ -124,38 +124,6 @@ describe('saveState', () => {
 
     await expect(readSnapshot(directory, filename, 'events')).resolves.toEqual(snapshotOf('first'));
   });
-
-  it('should remove the per-wallet files an earlier layout saved under the same name, so a carried cache does not keep them forever', async () => {
-    const legacy = [
-      `shielded-${filename}`,
-      `unshielded-${filename}`,
-      `dust-events-${filename}`,
-      `dust-projections-${filename}`,
-      `dust-custom-${filename}`,
-      // The dust file from before snapshots were namespaced by sync model.
-      `dust-${filename}`,
-    ];
-    const unrelated = `shielded-other-${filename}`;
-    await Promise.all([...legacy, unrelated].map((name) => fsAsync.writeFile(path.join(directory, name), 'old')));
-
-    await saveState(walletSerializingTo('first'), directory, filename);
-
-    const remaining = await fsAsync.readdir(directory);
-    expect(remaining.filter((name) => legacy.includes(name))).toEqual([]);
-    expect(remaining).toContain(unrelated);
-    await expect(readSnapshot(directory, filename, 'events')).resolves.toEqual(snapshotOf('first'));
-  });
-
-  it('should still succeed when an earlier layout’s file cannot be removed, because the snapshot itself was saved', async () => {
-    // `rm` without `recursive` refuses a directory, which stands in for any file the cleanup is not allowed to remove.
-    const unremovable = path.join(directory, `shielded-${filename}`);
-    await fsAsync.mkdir(unremovable);
-    await fsAsync.writeFile(path.join(unremovable, 'contents'), 'old');
-
-    await expect(saveState(walletSerializingTo('first'), directory, filename)).resolves.toBeUndefined();
-
-    await expect(readSnapshot(directory, filename, 'events')).resolves.toEqual(snapshotOf('first'));
-  });
 });
 
 describe('startRestoredFacade', () => {

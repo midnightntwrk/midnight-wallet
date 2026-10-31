@@ -16,9 +16,8 @@ import { firstValueFrom } from 'rxjs';
 import { randomUUID } from 'node:crypto';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { UnshieldedWallet } from '../src/index.js';
+import { createKeystore, PublicKey, UnshieldedWallet } from '../src/index.js';
 import { getUnshieldedSeed, createWalletConfig, waitForCoins } from './testUtils.js';
-import { createKeystore, PublicKey } from '../src/KeyStore.js';
 import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { IndexerLiveness, NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 

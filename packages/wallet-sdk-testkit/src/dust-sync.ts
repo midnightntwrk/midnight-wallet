@@ -10,20 +10,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type DustParameters, LedgerParameters } from '@midnightntwrk/ledger-v9';
 import { makeIndexerChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import {
-  asV8DustParameters,
   CustomForkingDustWallet,
   type DefaultDustConfiguration,
   DustWallet,
+  type DustGenerationRates,
   type DustKeysByEpoch,
+  dustVariantConfigurations,
   type DustWalletAPI,
-  makeEventLessSyncCapability,
-  makeEventLessSyncService,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
-import { Migration, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { SyncService, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 
 /**
  * The factory shape {@link provideWallet} and the scenarios accept for the dust sub-wallet.
@@ -38,7 +36,7 @@ import { Migration, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 export type DustWalletFactory = (config: DefaultDustConfiguration) => {
   startWithSeed(
     seed: Uint8Array,
-    dustParameters?: DustParameters,
+    dustParameters?: DustGenerationRates,
   ): DustWalletAPI<DustKeysByEpoch> | Promise<DustWalletAPI<DustKeysByEpoch>>;
   /** Also required, because `provideWallet` restores a snapshot into whatever composition it was given. */
   restore(serializedState: string): DustWalletAPI<DustKeysByEpoch>;
@@ -65,23 +63,18 @@ export type DustWalletFactory = (config: DefaultDustConfiguration) => {
  * while syncing their Dust from projections.
  */
 export const eventLessDustWallet: DustWalletFactory = (config) => {
-  const dustParameters = config.dustParameters ?? LedgerParameters.initialParameters().dust;
+  const { v1, v2, migration } = dustVariantConfigurations(config);
   return CustomForkingDustWallet(
     { ...config, chainVersionProbe: config.chainVersionProbe ?? makeIndexerChainVersionProbe(config) },
-    {
-      builder: new V1Builder().withDefaults(),
-      // The one field that cannot be shared: `dustParameters` is a WASM object of whichever ledger module produced it,
-      // so the V1 variant is handed the ledger-v8 rebuild of the same rates rather than the object itself.
-      configuration: { ...config, dustParameters: asV8DustParameters(dustParameters) },
-    },
+    { builder: new V1Builder().withDefaults(), configuration: v1 },
     {
       builder: new V2Builder()
         .withDefaults()
-        .withSync(makeEventLessSyncService, makeEventLessSyncCapability)
+        .withSync(SyncService.makeEventLessSyncService, SyncService.makeEventLessSyncCapability)
         // Restated because `withSync` drops it: the seed-to-key derivation a start from a seed needs.
         .withStartAuxDefaults()
-        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters })),
-      configuration: config,
+        .withMigration(migration),
+      configuration: v2,
     },
   );
 };
@@ -95,7 +88,7 @@ export const eventLessDustWallet: DustWalletFactory = (config) => {
  * the subscription from a position that is not an event id at all, and because the cursor is trusted rather than
  * validated, the effect would be silently skipped events rather than an error.
  *
- * Callers do not have to guard against that: dust snapshots are stored per sync model (see {@link dustSnapshotPath}), so
+ * Callers do not have to guard against that: dust snapshots are stored per sync model (see {@link snapshotPath}), so
  * switching a wallet's model finds no snapshot and rebuilds from scratch instead of resuming from a cursor that is not
  * one.
  */
@@ -177,15 +170,6 @@ export const dustWalletFromEnv = (
  */
 export const snapshotPath = (syncCacheDir: string, filename: string, model: DustSnapshotModel): string =>
   `${syncCacheDir}/snapshot-${model}-${filename}`;
-
-/**
- * Where the dust sub-wallet's snapshot lived when each sub-wallet was saved to a file of its own.
- *
- * @deprecated A wallet is now saved to the one file {@link snapshotPath} names, so that a save replaces the previous one
- *   whole. Kept so the earlier per-wallet files can be found and removed.
- */
-export const dustSnapshotPath = (syncCacheDir: string, filename: string, model: DustSnapshotModel): string =>
-  `${syncCacheDir}/dust-${model}-${filename}`;
 
 /**
  * The projections dust sync, synchronizing in the background like the event-based sync does.

@@ -19,6 +19,8 @@ export * as NetworkId from './NetworkId.js';
 export * as SyncProgress from './SyncProgress.js';
 export * from './TokenType.js';
 export * from './WalletTransaction.js';
+export * from './VariantState.js';
+export * from './UnshieldedUtxo.js';
 export * as IndexerLiveness from './IndexerLiveness.js';
 export * from './InMemoryTransactionHistoryStorage.js';
 export * from './NoOpTransactionHistoryStorage.js';

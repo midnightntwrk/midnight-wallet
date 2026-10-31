@@ -14,12 +14,8 @@ import type * as ledger from '@midnightntwrk/ledger-v9';
 import { Array as EArray, Data, Either, HashMap, Option, pipe } from 'effect';
 import { ApplyTransactionError, UtxoNotFoundError } from './WalletError.js';
 
-export interface UtxoMeta {
-  readonly ctime: Date;
-  readonly registeredForDustGeneration: boolean;
-}
-
-export type UtxoHash = string;
+export type { UtxoHash, UtxoMeta } from '../types/UnshieldedWalletTypes.js';
+import { type UtxoHash, type UtxoMeta } from '../types/UnshieldedWalletTypes.js';
 
 export class UtxoWithMeta extends Data.Class<{
   readonly utxo: ledger.Utxo;

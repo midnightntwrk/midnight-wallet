@@ -31,7 +31,7 @@ import {
   type AnyTx,
   type NetworkId,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   type UnprovenTx,
   WalletSeed,
   WalletTransaction,
@@ -87,7 +87,7 @@ export type ShieldedRestoreError = UnsupportedSnapshotVersionError | V1WalletErr
  *   what a wallet started from ledger-v9 key objects has to say while it is still on ledger-v8 — and a transaction
  *   handed in may have been built on the other side of the boundary, which no variant here can read.
  */
-type TransactingError = WalletError | StartMaterial.MissingStartAuxError | ProtocolVersionMismatchError;
+type TransactingError = WalletError | StartMaterial.MissingStartAuxError | WalletTransactionUnwrapError;
 
 /** The V1 variant a forking shielded wallet registers: the one that reads the chain before the boundary. */
 export type V1ShieldedVariant<TSyncUpdate> = V1Variant<
@@ -173,11 +173,7 @@ export type ShieldedKeysByEpoch = Readonly<{
  *   wallet restored from a snapshot is on whichever variant wrote it, which its caller cannot be asked to know, and a
  *   wallet below the boundary hands over to the other variant when the chain forks.
  */
-export type ForkingShieldedWallet<TV1SyncUpdate, TV2SyncUpdate> = ShieldedWalletAPI<
-  ShieldedKeysByEpoch,
-  ledgerV9.FinalizedTransaction,
-  string
-> &
+export type ForkingShieldedWallet<TV1SyncUpdate, TV2SyncUpdate> = ShieldedWalletAPI<ShieldedKeysByEpoch, string> &
   WalletLike.WalletLike<ForkingShieldedVariants<TV1SyncUpdate, TV2SyncUpdate>>;
 
 /** The class a forking shielded wallet is started from. */
@@ -765,9 +761,7 @@ export function CustomForkingShieldedWallet<
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<string>> {
-      return rx.firstValueFrom(
-        this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
-      );
+      return rx.firstValueFrom(this.state.pipe(rx.filter((state) => state.progress.isCompleteWithin(allowedGap))));
     }
 
     /**

@@ -19,33 +19,35 @@
  *   boundary (`UnshieldedWallet.ts`), and kept apart from both so that neither has to import the other to speak the
  *   same API. Nothing here knows how many variants are running: a state emission arrives already bound to the
  *   capabilities of the variant that produced it, and everything below that binding is plain data.
+ *
+ *   Nor does anything here name a ledger version. The data it speaks is declared in `types/UnshieldedWalletTypes.ts`,
+ *   which both variants are stated in, and a variant's own core state travels sealed, readable only by that variant.
  */
-import type * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
   type NetworkId,
   type ProtocolState,
   type ProtocolVersion,
+  type TokenType,
   type UnboundTx,
   type UnprovenTx,
+  VariantState,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
+import { liftSignatureVerifyingKey, type Signing } from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import type * as rx from 'rxjs';
-import { type CoreWallet as V1CoreWallet } from './v1/CoreWallet.js';
-import { type CoinsAndBalancesCapability } from './v2/CoinsAndBalances.js';
-import { type CoreWallet } from './v2/index.js';
-import { type KeysCapability } from './v2/Keys.js';
-import { type SerializationCapability } from './v2/Serialization.js';
-import { type SignSegment } from './v2/Signing.js';
-import { type DefaultSyncConfiguration, type IndexerClientConnection } from './v2/Sync.js';
-import { type SyncProgress } from './v2/SyncProgress.js';
-import { type TokenTransfer } from './v2/Transacting.js';
-import { type UnshieldedHistoryStorage } from './v2/TransactionHistory.js';
-import { type UtxoHash, type UtxoWithMeta } from './v2/UnshieldedState.js';
-
-/** The core state of whichever unshielded variant produced an emission. */
-export type UnshieldedCoreState = V1CoreWallet | CoreWallet;
+import { type CoinsAndBalancesCapability } from './types/UnshieldedWalletCapabilities.js';
+import {
+  type DefaultSyncConfiguration,
+  type IndexerClientConnection,
+  type SignSegment,
+  type SyncProgress,
+  type TokenTransfer,
+  type UnshieldedHistoryStorage,
+  type UtxoHash,
+  type UtxoWithMeta,
+} from './types/UnshieldedWalletTypes.js';
 
 /**
  * Everything a state emission projects, already bound to the variant that produced it.
@@ -56,15 +58,18 @@ export type UnshieldedCoreState = V1CoreWallet | CoreWallet;
  *   capability of one would type-check against a state of the other and be wrong at runtime. Once bound there is
  *   nothing left to mis-pair, and everything below is version-agnostic plain data — balances are `bigint` under string
  *   token types, a UTXO is a plain record of value, owner, type, intent hash and output number, and the address is the
- *   SDK's own type. The one genuinely version-bound reading a variant offers, the verifying key, is deliberately not
- *   projected here: it is a bare hex string on one side and a `{tag, value}` record on the other.
+ *   SDK's own type. The one genuinely version-bound reading a variant offers, the verifying key — a bare hex string on
+ *   one side and a `{tag, value}` record on the other — is projected in the SDK's own signature shape, which
+ *   ledger-v8's key is lifted into without loss.
  */
 type UnshieldedProjections<TSerialized> = Readonly<{
-  balances: () => Record<ledger.RawTokenType, bigint>;
+  progress: () => SyncProgress;
+  balances: () => Record<TokenType, bigint>;
   totalCoins: () => readonly UtxoWithMeta[];
   availableCoins: () => readonly UtxoWithMeta[];
   pendingCoins: () => readonly UtxoWithMeta[];
   address: () => UnshieldedAddress;
+  verifyingKey: () => Signing.SignatureVerifyingKey;
   serialize: () => TSerialized;
 }>;
 
@@ -72,20 +77,29 @@ type UnshieldedProjections<TSerialized> = Readonly<{
  * What a variant has to offer for its own state to be projected — exactly that, and nothing more.
  *
  * @remarks
- *   Narrowed to the projected methods rather than naming the three capability types whole, because one of their members
- *   is the version break itself: `KeysCapability.getPublicKey` answers with a bare hex string on ledger-v8 version and
- *   a `{tag, value}` record on the ledger-v9 one, so a type demanding it could only ever be satisfied by one of the two
- *   variants. Asking for what is projected keeps a wallet spanning the boundary buildable and keeps the unprojectable
- *   reading out of reach, in one stroke.
+ *   Coins and balances are read through the contract both variants share (`types/UnshieldedWalletCapabilities.ts`).
+ *   Serialization is each variant's own, because its deserialization fails with that variant's errors, so only the
+ *   `serialize` half is asked for here. Keys are each variant's own too, and are the version break itself:
+ *   `KeysCapability.getPublicKey` answers with a bare hex string on ledger-v8 and a `{tag, value}` record on ledger-v9,
+ *   so it is asked for as either, and the wallet state lifts the first into the second.
  */
-type UnshieldedStateCapabilities<TState, TSerialized> = Readonly<{
-  serialization: Pick<SerializationCapability<TState, TSerialized>, 'serialize'>;
-  coinsAndBalances: Pick<
-    CoinsAndBalancesCapability<TState>,
-    'getAvailableBalances' | 'getTotalCoins' | 'getAvailableCoins' | 'getPendingCoins'
+type UnshieldedStateReaders<TState, TSerialized> = Readonly<{
+  serialization: Readonly<{ serialize(state: TState): TSerialized }>;
+  coinsAndBalances: Readonly<
+    Pick<
+      CoinsAndBalancesCapability<TState>,
+      'getAvailableBalances' | 'getTotalCoins' | 'getAvailableCoins' | 'getPendingCoins'
+    >
   >;
-  keys: Pick<KeysCapability<TState>, 'getAddress'>;
+  keys: Readonly<{
+    getAddress(state: TState): UnshieldedAddress;
+    getPublicKey(state: TState): string | Signing.SignatureVerifyingKey;
+  }>;
 }>;
+
+/** A verifying key in the SDK's signature shape, lifting ledger-v8's bare hex, whose only scheme is schnorr. */
+const asSignatureVerifyingKey = (key: string | Signing.SignatureVerifyingKey): Signing.SignatureVerifyingKey =>
+  typeof key === 'string' ? liftSignatureVerifyingKey(key) : key;
 
 export class UnshieldedWalletState<TSerialized = string> {
   /**
@@ -93,26 +107,38 @@ export class UnshieldedWalletState<TSerialized = string> {
    *
    * @remarks
    *   Call this inside a branch that has narrowed on the emission's `variantTag`, so `variant` and `state` are known to
-   *   belong together. It is generic over the state type precisely so that pairing is checked.
+   *   belong together. It is generic over the state type precisely so that pairing is checked. The state itself is
+   *   sealed under that tag, so the producing variant is the only one that can read it back.
    */
-  static readonly fromVariant = <TState extends UnshieldedCoreState, TSerialized = string>(
-    variant: UnshieldedStateCapabilities<TState, TSerialized>,
+  static readonly fromVariant = <TState extends Readonly<{ progress: SyncProgress }>, TSerialized = string>(
+    variant: UnshieldedStateReaders<TState, TSerialized>,
     state: ProtocolState.ProtocolState<TState>,
   ): UnshieldedWalletState<TSerialized> =>
-    new UnshieldedWalletState<TSerialized>(state.version, state.state, {
+    new UnshieldedWalletState<TSerialized>(state.version, VariantState.seal(state.variantTag, state.state), {
+      progress: () => state.state.progress,
       balances: () => variant.coinsAndBalances.getAvailableBalances(state.state),
       totalCoins: () => variant.coinsAndBalances.getTotalCoins(state.state),
       availableCoins: () => variant.coinsAndBalances.getAvailableCoins(state.state),
       pendingCoins: () => variant.coinsAndBalances.getPendingCoins(state.state),
       address: () => variant.keys.getAddress(state.state),
+      verifyingKey: () => asSignatureVerifyingKey(variant.keys.getPublicKey(state.state)),
       serialize: () => variant.serialization.serialize(state.state),
     });
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
-  readonly state: UnshieldedCoreState;
+
+  /**
+   * The producing variant's own state, sealed.
+   *
+   * @remarks
+   *   It is made of that variant's ledger version's objects, so only that variant reads it: `coreStateOf` from the `/v1`
+   *   or `/v2` subpath hands it over when that variant produced this emission, and nothing otherwise.
+   */
+  readonly state: VariantState;
+
   readonly #projections: UnshieldedProjections<TSerialized>;
 
-  get balances(): Record<ledger.RawTokenType, bigint> {
+  get balances(): Record<TokenType, bigint> {
     return this.#projections.balances();
   }
 
@@ -132,13 +158,24 @@ export class UnshieldedWalletState<TSerialized = string> {
     return this.#projections.address();
   }
 
+  /**
+   * The key this wallet's signatures verify against, in the SDK's signature shape.
+   *
+   * @remarks
+   *   Whichever variant produced the state: ledger-v8 writes the key as the bare hex of its one scheme, and it is named
+   *   here as that scheme's, so the same identity reads the same on either side of the boundary.
+   */
+  get verifyingKey(): Signing.SignatureVerifyingKey {
+    return this.#projections.verifyingKey();
+  }
+
   get progress(): SyncProgress {
-    return this.state.progress;
+    return this.#projections.progress();
   }
 
   constructor(
     protocolVersion: ProtocolVersion.ProtocolVersion,
-    state: UnshieldedCoreState,
+    state: VariantState,
     projections: UnshieldedProjections<TSerialized>,
   ) {
     this.protocolVersion = protocolVersion;
@@ -229,12 +266,12 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
   rotateUtxos(
     guaranteedUtxos: readonly UtxoWithMeta[],
     fallibleUtxos: readonly UtxoWithMeta[],
-    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    nightVerifyingKey: Signing.SignatureVerifyingKey,
     ttl: Date,
   ): Promise<UnprovenTx>;
 
   initSwap(
-    desiredInputs: Record<ledger.RawTokenType, bigint>,
+    desiredInputs: Record<TokenType, bigint>,
     desiredOutputs: readonly TokenTransfer[],
     ttl: Date,
   ): Promise<UnprovenTx>;

@@ -15,14 +15,33 @@
 // ledger-v9 chain, and the hard-fork lane's crossing from event sync into projections sync — and a wallet that
 // disagreed with its twin in only one of them would be a finding either suite could miss, so the comparison lives in
 // one place rather than in each.
+import { eitherCoreStateOf } from '@midnightntwrk/wallet-sdk-utilities/testing/variants';
 import { Array as Arr } from 'effect';
 import { type FacadeState } from '@midnightntwrk/wallet-sdk-facade';
+import {
+  type CoreWallet as V1DustCoreWallet,
+  coreStateOf as v1DustCoreStateOf,
+} from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
+import {
+  type CoreWallet as V2DustCoreWallet,
+  coreStateOf as v2DustCoreStateOf,
+} from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 
 /**
  * The dust state a facade emission carries is whichever variant produced it, so this reads the union rather than
  * ledger-v9's class by name. Both versions declare everything compared here.
  */
-export type SyncedDustState = FacadeState['dust']['state']['state'];
+export type SyncedDustState = V1DustCoreWallet['state'] | V2DustCoreWallet['state'];
+
+/**
+ * A dust wallet state's ledger-level dust state, read back by whichever variant produced it.
+ *
+ * @remarks
+ *   The wallet state carries its core state sealed, because it is one ledger version's objects; comparing commitment
+ *   trees is exactly the ledger-level detail that only the producing variant's subpath hands over.
+ */
+export const dustLocalStateOf = (dust: FacadeState['dust']): SyncedDustState =>
+  eitherCoreStateOf(dust, v2DustCoreStateOf, v1DustCoreStateOf).state;
 
 /** One dust UTxO as its wallet's ledger version reports it. */
 export type SyncedDustUtxo = SyncedDustState['utxos'][number];

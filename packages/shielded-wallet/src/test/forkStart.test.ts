@@ -50,14 +50,7 @@ import {
   ShieldedEncryptionPublicKey,
 } from '@midnightntwrk/wallet-sdk-address-format';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import {
-  ForkSimulator,
-  type LedgerTranslationError,
-  type Simulator,
-  V8,
-  genesisStrictness,
-  immediateBlockProducer,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { ForkSimulator, type LedgerTranslationError, V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Cause, Effect, Option, Runtime, type Scope } from 'effect';
@@ -130,7 +123,7 @@ const payingChainFor = (coins: readonly MintedCoin[], chain: V8.Simulator) =>
       protocolVersion: v9Version,
       genesisBlockNumber: forkBlock,
       genesisTime,
-      blockProducer: immediateBlockProducer(undefined, genesisStrictness),
+      blockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
       coins,
     });
   });
@@ -199,7 +192,7 @@ const timelineStartVersion = (chain: V8.Simulator): Effect.Effect<ProtocolVersio
   chain.query((state) => state.blocks[0].protocolVersion);
 
 /** The version a chain has reached — a true statement about the chain, and the wrong one to start a fresh wallet on. */
-const tipVersion = (chain: Simulator): Effect.Effect<ProtocolVersion.ProtocolVersion> =>
+const tipVersion = (chain: V9.Simulator): Effect.Effect<ProtocolVersion.ProtocolVersion> =>
   chain.query((state) => state.protocolVersion);
 
 /**
@@ -328,7 +321,7 @@ describe('a fresh shielded wallet on a chain that forked after paying it', () =>
   const chainForkedAfterPaying = (
     coins: readonly MintedCoin[],
   ): Effect.Effect<
-    Readonly<{ v8: V8.Simulator; v9: Simulator }>,
+    Readonly<{ v8: V8.Simulator; v9: V9.Simulator }>,
     LedgerOps.LedgerError | LedgerTranslationError,
     Scope.Scope
   > =>
@@ -339,7 +332,7 @@ describe('a fresh shielded wallet on a chain that forked after paying it', () =>
         forkVersion,
         v8Version: v8Version,
         v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-        v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        v9BlockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
         translator: translationStub({ networkId, coins }),
       });
       yield* Effect.forEach(coins, (coin) => fork.v8.submitTransaction(v8Payment(networkId, coin)), {
@@ -657,7 +650,7 @@ describe('a shielded wallet built from both ledger versions’ keys rather than 
         forkVersion,
         v8Version: v8Version,
         v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-        v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        v9BlockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
         translator: translationStub({ networkId, coins }),
       });
 

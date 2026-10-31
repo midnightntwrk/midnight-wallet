@@ -79,6 +79,23 @@ export class ProtocolVersionMismatchError extends Data.TaggedError(
 }> {}
 
 /**
+ * Raised when a handle was sealed by another copy of {@link WalletTransaction} than the one asked to read it.
+ *
+ * @remarks
+ *   A handle keeps its transaction in a private field, which only the copy of the class that sealed it can read. Two
+ *   copies are what an application gets when two copies of `@midnightntwrk/wallet-sdk-abstractions` are installed side
+ *   by side, so the transaction is refused whatever version the handle names: this copy cannot read it at all.
+ */
+export class ForeignTransactionHandleError extends Data.TaggedError(
+  '@midnightntwrk/wallet-sdk-abstractions/WalletTransaction/ForeignTransactionHandleError',
+)<{
+  readonly message: string;
+}> {}
+
+/** Why {@link WalletTransaction.unwrapWithin} refused a handle. */
+export type WalletTransactionUnwrapError = ProtocolVersionMismatchError | ForeignTransactionHandleError;
+
+/**
  * Raised when bytes cannot be read as a transaction of a version this SDK knows — whether they arrived in a wire
  * envelope that names their version, or bare, to be read at the version the reader is acting at.
  */
@@ -197,15 +214,28 @@ export class WalletTransaction<out TStage extends TransactionStage = Transaction
    *   the transaction only when the stamp falls inside it. The result type is the caller's to name, because the handle
    *   deliberately does not remember it; the range is the whole of the guarantee, which is why it is checked here
    *   rather than trusted anywhere else.
+   *
+   *   A handle another copy of this class sealed is refused before its version is looked at, because this copy cannot
+   *   read the transaction it carries whatever that version is.
    * @param handle The handle to read.
    * @param accepted The range of protocol versions the caller can act at.
-   * @returns The carried transaction, or a {@link ProtocolVersionMismatchError} naming what was carried and what was
-   *   asked for.
+   * @returns The carried transaction; a {@link ForeignTransactionHandleError} when another copy of this class sealed the
+   *   handle; or a {@link ProtocolVersionMismatchError} naming what was carried and what was asked for.
    */
   static unwrapWithin<T>(
     handle: WalletTransaction,
     accepted: ProtocolVersion.ProtocolVersion.Range,
-  ): Either.Either<T, ProtocolVersionMismatchError> {
+  ): Either.Either<T, WalletTransactionUnwrapError> {
+    if (!WalletTransaction.is(handle)) {
+      return Either.left(
+        new ForeignTransactionHandleError({
+          message:
+            'This transaction handle was sealed by another copy of @midnightntwrk/wallet-sdk-abstractions, so this ' +
+            'copy cannot read the transaction it carries. Two copies are installed side by side: deduplicate the ' +
+            'package so that the application and the SDK share one.',
+        }),
+      );
+    }
     if (!ProtocolVersion.withinRange(handle.protocolVersion, accepted)) {
       const [from, to] = accepted;
       return Either.left(
@@ -222,8 +252,8 @@ export class WalletTransaction<out TStage extends TransactionStage = Transaction
       );
     }
     // The carried type is erased when a transaction is sealed, and deliberately: remembering it would put a ledger
-    // version back into the handle's own type. The version check above is the whole of what can be guaranteed here,
-    // and it is the same guarantee the caller would have had to make for itself.
+    // version back into the handle's own type. The two checks above are the whole of what can be guaranteed here, and
+    // the same guarantee the caller would have had to make for itself.
     return Either.right(handle.#carried as T);
   }
 
@@ -249,9 +279,9 @@ export class WalletTransaction<out TStage extends TransactionStage = Transaction
    *
    * @remarks
    *   Answers on the sealed transaction itself, so a record that merely has the same readable fields is not mistaken for
-   *   one.
+   *   one, and neither is a handle another copy of this class sealed, whose transaction this copy cannot read.
    * @param value The value to test.
-   * @returns `true` when `value` is a {@link WalletTransaction}.
+   * @returns `true` when `value` is a {@link WalletTransaction} this copy of the class sealed.
    */
   static is(value: unknown): value is WalletTransaction {
     return typeof value === 'object' && value !== null && #carried in value;

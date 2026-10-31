@@ -26,15 +26,11 @@ import {
 import { TransactionOps, type UnboundTransaction, type IntentOf } from './TransactionOps.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
-import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
+import { type TokenTransfer } from '../types/UnshieldedWalletTypes.js';
 
 const GUARANTEED_SEGMENT = 0;
 
-export interface TokenTransfer {
-  readonly amount: bigint;
-  readonly type: ledger.RawTokenType;
-  readonly receiverAddress: UnshieldedAddress;
-}
+export type { TokenTransfer } from '../types/UnshieldedWalletTypes.js';
 
 export type FinalizedTransactionBalanceResult = ledger.UnprovenTransaction | undefined;
 

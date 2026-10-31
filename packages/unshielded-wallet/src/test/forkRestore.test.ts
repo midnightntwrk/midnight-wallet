@@ -36,7 +36,7 @@ import { describe, expect, it } from 'vitest';
 import { peekProtocolVersion } from '../Restore.js';
 import { V1Tag } from '../v1/RunningV1Variant.js';
 import { V2Tag } from '../v2/RunningV2Variant.js';
-import { type CarriedUtxo, type ForkWallet, makeForkWallet, utxosOf } from './forkHarness.js';
+import { type CarriedUtxo, type ForkWallet, makeForkWallet, utxosOf, eitherCoreStateOf } from './forkHarness.js';
 import { v2Identity, timelineTransaction } from './forkTimeline.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
@@ -110,8 +110,8 @@ describe('an unshielded wallet restoring a snapshot through the class it was sta
       const state = yield* restoredState(restored);
       // Not merely on the right side of the boundary: at the version the snapshot recorded, which is where the chain was.
       expect(state.protocolVersion).toBe(Option.getOrThrow(peekProtocolVersion(snapshot)));
-      expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n]);
-      expect(state.state.publicKey.address).toBe(synced.state.publicKey.address);
+      expect(valuesOf(utxosOf(eitherCoreStateOf(state)))).toEqual([100n, 200n]);
+      expect(eitherCoreStateOf(state).publicKey.address).toBe(synced.state.publicKey.address);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('restores a snapshot written at or past the boundary onto the V2 variant, with what it held', async () =>
@@ -133,7 +133,7 @@ describe('an unshielded wallet restoring a snapshot through the class it was sta
       const state = yield* restoredState(restored);
       // Not merely on the right side of the boundary: at the version the snapshot recorded, which is where the chain was.
       expect(state.protocolVersion).toBe(Option.getOrThrow(peekProtocolVersion(snapshot)));
-      expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n]);
-      expect(state.state.publicKey.address).toBe(synced.state.publicKey.address);
+      expect(valuesOf(utxosOf(eitherCoreStateOf(state)))).toEqual([100n, 200n]);
+      expect(eitherCoreStateOf(state).publicKey.address).toBe(synced.state.publicKey.address);
     }).pipe(Effect.scoped, Effect.runPromise));
 });

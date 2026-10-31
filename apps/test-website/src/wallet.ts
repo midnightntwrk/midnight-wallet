@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { V9_NATIVE_FORK_VERSION } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   type DefaultConfiguration,
   DustWallet,
@@ -25,6 +24,7 @@ import {
   UnshieldedWallet,
   WalletSeeds,
   mergeWalletEntries,
+  ProtocolVersion,
 } from '@midnightntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
 
@@ -55,7 +55,7 @@ export const configurationFor = (network: KnownNetwork): Configuration => ({
   networkId: network,
   // The protocol version this chain hands over to ledger-v9 at. A 2.x node reports 2000000;
   // the final mainnet fork constant is not yet fixed, so this is supplied per environment.
-  forks: { v9: V9_NATIVE_FORK_VERSION },
+  forks: { v9: ProtocolVersion.V9NativeForkVersion },
   costParameters: {
     feeBlocksMargin: 5,
   },

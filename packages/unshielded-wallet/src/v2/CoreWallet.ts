@@ -12,7 +12,7 @@
 // limitations under the License.
 import { ProtocolVersion, type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { createSyncProgress, type SyncProgress, type SyncProgressData } from './SyncProgress.js';
-import { type PublicKey } from '../KeyStore.js';
+import { type PublicKey } from './KeyStore.js';
 import { UnshieldedState, type UnshieldedUpdate, type UtxoHash } from './UnshieldedState.js';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 import { Either, Array as Arr, pipe } from 'effect';

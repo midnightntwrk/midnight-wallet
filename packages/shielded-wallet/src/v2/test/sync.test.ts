@@ -38,7 +38,7 @@ import type {
 import { type EventsSyncUpdate, type WalletSyncUpdate, makeEventsSyncService } from '../Sync.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Simulator, getLastBlock, getLastBlockEvents } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 
 vi.setConfig({
   testTimeout: 60_000,
@@ -49,7 +49,7 @@ const createMockEventHex = async (): Promise<string> => {
   // Use Simulator to generate a real event, then serialize it
   return await Effect.gen(function* () {
     const scope = yield* Scope.make();
-    const simulator = yield* Simulator.init({
+    const simulator = yield* V9.Simulator.init({
       genesisMints: [
         {
           type: 'shielded',
@@ -68,11 +68,11 @@ const createMockEventHex = async (): Promise<string> => {
       onSome: (s) => s,
     });
 
-    const lastBlock = getLastBlock(state);
+    const lastBlock = V9.getLastBlock(state);
     if (lastBlock === undefined) {
       throw new Error('No block from simulator');
     }
-    const events = getLastBlockEvents(state);
+    const events = V9.getLastBlockEvents(state);
     if (events.length === 0) {
       throw new Error('No events generated from simulator');
     }

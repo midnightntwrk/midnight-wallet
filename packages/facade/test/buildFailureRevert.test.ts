@@ -32,7 +32,7 @@ import {
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
-import { Simulator, immediateBlockProducer } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
@@ -81,7 +81,7 @@ const spendable = (state: FacadeState) => ({
 const fundedFacade = ({ withDust }: { withDust: boolean }) =>
   Effect.gen(function* () {
     const keys = deriveWalletKeys(SEED, NETWORK_ID);
-    const simulator = yield* Simulator.init({
+    const simulator = yield* V9.Simulator.init({
       genesisMints: [
         { type: 'shielded', tokenType: SHIELDED, amount: SHIELDED_HELD, recipient: keys.shieldedKeys },
         {
@@ -92,7 +92,7 @@ const fundedFacade = ({ withDust }: { withDust: boolean }) =>
           verifyingKey: keys.signatureVerifyingKey,
         },
       ],
-      blockProducer: immediateBlockProducer(),
+      blockProducer: V9.immediateBlockProducer(),
     });
     const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
     const facade = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config));

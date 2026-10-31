@@ -22,7 +22,7 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type FinalizedTx, NetworkId, NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
-import { Simulator, immediateBlockProducer } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { CustomShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   Sync as ShieldedSync,
@@ -65,11 +65,11 @@ const pendingSet = (facade: WalletFacade): Effect.Effect<PendingTransactions.Pen
 const fundedFacade = () =>
   Effect.gen(function* () {
     const keys = deriveWalletKeys(SEED, NETWORK_ID);
-    const simulator = yield* Simulator.init({
+    const simulator = yield* V9.Simulator.init({
       genesisMints: [
         { type: 'shielded', tokenType: SHIELDED, amount: tokenValue(1_000n), recipient: keys.shieldedKeys },
       ],
-      blockProducer: immediateBlockProducer(),
+      blockProducer: V9.immediateBlockProducer(),
     });
     const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
     const facade = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config));

@@ -42,7 +42,7 @@ import { V2Tag } from '../v2/RunningV2Variant.js';
 import { dustParameters as v9DustParameters } from '../v2/test/dustEvents.js';
 import { type ForkWallet, makeForkWallet } from './forkHarness.js';
 import { type TimelineEvent, numberedFrom } from './forkReplay.js';
-import { balanceAt, dustCount } from './forkWalletAssertions.js';
+import { balanceAt, dustCount, eitherCoreStateOf } from './forkWalletAssertions.js';
 
 // Building a real dust chain (rewards + registrations through WASM) does not fit vitest's 5s default on a CI runner.
 vi.setConfig({ testTimeout: 60_000 });
@@ -129,9 +129,9 @@ describe('a dust wallet restoring a snapshot through the class it was started fr
       const state = yield* restoredState(restored);
       // Not merely on the right side of the boundary: at the version the snapshot recorded, which is where the chain was.
       expect(state.protocolVersion).toBe(Option.getOrThrow(peekProtocolVersion(snapshot)));
-      expect(dustCount(state.state)).toBe(DUST_EVENT_COUNT);
-      expect(balanceAt(state.state, chain.syncTime)).toBe(balanceAt(synced.state, chain.syncTime));
-      expect(state.state.publicKey.publicKey).toBe(synced.state.publicKey.publicKey);
+      expect(dustCount(eitherCoreStateOf(state))).toBe(DUST_EVENT_COUNT);
+      expect(balanceAt(eitherCoreStateOf(state), chain.syncTime)).toBe(balanceAt(synced.state, chain.syncTime));
+      expect(eitherCoreStateOf(state).publicKey.publicKey).toBe(synced.state.publicKey.publicKey);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('restores a snapshot written at or past the boundary onto the V2 variant, with what it held', async () =>
@@ -154,9 +154,9 @@ describe('a dust wallet restoring a snapshot through the class it was started fr
       const state = yield* restoredState(restored);
       // Not merely on the right side of the boundary: at the version the snapshot recorded, which is where the chain was.
       expect(state.protocolVersion).toBe(Option.getOrThrow(peekProtocolVersion(snapshot)));
-      expect(dustCount(state.state)).toBe(DUST_EVENT_COUNT);
-      expect(balanceAt(state.state, chain.syncTime)).toBe(balanceAt(synced.state, chain.syncTime));
-      expect(state.state.publicKey.publicKey).toBe(synced.state.publicKey.publicKey);
+      expect(dustCount(eitherCoreStateOf(state))).toBe(DUST_EVENT_COUNT);
+      expect(balanceAt(eitherCoreStateOf(state), chain.syncTime)).toBe(balanceAt(synced.state, chain.syncTime));
+      expect(eitherCoreStateOf(state).publicKey.publicKey).toBe(synced.state.publicKey.publicKey);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('restores a snapshot the V1 variant wrote after annotating the fork version onto V1, and crosses on start', async () =>

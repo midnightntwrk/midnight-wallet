@@ -60,7 +60,7 @@ import {
   type AnyTx,
   type FinalizedTx,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   TransactionHistoryStorage,
   type UnboundTx,
   type UnprovenTx,
@@ -101,6 +101,7 @@ import {
   type VersionedValidationService,
   WellFormedError,
   type WellFormedStrictnessFlags,
+  withLedgerParameters,
 } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import { finalizedTransactionTraits, txHistoryHash } from './transaction.js';
 
@@ -381,6 +382,23 @@ export type UnprovenTransactionRecipe = {
 };
 
 export type BalancingRecipe = FinalizedTransactionRecipe | UnboundTransactionRecipe | UnprovenTransactionRecipe;
+
+/**
+ * The block a fee was priced against, as a recipe carries it to validation.
+ *
+ * @remarks
+ *   The dust wallet hands that block back with parameters it leaves untyped, because they are its pricing variant's own
+ *   ledger object. Parameters neither ledger version recognises leave the recipe without block data, and validation
+ *   then fetches a block of its own.
+ */
+const pricedBlockOf = (
+  dustResult: Readonly<{ blockData: BlockData<unknown> }> | undefined,
+): { blockData?: BlockData<AnyLedgerParameters> } =>
+  pipe(
+    Option.fromNullable(dustResult),
+    Option.flatMap(({ blockData }) => withLedgerParameters(blockData)),
+    Option.match({ onNone: () => ({}), onSome: (blockData) => ({ blockData }) }),
+  );
 
 export const BalancingRecipe = {
   isRecipe: (value: unknown): value is BalancingRecipe => {
@@ -699,8 +717,8 @@ export class FacadeState {
 
   public get isSynced(): boolean {
     return (
-      this.shielded.state.progress.isStrictlyComplete() &&
-      this.dust.state.progress.isStrictlyComplete() &&
+      this.shielded.progress.isStrictlyComplete() &&
+      this.dust.progress.isStrictlyComplete() &&
       this.unshielded.progress.isStrictlyComplete()
     );
   }
@@ -1177,16 +1195,16 @@ export class WalletFacade {
     // transaction is still in the mempool is released here.
     this.#restoredBookingSubscription = this.unshielded.state
       .pipe(
-        filter((unshielded) => unshielded.state.progress.isStrictlyComplete()),
+        filter((unshielded) => unshielded.progress.isStrictlyComplete()),
         // Only bookings restored at startup are candidates, and this releases all of them at once, so the first time
         // sync reaches the tip is the only time there is anything to do. Acting once also keeps the reaction from
         // feeding itself: releasing publishes new state, which would otherwise satisfy this same condition again.
         take(1),
         concatMap(async () => {
-          const { publicKey } = (await firstValueFrom(this.unshielded.state)).state;
+          const { verifyingKey } = await firstValueFrom(this.unshielded.state);
           const pending = await firstValueFrom(this.pendingTransactionsService.state());
           const stillSpokenFor = PendingTransactions.coveredUnshieldedIds(pending, (tx) =>
-            this.#ownInputIds(tx, publicKey.publicKey),
+            this.#ownInputIds(tx, verifyingKey),
           );
           await this.unshielded.releaseRestoredPending(stillSpokenFor);
         }),
@@ -1246,12 +1264,13 @@ export class WalletFacade {
    *   refused here, by name, with the versions written down.
    * @param handle The handle to read.
    * @returns The carried transaction.
-   * @throws {@link ProtocolVersionMismatchError} When the transaction was built on the other side of the boundary.
+   * @throws {@link WalletTransactionUnwrapError} When the transaction was built on the other side of the boundary, or
+   *   sealed by another copy of the abstractions package.
    */
   private accept<T>(handle: AnyTx): T {
     return Either.getOrThrowWith(
       WalletTransaction.unwrapWithin<T>(handle, this.currentEpoch()),
-      (error: ProtocolVersionMismatchError) => error,
+      (error: WalletTransactionUnwrapError) => error,
     );
   }
 
@@ -1294,8 +1313,8 @@ export class WalletFacade {
    *   The version is the facade's rather than the caller's, which is the point: a caller that reads
    *   {@link FacadeState.activeProtocolVersion} and seals a handle itself is answering the same question a moment
    *   earlier, with a crossing able to land in between. It is still only the version at the moment of the call — a
-   *   crossing can land before the handle is used, and {@link ProtocolVersionMismatchError} from the operation that uses
-   *   it is what says so.
+   *   crossing can land before the handle is used, and `ProtocolVersionMismatchError` from the operation that uses it
+   *   is what says so.
    * @example
    *   Balancing a transaction a dApp connector handed over as hex:
    *
@@ -1346,7 +1365,7 @@ export class WalletFacade {
   #carried<T>(handle: AnyTx): T {
     return Either.getOrThrowWith(
       WalletTransaction.unwrapWithin<T>(handle, this.epochOf(handle.protocolVersion)),
-      (error: ProtocolVersionMismatchError) => error,
+      (error: WalletTransactionUnwrapError) => error,
     );
   }
 
@@ -1359,16 +1378,10 @@ export class WalletFacade {
    *   identity ever has a ledger-v8 transaction to read, because the wallet refuses to start that variant with any
    *   other, so the narrowing cannot fail here and a failure is reported as the defect it would be.
    * @param handle The transaction to read.
-   * @param publicKey This wallet's verifying key, in the shape of whichever variant is running: ledger-v8's bare hex
-   *   below the boundary, ledger-v9's tagged record from it.
+   * @param verifyingKey This wallet's verifying key, in the SDK's signature shape, as its state reports it.
    * @returns Every coin of this wallet's the transaction spends, each `intentHash#outputNo`.
    */
-  #ownInputIds(
-    handle: AnyTx,
-    publicKey: ledgerV8.SignatureVerifyingKey | ledgerV9.SignatureVerifyingKey,
-  ): readonly string[] {
-    // Lifted once so both branches start from ledger-v9's shape; ledger-v8's key is the bare string, so the check is exact.
-    const verifyingKey = typeof publicKey === 'string' ? Signatures.liftSignatureVerifyingKey(publicKey) : publicKey;
+  #ownInputIds(handle: AnyTx, verifyingKey: Signatures.Signing.SignatureVerifyingKey): readonly string[] {
     const ownInputs =
       handle.protocolVersion < this.#forkVersion
         ? V1UnshieldedTransactionOps.extractOwnInputs(
@@ -1402,9 +1415,9 @@ export class WalletFacade {
       return;
     }
 
-    const { publicKey } = (await firstValueFrom(this.unshielded.state)).state;
+    const { verifyingKey } = await firstValueFrom(this.unshielded.state);
 
-    await this.#reserveIds(unshieldedTx, this.#ownInputIds(unshieldedTx, publicKey.publicKey), ttl);
+    await this.#reserveIds(unshieldedTx, this.#ownInputIds(unshieldedTx, verifyingKey), ttl);
   }
 
   /** Records `bookedIds` against `unshieldedTx`, or nothing at all when the transaction booked no coins. */
@@ -1470,15 +1483,15 @@ export class WalletFacade {
     balance: () => Promise<T>,
     ttl: Date,
   ): Promise<{ balanced: T; release: Release }> {
-    const { publicKey } = (await firstValueFrom(this.unshielded.state)).state;
-    const inputsBefore = new Set(this.#ownInputIds(tx, publicKey.publicKey));
+    const { verifyingKey } = await firstValueFrom(this.unshielded.state);
+    const inputsBefore = new Set(this.#ownInputIds(tx, verifyingKey));
     const balanced = await balance();
 
     if (balanced === undefined) {
       return { balanced, release: () => Promise.resolve() };
     }
 
-    const newlyBooked = this.#ownInputIds(balanced, publicKey.publicKey).filter((id) => !inputsBefore.has(id));
+    const newlyBooked = this.#ownInputIds(balanced, verifyingKey).filter((id) => !inputsBefore.has(id));
     const release = this.#inPlaceUnshieldedBooking(balanced, newlyBooked);
     await this.#releasingOnFailure([release], () => this.#reserveIds(balanced, newlyBooked, ttl));
 
@@ -1617,7 +1630,7 @@ export class WalletFacade {
           tx,
           ProtocolVersion.epochOf(tx.protocolVersion, this.#forkVersion),
         ),
-        (error: ProtocolVersionMismatchError) => error,
+        (error: WalletTransactionUnwrapError) => error,
       ),
       tx.protocolVersion,
       options,
@@ -1860,7 +1873,7 @@ export class WalletFacade {
       protocolVersion: this.currentVersion(),
       originalTransaction: tx,
       balancingTransaction: balancingTx,
-      ...(dustResult ? { blockData: dustResult.blockData } : {}),
+      ...pricedBlockOf(dustResult),
     };
   }
 
@@ -1929,7 +1942,7 @@ export class WalletFacade {
       protocolVersion: this.currentVersion(),
       baseTransaction: baseTx,
       balancingTransaction: balancingTransaction ?? undefined,
-      ...(dustResult ? { blockData: dustResult.blockData } : {}),
+      ...pricedBlockOf(dustResult),
     };
   }
 
@@ -1995,7 +2008,7 @@ export class WalletFacade {
       type: 'UNPROVEN_TRANSACTION',
       protocolVersion: this.currentVersion(),
       transaction: balancedTx,
-      ...(dustResult ? { blockData: dustResult.blockData } : {}),
+      ...pricedBlockOf(dustResult),
     };
   }
 
@@ -2114,8 +2127,8 @@ export class WalletFacade {
    *   the three wallets are given back like those of any other failure here.
    * @param tx The unproven transaction.
    * @returns The finalized transaction, stamped with the version it was authored at.
-   * @throws {@link ProtocolVersionMismatchError} When the wallets left the transaction's epoch while it was being
-   *   proved, or were never in it.
+   * @throws {@link WalletTransactionUnwrapError} When the wallets left the transaction's epoch while it was being
+   *   proved, or were never in it, or when another copy of the abstractions package sealed the handle.
    * @throws {AggregateError} When giving back a reservation failed as well, so a booking may remain until it expires:
    *   `errors` holds the original failure first, then each failed release.
    */
@@ -2212,7 +2225,7 @@ export class WalletFacade {
       type: 'UNPROVEN_TRANSACTION',
       protocolVersion: this.currentVersion(),
       transaction: finalTx,
-      ...(dustResult ? { blockData: dustResult.blockData } : {}),
+      ...pricedBlockOf(dustResult),
     };
   }
 
@@ -2346,7 +2359,7 @@ export class WalletFacade {
       type: 'UNPROVEN_TRANSACTION',
       protocolVersion: this.currentVersion(),
       transaction: finalTx,
-      ...(dustResult ? { blockData: dustResult.blockData } : {}),
+      ...pricedBlockOf(dustResult),
     };
   }
 

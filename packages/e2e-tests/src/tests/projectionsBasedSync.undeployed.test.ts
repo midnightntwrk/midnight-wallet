@@ -24,7 +24,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { provideWallet, saveState } from '@midnightntwrk/wallet-sdk-testkit/core';
 import { carried } from './helpers/transactions.js';
-import { dustStatesEqual, rootsEqual, sameItems, stringifyWithBigInts } from './helpers/dustComparison.js';
+import {
+  dustStatesEqual,
+  rootsEqual,
+  sameItems,
+  stringifyWithBigInts,
+  dustLocalStateOf,
+} from './helpers/dustComparison.js';
 
 /** @group undeployed */
 
@@ -81,7 +87,10 @@ describe('Projections-based synchronisation model', () => {
     );
 
   const expectSameSyncState = (eventsSyncState: FacadeState, projectionsSyncState: FacadeState) => {
-    const statesEqual = dustStatesEqual(eventsSyncState.dust.state.state, projectionsSyncState.dust.state.state);
+    const statesEqual = dustStatesEqual(
+      dustLocalStateOf(eventsSyncState.dust),
+      dustLocalStateOf(projectionsSyncState.dust),
+    );
     expect(statesEqual).toBe(true);
     expect(eventsSyncState.unshielded.balances[unshieldedTokenRaw]).toEqual(
       projectionsSyncState.unshielded.balances[unshieldedTokenRaw],
@@ -92,7 +101,7 @@ describe('Projections-based synchronisation model', () => {
   };
 
   const expectSameRoots = (state1: FacadeState, state2: FacadeState) => {
-    expect(rootsEqual(state1.dust.state.state, state2.dust.state.state)).toBe(true);
+    expect(rootsEqual(dustLocalStateOf(state1.dust), dustLocalStateOf(state2.dust))).toBe(true);
   };
 
   const syncAndVerify = async () => {
@@ -291,7 +300,7 @@ describe('Projections-based synchronisation model', () => {
         // next transfer all five are exactly equal again and the tie breaks on merkle-index order — which places
         // the successor last. Consecutive transfers therefore land on different chains rather than deepening one.
         const eventsState = await fundedEventsSynced.wallet.waitForSyncedState();
-        const dustSpends = eventsState.dust.state.state.utxos.reduce((total, utxo) => total + utxo.seq, 0);
+        const dustSpends = dustLocalStateOf(eventsState.dust).utxos.reduce((total, utxo) => total + utxo.seq, 0);
         expect(dustSpends).toBeGreaterThanOrEqual(expectedSpendCount);
       }
 
@@ -388,7 +397,7 @@ describe('Projections-based synchronisation model', () => {
       // would depend on execution order.
       await funded.wallet.doSync(funded.seeds);
       const stateBeforeSnapshot = await funded.wallet.waitForSyncedState();
-      const dustUtxosBeforeSnapshot = stateBeforeSnapshot.dust.state.state.utxos.length;
+      const dustUtxosBeforeSnapshot = dustLocalStateOf(stateBeforeSnapshot.dust).utxos.length;
       expect(dustUtxosBeforeSnapshot).toBeGreaterThan(0);
 
       // Snapshot the projections-synced wallet, then restore it into a fresh facade. The snapshot goes to a directory
@@ -413,7 +422,7 @@ describe('Projections-based synchronisation model', () => {
           // The restored wallet is started with `manualSync`, so before the first `doSync` its Dust state is exactly
           // what came off disk: the resumed pass starts from this baseline.
           const restoredBeforeSync = await rx.firstValueFrom(restored.wallet.state());
-          const restoredDustState = restoredBeforeSync.dust.state.state;
+          const restoredDustState = dustLocalStateOf(restoredBeforeSync.dust);
           expect(restoredDustState.utxos.length).toBe(dustUtxosBeforeSnapshot);
 
           // The two cursors the resumed pass keys off are ledger-v9 members — no published ledger-v8 exposes the

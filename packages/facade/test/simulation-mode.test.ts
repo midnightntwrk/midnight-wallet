@@ -30,7 +30,7 @@
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
@@ -74,7 +74,7 @@ describe('WalletFacade in simulation mode', () => {
 
       // Step 2: Initialize Simulator with shielded + Night genesis mints
       const nightTokenType = ledger.nativeToken().raw;
-      const genesisMints: [GenesisMint, ...GenesisMint[]] = [
+      const genesisMints: [V9.GenesisMint, ...V9.GenesisMint[]] = [
         {
           type: 'shielded',
           tokenType: shieldedTokenType,
@@ -91,9 +91,9 @@ describe('WalletFacade in simulation mode', () => {
       ];
 
       // Use default block producer which enforces balancing (requires fee payment)
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         genesisMints,
-        blockProducer: immediateBlockProducer(), // Default strictness enforces balancing
+        blockProducer: V9.immediateBlockProducer(), // Default strictness enforces balancing
       });
 
       // Step 3: Create simulator services and wallet factories
@@ -173,6 +173,9 @@ describe('WalletFacade in simulation mode', () => {
       const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
         senderFacade.transferTransaction(transferOutputs, { ttl }),
       );
+      // The recipe carries the block the fee was priced against, so validation checks the transaction against the same
+      // parameters rather than fetching a block of its own.
+      expect(transferRecipe.blockData?.ledgerParameters).toBeInstanceOf(ledger.LedgerParameters);
 
       const finalizedTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(transferRecipe));
       const txHash = yield* Effect.promise(() => senderFacade.submitTransaction(finalizedTx));
@@ -204,8 +207,8 @@ describe('WalletFacade in simulation mode', () => {
       const senderKeys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
 
       // Initialize simulator without genesis mints (blank ledger)
-      const simulator = yield* Simulator.init({
-        blockProducer: immediateBlockProducer(),
+      const simulator = yield* V9.Simulator.init({
+        blockProducer: V9.immediateBlockProducer(),
       });
 
       const simulatorConfig: SimulatorConfig = {
@@ -236,7 +239,7 @@ describe('WalletFacade in simulation mode', () => {
       const nightTokenType = ledger.nativeToken().raw;
 
       // Genesis: Night tokens for sender (enough for Dust generation + transfer)
-      const genesisMints: [GenesisMint] = [
+      const genesisMints: [V9.GenesisMint] = [
         {
           type: 'unshielded',
           tokenType: nightTokenType,
@@ -247,9 +250,9 @@ describe('WalletFacade in simulation mode', () => {
       ];
 
       // Default block producer enforces balancing (requires fee payment)
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         genesisMints,
-        blockProducer: immediateBlockProducer(),
+        blockProducer: V9.immediateBlockProducer(),
       });
 
       const simulatorConfig: SimulatorConfig = {
@@ -333,7 +336,7 @@ describe('WalletFacade in simulation mode', () => {
       const nightTokenType = ledger.nativeToken().raw;
 
       // Genesis: Night tokens minted to the sender's ECDSA-derived address
-      const genesisMints: [GenesisMint] = [
+      const genesisMints: [V9.GenesisMint] = [
         {
           type: 'unshielded',
           tokenType: nightTokenType,
@@ -344,9 +347,9 @@ describe('WalletFacade in simulation mode', () => {
       ];
 
       // Default block producer enforces balancing (requires fee payment)
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         genesisMints,
-        blockProducer: immediateBlockProducer(),
+        blockProducer: V9.immediateBlockProducer(),
       });
 
       const simulatorConfig: SimulatorConfig = {
@@ -422,7 +425,7 @@ describe('WalletFacade in simulation mode', () => {
       const nightTokenType = ledger.nativeToken().raw;
 
       // Genesis: Night tokens for the schnorr sender
-      const genesisMints: [GenesisMint] = [
+      const genesisMints: [V9.GenesisMint] = [
         {
           type: 'unshielded',
           tokenType: nightTokenType,
@@ -433,9 +436,9 @@ describe('WalletFacade in simulation mode', () => {
       ];
 
       // Default block producer enforces balancing (requires fee payment)
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         genesisMints,
-        blockProducer: immediateBlockProducer(),
+        blockProducer: V9.immediateBlockProducer(),
       });
 
       const simulatorConfig: SimulatorConfig = {

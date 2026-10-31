@@ -31,9 +31,13 @@ export const HttpURL = Brand.refined<HttpUrl>(
  */
 export const make: (url: URL | string) => Either.Either<HttpUrl, InvalidProtocolSchemeError> = (url) => {
   const targetURL = new URL(url);
-  try {
-    return Either.right(HttpURL(targetURL));
-  } catch (err: unknown) {
-    return Either.left(new InvalidProtocolSchemeError({ message: String(err), invalidScheme: targetURL.protocol }));
-  }
+  return HttpURL.either(targetURL).pipe(
+    Either.mapLeft(
+      (errors) =>
+        new InvalidProtocolSchemeError({
+          message: errors.map(({ message }) => message).join('; '),
+          invalidScheme: targetURL.protocol,
+        }),
+    ),
+  );
 };

@@ -14,9 +14,9 @@ import { IndexerLiveness, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abst
 import { type LivenessReads } from '@midnightntwrk/wallet-sdk-capabilities';
 import { Chunk, Duration, Effect, Either, Option, Ref, Stream, TestClock, TestContext } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { type PublicKey } from '../../KeyStore.js';
+import { type PublicKey } from '../KeyStore.js';
 import { CoreWallet } from '../CoreWallet.js';
-import { type SimulatorState } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { type V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import {
   type DefaultSyncConfiguration,
   makeDefaultSyncCapability,
@@ -143,7 +143,7 @@ describe('makeSimulatorSyncCapability', () => {
       ledger: { dust: { toString: () => '' }, utxo: { filter: () => [] } },
       // Type cast required because: the capability reads only these fields, and a real LedgerState needs the ledger
       // WASM runtime, which a unit test must not load.
-    } as unknown as SimulatorState;
+    } as unknown as V9.SimulatorState;
 
     const settled = CoreWallet.updateProgress(CoreWallet.init(publicKey, 'undeployed'), {
       indexerLiveness: IndexerLiveness.Skipped({ reason: 'simulation' }),
@@ -166,7 +166,7 @@ describe('makeSimulatorSyncCapability', () => {
       ledger: { dust: { toString: () => '' }, utxo: { filter: () => [] } },
       // Type cast required because: the capability reads only these fields, and a real LedgerState needs the ledger
       // WASM runtime, which a unit test must not load.
-    } as unknown as SimulatorState;
+    } as unknown as V9.SimulatorState;
 
     const result = makeSimulatorSyncCapability().applyUpdate(
       CoreWallet.init(publicKey, 'undeployed'),

@@ -12,10 +12,10 @@
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type SimulatorState, Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, HashMap, Option, pipe, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { createKeystore, PublicKey } from '../../KeyStore.js';
+import { createKeystore, PublicKey } from '../KeyStore.js';
 import { type CoreWallet as CoreWalletType, CoreWallet } from '../CoreWallet.js';
 import { makeDefaultSyncCapability, makeSimulatorSyncCapability } from '../Sync.js';
 import { type PendingUtxo, UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
@@ -306,9 +306,9 @@ describe('Unshielded simulator sync capability', () => {
    */
   const simulatorHoldingOneCoin = (
     currentTime: Date,
-  ): Effect.Effect<{ state: SimulatorState; coin: UtxoWithMeta }, unknown, Scope.Scope> =>
+  ): Effect.Effect<{ state: V9.SimulatorState; coin: UtxoWithMeta }, unknown, Scope.Scope> =>
     Effect.gen(function* () {
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         genesisMints: [
           {
             type: 'unshielded',

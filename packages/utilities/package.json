@@ -36,6 +36,10 @@
     "./testing": {
       "types": "./dist/testing/index.d.ts",
       "import": "./dist/testing/index.js"
+    },
+    "./testing/variants": {
+      "types": "./dist/testing/variants.d.ts",
+      "import": "./dist/testing/variants.js"
     }
   },
   "dependencies": {

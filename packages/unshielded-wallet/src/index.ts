@@ -18,17 +18,21 @@ export * from './UnshieldedWallet.js';
 // three different deterministic tags, one per wallet whose snapshot could not be read. Namespacing the third one keeps
 // that barrel unambiguous without renaming the two that shipped before it.
 export * as UnshieldedRestore from './Restore.js';
+// Under the wallet's name rather than flat, for the same reason: the other wallets declare some of the same names,
+// `TokenTransfer` among them.
+export * as UnshieldedWalletTypes from './types/index.js';
 export {
   type UnshieldedTransactionHistoryEntry,
   UnshieldedSectionSchema,
   mergeUnshieldedSections,
-} from './v2/TransactionHistory.js';
-export { type SignSegment } from './v2/Signing.js';
-export * from './KeyStore.js';
+  type SignSegment,
+} from './types/UnshieldedWalletTypes.js';
+// The keystore's types, under their own names as they always were; `createKeystore` comes with the wallet itself.
+export { PublicKey, type UnshieldedKeystore, type UnshieldedSecretKey } from './types/UnshieldedWalletTypes.js';
 // The sync configuration under a wallet-qualified name, for the same reason as the restore errors above: the dust
 // wallet exports a `DefaultSyncConfiguration` of its own, and the umbrella barrel would otherwise hold two.
 export {
   type DefaultSyncConfiguration as DefaultUnshieldedSyncConfiguration,
   type NodeClientConnection,
   resolveNodeEndpoint,
-} from './v2/Sync.js';
+} from './types/UnshieldedWalletTypes.js';

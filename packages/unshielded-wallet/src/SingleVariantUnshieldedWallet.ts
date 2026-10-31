@@ -21,10 +21,11 @@
  *   cross a protocol boundary. The wallet that can is `UnshieldedWallet`, in `UnshieldedWallet.ts`.
  */
 import type * as ledger from '@midnightntwrk/ledger-v9';
+import { type Signing } from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import {
   type AnyTx,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   type UnboundTx,
   type UnprovenTx,
   WalletTransaction,
@@ -35,7 +36,6 @@ import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntw
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Either, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
-import { type PublicKey } from './KeyStore.js';
 import { type UnshieldedWalletAPI, UnshieldedWalletState } from './UnshieldedWalletAPI.js';
 import {
   type BaseV2Configuration,
@@ -49,7 +49,7 @@ import { type RunningV2Variant } from './v2/RunningV2Variant.js';
 import { type SignSegment } from './v2/Signing.js';
 import { type SyncUpdate } from './v2/SyncSchema.js';
 import { type TokenTransfer } from './v2/Transacting.js';
-import { type UtxoHash, type UtxoWithMeta } from './v2/UnshieldedState.js';
+import { type PublicKey, type UtxoHash, type UtxoWithMeta } from './types/UnshieldedWalletTypes.js';
 
 export type CustomizedUnshieldedWallet<
   TSyncUpdate = SyncUpdate,
@@ -96,7 +96,7 @@ export function CustomUnshieldedWallet<
   );
 
   /** Reads a transaction a caller handed in, which a single-variant wallet accepts at any version. */
-  const carried = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+  const carried = <T>(handle: AnyTx): Effect.Effect<T, WalletTransactionUnwrapError> =>
     EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, wholeTimeline));
 
   /** Seals a transaction this wallet built, at the version its one variant answers from. */
@@ -251,7 +251,7 @@ export function CustomUnshieldedWallet<
     rotateUtxos(
       guaranteedUtxos: readonly UtxoWithMeta[],
       fallibleUtxos: readonly UtxoWithMeta[],
-      nightVerifyingKey: ledger.SignatureVerifyingKey,
+      nightVerifyingKey: Signing.SignatureVerifyingKey,
       ttl: Date,
     ): Promise<UnprovenTx> {
       return this.runtime
@@ -319,9 +319,7 @@ export function CustomUnshieldedWallet<
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<UnshieldedWalletState<TSerialized>> {
-      return rx.firstValueFrom(
-        this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
-      );
+      return rx.firstValueFrom(this.state.pipe(rx.filter((state) => state.progress.isCompleteWithin(allowedGap))));
     }
 
     /**
