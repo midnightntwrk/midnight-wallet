@@ -73,7 +73,7 @@ import { type SignSegment } from './v2/Signing.js';
 import { type SyncUpdate as V2SyncUpdate } from './v2/SyncSchema.js';
 import { type TokenTransfer } from './v2/Transacting.js';
 import { type UnboundTransaction } from './v2/TransactionOps.js';
-import { type UtxoHash, type UtxoWithMeta } from './v2/UnshieldedState.js';
+import { type UtxoHash, type UtxoWithMeta } from './types/UnshieldedWalletTypes.js';
 import { type WalletError as V1WalletError } from './v1/WalletError.js';
 import { type WalletError } from './v2/WalletError.js';
 
@@ -667,7 +667,7 @@ export function CustomForkingUnshieldedWallet<
     rotateUtxos(
       guaranteedUtxos: readonly UtxoWithMeta[],
       fallibleUtxos: readonly UtxoWithMeta[],
-      nightVerifyingKey: ledgerV9.SignatureVerifyingKey,
+      nightVerifyingKey: Signatures.Signing.SignatureVerifyingKey,
       ttl: Date,
     ): Promise<UnprovenTx> {
       return this.runtime

@@ -21,6 +21,7 @@
  *   cross a protocol boundary. The wallet that can is `UnshieldedWallet`, in `UnshieldedWallet.ts`.
  */
 import type * as ledger from '@midnightntwrk/ledger-v9';
+import { type Signing } from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import {
   type AnyTx,
   ProtocolVersion,
@@ -49,7 +50,7 @@ import { type RunningV2Variant } from './v2/RunningV2Variant.js';
 import { type SignSegment } from './v2/Signing.js';
 import { type SyncUpdate } from './v2/SyncSchema.js';
 import { type TokenTransfer } from './v2/Transacting.js';
-import { type UtxoHash, type UtxoWithMeta } from './v2/UnshieldedState.js';
+import { type UtxoHash, type UtxoWithMeta } from './types/UnshieldedWalletTypes.js';
 
 export type CustomizedUnshieldedWallet<
   TSyncUpdate = SyncUpdate,
@@ -251,7 +252,7 @@ export function CustomUnshieldedWallet<
     rotateUtxos(
       guaranteedUtxos: readonly UtxoWithMeta[],
       fallibleUtxos: readonly UtxoWithMeta[],
-      nightVerifyingKey: ledger.SignatureVerifyingKey,
+      nightVerifyingKey: Signing.SignatureVerifyingKey,
       ttl: Date,
     ): Promise<UnprovenTx> {
       return this.runtime
