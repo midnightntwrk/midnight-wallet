@@ -103,10 +103,19 @@ export const V1Tag: unique symbol = Symbol('V1');
  * This variant's core state, when this variant produced the wallet state it is read from.
  *
  * @remarks
- *   A unshielded wallet's state carries its core state sealed, because that state is made of one ledger version's
+ *   An unshielded wallet's state carries its core state sealed, because that state is made of one ledger version's
  *   objects. This is how the variant — or a test or tool that needs its ledger-level detail — reads it back. A state
  *   another variant produced gives nothing, since this variant's ledger version could not read it.
- * @param walletState A state, as a unshielded wallet emits it.
+ * @example
+ *   ```typescript
+ *   import { coreStateOf } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
+ *
+ *   const state = await unshieldedWallet.waitForSyncedState();
+ *   // Some while the V1 variant runs; none once the wallet has handed over to the V2 variant.
+ *   const core = coreStateOf(state);
+ *   ```;
+ *
+ * @param walletState A state, as an unshielded wallet emits it.
  * @returns This variant's core state, or nothing when another variant produced the state.
  */
 export const coreStateOf = (walletState: Readonly<{ state: VariantState }>): Option.Option<CoreWallet> =>

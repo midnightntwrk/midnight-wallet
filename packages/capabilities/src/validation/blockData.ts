@@ -123,6 +123,13 @@ export const blockDataFrom = (
  *   the pricing variant's own object and its API names no ledger version. Validation needs them typed, so this asks the
  *   object itself which ledger version made it; parameters of neither are refused rather than passed on, and the caller
  *   validates against a block it fetches.
+ * @example
+ *   ```typescript
+ *   const { blockData } = await dustWallet.balanceTransactions([transaction], ttl);
+ *   // Some with the parameters typed as either ledger version's; none when they are neither.
+ *   const priced = withLedgerParameters(blockData);
+ *   ```;
+ *
  * @param blockData The block data, with parameters of unknown type.
  * @returns The same block data with its parameters typed, or nothing when they are neither ledger version's.
  */
