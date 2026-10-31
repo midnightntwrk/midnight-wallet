@@ -33,7 +33,7 @@ import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, type PublicKey, type UnshieldedKeystore } from '../src/v2/KeyStore.js';
-import { assertKeyAddressConsistency, assertSignatureMatchesKey } from '../src/SchemeConsistency.js';
+import { assertKeyAddressConsistency, assertSignatureMatchesKey } from '../src/v2/SchemeConsistency.js';
 import { SchemeMismatchError } from '../src/v2/WalletError.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
