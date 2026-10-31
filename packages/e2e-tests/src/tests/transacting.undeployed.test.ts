@@ -50,6 +50,7 @@ import {
   type DefaultProvingConfiguration,
   type VersionedProvingServiceEffect,
   type V9UnboundTransaction,
+  type V9UnprovenTransaction,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -127,7 +128,7 @@ describe.skip('Wallet transacting', () => {
   let coinsAndBalances: CoinsAndBalances.CoinsAndBalancesCapability<CoreWallet>;
   let keys: Keys.KeysCapability<CoreWallet>;
   let submissionService: Submission.SubmissionServiceEffect<ledger.FinalizedTransaction>;
-  let provingService: VersionedProvingServiceEffect<V9UnboundTransaction>;
+  let provingService: VersionedProvingServiceEffect<V9UnboundTransaction, V9UnprovenTransaction>;
 
   const getShieldedAddress = (state: CoreWallet | ledger.ZswapSecretKeys): ShieldedAddress => {
     return state instanceof ledger.ZswapSecretKeys

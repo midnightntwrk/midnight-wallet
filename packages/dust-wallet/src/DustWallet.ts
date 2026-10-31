@@ -64,7 +64,10 @@ import {
   DustWalletState,
 } from './DustWalletAPI.js';
 import { runPromiseThrowingFailure } from './PromiseBoundary.js';
-import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-capabilities/validation';
+import {
+  type AnyLedgerParameters,
+  type BlockData as PricedBlockData,
+} from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import { CoreWallet as V1CoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
 import { type WalletSyncUpdate as V1SyncUpdate } from './v1/Sync.js';
 import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
@@ -1138,9 +1141,9 @@ export function CustomForkingDustWallet<
       transactions: ReadonlyArray<AnyTx>,
       ttl: Date,
       currentTime?: Date,
-    ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData }> {
+    ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData<AnyLedgerParameters> }> {
       return this.runtime
-        .dispatch<{ transaction: UnprovenTx; blockData: PricedBlockData }, TransactingError>({
+        .dispatch<{ transaction: UnprovenTx; blockData: PricedBlockData<AnyLedgerParameters> }, TransactingError>({
           [V1Tag]: (v1) =>
             Effect.all([this.#requireAux(v8Aux), Effect.forEach(transactions, v8Tx<V1AnyTransaction>)]).pipe(
               Effect.flatMap(([key, txs]) => v1.balanceTransactions(key, txs, ttl, currentTime)),
