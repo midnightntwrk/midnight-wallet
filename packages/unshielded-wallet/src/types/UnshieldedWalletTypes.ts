@@ -120,18 +120,18 @@ export type DefaultSyncConfiguration = {
    * How far the indexer may drift from the node's finalized head before the difference is reported.
    *
    * @remarks
-   *   Defaults to {@link DEFAULT_LIVENESS_CONFIGURATION}, whose tolerances suit a chain producing blocks seconds apart.
-   *   Set this for a chain with a different block time, or to tighten the staleness allowance a caller is willing to
-   *   treat as current.
+   *   Defaults to the capabilities package's `DEFAULT_LIVENESS_CONFIGURATION`, whose tolerances suit a chain producing
+   *   blocks seconds apart. Set this for a chain with a different block time, or to tighten the staleness allowance a
+   *   caller is willing to treat as current.
    */
   livenessConfiguration?: LivenessConfiguration;
   /**
    * How often to compare the indexer against the node.
    *
    * @remarks
-   *   Defaults to {@link DEFAULT_POLL_INTERVAL}. Each poll costs one request to the indexer and one to a node the wallet
-   *   does not own, so shortening this trades load for how quickly a stalled indexer is noticed. Polling faster than
-   *   blocks are produced only re-reads the same block.
+   *   Defaults to the capabilities package's `DEFAULT_POLL_INTERVAL`. Each poll costs one request to the indexer and one
+   *   to a node the wallet does not own, so shortening this trades load for how quickly a stalled indexer is noticed.
+   *   Polling faster than blocks are produced only re-reads the same block.
    *
    *   Polls never overlap: each one is awaited before the next tick is taken. An interval shorter than the time a read
    *   takes — a read of the node is given ten seconds before it is abandoned — therefore slows the effective cadence to

@@ -23,9 +23,9 @@ import { type SegmentSignature, TransactionOps, type UnboundTransaction } from '
 import { SignError, type WalletError } from './WalletError.js';
 
 /**
- * Produces a {@link ledger.Signature} over the supplied bytes. Asynchronous so that out-of-process signers (MPC, HSM) —
- * whose whole purpose is that the secret never materializes in-process — can be plugged in directly. A synchronous
- * in-process keystore satisfies this by resolving immediately: `keystore.signDataAsync`.
+ * Produces a signature, in the SDK's own shape, over the supplied bytes. Asynchronous so that out-of-process signers
+ * (MPC, HSM) — whose whole purpose is that the secret never materializes in-process — can be plugged in directly. A
+ * synchronous in-process keystore satisfies this by resolving immediately: `keystore.signDataAsync`.
  */
 export type { SignSegment } from '../types/UnshieldedWalletTypes.js';
 import { type SignSegment } from '../types/UnshieldedWalletTypes.js';
