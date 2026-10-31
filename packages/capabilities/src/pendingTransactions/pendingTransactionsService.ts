@@ -35,6 +35,7 @@ import type * as rx from 'rxjs';
 import { HttpQueryClient, type QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { TransactionStatus, type TransactionStatusQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { EitherOps, ObservableOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { runPromiseThrowingFailure } from '../promiseBoundary.js';
 
 export type PendingTransactionsService<TTransaction> = {
   start: () => Promise<void>;
@@ -105,7 +106,7 @@ export class PendingTransactionsServiceImpl<TTransaction> implements PendingTran
   static init<TTransaction>(
     initParams: InitParams<TTransaction>,
   ): Promise<PendingTransactionsServiceImpl<TTransaction>> {
-    return PendingTransactionsServiceImpl.initEffect(initParams).pipe(Effect.runPromise);
+    return runPromiseThrowingFailure(PendingTransactionsServiceImpl.initEffect(initParams));
   }
 
   static restore<TTransaction>(
@@ -119,7 +120,7 @@ export class PendingTransactionsServiceImpl<TTransaction> implements PendingTran
       Effect.andThen((state) =>
         PendingTransactionsServiceImpl.initEffect({ txTraits, initialState: state, configuration }),
       ),
-      Effect.runPromise,
+      runPromiseThrowingFailure,
     );
   }
 
@@ -155,23 +156,23 @@ export class PendingTransactionsServiceImpl<TTransaction> implements PendingTran
     tx: TTransaction,
     protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
   ): Promise<void> {
-    return this.#effectService.addPendingTransaction(tx, protocolVersion).pipe(Effect.runPromise);
+    return runPromiseThrowingFailure(this.#effectService.addPendingTransaction(tx, protocolVersion));
   }
 
   clear(tx: TTransaction): Promise<void> {
-    return this.#effectService.clear(tx).pipe(Effect.runPromise);
+    return runPromiseThrowingFailure(this.#effectService.clear(tx));
   }
 
   orphanBeyond(chainNow: ProtocolVersion.ProtocolVersion): Promise<void> {
-    return this.#effectService.orphanBeyond(chainNow).pipe(Effect.runPromise);
+    return runPromiseThrowingFailure(this.#effectService.orphanBeyond(chainNow));
   }
 
   addReservation(reservation: PendingTransactions.Reservation): Promise<void> {
-    return this.#effectService.addReservation(reservation).pipe(Effect.runPromise);
+    return runPromiseThrowingFailure(this.#effectService.addReservation(reservation));
   }
 
   clearReservation(identifiers: readonly string[]): Promise<void> {
-    return this.#effectService.clearReservation(identifiers).pipe(Effect.runPromise);
+    return runPromiseThrowingFailure(this.#effectService.clearReservation(identifiers));
   }
 
   start(): Promise<void> {
@@ -193,7 +194,7 @@ export class PendingTransactionsServiceImpl<TTransaction> implements PendingTran
   }
 
   stop(): Promise<void> {
-    return pipe(Scope.close(this.#scope, Exit.succeed(undefined)), Effect.runPromise);
+    return runPromiseThrowingFailure(Scope.close(this.#scope, Exit.succeed(undefined)));
   }
 }
 

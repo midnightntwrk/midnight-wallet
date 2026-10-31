@@ -17,6 +17,7 @@ import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { Effect, Either, Option, pipe } from 'effect';
 import { LedgerParametersCodec } from '../codecs/index.js';
+import { runPromiseThrowingFailure } from '../promiseBoundary.js';
 import { V9 } from '../simulation/index.js';
 import type { AnyLedgerParameters, BlockData } from './validationService.js';
 
@@ -149,7 +150,7 @@ export const makeDefaultBlockDataFetcher = (config: DefaultBlockDataFetcherConfi
   const url = config.indexerClientConnection.indexerHttpUrl;
   const codecs = config.ledgerParametersCodecs ?? defaultLedgerParametersCodecs(config.forks.v9);
   return () =>
-    Effect.runPromise(
+    runPromiseThrowingFailure(
       Effect.gen(function* () {
         const query = yield* BlockHash;
         const result = yield* query({ offset: null });
@@ -166,7 +167,7 @@ export const makeDefaultBlockDataFetcher = (config: DefaultBlockDataFetcherConfi
  */
 export const makeV9SimulatorBlockDataFetcher = (simulator: V9.Simulator): BlockDataFetcher => {
   return () =>
-    Effect.runPromise(
+    runPromiseThrowingFailure(
       Effect.gen(function* () {
         const state = yield* simulator.getLatestState();
         const lastBlock = V9.getLastBlock(state);

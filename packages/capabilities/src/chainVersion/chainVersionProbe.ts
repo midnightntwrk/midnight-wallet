@@ -37,6 +37,7 @@ import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { Data, Effect, Option, pipe } from 'effect';
+import { runPromiseThrowingFailure } from '../promiseBoundary.js';
 
 /**
  * Asks the chain which protocol version its timeline starts under.
@@ -133,5 +134,5 @@ export const makeIndexerChainVersionProbe =
           onSome: Effect.succeed,
         }),
       ),
-      Effect.runPromise,
+      runPromiseThrowingFailure,
     );
