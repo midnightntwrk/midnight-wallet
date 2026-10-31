@@ -23,7 +23,6 @@ export {
   getLastBlockResults,
   getLastBlockEvents,
   getBlockEventsFrom,
-  getBlockEventsSince,
   hasPendingTransactions,
   // State transformation functions
   resolveFullness,

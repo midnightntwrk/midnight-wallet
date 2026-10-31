@@ -97,7 +97,7 @@ export const eventLessDustWallet: DustWalletFactory = (config) => {
  * the subscription from a position that is not an event id at all, and because the cursor is trusted rather than
  * validated, the effect would be silently skipped events rather than an error.
  *
- * Callers do not have to guard against that: dust snapshots are stored per sync model (see {@link dustSnapshotPath}), so
+ * Callers do not have to guard against that: dust snapshots are stored per sync model (see {@link snapshotPath}), so
  * switching a wallet's model finds no snapshot and rebuilds from scratch instead of resuming from a cursor that is not
  * one.
  */
@@ -179,15 +179,6 @@ export const dustWalletFromEnv = (
  */
 export const snapshotPath = (syncCacheDir: string, filename: string, model: DustSnapshotModel): string =>
   `${syncCacheDir}/snapshot-${model}-${filename}`;
-
-/**
- * Where the dust sub-wallet's snapshot lived when each sub-wallet was saved to a file of its own.
- *
- * @deprecated A wallet is now saved to the one file {@link snapshotPath} names, so that a save replaces the previous one
- *   whole. Kept so the earlier per-wallet files can be found and removed.
- */
-export const dustSnapshotPath = (syncCacheDir: string, filename: string, model: DustSnapshotModel): string =>
-  `${syncCacheDir}/dust-${model}-${filename}`;
 
 /**
  * The projections dust sync, synchronizing in the background like the event-based sync does.

@@ -13,7 +13,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   DUST_SYNC_ENV_VAR,
-  dustSnapshotPath,
   dustSyncModelFromEnv,
   dustSyncModelOf,
   type DustWalletFactory,
@@ -90,16 +89,6 @@ describe('dustSyncModelOf', () => {
     // model it may not implement. `custom` gives it a namespace of its own instead.
     const ownFactory: DustWalletFactory = (config) => eventLessDustWallet(config);
     expect(dustSyncModelOf(ownFactory)).toBe('custom');
-  });
-});
-
-describe('dustSnapshotPath', () => {
-  it('gives each sync model its own dust snapshot', () => {
-    const paths = (['events', 'projections', 'custom'] as const).map((model) =>
-      dustSnapshotPath('/cache', 'abc1234-testnet.state', model),
-    );
-    expect(new Set(paths).size).toBe(paths.length);
-    expect(paths[0]).toBe('/cache/dust-events-abc1234-testnet.state');
   });
 });
 

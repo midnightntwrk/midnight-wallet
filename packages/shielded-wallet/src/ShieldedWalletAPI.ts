@@ -27,7 +27,7 @@ import {
   type AnyTx,
   type NetworkId,
   type ProtocolState,
-  ProtocolVersion,
+  type ProtocolVersion,
   type SyncProgress,
   type TokenType,
   type UnprovenTx,
@@ -294,15 +294,6 @@ export type ShieldedWalletAPI<TKeys = never, TSerialized = string> = {
 
   stop(): Promise<void>;
 };
-
-/**
- * The protocol version a ledger-v9-native chain hands over at.
- *
- * @deprecated Use {@link ProtocolVersion.V9NativeForkVersion} from `@midnightntwrk/wallet-sdk-abstractions` (or the
- *   umbrella package) — the value is a property of the chain, not of the shielded wallet, and lives with the version
- *   type now. This alias is the same value and will be removed in a later release.
- */
-export const V9_NATIVE_FORK_VERSION: ProtocolVersion.ProtocolVersion = ProtocolVersion.V9NativeForkVersion;
 
 /**
  * The configuration a default {@link ShieldedWallet} is built from.
