@@ -29,6 +29,8 @@ Also:
 - capabilities adds `withLedgerParameters`, which types block data whose parameters arrive as `unknown`.
 - `UnshieldedWalletState.verifyingKey` reports the key in the SDK's signature shape on both sides of `forks.v9`.
 - utilities adds `eitherCoreStateOf` on `/testing/variants`, and the testkit's `DustWalletFactory` takes plain rates.
+- utilities' `HttpURL.make` and `WsURL.make` refuse a URL with the wrong scheme with a message that names it, such as
+  `Invalid protocol scheme 'ftp:'. Expected 'http:' or 'https:'`, rather than `[object Object]`.
 
 BREAKING CHANGE:
 
