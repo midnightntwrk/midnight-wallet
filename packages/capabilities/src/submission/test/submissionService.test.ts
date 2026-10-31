@@ -52,6 +52,12 @@ describe('Naming the ledger version a submission service is written against', ()
     type _10 = Expect<Equal<CanAssign<V9UnboundTransaction, Submits>, false>>;
   });
 
+  it("names the simulator's ledger version on the configuration its submission service reads", () => {
+    // @ts-expect-error the configuration is named for the ledger version of the simulator it reads
+    type _1 = Submission.SimulatorSubmissionConfiguration<ledgerV9.FinalizedTransaction>;
+    type _2 = Submission.V9SimulatorSubmissionConfiguration<ledgerV9.FinalizedTransaction>;
+  });
+
   it("names the simulator's ledger version on the submission service that reads one", () => {
     expect(Submission).toHaveProperty('makeV9SimulatorSubmissionService');
     expect(Submission).not.toHaveProperty('makeSimulatorSubmissionService');
