@@ -73,12 +73,15 @@ export class VariantState {
    *   handle deliberately does not remember it; the tag is the whole of the guarantee.
    * @param handle The sealed state.
    * @param variantTag The tag of the variant asking.
-   * @returns The carried state, or nothing when another variant produced it.
+   * @returns The carried state, or nothing when another variant produced it or another copy of this class sealed it,
+   *   whose private fields this class cannot read.
    */
   static unwrapFor<T>(handle: VariantState, variantTag: string | symbol): Option.Option<T> {
     // The carried type is erased when a state is sealed, and deliberately: remembering it would put a ledger version
     // back into the handle's own type. The tag check is the same guarantee the caller would otherwise make for itself.
-    return handle.#variantTag === variantTag ? Option.some(handle.#carried as T) : Option.none();
+    return VariantState.is(handle) && handle.#variantTag === variantTag
+      ? Option.some(handle.#carried as T)
+      : Option.none();
   }
 
   /**
