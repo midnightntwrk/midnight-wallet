@@ -13,8 +13,8 @@
 import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import type { Clock } from '@midnightntwrk/wallet-sdk-utilities';
-import { Cause, Data, Effect, Exit, Option, pipe } from 'effect';
+import { EitherOps, type Clock } from '@midnightntwrk/wallet-sdk-utilities';
+import { Cause, Data, Effect, Either, Exit, Option, pipe } from 'effect';
 import type { V9UnboundTransaction } from '../proving/provingService.js';
 
 /**
@@ -24,8 +24,8 @@ import type { V9UnboundTransaction } from '../proving/provingService.js';
  *   The two ledger versions' `LedgerParameters` are structurally identical, so this union carries no information the
  *   compiler can act on — it names, at the one place a block's parameters cross into validation, that which ledger
  *   version produced them is a run-time fact settled by the block's reported protocol version. Each ledger's
- *   `LedgerState` still insists on its own class, so handing over the wrong one fails at the WASM boundary and is
- *   reported as a {@link WellFormedError}.
+ *   `LedgerState` still insists on its own class, so each ledger version's validator looks at the object it is handed
+ *   and refuses the other's with a {@link LedgerParametersMismatchError}.
  */
 export type AnyLedgerParameters = ledgerV8.LedgerParameters | ledgerV9.LedgerParameters;
 
@@ -80,6 +80,24 @@ export class ValidationFetchError extends Data.TaggedError(
   cause: unknown;
 }> {}
 
+/**
+ * Raised when a validator is handed block data whose parameters another ledger version decoded.
+ *
+ * @remarks
+ *   Both ledger versions declare `LedgerParameters` identically, so nothing in the types keeps one version's out of the
+ *   other's validator, and each validator looks for itself. A transaction checked against the other ledger version's
+ *   parameters is not malformed, which is why this is not a {@link WellFormedError}: the block data is from the other
+ *   side of `forks.v9`.
+ */
+export class LedgerParametersMismatchError extends Data.TaggedError(
+  '@midnightntwrk/wallet-sdk-capabilities/validation/validationService/LedgerParametersMismatchError',
+)<{
+  readonly message: string;
+}> {}
+
+/** Everything a validator written against one ledger version can fail with. */
+export type ValidationFailure = WellFormedError | ValidationFetchError | LedgerParametersMismatchError;
+
 export type AnyV9ValidatableTransaction =
   ledgerV9.FinalizedTransaction | V9UnboundTransaction | ledgerV9.UnprovenTransaction;
 
@@ -93,10 +111,7 @@ export type AnyV9ValidatableTransaction =
  *   that left them out would be ledger-v9's without saying so.
  */
 export interface ValidationServiceEffect<TTransaction, TParameters> {
-  validateTx(
-    tx: TTransaction,
-    options: ValidateTxOptions<TParameters>,
-  ): Effect.Effect<void, WellFormedError | ValidationFetchError>;
+  validateTx(tx: TTransaction, options: ValidateTxOptions<TParameters>): Effect.Effect<void, ValidationFailure>;
 }
 
 export interface ValidationService<TTransaction, TParameters> {
@@ -126,7 +141,7 @@ export interface VersionedValidationServiceEffect<TTransaction, TParameters> {
     tx: TTransaction,
     protocolVersion: ProtocolVersion.ProtocolVersion,
     options: ValidateTxOptions<TParameters>,
-  ): Effect.Effect<void, WellFormedError | ValidationFetchError | UnsupportedValidationVersionError>;
+  ): Effect.Effect<void, ValidationFailure | UnsupportedValidationVersionError>;
 }
 
 export interface VersionedValidationService<TTransaction, TParameters> {
@@ -223,14 +238,24 @@ export type WellFormedCheck<TTransaction, TParameters> = (
 ) => void;
 
 /**
+ * Reads block data's parameters as the ones a ledger version's well-formedness check takes, refusing another ledger
+ * version's: the two declare `LedgerParameters` identically, so only the object itself can say which made it.
+ */
+export type LedgerParametersReader<TParameters, TOwnParameters> = (
+  parameters: TParameters,
+) => Either.Either<TOwnParameters, LedgerParametersMismatchError>;
+
+/**
  * Builds a validation service for one ledger version from that version's well-formedness check.
  *
  * @param check The ledger version's well-formedness check.
+ * @param readParameters Reads block data's parameters as that ledger version's, refusing another's.
  * @param deps The network, clock, and the block-data fetcher that decodes at the same ledger version.
  * @returns A validator for that ledger version, ready to register in {@link ValidationServices}.
  */
-export const makeValidationServiceEffect = <TTransaction, TParameters>(
-  check: WellFormedCheck<TTransaction, TParameters>,
+export const makeValidationServiceEffect = <TTransaction, TParameters, TOwnParameters>(
+  check: WellFormedCheck<TTransaction, TOwnParameters>,
+  readParameters: LedgerParametersReader<TParameters, TOwnParameters>,
   deps: ValidationServiceDependencies<TParameters>,
 ): ValidationServiceEffect<TTransaction, TParameters> => ({
   validateTx(tx, options) {
@@ -243,12 +268,13 @@ export const makeValidationServiceEffect = <TTransaction, TParameters>(
 
     return pipe(
       fetchOrUse,
-      Effect.flatMap((blockData) =>
+      Effect.flatMap((blockData) => EitherOps.toEffect(readParameters(blockData.ledgerParameters))),
+      Effect.flatMap((ledgerParameters) =>
         Effect.try({
           try: () =>
             check(tx, {
               networkId: deps.networkId,
-              ledgerParameters: blockData.ledgerParameters,
+              ledgerParameters,
               flags: options.flags,
               now: deps.clock.now(),
             }),
@@ -274,7 +300,7 @@ const buildBlankLedgerState = (networkId: string, parameters: ledgerV9.LedgerPar
 };
 
 /** The ledger-v9's well-formedness check. */
-export const v9WellFormedCheck: WellFormedCheck<AnyV9ValidatableTransaction, AnyLedgerParameters> = (
+export const v9WellFormedCheck: WellFormedCheck<AnyV9ValidatableTransaction, ledgerV9.LedgerParameters> = (
   tx,
   { networkId, ledgerParameters, flags, now },
 ) => {
@@ -297,10 +323,20 @@ const runPromiseThrowingFailure = async <A, E extends Error>(effect: Effect.Effe
   throw new Error(Cause.pretty(exit.cause));
 };
 
+const v9LedgerParameters: LedgerParametersReader<AnyLedgerParameters, ledgerV9.LedgerParameters> = (parameters) =>
+  parameters instanceof ledgerV9.LedgerParameters
+    ? Either.right(parameters)
+    : Either.left(
+        new LedgerParametersMismatchError({
+          message:
+            "ledger-v9's validator was handed another ledger version's parameters; it checks transactions only against ledger-v9's.",
+        }),
+      );
+
 export const makeV9ValidationServiceEffect = (
   deps: ValidationServiceDependencies<AnyLedgerParameters>,
 ): ValidationServiceEffect<AnyV9ValidatableTransaction, AnyLedgerParameters> =>
-  makeValidationServiceEffect(v9WellFormedCheck, deps);
+  makeValidationServiceEffect(v9WellFormedCheck, v9LedgerParameters, deps);
 
 export const makeV9ValidationService = (
   deps: ValidationServiceDependencies<AnyLedgerParameters>,
