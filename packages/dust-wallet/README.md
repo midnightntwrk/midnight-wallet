@@ -72,8 +72,8 @@ the empty state a wallet crossing the boundary is handed. From there it syncs by
 ```typescript
 dustWallet.state.subscribe((state) => {
   console.log('Progress:', state.progress);
-  console.log('Balance:', state.state.balance);
-  console.log('Dust Address:', state.dustAddress);
+  console.log('Balance:', state.balance(new Date()));
+  console.log('Dust Address:', state.address);
 });
 
 // Or wait for sync
@@ -83,8 +83,8 @@ const syncedState = await dustWallet.waitForSyncedState();
 ### Balancing Transaction Fees
 
 ```typescript
-// Add fee balancing to a transaction
-const feeBalancingTx = await dustWallet.balanceTransactions(dustSecretKey, [transactionToBalance], ttl);
+// Add fee balancing to a transaction; `blockData` describes the block it was priced at
+const { transaction: feeBalancingTx, blockData } = await dustWallet.balanceTransactions([transactionToBalance], ttl);
 ```
 
 ### Calculating Fees
@@ -95,10 +95,10 @@ const fee = await dustWallet.calculateFee([transaction]);
 
 // Estimate the total fee including the balancing transaction fee
 // ttl and currentTime are optional (default: 1 hour from now, and current block timestamp)
-const totalFee = await dustWallet.estimateFee(dustSecretKey, [transaction]);
+const totalFee = await dustWallet.estimateFee([transaction]);
 
 // With explicit ttl and currentTime
-const totalFeeWithOptions = await dustWallet.estimateFee(dustSecretKey, [transaction], ttl, currentTime);
+const totalFeeWithOptions = await dustWallet.estimateFee([transaction], ttl, currentTime);
 ```
 
 ### Dust Generation
@@ -106,8 +106,9 @@ const totalFeeWithOptions = await dustWallet.estimateFee(dustSecretKey, [transac
 Register Night UTXOs to generate dust:
 
 ```typescript
+// currentTime may be undefined, to use the latest block's timestamp
 const dustGenerationTx = await dustWallet.createDustGenerationTransaction(
-  previousState,
+  currentTime,
   ttl,
   nightUtxos,
   nightVerifyingKey,
@@ -120,16 +121,13 @@ const signedTx = await dustWallet.addDustGenerationSignature(dustGenerationTx, s
 
 ## Exports
 
-- `DustWallet` - Main wallet class
-- `DustWalletState` - Wallet state type
-- `DustCoreWallet` - Core wallet implementation
-- `Keys` - Key management utilities
-- `Simulator` - Dust simulation utilities
-- `SyncService` - Synchronization service
-- `Transacting` - Transaction utilities
-- `CoinsAndBalances` - Coin and balance management
-- V2 (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-dust-wallet/v2`
-- V1 (ledger-v8) variant internals via `@midnightntwrk/wallet-sdk-dust-wallet/v1`
+- `DustWallet` - The wallet, running the V1 variant below `forks.v9` and the V2 variant from it
+- `CustomDustWallet` - A wallet composed from one variant's builder
+- `DustWalletState` - Wallet state
+- `DustWalletTypes` - The data both variants speak, and the capability contracts they implement
+- V2 (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-dust-wallet/v2`, and V1 (ledger-v8) ones via
+  `@midnightntwrk/wallet-sdk-dust-wallet/v1`: `CoreWallet`, `Keys`, `CoinsAndBalances`, `SyncService`, `Transacting`,
+  and `Simulator`, that ledger version's simulator
 
 ## V2 Builder
 
