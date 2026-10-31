@@ -20,6 +20,7 @@ import {
   ServerError,
 } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Data, Effect, Either, Option, pipe } from 'effect';
+import { runPromiseThrowingFailure } from '../promiseBoundary.js';
 
 export class ProvingError extends Data.TaggedError('Wallet.Proving')<{
   message: string;
@@ -150,14 +151,14 @@ export type V9ProvingService = ProvingService<V9UnboundTransaction, V9UnprovenTr
 const wrapEffectService = <TProven, TUnproven>(
   effectService: ProvingServiceEffect<TProven, TUnproven>,
 ): ProvingService<TProven, TUnproven> => ({
-  prove: (transaction) => Effect.runPromise(effectService.prove(transaction)),
+  prove: (transaction) => runPromiseThrowingFailure(effectService.prove(transaction)),
 });
 
 /** Adapts a version-routed proving service to the promise-facing surface the facade exposes. */
 export const wrapVersionedEffectService = <TProven, TUnproven>(
   effectService: VersionedProvingServiceEffect<TProven, TUnproven>,
 ): VersionedProvingService<TProven, TUnproven> => ({
-  prove: (transaction, protocolVersion) => Effect.runPromise(effectService.prove(transaction, protocolVersion)),
+  prove: (transaction, protocolVersion) => runPromiseThrowingFailure(effectService.prove(transaction, protocolVersion)),
 });
 
 export const fromV9ProvingProviderEffect = (

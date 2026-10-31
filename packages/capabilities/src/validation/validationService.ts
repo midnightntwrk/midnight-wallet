@@ -14,7 +14,8 @@ import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { EitherOps, type Clock } from '@midnightntwrk/wallet-sdk-utilities';
-import { Cause, Data, Effect, Either, Exit, Option, pipe } from 'effect';
+import { Data, Effect, Either, Option, pipe } from 'effect';
+import { runPromiseThrowingFailure } from '../promiseBoundary.js';
 import type { V9UnboundTransaction, V9UnprovenTransaction } from '../proving/provingService.js';
 
 /**
@@ -304,22 +305,6 @@ export const v9WellFormedCheck: WellFormedCheck<AnyV9ValidatableTransaction, led
   { networkId, ledgerParameters, flags, now },
 ) => {
   tx.wellFormed(buildBlankLedgerState(networkId, ledgerParameters), buildStrictness(flags), now);
-};
-
-/**
- * Rejects a promise with the typed failure itself rather than the fiber wrapper around it, so a caller can `catch` the
- * error class the signature names.
- *
- * @remarks
- *   `E extends Error` is what makes that rejection legitimate rather than a thrown bare value, and every failure on this
- *   surface is a `Data.TaggedError`, which is one.
- */
-const runPromiseThrowingFailure = async <A, E extends Error>(effect: Effect.Effect<A, E>): Promise<A> => {
-  const exit = await Effect.runPromiseExit(effect);
-  if (Exit.isSuccess(exit)) return exit.value;
-  const failure = Cause.failureOption(exit.cause);
-  if (Option.isSome(failure)) throw failure.value;
-  throw new Error(Cause.pretty(exit.cause));
 };
 
 const v9LedgerParameters: LedgerParametersReader<AnyLedgerParameters, ledgerV9.LedgerParameters> = (parameters) =>

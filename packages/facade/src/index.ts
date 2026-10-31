@@ -2135,6 +2135,8 @@ export class WalletFacade {
    * @returns The finalized transaction, stamped with the version it was authored at.
    * @throws {@link WalletTransactionUnwrapError} When the wallets left the transaction's epoch while it was being
    *   proved, or were never in it, or when another copy of the abstractions package sealed the handle.
+   * @throws What the proving service rejects with, as itself: from the default one, `ProvingError`,
+   *   `ProvingEpochMismatchError` or `UnsupportedProvingVersionError`.
    * @throws {AggregateError} When giving back a reservation failed as well, so a booking may remain until it expires:
    *   `errors` holds the original failure first, then each failed release.
    */

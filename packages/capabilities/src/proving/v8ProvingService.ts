@@ -28,6 +28,7 @@ import {
   ServerError,
 } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Effect, pipe } from 'effect';
+import { runPromiseThrowingFailure } from '../promiseBoundary.js';
 import {
   ProvingError,
   type ProvingFailure,
@@ -152,5 +153,5 @@ export const makeV8SimulatorProvingService = (): ProvingService<
   V8UnprovenTransaction
 > => {
   const effectService = makeV8SimulatorProvingServiceEffect();
-  return { prove: (transaction) => Effect.runPromise(effectService.prove(transaction)) };
+  return { prove: (transaction) => runPromiseThrowingFailure(effectService.prove(transaction)) };
 };

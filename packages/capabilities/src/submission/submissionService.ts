@@ -20,6 +20,7 @@ import {
 import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
+import { runPromiseThrowingFailure } from '../promiseBoundary.js';
 import { type SimulatorState, getLastBlock } from '../simulation/v9/SimulatorState.js';
 
 export const SubmissionEvent = SubmissionEventImported;
@@ -163,11 +164,11 @@ export const makeDefaultSubmissionService = <
   const effectService = makeDefaultSubmissionServiceEffect<TTransaction>(config);
 
   const submit = (transaction: TTransaction, waitForStatus: SubmissionEvent['_tag'] = 'InBlock') =>
-    effectService.submitTransaction(transaction, waitForStatus).pipe(Effect.runPromise);
+    runPromiseThrowingFailure(effectService.submitTransaction(transaction, waitForStatus));
 
   return {
     submitTransaction: submit as SubmitTransactionMethod<TTransaction>,
-    close: () => effectService.close().pipe(Effect.runPromise),
+    close: () => runPromiseThrowingFailure(effectService.close()),
   };
 };
 
