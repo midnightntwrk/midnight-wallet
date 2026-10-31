@@ -163,7 +163,7 @@ export const createSimulatorProvingService = (): ProvingService<V9UnboundTransac
  * because simulator uses different transaction types internally.
  */
 export const createSimulatorSubmissionService = (simulator: V9.Simulator): SubmissionService<FinalizedTx> => {
-  const effectService = Submission.makeSimulatorSubmissionService<ledgerV9.FinalizedTransaction>('InBlock')({
+  const effectService = Submission.makeV9SimulatorSubmissionService<ledgerV9.FinalizedTransaction>('InBlock')({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     simulator: simulator as any,
   });

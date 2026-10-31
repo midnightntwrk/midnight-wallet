@@ -225,7 +225,7 @@ describe('DustWallet', () => {
         .pipe(Effect.provideService(Scope.Scope, scope));
       yield* wallet.startSyncInBackground(dustSecretKey);
 
-      submissionService = Submission.makeSimulatorSubmissionService<ProofErasedTransaction>('InBlock')({ simulator });
+      submissionService = Submission.makeV9SimulatorSubmissionService<ProofErasedTransaction>('InBlock')({ simulator });
     }).pipe(Effect.scoped, Effect.runPromise),
   );
 

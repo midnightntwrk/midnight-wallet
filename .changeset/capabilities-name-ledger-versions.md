@@ -15,6 +15,10 @@ ledger version's, which is what it returns on either side of `forks.v9`.
 `V9UnprovenTransaction` now sits beside `V9UnboundTransaction`, and `V9ProvingServiceEffect` is added as the twin of
 `V8ProvingServiceEffect`. Both are exported from `./proving`.
 
+`makeDefaultSubmissionService` and `makeDefaultSubmissionServiceEffect` no longer default their transaction type to
+ledger-v9's `FinalizedTransaction`. The node takes a transaction's bytes, so a service built without naming one now
+submits either ledger version's transactions.
+
 BREAKING CHANGE:
 
 - `ProvingServiceEffect`, `ProvingService`, `VersionedProvingServiceEffect`, `VersionedProvingService` and
@@ -28,5 +32,6 @@ BREAKING CHANGE:
   `makeV9ServerProvingServiceEffect` and `makeV9ServerProvingService` under another name.
 - Renamed after the ledger version they build over: `makeWasmProvingServices` is `makeV9WasmProvingServices`,
   `makeSimulatorProvingServiceEffect` is `makeV9SimulatorProvingServiceEffect`, `makeSimulatorProvingService` is
-  `makeV9SimulatorProvingService`, and `./validation`'s `makeSimulatorBlockDataFetcher` is
-  `makeV9SimulatorBlockDataFetcher`.
+  `makeV9SimulatorProvingService`, `./validation`'s `makeSimulatorBlockDataFetcher` is
+  `makeV9SimulatorBlockDataFetcher`, and `./submission`'s `makeSimulatorSubmissionService` is
+  `makeV9SimulatorSubmissionService`.

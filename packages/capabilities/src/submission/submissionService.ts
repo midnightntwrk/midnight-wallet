@@ -18,7 +18,6 @@ import {
   SubmissionEvent as SubmissionEventImported,
 } from '@midnightntwrk/wallet-sdk-node-client/effect';
 import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type FinalizedTransaction } from '@midnightntwrk/ledger-v9';
 import { type SimulatorState, getLastBlock } from '../simulation/v9/SimulatorState.js';
 
 export const SubmissionEvent = SubmissionEventImported;
@@ -73,8 +72,17 @@ export type DefaultSubmissionConfiguration = {
   relayURL: URL;
 };
 
+/**
+ * Submits transactions to a node through its relay.
+ *
+ * @remarks
+ *   The node takes a transaction's bytes, whichever ledger version wrote them, so the transaction type has no default:
+ *   left unnamed, it is anything that serializes, and a service built that way submits either ledger version's.
+ * @param config The relay to submit through.
+ * @returns A submission service that closes its connection on `close`.
+ */
 export const makeDefaultSubmissionServiceEffect = <
-  TTransaction extends { serialize: () => Uint8Array; toString: () => string } = FinalizedTransaction,
+  TTransaction extends { serialize: () => Uint8Array; toString: () => string },
 >(
   config: DefaultSubmissionConfiguration,
 ): SubmissionServiceEffect<TTransaction> => {
@@ -122,9 +130,7 @@ export const makeDefaultSubmissionServiceEffect = <
   };
 };
 
-export const makeDefaultSubmissionService = <
-  TTransaction extends { serialize: () => Uint8Array } = FinalizedTransaction,
->(
+export const makeDefaultSubmissionService = <TTransaction extends { serialize: () => Uint8Array }>(
   config: DefaultSubmissionConfiguration,
 ): SubmissionService<TTransaction> => {
   const effectService = makeDefaultSubmissionServiceEffect<TTransaction>(config);
@@ -144,7 +150,7 @@ export type SimulatorSubmissionConfiguration<TTransaction> = {
     getLatestState: () => Effect.Effect<SimulatorState>;
   };
 };
-export const makeSimulatorSubmissionService =
+export const makeV9SimulatorSubmissionService =
   <TTransaction extends { serialize: () => Uint8Array }>(
     waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock',
   ) =>
