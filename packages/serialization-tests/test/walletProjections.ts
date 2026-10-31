@@ -17,7 +17,8 @@ import { coreStateOf as v1ShieldedCoreStateOf } from '@midnightntwrk/wallet-sdk-
 import { coreStateOf as v2ShieldedCoreStateOf } from '@midnightntwrk/wallet-sdk-shielded/v2';
 import { coreStateOf as v1UnshieldedCoreStateOf } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v1';
 import { coreStateOf as v2UnshieldedCoreStateOf } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
-import { Either, Option } from 'effect';
+import { eitherCoreStateOf } from '@midnightntwrk/wallet-sdk-utilities/testing/variants';
+import { Either } from 'effect';
 import { firstValueFrom, type Observable } from 'rxjs';
 import { type Fixture } from './fixtures.js';
 
@@ -137,15 +138,10 @@ export type DustState = {
  * The wallet state carries it sealed, because it is one ledger version's objects; the network and the ledger-level
  * readings below are only reachable through the variant that owns them, which is the route an application would take.
  */
-const coreOf = <TV1, TV2>(
-  state: Readonly<{ state: VariantState }>,
-  v2: (state: Readonly<{ state: VariantState }>) => Option.Option<TV2>,
-  v1: (state: Readonly<{ state: VariantState }>) => Option.Option<TV1>,
-): TV1 | TV2 => Option.getOrThrow(Option.orElse<TV2, TV1>(v2(state), () => v1(state)));
-
-const shieldedCoreOf = (state: ShieldedState) => coreOf(state, v2ShieldedCoreStateOf, v1ShieldedCoreStateOf);
-const unshieldedCoreOf = (state: UnshieldedState) => coreOf(state, v2UnshieldedCoreStateOf, v1UnshieldedCoreStateOf);
-const dustCoreOf = (state: DustState) => coreOf(state, v2DustCoreStateOf, v1DustCoreStateOf);
+const shieldedCoreOf = (state: ShieldedState) => eitherCoreStateOf(state, v2ShieldedCoreStateOf, v1ShieldedCoreStateOf);
+const unshieldedCoreOf = (state: UnshieldedState) =>
+  eitherCoreStateOf(state, v2UnshieldedCoreStateOf, v1UnshieldedCoreStateOf);
+const dustCoreOf = (state: DustState) => eitherCoreStateOf(state, v2DustCoreStateOf, v1DustCoreStateOf);
 
 /** Coin values of one token, as the fixtures record them. */
 const shieldedValuesOf = (state: ShieldedState, token: unknown): readonly string[] =>

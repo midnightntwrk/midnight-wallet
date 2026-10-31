@@ -26,7 +26,8 @@ import {
   WalletTransaction,
   type AnyTx,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Either, Option } from 'effect';
+import * as Variants from '@midnightntwrk/wallet-sdk-utilities/testing/variants';
+import { Either } from 'effect';
 import { type CoreWallet as V1CoreWallet } from '../v1/CoreWallet.js';
 import { coreStateOf as v1CoreStateOf } from '../v1/RunningV1Variant.js';
 import { type CoreWallet as V2CoreWallet } from '../v2/CoreWallet.js';
@@ -37,7 +38,7 @@ export type EitherWallet = V1CoreWallet | V2CoreWallet;
 
 /** The core state a shielded wallet state carries, read back by whichever variant produced it. */
 export const eitherCoreStateOf = (walletState: Readonly<{ state: VariantState }>): EitherWallet =>
-  Option.getOrThrow(Option.orElse(v2CoreStateOf(walletState), () => v1CoreStateOf(walletState)));
+  Variants.eitherCoreStateOf(walletState, v2CoreStateOf, v1CoreStateOf);
 
 /**
  * The transaction a handle carries, read at the epoch its own stamp names.

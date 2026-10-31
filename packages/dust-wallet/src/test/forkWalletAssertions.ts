@@ -27,7 +27,7 @@
  */
 
 import { type VariantState } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Option } from 'effect';
+import * as Variants from '@midnightntwrk/wallet-sdk-utilities/testing/variants';
 import { type CoreWallet as V1CoreWallet } from '../v1/CoreWallet.js';
 import { coreStateOf as v1CoreStateOf } from '../v1/RunningV1Variant.js';
 import { type CoreWallet as V2CoreWallet } from '../v2/CoreWallet.js';
@@ -38,7 +38,7 @@ export type EitherWallet = V1CoreWallet | V2CoreWallet;
 
 /** The core state a dust wallet state carries, read back by whichever variant produced it. */
 export const eitherCoreStateOf = (walletState: Readonly<{ state: VariantState }>): EitherWallet =>
-  Option.getOrThrow(Option.orElse(v2CoreStateOf(walletState), () => v1CoreStateOf(walletState)));
+  Variants.eitherCoreStateOf(walletState, v2CoreStateOf, v1CoreStateOf);
 
 /** Ascending order for bigints, which `Array.prototype.sort`'s default (string) comparison gets wrong. */
 const ascending = (left: bigint, right: bigint): number => (left < right ? -1 : left > right ? 1 : 0);

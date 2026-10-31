@@ -37,6 +37,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
+import * as Variants from '@midnightntwrk/wallet-sdk-utilities/testing/variants';
 import { Deferred, Effect, FiberId, HashMap, Option, Stream, pipe } from 'effect';
 import {
   CustomForkingUnshieldedWallet,
@@ -143,7 +144,7 @@ export const bookedUtxosOf = (wallet: V1CoreWallet | V2CoreWallet): readonly Car
 
 /** The core state an unshielded wallet state carries, read back by whichever variant produced it. */
 export const eitherCoreStateOf = (walletState: Readonly<{ state: VariantState }>): V1CoreWallet | V2CoreWallet =>
-  Option.getOrThrow(Option.orElse(v2CoreStateOf(walletState), () => v1CoreStateOf(walletState)));
+  Variants.eitherCoreStateOf(walletState, v2CoreStateOf, v1CoreStateOf);
 
 /** Wraps the real cross-ledger migration so the test can see exactly what crossed. */
 const capturingCrossLedgerMigration = (
