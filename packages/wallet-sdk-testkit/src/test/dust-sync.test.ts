@@ -10,6 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { type DustGenerationRates } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { type CanAssign, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { describe, expect, it } from 'vitest';
 import {
   DUST_SYNC_ENV_VAR,
@@ -89,6 +91,13 @@ describe('dustSyncModelOf', () => {
     // model it may not implement. `custom` gives it a namespace of its own instead.
     const ownFactory: DustWalletFactory = (config) => eventLessDustWallet(config);
     expect(dustSyncModelOf(ownFactory)).toBe('custom');
+  });
+});
+
+describe('DustWalletFactory', () => {
+  it('starts a wallet against plain dust rates, so passing custom ones imports no ledger', () => {
+    type StartRates = Parameters<ReturnType<DustWalletFactory>['startWithSeed']>[1];
+    type _1 = Expect<CanAssign<DustGenerationRates, StartRates>>;
   });
 });
 
