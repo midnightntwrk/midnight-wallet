@@ -280,31 +280,6 @@ export const resolveProvingBackends = (
         })
       : Either.left(noBackendNamed());
 
-/**
- * Registers the in-process WASM prover, driven by ledger-v9, from a given protocol version upwards.
- *
- * @remarks
- *   Every entry here is ledger-v9's backend, so `sinceVersion` should not be below a protocol boundary: what a version
- *   below it needs is the ledger-v8 driver, which `makeDefaultProvingServices` registers for the epoch the fork
- *   schedule it is given places below `forks.v9`. Registering nothing below is what turns that into an
- *   {@link UnsupportedProvingVersionError} naming the version, rather than a ledger-v8 transaction handed to a ledger
- *   that cannot read it.
- * @param sinceVersion The first protocol version to register the bundled prover for.
- * @param configuration Optional key material override.
- * @returns The proving backends, keyed by version.
- */
-export const makeV9WasmProvingServices = (
-  sinceVersion: ProtocolVersion.ProtocolVersion,
-  configuration?: WasmProvingConfiguration,
-): ProvingServices<V9UnboundTransaction, V9UnprovenTransaction> => ({
-  entries: [
-    {
-      range: ProtocolVersion.makeRange(sinceVersion, ProtocolVersion.MaxSupportedVersion),
-      value: makeV9WasmProvingServiceEffect(configuration),
-    },
-  ],
-});
-
 export const makeV9ServerProvingServiceEffect = (configuration: ServerProvingConfiguration): V9ProvingServiceEffect => {
   return pipe(
     HttpProverClient.create({
