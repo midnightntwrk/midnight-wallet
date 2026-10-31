@@ -330,8 +330,9 @@ export type ForkWalletConfig = Readonly<{
    *   module produced them. The shipped wallet rebuilds the ledger-v8 set from the ledger-v9 one it is handed; this
    *   harness states both so a proof can assert what the migration was given.
    *
-   *   Configuration only: the start is called without them, as `DustWallet(configuration).startWithSeed(seed)` is, so it
-   *   falls back to the class's default.
+   *   The variants' configuration only: neither the wallet layer's configuration nor the start names rates, so a fresh
+   *   start values its empty state against the ledger's initial ones. `configuration.test.ts` covers configured rates
+   *   reaching a start.
    */
   dustParameters: Readonly<{ v8: V8Parameters; v9: V9Parameters }>;
   /** The instant sync updates are valued at — at or after the last event's block time. */

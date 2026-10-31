@@ -213,6 +213,16 @@ export type ForkingDustConfiguration = {
    *   be without it.
    */
   dustTimelineStartProbe?: DustTimelineStartProbe;
+  /**
+   * The rates a fresh start values its empty state against when the start names none.
+   *
+   * @remarks
+   *   Plain rates rather than either ledger version's parameters, because a start may begin on either variant and each
+   *   builds its empty state from its own ledger version's rebuild of them. The rates a start names win over these;
+   *   with neither, the start uses the ledger's initial ones. A composition configures its variants from the same
+   *   rates, as `DustWallet` does, so the state a start builds and the state a hand-over builds are valued alike.
+   */
+  dustParameters?: DustGenerationRates;
 };
 
 /**
@@ -270,9 +280,9 @@ export interface ForkingDustWalletClass<
    *   Without one, or when the question goes unanswered, it begins on the V1 variant and is handed over when the chain
    *   reports a version the V2 variant owns — on a chain that has already forked, the first batch it sees.
    * @param seed The seed to derive both ledger versions' dust keys from.
-   * @param dustParameters The ledger-v9's dust parameters, which an empty ledger-v9 state is valued against. A start at
-   *   the dust timeline's boundary does not use them: its state is the V2 variant's migration's, as the hand-over's
-   *   is.
+   * @param dustParameters The rates the empty state is valued against, on whichever variant the start begins; the
+   *   configured {@link ForkingDustConfiguration.dustParameters} when omitted. A start at the dust timeline's boundary
+   *   does not use them: its state is the V2 variant's migration's, as the hand-over's is.
    * @returns A wallet started at the variant the chain is on, or on the V1 variant when the chain was not asked or did
    *   not say.
    */
@@ -290,8 +300,9 @@ export interface ForkingDustWalletClass<
    *   alone could not read the other side of the chain. It costs the caller an import of both ledger packages and the
    *   same derivation done twice; a seed costs neither.
    * @param keys One ledger version's dust secret key per side of the boundary.
-   * @param dustParameters The ledger-v9's dust parameters. A start at the dust timeline's boundary does not use them:
-   *   its state is the V2 variant's migration's, as the hand-over's is.
+   * @param dustParameters The rates the empty state is valued against, on whichever variant the start begins; the
+   *   configured {@link ForkingDustConfiguration.dustParameters} when omitted. A start at the dust timeline's boundary
+   *   does not use them: its state is the V2 variant's migration's, as the hand-over's is.
    * @returns A wallet started at the variant the chain is on, or on the V1 variant — where a wallet with no history
    *   belongs — when the chain was not asked or did not say.
    */
@@ -378,7 +389,8 @@ export const asV9DustParameters = (parameters: DustGenerationRates): ledgerV9.Du
  *   const wallet = Wallet.startWithSeed(seed, dustParameters);
  *   ```;
  *
- * @param configuration What the wallet layer needs: where the boundary lies.
+ * @param configuration What the wallet layer needs: where the boundary lies, and the rates a start that names none is
+ *   valued against.
  * @param v1 The variant that reads the chain below the boundary, with the configuration it is built from.
  * @param v2 The variant that reads it from the boundary, with the configuration it is built from.
  * @returns The wallet class.
@@ -409,8 +421,9 @@ export function CustomForkingDustWallet<
 
   const variants = BaseWallet.allVariantsRecord();
 
-  /** What the rates are when a caller names none: the ledger's own initial parameters. */
-  const defaultRates: DustGenerationRates = ledgerV9.LedgerParameters.initialParameters().dust;
+  /** What the rates are when a start names none: the configured ones, else the ledger's own initial parameters. */
+  const defaultRates: DustGenerationRates =
+    configuration.dustParameters ?? ledgerV9.LedgerParameters.initialParameters().dust;
 
   /**
    * The key material this wallet holds: one ledger version's `DustSecretKey` per side of the boundary, or none.

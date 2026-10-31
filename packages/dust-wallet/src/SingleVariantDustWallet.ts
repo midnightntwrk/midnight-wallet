@@ -118,6 +118,13 @@ export function CustomDustWallet<
     ProtocolVersion.MinSupportedVersion,
   );
 
+  /**
+   * What a start that names no dust parameters values its empty state against: the configured ones, else the ledger's
+   * own initial parameters, so an application starting a wallet need not import a ledger version for them.
+   */
+  const defaultDustParameters: DustParameters =
+    configuration.dustParameters ?? LedgerParameters.initialParameters().dust;
+
   /** Seals a transaction this wallet built, at the version its one variant answers from. */
   const seal = (transaction: UnprovenTransaction): UnprovenTx =>
     WalletTransaction.adopt('Unproven', transaction, ProtocolVersion.MinSupportedVersion);
@@ -145,9 +152,7 @@ export function CustomDustWallet<
   {
     static startWithSeed(
       seed: Uint8Array,
-      // The ledger's own initial parameters when a caller names none: three rates that do not depend on this wallet,
-      // and asking for them made an application import a ledger version to start one.
-      dustParameters: DustParameters = LedgerParameters.initialParameters().dust,
+      dustParameters: DustParameters = defaultDustParameters,
     ): CustomDustWalletImplementation {
       const dustSecretKey = DustSecretKey.fromSeed(seed);
       return CustomDustWalletImplementation.startFirst(
@@ -158,7 +163,7 @@ export function CustomDustWallet<
 
     static startWithSecretKey(
       secretKey: DustSecretKey,
-      dustParameters: DustParameters = LedgerParameters.initialParameters().dust,
+      dustParameters: DustParameters = defaultDustParameters,
     ): CustomDustWalletImplementation {
       return CustomDustWalletImplementation.startFirst(
         CustomDustWalletImplementation,
