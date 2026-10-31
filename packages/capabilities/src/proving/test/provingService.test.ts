@@ -13,7 +13,16 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { makeSimulatorProvingServiceEffect } from '../provingService.js';
+import * as Proving from '../index.js';
+import {
+  makeV9SimulatorProvingServiceEffect,
+  type ProvingService,
+  type ProvingServiceEffect,
+  type ProvingServices,
+  type V9UnboundTransaction,
+  type VersionedProvingService,
+  type VersionedProvingServiceEffect,
+} from '../provingService.js';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 
 const getNonDustImbalance = (imbalances: Map<ledger.TokenType, bigint>, rawTokenType: ledger.RawTokenType): bigint => {
@@ -39,10 +48,39 @@ describe('Simulator proving service', () => {
   const testUnprovenTx = makeTransaction();
 
   it('does transform unproven transaction into proof-erased transaction', async () => {
-    const service = makeSimulatorProvingServiceEffect();
+    const service = makeV9SimulatorProvingServiceEffect();
     const finalTx: ledger.ProofErasedTransaction = await service.prove(testUnprovenTx).pipe(Effect.runPromise);
 
     expect(finalTx).toBeInstanceOf(ledger.Transaction);
     expect(getNonDustImbalance(finalTx.imbalances(0), ledger.shieldedToken().raw)).toEqual(-42n);
+  });
+});
+
+describe('Naming the ledger version a proving backend is written against', () => {
+  it('requires every proving type to name the transaction it accepts, so none is ledger-v9 by omission', () => {
+    // @ts-expect-error a backend names the unproven transaction it accepts
+    type _1 = ProvingServiceEffect<V9UnboundTransaction>;
+    // @ts-expect-error a backend names the unproven transaction it accepts
+    type _2 = ProvingService<V9UnboundTransaction>;
+    // @ts-expect-error a version-routed service names the unproven transactions it accepts
+    type _3 = VersionedProvingServiceEffect<V9UnboundTransaction>;
+    // @ts-expect-error a version-routed service names the unproven transactions it accepts
+    type _4 = VersionedProvingService<V9UnboundTransaction>;
+    // @ts-expect-error a registry names the unproven transactions its backends accept
+    type _5 = ProvingServices<V9UnboundTransaction>;
+  });
+
+  it('names the ledger version of every backend that is built over one', () => {
+    expect(Proving).toHaveProperty('makeV9SimulatorProvingServiceEffect');
+    expect(Proving).toHaveProperty('makeV9SimulatorProvingService');
+    expect(Proving).toHaveProperty('makeV9WasmProvingServices');
+    expect(Proving).not.toHaveProperty('makeSimulatorProvingServiceEffect');
+    expect(Proving).not.toHaveProperty('makeSimulatorProvingService');
+    expect(Proving).not.toHaveProperty('makeWasmProvingServices');
+  });
+
+  it('offers no version-less name for the ledger-v9 proof server, which is makeV9ServerProvingService', () => {
+    expect(Proving).not.toHaveProperty('makeDefaultProvingServiceEffect');
+    expect(Proving).not.toHaveProperty('makeDefaultProvingService');
   });
 });
