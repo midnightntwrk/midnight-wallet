@@ -39,7 +39,7 @@ import {
   type AnyTx,
   type NetworkId,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   type UnboundTx,
   type UnprovenTx,
   WalletTransaction,
@@ -95,7 +95,7 @@ export type UnshieldedRestoreError = UnsupportedSnapshotVersionError | V1WalletE
  *   Two failures beyond the variant's own: a transaction handed in may have been built on the other side of the boundary,
  *   and a signature the caller's signer returns may name a scheme ledger-v8 does not have.
  */
-type TransactingError = WalletError | ProtocolVersionMismatchError | Signatures.UnsupportedSignatureKindError;
+type TransactingError = WalletError | WalletTransactionUnwrapError | Signatures.UnsupportedSignatureKindError;
 
 /** The V1 variant a forking unshielded wallet registers: the one that reads the chain before the boundary. */
 export type V1UnshieldedVariant<TSyncUpdate> = V1Variant<string, TSyncUpdate>;
@@ -294,11 +294,11 @@ export function CustomForkingUnshieldedWallet<
   const [v9Stamp] = v9Epoch;
 
   /** Reads a transaction built before the boundary, refusing one built after it. */
-  const v8Tx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+  const v8Tx = <T>(handle: AnyTx): Effect.Effect<T, WalletTransactionUnwrapError> =>
     EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, v8Epoch));
 
   /** Reads a transaction built from the boundary, refusing one built before it. */
-  const v9Tx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+  const v9Tx = <T>(handle: AnyTx): Effect.Effect<T, WalletTransactionUnwrapError> =>
     EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, v9Epoch));
 
   /** Seals a balancing result, which is absent when the wallet had nothing of its own to add. */

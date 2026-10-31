@@ -60,7 +60,7 @@ import {
   type AnyTx,
   type FinalizedTx,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   TransactionHistoryStorage,
   type UnboundTx,
   type UnprovenTx,
@@ -1264,12 +1264,13 @@ export class WalletFacade {
    *   refused here, by name, with the versions written down.
    * @param handle The handle to read.
    * @returns The carried transaction.
-   * @throws {@link ProtocolVersionMismatchError} When the transaction was built on the other side of the boundary.
+   * @throws {@link WalletTransactionUnwrapError} When the transaction was built on the other side of the boundary, or
+   *   sealed by another copy of the abstractions package.
    */
   private accept<T>(handle: AnyTx): T {
     return Either.getOrThrowWith(
       WalletTransaction.unwrapWithin<T>(handle, this.currentEpoch()),
-      (error: ProtocolVersionMismatchError) => error,
+      (error: WalletTransactionUnwrapError) => error,
     );
   }
 
@@ -1312,8 +1313,8 @@ export class WalletFacade {
    *   The version is the facade's rather than the caller's, which is the point: a caller that reads
    *   {@link FacadeState.activeProtocolVersion} and seals a handle itself is answering the same question a moment
    *   earlier, with a crossing able to land in between. It is still only the version at the moment of the call — a
-   *   crossing can land before the handle is used, and {@link ProtocolVersionMismatchError} from the operation that uses
-   *   it is what says so.
+   *   crossing can land before the handle is used, and `ProtocolVersionMismatchError` from the operation that uses it
+   *   is what says so.
    * @example
    *   Balancing a transaction a dApp connector handed over as hex:
    *
@@ -1364,7 +1365,7 @@ export class WalletFacade {
   #carried<T>(handle: AnyTx): T {
     return Either.getOrThrowWith(
       WalletTransaction.unwrapWithin<T>(handle, this.epochOf(handle.protocolVersion)),
-      (error: ProtocolVersionMismatchError) => error,
+      (error: WalletTransactionUnwrapError) => error,
     );
   }
 
@@ -1629,7 +1630,7 @@ export class WalletFacade {
           tx,
           ProtocolVersion.epochOf(tx.protocolVersion, this.#forkVersion),
         ),
-        (error: ProtocolVersionMismatchError) => error,
+        (error: WalletTransactionUnwrapError) => error,
       ),
       tx.protocolVersion,
       options,
@@ -2126,8 +2127,8 @@ export class WalletFacade {
    *   the three wallets are given back like those of any other failure here.
    * @param tx The unproven transaction.
    * @returns The finalized transaction, stamped with the version it was authored at.
-   * @throws {@link ProtocolVersionMismatchError} When the wallets left the transaction's epoch while it was being
-   *   proved, or were never in it.
+   * @throws {@link WalletTransactionUnwrapError} When the wallets left the transaction's epoch while it was being
+   *   proved, or were never in it, or when another copy of the abstractions package sealed the handle.
    * @throws {AggregateError} When giving back a reservation failed as well, so a booking may remain until it expires:
    *   `errors` holds the original failure first, then each failed release.
    */

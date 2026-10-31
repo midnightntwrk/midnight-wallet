@@ -14,7 +14,12 @@ import { Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as ProtocolVersion from '../ProtocolVersion.js';
 import type * as WalletTransactionModule from '../WalletTransaction.js';
-import { ProtocolVersionMismatchError, WalletTransaction, WireFormatError } from '../WalletTransaction.js';
+import {
+  ProtocolVersionMismatchError,
+  WalletTransaction,
+  type WalletTransactionUnwrapError,
+  WireFormatError,
+} from '../WalletTransaction.js';
 
 const version = (value: bigint): ProtocolVersion.ProtocolVersion => ProtocolVersion.ProtocolVersion(value);
 
@@ -40,6 +45,14 @@ const ledgerLikeTransaction = (kind: string, bytes: readonly number[]): LedgerLi
 
 const someBytes = [0xde, 0xad, 0xbe, 0xef] as const;
 const someTransaction = (): LedgerLikeTransaction => ledgerLikeTransaction('v9-finalized', someBytes);
+
+/** The version mismatch an unwrap was refused with; throws, failing the test, when it was refused for another reason. */
+const mismatchOf = (unwrapped: Either.Either<unknown, WalletTransactionUnwrapError>): ProtocolVersionMismatchError =>
+  unwrapped.pipe(
+    Either.getLeft,
+    Option.filter((error): error is ProtocolVersionMismatchError => error instanceof ProtocolVersionMismatchError),
+    Option.getOrThrow,
+  );
 
 /** This module loaded a second time, as an application with two installed copies of this package loads it. */
 const anotherCopy = async (): Promise<typeof WalletTransactionModule> => {
@@ -88,7 +101,7 @@ describe('WalletTransaction', () => {
     it('refuses a ledger-v8 transaction handed to a ledger-v9 caller, naming both', () => {
       const handle = WalletTransaction.adopt('Finalized', someTransaction(), v8Version);
 
-      const error = WalletTransaction.unwrapWithin(handle, v9Epoch).pipe(Either.flip, Either.getOrThrow);
+      const error = mismatchOf(WalletTransaction.unwrapWithin(handle, v9Epoch));
 
       expect(error).toBeInstanceOf(ProtocolVersionMismatchError);
       expect(error._tag).toBe('@midnightntwrk/wallet-sdk-abstractions/WalletTransaction/ProtocolVersionMismatchError');
@@ -100,7 +113,7 @@ describe('WalletTransaction', () => {
     it('refuses a ledger-v9 transaction handed to a ledger-v8 caller, naming both', () => {
       const handle = WalletTransaction.adopt('Unproven', someTransaction(), v9Version);
 
-      const error = WalletTransaction.unwrapWithin(handle, v8Epoch).pipe(Either.flip, Either.getOrThrow);
+      const error = mismatchOf(WalletTransaction.unwrapWithin(handle, v8Epoch));
 
       expect(error.authoredFor).toBe(v9Version);
       expect(error.accepted).toStrictEqual(v8Epoch);

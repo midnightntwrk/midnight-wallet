@@ -24,7 +24,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   type UnprovenTx,
   WalletSeed,
   WalletTransaction,
@@ -355,7 +355,7 @@ export function CustomShieldedWallet<
       return this.runtime
         .dispatch<
           ShieldedBalancingResult,
-          WalletError | StartMaterial.MissingStartAuxError | ProtocolVersionMismatchError
+          WalletError | StartMaterial.MissingStartAuxError | WalletTransactionUnwrapError
         >({
           [V2Tag]: (v2) =>
             Effect.all([

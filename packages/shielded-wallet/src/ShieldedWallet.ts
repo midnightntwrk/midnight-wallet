@@ -31,7 +31,7 @@ import {
   type AnyTx,
   type NetworkId,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   type UnprovenTx,
   WalletSeed,
   WalletTransaction,
@@ -87,7 +87,7 @@ export type ShieldedRestoreError = UnsupportedSnapshotVersionError | V1WalletErr
  *   what a wallet started from ledger-v9 key objects has to say while it is still on ledger-v8 — and a transaction
  *   handed in may have been built on the other side of the boundary, which no variant here can read.
  */
-type TransactingError = WalletError | StartMaterial.MissingStartAuxError | ProtocolVersionMismatchError;
+type TransactingError = WalletError | StartMaterial.MissingStartAuxError | WalletTransactionUnwrapError;
 
 /** The V1 variant a forking shielded wallet registers: the one that reads the chain before the boundary. */
 export type V1ShieldedVariant<TSyncUpdate> = V1Variant<

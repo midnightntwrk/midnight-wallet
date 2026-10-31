@@ -25,7 +25,7 @@ import { type Signing } from '@midnightntwrk/wallet-sdk-capabilities/signatures'
 import {
   type AnyTx,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   type UnboundTx,
   type UnprovenTx,
   WalletTransaction,
@@ -97,7 +97,7 @@ export function CustomUnshieldedWallet<
   );
 
   /** Reads a transaction a caller handed in, which a single-variant wallet accepts at any version. */
-  const carried = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+  const carried = <T>(handle: AnyTx): Effect.Effect<T, WalletTransactionUnwrapError> =>
     EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, wholeTimeline));
 
   /** Seals a transaction this wallet built, at the version its one variant answers from. */

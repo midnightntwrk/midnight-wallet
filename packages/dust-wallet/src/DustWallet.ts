@@ -32,7 +32,7 @@ import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   type UnprovenTx,
   WalletSeed,
   WalletTransaction,
@@ -101,7 +101,7 @@ export type DustRestoreError = UnsupportedSnapshotVersionError | V1WalletError |
 type TransactingError =
   | WalletError
   | StartMaterial.MissingStartAuxError
-  | ProtocolVersionMismatchError
+  | WalletTransactionUnwrapError
   | Signatures.UnsupportedSignatureKindError;
 
 /**
@@ -483,11 +483,11 @@ export function CustomForkingDustWallet<
   const [v9Stamp] = v9Epoch;
 
   /** Reads a transaction built before the boundary, refusing one built after it. */
-  const v8Tx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+  const v8Tx = <T>(handle: AnyTx): Effect.Effect<T, WalletTransactionUnwrapError> =>
     EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, v8Epoch));
 
   /** Reads a transaction built from the boundary, refusing one built before it. */
-  const v9Tx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+  const v9Tx = <T>(handle: AnyTx): Effect.Effect<T, WalletTransactionUnwrapError> =>
     EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, v9Epoch));
 
   /**

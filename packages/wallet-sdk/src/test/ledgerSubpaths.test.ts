@@ -19,7 +19,7 @@ import {
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as Signatures from '@midnightntwrk/wallet-sdk-capabilities/signatures';
-import { Either, Schema } from 'effect';
+import { Either, Option, Schema } from 'effect';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import * as sdk from '../index.js';
@@ -146,7 +146,13 @@ describe('a transaction an author built for itself', () => {
     const handle = WalletTransaction.adopt('Unproven', authoredV9, version);
     const v8Epoch = ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, version);
 
-    const error = WalletTransaction.unwrapWithin(handle, v8Epoch).pipe(Either.flip, Either.getOrThrow);
+    const error = WalletTransaction.unwrapWithin(handle, v8Epoch).pipe(
+      Either.getLeft,
+      Option.filter(
+        (refusal): refusal is ProtocolVersionMismatchError => refusal instanceof ProtocolVersionMismatchError,
+      ),
+      Option.getOrThrow,
+    );
 
     expect(error).toBeInstanceOf(ProtocolVersionMismatchError);
     expect(error.authoredFor).toBe(version);
