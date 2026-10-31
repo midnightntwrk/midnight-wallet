@@ -922,6 +922,8 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
 // `@midnightntwrk/wallet-sdk-dust-wallet` export. The two are structurally identical; users can name the type via
 // `@midnightntwrk/wallet-sdk-dust-wallet` or `@midnightntwrk/wallet-sdk-capabilities/validation`.
 export {
+  type AnyLedgerParameters,
+  type AnyVersionValidatableTransaction,
   type BlockDataFetcher,
   LedgerParametersMismatchError,
   type ValidateTxOptions,
