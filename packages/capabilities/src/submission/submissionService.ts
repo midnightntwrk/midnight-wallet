@@ -17,6 +17,8 @@ import {
   PolkadotNodeClient,
   SubmissionEvent as SubmissionEventImported,
 } from '@midnightntwrk/wallet-sdk-node-client/effect';
+import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type SimulatorState, getLastBlock } from '../simulation/v9/SimulatorState.js';
 
@@ -72,17 +74,27 @@ export type DefaultSubmissionConfiguration = {
   relayURL: URL;
 };
 
+/** A transaction either ledger version has proved and bound, and so one a node will put in a block. */
+export type AnyVersionFinalizedTransaction = ledgerV8.FinalizedTransaction | ledgerV9.FinalizedTransaction;
+
 /**
  * Submits transactions to a node through its relay.
  *
  * @remarks
- *   The node takes a transaction's bytes, whichever ledger version wrote them, so the transaction type has no default:
- *   left unnamed, it is anything that serializes, and a service built that way submits either ledger version's.
+ *   The node takes a transaction's bytes, whichever ledger version wrote them, so left unnamed the transaction type is
+ *   either ledger version's finalized transaction: never one still to be proved or bound, which no block would take.
+ * @example
+ *   ```typescript
+ *   const submission = makeDefaultSubmissionServiceEffect({ relayURL: new URL('ws://localhost:9944') });
+ *   const inBlock = yield* submission.submitTransaction(finalizedTransaction, 'InBlock');
+ *   yield* submission.close();
+ *   ```;
+ *
  * @param config The relay to submit through.
  * @returns A submission service that closes its connection on `close`.
  */
 export const makeDefaultSubmissionServiceEffect = <
-  TTransaction extends { serialize: () => Uint8Array; toString: () => string },
+  TTransaction extends { serialize: () => Uint8Array; toString: () => string } = AnyVersionFinalizedTransaction,
 >(
   config: DefaultSubmissionConfiguration,
 ): SubmissionServiceEffect<TTransaction> => {
@@ -130,7 +142,22 @@ export const makeDefaultSubmissionServiceEffect = <
   };
 };
 
-export const makeDefaultSubmissionService = <TTransaction extends { serialize: () => Uint8Array }>(
+/**
+ * The promise-facing surface of {@link makeDefaultSubmissionServiceEffect}.
+ *
+ * @example
+ *   ```typescript
+ *   const submission = makeDefaultSubmissionService({ relayURL: new URL('ws://localhost:9944') });
+ *   const inBlock = await submission.submitTransaction(finalizedTransaction, 'InBlock');
+ *   await submission.close();
+ *   ```;
+ *
+ * @param config The relay to submit through.
+ * @returns A submission service that closes its connection on `close`.
+ */
+export const makeDefaultSubmissionService = <
+  TTransaction extends { serialize: () => Uint8Array } = AnyVersionFinalizedTransaction,
+>(
   config: DefaultSubmissionConfiguration,
 ): SubmissionService<TTransaction> => {
   const effectService = makeDefaultSubmissionServiceEffect<TTransaction>(config);
