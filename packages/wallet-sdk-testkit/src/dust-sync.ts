@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type DustParameters, LedgerParameters } from '@midnightntwrk/ledger-v9';
+import { LedgerParameters } from '@midnightntwrk/ledger-v9';
 import { makeIndexerChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import {
   asV8DustParameters,
@@ -18,6 +18,7 @@ import {
   CustomForkingDustWallet,
   type DefaultDustConfiguration,
   DustWallet,
+  type DustGenerationRates,
   type DustKeysByEpoch,
   type DustWalletAPI,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
@@ -37,7 +38,7 @@ import { Migration, SyncService, V2Builder } from '@midnightntwrk/wallet-sdk-dus
 export type DustWalletFactory = (config: DefaultDustConfiguration) => {
   startWithSeed(
     seed: Uint8Array,
-    dustParameters?: DustParameters,
+    dustParameters?: DustGenerationRates,
   ): DustWalletAPI<DustKeysByEpoch> | Promise<DustWalletAPI<DustKeysByEpoch>>;
   /** Also required, because `provideWallet` restores a snapshot into whatever composition it was given. */
   restore(serializedState: string): DustWalletAPI<DustKeysByEpoch>;
