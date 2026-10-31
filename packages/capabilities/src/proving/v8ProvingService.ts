@@ -31,6 +31,7 @@ import { Effect, pipe } from 'effect';
 import {
   ProvingError,
   type ProvingFailure,
+  type ProvingService,
   type ProvingServiceEffect,
   type ServerProvingConfiguration,
   type WasmProvingConfiguration,
@@ -44,6 +45,9 @@ export type V8UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, l
 
 /** A proving backend written against ledger-v8. */
 export type V8ProvingServiceEffect = ProvingServiceEffect<V8UnboundTransaction, V8UnprovenTransaction>;
+
+/** The promise-facing surface of a {@link V8ProvingServiceEffect}. */
+export type V8ProvingService = ProvingService<V8UnboundTransaction, V8UnprovenTransaction>;
 
 /**
  * Drives a ledger-v8 transaction's proving with a low-level proving provider.
@@ -112,3 +116,41 @@ export const makeV8WasmProvingServiceEffect = (configuration?: WasmProvingConfig
     Effect.map((prover) => prover.asProvingProvider()),
     fromV8ProvingProviderEffect,
   );
+
+/**
+ * Erases the proofs of ledger-v8 transactions instead of proving them, for the in-memory simulator.
+ *
+ * @example
+ *   ```typescript
+ *   const proving = makeV8SimulatorProvingServiceEffect();
+ *   const proofErased = yield* proving.prove(unprovenTransaction);
+ *   yield* simulator.submitTransaction(proofErased);
+ *   ```;
+ *
+ * @returns A backend that hands back each ledger-v8 transaction proof-erased, which the simulator accepts.
+ */
+export const makeV8SimulatorProvingServiceEffect = (): ProvingServiceEffect<
+  ledger.ProofErasedTransaction,
+  V8UnprovenTransaction
+> => ({
+  prove: (transaction) => Effect.succeed(transaction.eraseProofs()),
+});
+
+/**
+ * The promise-facing surface of {@link makeV8SimulatorProvingServiceEffect}.
+ *
+ * @example
+ *   ```typescript
+ *   const proving = makeV8SimulatorProvingService();
+ *   const proofErased = await proving.prove(unprovenTransaction);
+ *   ```;
+ *
+ * @returns A backend that hands back each ledger-v8 transaction proof-erased, which the simulator accepts.
+ */
+export const makeV8SimulatorProvingService = (): ProvingService<
+  ledger.ProofErasedTransaction,
+  V8UnprovenTransaction
+> => {
+  const effectService = makeV8SimulatorProvingServiceEffect();
+  return { prove: (transaction) => Effect.runPromise(effectService.prove(transaction)) };
+};

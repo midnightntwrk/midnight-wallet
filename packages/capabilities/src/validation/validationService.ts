@@ -15,7 +15,7 @@ import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { EitherOps, type Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { Cause, Data, Effect, Either, Exit, Option, pipe } from 'effect';
-import type { V9UnboundTransaction } from '../proving/provingService.js';
+import type { V9UnboundTransaction, V9UnprovenTransaction } from '../proving/provingService.js';
 
 /**
  * Ledger parameters as either ledger version reads them: what a block-data fetch spanning a protocol boundary yields.
@@ -98,8 +98,7 @@ export class LedgerParametersMismatchError extends Data.TaggedError(
 /** Everything a validator written against one ledger version can fail with. */
 export type ValidationFailure = WellFormedError | ValidationFetchError | LedgerParametersMismatchError;
 
-export type AnyV9ValidatableTransaction =
-  ledgerV9.FinalizedTransaction | V9UnboundTransaction | ledgerV9.UnprovenTransaction;
+export type AnyV9ValidatableTransaction = ledgerV9.FinalizedTransaction | V9UnboundTransaction | V9UnprovenTransaction;
 
 /**
  * Checks a transaction for well-formedness.
