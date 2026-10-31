@@ -26,9 +26,10 @@ const globalIgnores = includeIgnoreFile(
 
 // A wallet package's API is fulfilled by its variants on both sides of a protocol boundary, so it names neither ledger
 // version: a type from one would describe only that side. Nor does it reach into a variant's tree, whose types are
-// stated in that variant's ledger version. The variants import the API's types, not the other way round.
+// stated in that variant's ledger version. The variants import the API's types and the capability contracts they
+// share from `src/types`, not the other way round.
 const walletApiContracts = {
-  files: ['src/*WalletAPI.ts', 'src/*WalletTypes.ts'],
+  files: ['src/*WalletAPI.ts', 'src/types/**/*.ts'],
   rules: {
     'no-restricted-imports': [
       'error',
@@ -39,7 +40,7 @@ const walletApiContracts = {
             message: "A wallet API spans both ledger versions: use an SDK-owned type, not one ledger version's.",
           },
           {
-            group: ['./v1/*', './v2/*'],
+            group: ['./v1/*', './v2/*', '../v1/*', '../v2/*'],
             message: 'A wallet API spans both variants: declare the type here, and have the variants use it.',
           },
         ],

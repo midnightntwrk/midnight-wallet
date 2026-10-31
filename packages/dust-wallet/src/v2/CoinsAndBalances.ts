@@ -24,14 +24,11 @@ import {
   type DustFullInfo,
   type UtxoWithMeta,
 } from './types/Dust.js';
-import { type Balance, type UtxoWithFullDustDetails } from '../DustWalletTypes.js';
+import { type CoinsAndBalancesCapability } from '../types/DustWalletCapabilities.js';
+import { type Balance, type CoinWithValue, type UtxoWithFullDustDetails } from '../types/DustWalletTypes.js';
 
-export type { Balance, UtxoWithFullDustDetails } from '../DustWalletTypes.js';
-
-export type CoinWithValue<TToken> = {
-  token: TToken;
-  value: Balance;
-};
+export type { CoinsAndBalancesCapability } from '../types/DustWalletCapabilities.js';
+export type { Balance, CoinWithValue, UtxoWithFullDustDetails } from '../types/DustWalletTypes.js';
 
 export type CoinSelection = <TCoin extends CoinRecipe>(coins: readonly TCoin[]) => TCoin | undefined;
 
@@ -40,64 +37,6 @@ export const chooseCoin: CoinSelection = (coins) =>
     .filter((coin) => coin.value > 0n)
     .toSorted((a, b) => Number(a.value - b.value))
     .at(0);
-
-export type CoinsAndBalancesCapability<TState> = {
-  getWalletBalance(state: TState, time: Date): Balance;
-  getAvailableCoins(state: TState, time?: Date): readonly DustFullInfo[];
-  getPendingCoins(state: TState, time?: Date): readonly DustFullInfo[];
-  getTotalCoins(state: TState, time?: Date): ReadonlyArray<DustFullInfo>;
-  getAvailableCoinsWithGeneratedDust(state: TState, currentTime: Date): ReadonlyArray<CoinWithValue<Dust>>;
-  getGenerationInfo(state: TState, coin: Dust): DustGenerationInfo | undefined;
-
-  /** Splits provided Night utxos into the ones that will be used as inputs in the guaranteed and fallible sections */
-  splitNightUtxos(nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>): {
-    guaranteed: ReadonlyArray<UtxoWithFullDustDetails>;
-    fallible: ReadonlyArray<UtxoWithFullDustDetails>;
-  };
-
-  /**
-   * Estimate how much Dust would be available to use if the Utxos provided were used for Dust generation from their
-   * beginning. This function is particularly useful for the purpose of registering for Dust generation and selecting
-   * the Utxo to be used for paying fees and approving the registration itself.
-   *
-   * @param state Current state of the wallet
-   * @param nightUtxos Existing Night utxos
-   * @param currentTime Current time
-   * @returns Estimated Dust generation per Utxo
-   */
-  estimateDustGeneration(
-    state: TState,
-    nightUtxos: ReadonlyArray<UtxoWithMeta>,
-    currentTime: Date,
-  ): ReadonlyArray<UtxoWithFullDustDetails>;
-
-  /**
-   * Estimate when the dust a first-time registration may claim for its own fee will reach `fee`.
-   *
-   * @remarks
-   *   Reads the same projection as {@link estimateDustGeneration}, over the UTxOs not yet registered for Dust generation:
-   *   each grows at its `rate` up to its `maxCap`, and the estimate is the earliest whole second at which any one of
-   *   them reaches the fee. Only one UTxO fills the registration's guaranteed slot, so amounts are never summed across
-   *   UTxOs.
-   * @example
-   *   ```ts
-   *   const estimate = coinsAndBalances.feeCoverageEstimate(state, nightUtxos, fee, new Date());
-   *   if (estimate._tag === 'Reachable') console.log(`fee covered in ${estimate.seconds} s`);
-   *   ```
-   *
-   * @param state Current state of the wallet
-   * @param nightUtxos The Night UTxOs the registration would carry
-   * @param fee The fee to cover, in Specks
-   * @param currentTime The time to estimate from
-   * @returns When the fee is covered, or why it never will be
-   */
-  feeCoverageEstimate(
-    state: TState,
-    nightUtxos: ReadonlyArray<UtxoWithMeta>,
-    fee: bigint,
-    currentTime: Date,
-  ): FeeCoverageEstimate;
-};
 
 const FAKE_NONCE: ledger.DustInitialNonce = '0'.repeat(64);
 

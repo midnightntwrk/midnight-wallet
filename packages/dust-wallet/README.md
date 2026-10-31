@@ -146,7 +146,7 @@ import { V2Builder, RunningV2Variant } from '@midnightntwrk/wallet-sdk-dust-wall
 The two variants do not offer the same synchronisation options, and this is not a temporary gap.
 
 `./v2` (ledger-v9) can sync either way: by replaying the indexer's dust ledger events, or through the projections-based
-**eventless fast sync** (`makeEventLessSyncService` / `makeEventLessSyncCapability`).
+**eventless fast sync** (`SyncService.makeEventLessSyncService` / `SyncService.makeEventLessSyncCapability`).
 
 `./v1` (ledger-v8) offers **event replay only** — the same mechanism the shipped 1.x wallet uses in production today. It
 does not export the projection schema types, the `DustProjectionsUpdate` union, or the eventless sync service and

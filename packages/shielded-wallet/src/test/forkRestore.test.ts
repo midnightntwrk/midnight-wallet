@@ -37,13 +37,7 @@ import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import {
-  ForkSimulator,
-  type Simulator,
-  V8,
-  genesisStrictness,
-  immediateBlockProducer,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { ForkSimulator, V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Deferred, Effect, Option, Schedule, Stream, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
@@ -143,7 +137,7 @@ const payingChainFor = (coins: readonly MintedCoin[], chain: V8.Simulator) =>
       protocolVersion: v9Version,
       genesisBlockNumber: forkBlock,
       genesisTime,
-      blockProducer: immediateBlockProducer(undefined, genesisStrictness),
+      blockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
       coins,
     });
   });
@@ -266,13 +260,13 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
         forkBlock,
         forkVersion,
         v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-        v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        v9BlockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
         translator: translationStub({ networkId, coins }),
       });
       // Withholding the ledger-v9 source is what holds the wallet in the mid-crossing window: the hand-over happens,
       // and the first sync update that would complete it cannot arrive, because nothing is answering yet. That is the
       // second a snapshot may land in.
-      const answering = yield* Deferred.make<Simulator>();
+      const answering = yield* Deferred.make<V9.Simulator>();
 
       const wallet = yield* makeForkWallet({
         v8: fork.v8,
@@ -347,10 +341,10 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
         forkBlock,
         forkVersion: v9Version,
         v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-        v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        v9BlockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
         translator: translationStub({ networkId, coins }),
       });
-      const answering = yield* Deferred.make<Simulator>();
+      const answering = yield* Deferred.make<V9.Simulator>();
 
       const wallet = yield* makeForkWallet({
         v8: fork.v8,

@@ -18,7 +18,7 @@ export * from '../SingleVariantDustWallet.js';
 export * as Keys from './Keys.js';
 export * as Migration from './Migration.js';
 export * as Serialization from './Serialization.js';
-export * as Simulator from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+export { V9 as Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 export * as SyncService from './Sync.js';
 export * as Transacting from './Transacting.js';
 export * from './RunningV2Variant.js';

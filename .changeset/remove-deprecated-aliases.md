@@ -11,5 +11,8 @@ BREAKING CHANGE:
 - `V9_NATIVE_FORK_VERSION` is removed from `@midnightntwrk/wallet-sdk-shielded`. Use
   `ProtocolVersion.V9NativeForkVersion` from `@midnightntwrk/wallet-sdk-abstractions`.
 - `getBlockEventsSince` is removed from the capabilities simulators. Use `getBlockEventsFrom`.
+- `@midnightntwrk/wallet-sdk-capabilities/simulation`, and the capabilities root, no longer re-export the ledger-v9
+  simulator unqualified. Name it by its ledger version, as the ledger-v8 one already is: `V9.Simulator`,
+  `V9.SimulatorState`, `V9.getLastBlock`, `V9.immediateBlockProducer`, and so on.
 - The testkit's `dustSnapshotPath` is removed, and saving a snapshot no longer deletes the files earlier snapshot layouts
   left behind.

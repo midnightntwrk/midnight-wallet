@@ -20,7 +20,7 @@ import {
   type Nullifier,
   type QualifiedShieldedCoinInfo,
   type ShieldedCoinInfo,
-} from '../ShieldedWalletTypes.js';
+} from '../types/ShieldedWalletTypes.js';
 
 /**
  * The shielded API states its coins in its own types, so it names no ledger version. That holds only while both ledger

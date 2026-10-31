@@ -58,7 +58,7 @@ import {
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type URLError, WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { OtherWalletError, OutOfOrderSyncUpdateError, SyncWalletError, type WalletError } from './WalletError.js';
-import { type Simulator, type SimulatorState, getLastBlock } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from './types/ledger.js';
 import {
@@ -532,12 +532,12 @@ export const findDustTimelineStart = (
   );
 
 export type SimulatorSyncConfiguration = {
-  simulator: Simulator;
+  simulator: V9.Simulator;
   networkId: NetworkId;
 };
 
 export type SimulatorSyncUpdate = {
-  update: SimulatorState;
+  update: V9.SimulatorState;
   secretKey: DustSecretKey;
 };
 
@@ -1528,7 +1528,7 @@ export const makeSimulatorSyncService = (
         Stream.fromEffect(config.simulator.getLatestState()),
         Stream.concat(config.simulator.state$),
         Stream.filter((state) => {
-          const lastBlock = getLastBlock(state);
+          const lastBlock = V9.getLastBlock(state);
           if (lastBlock === undefined) {
             return false; // Skip blank state
           }
@@ -1546,7 +1546,7 @@ export const makeSimulatorSyncService = (
     blockData: (): Effect.Effect<BlockData> => {
       return Effect.gen(function* () {
         const state = yield* config.simulator.getLatestState();
-        const lastBlock = getLastBlock(state);
+        const lastBlock = V9.getLastBlock(state);
         // Use currentTime instead of lastBlock.timestamp for time-sensitive operations
         // (e.g., Dust generation calculation). The currentTime reflects any fast-forwarding
         // that has been done, while lastBlock.timestamp only reflects when the block was produced.
@@ -1574,7 +1574,7 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
       update: SimulatorSyncUpdate,
       activeRange: ProtocolVersion.ProtocolVersion.Range,
     ): [CoreWallet, ChangesResult] => {
-      const lastBlock = getLastBlock(update.update);
+      const lastBlock = V9.getLastBlock(update.update);
       // If no block exists yet (blank simulator), skip update
       if (lastBlock === undefined) {
         return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];

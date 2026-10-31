@@ -45,7 +45,7 @@ import { type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
 import { BackgroundRepeat, type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
 import { type BlockData } from './SyncSchema.js';
-import { type SimulatorState } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { type V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import {
   type CoinsAndBalancesCapability,
   type CoinSelection,
@@ -148,7 +148,7 @@ export const syncRetrySchedule = pipe(
   Schedule.union(Schedule.spaced(Duration.minutes(2))),
 );
 
-export type DefaultRunningV2 = RunningV2Variant<string, SimulatorState, FinalizedTransaction, DustSecretKey>;
+export type DefaultRunningV2 = RunningV2Variant<string, V9.SimulatorState, FinalizedTransaction, DustSecretKey>;
 
 export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux> implements Variant.RunningVariant<
   typeof V2Tag,

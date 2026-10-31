@@ -20,8 +20,8 @@
  *   here knows how many variants are running: a state emission arrives already bound to the capabilities of the variant
  *   that produced it, and everything below that binding is plain data.
  *
- *   Nor does anything here name a ledger version. The data it speaks is declared in `DustWalletTypes.ts`, which both
- *   variants are stated in, and a variant's own core state travels sealed, readable only by that variant.
+ *   Nor does anything here name a ledger version. The data it speaks is declared in `types/DustWalletTypes.ts`, which
+ *   both variants are stated in, and a variant's own core state travels sealed, readable only by that variant.
  */
 import {
   type AnyTx,
@@ -39,6 +39,7 @@ import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-cap
 import { type Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { type Duration } from 'effect';
 import type * as rx from 'rxjs';
+import { type CoinsAndBalancesCapability, type KeysCapability } from './types/DustWalletCapabilities.js';
 import {
   type Balance,
   type DustFullInfo,
@@ -48,7 +49,7 @@ import {
   type TotalCostParameters,
   type UtxoWithFullDustDetails,
   type UtxoWithMeta,
-} from './DustWalletTypes.js';
+} from './types/DustWalletTypes.js';
 
 /**
  * Everything a state emission projects, already bound to the variant that produced it.
@@ -80,31 +81,27 @@ type DustProjections<TSerialized> = Readonly<{
 }>;
 
 /**
- * What a variant reads its own state through, stated in the API's types.
+ * What a variant reads its own state through: the part of its capability set the wallet state projects, and no more.
  *
  * @remarks
- *   The part of a variant's capability set the wallet state projects, and no more. Each variant's capabilities are typed
- *   in its ledger version's terms; they fit this because the data they report is the plain data this API declares,
- *   which is what `fromVariant` checks at every call.
+ *   Coins, balances and keys are read through the contracts both variants share (`types/DustWalletCapabilities.ts`).
+ *   Serialization is each variant's own, because its deserialization fails with that variant's errors, so only the
+ *   `serialize` half is asked for here.
  */
 type DustStateReaders<TState, TSerialized> = Readonly<{
   serialization: Readonly<{ serialize(state: TState): TSerialized }>;
-  coinsAndBalances: Readonly<{
-    getTotalCoins(state: TState): readonly DustFullInfo[];
-    getAvailableCoins(state: TState): readonly DustFullInfo[];
-    getPendingCoins(state: TState): readonly DustFullInfo[];
-    getWalletBalance(state: TState, time: Date): Balance;
-    estimateDustGeneration(
-      state: TState,
-      nightUtxos: ReadonlyArray<UtxoWithMeta>,
-      currentTime: Date,
-    ): ReadonlyArray<UtxoWithFullDustDetails>;
-    splitNightUtxos(nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>): {
-      guaranteed: ReadonlyArray<UtxoWithFullDustDetails>;
-      fallible: ReadonlyArray<UtxoWithFullDustDetails>;
-    };
-  }>;
-  keys: Readonly<{ getPublicKey(state: TState): DustPublicKey; getAddress(state: TState): DustAddress }>;
+  coinsAndBalances: Readonly<
+    Pick<
+      CoinsAndBalancesCapability<TState>,
+      | 'getTotalCoins'
+      | 'getAvailableCoins'
+      | 'getPendingCoins'
+      | 'getWalletBalance'
+      | 'estimateDustGeneration'
+      | 'splitNightUtxos'
+    >
+  >;
+  keys: Readonly<KeysCapability<TState>>;
 }>;
 
 export class DustWalletState<TSerialized = string> {

@@ -17,9 +17,9 @@
  * @remarks
  *   Everything here is plain data that both ledger versions report identically, so both variants are stated in these
  *   types and neither ledger version has to be named to read what an unshielded wallet emits. Each variant's tree
- *   re-exports them under the names it always had. Kept apart from `UnshieldedWalletAPI.ts`, and not re-exported
- *   wholesale by the package, because several of these names — `TokenTransfer`, `UtxoWithMeta`, `SyncProgress` — are
- *   also another wallet's, or the abstractions'.
+ *   re-exports them under the names it always had. Kept apart from `UnshieldedWalletAPI.ts`, which the package exports
+ *   flat: these it exports under the wallet's name, as `UnshieldedWalletTypes`, because several of them —
+ *   `TokenTransfer`, `UtxoWithMeta`, `SyncProgress` — are also another wallet's, or the abstractions'.
  */
 import {
   type IndexerLiveness,
@@ -34,7 +34,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-capabilities';
 import { type Signing } from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import { type Clock, SafeBigInt } from '@midnightntwrk/wallet-sdk-utilities';
-import { type Duration, Schema } from 'effect';
+import { type Duration, Option, Schema } from 'effect';
 
 export interface UtxoMeta {
   readonly ctime: Date;
@@ -54,6 +54,8 @@ export type UtxoWithMeta = Readonly<{
   utxo: UnshieldedUtxo;
   meta: UtxoMeta;
 }>;
+
+export type Balances = Record<TokenType, bigint>;
 
 export interface TokenTransfer {
   readonly amount: bigint;
@@ -138,6 +140,21 @@ export type DefaultSyncConfiguration = {
   livenessPollInterval?: Duration.DurationInput;
 } & SubmissionNodeFallback;
 
+/**
+ * Decides which node endpoint the liveness check should read, if any.
+ *
+ * @remarks
+ *   `nodeClientConnection` is sync's own statement of the node it needs, so it is preferred. A wallet configured for
+ *   submission need not repeat that endpoint, so `relayURL` serves as the default. Only a wallet naming neither goes
+ *   unchecked.
+ * @param config - The sync configuration.
+ * @returns The endpoint to read the finalized head from, or `Option.none` when the wallet names no node at all.
+ */
+export const resolveNodeEndpoint = (config: DefaultSyncConfiguration): Option.Option<NodeClientConnection> =>
+  Option.orElse(Option.fromNullable(config.nodeClientConnection), () =>
+    Option.map(Option.fromNullable(config.relayURL), (relayURL) => ({ nodeURL: relayURL.toString() })),
+  );
+
 export interface SyncProgressData {
   readonly appliedId: bigint;
   readonly highestTransactionId: bigint;
@@ -175,6 +192,23 @@ export const UnshieldedSectionSchema = Schema.Struct({
   id: Schema.Number,
   createdUtxos: Schema.Array(UtxoSchema),
   spentUtxos: Schema.Array(UtxoSchema),
+});
+
+type UnshieldedSection = Schema.Schema.Type<typeof UnshieldedSectionSchema>;
+
+/**
+ * Merges two records of one transaction's unshielded section, the one being written taking precedence.
+ *
+ * @param existing The section already stored.
+ * @param incoming The section being written.
+ * @returns `existing`, with every field `incoming` records replaced by its value there.
+ */
+export const mergeUnshieldedSections = (
+  existing: UnshieldedSection,
+  incoming: UnshieldedSection,
+): UnshieldedSection => ({
+  ...existing,
+  ...incoming,
 });
 
 /**

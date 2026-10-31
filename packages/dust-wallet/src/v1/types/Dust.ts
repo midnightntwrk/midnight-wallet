@@ -11,17 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type DustNullifier } from '@midnight-ntwrk/ledger-v8';
-import { type Dust, type DustInitialNonce, type DustPublicKey } from '../../DustWalletTypes.js';
+import { type Dust } from '../../types/DustWalletTypes.js';
 
-export type { Dust, DustFullInfo, DustGenerationDetails, UtxoWithMeta } from '../../DustWalletTypes.js';
+export type {
+  Dust,
+  DustFullInfo,
+  DustGenerationDetails,
+  DustGenerationInfo,
+  UtxoWithMeta,
+} from '../../types/DustWalletTypes.js';
 
 export type DustWithNullifier = Dust & {
   nullifier: DustNullifier;
-};
-
-export type DustGenerationInfo = {
-  value: bigint;
-  owner: DustPublicKey;
-  nonce: DustInitialNonce;
-  dtime: Date | undefined;
 };

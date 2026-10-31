@@ -11,22 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type CoreWallet } from './CoreWallet.js';
-import type * as ledger from '@midnightntwrk/ledger-v9';
 import { pipe } from 'effect';
 import { RecordOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { UnshieldedState, type UtxoWithMeta } from './UnshieldedState.js';
+import { type CoinsAndBalancesCapability } from '../types/UnshieldedWalletCapabilities.js';
+import { type Balances } from '../types/UnshieldedWalletTypes.js';
 
-export type Balances = Record<ledger.RawTokenType, bigint>;
-
-export type CoinsAndBalancesCapability<TState> = {
-  getAvailableBalances(state: TState): Balances;
-  getPendingBalances(state: TState): Balances;
-  getTotalBalances(state: TState): Balances;
-
-  getAvailableCoins(state: TState): readonly UtxoWithMeta[];
-  getPendingCoins(state: TState): readonly UtxoWithMeta[];
-  getTotalCoins(state: TState): ReadonlyArray<UtxoWithMeta>;
-};
+export type { CoinsAndBalancesCapability } from '../types/UnshieldedWalletCapabilities.js';
+export type { Balances } from '../types/UnshieldedWalletTypes.js';
 
 const calculateBalances = (utxos: readonly UtxoWithMeta[]): Balances =>
   utxos.reduce(

@@ -23,6 +23,10 @@ ledger version's parameters made from the rates. Either ledger version's `DustPa
 
 Also:
 
+- Each wallet package exports those types under its own name — `ShieldedWalletTypes`, `DustWalletTypes`,
+  `UnshieldedWalletTypes` — together with the capability contracts both of its variants implement, so an application names `ShieldedWalletTypes.AvailableCoin` or `UnshieldedWalletTypes.TokenTransfer`
+  without reaching into `/v1` or `/v2`. Namespaced because two wallets can declare the same name, and the umbrella
+  package re-exports every wallet into one barrel.
 - `@midnightntwrk/wallet-sdk-abstractions` adds `VariantState`, a variant's core state sealed under its tag, and
   `UnshieldedUtxo`, the UTxO shape the unshielded and dust wallets share.
 - `@midnightntwrk/wallet-sdk-capabilities/validation` adds `withLedgerParameters`, which types block data whose
@@ -49,3 +53,9 @@ BREAKING CHANGE:
   `asV9DustParameters(rates)`, as `DustWallet` does.
 - `CustomDustWallet` and `CustomizedDustWalletClass` default their configuration to the V2 variant's
   `DefaultV2Configuration` (from `/v2`) instead of `DefaultDustConfiguration`, as the unshielded wallet's already do.
+- The dust package root no longer re-exports the V2 variant's sync module or its `BlockData`, which named ledger-v9 and
+  claimed generic names such as `IndexerClientConnection` and `DefaultSyncConfiguration` in the umbrella package. They
+  stay on `/v2`: the eventless fast sync is `SyncService.makeEventLessSyncService` and
+  `SyncService.makeEventLessSyncCapability` from there.
+- `Simulator` from each wallet's `/v2` subpath is the ledger-v9 simulator alone, as `/v1`'s is the ledger-v8 one. It no
+  longer carries `V8`, `ForkSimulator` and the rest of the capabilities simulation entry.

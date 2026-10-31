@@ -33,7 +33,7 @@
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, NoOpTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Simulator, V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { CustomForkingDustWallet, ManualSyncUnsupportedError } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import * as DustV1 from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import * as DustV2 from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
@@ -78,7 +78,7 @@ const facadeOverRestoredWallets = (
       protocolVersion: ProtocolVersion.MinSupportedVersion,
     });
     // The ledger-v9 variants are registered but never reached; their chain only has to exist.
-    const v9Chain = yield* Simulator.init({ networkId: NETWORK_ID });
+    const v9Chain = yield* V9.Simulator.init({ networkId: NETWORK_ID });
     const forkingConfiguration = { networkId: NETWORK_ID, forks: { v9: forkVersion } };
 
     const ShieldedWallet = CustomForkingShieldedWallet(

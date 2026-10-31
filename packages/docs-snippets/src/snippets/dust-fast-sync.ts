@@ -22,15 +22,13 @@ import {
   WalletFacade,
   ShieldedWallet,
   createKeystore,
-  makeEventLessSyncCapability,
-  makeEventLessSyncService,
   PublicKey,
   UnshieldedWallet,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk';
 import { makeIndexerChainVersionProbe } from '@midnightntwrk/wallet-sdk/capabilities';
 import { V1Builder } from '@midnightntwrk/wallet-sdk/dust/v1';
-import { Migration, V2Builder } from '@midnightntwrk/wallet-sdk/dust/v2';
+import { Migration, SyncService, V2Builder } from '@midnightntwrk/wallet-sdk/dust/v2';
 import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
@@ -98,7 +96,7 @@ const fastSyncDustWallet = (config: DefaultDustConfiguration) => {
     {
       builder: new V2Builder()
         .withDefaults()
-        .withSync(makeEventLessSyncService, makeEventLessSyncCapability)
+        .withSync(SyncService.makeEventLessSyncService, SyncService.makeEventLessSyncCapability)
         // Restated because `withSync` drops it: a sync service names the key material it is started with, so choosing
         // one un-chooses the derivation from a seed the defaults had set. This service is started with the same
         // `DustSecretKey` the default one is, and a start from a seed needs the derivation by name on both sides.

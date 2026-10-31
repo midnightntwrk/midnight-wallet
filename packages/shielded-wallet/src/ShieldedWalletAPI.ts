@@ -20,8 +20,8 @@
  *   API. Nothing here knows how many variants are running: a state emission arrives already bound to the capabilities
  *   of the variant that produced it, and everything below that binding is plain data.
  *
- *   Nor does anything here name a ledger version. The data it speaks is declared in `ShieldedWalletTypes.ts`, which both
- *   variants are stated in, and a variant's own core state travels sealed, readable only by that variant.
+ *   Nor does anything here name a ledger version. The data it speaks is declared in `types/ShieldedWalletTypes.ts`, which
+ *   both variants are stated in, and a variant's own core state travels sealed, readable only by that variant.
  */
 import {
   type AnyTx,
@@ -41,6 +41,7 @@ import {
 import type { ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { type Duration } from 'effect';
 import type * as rx from 'rxjs';
+import { type CoinsAndBalancesCapability, type KeysCapability } from './types/ShieldedWalletCapabilities.js';
 import {
   type AvailableCoin,
   type BatchUpdatesConfig,
@@ -49,7 +50,7 @@ import {
   type ReservedCoin,
   type ShieldedHistoryStorage,
   type TokenTransfer,
-} from './ShieldedWalletTypes.js';
+} from './types/ShieldedWalletTypes.js';
 
 /**
  * Everything a state emission projects, already bound to the variant that produced it.
@@ -75,28 +76,22 @@ type ShieldedProjections<TSerialized> = Readonly<{
 }>;
 
 /**
- * What a variant reads its own state through, stated in the API's types.
+ * What a variant reads its own state through: the part of its capability set the wallet state projects, and no more.
  *
  * @remarks
- *   The part of a variant's capability set the wallet state projects, and no more. Each variant's capabilities are typed
- *   in its ledger version's terms; they fit this because the data they report is the plain data this API declares,
- *   which is what `fromVariant` checks at every call.
+ *   Coins, balances and keys are read through the contracts both variants share (`types/ShieldedWalletCapabilities.ts`).
+ *   Serialization is each variant's own, because its deserialization fails with that variant's errors, so only the
+ *   `serialize` half is asked for here.
  */
 type ShieldedStateReaders<TState, TSerialized> = Readonly<{
   serialization: Readonly<{ serialize(state: TState): TSerialized }>;
-  coinsAndBalances: Readonly<{
-    getAvailableBalances(state: TState): Record<TokenType, bigint>;
-    getTotalCoins(state: TState): ReadonlyArray<AvailableCoin | PendingCoin>;
-    getAvailableCoins(state: TState): readonly AvailableCoin[];
-    getPendingCoins(state: TState): readonly PendingCoin[];
-    /** Optional so that a capability implemented outside this package still fits; it then reports none. */
-    getReservedCoins?(state: TState): readonly ReservedCoin[];
-  }>;
-  keys: Readonly<{
-    getCoinPublicKey(state: TState): ShieldedCoinPublicKey;
-    getEncryptionPublicKey(state: TState): ShieldedEncryptionPublicKey;
-    getAddress(state: TState): ShieldedAddress;
-  }>;
+  coinsAndBalances: Readonly<
+    Pick<
+      CoinsAndBalancesCapability<TState>,
+      'getAvailableBalances' | 'getTotalCoins' | 'getAvailableCoins' | 'getPendingCoins' | 'getReservedCoins'
+    >
+  >;
+  keys: Readonly<KeysCapability<TState>>;
 }>;
 
 export class ShieldedWalletState<TSerialized = string> {

@@ -17,7 +17,7 @@ import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { Effect, Either, Option, pipe } from 'effect';
 import { LedgerParametersCodec } from '../codecs/index.js';
-import { getLastBlock, type Simulator } from '../simulation/index.js';
+import { V9 } from '../simulation/index.js';
 import type { AnyLedgerParameters, BlockData } from './validationService.js';
 
 export type BlockDataFetcher = () => Promise<BlockData<AnyLedgerParameters>>;
@@ -150,15 +150,15 @@ export const makeDefaultBlockDataFetcher = (config: DefaultBlockDataFetcherConfi
 };
 
 /**
- * Builds a `BlockDataFetcher` backed by a {@link Simulator}. Returns the simulator's latest block, using its
+ * Builds a `BlockDataFetcher` backed by a {@link V9.Simulator}. Returns the simulator's latest block, using its
  * `currentTime` for the timestamp (so fast-forwarded simulator clocks are respected).
  */
-export const makeSimulatorBlockDataFetcher = (simulator: Simulator): BlockDataFetcher => {
+export const makeSimulatorBlockDataFetcher = (simulator: V9.Simulator): BlockDataFetcher => {
   return () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const state = yield* simulator.getLatestState();
-        const lastBlock = getLastBlock(state);
+        const lastBlock = V9.getLastBlock(state);
         if (!lastBlock) throw new Error('Simulator has not produced any block yet.');
         return {
           hash: lastBlock.hash,

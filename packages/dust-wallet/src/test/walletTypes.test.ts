@@ -15,7 +15,12 @@ import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { type UnshieldedUtxo } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { describe, it } from 'vitest';
-import { type DustInitialNonce, type DustNonce, type DustPublicKey } from '../DustWalletTypes.js';
+import {
+  type DustGenerationInfo,
+  type DustInitialNonce,
+  type DustNonce,
+  type DustPublicKey,
+} from '../types/DustWalletTypes.js';
 
 /**
  * The dust API states its dust and the Night UTxOs that generate it in its own types, so it names no ledger version.
@@ -28,6 +33,7 @@ describe("the dust API's types", () => {
     type _2 = Expect<Equal<ledgerV8.DustNonce, DustNonce>>;
     type _3 = Expect<Equal<ledgerV8.DustInitialNonce, DustInitialNonce>>;
     type _4 = Expect<Equal<ledgerV8.Utxo, UnshieldedUtxo>>;
+    type _5 = Expect<Equal<ledgerV8.DustGenerationInfo, DustGenerationInfo>>;
   });
 
   it("are exactly ledger-v9's, which the V2 variant reports", () => {
@@ -35,5 +41,6 @@ describe("the dust API's types", () => {
     type _2 = Expect<Equal<ledgerV9.DustNonce, DustNonce>>;
     type _3 = Expect<Equal<ledgerV9.DustInitialNonce, DustInitialNonce>>;
     type _4 = Expect<Equal<ledgerV9.Utxo, UnshieldedUtxo>>;
+    type _5 = Expect<Equal<ledgerV9.DustGenerationInfo, DustGenerationInfo>>;
   });
 });

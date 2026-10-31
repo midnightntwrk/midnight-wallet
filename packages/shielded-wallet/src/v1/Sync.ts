@@ -41,7 +41,7 @@ import { OutOfOrderSyncUpdateError, SyncWalletError, type WalletError } from './
 import { WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { type BatchUpdatesConfig, type IndexerClientConnection } from '../ShieldedWalletTypes.js';
+import { type BatchUpdatesConfig, type IndexerClientConnection } from '../types/ShieldedWalletTypes.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
@@ -166,7 +166,7 @@ export const annotateVersion = (
     onSome: (version) => CoreWallet.withProtocolVersion(state, version),
   });
 
-export type { BatchUpdatesConfig, IndexerClientConnection } from '../ShieldedWalletTypes.js';
+export type { BatchUpdatesConfig, IndexerClientConnection } from '../types/ShieldedWalletTypes.js';
 
 /**
  * How often the sync source re-asks the chain which protocol version it is on.

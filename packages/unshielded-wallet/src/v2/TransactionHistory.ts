@@ -18,17 +18,9 @@ import {
   type UnshieldedSectionSchema,
   type UnshieldedHistoryStorage,
   type UnshieldedTransactionHistoryEntry,
-} from '../UnshieldedWalletTypes.js';
+} from '../types/UnshieldedWalletTypes.js';
 
 type UnshieldedSection = Schema.Schema.Type<typeof UnshieldedSectionSchema>;
-
-export const mergeUnshieldedSections = (
-  existing: UnshieldedSection,
-  incoming: UnshieldedSection,
-): UnshieldedSection => ({
-  ...existing,
-  ...incoming,
-});
 
 export type TransactionHistoryService = {
   put(update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError>;
@@ -37,9 +29,10 @@ export type TransactionHistoryService = {
 export {
   UnshieldedSectionSchema,
   UnshieldedTransactionHistoryEntrySchema,
+  mergeUnshieldedSections,
   type UnshieldedHistoryStorage,
   type UnshieldedTransactionHistoryEntry,
-} from '../UnshieldedWalletTypes.js';
+} from '../types/UnshieldedWalletTypes.js';
 
 /**
  * Writer input for unshielded's `gotFinalized`. The stored shape leaves fields optional, but at write time we know

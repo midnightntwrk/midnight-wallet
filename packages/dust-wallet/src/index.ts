@@ -11,10 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 export * from './DustWalletAPI.js';
-export type { BlockData } from './v2/SyncSchema.js';
 export * from './SingleVariantDustWallet.js';
 export * from './DustWallet.js';
 export { UnsupportedSnapshotVersionError, peekProtocolVersion } from './Restore.js';
 export { isInsufficientDustForFeeError } from './InsufficientDustForFee.js';
-export * from './v2/Sync.js';
-export { type DustTransactionHistoryEntry, DustSectionSchema, mergeDustSections } from './v2/TransactionHistory.js';
+// Under the wallet's name rather than flat: the unshielded wallet declares some of the same names, `UtxoWithMeta` among
+// them, and the umbrella package re-exports every wallet into one barrel.
+export * as DustWalletTypes from './types/index.js';
+export { type DustTransactionHistoryEntry, DustSectionSchema, mergeDustSections } from './types/DustWalletTypes.js';

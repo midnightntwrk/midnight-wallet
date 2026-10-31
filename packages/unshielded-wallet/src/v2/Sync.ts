@@ -14,11 +14,7 @@ import { Effect, type Scope, Stream, Schema, pipe, Either, HashMap, Match, Optio
 import { IndexerLiveness, ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import { CoreWallet } from './CoreWallet.js';
 import { UtxoWithMeta } from './UnshieldedState.js';
-import {
-  type Simulator,
-  type SimulatorState,
-  getCurrentBlockNumber,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import {
   DEFAULT_LIVENESS_CONFIGURATION,
   DEFAULT_POLL_INTERVAL,
@@ -43,7 +39,7 @@ import {
   type WalletSyncUpdate,
   WalletSyncUpdateSchema,
 } from './SyncSchema.js';
-import { type DefaultSyncConfiguration, type NodeClientConnection } from '../UnshieldedWalletTypes.js';
+import { type DefaultSyncConfiguration, resolveNodeEndpoint } from '../types/UnshieldedWalletTypes.js';
 
 export interface SyncService<TState, TUpdate> {
   /**
@@ -120,7 +116,8 @@ export type {
   DefaultSyncConfiguration,
   IndexerClientConnection,
   NodeClientConnection,
-} from '../UnshieldedWalletTypes.js';
+} from '../types/UnshieldedWalletTypes.js';
+export { resolveNodeEndpoint } from '../types/UnshieldedWalletTypes.js';
 
 export type DefaultSyncContext = {
   transactionHistoryService: TransactionHistoryService;
@@ -397,21 +394,6 @@ const applyTransaction = (
   );
 
 /**
- * Decides which node endpoint the liveness check should read, if any.
- *
- * @remarks
- *   `nodeClientConnection` is sync's own statement of the node it needs, so it is preferred. A wallet configured for
- *   submission need not repeat that endpoint, so `relayURL` serves as the default. Only a wallet naming neither goes
- *   unchecked.
- * @param config - The sync configuration.
- * @returns The endpoint to read the finalized head from, or `Option.none` when the wallet names no node at all.
- */
-export const resolveNodeEndpoint = (config: DefaultSyncConfiguration): Option.Option<NodeClientConnection> =>
-  Option.orElse(Option.fromNullable(config.nodeClientConnection), () =>
-    Option.map(Option.fromNullable(config.relayURL), (relayURL) => ({ nodeURL: relayURL.toString() })),
-  );
-
-/**
  * Builds the stream of liveness verdicts for a wallet, when one can be produced.
  *
  * @remarks
@@ -511,13 +493,13 @@ export const makeDefaultSyncCapability = (
 };
 
 export type SimulatorSyncConfiguration = {
-  simulator: Simulator;
+  simulator: V9.Simulator;
 };
 
 /** What the simulator's sync service emits: its own state, and the one liveness verdict it has to report. */
 export type SimulatorSyncUpdate =
   | {
-      update: SimulatorState;
+      update: V9.SimulatorState;
     }
   | IndexerLivenessUpdate;
 
@@ -619,7 +601,7 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
 
       const spentUtxos = trackedUtxos.filter(([hash]) => !simulatorUtxoMap.has(hash)).map(([, utxo]) => utxo);
 
-      const blockNumber = getCurrentBlockNumber(update.update);
+      const blockNumber = V9.getCurrentBlockNumber(update.update);
       const updateProgress = (wallet: CoreWallet) =>
         // No `indexerLiveness`: the verdict belongs to the sync service's liveness feed, which states it once before
         // sync starts. A capability that wrote it again on every update would be a second writer of a settled fact.

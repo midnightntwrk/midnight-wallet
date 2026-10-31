@@ -26,11 +26,11 @@ import {
 import { TransactionOps, type UnboundTransaction, type IntentOf } from './TransactionOps.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
-import { type TokenTransfer } from '../UnshieldedWalletTypes.js';
+import { type TokenTransfer } from '../types/UnshieldedWalletTypes.js';
 
 const GUARANTEED_SEGMENT = 0;
 
-export type { TokenTransfer } from '../UnshieldedWalletTypes.js';
+export type { TokenTransfer } from '../types/UnshieldedWalletTypes.js';
 
 export type FinalizedTransactionBalanceResult = ledger.UnprovenTransaction | undefined;
 

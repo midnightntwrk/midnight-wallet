@@ -13,11 +13,9 @@
 import { type DustPublicKey } from '@midnight-ntwrk/ledger-v8';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { type CoreWallet } from './CoreWallet.js';
+import { type KeysCapability } from '../types/DustWalletCapabilities.js';
 
-export type KeysCapability<TState> = {
-  getPublicKey(state: TState): DustPublicKey;
-  getAddress(state: TState): DustAddress;
-};
+export type { KeysCapability } from '../types/DustWalletCapabilities.js';
 
 export const makeDefaultKeysCapability = (): KeysCapability<CoreWallet> => {
   return {

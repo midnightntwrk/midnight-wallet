@@ -60,9 +60,9 @@ import {
   InsufficientFundsError as BalancingInsufficientFundsError,
 } from '@midnightntwrk/wallet-sdk-capabilities';
 
-import { type NightUtxoSplitForDustRegistration } from '../DustWalletTypes.js';
+import { type NightUtxoSplitForDustRegistration } from '../types/DustWalletTypes.js';
 
-export type { NightUtxoSplitForDustRegistration } from '../DustWalletTypes.js';
+export type { NightUtxoSplitForDustRegistration } from '../types/DustWalletTypes.js';
 
 // This interface should abstract over the transaction types used
 // It does not do so now for historical reasons

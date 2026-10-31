@@ -27,8 +27,8 @@ import { SignError, type WalletError } from './WalletError.js';
  * whose whole purpose is that the secret never materializes in-process — can be plugged in directly. A synchronous
  * in-process keystore satisfies this by resolving immediately: `keystore.signDataAsync`.
  */
-export type { SignSegment } from '../UnshieldedWalletTypes.js';
-import { type SignSegment } from '../UnshieldedWalletTypes.js';
+export type { SignSegment } from '../types/UnshieldedWalletTypes.js';
+import { type SignSegment } from '../types/UnshieldedWalletTypes.js';
 
 /**
  * Authorizes a transaction by signing each of its signable segments with the supplied async {@link SignSegment}. The

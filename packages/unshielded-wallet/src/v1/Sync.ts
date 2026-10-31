@@ -42,7 +42,7 @@ import {
   type WalletSyncUpdate,
   WalletSyncUpdateSchema,
 } from './SyncSchema.js';
-import { type DefaultSyncConfiguration, type NodeClientConnection } from '../UnshieldedWalletTypes.js';
+import { type DefaultSyncConfiguration, resolveNodeEndpoint } from '../types/UnshieldedWalletTypes.js';
 
 export interface SyncService<TState, TUpdate> {
   /**
@@ -119,7 +119,8 @@ export type {
   DefaultSyncConfiguration,
   IndexerClientConnection,
   NodeClientConnection,
-} from '../UnshieldedWalletTypes.js';
+} from '../types/UnshieldedWalletTypes.js';
+export { resolveNodeEndpoint } from '../types/UnshieldedWalletTypes.js';
 
 export type DefaultSyncContext = {
   transactionHistoryService: TransactionHistoryService;
@@ -393,21 +394,6 @@ const applyTransaction = (
     Match.when('deferred', () => Either.right(annotateVersion(state, update.transaction.protocolVersion))),
     Match.when('applicable', () => foldTransaction(state, update, getContext, sweep)),
     Match.exhaustive,
-  );
-
-/**
- * Decides which node endpoint the liveness check should read, if any.
- *
- * @remarks
- *   `nodeClientConnection` is sync's own statement of the node it needs, so it is preferred. A wallet configured for
- *   submission need not repeat that endpoint, so `relayURL` serves as the default. Only a wallet naming neither goes
- *   unchecked.
- * @param config - The sync configuration.
- * @returns The endpoint to read the finalized head from, or `Option.none` when the wallet names no node at all.
- */
-export const resolveNodeEndpoint = (config: DefaultSyncConfiguration): Option.Option<NodeClientConnection> =>
-  Option.orElse(Option.fromNullable(config.nodeClientConnection), () =>
-    Option.map(Option.fromNullable(config.relayURL), (relayURL) => ({ nodeURL: relayURL.toString() })),
   );
 
 /**

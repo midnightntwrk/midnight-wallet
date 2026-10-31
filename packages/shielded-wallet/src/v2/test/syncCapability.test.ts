@@ -13,12 +13,7 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import * as otherLedger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import {
-  Simulator,
-  type SimulatorState,
-  V8 as OtherSimulation,
-  getLastBlockEvents,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V8 as OtherSimulation, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, Option, Stream, identity } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
@@ -45,7 +40,7 @@ const MINT_COUNT = 6;
 const MINT_TOTAL = 2100n;
 
 const mintingSimulator = (protocolVersion?: ProtocolVersion.ProtocolVersion) =>
-  Simulator.init({
+  V9.Simulator.init({
     ...(protocolVersion === undefined ? {} : { protocolVersion }),
     genesisMints: Array.from({ length: MINT_COUNT }, (_, i) => ({
       type: 'shielded' as const,
@@ -55,7 +50,7 @@ const mintingSimulator = (protocolVersion?: ProtocolVersion.ProtocolVersion) =>
     })) as never,
   });
 
-const simulatorStateAt = (protocolVersion?: ProtocolVersion.ProtocolVersion): Promise<SimulatorState> =>
+const simulatorStateAt = (protocolVersion?: ProtocolVersion.ProtocolVersion): Promise<V9.SimulatorState> =>
   Effect.gen(function* () {
     const simulator = yield* mintingSimulator(protocolVersion);
     return Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
@@ -84,7 +79,7 @@ let otherLedgerEventHex: string;
 
 beforeAll(async () => {
   const state = await simulatorStateAt();
-  eventHex = getLastBlockEvents(state).map((event) => hex(event.serialize()));
+  eventHex = V9.getLastBlockEvents(state).map((event) => hex(event.serialize()));
   expect(eventHex.length).toBe(MINT_COUNT);
 
   otherLedgerEventHex = await Effect.gen(function* () {

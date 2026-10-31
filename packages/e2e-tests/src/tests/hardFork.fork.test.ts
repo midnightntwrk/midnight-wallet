@@ -45,11 +45,9 @@ import {
   type DustKeysByEpoch,
   DustWallet,
   type DustWalletAPI,
-  makeEventLessSyncCapability,
-  makeEventLessSyncService,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
-import { Migration, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { Migration, SyncService, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
   type DefaultConfiguration,
   type FacadeState,
@@ -264,7 +262,7 @@ const projectionsTwinDustWallet = (configuration: DefaultDustConfiguration) => {
     {
       builder: new V2Builder()
         .withDefaults()
-        .withSync(makeEventLessSyncService, makeEventLessSyncCapability)
+        .withSync(SyncService.makeEventLessSyncService, SyncService.makeEventLessSyncCapability)
         // Restated because `withSync` drops it: a sync service names the key material it is started with, so choosing
         // one un-chooses whatever derivation the previous choice had. This service is started with the same
         // `DustSecretKey` the default one is, and a two-variant wallet needs the derivation by name — it is how a

@@ -12,12 +12,12 @@
 // limitations under the License.
 import { IndexerLiveness } from '@midnightntwrk/wallet-sdk-abstractions';
 
-export type { SyncProgressData, SyncProgressOps } from '../UnshieldedWalletTypes.js';
+export type { SyncProgressData, SyncProgressOps } from '../types/UnshieldedWalletTypes.js';
 import {
   type SyncProgress as UnshieldedSyncProgress,
   type SyncProgressData,
   type SyncProgressOps,
-} from '../UnshieldedWalletTypes.js';
+} from '../types/UnshieldedWalletTypes.js';
 
 export type SyncProgress = UnshieldedSyncProgress;
 

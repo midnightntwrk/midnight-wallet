@@ -17,13 +17,13 @@
  * @remarks
  *   Everything here is plain data that both ledger versions report identically, so both variants are stated in these
  *   types and neither ledger version has to be named to read what a shielded wallet emits. Each variant's tree
- *   re-exports them under the names it always had. Kept apart from `ShieldedWalletAPI.ts`, and not re-exported
- *   wholesale by the package, because several of these names — `TokenTransfer`, `IndexerClientConnection` — are also
- *   another wallet's.
+ *   re-exports them under the names it always had. Kept apart from `ShieldedWalletAPI.ts`, which the package exports
+ *   flat: these it exports under the wallet's name, as `ShieldedWalletTypes`, because several of them —
+ *   `TokenTransfer`, `IndexerClientConnection` — are also another wallet's.
  */
 import { TransactionHistoryStorage, type TokenType } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ShieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
-import { Schema } from 'effect';
+import { Array as EArray, Schema } from 'effect';
 
 /** A shielded coin's nullifier, as hexadecimal. */
 export type Nullifier = string;
@@ -127,6 +127,22 @@ export const QualifiedShieldedCoinInfoSchema = Schema.Struct({
 export const ShieldedSectionSchema = Schema.Struct({
   receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
   spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
+});
+
+type ShieldedSection = Schema.Schema.Type<typeof ShieldedSectionSchema>;
+
+const coinEquals = Schema.equivalence(QualifiedShieldedCoinInfoSchema);
+
+/**
+ * Merges two records of one transaction's shielded section, so that a coin either of them records appears once.
+ *
+ * @param existing The section already stored.
+ * @param incoming The section being written.
+ * @returns The coins received and spent according to either.
+ */
+export const mergeShieldedSections = (existing: ShieldedSection, incoming: ShieldedSection): ShieldedSection => ({
+  receivedCoins: EArray.unionWith(existing.receivedCoins, incoming.receivedCoins, coinEquals),
+  spentCoins: EArray.unionWith(existing.spentCoins, incoming.spentCoins, coinEquals),
 });
 
 /**

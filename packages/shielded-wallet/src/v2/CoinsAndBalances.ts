@@ -20,20 +20,12 @@ import {
   type Coin,
   type PendingCoin,
   type ReservedCoin,
-} from '../ShieldedWalletTypes.js';
+} from '../types/ShieldedWalletTypes.js';
 
-export type { AvailableCoin, Balances, Coin, PendingCoin, ReservedCoin } from '../ShieldedWalletTypes.js';
+import { type CoinsAndBalancesCapability } from '../types/ShieldedWalletCapabilities.js';
 
-export type CoinsAndBalancesCapability<TState> = {
-  getAvailableBalances(state: TState): Balances;
-  getPendingBalances(state: TState): Balances;
-  getTotalBalances(state: TState): Balances;
-  getAvailableCoins(state: TState): readonly AvailableCoin[];
-  getPendingCoins(state: TState): readonly PendingCoin[];
-  getTotalCoins(state: TState): ReadonlyArray<AvailableCoin | PendingCoin>;
-  /** Optional so that a capability implemented outside this package still satisfies the type; it then reports none. */
-  getReservedCoins?(state: TState): readonly ReservedCoin[];
-};
+export type { AvailableCoin, Balances, Coin, PendingCoin, ReservedCoin } from '../types/ShieldedWalletTypes.js';
+export type { CoinsAndBalancesCapability } from '../types/ShieldedWalletCapabilities.js';
 
 const calculateBalances = <T extends AvailableCoin | PendingCoin>(coins: T[]): Balances =>
   coins.reduce(

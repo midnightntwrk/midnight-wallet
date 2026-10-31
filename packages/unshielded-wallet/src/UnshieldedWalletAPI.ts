@@ -20,8 +20,8 @@
  *   same API. Nothing here knows how many variants are running: a state emission arrives already bound to the
  *   capabilities of the variant that produced it, and everything below that binding is plain data.
  *
- *   Nor does anything here name a ledger version. The data it speaks is declared in `UnshieldedWalletTypes.ts`, which
- *   both variants are stated in, and a variant's own core state travels sealed, readable only by that variant.
+ *   Nor does anything here name a ledger version. The data it speaks is declared in `types/UnshieldedWalletTypes.ts`,
+ *   which both variants are stated in, and a variant's own core state travels sealed, readable only by that variant.
  */
 import {
   type AnyTx,
@@ -37,6 +37,7 @@ import { type UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { liftSignatureVerifyingKey, type Signing } from '@midnightntwrk/wallet-sdk-capabilities/signatures';
 import type * as rx from 'rxjs';
+import { type CoinsAndBalancesCapability } from './types/UnshieldedWalletCapabilities.js';
 import {
   type DefaultSyncConfiguration,
   type IndexerClientConnection,
@@ -46,7 +47,7 @@ import {
   type UnshieldedHistoryStorage,
   type UtxoHash,
   type UtxoWithMeta,
-} from './UnshieldedWalletTypes.js';
+} from './types/UnshieldedWalletTypes.js';
 
 /**
  * Everything a state emission projects, already bound to the variant that produced it.
@@ -73,24 +74,23 @@ type UnshieldedProjections<TSerialized> = Readonly<{
 }>;
 
 /**
- * What a variant has to offer for its own state to be projected — exactly that, and nothing more — stated in the API's
- * types.
+ * What a variant has to offer for its own state to be projected — exactly that, and nothing more.
  *
  * @remarks
- *   Narrowed to the projected methods rather than naming the three capability types whole, and stated in the API's own
- *   types. One member is the version break itself: `KeysCapability.getPublicKey` answers with a bare hex string on
- *   ledger-v8 and a `{tag, value}` record on ledger-v9, so it is asked for as either, and the wallet state lifts the
- *   first into the second. Each variant's capabilities fit this because the data they report is the plain data this API
- *   declares, which is what `fromVariant` checks at every call.
+ *   Coins and balances are read through the contract both variants share (`types/UnshieldedWalletCapabilities.ts`).
+ *   Serialization is each variant's own, because its deserialization fails with that variant's errors, so only the
+ *   `serialize` half is asked for here. Keys are each variant's own too, and are the version break itself:
+ *   `KeysCapability.getPublicKey` answers with a bare hex string on ledger-v8 and a `{tag, value}` record on ledger-v9,
+ *   so it is asked for as either, and the wallet state lifts the first into the second.
  */
 type UnshieldedStateReaders<TState, TSerialized> = Readonly<{
   serialization: Readonly<{ serialize(state: TState): TSerialized }>;
-  coinsAndBalances: Readonly<{
-    getAvailableBalances(state: TState): Record<TokenType, bigint>;
-    getTotalCoins(state: TState): readonly UtxoWithMeta[];
-    getAvailableCoins(state: TState): readonly UtxoWithMeta[];
-    getPendingCoins(state: TState): readonly UtxoWithMeta[];
-  }>;
+  coinsAndBalances: Readonly<
+    Pick<
+      CoinsAndBalancesCapability<TState>,
+      'getAvailableBalances' | 'getTotalCoins' | 'getAvailableCoins' | 'getPendingCoins'
+    >
+  >;
   keys: Readonly<{
     getAddress(state: TState): UnshieldedAddress;
     getPublicKey(state: TState): string | Signing.SignatureVerifyingKey;

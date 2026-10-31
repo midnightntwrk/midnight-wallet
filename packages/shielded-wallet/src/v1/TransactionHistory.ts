@@ -12,25 +12,25 @@
 // limitations under the License.
 import { type TransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Duration, Array as EArray, Effect, Schedule, Schema } from 'effect';
+import { Duration, Array as EArray, Effect, Schedule, type Schema } from 'effect';
 import { TransactionHistoryDetail } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { BlocklessFinalizedEntryError, TransactionHistoryError } from './WalletError.js';
 
 import {
-  QualifiedShieldedCoinInfoSchema,
   type ShieldedSectionSchema,
   type ShieldedHistoryStorage,
   type ShieldedTransactionHistoryEntry,
-} from '../ShieldedWalletTypes.js';
+} from '../types/ShieldedWalletTypes.js';
 
 export {
   QualifiedShieldedCoinInfoSchema,
   ShieldedSectionSchema,
   ShieldedTransactionHistoryEntrySchema,
+  mergeShieldedSections,
   type ShieldedHistoryStorage,
   type ShieldedTransactionHistoryEntry,
-} from '../ShieldedWalletTypes.js';
+} from '../types/ShieldedWalletTypes.js';
 
 type ShieldedSection = Schema.Schema.Type<typeof ShieldedSectionSchema>;
 
@@ -55,8 +55,6 @@ export type DefaultTransactionHistoryConfiguration = {
    */
   transactionDetailsRetryWindow?: Duration.DurationInput;
 };
-
-const coinEquals = Schema.equivalence(QualifiedShieldedCoinInfoSchema);
 
 const isFinalized = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryCommon | undefined,
@@ -84,11 +82,6 @@ export type TransactionHistoryService = {
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<TransactionDetails, TransactionHistoryError | BlocklessFinalizedEntryError>;
 };
-
-export const mergeShieldedSections = (existing: ShieldedSection, incoming: ShieldedSection): ShieldedSection => ({
-  receivedCoins: EArray.unionWith(existing.receivedCoins, incoming.receivedCoins, coinEquals),
-  spentCoins: EArray.unionWith(existing.spentCoins, incoming.spentCoins, coinEquals),
-});
 
 const convertUpdateToFinalizedInput = (
   changes: ledger.ZswapStateChanges,

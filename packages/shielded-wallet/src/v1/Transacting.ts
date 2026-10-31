@@ -28,9 +28,9 @@ import { TransactionOps } from './TransactionOps.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 
-import { type TokenTransfer } from '../ShieldedWalletTypes.js';
+import { type TokenTransfer } from '../types/ShieldedWalletTypes.js';
 
-export type { TokenTransfer } from '../ShieldedWalletTypes.js';
+export type { TokenTransfer } from '../types/ShieldedWalletTypes.js';
 
 export type BalancingResult = ledger.UnprovenTransaction | undefined;
 

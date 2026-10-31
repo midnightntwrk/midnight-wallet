@@ -41,13 +41,9 @@ import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { type NetworkId, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
-  type BlockProducer,
   LedgerTranslationError,
   type LedgerStateTranslator,
-  Simulator,
-  type SimulatorState,
-  genesisStrictness,
-  immediateBlockProducer,
+  V9,
 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, type Scope } from 'effect';
@@ -124,9 +120,9 @@ export const translationStub =
   (config: TranslationStubConfig): LedgerStateTranslator =>
   () =>
     Effect.gen(function* () {
-      const chain = yield* Simulator.init({
+      const chain = yield* V9.Simulator.init({
         networkId: config.networkId,
-        blockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        blockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
       });
       // One payment per block, awaited in turn, so the commitments land in exactly the ledger-v8 order. Batching them
       // would leave the within-block ordering to the block producer, and the Merkle indices are the whole point.
@@ -148,7 +144,7 @@ export type PayingV9ChainConfig = Readonly<{
   protocolVersion: ProtocolVersion.ProtocolVersion;
   genesisBlockNumber: bigint;
   genesisTime: Date;
-  blockProducer: BlockProducer;
+  blockProducer: V9.BlockProducer;
   /** The coins to pay out, one block each. */
   coins: readonly MintedCoin[];
 }>;
@@ -166,9 +162,9 @@ export type PayingV9ChainConfig = Readonly<{
  */
 export const makePayingV9Chain = (
   config: PayingV9ChainConfig,
-): Effect.Effect<Simulator, LedgerOps.LedgerError, Scope.Scope> =>
+): Effect.Effect<V9.Simulator, LedgerOps.LedgerError, Scope.Scope> =>
   Effect.gen(function* () {
-    const chain = yield* Simulator.init({
+    const chain = yield* V9.Simulator.init({
       networkId: config.networkId,
       protocolVersion: config.protocolVersion,
       genesisBlockNumber: config.genesisBlockNumber,
@@ -192,4 +188,4 @@ export const chainMerkleRoot = (chain: ledgerV9.ZswapChainState): bigint | undef
       ).merkleTreeRoot;
 
 /** The commitment tree of a simulated chain, as a root. */
-export const simulatedChainRoot = (state: SimulatorState): bigint | undefined => chainMerkleRoot(state.ledger.zswap);
+export const simulatedChainRoot = (state: V9.SimulatorState): bigint | undefined => chainMerkleRoot(state.ledger.zswap);

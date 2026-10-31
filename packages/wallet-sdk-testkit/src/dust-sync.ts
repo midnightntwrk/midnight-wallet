@@ -20,11 +20,9 @@ import {
   DustWallet,
   type DustKeysByEpoch,
   type DustWalletAPI,
-  makeEventLessSyncCapability,
-  makeEventLessSyncService,
 } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { V1Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
-import { Migration, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+import { Migration, SyncService, V2Builder } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 
 /**
  * The factory shape {@link provideWallet} and the scenarios accept for the dust sub-wallet.
@@ -79,7 +77,7 @@ export const eventLessDustWallet: DustWalletFactory = (config) => {
     {
       builder: new V2Builder()
         .withDefaults()
-        .withSync(makeEventLessSyncService, makeEventLessSyncCapability)
+        .withSync(SyncService.makeEventLessSyncService, SyncService.makeEventLessSyncCapability)
         // Restated because `withSync` drops it: the seed-to-key derivation a start from a seed needs.
         .withStartAuxDefaults()
         .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters: v9DustParameters })),

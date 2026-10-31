@@ -35,7 +35,7 @@ import {
   NoOpTransactionHistoryStorage,
   ProtocolVersion,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Simulator, V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { CustomForkingUnshieldedWallet, createKeystore, PublicKey } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
@@ -108,7 +108,7 @@ export const forkingFacadeAt = ({
           }
         : {}),
     });
-    const v9Chain = yield* Simulator.init({
+    const v9Chain = yield* V9.Simulator.init({
       networkId: NETWORK_ID,
       protocolVersion: belowFork ? forkingFacadeSchedule.v9 : chainVersion,
       ...(belowFork
