@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
+import { type CanAssign, type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as Proving from '../index.js';
@@ -19,10 +20,22 @@ import {
   type ProvingService,
   type ProvingServiceEffect,
   type ProvingServices,
+  type V9ProvingServiceEffect,
   type V9UnboundTransaction,
+  type V9UnprovenTransaction,
   type VersionedProvingService,
   type VersionedProvingServiceEffect,
 } from '../provingService.js';
+import {
+  type V8ProvingServiceEffect,
+  type V8UnboundTransaction,
+  type V8UnprovenTransaction,
+} from '../v8ProvingService.js';
+import {
+  type AnyVersionUnboundTransaction,
+  type AnyVersionUnprovenTransaction,
+  type VersionProvingServiceEffect,
+} from '../versionedProving.js';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 
 const getNonDustImbalance = (imbalances: Map<ledger.TokenType, bigint>, rawTokenType: ledger.RawTokenType): bigint => {
@@ -82,5 +95,56 @@ describe('Naming the ledger version a proving backend is written against', () =>
   it('offers no version-less name for the ledger-v9 proof server, which is makeV9ServerProvingService', () => {
     expect(Proving).not.toHaveProperty('makeDefaultProvingServiceEffect');
     expect(Proving).not.toHaveProperty('makeDefaultProvingService');
+  });
+});
+
+describe('Telling a backend over one ledger version from one over both', () => {
+  it('refuses a backend over one ledger version where either ledger version may be handed to it', () => {
+    // Each ledger version's backend reads only that version's transactions, so it is no backend for a router that
+    // may hand it the other's: that transaction would reach a ledger that cannot read it.
+    type _1 = Expect<Equal<CanAssign<V8ProvingServiceEffect, VersionProvingServiceEffect>, false>>;
+    type _2 = Expect<Equal<CanAssign<V9ProvingServiceEffect, VersionProvingServiceEffect>, false>>;
+    type _3 = Expect<
+      Equal<
+        CanAssign<
+          ProvingService<V9UnboundTransaction, V9UnprovenTransaction>,
+          ProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>
+        >,
+        false
+      >
+    >;
+    type _4 = Expect<
+      Equal<
+        CanAssign<
+          VersionedProvingServiceEffect<V8UnboundTransaction, V8UnprovenTransaction>,
+          VersionedProvingServiceEffect<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>
+        >,
+        false
+      >
+    >;
+    type _5 = Expect<
+      Equal<
+        CanAssign<
+          VersionedProvingService<V8UnboundTransaction, V8UnprovenTransaction>,
+          VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>
+        >,
+        false
+      >
+    >;
+    type _6 = Expect<
+      Equal<
+        CanAssign<
+          ProvingService<V9UnboundTransaction, V9UnprovenTransaction>,
+          VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>
+        >,
+        false
+      >
+    >;
+  });
+
+  it('takes a backend that reads more transactions than it is asked to', () => {
+    type _1 = Expect<
+      CanAssign<ProvingServiceEffect<V9UnboundTransaction, AnyVersionUnprovenTransaction>, V9ProvingServiceEffect>
+    >;
   });
 });
