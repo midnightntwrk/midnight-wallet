@@ -286,6 +286,18 @@ export const resolveProvingBackends = (
         })
       : Either.left(noBackendNamed());
 
+/**
+ * Proves ledger-v9 transactions at a proof server.
+ *
+ * @example
+ *   ```typescript
+ *   const proving = makeV9ServerProvingServiceEffect({ provingServerUrl: new URL('http://localhost:6300') });
+ *   const unbound = yield* proving.prove(unprovenTransaction);
+ *   ```;
+ *
+ * @param configuration The proof server to send ledger-v9 proving requests to.
+ * @returns A backend that proves ledger-v9 transactions over HTTP.
+ */
 export const makeV9ServerProvingServiceEffect = (configuration: ServerProvingConfiguration): V9ProvingServiceEffect => {
   return pipe(
     HttpProverClient.create({
@@ -315,7 +327,18 @@ export const makeV9WasmProvingServiceEffect = (configuration?: WasmProvingConfig
   );
 };
 
-/** Erases the proofs of ledger-v9 transactions instead of proving them, for the in-memory simulator. */
+/**
+ * Erases the proofs of ledger-v9 transactions instead of proving them, for the in-memory simulator.
+ *
+ * @example
+ *   ```typescript
+ *   const proving = makeV9SimulatorProvingServiceEffect();
+ *   const proofErased = yield* proving.prove(unprovenTransaction);
+ *   yield* simulator.submitTransaction(proofErased);
+ *   ```;
+ *
+ * @returns A backend that hands back each ledger-v9 transaction proof-erased, which the simulator accepts.
+ */
 export const makeV9SimulatorProvingServiceEffect = (): ProvingServiceEffect<
   ledger.ProofErasedTransaction,
   V9UnprovenTransaction
