@@ -21,6 +21,13 @@ was typed as ledger-v9's `DustParameters` class, and a plain object passed anywa
 `expected instance of DustParameters` once the wallet crossed `forks.v9`. `DustWallet` now gives each variant its own
 ledger version's parameters made from the rates. Either ledger version's `DustParameters` is still accepted.
 
+A fresh start that names no rates now values its empty state against the configured ones, on whichever variant it
+begins. It used the ledger's initial rates instead, so a wallet started past `forks.v9` kept them for good and one
+started below it until it crossed. `ForkingDustConfiguration` gains the optional `dustParameters` a
+`CustomForkingDustWallet` start falls back to, which `DustWallet` fills from its configuration, and a single-variant
+`CustomDustWallet` start falls back to its configuration's `dustParameters` the same way. Rates passed to a start still
+win.
+
 Also:
 
 - Each wallet package exports those types under its own name — `ShieldedWalletTypes`, `DustWalletTypes`,
@@ -33,6 +40,7 @@ Also:
   parameters arrived as `unknown` by asking which ledger version's object they are.
 - `UnshieldedWalletState.verifyingKey` reports the wallet's key in the SDK's signature shape on either side of the
   boundary, ledger-v8's bare key lifted into it.
+- The testkit's `DustWalletFactory` starts a wallet against plain `DustGenerationRates`.
 
 BREAKING CHANGE:
 
@@ -56,6 +64,7 @@ BREAKING CHANGE:
 - The dust package root no longer re-exports the V2 variant's sync module or its `BlockData`, which named ledger-v9 and
   claimed generic names such as `IndexerClientConnection` and `DefaultSyncConfiguration` in the umbrella package. They
   stay on `/v2`: the eventless fast sync is `SyncService.makeEventLessSyncService` and
-  `SyncService.makeEventLessSyncCapability` from there.
+  `SyncService.makeEventLessSyncCapability` from there, and the dust timeline search
+  `SyncService.findDustTimelineStart`. Its answer, `DustTimelineStart`, is `DustWalletTypes.DustTimelineStart`.
 - `Simulator` from each wallet's `/v2` subpath is the ledger-v9 simulator alone, as `/v1`'s is the ledger-v8 one. It no
   longer carries `V8`, `ForkSimulator` and the rest of the capabilities simulation entry.
