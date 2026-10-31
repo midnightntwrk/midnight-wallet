@@ -33,9 +33,10 @@ import {
   type BlockOffset,
 } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { InvalidProtocolSchemeError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Effect, Layer, Option, Ref } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { chainVersionOf, timelineStartChainVersion } from '../chainVersionProbe.js';
+import { chainVersionOf, makeIndexerChainVersionProbe, timelineStartChainVersion } from '../chainVersionProbe.js';
 
 /** A block as the indexer serves it, cut down to the one field the probe reads. */
 const blockAt = (protocolVersion: number) => ({ block: { protocolVersion } });
@@ -130,4 +131,18 @@ describe('asking the chain which protocol version its timeline starts under', ()
 
       expect(version).toStrictEqual(Option.none());
     }).pipe(Effect.provide(indexerAnswering({ block: null })), Effect.runPromise));
+});
+
+describe('Asking the indexer behind a promise', () => {
+  it('rejects with the failure itself, so a caller can catch the class the probe names', async () => {
+    // An indexer URL no HTTP client can dial fails before any request is made.
+    const probe = makeIndexerChainVersionProbe({ indexerClientConnection: { indexerHttpUrl: 'ftp://localhost:8088' } });
+
+    const rejection = await probe().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(InvalidProtocolSchemeError);
+  });
 });

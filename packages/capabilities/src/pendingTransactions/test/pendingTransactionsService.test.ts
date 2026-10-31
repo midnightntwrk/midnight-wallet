@@ -28,6 +28,7 @@ import {
   HashSet,
   Option,
   Order,
+  ParseResult,
   pipe,
   Scope,
   Stream,
@@ -35,7 +36,7 @@ import {
   TestClock,
   TestContext,
 } from 'effect';
-import { PendingTransactionsServiceEffectImpl } from '../pendingTransactionsService.js';
+import { PendingTransactionsServiceEffectImpl, PendingTransactionsServiceImpl } from '../pendingTransactionsService.js';
 import * as PendingTransactions from '../pendingTransactions.js';
 import * as fc from 'fast-check';
 import { type Query, QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
@@ -745,4 +746,19 @@ describe('PendingTransactionsService reservations', () => {
       expect(PendingTransactions.allExpiredReservations(state)).toEqual([]);
       expect(state.reservations).toEqual([reservation()]);
     }).pipe(Effect.provide(TestContext.TestContext), Effect.scoped, Effect.runPromise));
+});
+
+describe('Restoring pending transactions behind a promise', () => {
+  it('rejects a payload it cannot read with the parse failure itself, so a caller can catch the class', async () => {
+    const rejection = await PendingTransactionsServiceImpl.restore(
+      'not a pending transactions payload',
+      FakeTransaction.txTraits,
+      { indexerClientConnection: { indexerHttpUrl: 'http://localhost:8088' } },
+    ).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(ParseResult.ParseError);
+  });
 });

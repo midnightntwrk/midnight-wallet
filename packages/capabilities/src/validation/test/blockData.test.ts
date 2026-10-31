@@ -17,7 +17,13 @@ import { Buffer } from 'buffer';
 import { Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { LedgerParametersCodec } from '../../codecs/index.js';
-import { blockDataFrom, defaultLedgerParametersCodecs, withLedgerParameters } from '../blockData.js';
+import { InvalidProtocolSchemeError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import {
+  blockDataFrom,
+  defaultLedgerParametersCodecs,
+  makeDefaultBlockDataFetcher,
+  withLedgerParameters,
+} from '../blockData.js';
 import { type BlockData } from '../validationService.js';
 
 const V9_NATIVE = ProtocolVersion.ProtocolVersion(2_000_000n);
@@ -124,5 +130,22 @@ describe('Block data whose parameters arrived untyped', () => {
 
   it("is not read back when its parameters are neither ledger version's, so a caller fetches its own", () => {
     expect(withLedgerParameters(pricedWith({ nightDustRatio: 5_000_000_000n }))).toStrictEqual(Option.none());
+  });
+});
+
+describe('Fetching block data behind a promise', () => {
+  it('rejects with the failure itself, so a caller can catch the class the fetcher names', async () => {
+    // An indexer URL no HTTP client can dial fails before any request is made.
+    const fetchBlockData = makeDefaultBlockDataFetcher({
+      indexerClientConnection: { indexerHttpUrl: 'ftp://localhost:8088' },
+      forks: ProtocolVersion.V9NativeForkSchedule,
+    });
+
+    const rejection = await fetchBlockData().then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(InvalidProtocolSchemeError);
   });
 });
