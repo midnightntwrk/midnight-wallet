@@ -17,8 +17,9 @@ import {
   PolkadotNodeClient,
   SubmissionEvent as SubmissionEventImported,
 } from '@midnightntwrk/wallet-sdk-node-client/effect';
+import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { SerializedTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type FinalizedTransaction } from '@midnightntwrk/ledger-v9';
 import { type SimulatorState, getLastBlock } from '../simulation/v9/SimulatorState.js';
 
 export const SubmissionEvent = SubmissionEventImported;
@@ -73,8 +74,27 @@ export type DefaultSubmissionConfiguration = {
   relayURL: URL;
 };
 
+/** A transaction either ledger version has proved and bound, and so one a node will put in a block. */
+export type AnyVersionFinalizedTransaction = ledgerV8.FinalizedTransaction | ledgerV9.FinalizedTransaction;
+
+/**
+ * Submits transactions to a node through its relay.
+ *
+ * @remarks
+ *   The node takes a transaction's bytes, whichever ledger version wrote them, so left unnamed the transaction type is
+ *   either ledger version's finalized transaction: never one still to be proved or bound, which no block would take.
+ * @example
+ *   ```typescript
+ *   const submission = makeDefaultSubmissionServiceEffect({ relayURL: new URL('ws://localhost:9944') });
+ *   const inBlock = yield* submission.submitTransaction(finalizedTransaction, 'InBlock');
+ *   yield* submission.close();
+ *   ```;
+ *
+ * @param config The relay to submit through.
+ * @returns A submission service that closes its connection on `close`.
+ */
 export const makeDefaultSubmissionServiceEffect = <
-  TTransaction extends { serialize: () => Uint8Array; toString: () => string } = FinalizedTransaction,
+  TTransaction extends { serialize: () => Uint8Array; toString: () => string } = AnyVersionFinalizedTransaction,
 >(
   config: DefaultSubmissionConfiguration,
 ): SubmissionServiceEffect<TTransaction> => {
@@ -122,8 +142,21 @@ export const makeDefaultSubmissionServiceEffect = <
   };
 };
 
+/**
+ * The promise-facing surface of {@link makeDefaultSubmissionServiceEffect}.
+ *
+ * @example
+ *   ```typescript
+ *   const submission = makeDefaultSubmissionService({ relayURL: new URL('ws://localhost:9944') });
+ *   const inBlock = await submission.submitTransaction(finalizedTransaction, 'InBlock');
+ *   await submission.close();
+ *   ```;
+ *
+ * @param config The relay to submit through.
+ * @returns A submission service that closes its connection on `close`.
+ */
 export const makeDefaultSubmissionService = <
-  TTransaction extends { serialize: () => Uint8Array } = FinalizedTransaction,
+  TTransaction extends { serialize: () => Uint8Array } = AnyVersionFinalizedTransaction,
 >(
   config: DefaultSubmissionConfiguration,
 ): SubmissionService<TTransaction> => {
@@ -138,17 +171,34 @@ export const makeDefaultSubmissionService = <
   };
 };
 
-export type SimulatorSubmissionConfiguration<TTransaction> = {
+/** The ledger-v9 simulator a {@link makeV9SimulatorSubmissionService} submits to and reads blocks from. */
+export type V9SimulatorSubmissionConfiguration<TTransaction> = {
   simulator: {
     submitTransaction: (transaction: TTransaction) => Effect.Effect<void, Error>;
     getLatestState: () => Effect.Effect<SimulatorState>;
   };
 };
-export const makeSimulatorSubmissionService =
+
+/**
+ * Submits transactions to the in-memory ledger-v9 simulator, answering as a node would.
+ *
+ * @remarks
+ *   The simulator has no relay to report progress, so every submission answers with the one status this service was built
+ *   for, read off the simulator's latest block once the transaction is in.
+ * @example
+ *   ```typescript
+ *   const submission = makeV9SimulatorSubmissionService<ledger.ProofErasedTransaction>('InBlock')({ simulator });
+ *   const inBlock = yield* submission.submitTransaction(proofErasedTransaction);
+ *   ```;
+ *
+ * @param waitForStatus The status every submission reports. Defaults to `InBlock`, as a node's does.
+ * @returns A function from the simulator to the submission service over it.
+ */
+export const makeV9SimulatorSubmissionService =
   <TTransaction extends { serialize: () => Uint8Array }>(
     waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock',
   ) =>
-  (config: SimulatorSubmissionConfiguration<TTransaction>): SubmissionServiceEffect<TTransaction> => {
+  (config: V9SimulatorSubmissionConfiguration<TTransaction>): SubmissionServiceEffect<TTransaction> => {
     const submit = (transaction: TTransaction): Effect.Effect<SubmissionEvent, SubmissionError> => {
       return pipe(
         config.simulator.submitTransaction(transaction),

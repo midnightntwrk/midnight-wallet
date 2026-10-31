@@ -44,13 +44,11 @@ import {
   type ProvingServiceEffect,
   type ProvingServices,
   type V9UnboundTransaction,
+  type V9UnprovenTransaction,
   type VersionedProvingService,
   type VersionedProvingServiceEffect,
   type WasmProvingConfiguration,
 } from './provingService.js';
-
-/** Ledger-v9's unproven transaction, named for symmetry with {@link V8UnprovenTransaction}. */
-export type V9UnprovenTransaction = ledgerV9.UnprovenTransaction;
 
 /**
  * Every unproven transaction either ledger version can be asked to prove.
@@ -102,7 +100,7 @@ const onlyFrom = <TUnproven extends AnyVersionUnprovenTransaction, TUnbound exte
 const isV8Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is V8UnprovenTransaction =>
   transaction instanceof ledgerV8.Transaction;
 
-const isV9Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is ledgerV9.UnprovenTransaction =>
+const isV9Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is V9UnprovenTransaction =>
   transaction instanceof ledgerV9.Transaction;
 
 /** The in-process backend's configuration, with a key material override only when one was named. */
@@ -134,6 +132,35 @@ const makeV9Backend = (
     isV9Transaction,
     epoch,
   );
+
+/**
+ * Registers the in-process WASM prover, driven by ledger-v9, from a given protocol version upwards.
+ *
+ * @remarks
+ *   Every entry here is ledger-v9's backend, so `sinceVersion` should not be below a protocol boundary: what a version
+ *   below it needs is the ledger-v8 driver, which {@link makeDefaultProvingServices} registers for the epoch the fork
+ *   schedule it is given places below `forks.v9`. A ledger-v8 transaction the router hands this backend anyway is
+ *   refused with {@link ProvingEpochMismatchError}, naming the range it was registered for, rather than passed to a
+ *   ledger that cannot read it.
+ * @example
+ *   ```typescript
+ *   const proving = makeVersionedProvingServiceEffect(makeV9WasmProvingServices(forks.v9));
+ *   const unbound = yield* proving.prove(unprovenTransaction, protocolVersion);
+ *   ```;
+ *
+ * @param sinceVersion The first protocol version to register the bundled prover for.
+ * @param configuration Optional key material override.
+ * @returns The proving backends, keyed by version.
+ */
+export const makeV9WasmProvingServices = (
+  sinceVersion: ProtocolVersion.ProtocolVersion,
+  configuration?: WasmProvingConfiguration,
+): ProvingServices<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction> => {
+  const range = ProtocolVersion.makeRange(sinceVersion, ProtocolVersion.MaxSupportedVersion);
+  return {
+    entries: [{ range, value: onlyFrom(makeV9WasmProvingServiceEffect(configuration), isV9Transaction, range) }],
+  };
+};
 
 /**
  * The range of protocol versions each ledger version reads on a chain, from where the chain says the hand-over is.

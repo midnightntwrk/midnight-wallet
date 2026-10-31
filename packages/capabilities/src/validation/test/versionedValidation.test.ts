@@ -25,7 +25,12 @@ import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractio
 import { Cause, Effect, Either, Exit, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { blockDataFrom, defaultLedgerParametersCodecs } from '../blockData.js';
-import { UnsupportedValidationVersionError, WellFormedError, type BlockData } from '../validationService.js';
+import {
+  UnsupportedValidationVersionError,
+  WellFormedError,
+  type AnyLedgerParameters,
+  type BlockData,
+} from '../validationService.js';
 import { makeDefaultVersionedValidationServiceEffect } from '../versionedValidation.js';
 
 const NETWORK_ID = NetworkId.NetworkId.Undeployed;
@@ -49,10 +54,10 @@ const v8Hex = () => Buffer.from(ledgerV8.LedgerParameters.initialParameters().se
 const v9Hex = () => Buffer.from(ledgerV9.LedgerParameters.initialParameters().serialize()).toString('hex');
 
 /** Reads a block the way the SDK's own fetcher does: with the codecs split at the same fork version. */
-const blockDataAt = (protocolVersion: bigint, hex: string): BlockData =>
+const blockDataAt = (protocolVersion: bigint, hex: string): BlockData<AnyLedgerParameters> =>
   Either.getOrThrow(blockDataFrom(defaultLedgerParametersCodecs(FORK), blockAt(protocolVersion, hex)));
 
-const validator = (blockData: BlockData) =>
+const validator = (blockData: BlockData<AnyLedgerParameters>) =>
   makeDefaultVersionedValidationServiceEffect(
     {
       fetchBlockData: () => Promise.resolve(blockData),
@@ -142,5 +147,38 @@ describe('Validating at the version a transaction was authored for, either side 
     );
 
     expect(error).toBeInstanceOf(UnsupportedValidationVersionError);
+  });
+});
+
+describe("Refusing block data another ledger version's parameters were decoded at", () => {
+  // Both ledger versions declare `LedgerParameters` identically, so nothing in the types keeps one version's out of the
+  // other's validator. The validator has to look, and say which ledger version it was handed, rather than let the
+  // parameters reach a ledger state that cannot hold them and report the transaction as malformed.
+  const MISMATCH = '@midnightntwrk/wallet-sdk-capabilities/validation/validationService/LedgerParametersMismatchError';
+
+  it("refuses ledger-v8's parameters for a transaction ledger-v9 checks", async () => {
+    const routed = validator(blockDataAt(FORK, v9Hex()));
+
+    const error = await failureOf(
+      routed.validateTx(ledgerV9.Transaction.fromParts(NETWORK_ID), FORK, {
+        flags: NO_STRICTNESS,
+        blockData: blockDataAt(1n, v8Hex()),
+      }),
+    );
+
+    expect(error).toMatchObject({ _tag: MISMATCH });
+  });
+
+  it("refuses ledger-v9's parameters for a transaction ledger-v8 checks, symmetrically", async () => {
+    const routed = validator(blockDataAt(1n, v8Hex()));
+
+    const error = await failureOf(
+      routed.validateTx(ledgerV8.Transaction.fromParts(NETWORK_ID), V8_VERSION, {
+        flags: NO_STRICTNESS,
+        blockData: blockDataAt(FORK, v9Hex()),
+      }),
+    );
+
+    expect(error).toMatchObject({ _tag: MISMATCH });
   });
 });

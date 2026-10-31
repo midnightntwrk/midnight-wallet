@@ -94,6 +94,7 @@ import {
   type AnyVersionValidatableTransaction,
   type BlockData,
   type BlockDataFetcher,
+  LedgerParametersMismatchError,
   makeDefaultBlockDataFetcher,
   makeDefaultVersionedValidationService,
   type ValidateTxOptions,
@@ -905,7 +906,7 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
   /**
    * Optional factory for the block-data fetcher used by validation. Defaults to an HTTP indexer-backed fetcher built
    * from `configuration.indexerClientConnection`. Override for simulator-based tests with
-   * `makeSimulatorBlockDataFetcher(simulator)` from `@midnightntwrk/wallet-sdk-capabilities/validation`.
+   * `makeV9SimulatorBlockDataFetcher(simulator)` from `@midnightntwrk/wallet-sdk-capabilities/validation`.
    */
   fetchBlockData?: (config: ResolvedConfiguration<TConfig>) => MaybePromise<BlockDataFetcher>;
   validationService?: (
@@ -921,7 +922,10 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
 // `@midnightntwrk/wallet-sdk-dust-wallet` export. The two are structurally identical; users can name the type via
 // `@midnightntwrk/wallet-sdk-dust-wallet` or `@midnightntwrk/wallet-sdk-capabilities/validation`.
 export {
+  type AnyLedgerParameters,
+  type AnyVersionValidatableTransaction,
   type BlockDataFetcher,
+  LedgerParametersMismatchError,
   type ValidateTxOptions,
   type VersionedValidationService,
   ValidationFetchError,
@@ -1619,6 +1623,8 @@ export class WalletFacade {
    * @param options - Strictness flags and optional `blockData` to skip the fetch.
    * @throws {@link WellFormedError} If the transaction fails any enabled check.
    * @throws {@link ValidationFetchError} If the block-data fetch fails.
+   * @throws {@link LedgerParametersMismatchError} If `blockData` carries another ledger version's parameters than the
+   *   one that authored the transaction.
    */
   async validateTransaction(tx: AnyTx, options: ValidateTxOptions<AnyLedgerParameters>): Promise<void> {
     // Checked at the version the transaction says it was authored for, and never at the version the chain has since

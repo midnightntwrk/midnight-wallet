@@ -393,7 +393,7 @@ export function CustomDustWallet<
       transactions: ReadonlyArray<AnyTx>,
       ttl: Date,
       currentTime?: Date,
-    ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData }> {
+    ): Promise<{ transaction: UnprovenTx; blockData: PricedBlockData<LedgerParameters> }> {
       return this.runtime
         .dispatch({
           [V2Tag]: (v2) =>

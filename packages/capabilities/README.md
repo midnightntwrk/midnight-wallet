@@ -105,10 +105,12 @@ wallets are built with:
 ```typescript
 import { makeDefaultVersionedProvingService } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 
+// Either<VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>,
+//        ProvingConfigurationError>
 const service = makeDefaultVersionedProvingService(
   { provers: { v8: { kind: 'server', url: v8ProofServer }, v9: { kind: 'wasm' } } },
   forks,
-); // Either<VersionedProvingService, ProvingConfigurationError>
+);
 ```
 
 - `provers` wins over `provingServerUrl`; naming neither is a `ProvingConfigurationError`. `v9` is required and `v8` is
@@ -118,8 +120,13 @@ const service = makeDefaultVersionedProvingService(
   operational fact about that server, not something the SDK enforces.
 - Each registered backend refuses the other ledger version's transaction with `ProvingEpochMismatchError` rather than
   handing it to a ledger that cannot read it.
-- `makeV9ServerProvingServiceEffect` / `makeV9WasmProvingServiceEffect` build a single ledger-v9 backend;
-  `makeV8ServerProvingServiceEffect` / `makeV8WasmProvingServiceEffect` are their ledger-v8 twins.
+- `makeV9ServerProvingServiceEffect` / `makeV9WasmProvingServiceEffect` build a single ledger-v9 backend, a
+  `V9ProvingServiceEffect` over `V9UnprovenTransaction`; `makeV8ServerProvingServiceEffect` /
+  `makeV8WasmProvingServiceEffect` are their ledger-v8 twins (`V8ProvingServiceEffect`, `V8UnprovenTransaction`). The
+  facade's `provingService` takes a prover over both ledger versions; to prove with one ledger version's backend alone,
+  name it in `provers` (`{ v9: { kind: 'wasm' } }`) instead.
+- `makeV9SimulatorProvingServiceEffect` / `makeV8SimulatorProvingServiceEffect` erase proofs instead of proving them,
+  for the in-memory simulator.
 
 ## Exports
 

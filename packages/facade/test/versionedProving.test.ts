@@ -25,9 +25,10 @@ import {
 import {
   ProvingEpochMismatchError,
   UnsupportedProvingVersionError,
+  type AnyVersionUnboundTransaction,
+  type AnyVersionUnprovenTransaction,
   type ProvingBackends,
   type V9UnboundTransaction,
-  type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
@@ -44,25 +45,36 @@ import {
   WalletFacade,
   mergeWalletEntries,
 } from '../src/index.js';
-import { getDustSeed, getShieldedSeed, getUnshieldedSeed } from './utils/index.js';
+import {
+  getDustSeed,
+  getShieldedSeed,
+  getUnshieldedSeed,
+  isV9Transaction,
+  provingOnly,
+  type AnyVersionProvingService,
+} from './utils/index.js';
 
 vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 
 const V8_VERSION = ProtocolVersion.ProtocolVersion(1_000n);
 
 /** Records the version each transaction is routed to a prover with; erases proofs so the facade can carry on. */
-class RecordingProver implements VersionedProvingService<V9UnboundTransaction> {
+class RecordingProver implements AnyVersionProvingService {
   readonly askedFor: ProtocolVersion.ProtocolVersion[] = [];
 
+  // The unproven transaction is already unbound and carries no real proofs in these tests, so it stands in for the
+  // proven result. Type cast required because: the simulator's proof-erased transaction is not `Proof`-typed, and this
+  // stand-in only has to travel back through the facade untouched.
+  readonly #proving = provingOnly('ledger-v9', isV9Transaction, (transaction) =>
+    Promise.resolve(transaction as unknown as V9UnboundTransaction),
+  );
+
   prove(
-    transaction: ledgerV9.UnprovenTransaction,
+    transaction: AnyVersionUnprovenTransaction,
     protocolVersion: ProtocolVersion.ProtocolVersion,
-  ): Promise<V9UnboundTransaction> {
+  ): Promise<AnyVersionUnboundTransaction> {
     this.askedFor.push(protocolVersion);
-    // The unproven transaction is already unbound and carries no real proofs in these tests, so it stands in for the
-    // proven result. Type cast required because: the simulator's proof-erased transaction is not `Proof`-typed, and
-    // this stand-in only has to travel back through the facade untouched.
-    return Promise.resolve(transaction as unknown as V9UnboundTransaction);
+    return this.#proving.prove(transaction, protocolVersion);
   }
 }
 
