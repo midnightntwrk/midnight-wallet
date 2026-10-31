@@ -124,7 +124,9 @@ const walletWithOneGeneratingDustCoin = Effect.gen(function* () {
     })
     .pipe(Effect.provideService(Scope.Scope, scope));
   yield* wallet.startSyncInBackground(dustSecretKey);
-  const submission = Submission.makeSimulatorSubmissionService<ledger.ProofErasedTransaction>('InBlock')({ simulator });
+  const submission = Submission.makeV9SimulatorSubmissionService<ledger.ProofErasedTransaction>('InBlock')({
+    simulator,
+  });
   const waitForBlock = (block: bigint) =>
     Stream.runLast(stateRef.changes.pipe(Stream.find((state) => state.progress.appliedIndex >= block + 1n)));
 
