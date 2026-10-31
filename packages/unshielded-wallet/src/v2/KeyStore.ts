@@ -10,6 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// The ledger-v9 keystore. It lives inside the variant rather than at the package root because the two ledger
+// versions disagree about what a key *is*: v8 signing and verifying keys are bare hex strings, v9's are `{tag, value}`
+// records naming a signature scheme. Its twin is `../v1/KeyStore.ts`; the package root states keys in the SDK's own
+// shapes instead (`types/`), and its `createKeystore` derives them here.
 import { UnshieldedAddress, type MidnightBech32m } from '@midnightntwrk/wallet-sdk-address-format';
 import {
   addressFromKey,

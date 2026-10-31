@@ -19,7 +19,7 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Ref } from 'effect';
-import { createKeystore, type PublicKey, PublicKey as PublicKeyOps } from '../../KeyStore.js';
+import { createKeystore, type PublicKey, PublicKey as PublicKeyOps } from '../KeyStore.js';
 import { type UnshieldedUpdate, type UtxoWithMeta, type WalletSyncUpdate } from '../SyncSchema.js';
 import { type TransactionHistoryService } from '../TransactionHistory.js';
 

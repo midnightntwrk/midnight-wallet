@@ -24,7 +24,7 @@
 // asks, filtered by the cursor that variant presents. The boundary item is therefore genuinely re-fetched by the second
 // variant rather than handed to it.
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { createKeystore as createV2Keystore, PublicKey as V2PublicKey } from '../KeyStore.js';
+import { createKeystore as createV2Keystore, PublicKey as V2PublicKey } from '../v2/KeyStore.js';
 import { createKeystore as createV1Keystore, PublicKey as V1PublicKey } from '../v1/KeyStore.js';
 
 /** One indexer message, with the protocol version the indexer reported it under. */

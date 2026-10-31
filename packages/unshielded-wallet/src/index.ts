@@ -27,7 +27,8 @@ export {
   mergeUnshieldedSections,
   type SignSegment,
 } from './types/UnshieldedWalletTypes.js';
-export * from './KeyStore.js';
+// The keystore's types, under their own names as they always were; `createKeystore` comes with the wallet itself.
+export { PublicKey, type UnshieldedKeystore, type UnshieldedSecretKey } from './types/UnshieldedWalletTypes.js';
 // The sync configuration under a wallet-qualified name, for the same reason as the restore errors above: the dust
 // wallet exports a `DefaultSyncConfiguration` of its own, and the umbrella barrel would otherwise hold two.
 export {

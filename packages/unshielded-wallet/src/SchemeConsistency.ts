@@ -25,7 +25,7 @@ import {
   type SignatureVerifyingKey,
 } from '@midnightntwrk/ledger-v9';
 import { Either, pipe } from 'effect';
-import type { PublicKey } from './KeyStore.js';
+import type { PublicKey } from './types/UnshieldedWalletTypes.js';
 import { OtherWalletError, SchemeMismatchError, type WalletError } from './v2/WalletError.js';
 
 const otherScheme = (kind: SignatureKind): SignatureKind => (kind === 'schnorr' ? 'ecdsa' : 'schnorr');

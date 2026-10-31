@@ -29,7 +29,7 @@ import { HashMap } from 'effect';
 import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { UnshieldedState } from '../UnshieldedState.js';
-import { createKeystore, PublicKey } from '../../KeyStore.js';
+import { createKeystore, PublicKey } from '../KeyStore.js';
 import { generateMockUtxoWithMeta } from './testUtils.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;

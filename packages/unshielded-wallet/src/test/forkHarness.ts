@@ -25,8 +25,8 @@
  *   unshielded increment: there is no key to retain. Unshielded synchronization is watch-only — the address is public
  *   and signing is supplied per call by the caller — so `startSyncInBackground` takes no argument on either variant,
  *   the activation watcher re-dispatches with nothing, and none of the start-aux machinery those wallets need applies
- *   here. What the wallet is started with is an identity, and the harness hands it the one an application holds: the
- *   ledger-v9's {@link PublicKey}.
+ *   here. What the wallet is started with is an identity, and the harness hands it the one an application holds: a
+ *   {@link PublicKey}, in the SDK's shape.
  */
 import {
   IndexerLiveness,
@@ -44,7 +44,7 @@ import {
   type ForkingUnshieldedWallet,
   type ForkingUnshieldedWalletClass,
 } from '../UnshieldedWallet.js';
-import { type PublicKey } from '../KeyStore.js';
+import { type PublicKey } from '../types/UnshieldedWalletTypes.js';
 import { CustomUnshieldedWallet, type CustomizedUnshieldedWallet } from '../SingleVariantUnshieldedWallet.js';
 import { type CoreWallet as V1CoreWallet } from '../v1/CoreWallet.js';
 import { coreStateOf as v1CoreStateOf } from '../v1/RunningV1Variant.js';

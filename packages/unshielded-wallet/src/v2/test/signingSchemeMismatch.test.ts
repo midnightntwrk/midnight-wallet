@@ -22,7 +22,7 @@ import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Array as Arr, Either, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { createKeystore, PublicKey, type UnshieldedKeystore } from '../../KeyStore.js';
+import { createKeystore, PublicKey, type UnshieldedKeystore } from '../KeyStore.js';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultKeysCapability } from '../Keys.js';

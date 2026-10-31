@@ -24,7 +24,7 @@ import {
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { UnshieldedWallet } from '../UnshieldedWallet.js';
-import { createKeystore, PublicKey } from '../KeyStore.js';
+import { createKeystore, PublicKey } from '../index.js';
 import { UnsupportedSnapshotVersionError } from '../Restore.js';
 import { type DefaultUnshieldedConfiguration } from '../UnshieldedWalletAPI.js';
 import { TransactionHistory } from '../v2/index.js';

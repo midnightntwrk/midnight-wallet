@@ -25,7 +25,7 @@ import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { createKeystore, PublicKey, type UnshieldedKeystore } from '../src/KeyStore.js';
+import { createKeystore, PublicKey, type UnshieldedKeystore } from '../src/v2/KeyStore.js';
 import { makeDefaultCoinsAndBalancesCapability } from '../src/v2/CoinsAndBalances.js';
 import { CoreWallet } from '../src/v2/CoreWallet.js';
 import { makeDefaultKeysCapability } from '../src/v2/Keys.js';

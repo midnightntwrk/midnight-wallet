@@ -32,7 +32,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { createKeystore, type PublicKey, type UnshieldedKeystore } from '../src/KeyStore.js';
+import { createKeystore, type PublicKey, type UnshieldedKeystore } from '../src/v2/KeyStore.js';
 import { assertKeyAddressConsistency, assertSignatureMatchesKey } from '../src/SchemeConsistency.js';
 import { SchemeMismatchError } from '../src/v2/WalletError.js';
 

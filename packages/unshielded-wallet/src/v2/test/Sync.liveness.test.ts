@@ -14,7 +14,7 @@ import { IndexerLiveness, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abst
 import { type LivenessReads } from '@midnightntwrk/wallet-sdk-capabilities';
 import { Chunk, Duration, Effect, Either, Option, Ref, Stream, TestClock, TestContext } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { type PublicKey } from '../../KeyStore.js';
+import { type PublicKey } from '../KeyStore.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { type V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import {

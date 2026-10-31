@@ -44,7 +44,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { HDWallet, type Role, Roles } from '@midnightntwrk/wallet-sdk-hd';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { describe, expect, it } from 'vitest';
-import { createKeystore, type UnshieldedKeystore } from '../src/KeyStore.js';
+import { createKeystore, type UnshieldedKeystore } from '../src/v2/KeyStore.js';
 import { verifyWithOracle } from './ecdsaOracle.js';
 
 type Vector = {

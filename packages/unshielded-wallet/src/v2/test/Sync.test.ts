@@ -15,7 +15,7 @@ import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wall
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, HashMap, Option, pipe, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { createKeystore, PublicKey } from '../../KeyStore.js';
+import { createKeystore, PublicKey } from '../KeyStore.js';
 import { type CoreWallet as CoreWalletType, CoreWallet } from '../CoreWallet.js';
 import { makeDefaultSyncCapability, makeSimulatorSyncCapability } from '../Sync.js';
 import { type PendingUtxo, UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';

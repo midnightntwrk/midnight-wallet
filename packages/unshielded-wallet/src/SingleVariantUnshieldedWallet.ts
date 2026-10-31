@@ -36,7 +36,6 @@ import { type Variant, type VariantBuilder, type WalletLike } from '@midnightntw
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Either, Ref, type Scope } from 'effect';
 import * as rx from 'rxjs';
-import { type PublicKey } from './KeyStore.js';
 import { type UnshieldedWalletAPI, UnshieldedWalletState } from './UnshieldedWalletAPI.js';
 import {
   type BaseV2Configuration,
@@ -50,7 +49,7 @@ import { type RunningV2Variant } from './v2/RunningV2Variant.js';
 import { type SignSegment } from './v2/Signing.js';
 import { type SyncUpdate } from './v2/SyncSchema.js';
 import { type TokenTransfer } from './v2/Transacting.js';
-import { type UtxoHash, type UtxoWithMeta } from './types/UnshieldedWalletTypes.js';
+import { type PublicKey, type UtxoHash, type UtxoWithMeta } from './types/UnshieldedWalletTypes.js';
 
 export type CustomizedUnshieldedWallet<
   TSyncUpdate = SyncUpdate,
