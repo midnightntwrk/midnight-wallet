@@ -105,12 +105,6 @@ const v9ShortOfNight = (): ledgerV9.UnprovenTransaction => {
   return ledgerV9.Transaction.fromParts(NETWORK_ID, undefined, undefined, intent);
 };
 
-/** The simulator's ledger-v9 prover, for a facade from the boundary; like the ledger-v8 one, it ignores the version. */
-const v9Prover = () => {
-  const prover = createSimulatorProvingService();
-  return { prove: (tx: ledgerV9.UnprovenTransaction) => prover.prove(tx) };
-};
-
 /** What a transaction is handed over as: bytes of whichever ledger version the side runs. */
 type Handed = Readonly<{ serialize: () => Uint8Array }>;
 
@@ -127,7 +121,7 @@ const sides = [
     side: 'from the boundary (V2 variant, ledger-v9)',
     handedAt: ProtocolVersion.ProtocolVersion(forkingFacadeSchedule.v9 + 1_000n),
     chainVersion: ProtocolVersion.ProtocolVersion(forkingFacadeSchedule.v9 + 2_000n),
-    provingService: v9Prover,
+    provingService: createSimulatorProvingService,
     unproven: (): Handed => v9ShortOfNight(),
     unbound: (): Promise<Handed> => v9UnboundOf(v9ShortOfNight()),
   },

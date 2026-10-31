@@ -99,7 +99,7 @@ describe('WalletFacade.validateTransaction', () => {
       const provingService = createSimulatorProvingService();
       const unboundTx = yield* Effect.promise(() =>
         provingService
-          .prove(ledger.Transaction.fromParts(NetworkId.NetworkId.MainNet))
+          .prove(ledger.Transaction.fromParts(NetworkId.NetworkId.MainNet), ProtocolVersion.MinSupportedVersion)
           .then((tx) => sealed('Unbound', tx)),
       );
       yield* Effect.promise(() =>

@@ -50,17 +50,20 @@ export type ProvingFailure = ProvingError | ProvingEpochMismatchError;
 /**
  * Turns an unproven transaction into a proven one.
  *
+ * @remarks
+ *   `prove` is a property rather than a method so that the transaction is checked contravariantly: a backend over one
+ *   ledger version is then no backend over both, which is what keeps a ledger-v8 transaction from reaching ledger-v9.
  * @typeParam TProven The proven transaction this backend produces.
  * @typeParam TUnproven The unproven transaction it accepts, and so the one ledger version it is written against. It has
  *   no default: a backend that left it out would be ledger-v9's without saying so. Choosing between backends for
  *   different ledger versions is {@link VersionedProvingServiceEffect}'s job, not this interface's.
  */
 export interface ProvingServiceEffect<TProven, TUnproven> {
-  prove(transaction: TUnproven): Effect.Effect<TProven, ProvingFailure>;
+  readonly prove: (transaction: TUnproven) => Effect.Effect<TProven, ProvingFailure>;
 }
 
 export interface ProvingService<TProven, TUnproven> {
-  prove(transaction: TUnproven): Promise<TProven>;
+  readonly prove: (transaction: TUnproven) => Promise<TProven>;
 }
 
 /** Raised when no proving backend is registered for the protocol version a transaction was built for. */
@@ -81,14 +84,14 @@ export class UnsupportedProvingVersionError extends Data.TaggedError(
  *   fixed before it did.
  */
 export interface VersionedProvingServiceEffect<TProven, TUnproven> {
-  prove(
+  readonly prove: (
     transaction: TUnproven,
     protocolVersion: ProtocolVersion.ProtocolVersion,
-  ): Effect.Effect<TProven, ProvingFailure | UnsupportedProvingVersionError>;
+  ) => Effect.Effect<TProven, ProvingFailure | UnsupportedProvingVersionError>;
 }
 
 export interface VersionedProvingService<TProven, TUnproven> {
-  prove(transaction: TUnproven, protocolVersion: ProtocolVersion.ProtocolVersion): Promise<TProven>;
+  readonly prove: (transaction: TUnproven, protocolVersion: ProtocolVersion.ProtocolVersion) => Promise<TProven>;
 }
 
 /** The proving backends a wallet can use, keyed by the protocol version range each one serves. */

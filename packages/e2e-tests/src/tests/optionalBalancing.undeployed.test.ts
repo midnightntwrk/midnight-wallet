@@ -100,6 +100,7 @@ describe('Optional Balancing', () => {
       ),
       networkId: NetworkId.NetworkId.Undeployed,
       forks: ProtocolVersion.V9NativeForkSchedule,
+      provers: { v9: { kind: 'wasm' } },
       costParameters: {
         feeBlocksMargin: 5,
       },
@@ -119,7 +120,6 @@ describe('Optional Balancing', () => {
       shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedSeed),
       unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust),
-      provingService: () => makeV9WasmProvingService(),
     });
 
     await facade.start({ shielded: shieldedSeed, unshielded: shieldedSeed, dust: dustSeed });
