@@ -35,17 +35,13 @@ import { Effect, Either } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { type FacadeState, type WalletEntry, type WalletFacade } from '../src/index.js';
-import type {
-  V9UnboundTransaction,
-  V9UnprovenTransaction,
-  VersionedProvingService,
-} from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import {
   createSimulatorWalletFactories,
   deriveWalletKeys,
   makeSimulatorFacade,
   SilentPendingTransactions,
   tokenValue,
+  type AnyVersionProvingService,
   waitForUnshieldedBalance,
   type SimulatorConfig,
 } from './utils/index.js';
@@ -205,7 +201,7 @@ describe('A balanced transaction that never gets proven', () => {
   // Proving is the first thing after balancing that can fail, and the caller is handed the error with the coins
   // already booked. The booking is undone there, and the record standing for it has to go with it: a record left
   // behind outlives the coins it named, and the next thing to read it is told a spend is still out there.
-  const failingProver: VersionedProvingService<V9UnboundTransaction, V9UnprovenTransaction> = {
+  const failingProver: AnyVersionProvingService = {
     prove: () => Promise.reject(new Error('the proof server is on a different ledger version')),
   };
 

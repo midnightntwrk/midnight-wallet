@@ -10,6 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { HDWallet, Roles, type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import { WalletFacade, type Clock } from '../../src/index.js';
@@ -47,7 +48,8 @@ import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import {
   makeV9SimulatorProvingServiceEffect,
-  type ProvingService,
+  type AnyVersionUnboundTransaction,
+  type AnyVersionUnprovenTransaction,
   type V8UnboundTransaction,
   type V8UnprovenTransaction,
   type V9UnboundTransaction,
@@ -144,18 +146,46 @@ export type SimulatorConfig = {
   costParameters: { feeBlocksMargin: number };
 };
 
+/** A prover for the facade, which may hand it either ledger version's transactions. */
+export type AnyVersionProvingService = VersionedProvingService<
+  AnyVersionUnboundTransaction,
+  AnyVersionUnprovenTransaction
+>;
+
+export const isV8Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is V8UnprovenTransaction =>
+  transaction instanceof ledgerV8.Transaction;
+
+export const isV9Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is V9UnprovenTransaction =>
+  transaction instanceof ledgerV9.Transaction;
+
 /**
- * Creates a Promise-based wrapper around the Effect-based simulator proving service. Note: Uses type assertion because
- * simulator proving returns ProofErasedTransaction but facade expects V9UnboundTransaction - they are compatible at
- * runtime.
+ * Types a test prover over one ledger version as a prover for the facade, which may hand it either ledger version's
+ * transactions.
+ *
+ * @remarks
+ *   The other ledger version's transactions are rejected rather than handed to a ledger that cannot read them, so a suite
+ *   that routes a transaction to the wrong prover fails at the prover.
  */
-export const createSimulatorProvingService = (): ProvingService<V9UnboundTransaction, V9UnprovenTransaction> => {
+export const provingOnly = <TUnproven extends AnyVersionUnprovenTransaction>(
+  ledgerVersion: 'ledger-v8' | 'ledger-v9',
+  isOwn: (transaction: AnyVersionUnprovenTransaction) => transaction is TUnproven,
+  prove: (transaction: TUnproven) => Promise<AnyVersionUnboundTransaction>,
+): AnyVersionProvingService => ({
+  prove: (transaction) =>
+    isOwn(transaction)
+      ? prove(transaction)
+      : Promise.reject(new Error(`The ${ledgerVersion} test prover was handed another ledger version's transaction.`)),
+});
+
+/** The simulator's ledger-v9 prover, behind a promise: it erases proofs rather than proving. */
+export const createSimulatorProvingService = (): AnyVersionProvingService => {
   const effectService = makeV9SimulatorProvingServiceEffect();
-  return {
-    prove: (tx: ledgerV9.UnprovenTransaction) =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return
-      effectService.prove(tx).pipe(Effect.runPromise) as any,
-  };
+  return provingOnly('ledger-v9', isV9Transaction, async (tx) => {
+    const erased = await effectService.prove(tx).pipe(Effect.runPromise);
+    // Type cast required because: the simulator's proof-erased transaction is not `Proof`-typed, and it only has to
+    // travel back through the facade to the simulator, which accepts it.
+    return erased as unknown as V9UnboundTransaction;
+  });
 };
 
 /**
@@ -388,8 +418,8 @@ export const waitForUnshieldedBalance = (
  *   one. It hands back something the facade can bind: the proving contract is proved-but-not-yet-bound, and `mockProve`
  *   binds as it proves.
  */
-export const createV8MockProvingService = (): VersionedProvingService<V8UnboundTransaction, V8UnprovenTransaction> => ({
-  prove: (tx) => {
+export const createV8MockProvingService = (): AnyVersionProvingService =>
+  provingOnly('ledger-v8', isV8Transaction, (tx) => {
     const proven = tx.mockProve();
     // Type cast required because: `mockProve` hands back a bound transaction, and the unbound one the contract asks
     // for is stood in for by an object whose `bind` returns it.
@@ -397,5 +427,4 @@ export const createV8MockProvingService = (): VersionedProvingService<V8UnboundT
       bind: () => proven,
       serialize: () => proven.serialize(),
     } as unknown as V8UnboundTransaction);
-  },
-});
+  });
