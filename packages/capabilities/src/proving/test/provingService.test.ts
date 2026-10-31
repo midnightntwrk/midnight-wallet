@@ -65,6 +65,9 @@ describe('Simulator proving service', () => {
     const finalTx: ledger.ProofErasedTransaction = await service.prove(testUnprovenTx).pipe(Effect.runPromise);
 
     expect(finalTx).toBeInstanceOf(ledger.Transaction);
+    expect(() =>
+      ledger.Transaction.deserialize('signature', 'no-proof', 'no-binding', finalTx.serialize()),
+    ).not.toThrow();
     expect(getNonDustImbalance(finalTx.imbalances(0), ledger.shieldedToken().raw)).toEqual(-42n);
   });
 });
@@ -146,5 +149,9 @@ describe('Telling a backend over one ledger version from one over both', () => {
     type _1 = Expect<
       CanAssign<ProvingServiceEffect<V9UnboundTransaction, AnyVersionUnprovenTransaction>, V9ProvingServiceEffect>
     >;
+  });
+
+  it('names the promise-facing ledger-v9 backend as it names the effect one', () => {
+    type _1 = Expect<Equal<Proving.V9ProvingService, ProvingService<V9UnboundTransaction, V9UnprovenTransaction>>>;
   });
 });
