@@ -10,7 +10,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { HDWallet, Roles, type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import { WalletFacade, type Clock } from '../../src/index.js';
@@ -49,6 +48,8 @@ import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import {
   makeV9SimulatorProvingServiceEffect,
   type ProvingService,
+  type V8UnboundTransaction,
+  type V8UnprovenTransaction,
   type V9UnboundTransaction,
   type V9UnprovenTransaction,
   type VersionedProvingService,
@@ -382,18 +383,19 @@ export const waitForUnshieldedBalance = (
  * A prover for the epoch a wallet with no history is in: the ledger-v8 one.
  *
  * @remarks
- *   The SDK ships no ledger-v8 proving path — that is the one thing waiting on a proof server for the previous ledger
- *   version — so a suite whose subject is what the facade does _around_ proving supplies its own. It mock-proves with
+ *   A suite whose subject is what the facade does _around_ proving needs no proof server, so this mock-proves with
  *   ledger-v8's own primitives, which is what makes it a fake of the right shape rather than a stand in for the wrong
- *   one, and hands back something the facade can bind: the proving contract is proved-but-not-yet-bound, and
- *   `mockProve` binds as it proves.
+ *   one. It hands back something the facade can bind: the proving contract is proved-but-not-yet-bound, and `mockProve`
+ *   binds as it proves.
  */
-export const createV8MockProvingService = (): VersionedProvingService<V9UnboundTransaction, V9UnprovenTransaction> => ({
-  prove: (tx: unknown) => {
-    const proven = (tx as ledgerV8.UnprovenTransaction).mockProve();
+export const createV8MockProvingService = (): VersionedProvingService<V8UnboundTransaction, V8UnprovenTransaction> => ({
+  prove: (tx) => {
+    const proven = tx.mockProve();
+    // Type cast required because: `mockProve` hands back a bound transaction, and the unbound one the contract asks
+    // for is stood in for by an object whose `bind` returns it.
     return Promise.resolve({
       bind: () => proven,
       serialize: () => proven.serialize(),
-    } as unknown as V9UnboundTransaction);
+    } as unknown as V8UnboundTransaction);
   },
 });
