@@ -171,17 +171,34 @@ export const makeDefaultSubmissionService = <
   };
 };
 
-export type SimulatorSubmissionConfiguration<TTransaction> = {
+/** The ledger-v9 simulator a {@link makeV9SimulatorSubmissionService} submits to and reads blocks from. */
+export type V9SimulatorSubmissionConfiguration<TTransaction> = {
   simulator: {
     submitTransaction: (transaction: TTransaction) => Effect.Effect<void, Error>;
     getLatestState: () => Effect.Effect<SimulatorState>;
   };
 };
+
+/**
+ * Submits transactions to the in-memory ledger-v9 simulator, answering as a node would.
+ *
+ * @remarks
+ *   The simulator has no relay to report progress, so every submission answers with the one status this service was built
+ *   for, read off the simulator's latest block once the transaction is in.
+ * @example
+ *   ```typescript
+ *   const submission = makeV9SimulatorSubmissionService<ledger.ProofErasedTransaction>('InBlock')({ simulator });
+ *   const inBlock = yield* submission.submitTransaction(proofErasedTransaction);
+ *   ```;
+ *
+ * @param waitForStatus The status every submission reports. Defaults to `InBlock`, as a node's does.
+ * @returns A function from the simulator to the submission service over it.
+ */
 export const makeV9SimulatorSubmissionService =
   <TTransaction extends { serialize: () => Uint8Array }>(
     waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock',
   ) =>
-  (config: SimulatorSubmissionConfiguration<TTransaction>): SubmissionServiceEffect<TTransaction> => {
+  (config: V9SimulatorSubmissionConfiguration<TTransaction>): SubmissionServiceEffect<TTransaction> => {
     const submit = (transaction: TTransaction): Effect.Effect<SubmissionEvent, SubmissionError> => {
       return pipe(
         config.simulator.submitTransaction(transaction),
