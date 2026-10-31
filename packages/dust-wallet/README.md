@@ -63,9 +63,10 @@ the empty state a wallet crossing the boundary is handed. From there it syncs by
   start as it is without the option.
 - Dust only. The shielded and unshielded wallets have to read ledger-v8 to find the coins they hold from it.
 - A `CustomForkingDustWallet` composition opts in by setting `dustTimelineStartProbe`, for example to
-  `() => Effect.runPromise(findDustTimelineStart(configuration, configuration.forks.v9))`. The start builds its state
-  with the composition's own V2 migration, so it is valued against the dust parameters that migration is built on, as a
-  wallet crossing the boundary is.
+  `() => Effect.runPromise(SyncService.findDustTimelineStart(configuration, configuration.forks.v9))`, with
+  `SyncService` from `/v2`; the answer is a `DustWalletTypes.DustTimelineStart`. The start builds its state with the
+  composition's own V2 migration, so it is valued against the dust parameters that migration is built on, as a wallet
+  crossing the boundary is.
 
 ### Observing State
 

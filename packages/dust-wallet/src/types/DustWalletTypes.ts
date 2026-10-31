@@ -21,7 +21,11 @@
  *   exports under the wallet's name, as `DustWalletTypes`, because several of them — `UtxoWithMeta`, `Balance` — are
  *   also another wallet's.
  */
-import { TransactionHistoryStorage, type UnshieldedUtxo } from '@midnightntwrk/wallet-sdk-abstractions';
+import {
+  type ProtocolVersion,
+  TransactionHistoryStorage,
+  type UnshieldedUtxo,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as EArray, Schema } from 'effect';
 
 /** A dust public key: the identity dust is generated for. */
@@ -129,6 +133,14 @@ export type TotalCostParameters = {
   // a number of blocks we expect for finalization.
   feeBlocksMargin: number;
 };
+
+/** Where a chain's dust event timeline reaches a protocol boundary. */
+export type DustTimelineStart = Readonly<{
+  /** The last dust event id below the boundary: the cursor a variant registered from the boundary resumes after. */
+  cursor: bigint;
+  /** The version the first dust event at or beyond the boundary was reported at. */
+  version: ProtocolVersion.ProtocolVersion;
+}>;
 
 export const DustUtxoInfoSchema = Schema.Struct({
   initialValue: Schema.BigInt,

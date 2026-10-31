@@ -98,6 +98,7 @@ import {
   uniqueArray,
 } from './Utils.js';
 import { type Dust } from './types/index.js';
+import { type DustTimelineStart } from '../types/DustWalletTypes.js';
 
 /**
  * How often background synchronization runs a sync service's `updates`.
@@ -420,13 +421,7 @@ const versionWatch = (
       );
 };
 
-/** Where a chain's dust event timeline reaches a protocol boundary. */
-export type DustTimelineStart = Readonly<{
-  /** The last dust event id below the boundary: the cursor a variant registered from the boundary resumes after. */
-  cursor: bigint;
-  /** The version the first dust event at or beyond the boundary was reported at. */
-  version: ProtocolVersion.ProtocolVersion;
-}>;
+export type { DustTimelineStart } from '../types/DustWalletTypes.js';
 
 /** A dust event's place on the timeline: all a search for the boundary reads of it. */
 type DustEventPosition = Readonly<{
