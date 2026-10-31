@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { LedgerParameters as V8LedgerParameters } from '@midnight-ntwrk/ledger-v8';
-import { LedgerParameters } from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
@@ -47,19 +47,23 @@ export const defaultLedgerParametersCodecs = (
             {
               sinceVersion: ProtocolVersion.MinSupportedVersion,
               codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) =>
-                V8LedgerParameters.deserialize(bytes),
+                ledgerV8.LedgerParameters.deserialize(bytes),
               ),
             },
             {
               sinceVersion: forkVersion,
-              codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) => LedgerParameters.deserialize(bytes)),
+              codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) =>
+                ledgerV9.LedgerParameters.deserialize(bytes),
+              ),
             },
           ]
         : // A chain whose boundary is at or below the minimum supported version has no ledger-v8 epoch to register for.
           [
             {
               sinceVersion: ProtocolVersion.MinSupportedVersion,
-              codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) => LedgerParameters.deserialize(bytes)),
+              codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) =>
+                ledgerV9.LedgerParameters.deserialize(bytes),
+              ),
             },
           ],
     ),
@@ -124,7 +128,7 @@ export const blockDataFrom = (
  */
 export const withLedgerParameters = (blockData: BlockData<unknown>): Option.Option<BlockData<AnyLedgerParameters>> => {
   const { ledgerParameters } = blockData;
-  return ledgerParameters instanceof LedgerParameters || ledgerParameters instanceof V8LedgerParameters
+  return ledgerParameters instanceof ledgerV9.LedgerParameters || ledgerParameters instanceof ledgerV8.LedgerParameters
     ? Option.some({ ...blockData, ledgerParameters })
     : Option.none();
 };
