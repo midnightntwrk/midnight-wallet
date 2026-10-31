@@ -11,10 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { Either } from 'effect';
 import type { V8UnboundTransaction } from '../proving/v8ProvingService.js';
 import {
+  LedgerParametersMismatchError,
   makeValidationServiceEffect,
   type AnyLedgerParameters,
+  type LedgerParametersReader,
   type ValidationServiceDependencies,
   type ValidationServiceEffect,
   type WellFormedCheck,
@@ -51,12 +54,22 @@ const buildBlankLedgerState = (networkId: string, parameters: ledger.LedgerParam
  *   not the steps, that make this a separate check: a ledger-v8 transaction cannot be handed to ledger-v9's
  *   `wellFormed`, nor ledger-v9 parameters to this one.
  */
-export const v8WellFormedCheck: WellFormedCheck<AnyV8ValidatableTransaction, AnyLedgerParameters> = (
+export const v8WellFormedCheck: WellFormedCheck<AnyV8ValidatableTransaction, ledger.LedgerParameters> = (
   tx,
   { networkId, ledgerParameters, flags, now },
 ) => {
   tx.wellFormed(buildBlankLedgerState(networkId, ledgerParameters), buildStrictness(flags), now);
 };
+
+const v8LedgerParameters: LedgerParametersReader<AnyLedgerParameters, ledger.LedgerParameters> = (parameters) =>
+  parameters instanceof ledger.LedgerParameters
+    ? Either.right(parameters)
+    : Either.left(
+        new LedgerParametersMismatchError({
+          message:
+            "ledger-v8's validator was handed another ledger version's parameters; it checks transactions only against ledger-v8's.",
+        }),
+      );
 
 /**
  * Builds the validator for ledger-v8 transactions.
@@ -71,4 +84,4 @@ export const v8WellFormedCheck: WellFormedCheck<AnyV8ValidatableTransaction, Any
 export const makeV8ValidationServiceEffect = (
   deps: ValidationServiceDependencies<AnyLedgerParameters>,
 ): ValidationServiceEffect<AnyV8ValidatableTransaction, AnyLedgerParameters> =>
-  makeValidationServiceEffect(v8WellFormedCheck, deps);
+  makeValidationServiceEffect(v8WellFormedCheck, v8LedgerParameters, deps);
