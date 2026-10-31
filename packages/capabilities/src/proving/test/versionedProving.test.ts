@@ -25,8 +25,15 @@ import {
   type DefaultProvingConfiguration,
   type ProvingBackend,
   type ProvingBackends,
+  type WasmProvingConfiguration,
 } from '../provingService.js';
-import { makeDefaultProvingServices, makeDefaultVersionedProvingServiceEffect } from '../versionedProving.js';
+import { makeV9WasmProvingServices, makeVersionedProvingServiceEffect, type ProvingServices } from '../index.js';
+import {
+  makeDefaultProvingServices,
+  makeDefaultVersionedProvingServiceEffect,
+  type AnyVersionUnboundTransaction,
+  type AnyVersionUnprovenTransaction,
+} from '../versionedProving.js';
 
 const version = (value: bigint): ProtocolVersion.ProtocolVersion => ProtocolVersion.ProtocolVersion(value);
 const FORK = version(2_000_000n);
@@ -252,5 +259,41 @@ describe('Reading which backend proves for which ledger version', () => {
   it('no longer takes backends keyed by the protocol version each starts serving', () => {
     type _1 = Expect<Equal<'provingServers' extends keyof DefaultProvingConfiguration ? true : false, false>>;
     type _2 = Expect<Equal<DefaultProvingConfiguration['provers'], ProvingBackends | undefined>>;
+  });
+});
+
+describe("Registering ledger-v9's in-process prover on its own", () => {
+  /** Key material nothing here reads: a transaction from the other ledger version is refused before any proving. */
+  const noKeyMaterial: NonNullable<WasmProvingConfiguration['keyMaterialProvider']> = {
+    lookupKey: () => Promise.reject(new Error('no key material is read in this test')),
+    getParams: () => Promise.reject(new Error('no key material is read in this test')),
+  };
+
+  it('refuses a ledger-v8 transaction by the epoch it serves when registered from below the boundary', async () => {
+    // Registered from the minimum supported version, its range covers ledger-v8 stamps too, so the router hands it a
+    // ledger-v8 transaction. It has to say that transaction is not its ledger version's, rather than pass it on to a
+    // ledger that cannot read it.
+    const services: ProvingServices<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction> =
+      makeV9WasmProvingServices(ProtocolVersion.MinSupportedVersion, { keyMaterialProvider: noKeyMaterial });
+
+    const error = await failureOf(makeVersionedProvingServiceEffect(services).prove(aV8Transaction(), V8_VERSION));
+
+    expect(error).toBeInstanceOf(ProvingEpochMismatchError);
+    expect(error).toMatchObject({
+      epoch: ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MaxSupportedVersion),
+    });
+  });
+
+  it('passes a ledger-v9 transaction on to ledger-v9 rather than refusing it', async () => {
+    const services = makeV9WasmProvingServices(ProtocolVersion.MinSupportedVersion, {
+      keyMaterialProvider: noKeyMaterial,
+    });
+
+    const outcome = await Effect.runPromise(
+      Effect.either(makeVersionedProvingServiceEffect(services).prove(aV9Transaction(), FORK)),
+    );
+
+    // Whatever ledger-v9 makes of a transaction with nothing to prove, it is ledger-v9 that answers, not the guard.
+    expect(Option.getOrUndefined(Either.getLeft(outcome))).not.toBeInstanceOf(ProvingEpochMismatchError);
   });
 });
