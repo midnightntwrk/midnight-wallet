@@ -16,16 +16,18 @@ import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as Proving from '../index.js';
 import {
-  makeV9SimulatorProvingServiceEffect,
   type ProvingService,
   type ProvingServiceEffect,
   type ProvingServices,
-  type V9ProvingServiceEffect,
-  type V9UnboundTransaction,
-  type V9UnprovenTransaction,
   type VersionedProvingService,
   type VersionedProvingServiceEffect,
 } from '../provingService.js';
+import {
+  makeV9SimulatorProvingServiceEffect,
+  type V9ProvingServiceEffect,
+  type V9UnboundTransaction,
+  type V9UnprovenTransaction,
+} from '../v9ProvingService.js';
 import {
   type V8ProvingServiceEffect,
   type V8UnboundTransaction,

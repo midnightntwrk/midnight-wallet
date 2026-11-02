@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
-import * as ledgerV9 from '@midnightntwrk/ledger-v9';
+import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { EitherOps, type Clock } from '@midnightntwrk/wallet-sdk-utilities';
-import { Cause, Data, Effect, Either, Exit, Option, pipe } from 'effect';
-import type { V9UnboundTransaction, V9UnprovenTransaction } from '../proving/provingService.js';
+import { Data, Effect, type Either, Option, pipe } from 'effect';
+import { runPromiseThrowingFailure } from './promiseBoundary.js';
 
 /**
  * Ledger parameters as either ledger version reads them: what a block-data fetch spanning a protocol boundary yields.
@@ -97,8 +97,6 @@ export class LedgerParametersMismatchError extends Data.TaggedError(
 
 /** Everything a validator written against one ledger version can fail with. */
 export type ValidationFailure = WellFormedError | ValidationFetchError | LedgerParametersMismatchError;
-
-export type AnyV9ValidatableTransaction = ledgerV9.FinalizedTransaction | V9UnboundTransaction | V9UnprovenTransaction;
 
 /**
  * Checks a transaction for well-formedness.
@@ -283,68 +281,6 @@ export const makeValidationServiceEffect = <TTransaction, TParameters, TOwnParam
     );
   },
 });
-
-const buildStrictness = (flags: WellFormedStrictnessFlags): ledgerV9.WellFormedStrictness => {
-  const strictness = new ledgerV9.WellFormedStrictness();
-  strictness.enforceBalancing = flags.enforceBalancing;
-  strictness.verifySignatures = flags.verifySignatures;
-  strictness.enforceLimits = flags.enforceLimits;
-  return strictness;
-};
-
-const buildBlankLedgerState = (networkId: string, parameters: ledgerV9.LedgerParameters): ledgerV9.LedgerState => {
-  const state = ledgerV9.LedgerState.blank(networkId);
-  state.parameters = parameters;
-  return state;
-};
-
-/** The ledger-v9's well-formedness check. */
-export const v9WellFormedCheck: WellFormedCheck<AnyV9ValidatableTransaction, ledgerV9.LedgerParameters> = (
-  tx,
-  { networkId, ledgerParameters, flags, now },
-) => {
-  tx.wellFormed(buildBlankLedgerState(networkId, ledgerParameters), buildStrictness(flags), now);
-};
-
-/**
- * Rejects a promise with the typed failure itself rather than the fiber wrapper around it, so a caller can `catch` the
- * error class the signature names.
- *
- * @remarks
- *   `E extends Error` is what makes that rejection legitimate rather than a thrown bare value, and every failure on this
- *   surface is a `Data.TaggedError`, which is one.
- */
-const runPromiseThrowingFailure = async <A, E extends Error>(effect: Effect.Effect<A, E>): Promise<A> => {
-  const exit = await Effect.runPromiseExit(effect);
-  if (Exit.isSuccess(exit)) return exit.value;
-  const failure = Cause.failureOption(exit.cause);
-  if (Option.isSome(failure)) throw failure.value;
-  throw new Error(Cause.pretty(exit.cause));
-};
-
-const v9LedgerParameters: LedgerParametersReader<AnyLedgerParameters, ledgerV9.LedgerParameters> = (parameters) =>
-  parameters instanceof ledgerV9.LedgerParameters
-    ? Either.right(parameters)
-    : Either.left(
-        new LedgerParametersMismatchError({
-          message:
-            "ledger-v9's validator was handed another ledger version's parameters; it checks transactions only against ledger-v9's.",
-        }),
-      );
-
-export const makeV9ValidationServiceEffect = (
-  deps: ValidationServiceDependencies<AnyLedgerParameters>,
-): ValidationServiceEffect<AnyV9ValidatableTransaction, AnyLedgerParameters> =>
-  makeValidationServiceEffect(v9WellFormedCheck, v9LedgerParameters, deps);
-
-export const makeV9ValidationService = (
-  deps: ValidationServiceDependencies<AnyLedgerParameters>,
-): ValidationService<AnyV9ValidatableTransaction, AnyLedgerParameters> => {
-  const effectService = makeV9ValidationServiceEffect(deps);
-  return {
-    validateTx: (tx, options) => runPromiseThrowingFailure(effectService.validateTx(tx, options)),
-  };
-};
 
 /** Adapts a version-routed validation service to the promise-facing surface the facade exposes. */
 export const wrapVersionedValidationService = <TTransaction, TParameters>(

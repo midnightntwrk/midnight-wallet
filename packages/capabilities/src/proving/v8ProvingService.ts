@@ -14,11 +14,11 @@
  * Proving on ledger-v8.
  *
  * @remarks
- *   The ledger-v8 twin of the backends in `provingService.ts`: structurally the same three steps — obtain a proving
- *   provider, drive the transaction's own `prove` with that ledger version's cost model, report failures as a
- *   {@link ProvingError} — against a different ledger version's classes. It is the classes that make this a separate
- *   module: a ledger-v8 transaction handed ledger-v9's cost model fails at the wasm-bindgen boundary, and a
- *   proof-server request framed by ledger-v9 is not the request ledger-v8 would have sent.
+ *   The ledger-v8 twin of `v9ProvingService.ts`: structurally the same three steps — obtain a proving provider, drive the
+ *   transaction's own `prove` with that ledger version's cost model, report failures as a {@link ProvingError} — against
+ *   a different ledger version's classes. It is the classes that make this a separate module: a ledger-v8 transaction
+ *   handed ledger-v9's cost model fails at the wasm-bindgen boundary, and a proof-server request framed by ledger-v9 is
+ *   not the request ledger-v8 would have sent.
  */
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { HttpProverClient, WasmProver } from '@midnightntwrk/wallet-sdk-prover-client/effect';

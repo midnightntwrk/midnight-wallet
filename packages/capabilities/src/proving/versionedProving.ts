@@ -32,9 +32,7 @@ import {
   type V8UnprovenTransaction,
 } from './v8ProvingService.js';
 import {
-  makeV9ServerProvingServiceEffect,
   makeVersionedProvingServiceEffect,
-  makeV9WasmProvingServiceEffect,
   ProvingEpochMismatchError,
   resolveProvingBackends,
   wrapVersionedEffectService,
@@ -43,12 +41,16 @@ import {
   type ProvingConfigurationError,
   type ProvingServiceEffect,
   type ProvingServices,
-  type V9UnboundTransaction,
-  type V9UnprovenTransaction,
   type VersionedProvingService,
   type VersionedProvingServiceEffect,
   type WasmProvingConfiguration,
 } from './provingService.js';
+import {
+  makeV9ServerProvingServiceEffect,
+  makeV9WasmProvingServiceEffect,
+  type V9UnboundTransaction,
+  type V9UnprovenTransaction,
+} from './v9ProvingService.js';
 
 /**
  * Every unproven transaction either ledger version can be asked to prove.

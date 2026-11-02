@@ -12,8 +12,8 @@
 // limitations under the License.
 import { describe, expect, it } from 'vitest';
 import * as Validation from '../index.js';
+import { type AnyV9ValidatableTransaction } from '../v9ValidationService.js';
 import {
-  type AnyV9ValidatableTransaction,
   type BlockData,
   type ValidateTxOptions,
   type ValidationService,

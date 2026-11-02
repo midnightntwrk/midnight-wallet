@@ -23,12 +23,11 @@
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Either } from 'effect';
 import { makeV8ValidationServiceEffect, type AnyV8ValidatableTransaction } from './v8ValidationService.js';
+import { makeV9ValidationServiceEffect, type AnyV9ValidatableTransaction } from './v9ValidationService.js';
 import {
-  makeV9ValidationServiceEffect,
   makeVersionedValidationServiceEffect,
   wrapVersionedValidationService,
   type AnyLedgerParameters,
-  type AnyV9ValidatableTransaction,
   type ValidationServiceDependencies,
   type ValidationServiceEffect,
   type ValidationServices,
