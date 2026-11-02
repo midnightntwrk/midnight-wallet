@@ -44,15 +44,20 @@ export default defineConfig({
           exclude: ['**/fundTestWallets.remote.test.ts'],
         },
       },
-      {
-        extends: true,
-        test: {
-          name: 'fund',
-          // Spends the funding wallet, so it runs only when asked for (`yarn test-fund`), never with `remote`.
-          include: ['**/**/tests/fundTestWallets.remote.test.ts'],
-          retry: 0,
-        },
-      },
+      // The funding script spends the funding wallet, so its project exists only when `yarn test-fund` asks for it: a bare
+      // `vitest run` runs every project, and must not select it.
+      ...(process.env['FUND_TEST_WALLETS'] === 'true'
+        ? [
+            {
+              extends: true,
+              test: {
+                name: 'fund',
+                include: ['**/**/tests/fundTestWallets.remote.test.ts'],
+                retry: 0,
+              },
+            },
+          ]
+        : []),
       {
         extends: true,
         test: {
