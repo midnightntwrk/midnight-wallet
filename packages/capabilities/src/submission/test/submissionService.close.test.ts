@@ -39,6 +39,7 @@ vi.mock('@polkadot/api', () => ({
 }));
 
 const { makeDefaultSubmissionServiceEffect } = await import('../submissionService.js');
+const { ApiPromise } = await import('@polkadot/api');
 
 const UNREACHABLE_RELAY = new URL('ws://127.0.0.1:1');
 
@@ -86,5 +87,34 @@ describe('Closing the default submission service while its node is unreachable',
     expect(Exit.isFailure(exit)).toBe(true);
     const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none<{ _tag: string }>();
     expect(Option.map(failure, (error) => error._tag)).toEqual(Option.some('SubmissionError'));
+  });
+});
+
+describe('Closing the default submission service once it has connected', () => {
+  it('should succeed even when releasing its client fails, so a transport error cannot fail stopping a wallet', async () => {
+    // `WsProvider.disconnect()` rethrows when the socket's own close throws. Releasing the client is the last thing a
+    // stopping wallet does with it, so there is nothing left for that failure to protect.
+    const releases = { attempted: 0 };
+    vi.mocked(ApiPromise).create.mockImplementationOnce(() =>
+      Promise.resolve(
+        // Type cast required because: the service only builds, holds and releases the api here; a full ApiPromise
+        // double would drag the whole polkadot surface into a test about releasing it.
+        {
+          isConnected: false,
+          disconnect: () => {
+            releases.attempted += 1;
+            return Promise.reject(new Error('websocket close failed'));
+          },
+        } as unknown as Awaited<ReturnType<typeof ApiPromise.create>>,
+      ),
+    );
+    const service = makeService();
+    // Long enough for the build to finish, so that closing releases a client rather than interrupting its build.
+    await Effect.runPromise(Effect.sleep(Duration.millis(100)));
+
+    const closed = await exitWithin(service.close(), 1_000);
+
+    expect(releases.attempted).toBe(1);
+    expect(Option.map(closed, Exit.isSuccess)).toEqual(Option.some(true));
   });
 });

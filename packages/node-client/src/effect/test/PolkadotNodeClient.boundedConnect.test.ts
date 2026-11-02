@@ -165,4 +165,27 @@ describe('PolkadotNodeClient.make', () => {
     expect(created).toHaveLength(1);
     expect(created[0]?.disconnected).toBe(true);
   });
+
+  it('should fail within a finite reconnectionTimeout even for a caller that cannot be interrupted, so the bound always holds', async () => {
+    // The liveness check builds its client uninterruptibly, so that a poll failing fast cannot strand a built client
+    // before it is cached. The bound it asks for must therefore hold without anyone interrupting the attempt. Forked and
+    // polled rather than raced, because a race would wait for an uninterruptible loser and hang instead of failing.
+    const createdBefore = providers.length;
+
+    const settled = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkDaemon(Effect.uninterruptible(makeClient(Duration.millis(200))));
+        yield* Effect.sleep(Duration.seconds(1));
+        return yield* Fiber.poll(fiber);
+      }),
+    );
+
+    expect(Option.isSome(settled)).toBe(true);
+    const exit = Option.getOrThrow(settled);
+    const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none<{ _tag: string }>();
+    expect(Option.map(failure, (error) => error._tag)).toEqual(Option.some('ConnectionError'));
+    const created = providers.slice(createdBefore);
+    expect(created).toHaveLength(1);
+    expect(created[0]?.disconnected).toBe(true);
+  });
 });
