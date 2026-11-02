@@ -29,12 +29,18 @@
  * - DApp connector reference implementation tests
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { type CombinedTokenTransfer, type UnprovenTransactionRecipe, type FacadeState } from '../src/index.js';
+import {
+  type BalancingRecipe,
+  type CombinedTokenTransfer,
+  type UnprovenTransactionRecipe,
+  type FacadeState,
+  type WalletFacade,
+} from '../src/index.js';
 import {
   createSimulatorWalletFactories,
   deriveWalletKeys,
@@ -502,4 +508,139 @@ describe('WalletFacade in simulation mode', () => {
       expect(receiverBalance).toEqual(tokenValue(100n));
     }).pipe(Effect.scoped, Effect.runPromise);
   });
+});
+
+describe('A recipe that pays a fee', () => {
+  const nightTokenType = ledger.nativeToken().raw;
+
+  /** A facade whose Night is registered for Dust generation, holding the Dust to pay fees with. */
+  const facadeWithDust = Effect.gen(function* () {
+    const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
+    const simulator = yield* V9.Simulator.init({
+      genesisMints: [
+        {
+          type: 'unshielded',
+          tokenType: nightTokenType,
+          amount: tokenValue(100_000n),
+          recipient: keys.userAddress,
+          verifyingKey: keys.signatureVerifyingKey,
+        },
+      ],
+      blockProducer: V9.immediateBlockProducer(),
+    });
+    const simulatorConfig: SimulatorConfig = {
+      simulator,
+      networkId: NETWORK_ID,
+      costParameters: { feeBlocksMargin: 5 },
+    };
+    const facade = yield* makeSimulatorFacade(simulatorConfig, keys, createSimulatorWalletFactories(simulatorConfig));
+    yield* waitForUnshieldedBalance(facade, nightTokenType, 1n);
+
+    // Registration pays its own fee out of the Dust its Night would have generated, so time has to pass first.
+    yield* simulator.fastForward(10_000n);
+    const registering: FacadeState = yield* Effect.promise(() => rx.firstValueFrom(facade.state()));
+    const registrationRecipe = yield* Effect.promise(() =>
+      facade.registerNightUtxosForDustGeneration(
+        registering.unshielded.availableCoins,
+        keys.signatureVerifyingKey,
+        keys.unshieldedKeystore.signDataAsync,
+      ),
+    );
+    const registration = yield* Effect.promise(() => facade.finalizeRecipe(registrationRecipe));
+    yield* Effect.promise(() => facade.submitTransaction(registration));
+    yield* Effect.promise(() =>
+      rx.firstValueFrom(
+        facade
+          .state()
+          .pipe(
+            rx.filter(
+              (s) =>
+                s.dust.availableCoins.length > 0 &&
+                s.unshielded.availableCoins.length > 0 &&
+                s.unshielded.pendingCoins.length === 0,
+            ),
+          ),
+      ),
+    );
+
+    const simTime = yield* simulator.query((s) => s.currentTime);
+    return { facade, ttl: new Date(simTime.getTime() + 60 * 60 * 1000) };
+  });
+
+  // A caller's transaction with nothing in it, so the only balancing it needs is its fee.
+  const callersTransaction = () => ledger.Transaction.fromParts(NETWORK_ID);
+  const sealed = <TStage extends WalletTransaction.Stage>(stage: TStage, tx: { serialize: () => Uint8Array }) =>
+    WalletTransaction.adopt(stage, tx, ProtocolVersion.MinSupportedVersion);
+
+  const builders: ReadonlyArray<readonly [string, (facade: WalletFacade, ttl: Date) => Promise<BalancingRecipe>]> = [
+    [
+      'transferTransaction',
+      async (facade, ttl) =>
+        facade.transferTransaction(
+          [
+            {
+              type: 'unshielded',
+              outputs: [
+                { type: nightTokenType, receiverAddress: await facade.unshielded.getAddress(), amount: tokenValue(1n) },
+              ],
+            },
+          ],
+          { ttl, payFees: true },
+        ),
+    ],
+    [
+      'initSwap',
+      async (facade, ttl) =>
+        facade.initSwap(
+          { unshielded: { [nightTokenType]: tokenValue(1n) } },
+          [
+            {
+              type: 'shielded',
+              outputs: [
+                {
+                  type: shieldedTokenType,
+                  receiverAddress: await facade.shielded.getAddress(),
+                  amount: tokenValue(1n),
+                },
+              ],
+            },
+          ],
+          { ttl, payFees: true },
+        ),
+    ],
+    [
+      'balanceUnprovenTransaction',
+      (facade, ttl) =>
+        facade.balanceUnprovenTransaction(sealed('Unproven', callersTransaction()), {
+          ttl,
+          tokenKindsToBalance: ['dust'],
+        }),
+    ],
+    [
+      'balanceUnboundTransaction',
+      (facade, ttl) =>
+        facade.balanceUnboundTransaction(sealed('Unbound', callersTransaction().mockProve()), {
+          ttl,
+          tokenKindsToBalance: ['dust'],
+        }),
+    ],
+    [
+      'balanceFinalizedTransaction',
+      (facade, ttl) =>
+        facade.balanceFinalizedTransaction(sealed('Finalized', callersTransaction().mockProve().bind()), {
+          ttl,
+          tokenKindsToBalance: ['dust'],
+        }),
+    ],
+  ];
+
+  it.each(builders)(
+    'should carry the block its fee was priced against when built by %s, so validation checks it against the same parameters',
+    (_, build) =>
+      Effect.gen(function* () {
+        const { facade, ttl } = yield* facadeWithDust;
+        const recipe = yield* Effect.promise(() => build(facade, ttl));
+        expect(recipe.blockData?.ledgerParameters).toBeInstanceOf(ledger.LedgerParameters);
+      }).pipe(Effect.scoped, Effect.runPromise),
+  );
 });
