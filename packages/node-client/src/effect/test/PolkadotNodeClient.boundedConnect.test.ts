@@ -14,6 +14,12 @@ import { Cause, Duration, Effect, Exit, Fiber, Option, Scope } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 /**
+ * Every provider the client created, in order, with whether it was disconnected — the only thing that stops its
+ * retries.
+ */
+const providers = vi.hoisted(() => [] as Array<{ disconnected: boolean }>);
+
+/**
  * A stub whose connection never establishes, standing in for a node that accepts nothing — the condition under which
  * `ApiPromise.create` waits indefinitely, because `WsProvider` retries on a timer and `throwOnConnect: false` means it
  * never rejects.
@@ -22,7 +28,18 @@ vi.mock('@polkadot/api', () => ({
   ApiPromise: {
     create: vi.fn(() => new Promise(() => {})),
   },
-  WsProvider: vi.fn(),
+  WsProvider: class {
+    disconnected = false;
+
+    constructor() {
+      providers.push(this);
+    }
+
+    disconnect(): Promise<void> {
+      this.disconnected = true;
+      return Promise.resolve();
+    }
+  },
 }));
 
 const { PolkadotNodeClient } = await import('../PolkadotNodeClient.js');
@@ -128,5 +145,25 @@ describe('PolkadotNodeClient.make', () => {
     );
 
     expect(Option.isNone(stillRunning)).toBe(true);
+  });
+
+  it('should stop connecting once interrupted while the node is unreachable, so its owner can always tear it down', async () => {
+    // A caller closing a wallet whose node never answered interrupts the connection attempt. The attempt has produced no
+    // client to release, so it has to disconnect the provider itself; the caller's scope is left open here to show that
+    // the disconnect does not wait for it.
+    const createdBefore = providers.length;
+
+    const interrupted = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkDaemon(makeClient());
+        yield* Effect.sleep(Duration.millis(100));
+        return yield* Fiber.interrupt(fiber).pipe(Effect.timeout(Duration.seconds(1)), Effect.option);
+      }),
+    );
+
+    expect(Option.isSome(interrupted)).toBe(true);
+    const created = providers.slice(createdBefore);
+    expect(created).toHaveLength(1);
+    expect(created[0]?.disconnected).toBe(true);
   });
 });
