@@ -31,6 +31,7 @@ import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
+  type NetworkId,
   ProtocolVersion,
   type WalletTransactionUnwrapError,
   type UnprovenTx,
@@ -68,12 +69,13 @@ import { type BlockData as PricedBlockData } from '@midnightntwrk/wallet-sdk-cap
 import { CoreWallet as V1CoreWallet, V1Builder, V1Tag, type V1Variant } from './v1/index.js';
 import { type WalletSyncUpdate as V1SyncUpdate } from './v1/Sync.js';
 import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
-import { type DustTimelineStart } from './types/DustWalletTypes.js';
+import {
+  type DustTimelineStart,
+  type NightUtxoSplitForDustRegistration,
+  type UtxoWithMeta,
+} from './types/DustWalletTypes.js';
 import { findDustTimelineStart } from './v2/Sync.js';
 import { type WalletSyncUpdate as V2SyncUpdate } from './v2/SyncSchema.js';
-import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
-import { type UtxoWithMeta } from './v2/types/Dust.js';
-import { type NetworkId } from './v2/types/index.js';
 import { type AnyTransaction as V1AnyTransaction } from './v1/types/ledger.js';
 import { type AnyTransaction } from './v2/types/ledger.js';
 import { type WalletError as V1WalletError } from './v1/WalletError.js';
@@ -182,7 +184,7 @@ export type SelfConfiguredDustVariant<TVariant extends Variant.AnyVariant, TConf
 
 /** What a forking dust wallet needs to know about itself, whatever its variants are built from. */
 export type ForkingDustConfiguration = {
-  networkId: NetworkId;
+  networkId: NetworkId.NetworkId;
   /** Where each ledger version begins on this chain — see {@link ProtocolVersion.ForkSchedule}. */
   forks: ProtocolVersion.ForkSchedule;
   /**

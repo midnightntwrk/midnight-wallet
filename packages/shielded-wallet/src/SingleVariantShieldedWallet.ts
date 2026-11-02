@@ -56,7 +56,7 @@ import {
   CoreWallet,
 } from './v2/index.js';
 import { type WalletSyncUpdate } from './v2/Sync.js';
-import { type TokenTransfer } from './v2/Transacting.js';
+import { type TokenTransfer } from './types/ShieldedWalletTypes.js';
 import { type WalletError } from './v2/WalletError.js';
 
 export type CustomizedShieldedWallet<

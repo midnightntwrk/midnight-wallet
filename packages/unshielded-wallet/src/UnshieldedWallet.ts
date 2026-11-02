@@ -68,12 +68,12 @@ import { type SyncUpdate as V1SyncUpdate } from './v1/SyncSchema.js';
 import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
 import { type SignSegment as V1SignSegment } from './v1/Signing.js';
 import { type UnboundTransaction as V1UnboundTransaction } from './v1/TransactionOps.js';
-import { type SignSegment } from './v2/Signing.js';
 import { type SyncUpdate as V2SyncUpdate } from './v2/SyncSchema.js';
-import { type TokenTransfer } from './v2/Transacting.js';
 import { type UnboundTransaction } from './v2/TransactionOps.js';
 import {
   type PublicKey,
+  type SignSegment,
+  type TokenTransfer,
   type UnshieldedKeystore,
   type UnshieldedSecretKey,
   type UtxoHash,

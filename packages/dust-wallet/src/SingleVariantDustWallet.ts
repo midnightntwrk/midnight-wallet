@@ -54,8 +54,7 @@ import { runPromiseThrowingFailure } from './PromiseBoundary.js';
 import { CoreWallet } from './v2/CoreWallet.js';
 import { type RunningV2Variant, V2Tag } from './v2/RunningV2Variant.js';
 import { type WalletSyncUpdate } from './v2/SyncSchema.js';
-import { type NightUtxoSplitForDustRegistration } from './v2/Transacting.js';
-import { type UtxoWithMeta } from './v2/types/Dust.js';
+import { type NightUtxoSplitForDustRegistration, type UtxoWithMeta } from './types/DustWalletTypes.js';
 import { type AnyTransaction } from './v2/types/ledger.js';
 import { type BaseV2Configuration, type DefaultV2Configuration, type V2Variant } from './v2/V2Builder.js';
 

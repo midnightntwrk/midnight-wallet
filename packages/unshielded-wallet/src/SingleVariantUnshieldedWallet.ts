@@ -46,10 +46,14 @@ import {
   type UnboundTransaction,
 } from './v2/index.js';
 import { type RunningV2Variant } from './v2/RunningV2Variant.js';
-import { type SignSegment } from './v2/Signing.js';
 import { type SyncUpdate } from './v2/SyncSchema.js';
-import { type TokenTransfer } from './v2/Transacting.js';
-import { type PublicKey, type UtxoHash, type UtxoWithMeta } from './types/UnshieldedWalletTypes.js';
+import {
+  type PublicKey,
+  type SignSegment,
+  type TokenTransfer,
+  type UtxoHash,
+  type UtxoWithMeta,
+} from './types/UnshieldedWalletTypes.js';
 
 export type CustomizedUnshieldedWallet<
   TSyncUpdate = SyncUpdate,

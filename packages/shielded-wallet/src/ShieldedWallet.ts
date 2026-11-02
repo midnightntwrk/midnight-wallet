@@ -64,7 +64,7 @@ import { CoreWallet as V1CoreWallet, V1Builder, V1Tag, type V1Variant } from './
 import { type WalletSyncUpdate as V1SyncUpdate } from './v1/Sync.js';
 import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
 import { type WalletSyncUpdate as V2SyncUpdate } from './v2/Sync.js';
-import { type TokenTransfer } from './v2/Transacting.js';
+import { type TokenTransfer } from './types/ShieldedWalletTypes.js';
 import { type WalletError as V1WalletError } from './v1/WalletError.js';
 import { type WalletError } from './v2/WalletError.js';
 
