@@ -66,7 +66,7 @@ vi.mock('@polkadot/api', () => ({
   ApiPromise: {
     create: vi.fn(() => {
       mockApi.isConnected = true;
-      return mockApi;
+      return Promise.resolve(mockApi);
     }),
   },
   WsProvider: vi.fn(),
@@ -339,11 +339,10 @@ describe('PolkadotNodeClient lifecycle', () => {
 
   it('make() stops waiting for the close once a finite reconnectionTimeout elapses', async () => {
     // A node that completes the handshake and then goes half-open never acknowledges the close frame. Only ws's own
-    // 30-second close timeout ended that wait, from inside an uninterruptible acquire no outer deadline can cut short —
-    // so a caller who asked for a 10-second bound waited 40. The bound the caller asked for covers the whole build,
-    // the close included.
+    // 30-second close timeout ended that wait, so a caller who asked for a 10-second bound waited 40. The bound the
+    // caller asked for covers the whole build, the close included.
     //
-    // Forked and polled rather than raced: interrupting an uninterruptible acquire would block the test forever.
+    // Forked and polled rather than raced, so it is `make()`'s own bound that ends the wait rather than the test's.
     mockApi.disconnect.mockImplementationOnce(() => Promise.resolve()); // never emits 'disconnected'
 
     const settled = await Effect.runPromise(
