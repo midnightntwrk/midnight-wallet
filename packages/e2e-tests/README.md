@@ -108,6 +108,47 @@ Remote tests are designed to be run on deployed test environments where test wal
 generated dust to run successfully. All remote tests spin up a local instance of the proof server which can be found in
 `infra/compose/docker-compose-remote-dynamic.yml`.
 
+### Funding remote test wallets
+
+The remote suites run on wallets that must already hold funds on the target network:
+
+| Suite                                 | Wallet                | Needs                                                                   |
+| ------------------------------------- | --------------------- | ----------------------------------------------------------------------- |
+| `dust.remote`, `tokenTransfer.remote` | `SEED` (and `SEED2`)  | Night UTxOs, two of them registered and two unregistered, and Dust      |
+| `nativeTokenTransfer.remote`          | `NT_SEED`, `NT_SEED2` | shielded native tokens `…01` and `…02`, and Dust to pay fees            |
+| `balanceConstant.remote`              | `SEED_STABLE`         | exactly 10 shielded tNight, 10 unshielded tNight, 25 `…01` and 50 `…02` |
+
+`fundTestWallets.remote.test.ts` tops a wallet up to what these suites need. It only sends what is missing, so it is
+safe to run again. It spends real funds, so no other run selects it: run it with
+
+```shell
+yarn turbo test-fund
+```
+
+In the funding script the seed variables mean something different from the suites:
+
+- `SEED` is the wallet the funds come from (a faucet wallet).
+- `SEED2` is the test wallet to fund. Point it at whichever wallet a suite runs on — the suites' `SEED`, `NT_SEED`,
+  `NT_SEED2`, ... — and run the script once per wallet. `FUND_RANDOM_TARGET=true` funds a newly generated wallet instead
+  and logs its seed.
+- `SEED_STABLE`, when set, is topped up to the exact balances `balanceConstant` asserts. If any balance is already above
+  them, the script warns and sends nothing.
+
+Set them in the root `.env`: it is loaded with `override: true`, so values given on the command line are replaced by the
+`.env` ones. Running from a checkout without a `.env` lets exported variables through instead.
+
+Each test wallet is brought to:
+
+- at least five Night UTxOs, one of them 100 tNight (ten times the usual 10 tNight);
+- at least 10 shielded tNight, 25 of native token `…01` and 50 of `…02`;
+- Night registered for Dust generation, and Dust. A wallet with nothing registered has the 100 tNight UTxO and one 10
+  tNight UTxO registered together; the registration pays its own fee from the Dust they generate, which takes around ten
+  minutes on a new wallet.
+
+Dust registration belongs to a wallet's Night address, not to a UTxO: once a wallet is registered, every Night UTxO sent
+to it arrives registered. Funding can therefore add unregistered UTxOs only to a wallet with nothing registered, and
+warns when a registered wallet has fewer than two left.
+
 ### Tests overview
 
 Balancing - Transaction balancing feature. Ensuring that the lowest available coin should always be spent before
