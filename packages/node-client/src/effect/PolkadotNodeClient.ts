@@ -122,56 +122,81 @@ export const makeConfig = (input: Partial<Config> & Pick<Config, 'nodeURL'>): Co
 });
 
 export class PolkadotNodeClient implements NodeClient.Service {
+  /**
+   * Connects to a node, loads its metadata, and releases the socket until a call needs it.
+   *
+   * @remarks
+   *   `reconnectionTimeout` bounds the wait for the node, and separately the close that follows it; the default,
+   *   `Duration.infinity`, waits as long as the node takes. A wait that outlasts a finite bound fails with a
+   *   `ConnectionError` whose `cause` is Effect's `TimeoutException`; an endpoint that is not `ws://` or `wss://` fails
+   *   with a `ConnectionError` too. An attempt that fails or is interrupted before it yields a client disconnects its
+   *   provider, so nothing it started keeps retrying.
+   *
+   *   An interrupt from outside abandons a handshake still in progress even when the caller is uninterruptible, because
+   *   the bounded wait runs in a child fiber that takes it. Once connected, the close and the release registration run
+   *   at the caller's status, so an uninterruptible caller still receives the client: the liveness reads rely on that
+   *   to cache every client they build.
+   * @example
+   *   ```typescript
+   *   const client = yield* PolkadotNodeClient.make({
+   *     nodeURL: new URL('ws://localhost:9944'),
+   *     reconnectionTimeout: Duration.seconds(10),
+   *   });
+   *   ```;
+   *
+   * @param configInput - The node to connect to, and optionally the bound and the delay between reconnection attempts.
+   * @returns The client, whose connection is released when the scope closes.
+   */
   static make(
     configInput: Partial<Config> & Pick<Config, 'nodeURL'>,
   ): Effect.Effect<PolkadotNodeClient, NodeClientError.NodeClientError, Scope.Scope> {
     const config = makeConfig(configInput);
 
-    // `autoConnectMs` keeps its default deliberately. Passing `false` does not mean "connect once without retrying" — it
-    // means "do not connect at all", leaving `ApiPromise.create` waiting on a connection nobody started. The bound below
-    // is what limits the wait; the provider's own retry behaviour is left alone. `try`, because the constructor throws
-    // for an endpoint that is not `ws://` or `wss://`.
-    const connect = Effect.try(() => new WsProvider(config.nodeURL.toString())).pipe(
-      Effect.flatMap((provider) =>
-        // `tryPromise` rather than `promise`: a rejected connection has to reach the error channel this method already
-        // declares, instead of arriving as a defect that no `catchTag` can handle.
-        Effect.tryPromise(async () =>
-          ApiPromise.create({
-            // @ts-expect-error -- exactOptionalPropertyTypes cause an incompatibility here
-            provider,
-            // Off for bounded callers too. With it on, `create` returns `isReadyOrError`, which rejects on the
-            // provider's first `error` event — any socket error, such as a node restarting — although the provider
-            // would have retried and connected moments later. A bounded caller then failed within milliseconds and
-            // never used the window it asked for. The timeout below is the bound; the provider's retries fill the
-            // window, as `ensureConnection`'s do.
-            throwOnConnect: false,
-            noInitWarn: true,
-          }),
-        ).pipe(
-          // Interruptible on its own, so the timeout below can end the wait whatever the caller's interruptibility.
-          // Only this raced wait: an interrupt from outside still reaches the attempt only through the caller.
-          Effect.interruptible,
-          // A finite `reconnectionTimeout` is a caller asking to be told when the node cannot be reached: left to its
-          // defaults, `WsProvider` retries on a timer and `ApiPromise.create` waits for a connection that may never
-          // arrive. The default, `Duration.infinity`, never elapses, which is what submission relies on.
-          Effect.timeout(config.reconnectionTimeout),
-          // Disconnect immediately after loading metadata to avoid keeping the WebSocket open.
-          // The health-check timer (10s interval) and timeout handler (5s interval) are cleared on disconnect.
-          // Metadata and type registry remain cached in memory for subsequent on-demand connections. The wait for the
-          // close, and its bound, are explained on `disconnectAndAwaitClose`.
-          Effect.tap((api) => Effect.promise(() => disconnectAndAwaitClose(api, config.reconnectionTimeout))),
-          // An attempt that ends without an api, failed or interrupted, leaves the scope nothing to release, so it
-          // disconnects the provider itself. Nothing else stops the provider retrying for the lifetime of the process.
-          Effect.onError(() => Effect.tryPromise(() => provider.disconnect()).pipe(Effect.ignore)),
-        ),
-      ),
-    );
+    const awaitApi = (provider: WsProvider) =>
+      // `tryPromise` rather than `promise`: a rejected connection has to reach the error channel this method already
+      // declares, instead of arriving as a defect that no `catchTag` can handle.
+      Effect.tryPromise(async () =>
+        ApiPromise.create({
+          // @ts-expect-error -- exactOptionalPropertyTypes cause an incompatibility here
+          provider,
+          // Off for bounded callers too. With it on, `create` returns `isReadyOrError`, which rejects on the provider's
+          // first `error` event — any socket error, such as a node restarting — although the provider would have
+          // retried and connected moments later. A bounded caller then failed within milliseconds and never used the
+          // window it asked for. The timeout below is the bound; the provider's retries fill the window, as
+          // `ensureConnection`'s do.
+          throwOnConnect: false,
+          noInitWarn: true,
+        }),
+      ).pipe(
+        // Interruptible on its own, so the timeout below can end the wait whatever the caller's interruptibility. Raced,
+        // it runs in a child fiber, which also takes an interrupt sent to the caller even when the caller defers it.
+        Effect.interruptible,
+        // A finite `reconnectionTimeout` is a caller asking to be told when the node cannot be reached: left to its
+        // defaults, `WsProvider` retries on a timer and `ApiPromise.create` waits for a connection that may never
+        // arrive. The default, `Duration.infinity`, never elapses, which is what submission relies on.
+        Effect.timeout(config.reconnectionTimeout),
+        // Disconnect immediately after loading metadata to avoid keeping the WebSocket open.
+        // The health-check timer (10s interval) and timeout handler (5s interval) are cleared on disconnect.
+        // Metadata and type registry remain cached in memory for subsequent on-demand connections. The wait for the
+        // close, and its bound, are explained on `disconnectAndAwaitClose`.
+        Effect.tap((api) => Effect.promise(() => disconnectAndAwaitClose(api, config.reconnectionTimeout))),
+      );
 
-    // Not an `Effect.acquireRelease` acquire, so an interruptible caller can abandon the attempt; an uninterruptible one,
-    // such as the liveness check's cache fill, waits out the bound instead. The mask registers the release in the same
-    // step that receives the api, so a connected api cannot escape it.
+    // The provider is built, and the api's release registered, in uninterruptible steps; only the wait between them runs
+    // at the caller's status. No interrupt can then leave a retrying provider or a connected api without its release.
     return Effect.uninterruptibleMask((restore) =>
-      restore(connect).pipe(
+      // `autoConnectMs` keeps its default deliberately. Passing `false` does not mean "connect once without retrying" —
+      // it means "do not connect at all", leaving `ApiPromise.create` waiting on a connection nobody started. The bound
+      // is what limits the wait; the provider's own retry behaviour is left alone. `try`, because the constructor throws
+      // for an endpoint that is not `ws://` or `wss://`.
+      Effect.try(() => new WsProvider(config.nodeURL.toString())).pipe(
+        Effect.flatMap((provider) =>
+          restore(awaitApi(provider)).pipe(
+            // An attempt that ends without an api, failed or interrupted, leaves the scope nothing to release, so it
+            // disconnects the provider itself. Nothing else stops the provider retrying for the lifetime of the process.
+            Effect.onError(() => Effect.tryPromise(() => provider.disconnect()).pipe(Effect.ignore)),
+          ),
+        ),
         Effect.mapError(
           (cause) =>
             new NodeClientError.ConnectionError({
