@@ -80,8 +80,9 @@ await shieldedWallet.start(keys);
 
 ```typescript
 wallet.state.subscribe((state) => {
-  console.log('Progress:', state.state.progress);
-  console.log('Coins:', state.state.coins);
+  console.log('Progress:', state.progress);
+  console.log('Balances:', state.balances);
+  console.log('Available coins:', state.availableCoins);
 });
 ```
 
@@ -128,8 +129,10 @@ While still proving:
 
 ## Exports
 
-- `ShieldedWallet` - Main wallet class
-- `ShieldedWalletState` - Wallet state type
+- `ShieldedWallet` - The wallet, running the V1 variant below `forks.v9` and the V2 variant from it
+- `CustomShieldedWallet` - A wallet composed from one variant's builder
+- `ShieldedWalletState` - Wallet state
+- `ShieldedWalletTypes` - The data both variants speak, and the capability contracts they implement
 - V2 (ledger-v9) variant internals via `@midnightntwrk/wallet-sdk-shielded/v2`
 - V1 (ledger-v8) variant internals via `@midnightntwrk/wallet-sdk-shielded/v1`
 

@@ -29,7 +29,7 @@ import {
   ProtocolVersion,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
-import { Simulator, type SimulatorState, getBlockEventsFrom } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { HDWallet, Roles } from '@midnightntwrk/wallet-sdk-hd';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Stream, SubscriptionRef } from 'effect';
@@ -82,7 +82,7 @@ const keystoreOf = (seed: Uint8Array) => {
   };
 };
 
-const nightWithMeta = (state: SimulatorState, address: UserAddress): UtxoWithMeta[] =>
+const nightWithMeta = (state: V9.SimulatorState, address: UserAddress): UtxoWithMeta[] =>
   [...state.ledger.utxo.filter(address)]
     .filter((utxo) => utxo.type === NIGHT_TOKEN_TYPE)
     .flatMap((utxo) => {
@@ -106,7 +106,7 @@ export type DustChain = {
    */
   readonly eventBytes: readonly Uint8Array[];
   /** The simulator state after the last registration. Its blocks still hold live, unconsumed `Event` instances. */
-  readonly state: SimulatorState;
+  readonly state: V9.SimulatorState;
   /** A time strictly after the last block, safe to value the resulting dust at. */
   readonly syncTime: Date;
 };
@@ -126,7 +126,7 @@ export type DustChain = {
  */
 export const buildDustChain = (protocolVersion?: ProtocolVersion.ProtocolVersion): Promise<DustChain> =>
   Effect.gen(function* () {
-    const simulator = yield* Simulator.init({
+    const simulator = yield* V9.Simulator.init({
       networkId: NETWORK,
       ...(protocolVersion === undefined ? {} : { protocolVersion }),
     });
@@ -196,7 +196,7 @@ export const buildDustChain = (protocolVersion?: ProtocolVersion.ProtocolVersion
     );
 
     const state = yield* simulator.getLatestState();
-    const eventBytes = [...getBlockEventsFrom(state, 0n)].map((event) => event.serialize());
+    const eventBytes = [...V9.getBlockEventsFrom(state, 0n)].map((event) => event.serialize());
     return { eventBytes, state, syncTime: DateOps.addSeconds(state.currentTime, 2) };
   }).pipe(Effect.scoped, Effect.runPromise);
 

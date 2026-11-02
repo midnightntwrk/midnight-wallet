@@ -67,12 +67,13 @@ export type BaseV2Configuration = {
    * The dust parameters a state built from nothing is valued against.
    *
    * @remarks
-   *   Consulted by the migration seam alone — nothing else in the variant reads it. It exists because dust's local state
-   *   is parameterised where shielded's is not: generation and decay rates live on the state, so an empty dust wallet
-   *   cannot be built without a set of them. Optional, and defaulting to `LedgerParameters.initialParameters().dust`,
-   *   because it is the empty-wallet fallback that needs it, and that fallback is what every builder written before
-   *   migrations were configurable silently relies on. A variant registered as the target of a real fork does not use
-   *   this field at all: {@link makeCrossLedgerMigration} carries its own, required, parameters.
+   *   Read by the migration seam, and by a single-variant `CustomDustWallet`'s start that names no parameters of its own;
+   *   nothing else in the variant reads it. It exists because dust's local state is parameterised where shielded's is
+   *   not: generation and decay rates live on the state, so an empty dust wallet cannot be built without a set of them.
+   *   Optional, and defaulting to `LedgerParameters.initialParameters().dust`, because it is the empty-wallet fallback
+   *   that needs it, and that fallback is what every builder written before migrations were configurable silently
+   *   relies on. A variant registered as the target of a real fork does not use this field at all:
+   *   {@link makeCrossLedgerMigration} carries its own, required, parameters.
    */
   dustParameters?: DustParameters;
 };

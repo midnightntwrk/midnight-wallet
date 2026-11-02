@@ -52,7 +52,7 @@ import {
   type V9UnboundTransaction,
   type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
-import { type Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { type V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { makeSimulatorBlockDataFetcher } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { Effect, Either, type Scope } from 'effect';
@@ -127,7 +127,7 @@ export const sleep = (secs: number): Promise<void> => {
 export const waitForDustGenerated = (seconds: number = 10): Promise<void> => sleep(seconds);
 
 /** Creates a clock backed by the simulator's current time. Reads time synchronously from the simulator's state ref. */
-export const simulatorClock = (simulator: Simulator): Clock.Clock => ({
+export const simulatorClock = (simulator: V9.Simulator): Clock.Clock => ({
   now: () => Effect.runSync(simulator.query((s) => s.currentTime)),
 });
 
@@ -137,7 +137,7 @@ export const simulatorClock = (simulator: Simulator): Clock.Clock => ({
 
 /** Configuration for simulator-based testing. */
 export type SimulatorConfig = {
-  simulator: Simulator;
+  simulator: V9.Simulator;
   networkId: NetworkId.NetworkId;
   costParameters: { feeBlocksMargin: number };
 };
@@ -160,7 +160,7 @@ export const createSimulatorProvingService = (): ProvingService<V9UnboundTransac
  * Creates a Promise-based wrapper around the Effect-based simulator submission service. Note: Uses type assertions
  * because simulator uses different transaction types internally.
  */
-export const createSimulatorSubmissionService = (simulator: Simulator): SubmissionService<FinalizedTx> => {
+export const createSimulatorSubmissionService = (simulator: V9.Simulator): SubmissionService<FinalizedTx> => {
   const effectService = Submission.makeSimulatorSubmissionService<ledgerV9.FinalizedTransaction>('InBlock')({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     simulator: simulator as any,

@@ -24,7 +24,7 @@ import {
   PendingTransactions,
   type PendingTransactionsService,
 } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
-import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { DateTime, Effect } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
@@ -50,7 +50,7 @@ const utxoKey = (coin: { utxo: { intentHash: string; outputNo: number } }): stri
 const nightGenesisMint = (
   verifyingKey: ledger.SignatureVerifyingKey,
   userAddress: ledger.UserAddress,
-): GenesisMint => ({
+): V9.GenesisMint => ({
   type: 'unshielded',
   tokenType: NIGHT,
   amount: tokenValue(100_000n),
@@ -96,9 +96,9 @@ describe('A reservation reaching its expiry', () => {
   const fundedFacade = () =>
     Effect.gen(function* () {
       const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         genesisMints: [nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress)],
-        blockProducer: immediateBlockProducer(),
+        blockProducer: V9.immediateBlockProducer(),
       });
       const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
       const pending = controllablePendingService();

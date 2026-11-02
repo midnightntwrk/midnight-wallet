@@ -30,7 +30,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { makeSimulatorProvingServiceEffect } from '@midnightntwrk/wallet-sdk-capabilities/proving';
-import { Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, Either, Scope, Stream, SubscriptionRef } from 'effect';
@@ -92,7 +92,7 @@ const walletWithOneGeneratingDustCoin = Effect.gen(function* () {
   const keyStore = createUnshieldedKeystore({ kind: 'schnorr', secret: getDustSeed('00'.repeat(31) + '01') });
   const dustSecretKey = ledger.DustSecretKey.fromSeed(keyStore.getSecretKey());
   const scope = yield* Scope.Scope;
-  const simulator = yield* Simulator.init({ networkId: NETWORK });
+  const simulator = yield* V9.Simulator.init({ networkId: NETWORK });
 
   const variant = new V2Builder()
     .withTransactionType<ledger.ProofErasedTransaction>()

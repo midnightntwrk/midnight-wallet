@@ -19,15 +19,19 @@
  *   boundary (`ShieldedWallet.ts`), and kept apart from both so that neither has to import the other to speak the same
  *   API. Nothing here knows how many variants are running: a state emission arrives already bound to the capabilities
  *   of the variant that produced it, and everything below that binding is plain data.
+ *
+ *   Nor does anything here name a ledger version. The data it speaks is declared in `types/ShieldedWalletTypes.ts`, which
+ *   both variants are stated in, and a variant's own core state travels sealed, readable only by that variant.
  */
-import type * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
   type NetworkId,
   type ProtocolState,
-  ProtocolVersion,
+  type ProtocolVersion,
   type SyncProgress,
+  type TokenType,
   type UnprovenTx,
+  VariantState,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type ShieldedAddress,
@@ -35,44 +39,18 @@ import {
   type ShieldedEncryptionPublicKey,
 } from '@midnightntwrk/wallet-sdk-address-format';
 import type { ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import type { V9UnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import { type Duration } from 'effect';
 import type * as rx from 'rxjs';
-import { type CoreWallet as V1CoreWallet } from './v1/CoreWallet.js';
+import { type CoinsAndBalancesCapability, type KeysCapability } from './types/ShieldedWalletCapabilities.js';
 import {
   type AvailableCoin,
-  type CoinsAndBalancesCapability,
+  type BatchUpdatesConfig,
+  type IndexerClientConnection,
   type PendingCoin,
   type ReservedCoin,
-} from './v2/CoinsAndBalances.js';
-import { type CoreWallet } from './v2/index.js';
-import { type KeysCapability } from './v2/Keys.js';
-import { type SerializationCapability } from './v2/Serialization.js';
-import { type BatchUpdatesConfig, type IndexerClientConnection } from './v2/Sync.js';
-import { type TokenTransfer } from './v2/Transacting.js';
-import { type ShieldedHistoryStorage, type TransactionHistoryService } from './v2/TransactionHistory.js';
-
-export type ShieldedWalletCapabilities<TSerialized = string> = {
-  serialization: SerializationCapability<CoreWallet, null, TSerialized>;
-  coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
-  keys: KeysCapability<CoreWallet>;
-};
-
-export type ShieldedWalletServices = {
-  transactionHistory: TransactionHistoryService;
-};
-
-/**
- * A transaction that has been proven but not yet bound.
- *
- * @remarks
- *   Owned by the proving capability, which is what produces one, and re-exported here so the name stays where callers
- *   already reach for it. The shielded wallet neither builds nor consumes one itself.
- */
-export type { V9UnboundTransaction };
-
-/** The core state of whichever shielded variant produced an emission. */
-export type ShieldedCoreState = V1CoreWallet | CoreWallet;
+  type ShieldedHistoryStorage,
+  type TokenTransfer,
+} from './types/ShieldedWalletTypes.js';
 
 /**
  * Everything a state emission projects, already bound to the variant that produced it.
@@ -84,7 +62,8 @@ export type ShieldedCoreState = V1CoreWallet | CoreWallet;
  *   nothing left to mis-pair, and everything below is version-agnostic plain data.
  */
 type ShieldedProjections<TSerialized> = Readonly<{
-  balances: () => Record<ledger.RawTokenType, bigint>;
+  progress: () => SyncProgress.SyncProgress;
+  balances: () => Record<TokenType, bigint>;
   totalCoins: () => readonly (AvailableCoin | PendingCoin)[];
   availableCoins: () => readonly AvailableCoin[];
   pendingCoins: () => readonly PendingCoin[];
@@ -96,26 +75,43 @@ type ShieldedProjections<TSerialized> = Readonly<{
   serialize: () => TSerialized;
 }>;
 
-/** The capability set a variant exposes for reading and serializing its own state. */
-type ShieldedStateCapabilities<TState, TSerialized> = Readonly<{
-  serialization: SerializationCapability<TState, null, TSerialized>;
-  coinsAndBalances: CoinsAndBalancesCapability<TState>;
-  keys: KeysCapability<TState>;
+/**
+ * What a variant reads its own state through: the part of its capability set the wallet state projects, and no more.
+ *
+ * @remarks
+ *   Coins, balances and keys are read through the contracts both variants share (`types/ShieldedWalletCapabilities.ts`).
+ *   Serialization is each variant's own, because its deserialization fails with that variant's errors, so only the
+ *   `serialize` half is asked for here.
+ */
+type ShieldedStateReaders<TState, TSerialized> = Readonly<{
+  serialization: Readonly<{ serialize(state: TState): TSerialized }>;
+  coinsAndBalances: Readonly<
+    Pick<
+      CoinsAndBalancesCapability<TState>,
+      'getAvailableBalances' | 'getTotalCoins' | 'getAvailableCoins' | 'getPendingCoins' | 'getReservedCoins'
+    >
+  >;
+  keys: Readonly<KeysCapability<TState>>;
 }>;
 
-export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.FinalizedTransaction> {
+export class ShieldedWalletState<TSerialized = string> {
   /**
    * Wraps a state emission with the capabilities of the variant that produced it.
    *
    * @remarks
    *   Call this inside a branch that has narrowed on the emission's `variantTag`, so `variant` and `state` are known to
-   *   belong together. It is generic over the state type precisely so that pairing is checked.
+   *   belong together. It is generic over the state type precisely so that pairing is checked. The state itself is
+   *   sealed under that tag, so the producing variant is the only one that can read it back.
    */
-  static readonly fromVariant = <TState, TSerialized = string>(
-    variant: ShieldedStateCapabilities<TState, TSerialized>,
+  static readonly fromVariant = <
+    TState extends Readonly<{ progress: SyncProgress.SyncProgress }>,
+    TSerialized = string,
+  >(
+    variant: ShieldedStateReaders<TState, TSerialized>,
     state: ProtocolState.ProtocolState<TState>,
   ): ShieldedWalletState<TSerialized> =>
-    new ShieldedWalletState<TSerialized>(state.version, state.state as ShieldedCoreState, {
+    new ShieldedWalletState<TSerialized>(state.version, VariantState.seal(state.variantTag, state.state), {
+      progress: () => state.state.progress,
       balances: () => variant.coinsAndBalances.getAvailableBalances(state.state),
       totalCoins: () => variant.coinsAndBalances.getTotalCoins(state.state),
       availableCoins: () => variant.coinsAndBalances.getAvailableCoins(state.state),
@@ -128,10 +124,19 @@ export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.Fi
     });
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
-  readonly state: ShieldedCoreState;
+
+  /**
+   * The producing variant's own state, sealed.
+   *
+   * @remarks
+   *   It is made of that variant's ledger version's objects, so only that variant reads it: `coreStateOf` from the `/v1`
+   *   or `/v2` subpath hands it over when that variant produced this emission, and nothing otherwise.
+   */
+  readonly state: VariantState;
+
   readonly #projections: ShieldedProjections<TSerialized>;
 
-  get balances(): Record<ledger.RawTokenType, bigint> {
+  get balances(): Record<TokenType, bigint> {
     return this.#projections.balances();
   }
 
@@ -168,12 +173,12 @@ export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.Fi
   }
 
   get progress(): SyncProgress.SyncProgress {
-    return this.state.progress;
+    return this.#projections.progress();
   }
 
   constructor(
     protocolVersion: ProtocolVersion.ProtocolVersion,
-    state: ShieldedCoreState,
+    state: VariantState,
     projections: ShieldedProjections<TSerialized>,
   ) {
     this.protocolVersion = protocolVersion;
@@ -196,8 +201,8 @@ export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.Fi
  */
 export type ShieldedBalancingResult = UnprovenTx | undefined;
 
-export type ShieldedWalletAPI<TKeys = never, TTransaction = ledger.FinalizedTransaction, TSerialized = string> = {
-  readonly state: rx.Observable<ShieldedWalletState<TSerialized, TTransaction>>;
+export type ShieldedWalletAPI<TKeys = never, TSerialized = string> = {
+  readonly state: rx.Observable<ShieldedWalletState<TSerialized>>;
 
   /**
    * Starts background synchronization from the given ledger keys, and keeps them for every variant that follows.
@@ -269,14 +274,14 @@ export type ShieldedWalletAPI<TKeys = never, TTransaction = ledger.FinalizedTran
    * @returns The unproven swap offer.
    */
   initSwap(
-    desiredInputs: Record<ledger.RawTokenType, bigint>,
+    desiredInputs: Record<TokenType, bigint>,
     desiredOutputs: readonly TokenTransfer[],
     ttl?: Date,
   ): Promise<UnprovenTx>;
 
   serializeState(): Promise<TSerialized>;
 
-  waitForSyncedState(allowedGap?: bigint): Promise<ShieldedWalletState<TSerialized, TTransaction>>;
+  waitForSyncedState(allowedGap?: bigint): Promise<ShieldedWalletState<TSerialized>>;
 
   getAddress(): Promise<ShieldedAddress>;
 
@@ -284,15 +289,6 @@ export type ShieldedWalletAPI<TKeys = never, TTransaction = ledger.FinalizedTran
 
   stop(): Promise<void>;
 };
-
-/**
- * The protocol version a ledger-v9-native chain hands over at.
- *
- * @deprecated Use {@link ProtocolVersion.V9NativeForkVersion} from `@midnightntwrk/wallet-sdk-abstractions` (or the
- *   umbrella package) — the value is a property of the chain, not of the shielded wallet, and lives with the version
- *   type now. This alias is the same value and will be removed in a later release.
- */
-export const V9_NATIVE_FORK_VERSION: ProtocolVersion.ProtocolVersion = ProtocolVersion.V9NativeForkVersion;
 
 /**
  * The configuration a default {@link ShieldedWallet} is built from.

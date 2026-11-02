@@ -33,12 +33,7 @@ import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import {
-  ForkSimulator,
-  V8,
-  genesisStrictness,
-  immediateBlockProducer,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { ForkSimulator, V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type CanAssign, type Equal, type Expect } from '@midnightntwrk/wallet-sdk-utilities/types';
 import { Effect, Option, type Scope, Stream, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
@@ -158,7 +153,7 @@ const snapshotBelowTheBoundary = (coins: readonly MintedCoin[]): Effect.Effect<S
       forkVersion,
       v8Version: v8Version,
       v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-      v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+      v9BlockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
       translator: translationStub({ networkId, coins }),
     });
 
@@ -266,7 +261,7 @@ describe('a shielded wallet restored from a snapshot written at or past the boun
         protocolVersion: v9Version,
         genesisBlockNumber: forkBlock,
         genesisTime,
-        blockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        blockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
         coins,
       });
 
@@ -328,7 +323,7 @@ describe('a shielded wallet restored from a snapshot the V2 variant wrote before
         forkVersion,
         v8Version: v8Version,
         v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-        v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        v9BlockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
         translator: translationStub({ networkId, coins }),
       });
       const host = yield* makeForkWallet({ v8: fork.v8, v9: fork.awaitV9(), networkId, forkVersion, seed });

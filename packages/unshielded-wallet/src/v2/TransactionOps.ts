@@ -15,7 +15,7 @@ import { Imbalances } from '@midnightntwrk/wallet-sdk-capabilities';
 import type { V9UnboundTransaction as UnboundTransaction } from '@midnightntwrk/wallet-sdk-capabilities/proving';
 import type * as ledger from '@midnightntwrk/ledger-v9';
 import { addressFromKey, SignatureEnabled } from '@midnightntwrk/ledger-v9';
-import { assertSignatureMatchesKey } from '../SchemeConsistency.js';
+import { assertSignatureMatchesKey } from './SchemeConsistency.js';
 import { TransactingError, type WalletError } from './WalletError.js';
 
 /**

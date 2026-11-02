@@ -16,12 +16,9 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnightntwrk/wallet-sdk-address-format';
+import { type KeysCapability } from '../types/ShieldedWalletCapabilities.js';
 
-export type KeysCapability<TState> = {
-  getCoinPublicKey(state: TState): ShieldedCoinPublicKey;
-  getEncryptionPublicKey(state: TState): ShieldedEncryptionPublicKey;
-  getAddress(state: TState): ShieldedAddress;
-};
+export type { KeysCapability } from '../types/ShieldedWalletCapabilities.js';
 
 export const makeDefaultKeysCapability = (): KeysCapability<CoreWallet> => {
   return {

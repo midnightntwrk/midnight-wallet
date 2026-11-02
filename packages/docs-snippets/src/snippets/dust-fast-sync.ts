@@ -14,23 +14,20 @@ import {
   WalletSeeds,
   type DefaultConfiguration,
   type DefaultDustConfiguration,
-  asV8DustParameters,
+  dustVariantConfigurations,
   CustomForkingDustWallet,
   InMemoryTransactionHistoryStorage,
   WalletEntrySchema,
   WalletFacade,
   ShieldedWallet,
   createKeystore,
-  makeEventLessSyncCapability,
-  makeEventLessSyncService,
   PublicKey,
   UnshieldedWallet,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk';
 import { makeIndexerChainVersionProbe } from '@midnightntwrk/wallet-sdk/capabilities';
 import { V1Builder } from '@midnightntwrk/wallet-sdk/dust/v1';
-import { Migration, V2Builder } from '@midnightntwrk/wallet-sdk/dust/v2';
-import * as ledger from '@midnightntwrk/wallet-sdk/ledger/v9';
+import { SyncService, V2Builder } from '@midnightntwrk/wallet-sdk/dust/v2';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
 
@@ -80,29 +77,27 @@ const configuration: DefaultConfiguration = {
 // (`makeCrossLedgerMigration`) and every pass after that reads projections; on a chain past the fork since genesis —
 // like the one this runs against — the probe starts it on the projections side from the first block.
 const fastSyncDustWallet = (config: DefaultDustConfiguration) => {
-  const dustParameters = config.dustParameters ?? ledger.LedgerParameters.initialParameters().dust;
+  // The configured `dustParameters` are plain rates, and each variant is handed its own ledger version's parameters
+  // made from them, since a ledger object belongs to the WASM module that made it; the migration is valued against
+  // the same rates.
+  const { v1, v2, migration } = dustVariantConfigurations(config);
   const withProbe: DefaultDustConfiguration = {
     ...config,
     chainVersionProbe: config.chainVersionProbe ?? makeIndexerChainVersionProbe(config),
   };
   return CustomForkingDustWallet(
     withProbe,
-    {
-      builder: new V1Builder().withDefaults(),
-      // `dustParameters` is a WASM object of whichever ledger produced it, so the ledger-v8 variant is handed the
-      // ledger-v8 rebuild of the same rates rather than the object itself.
-      configuration: { ...config, dustParameters: asV8DustParameters(dustParameters) },
-    },
+    { builder: new V1Builder().withDefaults(), configuration: v1 },
     {
       builder: new V2Builder()
         .withDefaults()
-        .withSync(makeEventLessSyncService, makeEventLessSyncCapability)
+        .withSync(SyncService.makeEventLessSyncService, SyncService.makeEventLessSyncCapability)
         // Restated because `withSync` drops it: a sync service names the key material it is started with, so choosing
         // one un-chooses the derivation from a seed the defaults had set. This service is started with the same
         // `DustSecretKey` the default one is, and a start from a seed needs the derivation by name on both sides.
         .withStartAuxDefaults()
-        .withMigration(() => Migration.makeCrossLedgerMigration({ dustParameters })),
-      configuration: { ...config, anonymityLevel: 7 },
+        .withMigration(migration),
+      configuration: { ...v2, anonymityLevel: 7 },
     },
   );
 };

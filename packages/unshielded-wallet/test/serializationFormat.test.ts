@@ -16,7 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../src/v1/CoreWallet.js';
 import { createKeystore, PublicKey } from '../src/v1/KeyStore.js';
 import { makeDefaultV1SerializationCapability } from '../src/v1/Serialization.js';
-import { createKeystore as createV2Keystore, PublicKey as V2PublicKey } from '../src/KeyStore.js';
+import { createKeystore as createV2Keystore, PublicKey as V2PublicKey } from '../src/v2/KeyStore.js';
 import { CoreWallet as V2CoreWallet } from '../src/v2/CoreWallet.js';
 import { makeDefaultV2SerializationCapability } from '../src/v2/Serialization.js';
 

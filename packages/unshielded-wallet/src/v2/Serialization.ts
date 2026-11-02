@@ -13,7 +13,7 @@
 import { Either, pipe, Schema } from 'effect';
 import { type SignatureKind } from '@midnightntwrk/ledger-v9';
 import { type WalletError } from './WalletError.js';
-import { assertKeyAddressConsistency } from '../SchemeConsistency.js';
+import { assertKeyAddressConsistency } from './SchemeConsistency.js';
 import { CoreWallet } from './CoreWallet.js';
 import { SNAPSHOT_FORMAT_VERSION, V1_SNAPSHOT_FORMAT_VERSION, upgradeSnapshotV1ToV2 } from '../SnapshotFormat.js';
 // Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.

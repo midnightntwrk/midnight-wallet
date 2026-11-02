@@ -48,13 +48,7 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnightntwrk/wallet-sdk-address-format';
-import {
-  ForkSimulator,
-  V8,
-  genesisStrictness,
-  immediateBlockProducer,
-  translatorFromAsync,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { ForkSimulator, V8, translatorFromAsync, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { translateLedgerState } from '@midnightntwrk/wallet-sdk-state-translation';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
@@ -125,7 +119,7 @@ const baseConfig = {
   // Genesis strictness throughout: the transfer below pays no fees, which a fee-enforcing chain would reject for
   // reasons that have nothing to do with the fork.
   v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-  v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+  v9BlockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
   translator: translatorFromAsync(translateLedgerState),
 };
 

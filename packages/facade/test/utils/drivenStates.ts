@@ -31,6 +31,7 @@ import type * as rx from 'rxjs';
 /** A shielded wallet's own state, restated at another protocol version. */
 export const shieldedAt = (state: ShieldedWalletState, version: ProtocolVersion.ProtocolVersion): ShieldedWalletState =>
   new ShieldedWalletState(version, state.state, {
+    progress: () => state.progress,
     balances: () => state.balances,
     totalCoins: () => state.totalCoins,
     availableCoins: () => state.availableCoins,
@@ -48,17 +49,20 @@ export const unshieldedAt = (
   version: ProtocolVersion.ProtocolVersion,
 ): UnshieldedWalletState =>
   new UnshieldedWalletState(version, state.state, {
+    progress: () => state.progress,
     balances: () => state.balances,
     totalCoins: () => state.totalCoins,
     availableCoins: () => state.availableCoins,
     pendingCoins: () => state.pendingCoins,
     address: () => state.address,
+    verifyingKey: () => state.verifyingKey,
     serialize: () => state.serialize(),
   });
 
 /** A dust wallet's own state, restated at another protocol version. */
 export const dustAt = (state: DustWalletState, version: ProtocolVersion.ProtocolVersion): DustWalletState =>
   new DustWalletState(version, state.state, {
+    progress: () => state.progress,
     totalCoins: () => state.totalCoins,
     availableCoins: () => state.availableCoins,
     pendingCoins: () => state.pendingCoins,

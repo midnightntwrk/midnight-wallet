@@ -35,10 +35,10 @@ export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
     wallet.state.pipe(
       rx.throttleTime(5_000),
       rx.tap((state) => {
-        const applyGap = state.state.progress.highestTransactionId - state.state.progress.appliedId;
+        const applyGap = state.progress.highestTransactionId - state.progress.appliedId;
         logger.info(`Wallet behind by ${applyGap} indices`);
       }),
-      rx.filter((state) => state.state.progress.isStrictlyComplete()),
+      rx.filter((state) => state.progress.isStrictlyComplete()),
     ),
   );
 

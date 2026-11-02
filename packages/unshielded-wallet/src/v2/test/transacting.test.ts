@@ -19,7 +19,7 @@ import { ArrayOps, DateOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilitie
 import { Array as Arr, Cause, Effect, Exit, HashMap, Option, pipe, Record as Rec } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { createKeystore, PublicKey } from '../../KeyStore.js';
+import { createKeystore, PublicKey } from '../KeyStore.js';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultKeysCapability } from '../Keys.js';

@@ -23,17 +23,14 @@ import {
   Imbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
 } from '@midnightntwrk/wallet-sdk-capabilities';
-import { type ShieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { ShieldedCostModel, TransactionImbalances } from './TransactionImbalances.js';
 import { TransactionOps } from './TransactionOps.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 
-export interface TokenTransfer {
-  readonly amount: bigint;
-  readonly type: ledger.RawTokenType;
-  readonly receiverAddress: ShieldedAddress;
-}
+import { type TokenTransfer } from '../types/ShieldedWalletTypes.js';
+
+export type { TokenTransfer } from '../types/ShieldedWalletTypes.js';
 
 export type BalancingResult = ledger.UnprovenTransaction | undefined;
 

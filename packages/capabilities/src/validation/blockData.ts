@@ -10,14 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { LedgerParameters as V8LedgerParameters } from '@midnight-ntwrk/ledger-v8';
-import { LedgerParameters } from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { BlockHash } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Effect, Either, pipe } from 'effect';
+import { Effect, Either, Option, pipe } from 'effect';
 import { LedgerParametersCodec } from '../codecs/index.js';
-import { getLastBlock, type Simulator } from '../simulation/index.js';
+import { V9 } from '../simulation/index.js';
 import type { AnyLedgerParameters, BlockData } from './validationService.js';
 
 export type BlockDataFetcher = () => Promise<BlockData<AnyLedgerParameters>>;
@@ -47,19 +47,23 @@ export const defaultLedgerParametersCodecs = (
             {
               sinceVersion: ProtocolVersion.MinSupportedVersion,
               codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) =>
-                V8LedgerParameters.deserialize(bytes),
+                ledgerV8.LedgerParameters.deserialize(bytes),
               ),
             },
             {
               sinceVersion: forkVersion,
-              codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) => LedgerParameters.deserialize(bytes)),
+              codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) =>
+                ledgerV9.LedgerParameters.deserialize(bytes),
+              ),
             },
           ]
         : // A chain whose boundary is at or below the minimum supported version has no ledger-v8 epoch to register for.
           [
             {
               sinceVersion: ProtocolVersion.MinSupportedVersion,
-              codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) => LedgerParameters.deserialize(bytes)),
+              codec: LedgerParametersCodec.fromDeserializer((bytes: Uint8Array) =>
+                ledgerV9.LedgerParameters.deserialize(bytes),
+              ),
             },
           ],
     ),
@@ -112,6 +116,31 @@ export const blockDataFrom = (
   );
 
 /**
+ * Reads block data whose parameters arrived untyped back as one ledger version's.
+ *
+ * @remarks
+ *   A wallet that priced a fee hands back the block it priced against with its parameters as `unknown`, because they are
+ *   the pricing variant's own object and its API names no ledger version. Validation needs them typed, so this asks the
+ *   object itself which ledger version made it; parameters of neither are refused rather than passed on, and the caller
+ *   validates against a block it fetches.
+ * @example
+ *   ```typescript
+ *   const { blockData } = await dustWallet.balanceTransactions([transaction], ttl);
+ *   // Some with the parameters typed as either ledger version's; none when they are neither.
+ *   const priced = withLedgerParameters(blockData);
+ *   ```;
+ *
+ * @param blockData The block data, with parameters of unknown type.
+ * @returns The same block data with its parameters typed, or nothing when they are neither ledger version's.
+ */
+export const withLedgerParameters = (blockData: BlockData<unknown>): Option.Option<BlockData<AnyLedgerParameters>> => {
+  const { ledgerParameters } = blockData;
+  return ledgerParameters instanceof ledgerV9.LedgerParameters || ledgerParameters instanceof ledgerV8.LedgerParameters
+    ? Option.some({ ...blockData, ledgerParameters })
+    : Option.none();
+};
+
+/**
  * Builds a `BlockDataFetcher` that queries the indexer over HTTP for the latest block.
  *
  * Each call opens a short-lived query client, runs the `BlockHash` query, and closes the client.
@@ -132,15 +161,15 @@ export const makeDefaultBlockDataFetcher = (config: DefaultBlockDataFetcherConfi
 };
 
 /**
- * Builds a `BlockDataFetcher` backed by a {@link Simulator}. Returns the simulator's latest block, using its
+ * Builds a `BlockDataFetcher` backed by a {@link V9.Simulator}. Returns the simulator's latest block, using its
  * `currentTime` for the timestamp (so fast-forwarded simulator clocks are respected).
  */
-export const makeSimulatorBlockDataFetcher = (simulator: Simulator): BlockDataFetcher => {
+export const makeSimulatorBlockDataFetcher = (simulator: V9.Simulator): BlockDataFetcher => {
   return () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const state = yield* simulator.getLatestState();
-        const lastBlock = getLastBlock(state);
+        const lastBlock = V9.getLastBlock(state);
         if (!lastBlock) throw new Error('Simulator has not produced any block yet.');
         return {
           hash: lastBlock.hash,

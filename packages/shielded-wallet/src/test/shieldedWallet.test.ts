@@ -21,11 +21,7 @@ import {
 import { Effect, Scope, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { type ShieldedKeysByEpoch } from '../ShieldedWallet.js';
-import {
-  type DefaultShieldedConfiguration,
-  type ShieldedWalletAPI,
-  V9_NATIVE_FORK_VERSION,
-} from '../ShieldedWalletAPI.js';
+import { type DefaultShieldedConfiguration, type ShieldedWalletAPI } from '../ShieldedWalletAPI.js';
 import { CustomShieldedWallet, type CustomizedShieldedWallet } from '../SingleVariantShieldedWallet.js';
 import { TransactionHistory, V2Builder, V2Tag } from '../v2/index.js';
 
@@ -254,11 +250,5 @@ describe('CustomShieldedWallet building a transaction with a TTL', () => {
       ['transferTransaction', undefined],
       ['initSwap', undefined],
     ]);
-  });
-});
-
-describe('V9_NATIVE_FORK_VERSION', () => {
-  it('is the same value as ProtocolVersion.V9NativeForkVersion, kept only so existing imports keep working', () => {
-    expect(V9_NATIVE_FORK_VERSION).toBe(ProtocolVersion.V9NativeForkVersion);
   });
 });

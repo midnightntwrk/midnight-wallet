@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Simulator, immediateBlockProducer } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { type WalletFacade, WellFormedError } from '../src/index.js';
@@ -51,7 +51,7 @@ const setupFacade = (): Effect.Effect<
 > =>
   Effect.gen(function* () {
     const keys = deriveWalletKeys(SEED, NETWORK_ID);
-    const simulator = yield* Simulator.init({ blockProducer: immediateBlockProducer() });
+    const simulator = yield* V9.Simulator.init({ blockProducer: V9.immediateBlockProducer() });
     const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
     const factories = createSimulatorWalletFactories(config);
     return yield* makeSimulatorFacade(config, keys, factories);

@@ -24,7 +24,7 @@ import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   type UnprovenTx,
   WalletSeed,
   WalletTransaction,
@@ -56,7 +56,7 @@ import {
   CoreWallet,
 } from './v2/index.js';
 import { type WalletSyncUpdate } from './v2/Sync.js';
-import { type TokenTransfer } from './v2/Transacting.js';
+import { type TokenTransfer } from './types/ShieldedWalletTypes.js';
 import { type WalletError } from './v2/WalletError.js';
 
 export type CustomizedShieldedWallet<
@@ -64,7 +64,7 @@ export type CustomizedShieldedWallet<
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-> = ShieldedWalletAPI<Readonly<{ v9: TStartAux }>, TTransaction, TSerialized> &
+> = ShieldedWalletAPI<Readonly<{ v9: TStartAux }>, TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
 export interface CustomizedShieldedWalletClass<
@@ -355,7 +355,7 @@ export function CustomShieldedWallet<
       return this.runtime
         .dispatch<
           ShieldedBalancingResult,
-          WalletError | StartMaterial.MissingStartAuxError | ProtocolVersionMismatchError
+          WalletError | StartMaterial.MissingStartAuxError | WalletTransactionUnwrapError
         >({
           [V2Tag]: (v2) =>
             Effect.all([
@@ -420,9 +420,7 @@ export function CustomShieldedWallet<
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<TSerialized>> {
-      return rx.firstValueFrom(
-        this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
-      );
+      return rx.firstValueFrom(this.state.pipe(rx.filter((state) => state.progress.isCompleteWithin(allowedGap))));
     }
 
     /**

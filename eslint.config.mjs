@@ -11,6 +11,7 @@ export const packageConfig = (...cfgs) => {
   return [
     ...defaultConfig.map((config) => ({ ...config, files: defaultFiles })),
     globalIgnores,
+    walletApiContracts,
     ...cfgs.map((cfg) => {
       const containsRules = cfg?.rules !== undefined;
       return containsRules ? { ...cfg, files: cfg.files ?? defaultFiles } : cfg;
@@ -22,6 +23,31 @@ const globalIgnores = includeIgnoreFile(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.gitignore'),
   'From gitignore',
 );
+
+// A wallet package's API is fulfilled by its variants on both sides of a protocol boundary, so it names neither ledger
+// version: a type from one would describe only that side. Nor does it reach into a variant's tree, whose types are
+// stated in that variant's ledger version. The variants import the API's types and the capability contracts they
+// share from `src/types`, not the other way round.
+const walletApiContracts = {
+  files: ['src/*WalletAPI.ts', 'src/types/**/*.ts'],
+  rules: {
+    'no-restricted-imports': [
+      'error',
+      {
+        patterns: [
+          {
+            group: ['@midnight-ntwrk/ledger-*', '@midnightntwrk/ledger-*'],
+            message: "A wallet API spans both ledger versions: use an SDK-owned type, not one ledger version's.",
+          },
+          {
+            group: ['./v1/*', './v2/*', '../v1/*', '../v2/*'],
+            message: 'A wallet API spans both variants: declare the type here, and have the variants use it.',
+          },
+        ],
+      },
+    ],
+  },
+};
 
 //TODO: consider defining config for config JS files too (for consistent formatting at the very least)
 export const defaultConfig = defineConfig(

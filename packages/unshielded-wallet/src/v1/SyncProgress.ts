@@ -12,30 +12,14 @@
 // limitations under the License.
 import { IndexerLiveness } from '@midnightntwrk/wallet-sdk-abstractions';
 
-export interface SyncProgressData {
-  readonly appliedId: bigint;
-  readonly highestTransactionId: bigint;
-  readonly isConnected: boolean;
-  /**
-   * The outcome of cross-checking the indexer's reported position against a node's finalized head.
-   *
-   * @remarks
-   *   `highestTransactionId` is a value the indexer reports about itself, so on its own it cannot distinguish a caught-up
-   *   indexer from a stalled or withholding one. This field carries an independent verdict, and
-   *   {@link SyncProgressOps.isCompleteWithin} refuses to report completion while that verdict blocks it — see
-   *   {@link IndexerLiveness.blocksSyncCompletion} for which verdicts do.
-   */
-  readonly indexerLiveness: IndexerLiveness.IndexerLiveness;
-}
+export type { SyncProgressData, SyncProgressOps } from '../types/UnshieldedWalletTypes.js';
+import {
+  type SyncProgress as UnshieldedSyncProgress,
+  type SyncProgressData,
+  type SyncProgressOps,
+} from '../types/UnshieldedWalletTypes.js';
 
-export interface SyncProgressOps {
-  isCompleteWithin(data: SyncProgressData, maxGap?: bigint): boolean;
-}
-
-export interface SyncProgress extends SyncProgressData {
-  isStrictlyComplete(): boolean;
-  isCompleteWithin(maxGap?: bigint): boolean;
-}
+export type SyncProgress = UnshieldedSyncProgress;
 
 export const SyncProgress: SyncProgressOps = {
   isCompleteWithin(data: SyncProgressData, maxGap: bigint = 50n): boolean {

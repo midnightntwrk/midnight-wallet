@@ -17,7 +17,8 @@ import { Buffer } from 'buffer';
 import { Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { LedgerParametersCodec } from '../../codecs/index.js';
-import { blockDataFrom, defaultLedgerParametersCodecs } from '../blockData.js';
+import { blockDataFrom, defaultLedgerParametersCodecs, withLedgerParameters } from '../blockData.js';
+import { type BlockData } from '../validationService.js';
 
 const V9_NATIVE = ProtocolVersion.ProtocolVersion(2_000_000n);
 
@@ -96,5 +97,32 @@ describe('Reading a block the indexer served', () => {
     const error = Option.getOrThrow(Either.getLeft(blockDataFrom(codecs, blockAt(2_000_000, v8Hex))));
 
     expect(error).toBeInstanceOf(LedgerParametersCodec.LedgerParametersDecodeError);
+  });
+});
+
+describe('Block data whose parameters arrived untyped', () => {
+  /** Block data as a wallet hands it back after pricing a fee: its parameters typed as nothing in particular. */
+  const pricedWith = (ledgerParameters: unknown): BlockData<unknown> => ({
+    hash: '00'.repeat(32),
+    height: 7,
+    protocolVersion: 2_000_000,
+    ledgerParameters,
+    timestamp: new Date(1752487200000),
+  });
+
+  it("is read back with ledger-v9's parameters when ledger-v9 priced it", () => {
+    const parameters = LedgerParameters.initialParameters();
+
+    expect(Option.getOrUndefined(withLedgerParameters(pricedWith(parameters)))?.ledgerParameters).toBe(parameters);
+  });
+
+  it("is read back with ledger-v8's parameters when ledger-v8 priced it", () => {
+    const parameters = V8LedgerParameters.initialParameters();
+
+    expect(Option.getOrUndefined(withLedgerParameters(pricedWith(parameters)))?.ledgerParameters).toBe(parameters);
+  });
+
+  it("is not read back when its parameters are neither ledger version's, so a caller fetches its own", () => {
+    expect(withLedgerParameters(pricedWith({ nightDustRatio: 5_000_000_000n }))).toStrictEqual(Option.none());
   });
 });

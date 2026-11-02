@@ -46,13 +46,7 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnightntwrk/wallet-sdk-address-format';
-import {
-  ForkSimulator,
-  type Simulator,
-  V8,
-  genesisStrictness,
-  immediateBlockProducer,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { ForkSimulator, V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Duration, Effect, Option, Stream, SubscriptionRef, pipe, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
@@ -102,7 +96,7 @@ const seed = Buffer.alloc(32, 42);
 const otherSeed = Buffer.alloc(32, 43);
 
 const v8Producer = () => V8.immediateBlockProducer(undefined, V8.genesisStrictness);
-const v9Producer = () => immediateBlockProducer(undefined, genesisStrictness);
+const v9Producer = () => V9.immediateBlockProducer(undefined, V9.genesisStrictness);
 
 const walletRecipient = () => {
   const keys = ledgerV9.ZswapSecretKeys.fromSeed(seed);
@@ -200,7 +194,7 @@ const settled = (wallet: ForkWallet) =>
 
 /** A wallet that has synced the ledger-v8 chain, crossed the boundary, and the chain it now reads. */
 type Crossing = Readonly<{
-  v9: Simulator;
+  v9: V9.Simulator;
   wallet: ForkWallet;
   migration: CapturedMigration;
   /**
@@ -494,7 +488,7 @@ describe('a migration that leaves the wallet’s state behind', () => {
    *   Dropped here so the error is observable, because the error is the point.
    */
   const syncUntilItFails = (
-    chain: Simulator,
+    chain: V9.Simulator,
     wallet: CoreWallet,
     secretKeys: ledgerV9.ZswapSecretKeys,
   ): Effect.Effect<void, WalletError.WalletError, Scope.Scope> =>

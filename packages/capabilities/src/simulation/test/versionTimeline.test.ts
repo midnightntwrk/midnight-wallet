@@ -33,7 +33,7 @@ import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, type Scope } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { Simulator, immediateBlockProducer, genesisStrictness, V8 } from '../index.js';
+import { V8, V9 } from '../index.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -74,11 +74,11 @@ const v9Fixture: TimelineFixture = {
     Effect.gen(function* () {
       const keys = ledgerV9.ZswapSecretKeys.fromSeed(seed(1));
       const tokenType = ledgerV9.shieldedToken().raw;
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         ...(config.protocolVersion !== undefined ? { protocolVersion: config.protocolVersion } : {}),
         networkId,
         genesisMints: [{ type: 'shielded', tokenType, amount: 1_000_000n, recipient: keys }],
-        blockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        blockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
       });
       const makeTransfer = () => {
         const coin = ledgerV9.createShieldedCoinInfo(tokenType, 100n);

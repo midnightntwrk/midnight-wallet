@@ -20,7 +20,7 @@ import type { WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import type { WalletFacade } from '@midnightntwrk/wallet-sdk-facade';
 import * as rx from 'rxjs';
 import { logger } from './logger.js';
-import { type DustSnapshotModel, dustSnapshotPath, snapshotPath } from './dust-sync.js';
+import { type DustSnapshotModel, snapshotPath } from './dust-sync.js';
 
 /**
  * What a snapshot is taken from: the shielded and dust sub-wallets' serializers, and the dust sync model that produced
@@ -86,20 +86,6 @@ export const readSnapshot = async (
   return snapshot;
 };
 
-const dustSnapshotModels: readonly DustSnapshotModel[] = ['events', 'projections', 'custom'];
-
-/**
- * The files earlier layouts saved one wallet to: one per sub-wallet, with the dust file namespaced by model, or, before
- * that, not namespaced at all. Nothing reads them any more, but a cache carried between runs would otherwise keep them
- * forever.
- */
-const legacySnapshotPaths = (syncCacheDir: string, filename: string): readonly string[] => [
-  `${syncCacheDir}/shielded-${filename}`,
-  `${syncCacheDir}/unshielded-${filename}`,
-  `${syncCacheDir}/dust-${filename}`,
-  ...dustSnapshotModels.map((model) => dustSnapshotPath(syncCacheDir, filename, model)),
-];
-
 /**
  * Serializes the shielded and dust sub-wallet states into one snapshot in `syncCacheDir`, keyed by `filename` and by
  * the dust sync model that produced the dust state.
@@ -139,19 +125,6 @@ export const saveState = async (walletInit: SnapshotSource, syncCacheDir: string
     throw err;
   }
   logger.info(`State written to ${target}`);
-
-  // Best effort: the snapshot is already in place, and a leftover file is never read, so failing to remove one must not
-  // fail the save.
-  const removals = await Promise.allSettled(
-    legacySnapshotPaths(syncCacheDir, filename).map((p) => fsAsync.rm(p, { force: true })),
-  );
-  removals.forEach((removal) => {
-    if (removal.status === 'rejected') {
-      logger.warn(
-        `Could not remove an earlier snapshot file: ${removal.reason instanceof Error ? removal.reason.message : String(removal.reason)}`,
-      );
-    }
-  });
 };
 
 /**

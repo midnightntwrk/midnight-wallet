@@ -13,7 +13,7 @@
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as otherLedger from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Simulator as OtherSimulator, V8, getLastBlockEvents } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, Option, Stream, identity } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
@@ -82,7 +82,7 @@ beforeAll(async () => {
   expect(eventHex.length).toBe(MINT_COUNT);
 
   otherLedgerEventHex = await Effect.gen(function* () {
-    const simulator = yield* OtherSimulator.init({
+    const simulator = yield* V9.Simulator.init({
       genesisMints: [
         {
           type: 'shielded' as const,
@@ -93,7 +93,7 @@ beforeAll(async () => {
       ] as never,
     });
     const otherState = Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
-    return hex(getLastBlockEvents(otherState)[0].serialize());
+    return hex(V9.getLastBlockEvents(otherState)[0].serialize());
   }).pipe(Effect.scoped, Effect.runPromise);
 
   expect(() => ledger.Event.deserialize(Buffer.from(otherLedgerEventHex, 'hex'))).toThrow();

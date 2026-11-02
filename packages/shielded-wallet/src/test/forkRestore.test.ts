@@ -37,13 +37,7 @@ import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, type ProtocolState, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import {
-  ForkSimulator,
-  type Simulator,
-  V8,
-  genesisStrictness,
-  immediateBlockProducer,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { ForkSimulator, V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Deferred, Effect, Option, Schedule, Stream, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
@@ -59,7 +53,14 @@ import {
   v8Payment,
   translationStub,
 } from './translationStub.js';
-import { awaitingCoinHashes, coinIndices, coinValues, totalValue, treeSize } from './forkWalletAssertions.js';
+import {
+  awaitingCoinHashes,
+  coinIndices,
+  coinValues,
+  eitherCoreStateOf,
+  totalValue,
+  treeSize,
+} from './forkWalletAssertions.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -136,7 +137,7 @@ const payingChainFor = (coins: readonly MintedCoin[], chain: V8.Simulator) =>
       protocolVersion: v9Version,
       genesisBlockNumber: forkBlock,
       genesisTime,
-      blockProducer: immediateBlockProducer(undefined, genesisStrictness),
+      blockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
       coins,
     });
   });
@@ -211,8 +212,8 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       const state = yield* restoredState(restored);
       // Not merely on the right side of the boundary: at the version the snapshot recorded, which is where the chain was.
       expect(state.protocolVersion).toBe(Option.getOrThrow(peekProtocolVersion(snapshot)));
-      expect(coinValues(state.state)).toEqual([...walletValues]);
-      expect(state.state.publicKeys).toStrictEqual(synced.state.publicKeys);
+      expect(coinValues(eitherCoreStateOf(state))).toEqual([...walletValues]);
+      expect(eitherCoreStateOf(state).publicKeys).toStrictEqual(synced.state.publicKeys);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('restores a snapshot written at or past the boundary onto the V2 variant, with what it held', async () =>
@@ -247,8 +248,8 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
       const state = yield* restoredState(restored);
       // Not merely on the right side of the boundary: at the version the snapshot recorded, which is where the chain was.
       expect(state.protocolVersion).toBe(Option.getOrThrow(peekProtocolVersion(snapshot)));
-      expect(coinValues(state.state)).toEqual([...walletValues]);
-      expect(state.state.publicKeys).toStrictEqual(synced.state.publicKeys);
+      expect(coinValues(eitherCoreStateOf(state))).toEqual([...walletValues]);
+      expect(eitherCoreStateOf(state).publicKeys).toStrictEqual(synced.state.publicKeys);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('restores a snapshot written mid-crossing, and completes it on resume', async () =>
@@ -259,13 +260,13 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
         forkBlock,
         forkVersion,
         v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-        v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        v9BlockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
         translator: translationStub({ networkId, coins }),
       });
       // Withholding the ledger-v9 source is what holds the wallet in the mid-crossing window: the hand-over happens,
       // and the first sync update that would complete it cannot arrive, because nothing is answering yet. That is the
       // second a snapshot may land in.
-      const answering = yield* Deferred.make<Simulator>();
+      const answering = yield* Deferred.make<V9.Simulator>();
 
       const wallet = yield* makeForkWallet({
         v8: fork.v8,
@@ -340,10 +341,10 @@ describe('a shielded wallet restoring a snapshot through the class it was starte
         forkBlock,
         forkVersion: v9Version,
         v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-        v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+        v9BlockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
         translator: translationStub({ networkId, coins }),
       });
-      const answering = yield* Deferred.make<Simulator>();
+      const answering = yield* Deferred.make<V9.Simulator>();
 
       const wallet = yield* makeForkWallet({
         v8: fork.v8,

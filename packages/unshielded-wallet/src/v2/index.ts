@@ -23,8 +23,10 @@ export * as Migration from './Migration.js';
 export * as CoinsAndBalances from './CoinsAndBalances.js';
 export * as Keys from './Keys.js';
 export * from './RunningV2Variant.js';
-export * as Simulator from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+// This variant's own ledger version's simulator, not the whole simulation entry, which holds both twins.
+export { V9 as Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 export * as WalletError from './WalletError.js';
 export * from './CoreWallet.js';
+export * from './KeyStore.js';
 export * from './TransactionOps.js';
 export * as UnshieldedState from './UnshieldedState.js';

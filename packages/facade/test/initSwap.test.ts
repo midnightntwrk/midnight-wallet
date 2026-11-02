@@ -13,7 +13,7 @@
 
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -59,10 +59,13 @@ const builtTransaction = (recipe: UnprovenTransactionRecipe): ledger.UnprovenTra
  * Boots a simulator with the given genesis funds, starts a maker facade, and runs `assert` against it. The facade is
  * torn down when the scope closes.
  */
-const runWithMaker = (genesisMints: [GenesisMint, ...GenesisMint[]], assert: (facade: WalletFacade) => Promise<void>) =>
+const runWithMaker = (
+  genesisMints: [V9.GenesisMint, ...V9.GenesisMint[]],
+  assert: (facade: WalletFacade) => Promise<void>,
+) =>
   Effect.gen(function* () {
     const keys = deriveWalletKeys(SEED, NETWORK_ID);
-    const simulator = yield* Simulator.init({ genesisMints, blockProducer: immediateBlockProducer() });
+    const simulator = yield* V9.Simulator.init({ genesisMints, blockProducer: V9.immediateBlockProducer() });
     const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
     const factories = createSimulatorWalletFactories(config);
     const facade = yield* makeSimulatorFacade(config, keys, factories);

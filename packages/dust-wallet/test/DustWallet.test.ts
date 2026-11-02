@@ -37,13 +37,7 @@ import {
   V2Builder,
   type V2Variant,
 } from '../src/v2/index.js';
-import {
-  Simulator,
-  type SimulatorState,
-  getCurrentBlockNumber,
-  getLastBlock,
-  getLastBlockResults,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { makeSimulatorSyncCapability, makeSimulatorSyncService, type SimulatorSyncUpdate } from '../src/v2/Sync.js';
 import {
   DustTransactionHistoryEntrySchema,
@@ -60,12 +54,12 @@ const SEED = '0000000000000000000000000000000000000000000000000000000000000001';
 const SEED_BOB = '0000000000000000000000000000000000000000000000000000000000000002';
 const NETWORK = 'undeployed';
 
-const getNightTokens = (state: SimulatorState, walletAddress: UserAddress) => {
+const getNightTokens = (state: V9.SimulatorState, walletAddress: UserAddress) => {
   const utxos = state.ledger.utxo.filter(walletAddress);
   return [...utxos].filter((utxo) => utxo.type === NIGHT_TOKEN_TYPE);
 };
 
-const getNightTokensWithMeta = (state: SimulatorState, walletAddress: UserAddress): Array<UtxoWithMeta> => {
+const getNightTokensWithMeta = (state: V9.SimulatorState, walletAddress: UserAddress): Array<UtxoWithMeta> => {
   const utxos = state.ledger.utxo.filter(walletAddress);
   const result: Array<UtxoWithMeta> = [];
   for (const utxo of utxos) {
@@ -84,7 +78,7 @@ const toTxTime = (secs: number | bigint): Date => new Date(Number(secs) * 1000);
 // Get the "current time" for transaction creation.
 // This should be 1 second ahead of the last block's timestamp to represent
 // the expected time of the next block (matching the old lastTxNumber + 1 behavior).
-const getCurrentTime = (simulatorState: SimulatorState) => DateOps.addSeconds(simulatorState.currentTime, 1);
+const getCurrentTime = (simulatorState: V9.SimulatorState) => DateOps.addSeconds(simulatorState.currentTime, 1);
 
 // Waits until the wallet has synced and processed the block at the given number.
 // appliedIndex semantics: next block to process = blockNumber + 1 after processing.
@@ -111,7 +105,7 @@ describe('DustWallet', () => {
   let walletVariant: WalletVariant;
   let wallet: RunningWallet;
   let stateRef: SubscriptionRef.SubscriptionRef<CoreWallet>;
-  let simulator: Simulator;
+  let simulator: V9.Simulator;
   let keyStore: UnshieldedKeystore;
   let submissionService: Submission.SubmissionServiceEffect<ProofErasedTransaction>;
   const provingService = makeSimulatorProvingServiceEffect();
@@ -143,8 +137,8 @@ describe('DustWallet', () => {
       const transaction = yield* provingService.prove(dustGenerationTransaction);
       const result = yield* submissionService.submitTransaction(transaction, 'InBlock');
       const latestSimulatorState = yield* simulator.getLatestState();
-      expect(result.blockHeight).toBe(getCurrentBlockNumber(latestSimulatorState));
-      expect(getLastBlockResults(latestSimulatorState)[0]?.type).toBe('success');
+      expect(result.blockHeight).toBe(V9.getCurrentBlockNumber(latestSimulatorState));
+      expect(V9.getLastBlockResults(latestSimulatorState)[0]?.type).toBe('success');
       return { submission: result, transaction };
     });
   };
@@ -185,8 +179,8 @@ describe('DustWallet', () => {
       const transaction = yield* provingService.prove(dustGenerationTransaction);
       const result = yield* submissionService.submitTransaction(transaction, 'InBlock');
       const latestSimulatorState = yield* simulator.getLatestState();
-      expect(result.blockHeight).toBe(getCurrentBlockNumber(latestSimulatorState));
-      expect(getLastBlockResults(latestSimulatorState)[0]?.type).toBe('success');
+      expect(result.blockHeight).toBe(V9.getCurrentBlockNumber(latestSimulatorState));
+      expect(V9.getLastBlockResults(latestSimulatorState)[0]?.type).toBe('success');
       return result;
     });
   };
@@ -198,7 +192,7 @@ describe('DustWallet', () => {
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
       const scope = yield* Scope.make();
 
-      simulator = yield* Simulator.init({ networkId: NETWORK }).pipe(Effect.provideService(Scope.Scope, scope));
+      simulator = yield* V9.Simulator.init({ networkId: NETWORK }).pipe(Effect.provideService(Scope.Scope, scope));
 
       walletVariant = new V2Builder()
         .withTransactionType<ProofErasedTransaction>()
@@ -250,8 +244,8 @@ describe('DustWallet', () => {
 
       yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
       const simulatorState = yield* simulator.getLatestState();
-      expect(getCurrentBlockNumber(simulatorState)).toBe(1n);
-      expect(getLastBlockResults(simulatorState)[0]?.type).toBe('success');
+      expect(V9.getCurrentBlockNumber(simulatorState)).toBe(1n);
+      expect(V9.getLastBlockResults(simulatorState)[0]?.type).toBe('success');
 
       const nightTokens = getNightTokens(yield* simulator.getLatestState(), walletAddress);
       yield* waitForBlock(stateRef, 1);
@@ -269,7 +263,7 @@ describe('DustWallet', () => {
 
       // reward & claim Night tokens
       yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
-      expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
+      expect(V9.getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
       yield* waitForBlock(stateRef, 1n);
 
       let latestState = yield* SubscriptionRef.get(stateRef);
@@ -299,7 +293,7 @@ describe('DustWallet', () => {
 
       // reward & claim Night tokens
       yield* Effect.repeatN(simulator.rewardNight(nightVerifyingKey, singleAwardTokens), awardUtxos - 1);
-      const maxBlockNr = getCurrentBlockNumber(yield* simulator.getLatestState());
+      const maxBlockNr = V9.getCurrentBlockNumber(yield* simulator.getLatestState());
       yield* waitForBlock(stateRef, maxBlockNr);
 
       const simulatorState = yield* simulator.getLatestState();
@@ -327,7 +321,7 @@ describe('DustWallet', () => {
 
       // reward & claim Night tokens
       yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
-      expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
+      expect(V9.getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
       yield* waitForBlock(stateRef, 1);
 
       const simulatorState = yield* simulator.getLatestState();
@@ -361,7 +355,7 @@ describe('DustWallet', () => {
 
       // reward & claim Night tokens
       yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
-      expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
+      expect(V9.getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
       yield* waitForBlock(stateRef, 1);
 
       let simulatorState = yield* simulator.getLatestState();
@@ -375,9 +369,9 @@ describe('DustWallet', () => {
       // get more night tokens with a different amount
       const newNightTokenAmount = 160_000_000_000n;
       yield* simulator.rewardNight(nightVerifyingKey, newNightTokenAmount);
-      expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(3n);
+      expect(V9.getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(3n);
       simulatorState = yield* simulator.getLatestState();
-      expect(getLastBlockResults(simulatorState)[0]?.type).toBe('success');
+      expect(V9.getLastBlockResults(simulatorState)[0]?.type).toBe('success');
       yield* waitForBlock(stateRef, 3);
 
       const walletState = yield* SubscriptionRef.get(stateRef);
@@ -427,7 +421,7 @@ describe('DustWallet', () => {
       yield* waitForBlock(stateRef, 4);
 
       simulatorState = yield* simulator.getLatestState();
-      expect(getLastBlockResults(simulatorState)[0]?.type).toBe('success');
+      expect(V9.getLastBlockResults(simulatorState)[0]?.type).toBe('success');
 
       const latestState = yield* SubscriptionRef.get(stateRef);
       const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoins(latestState);
@@ -452,7 +446,7 @@ describe('DustWallet', () => {
 
       // reward & claim Night tokens
       yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
-      expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
+      expect(V9.getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
       yield* waitForBlock(stateRef, 1);
 
       let simulatorState = yield* simulator.getLatestState();
@@ -463,16 +457,16 @@ describe('DustWallet', () => {
       const newNightTokenAmount = 140_000_000_000n;
       yield* simulator.rewardNight(nightVerifyingKey, newNightTokenAmount);
       simulatorState = yield* simulator.getLatestState();
-      expect(getCurrentBlockNumber(simulatorState)).toBe(2n);
-      expect(getLastBlockResults(simulatorState)[0]?.type).toBe('success');
+      expect(V9.getCurrentBlockNumber(simulatorState)).toBe(2n);
+      expect(V9.getLastBlockResults(simulatorState)[0]?.type).toBe('success');
       yield* waitForBlock(stateRef, 2);
 
       // get one more night token with a different amount
       const newNightTokenAmount2 = 160_000_000_000n;
       yield* simulator.rewardNight(nightVerifyingKey, newNightTokenAmount2);
-      expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(3n);
+      expect(V9.getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(3n);
       simulatorState = yield* simulator.getLatestState();
-      expect(getLastBlockResults(simulatorState)[0]?.type).toBe('success');
+      expect(V9.getLastBlockResults(simulatorState)[0]?.type).toBe('success');
       yield* waitForBlock(stateRef, 3);
 
       // verify we have 3 Night tokens
@@ -487,7 +481,7 @@ describe('DustWallet', () => {
       const walletState = yield* SubscriptionRef.get(stateRef);
       const availableCoins = walletVariant.coinsAndBalances.getAvailableCoins(
         walletState,
-        toTxTime(getCurrentBlockNumber(simulatorState)),
+        toTxTime(V9.getCurrentBlockNumber(simulatorState)),
       );
       expect(availableCoins.length).toBe(2);
 
@@ -508,7 +502,7 @@ describe('DustWallet', () => {
 
       // reward & claim Night tokens
       yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
-      expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
+      expect(V9.getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
       yield* waitForBlock(stateRef, 1);
 
       let simulatorState = yield* simulator.getLatestState();
@@ -595,9 +589,9 @@ describe('DustWallet', () => {
 
       walletState = yield* SubscriptionRef.get(stateRef);
       simulatorState = yield* simulator.getLatestState();
-      expect(getLastBlockResults(simulatorState)[0]?.type).toBe('success');
+      expect(V9.getLastBlockResults(simulatorState)[0]?.type).toBe('success');
 
-      const lastBlock = getLastBlock(simulatorState);
+      const lastBlock = V9.getLastBlock(simulatorState);
       const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoins(walletState, lastBlock.timestamp);
       expect(newAvailableCoins.length).toBe(1);
       expect(newAvailableCoins[0].dtime).toStrictEqual(lastBlock.timestamp);
@@ -649,7 +643,7 @@ describe('DustWallet', () => {
 
       // reward & claim Night tokens
       yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
-      expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
+      expect(V9.getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
       yield* waitForBlock(stateRef, 1);
 
       let simulatorState = yield* simulator.getLatestState();
@@ -713,7 +707,7 @@ describe('DustWallet', () => {
 
       // reward 5 night tokens — registering all at once produces 2 dust coins (guaranteed + fallible)
       yield* Effect.repeatN(simulator.rewardNight(nightVerifyingKey, singleAwardTokens), awardCount - 1);
-      const maxBlockNr = getCurrentBlockNumber(yield* simulator.getLatestState());
+      const maxBlockNr = V9.getCurrentBlockNumber(yield* simulator.getLatestState());
       yield* waitForBlock(stateRef, maxBlockNr);
 
       let simulatorState = yield* simulator.getLatestState();
@@ -792,7 +786,7 @@ describe('DustWallet', () => {
       const awardCount = 5;
 
       yield* Effect.repeatN(simulator.rewardNight(nightVerifyingKey, singleAwardTokens), awardCount - 1);
-      const maxBlockNr = getCurrentBlockNumber(yield* simulator.getLatestState());
+      const maxBlockNr = V9.getCurrentBlockNumber(yield* simulator.getLatestState());
       yield* waitForBlock(stateRef, maxBlockNr);
 
       let simulatorState = yield* simulator.getLatestState();
@@ -862,7 +856,7 @@ describe('DustWallet', () => {
 
       // reward & claim Night tokens
       yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
-      expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
+      expect(V9.getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
       yield* waitForBlock(stateRef, 1);
 
       let simulatorState = yield* simulator.getLatestState();
@@ -899,7 +893,7 @@ describe('DustWallet', () => {
       walletState = yield* SubscriptionRef.get(stateRef);
       simulatorState = yield* simulator.getLatestState();
 
-      const lastBlock = getLastBlock(simulatorState);
+      const lastBlock = V9.getLastBlock(simulatorState);
       const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoins(walletState, lastBlock.timestamp);
       expect(newAvailableCoins.length).toBe(1);
       expect(newAvailableCoins[0].dtime).toStrictEqual(lastBlock.timestamp);

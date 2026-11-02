@@ -34,7 +34,14 @@ import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { V1Tag } from '../v1/RunningV1Variant.js';
 import { V2Tag } from '../v2/RunningV2Variant.js';
-import { bookedUtxosOf, type CarriedUtxo, type ForkWallet, makeForkWallet, utxosOf } from './forkHarness.js';
+import {
+  bookedUtxosOf,
+  type CarriedUtxo,
+  type ForkWallet,
+  makeForkWallet,
+  utxosOf,
+  eitherCoreStateOf,
+} from './forkHarness.js';
 import { timelineTokenType, timelineTransaction, v2Identity } from './forkTimeline.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
@@ -126,16 +133,16 @@ const keepsTheCoveredBookingAndReleasesTheOther = (wallet: ForkWallet['unshielde
   Effect.gen(function* () {
     const restored = yield* publicState(wallet);
     // The premise, asserted rather than assumed: both bookings survived the snapshot, leaving nothing available.
-    expect(valuesOf(bookedUtxosOf(restored.state))).toEqual([100n, 200n]);
-    expect(valuesOf(utxosOf(restored.state))).toEqual([]);
+    expect(valuesOf(bookedUtxosOf(eitherCoreStateOf(restored)))).toEqual([100n, 200n]);
+    expect(valuesOf(utxosOf(eitherCoreStateOf(restored)))).toEqual([]);
 
-    const covered = bookedUtxosOf(restored.state).find((utxo) => utxo.value === 200n);
+    const covered = bookedUtxosOf(eitherCoreStateOf(restored)).find((utxo) => utxo.value === 200n);
     expect(covered).toBeDefined();
     yield* Effect.promise(() => wallet.releaseRestoredPending([idOf(covered!)]));
     const reconciled = yield* publicState(wallet);
 
-    expect(valuesOf(bookedUtxosOf(reconciled.state))).toEqual([200n]);
-    expect(valuesOf(utxosOf(reconciled.state))).toEqual([100n]);
+    expect(valuesOf(bookedUtxosOf(eitherCoreStateOf(reconciled)))).toEqual([200n]);
+    expect(valuesOf(utxosOf(eitherCoreStateOf(reconciled)))).toEqual([100n]);
   });
 
 describe('an unshielded wallet reconciling the bookings it restored from a snapshot', () => {

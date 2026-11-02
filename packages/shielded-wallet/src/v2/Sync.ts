@@ -30,7 +30,7 @@ import {
 } from 'effect';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { CoreWallet } from './CoreWallet.js';
-import { type Simulator, type SimulatorState, getLastBlock } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { BlockHash, ZswapEventTip, ZswapEvents } from '@midnightntwrk/wallet-sdk-indexer-client';
 import {
   ConnectionHelper,
@@ -41,6 +41,7 @@ import { OutOfOrderSyncUpdateError, SyncWalletError, type WalletError } from './
 import { WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { type BatchUpdatesConfig, type IndexerClientConnection } from '../types/ShieldedWalletTypes.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
@@ -165,38 +166,7 @@ export const annotateVersion = (
     onSome: (version) => CoreWallet.withProtocolVersion(state, version),
   });
 
-export type IndexerClientConnection = {
-  indexerHttpUrl: string;
-  indexerWsUrl?: string;
-  keepAlive?: number;
-  /** Cap on the in-flight event queue between the WebSocket push and the apply loop. Default: 10000. */
-  bufferSize?: number;
-  /** In-flight count at which the disposed WS subscription is reopened. Default: 100. */
-  resumeThreshold?: number;
-};
-
-export type BatchUpdatesConfig = {
-  /**
-   * Maximum number of events to collect into a single batch before emitting.
-   *
-   * @default 10
-   */
-  readonly size?: number;
-  /**
-   * Maximum time in milliseconds to wait for a full batch before emitting a partial one. Controls the `groupedWithin`
-   * timeout — lower values mean more responsive (but smaller) batches when events arrive slowly.
-   *
-   * @default 1
-   */
-  readonly timeout?: number;
-  /**
-   * Minimum delay in milliseconds injected between consecutive batches. Prevents the sync stream from saturating
-   * downstream consumers when many events are available at once. Set to 0 to disable spacing entirely.
-   *
-   * @default 4
-   */
-  readonly spacing?: number;
-};
+export type { BatchUpdatesConfig, IndexerClientConnection } from '../types/ShieldedWalletTypes.js';
 
 /**
  * How often the sync source re-asks the chain which protocol version it is on.
@@ -805,17 +775,17 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
 };
 
 export type SimulatorSyncConfiguration = {
-  simulator: Simulator;
+  simulator: V9.Simulator;
 };
 
 /** What the simulator-backed sync source emits: the simulator's state, from which the pending blocks are read. */
 export type SimulatorSyncUpdate = {
   _tag: 'Events';
-  update: SimulatorState;
+  update: V9.SimulatorState;
   secretKeys: ledger.ZswapSecretKeys;
 };
 export const SimulatorSyncUpdate = {
-  create: (update: SimulatorState, secretKeys: ledger.ZswapSecretKeys): SimulatorSyncUpdate => {
+  create: (update: V9.SimulatorState, secretKeys: ledger.ZswapSecretKeys): SimulatorSyncUpdate => {
     return {
       _tag: 'Events',
       update,
@@ -838,7 +808,7 @@ export const makeSimulatorSyncService = (
         Stream.concat(config.simulator.state$),
         Stream.filterMap((simulatorState) =>
           pipe(
-            Option.fromNullable(getLastBlock(simulatorState)),
+            Option.fromNullable(V9.getLastBlock(simulatorState)),
             Option.map((lastBlock) => ({ simulatorState, blockNumber: lastBlock.number })),
           ),
         ),
@@ -870,7 +840,7 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
       // and its carried state first meet, and a block that turns out to hold nothing must not skip it.
       const state = CoreWallet.completeCrossing(wallet, secretKeys);
 
-      const lastBlock = getLastBlock(simulatorState);
+      const lastBlock = V9.getLastBlock(simulatorState);
       if (lastBlock === undefined) {
         return [state, noChanges(state)];
       }

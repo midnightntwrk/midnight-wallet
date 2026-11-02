@@ -17,7 +17,7 @@ be searched leaves the start as it is without it. It concerns the dust wallet on
 still read ledger-v8, where the coins they hold from it are found.
 
 The search is a binary search over the dust event subscription, which shares its ids with zswap events, so it steps
-over the gaps they leave. It is exported as `findDustTimelineStart`, returning a `DustTimelineStart` (the cursor and the
-version of the first ledger-v9 dust event). A `CustomForkingDustWallet` composition opts in by setting the new
-`ForkingDustConfiguration.dustTimelineStartProbe` (a `DustTimelineStartProbe`), which a fresh start asks before
-`chainVersionProbe`. Purely additive.
+over the gaps they leave. It is exported from `/v2` as `SyncService.findDustTimelineStart`, returning a
+`DustWalletTypes.DustTimelineStart` (the cursor and the version of the first ledger-v9 dust event). A
+`CustomForkingDustWallet` composition opts in by setting the new `ForkingDustConfiguration.dustTimelineStartProbe` (a
+`DustTimelineStartProbe`), which a fresh start asks before `chainVersionProbe`. Purely additive.

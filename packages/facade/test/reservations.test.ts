@@ -30,7 +30,7 @@ import {
   V2Builder as UnshieldedV2Builder,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
 import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
-import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
@@ -58,7 +58,7 @@ const utxoKey = (coin: { utxo: { intentHash: string; outputNo: number } }): stri
 const nightGenesisMint = (
   verifyingKey: ledger.SignatureVerifyingKey,
   userAddress: ledger.UserAddress,
-): GenesisMint => ({
+): V9.GenesisMint => ({
   type: 'unshielded',
   tokenType: NIGHT,
   amount: tokenValue(100_000n),
@@ -89,9 +89,9 @@ describe('Reservations taken while balancing', () => {
   const fundedFacade = () =>
     Effect.gen(function* () {
       const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         genesisMints: [nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress)],
-        blockProducer: immediateBlockProducer(),
+        blockProducer: V9.immediateBlockProducer(),
       });
       const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
       const facade = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config));
@@ -208,9 +208,9 @@ describe('A balanced transaction that never gets proven', () => {
   it('leaves neither a booking nor the record that stood for it', () =>
     Effect.gen(function* () {
       const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         genesisMints: [nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress)],
-        blockProducer: immediateBlockProducer(),
+        blockProducer: V9.immediateBlockProducer(),
       });
       const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
       const facade = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config), {
@@ -257,12 +257,12 @@ describe('Balancing a transaction the caller already put its own coins into', ()
       // Two coins: one the caller's first transaction books, one left for the wallet to book when it balances the
       // caller's second. With a single coin there would be nothing to book and the comparison below would hold for
       // an empty record.
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         genesisMints: [
           nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress),
           nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress),
         ],
-        blockProducer: immediateBlockProducer(),
+        blockProducer: V9.immediateBlockProducer(),
       });
       const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
       const facade = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config));
@@ -338,12 +338,12 @@ describe('Bookings restored from a snapshot', () => {
     Effect.gen(function* () {
       const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
       // Two coins, so the previous process can book one for each of two transfers.
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         genesisMints: [
           nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress),
           nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress),
         ],
-        blockProducer: immediateBlockProducer(),
+        blockProducer: V9.immediateBlockProducer(),
       });
       const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
       const previous = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config));

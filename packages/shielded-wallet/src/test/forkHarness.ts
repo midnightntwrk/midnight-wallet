@@ -30,11 +30,7 @@ import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { type NetworkId, type ProtocolState, type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
-import {
-  type LedgerTranslationError,
-  type Simulator,
-  type V8,
-} from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { type LedgerTranslationError, type V8, type V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { type WalletRuntimeError } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { Deferred, Effect, FiberId, Option, Stream, pipe } from 'effect';
 import {
@@ -160,7 +156,7 @@ const noOpV2History: V2.TransactionHistory.TransactionHistoryService = {
 /** What the V2 variant is configured with: a source that does not exist yet. */
 type DeferredSourceConfiguration = Readonly<{
   networkId: NetworkId.NetworkId;
-  v9: Effect.Effect<Simulator, LedgerTranslationError>;
+  v9: Effect.Effect<V9.Simulator, LedgerTranslationError>;
 }>;
 
 /**
@@ -198,7 +194,7 @@ export type ForkWalletConfig = Readonly<{
    * It re-announces nothing: everything the wallet owned before the boundary is already in the tree its genesis block
    * holds, which is why a crossing wallet has to arrive holding its own state.
    */
-  v9: Effect.Effect<Simulator, LedgerTranslationError>;
+  v9: Effect.Effect<V9.Simulator, LedgerTranslationError>;
   networkId: NetworkId.NetworkId;
   /**
    * The version at which the V2 variant is registered.
