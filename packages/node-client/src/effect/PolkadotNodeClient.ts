@@ -133,9 +133,9 @@ export class PolkadotNodeClient implements NodeClient.Service {
    *   provider, so nothing it started keeps retrying.
    *
    *   An interrupt from outside abandons a handshake still in progress even when the caller is uninterruptible, because
-   *   the bounded wait runs in a child fiber that takes it. Once connected, the close and the release registration run
-   *   at the caller's status, so an uninterruptible caller still receives the client: the liveness reads rely on that
-   *   to cache every client they build.
+   *   the bounded wait runs in a child fiber that takes it. Once connected, the close runs at the caller's status and
+   *   the release is registered uninterruptibly, so an uninterruptible caller still receives the client: the liveness
+   *   reads rely on that to cache every client they build.
    * @example
    *   ```typescript
    *   const client = yield* PolkadotNodeClient.make({
@@ -155,7 +155,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
     const awaitApi = (provider: WsProvider) =>
       // `tryPromise` rather than `promise`: a rejected connection has to reach the error channel this method already
       // declares, instead of arriving as a defect that no `catchTag` can handle.
-      Effect.tryPromise(async () =>
+      Effect.tryPromise(() =>
         ApiPromise.create({
           // @ts-expect-error -- exactOptionalPropertyTypes cause an incompatibility here
           provider,
