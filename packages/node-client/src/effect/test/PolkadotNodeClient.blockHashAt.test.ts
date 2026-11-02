@@ -60,7 +60,7 @@ vi.mock('@polkadot/api', () => ({
   ApiPromise: {
     create: vi.fn(() => {
       mockApi.isConnected = true;
-      return mockApi;
+      return Promise.resolve(mockApi);
     }),
   },
   WsProvider: vi.fn(),
