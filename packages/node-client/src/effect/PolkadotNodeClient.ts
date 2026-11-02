@@ -56,9 +56,9 @@ const MAX_CONNECTED_PROBE_FAILURES = 3;
  * Clamps a duration to the largest delay `setTimeout` honours.
  *
  * @remarks
- *   A delay of 2^31 ms or more overflows and fires after about a millisecond, which turned a generous bound such as 30
- *   days into an instant failure on every connection attempt. A bound that large behaves as "still waiting" on any
- *   human timescale, so the clamp loses nothing.
+ *   A delay of 2^31 ms or more overflows and fires after about a millisecond, which would cut a generous bound such as 30
+ *   days short at once. A bound that large behaves as "still waiting" on any human timescale, so the clamp loses
+ *   nothing.
  */
 const toTimerMillis = (duration: Duration.Duration): number => Math.min(Duration.toMillis(duration), 2 ** 31 - 1);
 
@@ -84,10 +84,10 @@ const isEmptyHash = (hash: string): boolean => /^(0x)?0*$/.test(hash);
  *   drift.
  *
  *   The wait shares the caller's bound. A node that completes the handshake and then goes half-open never acknowledges
- *   the close frame, and only ws's own 30-second close timeout would end the wait — from inside an uninterruptible
- *   acquire, in `make()`'s case, which no outer deadline can cut short. A finite bound is therefore honoured here too:
- *   the wait is abandoned once it elapses, the socket is left CLOSING for ws to finish, and a stale `isConnected` costs
- *   one failed readiness probe. An infinite bound waits for the event, as an unbounded caller expects.
+ *   the close frame, and only ws's own 30-second close timeout would end the wait. A finite bound is therefore honoured
+ *   here too: the wait is abandoned once it elapses, the socket is left CLOSING for ws to finish, and a stale
+ *   `isConnected` costs one failed readiness probe. An infinite bound waits for the event, as an unbounded caller
+ *   expects.
  * @param api - The api whose socket to release.
  * @param bound - How long to wait for the close to be acknowledged; `Duration.infinity` waits indefinitely.
  * @returns A promise that settles once the socket has closed or the bound has elapsed.
@@ -127,66 +127,47 @@ export class PolkadotNodeClient implements NodeClient.Service {
   ): Effect.Effect<PolkadotNodeClient, NodeClientError.NodeClientError, Scope.Scope> {
     const config = makeConfig(configInput);
 
-    // A finite `reconnectionTimeout` is a caller asking to be told when the node cannot be reached. Honouring it here as
-    // well as in `ensureConnection` is what makes that possible: left to its defaults, `WsProvider` retries on a timer
-    // and `ApiPromise.create` waits for a connection that may never arrive.
-    const isBounded = Duration.isFinite(config.reconnectionTimeout);
-
-    // The bound is enforced inside the promise rather than with `Effect.timeout`, because `Effect.acquireRelease` runs
-    // its acquire uninterruptibly — deliberately, so a resource cannot be acquired and then leaked — and an
-    // uninterruptible region ignores an outer timeout. Racing here also lets the half-open provider be closed, which an
-    // interruption could not do.
-    const connect = Effect.tryPromise(async () => {
+    const connect = Effect.suspend(() => {
       // `autoConnectMs` keeps its default deliberately. Passing `false` does not mean "connect once without retrying" —
       // it means "do not connect at all", leaving `ApiPromise.create` waiting on a connection nobody started. The bound
       // below is what limits the wait; the provider's own retry behaviour is left alone.
       const provider = new WsProvider(config.nodeURL.toString());
 
-      const created = ApiPromise.create({
-        // @ts-expect-error -- exactOptionalPropertyTypes cause an incompatibility here
-        provider,
-        // Off for bounded callers too. With it on, `create` returns `isReadyOrError`, which rejects on the provider's
-        // first `error` event — any socket error, such as a node restarting — although the provider would have retried
-        // and connected moments later. A bounded caller then failed within milliseconds and never used the window it
-        // asked for. The race below is the bound; the provider's retries fill the window, as `ensureConnection`'s do.
-        throwOnConnect: false,
-        noInitWarn: true,
-      });
-
-      const timeoutMillis = toTimerMillis(config.reconnectionTimeout);
-      // Held so the timer can be cleared once the race settles. Left armed, it keeps Node's event loop alive, so a
-      // short-lived process that reads once cannot exit until it fires.
-      const timer: { handle?: ReturnType<typeof setTimeout> } = {};
-
-      const api = isBounded
-        ? await Promise.race([
-            created,
-            new Promise<never>((_resolve, reject) => {
-              timer.handle = setTimeout(() => reject(new Error(`Timed out after ${timeoutMillis}ms`)), timeoutMillis);
-            }),
-          ])
-            .catch(async (error: unknown) => {
-              // Without this the provider keeps retrying on its timer for the lifetime of the process.
-              await provider.disconnect().catch(() => undefined);
-              throw error;
-            })
-            .finally(() => {
-              if (timer.handle !== undefined) clearTimeout(timer.handle);
-            })
-        : await created;
-
-      // Disconnect immediately after loading metadata to avoid keeping the WebSocket open.
-      // The health-check timer (10s interval) and timeout handler (5s interval) are cleared on disconnect.
-      // Metadata and type registry remain cached in memory for subsequent on-demand connections. The wait for the
-      // close, and its bound, are explained on `disconnectAndAwaitClose`.
-      await disconnectAndAwaitClose(api, config.reconnectionTimeout);
-      return api;
-    });
-
-    return Effect.acquireRelease(
       // `tryPromise` rather than `promise`: a rejected connection has to reach the error channel this method already
       // declares, instead of arriving as a defect that no `catchTag` can handle.
-      connect.pipe(
+      return Effect.tryPromise(async () =>
+        ApiPromise.create({
+          // @ts-expect-error -- exactOptionalPropertyTypes cause an incompatibility here
+          provider,
+          // Off for bounded callers too. With it on, `create` returns `isReadyOrError`, which rejects on the provider's
+          // first `error` event — any socket error, such as a node restarting — although the provider would have
+          // retried and connected moments later. A bounded caller then failed within milliseconds and never used the
+          // window it asked for. The timeout below is the bound; the provider's retries fill the window, as
+          // `ensureConnection`'s do.
+          throwOnConnect: false,
+          noInitWarn: true,
+        }),
+      ).pipe(
+        // A finite `reconnectionTimeout` is a caller asking to be told when the node cannot be reached: left to its
+        // defaults, `WsProvider` retries on a timer and `ApiPromise.create` waits for a connection that may never
+        // arrive. The default, `Duration.infinity`, never elapses, which is what submission relies on.
+        Effect.timeout(config.reconnectionTimeout),
+        // Disconnect immediately after loading metadata to avoid keeping the WebSocket open.
+        // The health-check timer (10s interval) and timeout handler (5s interval) are cleared on disconnect.
+        // Metadata and type registry remain cached in memory for subsequent on-demand connections. The wait for the
+        // close, and its bound, are explained on `disconnectAndAwaitClose`.
+        Effect.tap((api) => Effect.promise(() => disconnectAndAwaitClose(api, config.reconnectionTimeout))),
+        // An attempt that ends without an api, failed or interrupted, leaves the scope nothing to release, so it
+        // disconnects the provider itself. Nothing else stops the provider retrying for the lifetime of the process.
+        Effect.onError(() => Effect.tryPromise(() => provider.disconnect()).pipe(Effect.ignore)),
+      );
+    });
+
+    // Connecting stays interruptible, unlike an `Effect.acquireRelease` acquire: a node that never answers would
+    // otherwise hold whoever waits for this client, and whoever tries to close them, forever. The mask registers the
+    // release in the same uninterruptible step that receives the api, so a connected api cannot escape it.
+    return Effect.uninterruptibleMask((restore) =>
+      restore(connect).pipe(
         Effect.mapError(
           (cause) =>
             new NodeClientError.ConnectionError({
@@ -194,8 +175,8 @@ export class PolkadotNodeClient implements NodeClient.Service {
               cause,
             }),
         ),
+        Effect.tap((api) => Effect.addFinalizer(() => Effect.promise(() => api.disconnect()))),
       ),
-      (api) => Effect.promise(() => api.disconnect()),
     ).pipe(
       Effect.flatMap((api) =>
         SynchronizedRef.make(0).pipe(Effect.map((activeCalls) => new PolkadotNodeClient(config, api, activeCalls))),

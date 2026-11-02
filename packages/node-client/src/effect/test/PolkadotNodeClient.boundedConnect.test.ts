@@ -111,11 +111,11 @@ describe('PolkadotNodeClient.make', () => {
 
   it('should not fire a finite timeout early when it exceeds the 32-bit setTimeout range', async () => {
     // `setTimeout` with a delay of 2^31ms or more overflows and fires after ~1ms, so a generous bound such as 30 days
-    // failed every connection attempt instantly — the opposite of what the caller asked for. The delay is clamped to
-    // the largest value `setTimeout` honours; a bound that large behaves as "still waiting" on any human timescale.
+    // failed every connection attempt instantly — the opposite of what the caller asked for. Effect's clock treats a
+    // delay beyond what `setTimeout` honours as one that never elapses; a bound that large behaves as "still waiting"
+    // on any human timescale.
     //
-    // Observed by polling rather than racing, for the same reason as the unbounded test below: the acquire is
-    // uninterruptible, so a race against it can never resolve.
+    // Observed by polling rather than racing, for the same reason as the unbounded test below.
     const stillRunning = await Effect.runPromise(
       Effect.gen(function* () {
         const fiber = yield* Effect.forkDaemon(makeClient(Duration.days(30)));
@@ -131,13 +131,12 @@ describe('PolkadotNodeClient.make', () => {
     // Submission passes no timeout and relies on retrying until the node appears. That behaviour must not change: this
     // asserts the absence of a bound, which is the whole reason the bound is opt-in.
     //
-    // Forked and polled rather than raced against a timer: `Effect.acquireRelease` acquires uninterruptibly, so a race
-    // could never resolve and would report the runner's timeout instead of this property. Polling observes "has not
-    // settled" without needing to interrupt anything. The fibre is left running, which is the point of the test.
+    // Forked and polled rather than raced against a timer: polling observes "has not settled" without ending the
+    // attempt it observes. The fibre is left running, which is the point of the test.
     const stillRunning = await Effect.runPromise(
       Effect.gen(function* () {
-        // `forkDaemon`, not `fork`: a child fibre is interrupted when its parent completes, and
-        // interrupting an uninterruptible acquire would block the test forever.
+        // `forkDaemon`, not `fork`: a child fibre is interrupted when its parent completes, which would end the
+        // attempt this test means to leave running.
         const fiber = yield* Effect.forkDaemon(makeClient());
         yield* Effect.sleep(Duration.millis(200));
         return yield* Fiber.poll(fiber);
