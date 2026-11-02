@@ -14,11 +14,11 @@
  * Proving on ledger-v8.
  *
  * @remarks
- *   The ledger-v8 twin of the backends in `provingService.ts`: structurally the same three steps — obtain a proving
- *   provider, drive the transaction's own `prove` with that ledger version's cost model, report failures as a
- *   {@link ProvingError} — against a different ledger version's classes. It is the classes that make this a separate
- *   module: a ledger-v8 transaction handed ledger-v9's cost model fails at the wasm-bindgen boundary, and a
- *   proof-server request framed by ledger-v9 is not the request ledger-v8 would have sent.
+ *   The ledger-v8 twin of `v9ProvingService.ts`: structurally the same three steps — obtain a proving provider, drive the
+ *   transaction's own `prove` with that ledger version's cost model, report failures as a {@link ProvingError} — against
+ *   a different ledger version's classes. It is the classes that make this a separate module: a ledger-v8 transaction
+ *   handed ledger-v9's cost model fails at the wasm-bindgen boundary, and a proof-server request framed by ledger-v9 is
+ *   not the request ledger-v8 would have sent.
  */
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { HttpProverClient, WasmProver } from '@midnightntwrk/wallet-sdk-prover-client/effect';
@@ -31,6 +31,7 @@ import { Effect, pipe } from 'effect';
 import {
   ProvingError,
   type ProvingFailure,
+  type ProvingService,
   type ProvingServiceEffect,
   type ServerProvingConfiguration,
   type WasmProvingConfiguration,
@@ -44,6 +45,9 @@ export type V8UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, l
 
 /** A proving backend written against ledger-v8. */
 export type V8ProvingServiceEffect = ProvingServiceEffect<V8UnboundTransaction, V8UnprovenTransaction>;
+
+/** The promise-facing surface of a {@link V8ProvingServiceEffect}. */
+export type V8ProvingService = ProvingService<V8UnboundTransaction, V8UnprovenTransaction>;
 
 /**
  * Drives a ledger-v8 transaction's proving with a low-level proving provider.
@@ -112,3 +116,41 @@ export const makeV8WasmProvingServiceEffect = (configuration?: WasmProvingConfig
     Effect.map((prover) => prover.asProvingProvider()),
     fromV8ProvingProviderEffect,
   );
+
+/**
+ * Erases the proofs of ledger-v8 transactions instead of proving them, for the in-memory simulator.
+ *
+ * @example
+ *   ```typescript
+ *   const proving = makeV8SimulatorProvingServiceEffect();
+ *   const proofErased = yield* proving.prove(unprovenTransaction);
+ *   yield* simulator.submitTransaction(proofErased);
+ *   ```;
+ *
+ * @returns A backend that hands back each ledger-v8 transaction proof-erased, which the simulator accepts.
+ */
+export const makeV8SimulatorProvingServiceEffect = (): ProvingServiceEffect<
+  ledger.ProofErasedTransaction,
+  V8UnprovenTransaction
+> => ({
+  prove: (transaction) => Effect.succeed(transaction.eraseProofs()),
+});
+
+/**
+ * The promise-facing surface of {@link makeV8SimulatorProvingServiceEffect}.
+ *
+ * @example
+ *   ```typescript
+ *   const proving = makeV8SimulatorProvingService();
+ *   const proofErased = await proving.prove(unprovenTransaction);
+ *   ```;
+ *
+ * @returns A backend that hands back each ledger-v8 transaction proof-erased, which the simulator accepts.
+ */
+export const makeV8SimulatorProvingService = (): ProvingService<
+  ledger.ProofErasedTransaction,
+  V8UnprovenTransaction
+> => {
+  const effectService = makeV8SimulatorProvingServiceEffect();
+  return { prove: (transaction) => Effect.runPromise(effectService.prove(transaction)) };
+};

@@ -11,10 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import type { V8UnboundTransaction } from '../proving/v8ProvingService.js';
+import { Either } from 'effect';
+import type { V8UnboundTransaction, V8UnprovenTransaction } from '../proving/v8ProvingService.js';
 import {
+  LedgerParametersMismatchError,
   makeValidationServiceEffect,
   type AnyLedgerParameters,
+  type LedgerParametersReader,
   type ValidationServiceDependencies,
   type ValidationServiceEffect,
   type WellFormedCheck,
@@ -26,8 +29,7 @@ import {
  * `AnyV9ValidatableTransaction`, and a genuinely different type from it: these are the other ledger version's classes,
  * and neither ledger can read the other's.
  */
-export type AnyV8ValidatableTransaction =
-  ledger.FinalizedTransaction | V8UnboundTransaction | ledger.UnprovenTransaction;
+export type AnyV8ValidatableTransaction = ledger.FinalizedTransaction | V8UnboundTransaction | V8UnprovenTransaction;
 
 const buildStrictness = (flags: WellFormedStrictnessFlags): ledger.WellFormedStrictness => {
   const strictness = new ledger.WellFormedStrictness();
@@ -51,12 +53,22 @@ const buildBlankLedgerState = (networkId: string, parameters: ledger.LedgerParam
  *   not the steps, that make this a separate check: a ledger-v8 transaction cannot be handed to ledger-v9's
  *   `wellFormed`, nor ledger-v9 parameters to this one.
  */
-export const v8WellFormedCheck: WellFormedCheck<AnyV8ValidatableTransaction, AnyLedgerParameters> = (
+export const v8WellFormedCheck: WellFormedCheck<AnyV8ValidatableTransaction, ledger.LedgerParameters> = (
   tx,
   { networkId, ledgerParameters, flags, now },
 ) => {
   tx.wellFormed(buildBlankLedgerState(networkId, ledgerParameters), buildStrictness(flags), now);
 };
+
+const v8LedgerParameters: LedgerParametersReader<AnyLedgerParameters, ledger.LedgerParameters> = (parameters) =>
+  parameters instanceof ledger.LedgerParameters
+    ? Either.right(parameters)
+    : Either.left(
+        new LedgerParametersMismatchError({
+          message:
+            "ledger-v8's validator was handed another ledger version's parameters; it checks transactions only against ledger-v8's.",
+        }),
+      );
 
 /**
  * Builds the validator for ledger-v8 transactions.
@@ -64,11 +76,12 @@ export const v8WellFormedCheck: WellFormedCheck<AnyV8ValidatableTransaction, Any
  * @remarks
  *   Registered below the fork version by `makeDefaultValidationServices`, against a block-data fetcher whose codec
  *   registry is split at the same version — so a block reported from before the boundary reaches this validator as
- *   ledger-v8 parameters, which is the only kind its ledger version can build a state from.
+ *   ledger-v8 parameters, which is the only kind its ledger version can build a state from. Once the chain's latest
+ *   block is past the boundary, the fetcher yields ledger-v9's instead, and this validator refuses them.
  * @param deps The network, clock, and the block-data fetcher, which decodes each block at the version it reports.
  * @returns A validator to register in a `ValidationServices` registry for the version range before the v9 fork.
  */
 export const makeV8ValidationServiceEffect = (
   deps: ValidationServiceDependencies<AnyLedgerParameters>,
 ): ValidationServiceEffect<AnyV8ValidatableTransaction, AnyLedgerParameters> =>
-  makeValidationServiceEffect(v8WellFormedCheck, deps);
+  makeValidationServiceEffect(v8WellFormedCheck, v8LedgerParameters, deps);

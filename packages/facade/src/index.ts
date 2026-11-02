@@ -94,6 +94,7 @@ import {
   type AnyVersionValidatableTransaction,
   type BlockData,
   type BlockDataFetcher,
+  LedgerParametersMismatchError,
   makeDefaultBlockDataFetcher,
   makeDefaultVersionedValidationService,
   type ValidateTxOptions,
@@ -905,7 +906,7 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
   /**
    * Optional factory for the block-data fetcher used by validation. Defaults to an HTTP indexer-backed fetcher built
    * from `configuration.indexerClientConnection`. Override for simulator-based tests with
-   * `makeSimulatorBlockDataFetcher(simulator)` from `@midnightntwrk/wallet-sdk-capabilities/validation`.
+   * `makeV9SimulatorBlockDataFetcher(simulator)` from `@midnightntwrk/wallet-sdk-capabilities/validation`.
    */
   fetchBlockData?: (config: ResolvedConfiguration<TConfig>) => MaybePromise<BlockDataFetcher>;
   validationService?: (
@@ -921,7 +922,10 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
 // `@midnightntwrk/wallet-sdk-dust-wallet` export. The two are structurally identical; users can name the type via
 // `@midnightntwrk/wallet-sdk-dust-wallet` or `@midnightntwrk/wallet-sdk-capabilities/validation`.
 export {
+  type AnyLedgerParameters,
+  type AnyVersionValidatableTransaction,
   type BlockDataFetcher,
+  LedgerParametersMismatchError,
   type ValidateTxOptions,
   type VersionedValidationService,
   ValidationFetchError,
@@ -1619,11 +1623,16 @@ export class WalletFacade {
    * @param options - Strictness flags and optional `blockData` to skip the fetch.
    * @throws {@link WellFormedError} If the transaction fails any enabled check.
    * @throws {@link ValidationFetchError} If the block-data fetch fails.
+   * @throws {@link LedgerParametersMismatchError} If the block checked against carries another ledger version's
+   *   parameters than the one that authored the transaction: the given `blockData`, or without it the chain's latest
+   *   block, which for a ledger-v8 transaction is ledger-v9's once the chain is past `forks.v9`. Passing `blockData`
+   *   from before `forks.v9` then gets the transaction checked, though the chain will no longer include it.
    */
   async validateTransaction(tx: AnyTx, options: ValidateTxOptions<AnyLedgerParameters>): Promise<void> {
     // Checked at the version the transaction says it was authored for, and never at the version the chain has since
     // reached: well-formedness asks whether the ledger that produced these bytes would accept them, and a fork landing
-    // afterwards cannot change that answer. The transaction is read at its own epoch for the same reason.
+    // afterwards does not change which ledger that is. It does change the block fetched when no `blockData` is passed,
+    // which is then refused rather than checked against. The transaction is read at its own epoch for the same reason.
     return this.validationService.validateTx(
       Either.getOrThrowWith(
         WalletTransaction.unwrapWithin<AnyVersionValidatableTransaction>(
