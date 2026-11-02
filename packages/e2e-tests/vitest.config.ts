@@ -47,6 +47,15 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: 'fund',
+          // Spends the funding wallet, so it runs only when asked for (`yarn test-fund`), never with `remote`.
+          include: ['**/**/tests/fundTestWallets.remote.test.ts'],
+          retry: 0,
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: 'fork',
           include: ['**/**/tests/*.fork.test.ts'],
           // No retry: a retried fork test would re-run against an already-forked chain and
