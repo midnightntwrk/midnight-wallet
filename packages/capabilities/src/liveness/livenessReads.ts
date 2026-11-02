@@ -30,9 +30,10 @@ import { type LivenessReads, LivenessReadError } from './livenessService.js';
  *   hangs instead.
  *
  *   The bound applies twice within one connection build — once to the handshake, once to the close that follows it — so
- *   the build's worst case is double this value, and the build runs uninterruptibly. That is why the poll's own
- *   deadline does not depend on it: the service disconnects the read before applying its timeout, so a slow build
- *   finishes in the background and its client is cached for the next poll, while the verdict still lands on time.
+ *   the build's worst case is double this value. The poll's own deadline does not depend on it: the service disconnects
+ *   the read before applying its timeout, so the verdict lands on time. A poll that gives up abandons a handshake still
+ *   in progress, and the next poll starts a new one; a build that has connected finishes its close in the background
+ *   and its client is cached for the next poll.
  */
 const NODE_CONNECTION_TIMEOUT = Duration.seconds(10);
 
@@ -181,10 +182,11 @@ export const makeDefaultLivenessReads = (
      *   Uninterruptible, because the poll fails fast: when the sibling indexer read fails, the in-flight node read is
      *   interrupted. Without this the interrupt could land between the build completing and the cache write — stranding
      *   a fully-built client on the sync-lifetime scope with the cache still empty, once per poll for as long as the
-     *   indexer stays down. Deferring the interrupt past the write costs at most the build's worst case: the connection
-     *   bound for the handshake plus the same again for the close, twenty seconds with the current value. The poll does
-     *   not wait that long for its verdict — the service disconnects the read before applying its own timeout — but the
-     *   build itself runs to completion or to that bound.
+     *   indexer stays down. It does not hold back the handshake: the client's bounded wait for the node runs in a child
+     *   fiber, which takes the interrupt whatever this region's status, so a poll that fails fast abandons a handshake
+     *   still in progress and its provider is disconnected. Once connected, the build defers the interrupt past its
+     *   close and the cache write, at most the connection bound, so a built client is always cached. The poll does not
+     *   wait for that — the service disconnects the read before applying its own timeout.
      */
     const client = (nodeURL: URL): Effect.Effect<LivenessNodeReader, NodeClientError.NodeClientError> =>
       Effect.uninterruptible(

@@ -113,8 +113,9 @@ describe('makeDefaultLivenessReads', () => {
         const builds = yield* Ref.make(0);
         const factory: NodeClientFactory = () =>
           Effect.acquireRelease(
-            // The sleep sits inside the acquire, which `acquireRelease` runs uninterruptibly, so the interrupt below
-            // arrives once the build is already done: the window the cache write must not be separated from.
+            // An uninterruptible acquire is a way to make the interrupt below land after a build that completed: the
+            // window between build and cache write that the wrapper protects. It does not model the real client,
+            // whose unfinished handshake an interrupt abandons.
             Ref.update(builds, (n) => n + 1).pipe(
               Effect.zipRight(Effect.sleep(Duration.millis(50))),
               Effect.as(stubReader),

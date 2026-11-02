@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Cause, Duration, Effect, Exit, Fiber, Option, Scope } from 'effect';
+import { Cause, Duration, Effect, Exit, Fiber, FiberId, Option, Scope } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 /**
@@ -18,6 +18,9 @@ import { describe, expect, it, vi } from 'vitest';
  * retries.
  */
 const providers = vi.hoisted(() => [] as Array<{ disconnected: boolean }>);
+
+/** Runs inside the provider's constructor, the moment the provider exists and has started retrying. */
+const onProviderCreated = vi.hoisted(() => ({ run: (): void => undefined }));
 
 /**
  * A stub whose connection never establishes, standing in for a node that accepts nothing — the condition under which
@@ -33,6 +36,7 @@ vi.mock('@polkadot/api', () => ({
 
     constructor() {
       providers.push(this);
+      onProviderCreated.run();
     }
 
     disconnect(): Promise<void> {
@@ -184,6 +188,61 @@ describe('PolkadotNodeClient.make', () => {
     const exit = Option.getOrThrow(settled);
     const failure = Exit.isFailure(exit) ? Cause.failureOption(exit.cause) : Option.none<{ _tag: string }>();
     expect(Option.map(failure, (error) => error._tag)).toEqual(Option.some('ConnectionError'));
+    const created = providers.slice(createdBefore);
+    expect(created).toHaveLength(1);
+    expect(created[0]?.disconnected).toBe(true);
+  });
+
+  it('should abandon an unfinished handshake when interrupted, even under an uninterruptible caller, so nothing keeps retrying', async () => {
+    // Effect forwards an interrupt to a fiber's children whatever the fiber's own status, and the raced wait is a child
+    // that accepts it. A liveness poll that fails fast therefore gives up a handshake still in progress, well inside
+    // the bound, and the attempt disconnects its provider.
+    const createdBefore = providers.length;
+
+    const settled = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkDaemon(Effect.uninterruptible(makeClient(Duration.seconds(10))));
+        yield* Effect.sleep(Duration.millis(100));
+        yield* Fiber.interruptFork(fiber);
+        yield* Effect.sleep(Duration.millis(400));
+        return yield* Fiber.poll(fiber);
+      }),
+    );
+
+    expect(Option.isSome(settled)).toBe(true);
+    const exit = Option.getOrThrow(settled);
+    expect(Exit.isFailure(exit) && Cause.isInterruptedOnly(exit.cause)).toBe(true);
+    const created = providers.slice(createdBefore);
+    expect(created).toHaveLength(1);
+    expect(created[0]?.disconnected).toBe(true);
+  });
+
+  it('should disconnect a provider it has just created when interrupted at that moment, so no interrupt strands one', async () => {
+    // The provider starts retrying in its constructor. An interrupt delivered then must still reach the step that
+    // disconnects it, so the hook interrupts the build from inside the constructor, the earliest moment it can.
+    const createdBefore = providers.length;
+    const build: { fiber?: Fiber.RuntimeFiber<unknown, unknown> } = {};
+    const interruptsSent = { count: 0 };
+    onProviderCreated.run = () => {
+      if (build.fiber !== undefined) {
+        interruptsSent.count += 1;
+        build.fiber.unsafeInterruptAsFork(FiberId.none);
+      }
+    };
+
+    const settled = await Effect.runPromise(
+      Effect.gen(function* () {
+        const fiber = yield* Effect.forkDaemon(makeClient());
+        build.fiber = fiber;
+        yield* Effect.sleep(Duration.millis(200));
+        return yield* Fiber.poll(fiber);
+      }).pipe(Effect.ensuring(Effect.sync(() => (onProviderCreated.run = () => undefined)))),
+    );
+
+    expect(interruptsSent.count).toBe(1);
+    expect(Option.isSome(settled)).toBe(true);
+    const exit = Option.getOrThrow(settled);
+    expect(Exit.isFailure(exit) && Cause.isInterruptedOnly(exit.cause)).toBe(true);
     const created = providers.slice(createdBefore);
     expect(created).toHaveLength(1);
     expect(created[0]?.disconnected).toBe(true);
