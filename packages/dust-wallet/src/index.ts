@@ -18,4 +18,9 @@ export { isInsufficientDustForFeeError } from './InsufficientDustForFee.js';
 // Under the wallet's name rather than flat: the unshielded wallet declares some of the same names, `UtxoWithMeta` among
 // them, and the umbrella package re-exports every wallet into one barrel.
 export * as DustWalletTypes from './types/index.js';
-export { type DustTransactionHistoryEntry, DustSectionSchema, mergeDustSections } from './types/DustWalletTypes.js';
+export {
+  type DustTransactionHistoryEntry,
+  DustSectionSchema,
+  InsufficientDustForFeeError,
+  mergeDustSections,
+} from './types/DustWalletTypes.js';

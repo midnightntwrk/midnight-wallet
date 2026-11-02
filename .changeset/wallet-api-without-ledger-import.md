@@ -31,6 +31,8 @@ Also:
 - The unshielded root's `PublicKey`, `UnshieldedKeystore` and `UnshieldedSecretKey` are stated in the SDK's signature
   shapes, also as `UnshieldedWalletTypes.*`. The ledger-v9 keystore moved into `/v2`, beside `/v1`'s ledger-v8 one, and
   the root's `createKeystore` derives its keys there.
+- The dust root exports `InsufficientDustForFeeError`, also as `DustWalletTypes.InsufficientDustForFeeError`. Both
+  variants raise this one class, so `instanceof` recognises it whichever variant was running.
 - utilities adds `eitherCoreStateOf` on `/testing/variants`, and the testkit's `DustWalletFactory` takes plain rates.
 - utilities' `HttpURL.make` and `WsURL.make` refuse a URL with the wrong scheme with a message that names it, such as
   `Invalid protocol scheme 'ftp:'. Expected 'http:' or 'https:'`, rather than `[object Object]`.

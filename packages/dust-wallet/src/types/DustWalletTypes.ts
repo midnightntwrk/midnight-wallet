@@ -26,7 +26,7 @@ import {
   TransactionHistoryStorage,
   type UnshieldedUtxo,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Array as EArray, Schema } from 'effect';
+import { Data, Array as EArray, Schema } from 'effect';
 
 /** A dust public key: the identity dust is generated for. */
 export type DustPublicKey = bigint;
@@ -127,6 +127,65 @@ export type NightUtxoSplitForDustRegistration = {
 export type FeeCoverageEstimate =
   | { readonly _tag: 'Reachable'; readonly seconds: bigint; readonly at: Date }
   | { readonly _tag: 'Unreachable'; readonly reason: 'NoGeneration' | 'ExceedsCap' };
+
+/** A deadline for `waitForGeneratedDust` that sees an estimate of `seconds` out, with a minute to spare. */
+const waitTimeoutMs = (seconds: bigint): bigint => seconds * 1000n + 60_000n;
+
+const UNREACHABLE_REASONS: Record<Extract<FeeCoverageEstimate, { _tag: 'Unreachable' }>['reason'], string> = {
+  NoGeneration: 'none of the unregistered Night UTxOs generates dust',
+  ExceedsCap: 'the fee is above the most dust any unregistered Night UTxO can generate',
+};
+
+/**
+ * A first-time registration cannot pay its own fee yet: the dust its unregistered Night has generated falls short.
+ *
+ * @remarks
+ *   Amounts are in Specks. `shortfall` is `fee - claimableFeePayment`, and `estimate` says when generation closes it, if
+ *   ever — the same moment `waitForGeneratedDust` would resolve for that fee.
+ *
+ *   Both variants raise this one class, since what it reports is the same plain data on both, so `instanceof` against it
+ *   recognises the error whichever variant was running.
+ * @example
+ *   ```ts
+ *   if (error instanceof InsufficientDustForFeeError && error.estimate._tag === 'Reachable')
+ *   console.warn(`short by ${error.shortfall} Specks, covered at ${error.estimate.at.toISOString()}`);
+ *   ```
+ */
+export class InsufficientDustForFeeError extends Data.TaggedError('Wallet.InsufficientDustForFee')<{
+  readonly message: string;
+  /** The dust the registration may claim for its own fee now. */
+  readonly claimableFeePayment: bigint;
+  /** The fee the registration needs. */
+  readonly fee: bigint;
+  /** How far `claimableFeePayment` falls below `fee`. */
+  readonly shortfall: bigint;
+  /** When `claimableFeePayment` reaches `fee`, or why it never will. */
+  readonly estimate: FeeCoverageEstimate;
+}> {
+  /**
+   * Builds the error from what was read, deriving the shortfall and the message.
+   *
+   * @param reading The claimable fee payment, the fee and the estimate of when one reaches the other.
+   * @returns The error.
+   */
+  static of(reading: {
+    readonly claimableFeePayment: bigint;
+    readonly fee: bigint;
+    readonly estimate: FeeCoverageEstimate;
+  }): InsufficientDustForFeeError {
+    const headline = `Insufficient generated dust to cover registration fee (have ${reading.claimableFeePayment}, need ${reading.fee}).`;
+    const outlook =
+      reading.estimate._tag === 'Reachable'
+        ? `Generated dust should cover it in about ${reading.estimate.seconds} s (at ${reading.estimate.at.toISOString()}). ` +
+          `Use WalletFacade.waitForGeneratedDust(utxos, ${reading.fee}, { timeoutMs: ${waitTimeoutMs(reading.estimate.seconds)} }) before retrying.`
+        : `It never will: ${UNREACHABLE_REASONS[reading.estimate.reason]}, so waitForGeneratedDust will not help.`;
+    return new InsufficientDustForFeeError({
+      ...reading,
+      shortfall: reading.fee - reading.claimableFeePayment,
+      message: `${headline} ${outlook}`,
+    });
+  }
+}
 
 export type TotalCostParameters = {
   additionalFeeOverhead?: bigint;

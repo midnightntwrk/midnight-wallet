@@ -13,8 +13,9 @@
 import { Data } from 'effect';
 import { type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { type FeeCoverageEstimate } from '../types/DustWalletTypes.js';
+import { type InsufficientDustForFeeError } from '../types/DustWalletTypes.js';
 
+export { InsufficientDustForFeeError } from '../types/DustWalletTypes.js';
 export type { FeeCoverageEstimate } from '../types/DustWalletTypes.js';
 
 export class OtherWalletError extends Data.TaggedError('Wallet.Other')<{
@@ -82,62 +83,6 @@ export class OutOfOrderSyncUpdateError extends Data.TaggedError('Wallet.OutOfOrd
   /** The event id the source delivered instead. */
   readonly received: bigint;
 }> {}
-
-/** A deadline for `waitForGeneratedDust` that sees an estimate of `seconds` out, with a minute to spare. */
-const waitTimeoutMs = (seconds: bigint): bigint => seconds * 1000n + 60_000n;
-
-const UNREACHABLE_REASONS: Record<Extract<FeeCoverageEstimate, { _tag: 'Unreachable' }>['reason'], string> = {
-  NoGeneration: 'none of the unregistered Night UTxOs generates dust',
-  ExceedsCap: 'the fee is above the most dust any unregistered Night UTxO can generate',
-};
-
-/**
- * A first-time registration cannot pay its own fee yet: the dust its unregistered Night has generated falls short.
- *
- * @remarks
- *   Amounts are in Specks. `shortfall` is `fee - claimableFeePayment`, and `estimate` says when generation closes it, if
- *   ever — the same moment `waitForGeneratedDust` would resolve for that fee.
- * @example
- *   ```ts
- *   if (error._tag === 'Wallet.InsufficientDustForFee' && error.estimate._tag === 'Reachable')
- *   console.warn(`short by ${error.shortfall} Specks, covered at ${error.estimate.at.toISOString()}`);
- *   ```
- */
-export class InsufficientDustForFeeError extends Data.TaggedError('Wallet.InsufficientDustForFee')<{
-  readonly message: string;
-  /** The dust the registration may claim for its own fee now. */
-  readonly claimableFeePayment: bigint;
-  /** The fee the registration needs. */
-  readonly fee: bigint;
-  /** How far `claimableFeePayment` falls below `fee`. */
-  readonly shortfall: bigint;
-  /** When `claimableFeePayment` reaches `fee`, or why it never will. */
-  readonly estimate: FeeCoverageEstimate;
-}> {
-  /**
-   * Builds the error from what was read, deriving the shortfall and the message.
-   *
-   * @param reading The claimable fee payment, the fee and the estimate of when one reaches the other.
-   * @returns The error.
-   */
-  static of(reading: {
-    readonly claimableFeePayment: bigint;
-    readonly fee: bigint;
-    readonly estimate: FeeCoverageEstimate;
-  }): InsufficientDustForFeeError {
-    const headline = `Insufficient generated dust to cover registration fee (have ${reading.claimableFeePayment}, need ${reading.fee}).`;
-    const outlook =
-      reading.estimate._tag === 'Reachable'
-        ? `Generated dust should cover it in about ${reading.estimate.seconds} s (at ${reading.estimate.at.toISOString()}). ` +
-          `Use WalletFacade.waitForGeneratedDust(utxos, ${reading.fee}, { timeoutMs: ${waitTimeoutMs(reading.estimate.seconds)} }) before retrying.`
-        : `It never will: ${UNREACHABLE_REASONS[reading.estimate.reason]}, so waitForGeneratedDust will not help.`;
-    return new InsufficientDustForFeeError({
-      ...reading,
-      shortfall: reading.fee - reading.claimableFeePayment,
-      message: `${headline} ${outlook}`,
-    });
-  }
-}
 
 export type WalletError =
   | SnapshotFormat.SnapshotRestoreError

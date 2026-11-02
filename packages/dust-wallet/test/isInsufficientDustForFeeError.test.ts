@@ -11,8 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Each variant declares its own InsufficientDustForFeeError, so which class a rejection is depends on the variant
-// running when it was raised. The guard is how a caller recognises it without knowing which one that was.
+// Both variants raise the one InsufficientDustForFeeError, so the guard recognises it whichever variant was running,
+// and nothing else: not another wallet error, not a look-alike, not the fiber wrapper around it.
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { isInsufficientDustForFeeError } from '../src/index.js';
