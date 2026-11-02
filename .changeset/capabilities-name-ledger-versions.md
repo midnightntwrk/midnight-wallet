@@ -11,7 +11,9 @@ The proving and validation types no longer default to ledger-v9's, and every fac
 says which. A prover over one ledger version is no longer accepted where either ledger version's transactions may reach
 it. Both ledger versions declare `LedgerParameters` identically, so the compiler cannot tell them apart: each validator
 now refuses the other ledger version's parameters with `LedgerParametersMismatchError` rather than reporting the
-transaction as malformed. `DustWallet.balanceTransactions` types its block data's parameters as either ledger version's.
+transaction as malformed. That includes a block it fetched because no `blockData` was passed, so a ledger-v8 transaction
+validated without `blockData` once the chain is past `forks.v9` is refused, saying so. `DustWallet.balanceTransactions`
+types its block data's parameters as either ledger version's.
 
 Added to `./proving`: `V9UnprovenTransaction`, `V9ProvingServiceEffect`, `V9ProvingService`, `V8ProvingService`,
 `makeV8SimulatorProvingServiceEffect` and `makeV8SimulatorProvingService`; to `./validation`:

@@ -81,13 +81,15 @@ export class ValidationFetchError extends Data.TaggedError(
 }> {}
 
 /**
- * Raised when a validator is handed block data whose parameters another ledger version decoded.
+ * Raised when a validator gets block data whose parameters another ledger version decoded: the `blockData` it was
+ * given, or, with none given, the chain's latest block it fetched.
  *
  * @remarks
  *   Both ledger versions declare `LedgerParameters` identically, so nothing in the types keeps one version's out of the
  *   other's validator, and each validator looks for itself. A transaction checked against the other ledger version's
  *   parameters is not malformed, which is why this is not a {@link WellFormedError}: the block data is from the other
- *   side of `forks.v9`.
+ *   side of `forks.v9`. Without `blockData` that is every transaction authored on the side the chain's latest block is
+ *   not on, and the message then says the block was fetched.
  */
 export class LedgerParametersMismatchError extends Data.TaggedError(
   '@midnightntwrk/wallet-sdk-capabilities/validation/validationService/LedgerParametersMismatchError',
@@ -242,6 +244,12 @@ export type LedgerParametersReader<TParameters, TOwnParameters> = (
   parameters: TParameters,
 ) => Either.Either<TOwnParameters, LedgerParametersMismatchError>;
 
+/** Names the block a refusal was about when the caller passed none: the chain's latest, which the validator fetched. */
+const fetchedFromLatestBlock = (error: LedgerParametersMismatchError): LedgerParametersMismatchError =>
+  new LedgerParametersMismatchError({
+    message: `${error.message} The parameters came from the chain's latest block, fetched because no \`blockData\` was passed; to check this transaction, pass \`blockData\` from a block of its own ledger version.`,
+  });
+
 /**
  * Builds a validation service for one ledger version from that version's well-formedness check.
  *
@@ -256,16 +264,21 @@ export const makeValidationServiceEffect = <TTransaction, TParameters, TOwnParam
   deps: ValidationServiceDependencies<TParameters>,
 ): ValidationServiceEffect<TTransaction, TParameters> => ({
   validateTx(tx, options) {
-    const fetchOrUse: Effect.Effect<BlockData<TParameters>, ValidationFetchError> = options.blockData
-      ? Effect.succeed(options.blockData)
-      : Effect.tryPromise({
-          try: () => deps.fetchBlockData(),
-          catch: (cause) => new ValidationFetchError({ cause }),
-        });
+    const parametersOf = (blockData: BlockData<TParameters>) =>
+      EitherOps.toEffect(readParameters(blockData.ledgerParameters));
+    const parameters: Effect.Effect<TOwnParameters, ValidationFetchError | LedgerParametersMismatchError> =
+      options.blockData
+        ? parametersOf(options.blockData)
+        : pipe(
+            Effect.tryPromise({
+              try: () => deps.fetchBlockData(),
+              catch: (cause) => new ValidationFetchError({ cause }),
+            }),
+            Effect.flatMap((blockData) => Effect.mapError(parametersOf(blockData), fetchedFromLatestBlock)),
+          );
 
     return pipe(
-      fetchOrUse,
-      Effect.flatMap((blockData) => EitherOps.toEffect(readParameters(blockData.ledgerParameters))),
+      parameters,
       Effect.flatMap((ledgerParameters) =>
         Effect.try({
           try: () =>

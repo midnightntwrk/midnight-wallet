@@ -71,7 +71,8 @@ const v9LedgerParameters: LedgerParametersReader<AnyLedgerParameters, ledger.Led
  * @remarks
  *   Registered from the fork version by `makeDefaultValidationServices`, against a block-data fetcher whose codec
  *   registry is split at the same version — so a block reported from the boundary reaches this validator as ledger-v9
- *   parameters, which is the only kind its ledger version can build a state from.
+ *   parameters, which is the only kind its ledger version can build a state from. While the chain's latest block is
+ *   below the boundary, the fetcher yields ledger-v8's instead, and this validator refuses them.
  * @param deps The network, clock, and the block-data fetcher, which decodes each block at the version it reports.
  * @returns A validator to register in a `ValidationServices` registry for the version range from the v9 fork.
  */
