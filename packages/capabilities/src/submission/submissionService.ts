@@ -131,7 +131,8 @@ export const makeDefaultSubmissionServiceEffect = <
   return {
     submitTransaction: submit as SubmitTransactionMethodEffect<TTransaction>,
     close(): Effect.Effect<void> {
-      return pipe(Fiber.interrupt(clientBuild), Effect.zipRight(Scope.close(scope, Exit.void)));
+      // Releasing the client is the last use of it, so a release that fails is logged rather than failing the caller.
+      return pipe(Fiber.interrupt(clientBuild), Effect.zipRight(Scope.close(scope, Exit.void)), Effect.ignoreLogged);
     },
   };
 };
