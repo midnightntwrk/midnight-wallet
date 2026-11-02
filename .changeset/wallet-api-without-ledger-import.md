@@ -50,6 +50,8 @@ BREAKING CHANGE:
 - The dust root, and so the umbrella package, no longer re-exports the V2 sync module: use `SyncService` from `/v2`
   (`makeEventLessSyncService`, `makeEventLessSyncCapability`, `findDustTimelineStart`). `DustTimelineStart` is
   `DustWalletTypes.DustTimelineStart`.
+- Dust's `/v1` and `/v2` no longer re-export the root's wallet API and `CustomDustWallet`, so `/v1` no longer hands out
+  a ledger-v9 wallet: import `DustWalletState`, `CustomDustWallet` and the rest from the package root.
 - The ledger-v9 simulator is no longer exported unqualified from the capabilities root or `/simulation`: use
   `V9.Simulator` (`Capabilities.V9.Simulator` in the umbrella package). A wallet's `/v2` `Simulator` is that simulator
   alone.

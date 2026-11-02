@@ -13,8 +13,6 @@
 
 // The V2 variant: this wallet on `@midnightntwrk/ledger-v9`, run from `forks.v9`. Its twin is `../v1`.
 export * from './CoreWallet.js';
-export * from '../DustWalletAPI.js';
-export * from '../SingleVariantDustWallet.js';
 export * as Keys from './Keys.js';
 export * as Migration from './Migration.js';
 export * as Serialization from './Serialization.js';
