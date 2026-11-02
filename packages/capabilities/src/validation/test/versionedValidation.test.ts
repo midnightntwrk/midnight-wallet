@@ -167,6 +167,9 @@ describe("Refusing block data another ledger version's parameters were decoded a
     );
 
     expect(error).toMatchObject({ _tag: MISMATCH });
+    // The caller chose this block, so the refusal neither blames the chain's latest one nor advises passing one.
+    expect(error.message).not.toContain("the chain's latest block");
+    expect(error.message).not.toContain('pass `blockData`');
   });
 
   it("refuses ledger-v9's parameters for a transaction ledger-v8 checks, symmetrically", async () => {
@@ -180,5 +183,34 @@ describe("Refusing block data another ledger version's parameters were decoded a
     );
 
     expect(error).toMatchObject({ _tag: MISMATCH });
+    expect(error.message).not.toContain("the chain's latest block");
+    expect(error.message).not.toContain('pass `blockData`');
+  });
+
+  it("refuses a ledger-v8 transaction once the chain's latest block is ledger-v9's, saying the block was fetched rather than given", async () => {
+    // With no `blockData` the validator fetches the chain's latest block. Past the boundary its parameters are
+    // ledger-v9's, while the transaction is still routed by its own stamp to ledger-v8's validator, which cannot check
+    // against them. The caller handed it nothing, so the refusal has to say where the parameters came from.
+    const routed = validator(blockDataAt(FORK, v9Hex()));
+
+    const error = await failureOf(
+      routed.validateTx(ledgerV8.Transaction.fromParts(NETWORK_ID), V8_VERSION, { flags: NO_STRICTNESS }),
+    );
+
+    expect(error).toMatchObject({ _tag: MISMATCH });
+    expect(error.message).toContain("the chain's latest block");
+    expect(error.message).toContain('pass `blockData`');
+  });
+
+  it("refuses a ledger-v9 transaction while the chain's latest block is ledger-v8's, symmetrically", async () => {
+    const routed = validator(blockDataAt(1n, v8Hex()));
+
+    const error = await failureOf(
+      routed.validateTx(ledgerV9.Transaction.fromParts(NETWORK_ID), FORK, { flags: NO_STRICTNESS }),
+    );
+
+    expect(error).toMatchObject({ _tag: MISMATCH });
+    expect(error.message).toContain("the chain's latest block");
+    expect(error.message).toContain('pass `blockData`');
   });
 });
