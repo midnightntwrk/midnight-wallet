@@ -162,6 +162,29 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
       ProtocolVersion.MinSupportedVersion,
     );
 
+  /**
+   * A transaction of the same epoch as {@link v8Transaction}, but one of its own. Two empty intents share an identifier,
+   * and transactions that share one are one record; this carries no intent, only a shielded output whose fresh coin
+   * nonce is its sole identifier.
+   */
+  const distinctV8Transaction = () => {
+    const coin = ledgerV8.createShieldedCoinInfo(ledgerV8.shieldedToken().raw, 1n);
+    const output = ledgerV8.ZswapOutput.new(
+      coin,
+      0,
+      ledgerV8.sampleCoinPublicKey(),
+      ledgerV8.sampleEncryptionPublicKey(),
+    );
+    return WalletTransaction.adopt(
+      'Unproven',
+      ledgerV8.Transaction.fromParts(
+        configuration.networkId,
+        ledgerV8.ZswapOffer.fromOutput(output, coin.type, coin.value),
+      ),
+      ProtocolVersion.MinSupportedVersion,
+    );
+  };
+
   /** Submits a transaction below the boundary, then moves all three wallets past it. */
   const submitThenCross = async (): Promise<FinalizedTx> => {
     const finalized = await facade.finalizeTransaction(v8Transaction());
@@ -298,5 +321,21 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
     unshieldedStates.next(unshieldedAt(unshieldedStates.value, later));
     dustStates.next(dustAt(dustStates.value, later));
     await vi.waitFor(() => expect(lifecycle.orphanedBeyond).toContainEqual(later));
+  });
+
+  it('should still release a later ended transaction after the history storage failed to read for an earlier one, so one failed read never stops every release after it', async () => {
+    const first = await facade.finalizeTransaction(distinctV8Transaction());
+    await facade.submitTransaction(first);
+    const second = await facade.finalizeTransaction(distinctV8Transaction());
+    await facade.submitTransaction(second);
+    vi.spyOn(configuration.txHistoryStorage, 'getAll').mockRejectedValueOnce(new Error('history storage unavailable'));
+    const revert = vi.spyOn(facade.shielded, 'revertTransaction');
+
+    shieldedStates.next(shieldedAt(shieldedStates.value, v9Version));
+    unshieldedStates.next(unshieldedAt(unshieldedStates.value, v9Version));
+    dustStates.next(dustAt(dustStates.value, v9Version));
+    await orphanArrives(first);
+
+    await vi.waitFor(() => expect(revert).toHaveBeenCalledWith(second));
   });
 });
