@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
-import { Either, Option } from 'effect';
+import { Lifecycle, PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { DateTime, Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { DefaultForkSchedule, finalizedTransactionTraits } from '@midnightntwrk/wallet-sdk-facade';
 import { fixturesFor } from './fixtures.js';
@@ -68,6 +68,43 @@ describe('pending transactions written by published releases', () => {
         ]);
         expect(identifiers).toEqual(fixture.expected['identifiers']);
       }
+    });
+
+    // Read as lifecycle records, each pending item is a submitted record: v1 showed it as submitted, kept only when it
+    // was finalized, and stored none of the facts a record carries, so those come off the transaction itself.
+    describe('read as lifecycle records', () => {
+      const lifecycle = () => Either.getOrThrow(Lifecycle.deserialize(fixture.serialized, traits));
+      const oldestTrait = Option.getOrThrow(PendingTransactions.headTrait(traits));
+      const creationTime = DateTime.unsafeMake(fixture.expected['creationTime'] as string);
+
+      it('should hold one submitted record per transaction, never submitted at a time v1 did not keep', () => {
+        const records = lifecycle().records;
+
+        expect(records).toHaveLength(fixture.expected['txCount'] as number);
+        expect(records.map((record) => record.state)).toStrictEqual(
+          records.map(() => Lifecycle.LifecycleState.Submitted()),
+        );
+        expect(records.map((record) => record.submittedAt)).toStrictEqual(records.map(() => Option.none()));
+        expect(records.map((record) => record.createdAt)).toStrictEqual(records.map(() => creationTime));
+      });
+
+      it('should give each record the identifiers its transaction was written with', () => {
+        expect(lifecycle().records.map((record) => record.identifiers)).toEqual(fixture.expected['identifiers']);
+      });
+
+      // Unstamped, so read with the oldest trait and never given a version: nothing recorded which one built it.
+      it('should take each record’s intent hashes, inputs and TTL from its transaction, read with the oldest trait', () => {
+        const records = lifecycle().records;
+        const txs = records.map((record) => Option.getOrThrow(record.tx));
+
+        expect(records.map((record) => record.protocolVersion)).toStrictEqual(records.map(() => Option.none()));
+        expect(records.map((record) => record.intentHashes)).toStrictEqual(
+          txs.map((tx) => oldestTrait.intentHashes(tx)),
+        );
+        expect(records.flatMap((record) => record.intentHashes).length).toBeGreaterThan(0);
+        expect(records.map((record) => record.inputs)).toStrictEqual(txs.map((tx) => oldestTrait.inputs(tx)));
+        expect(records.map((record) => record.ttl)).toStrictEqual(txs.map((tx) => oldestTrait.ttl(tx, creationTime)));
+      });
     });
   });
 });

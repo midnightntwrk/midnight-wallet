@@ -24,8 +24,8 @@
  */
 
 import { ProtocolVersion, type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Array as Arr, Data, DateTime, Option, pipe } from 'effect';
-import { type FailedTransactionResult } from './pendingTransactions.js';
+import { Array as Arr, Data, DateTime, Either, Option, type ParseResult, pipe } from 'effect';
+import { type FailedTransactionResult, type VersionedTransactionTrait } from './pendingTransactions.js';
 
 /**
  * Ids of the coins a transaction spends, per wallet: unshielded coins as `intentHash#outputNo`, shielded coins by
@@ -408,3 +408,33 @@ export const coveredUnshieldedIds = <TTransaction>(state: TransactionLifecycle<T
     Arr.flatMap((record) => record.inputs.unshielded),
     Arr.dedupe,
   );
+
+/**
+ * Writes the records in the current stored format.
+ *
+ * @example
+ *   const stored = serialize(lifecycle, traits);
+ *
+ * @param state The records.
+ * @param traits The traits each record's transaction is written with, chosen by the version it was built for.
+ * @returns The records as a JSON string.
+ */
+export const serialize = <TTransaction>(
+  _state: TransactionLifecycle<TTransaction>,
+  _traits: VersionedTransactionTrait<TTransaction>,
+): string => JSON.stringify({});
+
+/**
+ * Reads records stored in any format version this build knows, upgrading an older one on the way.
+ *
+ * @example
+ *   const lifecycle = deserialize(stored, traits);
+ *
+ * @param serialized The stored JSON string.
+ * @param traits The traits each record's transaction is read with, chosen by the version it was stamped with.
+ * @returns The records, or why the payload could not be read.
+ */
+export const deserialize = <TTransaction>(
+  _serialized: string,
+  _traits: VersionedTransactionTrait<TTransaction>,
+): Either.Either<TransactionLifecycle<TTransaction>, ParseResult.ParseError> => Either.right(empty());
