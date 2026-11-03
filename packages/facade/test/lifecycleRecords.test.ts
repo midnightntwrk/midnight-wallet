@@ -219,7 +219,9 @@ const balancedThrough = (facade: WalletFacade, build: () => Promise<Built>) =>
     const bookedUnshielded = before.unshielded.availableCoins.map(utxoKey).filter((id) => !stillAvailable.has(id));
     const bookedShielded = before.shielded.availableCoins.length - after.shielded.availableCoins.length;
     const parts = BalancingRecipe.getTransactions(recipe);
-    const identifiers = parts.flatMap((part) => carried<{ identifiers(): string[] }>(part).identifiers());
+    // A finalized transaction is past balancing, so balancing it records its balancing part alone.
+    const balancedParts = recipe.type === 'FINALIZED_TRANSACTION' ? [recipe.balancingTransaction] : parts;
+    const identifiers = balancedParts.flatMap((part) => carried<{ identifiers(): string[] }>(part).identifiers());
 
     const intentTtls = parts.flatMap((part) => [
       ...(carried<{ intents?: ReadonlyMap<number, { ttl: Date }> }>(part).intents?.values() ?? []),

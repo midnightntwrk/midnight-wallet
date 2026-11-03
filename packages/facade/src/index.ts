@@ -1646,9 +1646,16 @@ export class WalletFacade {
    * Records the whole transaction a balancing recipe finalizes into as balanced, its proofs erased: one record per
    * balancing call, naming every coin that transaction spends, since nothing else says they are spoken for until it is
    * finalized.
+   *
+   * A recipe that balances a finalized transaction records its balancing part alone. The finalized transaction is
+   * already past balancing, and may hold a finalized record of its own, which no balancing can move; a record covering
+   * both would be refused, leaving the coins the balancing part booked in no record. Finalizing the recipe folds the
+   * two records into one.
    */
   async #recordBalanced(recipe: BalancingRecipe): Promise<void> {
-    const parts = BalancingRecipe.getTransactions(recipe).map((part) => erasedOf(part, this.#forkVersion));
+    const unfinalizedParts =
+      recipe.type === 'FINALIZED_TRANSACTION' ? [recipe.balancingTransaction] : BalancingRecipe.getTransactions(recipe);
+    const parts = unfinalizedParts.map((part) => erasedOf(part, this.#forkVersion));
     if (Arr.isNonEmptyReadonlyArray(parts)) {
       await this.transactionLifecycleService.balanced(this.#factsOf(mergedLifecycleTxs(parts)));
     }
