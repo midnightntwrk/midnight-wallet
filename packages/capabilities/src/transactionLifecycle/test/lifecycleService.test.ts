@@ -37,8 +37,6 @@ const fakeTrait: TransactionTraits.TransactionTrait<FakeTransaction> = {
   ids: (tx) => tx.ids,
   firstId: (tx) => tx.ids[0],
   areAllTxIdsIncluded: (tx, ids) => tx.ids.every((id) => ids.includes(id)),
-  isOneIncludedInOther: () => false,
-  hasTTLExpired: () => false,
   intentHashes: (tx) => tx.ids.map((id) => `intent-${id}`),
   inputs: (tx) => ({ unshielded: tx.ids.map((id) => `${id}#0`) }),
   ttl: () => TTL,

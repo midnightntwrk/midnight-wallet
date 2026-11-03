@@ -399,7 +399,7 @@ export type TransactionTrait<TTransaction> = {
   ids: (tx: TTransaction) => readonly string[];
   firstId: (tx: TTransaction) => string;
   areAllTxIdsIncluded: (tx: TTransaction, txIds: readonly string[]) => boolean;
-  hasTTLExpired: (tx: TTransaction, txCreationTime: DateTime.Utc, now: DateTime.Utc) => boolean;
+  ttl: (tx: TTransaction, createdAt: DateTime.Utc) => Date;
   serialize: (tx: TTransaction) => Uint8Array;
   deserialize: (serialized: Uint8Array) => TTransaction;
 };

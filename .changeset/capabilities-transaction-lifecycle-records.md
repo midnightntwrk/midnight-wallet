@@ -11,7 +11,8 @@ end the wallet only inferred, such as an expiry.
 
 New exports: `Lifecycle` (the records and their pure moves), `TransactionLifecycleService`,
 `TransactionLifecycleServiceImpl`, `TransactionLifecycleServiceEffect(Impl)`, `InclusionVerdict`, `WallClock` and
-`LifecycleFormat` (the store's format versions and its `v1` → `v2` upgrade). The service polls the indexer for a
+`LifecycleFormat` (the store's format versions, its `v1` → `v2` upgrade, and `checkV1Store`, which refuses a damaged
+`v1` store for what is wrong in it rather than for its version). The service polls the indexer for a
 submitted transaction's verdict, sweeps expired and finished records each tick, and reads the time from an optional
 `clock`.
 
@@ -20,7 +21,9 @@ downgrading after this release has written the store loses the pending records.
 
 BREAKING CHANGE — the pending-transactions service and its module are renamed for what they hold now, with no
 deprecated aliases. The service's methods change with it: it is told where a transaction is, not handed items to keep.
-`TransactionTrait` now requires `intentHashes`, `inputs` and `ttl`, so a custom trait must add them.
+`TransactionTrait` now requires `intentHashes`, `inputs` and `ttl`, so a custom trait must add them, and no longer has
+`hasTTLExpired` or `isOneIncludedInOther`, which nothing reads now: a record's TTL comes from `ttl`, and records are
+matched by `areAllTxIdsIncluded`.
 
 | Before | After |
 | --- | --- |

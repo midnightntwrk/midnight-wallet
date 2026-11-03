@@ -27,8 +27,8 @@ import {
 
 /**
  * Both ledger versions' traits read a transaction the same way — identifiers, a TTL, offers, dust spends — against
- * different ledger classes. `hasTTLExpired` touches none of those classes, so one structural stub exercises both, and
- * running every case against each is what stops a fix landing on one and not the other.
+ * different ledger classes. `ttl` touches none of those classes, so one structural stub exercises both, and running
+ * every case against each is what stops a fix landing on one and not the other.
  *
  * Each trait reads the dust grace period off its own ledger's initial parameters, so the period is paired with the
  * trait here rather than read once: if the two ledgers ever disagree, the boundary each case probes must move with it.
@@ -54,20 +54,18 @@ const boundariesFor = (dustGracePeriodSeconds: bigint) => {
 };
 
 /**
- * Asks one trait whether the stub has expired.
+ * Asks one trait whether the stub's TTL has passed by `now`, as a lifecycle record's expiry does: passed, not reached,
+ * so a transaction is still valid at the instant its TTL names.
  *
- * Each trait's `hasTTLExpired` is typed against its own ledger's `FinalizedTransaction`, so calling either with the
- * shared stub needs the parameter widened back to the structural value it actually reads.
+ * Each trait's `ttl` is typed against its own ledger's `FinalizedTransaction`, so calling either with the shared stub
+ * needs the parameter widened back to the structural value it actually reads.
  */
 const hasTTLExpired = (trait: (typeof traits)[number][1], tx: unknown, now: DateTime.Utc): boolean =>
+  DateTime.toEpochMillis(now) >
   // Type cast required because: the two traits' parameter types are distinct nominal classes, so indexing the tuple
-  // yields a union whose call signature demands their intersection — a type no value can have. `hasTTLExpired` reads
-  // only `intents`, `guaranteedOffer` and `fallibleOffer`, which are identical across both.
-  (trait.hasTTLExpired as (tx: unknown, creationTime: DateTime.Utc, now: DateTime.Utc) => boolean)(
-    tx,
-    creationTime,
-    now,
-  );
+  // yields a union whose call signature demands their intersection — a type no value can have. `ttl` reads only
+  // `intents`, `guaranteedOffer` and `fallibleOffer`, which are identical across both.
+  (trait.ttl as (tx: unknown, createdAt: DateTime.Utc) => Date)(tx, creationTime).getTime();
 
 type StubIntent = Readonly<{
   ttl: Date;
@@ -81,9 +79,9 @@ type StubParts = Readonly<{
 }>;
 
 /**
- * Builds the smallest transaction-shaped value `hasTTLExpired` reads: its intents (deadline and dust spends), and
- * whether it carries shielded offers. A real `ledger.FinalizedTransaction` can only be produced by proving, which a
- * unit test must not do.
+ * Builds the smallest transaction-shaped value `ttl` reads: its intents (deadline and dust spends), and whether it
+ * carries shielded offers. A real `ledger.FinalizedTransaction` can only be produced by proving, which a unit test must
+ * not do.
  */
 const stubTransaction = (parts: StubParts): unknown => {
   const intents = new Map(
@@ -105,7 +103,7 @@ const stubTransaction = (parts: StubParts): unknown => {
     fallibleOffer,
   };
   // Returned as `unknown` on purpose: each ledger's `Transaction` has a private constructor, so a structural stub is
-  // the only way to reach `hasTTLExpired` from a unit test, and the widening happens once, at the call site that knows
+  // the only way to reach `ttl` from a unit test, and the widening happens once, at the call site that knows
   // which trait is being asked.
   return stub;
 };
@@ -119,7 +117,7 @@ describe.each(traits)('%s finalizedTransactionTrait', (_label, trait, dustGraceP
    * at all. A rewards or bridge claim built by `Transaction.fromRewards` has no intents and no offers, and the indexer
    * never reports a status for it, so the backstop is the only way it ever leaves the pending set.
    */
-  describe('hasTTLExpired', () => {
+  describe('expiry, measured by ttl', () => {
     it('does not expire a transaction with no shielded offers and no dust spends before its intent deadline', () => {
       const tx = stubTransaction({
         intents: [{ ttl: intentTTLBeyondGracePeriod, dustSpends: 0 }],
@@ -293,14 +291,6 @@ describe.each(traits)('%s finalizedTransactionTrait, the facts a lifecycle recor
       });
 
       expect(read.ttl(tx, creationTime)).toStrictEqual(withinGrace);
-    });
-
-    it('should agree with hasTTLExpired: valid at its TTL instant, expired just after it', () => {
-      const tx = factsTransaction({ intents: [{ segment: 1, ttl: lessBeyondGrace }] });
-      const ttl = DateTime.unsafeMake(read.ttl(tx, creationTime));
-
-      expect(read.hasTTLExpired(tx, creationTime, ttl)).toBe(false);
-      expect(read.hasTTLExpired(tx, creationTime, DateTime.addDuration(ttl, Duration.millis(1)))).toBe(true);
     });
   });
 

@@ -26,8 +26,6 @@ export type TransactionTrait<TTransaction> = {
   ids: (tx: TTransaction) => readonly string[];
   firstId: (tx: TTransaction) => string;
   areAllTxIdsIncluded: (tx: TTransaction, txIds: readonly string[]) => boolean;
-  isOneIncludedInOther: (tx: TTransaction, otherTx: TTransaction) => boolean;
-  hasTTLExpired: (tx: TTransaction, txCreationTime: DateTime.Utc, now: DateTime.Utc) => boolean;
   /** The hash of each intent the transaction carries: the value the ledger stamps on the coins it creates. */
   intentHashes: (tx: TTransaction) => readonly string[];
   /**

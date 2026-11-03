@@ -32,10 +32,6 @@ const traitOf = (era: FakeTx['era']): TransactionTraits.TransactionTrait<FakeTx>
   ids: (tx) => tx.ids,
   firstId: (tx) => tx.ids[0],
   areAllTxIdsIncluded: (tx, txIds) => tx.ids.every((id) => txIds.includes(id)),
-  isOneIncludedInOther: (tx, otherTx) =>
-    tx.era === otherTx.era &&
-    (tx.ids.every((id) => otherTx.ids.includes(id)) || otherTx.ids.every((id) => tx.ids.includes(id))),
-  hasTTLExpired: () => false,
   intentHashes: () => [],
   inputs: () => ({ unshielded: [] }),
   ttl: () => new Date(0),

@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { Array as Arr, DateTime, Duration, Either, HashSet, Option, Order, pipe } from 'effect';
+import { Array as Arr, DateTime, Duration, Either, HashSet, Option, pipe } from 'effect';
 import { type TransactionTraits } from '@midnightntwrk/wallet-sdk-capabilities';
 import {
   ProtocolVersion,
@@ -102,12 +102,6 @@ const ttlUnder =
     );
   };
 
-/** Passed, not reached: a transaction is still valid at the instant its TTL names. */
-const hasTTLExpiredUnder =
-  (dustGracePeriodSeconds: () => bigint) =>
-  (tx: FactsBearingTransaction, creationTime: DateTime.Utc, now: DateTime.Utc): boolean =>
-    DateTime.toEpochMillis(now) > ttlUnder(dustGracePeriodSeconds)(tx, creationTime).getTime();
-
 /** Each intent's hash, taken with the segment it sits in, as the ledger stamps it on the coins the intent creates. */
 const intentHashesOf = (tx: FactsBearingTransaction): readonly string[] =>
   [...(tx.intents?.entries() ?? [])].map(([segment, intent]) => intent.intentHash(segment));
@@ -142,19 +136,11 @@ export const v9FinalizedTransactionTrait: TransactionTraits.TransactionTrait<led
   firstId(tx: ledgerV9.FinalizedTransaction): string {
     return tx.identifiers()[0];
   },
-  hasTTLExpired: hasTTLExpiredUnder(v9DustGracePeriod),
   intentHashes: intentHashesOf,
   inputs: inputsOf,
   ttl: ttlUnder(v9DustGracePeriod),
   ids(tx: ledgerV9.FinalizedTransaction): readonly string[] {
     return tx.identifiers();
-  },
-  isOneIncludedInOther(tx: ledgerV9.FinalizedTransaction, otherTx: ledgerV9.FinalizedTransaction): boolean {
-    const txIds = HashSet.fromIterable(tx.identifiers());
-    const otherTxIds = HashSet.fromIterable(otherTx.identifiers());
-    const smallerSize = Order.min(Order.number)(HashSet.size(txIds), HashSet.size(otherTxIds));
-    const intersection = HashSet.intersection(txIds, otherTxIds);
-    return HashSet.size(intersection) == smallerSize;
   },
   isTx(tx: unknown): tx is ledgerV9.FinalizedTransaction {
     return tx instanceof ledgerV9.Transaction;
@@ -182,18 +168,11 @@ export const v8FinalizedTransactionTrait: TransactionTraits.TransactionTrait<led
   firstId(tx) {
     return tx.identifiers()[0];
   },
-  hasTTLExpired: hasTTLExpiredUnder(v8DustGracePeriod),
   intentHashes: intentHashesOf,
   inputs: inputsOf,
   ttl: ttlUnder(v8DustGracePeriod),
   ids(tx) {
     return tx.identifiers();
-  },
-  isOneIncludedInOther(tx, otherTx) {
-    const txIds = HashSet.fromIterable(tx.identifiers());
-    const otherTxIds = HashSet.fromIterable(otherTx.identifiers());
-    const smallerSize = Order.min(Order.number)(HashSet.size(txIds), HashSet.size(otherTxIds));
-    return HashSet.size(HashSet.intersection(txIds, otherTxIds)) == smallerSize;
   },
   isTx(tx: unknown): tx is ledgerV8.FinalizedTransaction {
     return tx instanceof ledgerV8.Transaction;
@@ -225,8 +204,6 @@ const overHandles = <T extends { serialize: () => Uint8Array }>(
     ids: (tx) => trait.ids(carried(tx)),
     firstId: (tx) => trait.firstId(carried(tx)),
     areAllTxIdsIncluded: (tx, txIds) => trait.areAllTxIdsIncluded(carried(tx), txIds),
-    isOneIncludedInOther: (tx, otherTx) => trait.isOneIncludedInOther(carried(tx), carried(otherTx)),
-    hasTTLExpired: (tx, creationTime, now) => trait.hasTTLExpired(carried(tx), creationTime, now),
     intentHashes: (tx) => trait.intentHashes(carried(tx)),
     inputs: (tx) => trait.inputs(carried(tx)),
     ttl: (tx, createdAt) => trait.ttl(carried(tx), createdAt),
@@ -382,14 +359,6 @@ const lifecycleTraitOf = <T extends (V8AnyTransaction | V9AnyTransaction) & Ledg
     firstId: (held) => ids(held)[0],
     areAllTxIdsIncluded: (held, txIds) =>
       HashSet.isSubset(HashSet.fromIterable(ids(held)), HashSet.fromIterable(txIds)),
-    isOneIncludedInOther: (held, other) => {
-      const heldIds = HashSet.fromIterable(ids(held));
-      const otherIds = HashSet.fromIterable(ids(other));
-      const smallerSize = Order.min(Order.number)(HashSet.size(heldIds), HashSet.size(otherIds));
-      return HashSet.size(HashSet.intersection(heldIds, otherIds)) === smallerSize;
-    },
-    hasTTLExpired: (held, creationTime, now) =>
-      hasTTLExpiredUnder(dustGracePeriodSeconds)(own(held), creationTime, now),
     intentHashes: (held) => intentHashesOf(own(held)),
     inputs: (held) => inputsOf(own(held)),
     ttl: (held, createdAt) => ttlUnder(dustGracePeriodSeconds)(own(held), createdAt),

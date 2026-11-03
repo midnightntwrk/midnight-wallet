@@ -43,8 +43,6 @@ const ledgerTrait = (ledger: LedgerTx['ledger']): TransactionTraits.TransactionT
   ids: (tx) => tx.ids,
   firstId: (tx) => tx.ids[0],
   areAllTxIdsIncluded: (tx, ids) => tx.ids.every((id) => ids.includes(id)),
-  isOneIncludedInOther: () => false,
-  hasTTLExpired: () => false,
   intentHashes: (tx) => tx.ids.map((id) => `${ledger}-intent-${id}`),
   inputs: (tx) => ({ unshielded: tx.ids.map((id) => `${ledger}-coin-${id}#0`) }),
   ttl: (_tx, createdAt) => new Date(DateTime.toEpochMillis(createdAt) + LIFETIME_MS[ledger]),
