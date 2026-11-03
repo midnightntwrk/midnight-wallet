@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { Schema } from 'effect';
+import { Either, type ParseResult, Schema } from 'effect';
 
 /**
  * Every format version the transaction lifecycle store has been written in, oldest first.
@@ -64,6 +64,26 @@ const V1Store = Schema.Struct({
 });
 
 const isV1Store: (json: unknown) => json is typeof V1Store.Type = Schema.is(V1Store);
+
+const isStampedV1 = (json: unknown): boolean =>
+  typeof json === 'object' && json !== null && 'version' in json && json.version === V1_SNAPSHOT_FORMAT_VERSION;
+
+/**
+ * Refuses a store stamped `v1` that does not have the `v1` shape, with the reason it does not.
+ *
+ * @remarks
+ *   Run before {@link upgradeSnapshotV1ToV2}, which hands back anything that is not a `v1` store unchanged. Without this
+ *   check a damaged `v1` store would reach the `v2` reader and be refused for its version, which this build does read,
+ *   rather than for what is actually wrong in it. Anything not stamped `v1` passes through for the reader after it to
+ *   judge.
+ * @example
+ *   const checked = checkV1Store(JSON.parse(stored));
+ *
+ * @param json The store as decoded from its JSON string.
+ * @returns The input unchanged, or why a store stamped `v1` is not one.
+ */
+export const checkV1Store = (json: unknown): Either.Either<unknown, ParseResult.ParseError> =>
+  isStampedV1(json) ? Either.map(Schema.decodeUnknownEither(V1Store)(json), () => json) : Either.right(json);
 
 /**
  * A pending item was finalized at least, and `v1` showed it as submitted. When it was submitted was never kept: its

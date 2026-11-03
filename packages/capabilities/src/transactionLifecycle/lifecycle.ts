@@ -26,7 +26,7 @@
 import { ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Buffer } from 'buffer';
 import { Array as Arr, Data, DateTime, Either, Match, Option, ParseResult, pipe, Schema, type SchemaAST } from 'effect';
-import { SNAPSHOT_FORMAT_VERSION, upgradeSnapshotV1ToV2 } from './SnapshotFormat.js';
+import { checkV1Store, SNAPSHOT_FORMAT_VERSION, upgradeSnapshotV1ToV2 } from './SnapshotFormat.js';
 import {
   type FailedTransactionResult,
   type Inputs,
@@ -692,6 +692,7 @@ export const deserialize = <TTransaction>(
   pipe(
     serialized,
     Schema.decodeUnknownEither(Schema.parseJson()),
+    Either.flatMap(checkV1Store),
     Either.flatMap((parsed) => {
       const json = upgradeSnapshotV1ToV2(parsed);
       const schema = StoredStruct(traits);
