@@ -40,6 +40,7 @@ import {
   deriveWalletKeys,
   makeSimulatorFacade,
   SilentPendingTransactions,
+  DrivenLifecycle,
   tokenValue,
   type AnyVersionProvingService,
   waitForUnshieldedBalance,
@@ -331,9 +332,9 @@ describe('Balancing a transaction the caller already put its own coins into', ()
 
 describe('Bookings restored from a snapshot', () => {
   // A snapshot carries the coins a previous process had booked, and nothing in it says whether their transactions are
-  // still out there. Once sync reaches the tip, a booked coin no transaction spent is free again, except where the
-  // pending set still accounts for it: a transaction being tracked is what says its coins are spoken for from
-  // submission onwards, so a coin it spends has to stay booked.
+  // still out there. Once sync reaches the tip, a booked coin no transaction spent is free again, except where a live
+  // record still accounts for it: a transaction recorded and not yet ended says its coins are spoken for, so a coin it
+  // spends has to stay booked.
   it('keeps a restored booking a tracked transaction spends, and frees the one nothing accounts for', () =>
     Effect.gen(function* () {
       const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
@@ -367,25 +368,25 @@ describe('Bookings restored from a snapshot', () => {
           rx.firstValueFrom(facade.state().pipe(rx.filter((state) => state.unshielded.pendingCoins.length === count))),
         );
 
-      // The first transfer is finalized, so the pending set tracks it and it alone accounts for its coin.
+      // The first transfer is finalized, so its record alone accounts for its coin.
       const tracked = yield* Effect.promise(() => transfer());
       const [trackedCoin] = (yield* pendingCoinsReach(previous, 1)).unshielded.pendingCoins.map(utxoKey);
       yield* Effect.promise(() => previous.finalizeRecipe(tracked));
 
-      // The second is abandoned after balancing; its coin stays booked with nothing in the restored pending set for it.
+      // The second is abandoned after balancing; its coin stays booked with no restored record for it.
       yield* Effect.promise(() => transfer());
       const bookedByPrevious = (yield* pendingCoinsReach(previous, 2)).unshielded.pendingCoins.map(utxoKey);
       const [abandonedCoin] = bookedByPrevious.filter((id) => id !== trackedCoin);
 
       const snapshot = yield* Effect.promise(() => previous.unshielded.serializeState());
-      const { all } = yield* pendingSet(previous);
-      expect(all).toHaveLength(1);
+      const lifecycle = yield* Effect.promise(() => rx.firstValueFrom(previous.transactionLifecycleService.state()));
+      const trackedRecords = lifecycle.records.filter((record) => record.state._tag === 'Finalized');
+      expect(trackedRecords).toHaveLength(1);
       expect(abandonedCoin).toBeDefined();
 
-      // The restored pending set holds the tracked transaction and no reservation, so the tracked transaction is the only
-      // thing that can account for either booking.
-      const restoredPending = new SilentPendingTransactions();
-      restoredPending.states.next({ all, reservations: [] });
+      // The restored records hold the tracked transaction alone, so it is the only thing that can account for either
+      // booking.
+      const restoredLifecycle = new DrivenLifecycle({ records: trackedRecords });
       const RestoredUnshieldedWallet = CustomUnshieldedWallet(
         { ...config, txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>() },
         new UnshieldedV2Builder()
@@ -400,7 +401,8 @@ describe('Bookings restored from a snapshot', () => {
       );
       const restored = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config), {
         unshielded: () => RestoredUnshieldedWallet.restore(snapshot),
-        pendingTransactionsService: () => restoredPending,
+        pendingTransactionsService: () => new SilentPendingTransactions(),
+        transactionLifecycleService: () => restoredLifecycle,
       });
 
       const settled = yield* Effect.promise(() =>
