@@ -30,9 +30,12 @@ import * as ledgerV9 from '@midnightntwrk/ledger-v9';
  * Prefer the ledger transaction hash — it's the canonical chain identifier and the value the indexer reports a
  * confirmed tx under. `transactionHash()` is only defined for proven + signed + bound transactions, though; it throws
  * for the other variants, notably the proof-erased transactions the simulator produces. In that case fall back to the
- * hex of the tx's serialized bytes: `serialize()` is total over every variant (it's the same encoding used to submit
- * the tx), so a key is always available — unlike `identifiers[0]`, which is an identifier, not a hash of the
- * transaction.
+ * hex of the tx's bytes with its proofs erased, so a key is always available — unlike `identifiers[0]`, which is an
+ * identifier, not a hash of the transaction.
+ *
+ * The fallback never uses an unproven transaction's own bytes: they carry the preimages its proofs are made from, which
+ * can hold key material, and the key is stored. Erasing the proofs of a transaction already proof-erased leaves its
+ * bytes as they were, so the simulator's transactions keep the key they always had.
  *
  * Both the submit (pending) and revert (rejected) sides route through this one function so they can never disagree on
  * the key. The fallback is deterministic: the same transaction object yields the same bytes every time, and the
@@ -40,11 +43,14 @@ import * as ledgerV9 from '@midnightntwrk/ledger-v9';
  * (Serialization differs across lifecycle states, so this is only stable for a fixed tx — which is exactly the
  * submit→revert flow.)
  */
-export const txHistoryHash = (tx: { transactionHash: () => unknown; serialize: () => Uint8Array }): string => {
+export const txHistoryHash = (tx: {
+  transactionHash: () => unknown;
+  eraseProofs: () => { serialize: () => Uint8Array };
+}): string => {
   try {
     return String(tx.transactionHash());
   } catch {
-    return Buffer.from(tx.serialize()).toString('hex');
+    return Buffer.from(tx.eraseProofs().serialize()).toString('hex');
   }
 };
 
