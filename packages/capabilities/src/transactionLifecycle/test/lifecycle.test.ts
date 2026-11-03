@@ -324,14 +324,30 @@ describe('A transaction in a final state', () => {
     ['submitting it', (state) => Lifecycle.submitted(state, facts('finalized', ['id-a']), SUBMITTED_AT)],
   ];
 
-  it.each(FINAL_STATES.flatMap((final) => events.map(([event, apply]) => [final._tag, event, final, apply] as const)))(
-    'should stay %s after %s, because a final state never moves',
-    (_tag, _event, final, apply) => {
-      const before = holding(final);
+  it.each(
+    FINAL_STATES.flatMap((final) =>
+      events
+        // Sending a reverted transaction again is a fact, as an inclusion is: it is pinned on its own below.
+        .filter(([event]) => !(final._tag === 'Reverted' && event === 'submitting it'))
+        .map(([event, apply]) => [final._tag, event, final, apply] as const),
+    ),
+  )('should stay %s after %s, because a final state never moves', (_tag, _event, final, apply) => {
+    const before = holding(final);
 
-      expect(apply(before)).toStrictEqual(before);
-    },
-  );
+    expect(apply(before)).toStrictEqual(before);
+  });
+
+  // A submission that threw is reverted, and the caller may send the same transaction again. Once it is sent it is in
+  // flight, whatever the wallet concluded before, so the record must await its answer again.
+  it('should submit a reverted record again when the transaction is sent again, because sending it is a fact', () => {
+    const final = facts('finalized', ['id-a']);
+
+    const state = Lifecycle.submitted(holding(Lifecycle.LifecycleState.Reverted()), final, SUBMITTED_AT);
+
+    expect(state.records).toStrictEqual([
+      recordOf(final, BALANCED_AT, Lifecycle.LifecycleState.Submitted(), Option.some(SUBMITTED_AT)),
+    ]);
+  });
 
   // A block's time is within the TTL, so an inclusion sync reports late happened before the wallet gave up on the
   // transaction. These ends are the wallet's inference; the inclusion is a fact.

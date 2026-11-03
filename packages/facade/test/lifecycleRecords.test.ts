@@ -583,6 +583,33 @@ describe('A reverted transaction’s lifecycle record', () => {
       ]);
     }).pipe(Effect.scoped, Effect.runPromise));
 
+  it('should await an answer again when a submission that threw is retried and goes through, because the transaction is in flight', () =>
+    Effect.gen(function* () {
+      const attempts = { count: 0 };
+      const { facade } = yield* fundedFacade({
+        submissionService: () => ({
+          // Refuses the first submission only, as a node that was briefly unreachable does.
+          submitTransaction: (): Promise<never> =>
+            ++attempts.count === 1
+              ? Promise.reject(new Error('the node was unreachable'))
+              : new Promise<never>(() => undefined),
+          close: () => Promise.resolve(),
+        }),
+      });
+      const recipe = yield* Effect.promise(() => selfTransfer(facade, ttlOn(facade)));
+      const finalizedTx = yield* Effect.promise(() => facade.finalizeRecipe(recipe));
+      yield* Effect.flip(Effect.tryPromise(() => facade.submitTransaction(finalizedTx)));
+
+      // The retry is in flight: it has been handed to the node and no answer has come back.
+      void facade.submitTransaction(finalizedTx);
+      yield* Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 10)));
+
+      expect(attempts.count).toBe(2);
+      expect(recordsCovering(yield* lifecycleOf(facade), finalizedTx).map((record) => record.state)).toStrictEqual([
+        { _tag: 'Submitted' },
+      ]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
   it('should not be left live by a builder that fails, because the builder gives back what it booked', () =>
     Effect.gen(function* () {
       const { facade } = yield* fundedFacade();
