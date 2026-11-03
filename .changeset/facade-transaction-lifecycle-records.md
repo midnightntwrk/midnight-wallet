@@ -18,6 +18,9 @@ Also fixed:
 
 - `submitTransaction` records a transaction under its own protocol version, not the version the wallets last reported.
 - `finalizeRecipe` gives back everything the recipe booked when finalizing it fails.
+- A transaction that misses its TTL before it is submitted gives back its Dust at once, not hours later.
+- A chain verdict on a transaction finalized here but submitted by someone else, as in a swap, now ends its entry.
+- Reverting a transaction that is not yet proven no longer stores its unproven bytes as its history key.
 
 BREAKING CHANGE — renamed and reshaped, with no deprecated aliases:
 
@@ -28,7 +31,8 @@ BREAKING CHANGE — renamed and reshaped, with no deprecated aliases:
 | restoring with `finalizedTransactionTraits` | `lifecycleTransactionTraits` |
 | `FacadeState.pending`, `PendingTransaction`, `PendingStatus`, `pendingTransactionsOf` | `FacadeState.lifecycle`, `LifecycleEntry`, `LifecycleStatus`, `lifecycleEntriesOf` |
 | `transaction: FinalizedTx`, `submittedAt: DateTime.Utc` | both `Option`s: none until finalized, and until submitted |
-| status tags | add `Balanced`, `Finalized`, `Expired`, `Reverted` |
+| status tags | add `Balanced`, `Finalized`, `PartialSuccess`, `Expired`, `Reverted` |
 | `Confirmed { segments }`, `Rejected { segments }` | `Confirmed`, `Rejected { reason }` (`Refused { segments }` or `TTLPassed`) |
+| a partial success shown as `Rejected { segments }` | `PartialSuccess { segments }` |
 | `!state.pending.length` | `!state.lifecycle.some(isAwaiting)` |
 | `finalizedTransactionTraits` entries' `hasTTLExpired`, `isOneIncludedInOther` | `intentHashes`, `inputs`, `ttl` |
