@@ -4,5 +4,7 @@
 
 fix(capabilities): stop counting an expired reservation's coins as spoken for
 
-`PendingTransactions.coveredUnshieldedIds` now leaves out reservations whose TTL has passed. No chain can accept their
-transactions any more, so the facade's release of restored bookings frees those coins instead of keeping them held.
+`coveredUnshieldedIds` now leaves out a balanced transaction whose TTL passed before it was submitted: an expired
+reservation in the previous release, an `Expired` lifecycle record in this one (`Lifecycle.coveredUnshieldedIds`). No
+chain can accept such a transaction any more, so the facade's release of restored bookings frees its coins instead of
+keeping them held.
