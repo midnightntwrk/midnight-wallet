@@ -14,9 +14,14 @@
  */
 
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { TransactionStatus, type TransactionStatusQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
-import { QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Chunk, DateTime, Effect, Either, Fiber, Option, pipe, Stream, TestClock, TestContext } from 'effect';
+import {
+  TransactionStatus,
+  type TransactionStatusQuery,
+  type TransactionStatusQueryVariables,
+} from '@midnightntwrk/wallet-sdk-indexer-client';
+import { type Query, QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
+import { Chunk, DateTime, Effect, Either, Fiber, Option, pipe, Ref, Stream, TestClock, TestContext } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as Lifecycle from '../lifecycle.js';
 import { TransactionLifecycleServiceEffectImpl } from '../lifecycleService.js';
@@ -249,5 +254,219 @@ describe('The transaction lifecycle service', () => {
         recordOf(held, BALANCED_AT, Lifecycle.LifecycleState.Balanced()),
         recordOf(sent, SUBMITTED_AT, Lifecycle.LifecycleState.Submitted(), Option.some(SUBMITTED_AT)),
       ]);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise));
+});
+
+type StatusQuery = Query.Query.QueryFn<TransactionStatusQuery, TransactionStatusQueryVariables>;
+type ReportedStatus = 'SUCCESS' | 'FAILURE' | 'PARTIAL_SUCCESS';
+type Segments = ReadonlyArray<{ id: number; success: boolean }>;
+
+/** What the indexer reports for each transaction it has seen, keyed by the identifiers it reports it under. */
+type Reported = ReadonlyArray<{ identifiers: readonly string[]; status: ReportedStatus; segments: Segments }>;
+
+/** An indexer that answers from `reported`, noting every identifier it was asked about in `asked`. */
+const indexerOf =
+  (reported: Reported, asked: Ref.Ref<readonly string[]>): StatusQuery =>
+  ({ transactionId }) =>
+    pipe(
+      Ref.update(asked, (ids) => [...ids, transactionId]),
+      Effect.as<TransactionStatusQuery>({
+        transactions: reported
+          .filter((entry) => entry.identifiers.includes(transactionId))
+          .map((entry) => ({
+            __typename: 'RegularTransaction' as const,
+            identifiers: [...entry.identifiers],
+            transactionResult: {
+              __typename: 'TransactionResult' as const,
+              status: entry.status,
+              segments: entry.segments.map((segment) => ({ __typename: 'Segment' as const, ...segment })),
+            },
+          })),
+      }),
+    );
+
+/** Runs the service's poll for `count` ticks against `indexer`. */
+const tickAgainst = (
+  service: TransactionLifecycleServiceEffectImpl<FakeTransaction>,
+  indexer: StatusQuery,
+  count = 1,
+) =>
+  service.startPolling(Stream.range(1, count)).pipe(
+    Effect.provideService(TransactionStatus.tag, indexer),
+    // Type cast required because: the stubbed status query above never reaches a client.
+    Effect.provideService(QueryClient, {} as unknown as QueryClient.Service),
+    Effect.scoped,
+  );
+
+const SEGMENTS: Segments = [
+  { id: 0, success: true },
+  { id: 1, success: false },
+];
+
+/** Moves a fresh record of `spend` into each live state, the way the facade would. */
+const LIVE_MOVES = [
+  {
+    live: 'balanced',
+    move: (service: TransactionLifecycleServiceEffectImpl<FakeTransaction>, spend: typeof SPEND) =>
+      service.balanced(spend),
+    submittedAt: Option.none<DateTime.Utc>(),
+  },
+  {
+    live: 'finalized',
+    move: (service: TransactionLifecycleServiceEffectImpl<FakeTransaction>, spend: typeof SPEND) =>
+      service.finalized(spend),
+    submittedAt: Option.none<DateTime.Utc>(),
+  },
+  {
+    live: 'submitted',
+    move: (service: TransactionLifecycleServiceEffectImpl<FakeTransaction>, spend: typeof SPEND) =>
+      service.submitted(spend),
+    submittedAt: Option.some(BALANCED_AT),
+  },
+];
+
+const SPEND = facts(['id-a', 'id-b']);
+
+describe('The transaction lifecycle service polling the indexer', () => {
+  it.each(LIVE_MOVES)(
+    'should confirm a $live transaction the indexer reports included, and keep its record, because whoever submitted it the coins are spent',
+    ({ move, submittedAt }) =>
+      Effect.gen(function* () {
+        const service = new TransactionLifecycleServiceEffectImpl(traits);
+        const asked = yield* Ref.make<readonly string[]>([]);
+
+        yield* setClock(BALANCED_AT);
+        yield* move(service, SPEND);
+        yield* setClock(BEFORE_TTL);
+        yield* tickAgainst(
+          service,
+          indexerOf([{ identifiers: SPEND.identifiers, status: 'SUCCESS', segments: [] }], asked),
+        );
+
+        expect(yield* currentRecords(service)).toStrictEqual([
+          recordOf(SPEND, BALANCED_AT, Lifecycle.LifecycleState.Confirmed(), submittedAt),
+        ]);
+      }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise),
+  );
+
+  it.each(['FAILURE', 'PARTIAL_SUCCESS'] as const)(
+    'should reject a submitted transaction the indexer reports with %s, carrying the segments the chain reported',
+    (status) =>
+      Effect.gen(function* () {
+        const service = new TransactionLifecycleServiceEffectImpl(traits);
+        const asked = yield* Ref.make<readonly string[]>([]);
+
+        yield* setClock(BALANCED_AT);
+        yield* service.submitted(SPEND);
+        yield* setClock(BEFORE_TTL);
+        yield* tickAgainst(service, indexerOf([{ identifiers: SPEND.identifiers, status, segments: SEGMENTS }], asked));
+
+        expect(yield* currentRecords(service)).toStrictEqual([
+          recordOf(
+            SPEND,
+            BALANCED_AT,
+            Lifecycle.LifecycleState.Rejected({ verdict: { status, segments: SEGMENTS } }),
+            Option.some(BALANCED_AT),
+          ),
+        ]);
+      }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise),
+  );
+
+  it.each([
+    { name: 'the indexer has not seen it', reported: [] },
+    {
+      name: 'the indexer reports a transaction holding only some of its identifiers',
+      reported: [{ identifiers: ['id-a'], status: 'SUCCESS' as const, segments: [] }],
+    },
+  ])('should leave a submitted transaction as it was while $name', ({ reported }) =>
+    Effect.gen(function* () {
+      const service = new TransactionLifecycleServiceEffectImpl(traits);
+      const asked = yield* Ref.make<readonly string[]>([]);
+
+      yield* setClock(BALANCED_AT);
+      yield* service.submitted(SPEND);
+      yield* setClock(BEFORE_TTL);
+      yield* tickAgainst(service, indexerOf(reported, asked));
+
+      expect(yield* currentRecords(service)).toStrictEqual([
+        recordOf(SPEND, BALANCED_AT, Lifecycle.LifecycleState.Submitted(), Option.some(BALANCED_AT)),
+      ]);
+      expect(yield* Ref.get(asked)).toStrictEqual(['id-a']);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise),
+  );
+
+  it('should confirm a transaction the indexer reports included on the tick its TTL passes, because the inclusion came first', () =>
+    Effect.gen(function* () {
+      const service = new TransactionLifecycleServiceEffectImpl(traits);
+      const asked = yield* Ref.make<readonly string[]>([]);
+
+      yield* setClock(BALANCED_AT);
+      yield* service.submitted(SPEND);
+
+      const published = service.state().pipe(
+        Stream.takeUntil((state) => state.records.length === 0),
+        Stream.runCollect,
+        Effect.runFork,
+      );
+
+      yield* setClock(PAST_TTL);
+      yield* tickAgainst(
+        service,
+        indexerOf([{ identifiers: SPEND.identifiers, status: 'SUCCESS', segments: [] }], asked),
+      );
+
+      const emitted = yield* Fiber.join(published);
+      expect(Chunk.toReadonlyArray(emitted).map((state) => state.records)).toStrictEqual([
+        [recordOf(SPEND, BALANCED_AT, Lifecycle.LifecycleState.Submitted(), Option.some(BALANCED_AT))],
+        [recordOf(SPEND, BALANCED_AT, Lifecycle.LifecycleState.Confirmed(), Option.some(BALANCED_AT))],
+        [],
+      ]);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise));
+
+  it('should still end a transaction whose TTL has passed when the indexer cannot be reached, so a poll failure never keeps coins spoken for', () =>
+    Effect.gen(function* () {
+      const service = new TransactionLifecycleServiceEffectImpl(traits);
+      const unreachable: StatusQuery = () => Effect.fail(new ServerError({ message: 'indexer unreachable' }));
+
+      yield* setClock(BALANCED_AT);
+      yield* service.balanced(SPEND);
+
+      const published = service.state().pipe(
+        Stream.takeUntil((state) => state.records.length === 0),
+        Stream.runCollect,
+        Effect.runFork,
+      );
+
+      yield* setClock(PAST_TTL);
+      yield* tickAgainst(service, unreachable);
+
+      const emitted = yield* Fiber.join(published);
+      expect(Chunk.toReadonlyArray(emitted).map((state) => state.records)).toStrictEqual([
+        [recordOf(SPEND, BALANCED_AT, Lifecycle.LifecycleState.Balanced())],
+        [recordOf(SPEND, BALANCED_AT, Lifecycle.LifecycleState.Expired())],
+        [],
+      ]);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise));
+
+  it('should ask only about live records that hold their transaction, by each one’s first identifier', () =>
+    Effect.gen(function* () {
+      const heldOnly: Lifecycle.LifecycleRecord<FakeTransaction> = {
+        ...recordOf(facts(['id-held']), BALANCED_AT, Lifecycle.LifecycleState.Balanced()),
+        tx: Option.none(),
+        protocolVersion: Option.none(),
+      };
+      const service = new TransactionLifecycleServiceEffectImpl(traits, { records: [heldOnly] });
+      const asked = yield* Ref.make<readonly string[]>([]);
+
+      yield* setClock(BALANCED_AT);
+      yield* service.balanced(facts(['id-balanced', 'id-balanced-2']));
+      yield* service.finalized(facts(['id-finalized']));
+      yield* service.submitted(facts(['id-submitted']));
+      yield* service.balanced(facts(['id-reverted']));
+      yield* service.reverted(['id-reverted']);
+      yield* setClock(BEFORE_TTL);
+      yield* tickAgainst(service, indexerOf([], asked));
+
+      expect([...(yield* Ref.get(asked))].sort()).toStrictEqual(['id-balanced', 'id-finalized', 'id-submitted']);
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise));
 });
