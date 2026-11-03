@@ -2,40 +2,33 @@
 '@midnightntwrk/wallet-sdk-facade': major
 ---
 
-feat(facade)!: track every transaction as one lifecycle record, from balancing to its final state
+feat(facade)!: show every transaction's lifecycle in FacadeState
 
-The facade now records each transaction it balances, finalizes, submits or reverts in
-`facade.transactionLifecycleService`, stamped by the facade's clock. A record ends confirmed or rejected from the
-inclusions each wallet's sync writes, as well as from the indexer. When a finalized or submitted record ends rejected or
-orphaned, the facade releases its coins; the release of restored bookings reads the records.
+The facade records each transaction it balances, finalizes, submits or reverts in
+`facade.transactionLifecycleService`, and shows them in `FacadeState.lifecycle`. A finalized transaction that was never
+sent now shows as `Finalized`, not `Submitted`, and `submittedAt` is when it was submitted. Ended entries stay listed
+until their TTL passes; `isAwaiting` tells the ones still waiting for an answer.
 
-`FacadeState.lifecycle` lists every record, including ones that have ended, until their TTL passes. The new `isAwaiting`
-tells the entries still waiting for an answer from the ended ones.
+Save the store with `facade.transactionLifecycleService.serializeState()` and hand it back through
+`InitParams.transactionLifecycleService`:
+`(config, { clock }) => TransactionLifecycleServiceImpl.restore(stored, lifecycleTransactionTraits(config.forks.v9), config, clock)`.
+A balanced transaction is saved with its proofs erased, so the store holds no secret key.
 
-The service now holds each transaction as a `LifecycleTx` (the ledger transaction in whatever proof state its record
-calls for, beside its protocol version) instead of a `FinalizedTx` handle. An application that stores the records and
-hands them back must write and read them with `lifecycleTransactionTraits(configuration.forks.v9)`, not
-`finalizedTransactionTraits`: `TransactionLifecycleServiceImpl.restore(stored, lifecycleTransactionTraits(forks.v9),
-configuration)`, and `Lifecycle.serialize(state, lifecycleTransactionTraits(forks.v9))` to store. A store written by an
-earlier release, in format `v1`, is read and upgraded; once this release has written it in `v2`, an earlier release
-refuses it, so downgrading loses the pending records (each wallet's own bookings are untouched).
+Also fixed:
 
-BREAKING CHANGE — the pending-transactions API changes shape:
+- `submitTransaction` records a transaction under its own protocol version, not the version the wallets last reported.
+- `finalizeRecipe` gives back everything the recipe booked when finalizing it fails.
+
+BREAKING CHANGE — renamed and reshaped, with no deprecated aliases:
 
 | Before | After |
 | --- | --- |
-| `facade.pendingTransactionsService: PendingTransactionsService<FinalizedTx>` | `facade.transactionLifecycleService: TransactionLifecycleService<LifecycleTx>` |
-| `InitParams.pendingTransactionsService`, returning a `PendingTransactionsService<FinalizedTx>` | `InitParams.transactionLifecycleService`, returning a `TransactionLifecycleService<LifecycleTx>` |
-| a stored store restored with `finalizedTransactionTraits(forks.v9)` | restored with `lifecycleTransactionTraits(forks.v9)` |
-| `FacadeState.pending` | `FacadeState.lifecycle` |
-| `new FacadeState(shielded, unshielded, dust, pending, forkVersion)`, `pending` a `PendingTransactions.PendingTransactions<FinalizedTx>` | the fourth argument is a `Lifecycle.TransactionLifecycle<LifecycleTx>` |
-| `PendingTransaction` | `LifecycleEntry` |
-| `PendingStatus` | `LifecycleStatus` |
-| `pendingTransactionsOf(pending)` | `lifecycleEntriesOf(lifecycle)`, over `Lifecycle.TransactionLifecycle` |
-| `PendingTransaction.transaction: FinalizedTx` | `Option<FinalizedTx>`: none while only balanced |
-| `PendingTransaction.submittedAt: DateTime.Utc`, the time it was finalized | `Option<DateTime.Utc>`: the time it was submitted, none until then and for a record read from a `v1` store |
-| — | `LifecycleEntry.identifiers` |
-| `PendingStatus` tags | adds `Balanced`, `Finalized`, `Expired` and `Reverted` |
-| `Confirmed { segments }` | `Confirmed`, with no segments |
-| `Rejected { segments }` | `Rejected { reason }`: `Refused { segments }` or `TTLPassed` |
-| `!state.pending.length` to wait until settled | `!state.lifecycle.some(isAwaiting)`: ended entries stay listed |
+| `facade.pendingTransactionsService` | `facade.transactionLifecycleService` |
+| `InitParams.pendingTransactionsService(config)` | `InitParams.transactionLifecycleService(config, { clock })` |
+| restoring with `finalizedTransactionTraits` | `lifecycleTransactionTraits` |
+| `FacadeState.pending`, `PendingTransaction`, `PendingStatus`, `pendingTransactionsOf` | `FacadeState.lifecycle`, `LifecycleEntry`, `LifecycleStatus`, `lifecycleEntriesOf` |
+| `transaction: FinalizedTx`, `submittedAt: DateTime.Utc` | both `Option`s: none until finalized, and until submitted |
+| status tags | add `Balanced`, `Finalized`, `Expired`, `Reverted` |
+| `Confirmed { segments }`, `Rejected { segments }` | `Confirmed`, `Rejected { reason }` (`Refused { segments }` or `TTLPassed`) |
+| `!state.pending.length` | `!state.lifecycle.some(isAwaiting)` |
+| `finalizedTransactionTraits` entries' `hasTTLExpired`, `isOneIncludedInOther` | `intentHashes`, `inputs`, `ttl` |
