@@ -386,7 +386,7 @@ describe('A builder that rejects at fee payment', () => {
 });
 
 /** The ledger transaction a handle carries, at the one epoch the simulator facade ever runs. */
-const opened = <T>(handle: FinalizedTx | UnboundTx): T =>
+const opened = <T>(handle: FinalizedTx | UnboundTx | UnprovenTx): T =>
   Either.getOrThrow(
     WalletTransaction.unwrapWithin<T>(
       handle,
@@ -471,6 +471,76 @@ describe('A recipe whose finalizing fails after its balancing part was finalized
 
       expect(releasedParts(releases, [recipe.baseTransaction, recipe.balancingTransaction])).toStrictEqual(onceEach(2));
       expect(yield* Effect.promise(() => history.getAll())).toStrictEqual(historyBefore);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/** The identifiers a handle's transaction carries, at the one epoch the simulator facade ever runs. */
+const identifiersOf = (handle: FinalizedTx | UnprovenTx): readonly string[] =>
+  opened<ledger.FinalizedTransaction | ledger.UnprovenTransaction>(handle).identifiers();
+
+/** The coins a transaction spends in its guaranteed segment, shielded and unshielded. */
+const guaranteedInputCount = (tx: ledger.UnprovenTransaction): number =>
+  (tx.guaranteedOffer?.inputs.length ?? 0) +
+  [...(tx.intents?.values() ?? [])].reduce(
+    (count, intent) => count + (intent.guaranteedUnshieldedOffer?.inputs.length ?? 0),
+    0,
+  );
+
+const coversAll =
+  (identifiers: readonly string[]) =>
+  (record: Lifecycle.LifecycleRecord<LifecycleTx>): boolean =>
+    identifiers.every((id) => record.identifiers.includes(id));
+
+const coversAny =
+  (identifiers: readonly string[]) =>
+  (record: Lifecycle.LifecycleRecord<LifecycleTx>): boolean =>
+    identifiers.some((id) => record.identifiers.includes(id));
+
+describe('Balancing a transaction this facade already finalized', () => {
+  /**
+   * A caller's transaction that needs balancing, finalized by the facade itself, so it has a `Finalized` record of its
+   * own before it is balanced. The facade's proving leaves an intent unbound, which unshielded balancing of a finalized
+   * transaction refuses, so the caller's transaction carries no intent and asks only for shielded funds.
+   */
+  const finalizedByTheFacade = (facade: WalletFacade, keys: WalletKeys) =>
+    Effect.gen(function* () {
+      const tx = yield* Effect.promise(() =>
+        facade.finalizeTransaction(unproven(callersTransaction(keys, { shielded: tokenValue(1n) }))),
+      );
+      const records = (yield* lifecycleOf(facade)).records.filter(coversAny(identifiersOf(tx)));
+      expect(records.map((record) => record.state._tag)).toStrictEqual(['Finalized']);
+      return tx;
+    });
+
+  it('should hold the balancing part in a live balanced record, beside the finalized record of the transaction it balances, so the coins it booked are spoken for', () =>
+    Effect.gen(function* () {
+      const { facade, keys } = yield* fundedFacade({ withDust: true });
+      const tx = yield* finalizedByTheFacade(facade, keys);
+
+      const recipe = yield* Effect.promise(() => facade.balanceFinalizedTransaction(tx, { ttl: hourFromNow() }));
+
+      // The balancing part books coins of the wallet's own, so a record must say they are spoken for.
+      expect(guaranteedInputCount(opened<ledger.UnprovenTransaction>(recipe.balancingTransaction))).toBeGreaterThan(0);
+      const live = yield* liveRecordsOf(facade);
+      expect(
+        live.filter(coversAll(identifiersOf(recipe.balancingTransaction))).map((record) => record.state._tag),
+      ).toStrictEqual(['Balanced']);
+      expect(live.filter(coversAny(identifiersOf(tx)))).not.toStrictEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should fold the finalized transaction and its balancing part into one live finalized record once the recipe is finalized, because merging them makes one transaction', () =>
+    Effect.gen(function* () {
+      const { facade, keys } = yield* fundedFacade({ withDust: true });
+      const tx = yield* finalizedByTheFacade(facade, keys);
+      const recipe = yield* Effect.promise(() => facade.balanceFinalizedTransaction(tx, { ttl: hourFromNow() }));
+      expect(guaranteedInputCount(opened<ledger.UnprovenTransaction>(recipe.balancingTransaction))).toBeGreaterThan(0);
+      const parts = [...identifiersOf(tx), ...identifiersOf(recipe.balancingTransaction)];
+
+      yield* Effect.promise(() => facade.finalizeRecipe(recipe));
+
+      const covering = (yield* liveRecordsOf(facade)).filter(coversAny(parts));
+      expect(covering.map((record) => record.state._tag)).toStrictEqual(['Finalized']);
+      expect(covering.every(coversAll(parts))).toBe(true);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
