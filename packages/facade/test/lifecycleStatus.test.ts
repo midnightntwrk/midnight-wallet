@@ -21,11 +21,11 @@
  *   rather than by the list being empty.
  */
 import { NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import { DateTime, Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { isAwaiting, type PendingTransaction, pendingTransactionsOf } from '../src/index.js';
+import { isAwaiting, type LifecycleEntry, lifecycleEntriesOf } from '../src/index.js';
 import { type LifecycleTx } from '../src/transaction.js';
 
 const authoredFor = ProtocolVersion.MinSupportedVersion;
@@ -55,14 +55,14 @@ const aRecord = (
   ...overrides,
 });
 
-const onlyEntryOf = (record: Lifecycle.LifecycleRecord<LifecycleTx>): PendingTransaction => {
-  const entries = pendingTransactionsOf({ records: [record] });
+const onlyEntryOf = (record: Lifecycle.LifecycleRecord<LifecycleTx>): LifecycleEntry => {
+  const entries = lifecycleEntriesOf({ records: [record] });
   expect(entries).toHaveLength(1);
   return entries[0];
 };
 
 /** The ledger transaction an entry's handle carries, so a test can tell it is the very one the record holds. */
-const carriedBy = (entry: PendingTransaction): Option.Option<unknown> =>
+const carriedBy = (entry: LifecycleEntry): Option.Option<unknown> =>
   Option.map(entry.transaction, (handle) =>
     Either.getOrThrow(
       WalletTransaction.unwrapWithin<unknown>(
@@ -195,7 +195,7 @@ describe('the transactions an application waits on', () => {
 
 describe('the records', () => {
   it('give one entry each, in the order the wallet keeps them', () => {
-    const entries = pendingTransactionsOf({
+    const entries = lifecycleEntriesOf({
       records: [
         aRecord(Lifecycle.LifecycleState.Submitted(), { identifiers: ['first'] }),
         aRecord(Lifecycle.LifecycleState.Confirmed(), { identifiers: ['second'] }),
@@ -206,6 +206,6 @@ describe('the records', () => {
   });
 
   it('give an empty list when there are none', () => {
-    expect(pendingTransactionsOf(Lifecycle.empty())).toStrictEqual([]);
+    expect(lifecycleEntriesOf(Lifecycle.empty())).toStrictEqual([]);
   });
 });

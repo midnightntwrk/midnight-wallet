@@ -38,7 +38,7 @@ sync(): Stream.Stream<Update> → Capability.apply(state, update) → Subscripti
 **Canonical examples:**
 
 - `packages/unshielded-wallet/src/v2/UnshieldedState.ts` - Pure state transformations (`v1` is its ledger-v8 twin)
-- `packages/capabilities/src/pendingTransactions/lifecycleService.ts` - Service orchestrating pure updates
+- `packages/capabilities/src/transactionLifecycle/lifecycleService.ts` - Service orchestrating pure updates
 
 ### Parse, Don't Validate
 
@@ -298,14 +298,14 @@ State lives in **refs**, pure functions **transform** it, services **orchestrate
 
 ```typescript
 // State container
-#state: SubscriptionRef.SubscriptionRef<PendingTransactions>;
+#state: SubscriptionRef.SubscriptionRef<Lifecycle.TransactionLifecycle<TTransaction>>;
 
 // Initialize
 this.#state = SubscriptionRef.make<Type>(initialState).pipe(Effect.runSync);
 
 // Update with pure function
 SubscriptionRef.update(this.#state, (state) =>
-  PendingTransactions.addPendingTransaction(state, tx, now, this.#txTrait)
+  Lifecycle.reverted(state, identifiers)
 );
 
 // Observable stream of changes
@@ -394,7 +394,7 @@ TypeScript lacks typeclasses, but the codebase simulates them via explicit dicti
 **Trait Pattern** - Define operations over a generic type, pass instance explicitly:
 
 ```typescript
-// packages/capabilities/src/pendingTransactions/pendingTransactions.ts
+// packages/capabilities/src/transactionLifecycle/transactionTraits.ts
 export type TransactionTrait<TTransaction> = {
   ids: (tx: TTransaction) => readonly string[];
   firstId: (tx: TTransaction) => string;
@@ -404,23 +404,12 @@ export type TransactionTrait<TTransaction> = {
   deserialize: (serialized: Uint8Array) => TTransaction;
 };
 
-// Functions take trait as explicit parameter (dictionary passing)
-export const has = <TTransaction>(
-  transactions: PendingTransactions<TTransaction>,
-  transaction: TTransaction,
-  txTrait: TransactionTrait<TTransaction>,  // <-- typeclass instance
-): boolean => {
-  return transactions.all.some((item) =>
-    txTrait.areAllTxIdsIncluded(transaction, txTrait.ids(item.tx))
-  );
-};
-
-export const addPendingTransaction = <TTransaction>(
-  state: PendingTransactions<TTransaction>,
+// Functions take traits as an explicit parameter (dictionary passing)
+export const traitForTx = <TTransaction>(
+  traits: VersionedTransactionTrait<TTransaction>, // <-- typeclass instances, one per protocol version
   tx: TTransaction,
-  now: DateTime.Utc,
-  txTrait: TransactionTrait<TTransaction>,  // <-- same pattern
-): PendingTransactions<TTransaction> => { ... };
+): Option.Option<TransactionTrait<TTransaction>> =>
+  Option.orElse(recognisingTrait(traits, tx), () => headTrait(traits));
 ```
 
 This pattern allows generic functions to work with any type that has a matching trait implementation.
@@ -551,16 +540,16 @@ const result = pipe(
 
 ### Scala/F# Idiom Translation
 
-| Scala/F# Idiom    | TypeScript Equivalent                           | Example Location                                                       |
-| ----------------- | ----------------------------------------------- | ---------------------------------------------------------------------- |
-| for-comprehension | `Effect.gen(function* () { ... })`              | `packages/runtime/src/Runtime.ts`                                      |
-| case class        | `Data.TaggedError`, `Data.Class`                | `packages/node-client/src/effect/NodeClientError.ts`                   |
-| sealed trait / DU | `Data.taggedEnum`                               | `packages/runtime/src/abstractions/StateChange.ts`                     |
-| implicit / given  | `Context.Tag` + service resolution              | `packages/node-client/src/effect/NodeClient.ts`                        |
-| `\|>` pipe        | `pipe()` from effect                            | Throughout                                                             |
-| Railway-oriented  | `Either.map`, `Either.flatMap` chains           | `packages/utilities/src/EitherOps.ts`                                  |
-| Pattern matching  | `match({ onLeft, onRight })`, `$match`          | Throughout                                                             |
-| typeclass         | Trait interface + explicit passing, `Monoid<T>` | `packages/capabilities/src/pendingTransactions/pendingTransactions.ts` |
+| Scala/F# Idiom    | TypeScript Equivalent                           | Example Location                                                      |
+| ----------------- | ----------------------------------------------- | --------------------------------------------------------------------- |
+| for-comprehension | `Effect.gen(function* () { ... })`              | `packages/runtime/src/Runtime.ts`                                     |
+| case class        | `Data.TaggedError`, `Data.Class`                | `packages/node-client/src/effect/NodeClientError.ts`                  |
+| sealed trait / DU | `Data.taggedEnum`                               | `packages/runtime/src/abstractions/StateChange.ts`                    |
+| implicit / given  | `Context.Tag` + service resolution              | `packages/node-client/src/effect/NodeClient.ts`                       |
+| `\|>` pipe        | `pipe()` from effect                            | Throughout                                                            |
+| Railway-oriented  | `Either.map`, `Either.flatMap` chains           | `packages/utilities/src/EitherOps.ts`                                 |
+| Pattern matching  | `match({ onLeft, onRight })`, `$match`          | Throughout                                                            |
+| typeclass         | Trait interface + explicit passing, `Monoid<T>` | `packages/capabilities/src/transactionLifecycle/transactionTraits.ts` |
 
 ### Anti-Patterns (NEVER DO)
 
@@ -618,17 +607,17 @@ should still follow the same functional principles.
 
 When implementing new features, refer to these exemplary files:
 
-| Pattern                              | File                                                                   |
-| ------------------------------------ | ---------------------------------------------------------------------- |
-| Trait/typeclass (dictionary passing) | `packages/capabilities/src/pendingTransactions/pendingTransactions.ts` |
-| PolyFunction dispatch (ADT handling) | `packages/utilities/src/polyFunction.ts`                               |
-| Either utilities                     | `packages/utilities/src/EitherOps.ts`                                  |
-| Monoid, dual functions               | `packages/utilities/src/ArrayOps.ts`                                   |
-| Tagged enum ADT                      | `packages/runtime/src/abstractions/StateChange.ts`                     |
-| Service/Capability separation        | `packages/capabilities/src/pendingTransactions/lifecycleService.ts`    |
-| Pure state transformations           | `packages/unshielded-wallet/src/v2/UnshieldedState.ts`                 |
-| Parse don't validate                 | `packages/address-format/src/index.ts`                                 |
-| Branded types                        | `packages/abstractions/src/ProtocolVersion.ts`                         |
+| Pattern                              | File                                                                  |
+| ------------------------------------ | --------------------------------------------------------------------- |
+| Trait/typeclass (dictionary passing) | `packages/capabilities/src/transactionLifecycle/transactionTraits.ts` |
+| PolyFunction dispatch (ADT handling) | `packages/utilities/src/polyFunction.ts`                              |
+| Either utilities                     | `packages/utilities/src/EitherOps.ts`                                 |
+| Monoid, dual functions               | `packages/utilities/src/ArrayOps.ts`                                  |
+| Tagged enum ADT                      | `packages/runtime/src/abstractions/StateChange.ts`                    |
+| Service/Capability separation        | `packages/capabilities/src/transactionLifecycle/lifecycleService.ts`  |
+| Pure state transformations           | `packages/unshielded-wallet/src/v2/UnshieldedState.ts`                |
+| Parse don't validate                 | `packages/address-format/src/index.ts`                                |
+| Branded types                        | `packages/abstractions/src/ProtocolVersion.ts`                        |
 
 ## Documentation Standards
 

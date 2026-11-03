@@ -133,7 +133,7 @@ const summarize = (state: FacadeState): string =>
     },
     shieldedBalances: state.shielded.balances,
     unshieldedBalances: state.unshielded.balances,
-    awaiting: state.pending.filter(isAwaiting).length,
+    awaiting: state.lifecycle.filter(isAwaiting).length,
   });
 
 /** How a UTxO is named in both the wallet's state and a transaction's inputs. */
@@ -407,7 +407,8 @@ describe.sequential('Hard fork crossing @fork', () => {
     return await stateWhere(
       `the wallet to settle on the Night transfer ${label}`,
       wallet,
-      (state) => state.isSynced && !state.pending.some(isAwaiting) && state.unshielded.balances[NIGHT] !== nightBefore,
+      (state) =>
+        state.isSynced && !state.lifecycle.some(isAwaiting) && state.unshielded.balances[NIGHT] !== nightBefore,
     );
   };
 
@@ -637,7 +638,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       [NIGHT]: v8State.unshielded.balances[NIGHT] - TRANSFER_AMOUNT,
     });
     expect(v9State.shielded.balances).toEqual(v8State.shielded.balances);
-    expect(v9State.pending.filter(isAwaiting)).toStrictEqual([]);
+    expect(v9State.lifecycle.filter(isAwaiting)).toStrictEqual([]);
   });
 
   test('restores a V2 snapshot on the version it declares', async () => {
@@ -816,7 +817,7 @@ describe.sequential('Hard fork crossing @fork', () => {
         (state) =>
           state.isSynced &&
           state.unshielded.pendingCoins.length === 0 &&
-          !state.pending.some(isAwaiting) &&
+          !state.lifecycle.some(isAwaiting) &&
           state.unshielded.balances[NIGHT] !== nightBefore,
       );
       logger.info(`AFTER UNSHIELDED SPEND ${summarize(afterUnshieldedSpend)}`);
@@ -825,7 +826,7 @@ describe.sequential('Hard fork crossing @fork', () => {
       // Fees are dust, so the Night that left the wallet is exactly what was transferred.
       expect(afterUnshieldedSpend.unshielded.balances[NIGHT]).toBe(nightBefore - TRANSFER_AMOUNT);
       expect(afterUnshieldedSpend.unshielded.pendingCoins.length).toBe(0);
-      expect(afterUnshieldedSpend.pending.filter(isAwaiting)).toStrictEqual([]);
+      expect(afterUnshieldedSpend.lifecycle.filter(isAwaiting)).toStrictEqual([]);
 
       const receiverAfter = await stateWhere(
         'the receiver to see the transferred Night',
@@ -898,7 +899,7 @@ describe.sequential('Hard fork crossing @fork', () => {
         (state) =>
           state.isSynced &&
           state.shielded.pendingCoins.length === 0 &&
-          !state.pending.some(isAwaiting) &&
+          !state.lifecycle.some(isAwaiting) &&
           state.shielded.balances[shieldedToken] !== shieldedBefore,
       );
       logger.info(`AFTER SHIELDED SPEND ${summarize(afterShieldedSpend)}`);
@@ -906,7 +907,7 @@ describe.sequential('Hard fork crossing @fork', () => {
 
       expect(afterShieldedSpend.shielded.balances[shieldedToken]).toBe(shieldedBefore - TRANSFER_AMOUNT);
       expect(afterShieldedSpend.shielded.pendingCoins.length).toBe(0);
-      expect(afterShieldedSpend.pending.filter(isAwaiting)).toStrictEqual([]);
+      expect(afterShieldedSpend.lifecycle.filter(isAwaiting)).toStrictEqual([]);
 
       const receiverAfter = await stateWhere(
         'the receiver to see the transferred shielded token',

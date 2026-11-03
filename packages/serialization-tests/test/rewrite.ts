@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { Serialization as DustV1Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { Serialization as DustV2Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
@@ -42,9 +42,9 @@ const pendingTxTraits = finalizedTransactionTraits(DefaultForkSchedule.v9);
 type Rewriter = (serialized: string) => Promise<string> | string;
 
 /** The surfaces with one writer outside the twins, rewritten the same way whichever variant a case is filed under. */
-const singleWriterRewriters: Pick<Record<Surface, Rewriter>, 'tx-history' | 'pending-transactions'> = {
+const singleWriterRewriters: Pick<Record<Surface, Rewriter>, 'tx-history' | 'transaction-lifecycle'> = {
   'tx-history': (s) => InMemoryTransactionHistoryStorage.restore(s, WalletEntrySchema, mergeWalletEntries).serialize(),
-  'pending-transactions': (s) =>
+  'transaction-lifecycle': (s) =>
     Lifecycle.serialize(EitherOps.getOrThrowLeft(Lifecycle.deserialize(s, pendingTxTraits)), pendingTxTraits),
 };
 

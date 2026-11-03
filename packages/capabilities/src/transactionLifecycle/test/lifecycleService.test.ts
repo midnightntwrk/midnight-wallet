@@ -25,11 +25,11 @@ import { Chunk, DateTime, Effect, Either, Fiber, Option, pipe, Ref, Stream, Test
 import { describe, expect, it } from 'vitest';
 import * as Lifecycle from '../lifecycle.js';
 import { TransactionLifecycleServiceEffectImpl } from '../lifecycleService.js';
-import type * as PendingTransactions from '../pendingTransactions.js';
+import type * as TransactionTraits from '../transactionTraits.js';
 
 type FakeTransaction = Readonly<{ ids: readonly string[] }>;
 
-const fakeTrait: PendingTransactions.TransactionTrait<FakeTransaction> = {
+const fakeTrait: TransactionTraits.TransactionTrait<FakeTransaction> = {
   isTx: (data): data is FakeTransaction => typeof data === 'object' && data !== null && 'ids' in data,
   serialize: (tx) => Buffer.from(JSON.stringify(tx), 'utf-8'),
   // Type cast required because: the bytes are only ever ones `serialize` wrote.
@@ -49,7 +49,7 @@ const V8 = ProtocolVersion.ProtocolVersion(3n);
 const V9 = ProtocolVersion.ProtocolVersion(FORK + 1n);
 
 /** Two epochs, so a record built for the first is stranded once the chain reaches the second. */
-const traits: PendingTransactions.VersionedTransactionTrait<FakeTransaction> = Either.getOrThrow(
+const traits: TransactionTraits.VersionedTransactionTrait<FakeTransaction> = Either.getOrThrow(
   ProtocolVersion.makeRegistryFromActivations([
     { sinceVersion: ProtocolVersion.MinSupportedVersion, value: fakeTrait },
     { sinceVersion: FORK, value: fakeTrait },

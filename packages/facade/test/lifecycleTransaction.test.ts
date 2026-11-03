@@ -16,7 +16,7 @@
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { TransactionTraits } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { DateTime, Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { erasedOf, type LifecycleTx, lifecycleTransactionTraits, lifecycleTxOf } from '../src/transaction.js';
@@ -94,7 +94,7 @@ const LEDGERS = [
 const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
 
 const traitFor = (version: ProtocolVersion.ProtocolVersion) =>
-  Option.getOrThrow(PendingTransactions.traitForVersion(traits, Option.some(version)));
+  Option.getOrThrow(TransactionTraits.traitForVersion(traits, Option.some(version)));
 
 describe.each(LEDGERS)(
   'A $ledger transaction held by its lifecycle record',

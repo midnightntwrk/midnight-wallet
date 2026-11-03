@@ -20,7 +20,7 @@
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type AnyTx, NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { type Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, Option } from 'effect';
 import * as rx from 'rxjs';
@@ -455,7 +455,7 @@ describe('A finalized transaction’s lifecycle record', () => {
       const { facade } = yield* fundedFacade();
       const entriesFor = (state: FacadeState, tx: AnyTx) => {
         const ids = carried<{ identifiers(): string[] }>(tx).identifiers();
-        return state.pending.filter((entry) => entry.identifiers.some((id) => ids.includes(id)));
+        return state.lifecycle.filter((entry) => entry.identifiers.some((id) => ids.includes(id)));
       };
       const bytesOf = (handle: AnyTx): string =>
         Buffer.from(carried<{ serialize(): Uint8Array }>(handle).serialize()).toString('hex');

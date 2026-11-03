@@ -16,7 +16,7 @@
 import { Schema } from 'effect';
 
 /**
- * Every format version the pending transactions store has been written in, oldest first.
+ * Every format version the transaction lifecycle store has been written in, oldest first.
  *
  * Declared here, with no ledger import, so the reader and the upgrade step share one source of truth.
  */
@@ -91,7 +91,7 @@ const fromReservation = (reservation: typeof V1Reservation.Type): Record<string,
 });
 
 /**
- * Upgrades a decoded pending transactions store from format version `v1` to `v2`.
+ * Upgrades a decoded transaction lifecycle store from format version `v1` to `v2`.
  *
  * @remarks
  *   A pure function on the decoded JSON, run before any schema, so the schema only ever has to describe one shape. Each

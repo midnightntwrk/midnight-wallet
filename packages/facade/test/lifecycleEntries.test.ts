@@ -112,7 +112,7 @@ describe('Wallet Facade handling pending transactions', () => {
       ),
     ).identifiers();
     expect(
-      state.pending.filter((entry) => Option.isSome(entry.transaction)).map((entry) => [...entry.identifiers].sort()),
+      state.lifecycle.filter((entry) => Option.isSome(entry.transaction)).map((entry) => [...entry.identifiers].sort()),
     ).toContainEqual([...finalizedIds].sort());
   });
 });

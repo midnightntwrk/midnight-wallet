@@ -18,6 +18,14 @@ submitted transaction's verdict, sweeps expired and finished records each tick, 
 The store format moves to `v2`. This release reads a `v1` store and upgrades it, but earlier releases refuse `v2`:
 downgrading after this release has written the store loses the pending records.
 
-BREAKING CHANGE — `PendingTransactionsService`, `PendingTransactionsServiceImpl`, `PendingTransactionsServiceEffect`
-and `PendingTransactionsServiceEffectImpl` are removed; use `TransactionLifecycleService` and its implementations.
-`PendingTransactions.TransactionTrait` now requires `intentHashes`, `inputs` and `ttl`, so a custom trait must add them.
+BREAKING CHANGE — the pending-transactions service and its module are renamed for what they hold now, with no
+deprecated aliases. `TransactionTrait` now requires `intentHashes`, `inputs` and `ttl`, so a custom trait must add them.
+
+| Before                                                  | After                                                       |
+| ------------------------------------------------------- | ----------------------------------------------------------- |
+| subpath `./pendingTransactions`                         | `./transactionLifecycle`                                    |
+| `PendingTransactionsService` and its three implementations | `TransactionLifecycleService`, `TransactionLifecycleServiceImpl`, `TransactionLifecycleServiceEffect(Impl)` |
+| `DefaultPendingTransactionsServiceConfiguration`        | `DefaultTransactionLifecycleServiceConfiguration`           |
+| `PendingTransactions.TransactionTrait`, `VersionedTransactionTrait`, `traitForVersion`, `traitForTx`, `headTrait`, `singleTrait`, `recognisingTrait`, `TransactionResult` and its arms | the same names under `TransactionTraits` |
+| `PendingTransactions.Reservation['inputs']`             | `TransactionTraits.Inputs` (also `Lifecycle.Inputs`)        |
+| `PendingTransactions.PendingTransactions`, `empty`, `addReservation`, `clearReservation`, `expireReservations`, `allExpiredReservations`, `addPendingTransaction`, `clear`, `saveResult`, `orphanBeyond`, `coveredUnshieldedIds`, `has`, `all`, `allFailed`, `allOrphaned`, `allRejected`, `allPending`, `serialize`, `deserialize` | removed; use `Lifecycle` (`balanced`, `finalized`, `submitted`, `confirmed`, `rejected`, `orphanBeyond`, `reverted`, `expire`, `dropFinished`, `coveredUnshieldedIds`, `serialize`, `deserialize`) |

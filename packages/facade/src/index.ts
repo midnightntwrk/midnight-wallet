@@ -85,10 +85,10 @@ import {
   tap,
 } from 'rxjs';
 import {
-  type DefaultPendingTransactionsServiceConfiguration,
+  type DefaultTransactionLifecycleServiceConfiguration,
   type InclusionVerdict,
   Lifecycle,
-  PendingTransactions,
+  TransactionTraits,
   type TransactionLifecycleService,
   TransactionLifecycleServiceImpl,
 } from '@midnightntwrk/wallet-sdk-capabilities';
@@ -131,11 +131,11 @@ export { finalizedTransactionTraits, lifecycleTransactionTraits, type LifecycleT
  *   A chain rejection speaks for itself through the entry's status; an orphaned transaction has no chain verdict at all,
  *   so the entry is the only place the reason can be recorded.
  */
-const rejectionReason = (result: PendingTransactions.TransactionResult): string | undefined =>
+const rejectionReason = (result: TransactionTraits.TransactionResult): string | undefined =>
   result.status === 'ORPHANED_BY_FORK' ? 'orphaned-by-protocol-upgrade' : undefined;
 
 /** The end a record reached, as the verdict a release is decided by; none for an end that releases nothing. */
-const endResultOf = (state: Lifecycle.LifecycleState): Option.Option<PendingTransactions.TransactionResult> => {
+const endResultOf = (state: Lifecycle.LifecycleState): Option.Option<TransactionTraits.TransactionResult> => {
   switch (state._tag) {
     case 'Rejected':
       // A TTL that passed is a refusal no chain applied any of, so it releases as a failure with no segments.
@@ -160,7 +160,7 @@ const recordKey = (record: Lifecycle.LifecycleRecord<LifecycleTx>): string => re
 const newlyEnded = (
   previous: ReadonlyArray<Lifecycle.LifecycleRecord<LifecycleTx>>,
   current: ReadonlyArray<Lifecycle.LifecycleRecord<LifecycleTx>>,
-): ReadonlyArray<Readonly<{ tx: FinalizedTx; result: PendingTransactions.TransactionResult }>> => {
+): ReadonlyArray<Readonly<{ tx: FinalizedTx; result: TransactionTraits.TransactionResult }>> => {
   const wasHeldFinalized = new Set(
     previous.filter((record) => record.state._tag === 'Finalized' || record.state._tag === 'Submitted').map(recordKey),
   );
@@ -172,7 +172,7 @@ const newlyEnded = (
 };
 
 /** The fallible segments a verdict says the chain did not apply; none for a verdict that carries no segments. */
-const failedSegmentsOf = (result: PendingTransactions.TransactionResult): ReadonlyArray<number> =>
+const failedSegmentsOf = (result: TransactionTraits.TransactionResult): ReadonlyArray<number> =>
   'segments' in result ? result.segments.filter((segment) => !segment.success).map((segment) => segment.id) : [];
 
 /**
@@ -710,7 +710,7 @@ export const protocolPhaseOf = (
  *   - `Expired`: its TTL passed before it was submitted.
  *   - `Reverted`: the wallet gave its coins back, so no chain will be asked to include it.
  */
-export type PendingStatus =
+export type LifecycleStatus =
   | Readonly<{ _tag: 'Balanced' }>
   | Readonly<{ _tag: 'Finalized' }>
   | Readonly<{ _tag: 'Submitted' }>
@@ -739,7 +739,7 @@ export type PendingStatus =
  *   An entry stays after its transaction has ended, until its TTL passes, so an application can read how it ended. Tell
  *   the ones still awaiting an answer from the rest with {@link isAwaiting}, not by the list being empty.
  */
-export type PendingTransaction = Readonly<{
+export type LifecycleEntry = Readonly<{
   /** What ties the entry to its transaction at every stage: proving and binding leave identifiers unchanged. */
   identifiers: readonly string[];
   /**
@@ -760,69 +760,67 @@ export type PendingTransaction = Readonly<{
    *   orphaned — an unobserved version is not evidence of anything.
    */
   authoredFor: Option.Option<ProtocolVersion.ProtocolVersion>;
-  /** What has become of it. See {@link PendingStatus}. */
-  status: PendingStatus;
+  /** What has become of it. See {@link LifecycleStatus}. */
+  status: LifecycleStatus;
 }>;
 
 /** Reads what has become of a transaction off its record's state. */
-const pendingStatusOf = (state: Lifecycle.LifecycleState): PendingStatus =>
+const lifecycleStatusOf = (state: Lifecycle.LifecycleState): LifecycleStatus =>
   Lifecycle.LifecycleState.$match(state, {
-    Balanced: (): PendingStatus => ({ _tag: 'Balanced' }),
-    Finalized: (): PendingStatus => ({ _tag: 'Finalized' }),
-    Submitted: (): PendingStatus => ({ _tag: 'Submitted' }),
-    Confirmed: (): PendingStatus => ({ _tag: 'Confirmed' }),
-    Rejected: ({ verdict }): PendingStatus => ({
+    Balanced: (): LifecycleStatus => ({ _tag: 'Balanced' }),
+    Finalized: (): LifecycleStatus => ({ _tag: 'Finalized' }),
+    Submitted: (): LifecycleStatus => ({ _tag: 'Submitted' }),
+    Confirmed: (): LifecycleStatus => ({ _tag: 'Confirmed' }),
+    Rejected: ({ verdict }): LifecycleStatus => ({
       _tag: 'Rejected',
       reason: verdict.status === 'TTL_PASSED' ? { _tag: 'TTLPassed' } : { _tag: 'Refused', segments: verdict.segments },
     }),
-    Orphaned: ({ authoredFor, chainNow }): PendingStatus => ({ _tag: 'Orphaned', authoredFor, chainNow }),
-    Expired: (): PendingStatus => ({ _tag: 'Expired' }),
-    Reverted: (): PendingStatus => ({ _tag: 'Reverted' }),
+    Orphaned: ({ authoredFor, chainNow }): LifecycleStatus => ({ _tag: 'Orphaned', authoredFor, chainNow }),
+    Expired: (): LifecycleStatus => ({ _tag: 'Expired' }),
+    Reverted: (): LifecycleStatus => ({ _tag: 'Reverted' }),
   });
 
 /**
- * The pending transactions as an application reads them.
+ * The lifecycle records as an application reads them.
  *
  * @remarks
  *   A projection over the lifecycle records the wallet keeps, not a second copy of them: the same facts, stated as a list
  *   of transactions with a status each.
  * @example
- *   const entries = pendingTransactionsOf(await firstValueFrom(facade.transactionLifecycleService.state()));
+ *   const entries = lifecycleEntriesOf(await firstValueFrom(facade.transactionLifecycleService.state()));
  *
  * @param lifecycle The lifecycle records.
  * @returns One entry per record, in the order the wallet keeps them.
  */
-export const pendingTransactionsOf = (
-  lifecycle: Lifecycle.TransactionLifecycle<LifecycleTx>,
-): readonly PendingTransaction[] =>
+export const lifecycleEntriesOf = (lifecycle: Lifecycle.TransactionLifecycle<LifecycleTx>): readonly LifecycleEntry[] =>
   lifecycle.records.map((record) => ({
     identifiers: record.identifiers,
     // A balanced record holds its transaction with the proofs erased, which is no finalized transaction.
     transaction: record.state._tag === 'Balanced' ? Option.none() : Option.map(record.tx, finalizedOf),
     submittedAt: record.submittedAt,
     authoredFor: record.protocolVersion,
-    status: pendingStatusOf(record.state),
+    status: lifecycleStatusOf(record.state),
   }));
 
-const AWAITING: ReadonlyArray<PendingStatus['_tag']> = ['Balanced', 'Finalized', 'Submitted'];
+const AWAITING: ReadonlyArray<LifecycleStatus['_tag']> = ['Balanced', 'Finalized', 'Submitted'];
 
 /**
  * Whether a transaction still awaits an answer: balanced, finalized or submitted, so it may yet be included and its
  * coins stay booked. Every other status is an end.
  *
  * @example
- *   const settled = await firstValueFrom(facade.state().pipe(filter((state) => !state.pending.some(isAwaiting))));
+ *   const settled = await firstValueFrom(facade.state().pipe(filter((state) => !state.lifecycle.some(isAwaiting))));
  *
- * @param entry The pending entry.
+ * @param entry The lifecycle entry.
  * @returns `true` while it awaits one.
  */
-export const isAwaiting = (entry: PendingTransaction): boolean => AWAITING.includes(entry.status._tag);
+export const isAwaiting = (entry: LifecycleEntry): boolean => AWAITING.includes(entry.status._tag);
 
 export class FacadeState {
   public readonly shielded: ShieldedWalletState;
   public readonly unshielded: UnshieldedWalletState;
   public readonly dust: DustWalletState;
-  public readonly pending: readonly PendingTransaction[];
+  public readonly lifecycle: readonly LifecycleEntry[];
 
   /** The protocol version each of the three wallets has reached. */
   public get protocolVersion(): WalletProtocolVersions {
@@ -876,7 +874,7 @@ export class FacadeState {
     this.shielded = shielded;
     this.unshielded = unshielded;
     this.dust = dust;
-    this.pending = pendingTransactionsOf(lifecycle);
+    this.lifecycle = lifecycleEntriesOf(lifecycle);
     this.#forkVersion = forkVersion;
   }
 }
@@ -978,7 +976,7 @@ type WalletsConfiguration = DefaultUnshieldedConfiguration &
   DefaultShieldedConfiguration &
   DefaultDustConfiguration &
   DefaultSubmissionConfiguration &
-  DefaultPendingTransactionsServiceConfiguration &
+  DefaultTransactionLifecycleServiceConfiguration &
   DefaultProvingConfiguration;
 
 /**
@@ -1077,7 +1075,7 @@ export class WalletFacade {
   }
 
   private static makeDefaultTransactionLifecycleService<
-    TConfig extends DefaultPendingTransactionsServiceConfiguration & { forks: ProtocolVersion.ForkSchedule },
+    TConfig extends DefaultTransactionLifecycleServiceConfiguration & { forks: ProtocolVersion.ForkSchedule },
   >(config: TConfig, clock: Clock.Clock): Promise<TransactionLifecycleServiceImpl<LifecycleTx>> {
     return TransactionLifecycleServiceImpl.init<LifecycleTx>({
       configuration: config,
@@ -1271,7 +1269,7 @@ export class WalletFacade {
   readonly #forkVersion: ProtocolVersion.ProtocolVersion;
 
   /** The traits lifecycle records are read with, split at {@link #forkVersion}. */
-  readonly #lifecycleTraits: PendingTransactions.VersionedTransactionTrait<LifecycleTx>;
+  readonly #lifecycleTraits: TransactionTraits.VersionedTransactionTrait<LifecycleTx>;
 
   /**
    * Constructor is private on purpose - much of initialization of the facade is potentially asynchronous, and adding
@@ -1541,7 +1539,7 @@ export class WalletFacade {
    */
   #factsOf(held: LifecycleTx): Lifecycle.TransactionFacts<LifecycleTx> {
     const trait = Option.getOrThrowWith(
-      PendingTransactions.traitForVersion(this.#lifecycleTraits, Option.some(held.protocolVersion)),
+      TransactionTraits.traitForVersion(this.#lifecycleTraits, Option.some(held.protocolVersion)),
       () => new Error(`No lifecycle trait is registered for protocol version ${held.protocolVersion}.`),
     );
     return {
@@ -2606,7 +2604,7 @@ export class WalletFacade {
   /** Sync can record inclusion before the independent pending-status poller observes it. */
   private async reconcileFinalizedTransaction(
     tx: FinalizedTx,
-    result: PendingTransactions.TransactionResult,
+    result: TransactionTraits.TransactionResult,
     history: readonly WalletEntry[],
   ): Promise<boolean> {
     const entry = this.finalizedEntryFor(tx, history);
@@ -2631,7 +2629,7 @@ export class WalletFacade {
    * Releases what a transaction that ended rejected or orphaned had booked, unless the history shows the chain included
    * it: then sync owns its coins, and releasing them would offer ones already spent.
    */
-  async #releaseEnded(tx: FinalizedTx, result: PendingTransactions.TransactionResult): Promise<void> {
+  async #releaseEnded(tx: FinalizedTx, result: TransactionTraits.TransactionResult): Promise<void> {
     if (!(await this.reconcileFinalizedTransaction(tx, result, await this.#txHistoryStorage.getAll()))) {
       await (result.status === 'PARTIAL_SUCCESS'
         ? this.#revertFailedSegments(tx, failedSegmentsOf(result))

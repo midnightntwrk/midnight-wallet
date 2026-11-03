@@ -14,7 +14,7 @@
  */
 
 import { Array as Arr, DateTime, Duration, Either, HashSet, Option, Order, pipe } from 'effect';
-import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
+import { type TransactionTraits } from '@midnightntwrk/wallet-sdk-capabilities';
 import {
   ProtocolVersion,
   WalletTransaction,
@@ -113,7 +113,7 @@ const intentHashesOf = (tx: FactsBearingTransaction): readonly string[] =>
   [...(tx.intents?.entries() ?? [])].map(([segment, intent]) => intent.intentHash(segment));
 
 /** Every coin the transaction spends, whoever owns it; `shielded` only when it spends a shielded coin. */
-const inputsOf = (tx: FactsBearingTransaction): PendingTransactions.Reservation['inputs'] => {
+const inputsOf = (tx: FactsBearingTransaction): TransactionTraits.Inputs => {
   const unshielded = coinIdsOf(
     [...(tx.intents?.values() ?? [])].flatMap((intent) => [
       ...(intent.guaranteedUnshieldedOffer?.inputs ?? []),
@@ -130,7 +130,7 @@ const inputsOf = (tx: FactsBearingTransaction): PendingTransactions.Reservation[
 const v9DustGracePeriod = (): bigint => ledgerV9.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds;
 const v8DustGracePeriod = (): bigint => ledgerV8.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds;
 
-export const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV9.FinalizedTransaction> = {
+export const v9FinalizedTransactionTrait: TransactionTraits.TransactionTrait<ledgerV9.FinalizedTransaction> = {
   areAllTxIdsIncluded(tx: ledgerV9.FinalizedTransaction, txIds: readonly string[]): boolean {
     const txIdsSet = HashSet.fromIterable(tx.identifiers());
     const expectedIdSet = HashSet.fromIterable(txIds);
@@ -172,7 +172,7 @@ export const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<l
  *   is the classes that make this a separate trait: `instanceof` distinguishes them, each deserializer refuses the
  *   other's bytes, and a grace period is read off that version's own initial parameters.
  */
-export const v8FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV8.FinalizedTransaction> = {
+export const v8FinalizedTransactionTrait: TransactionTraits.TransactionTrait<ledgerV8.FinalizedTransaction> = {
   areAllTxIdsIncluded(tx, txIds) {
     return HashSet.isSubset(HashSet.fromIterable(tx.identifiers()), HashSet.fromIterable(txIds));
   },
@@ -216,9 +216,9 @@ export const v8FinalizedTransactionTrait: PendingTransactions.TransactionTrait<l
  * @returns The same reading, in terms of handles.
  */
 const overHandles = <T extends { serialize: () => Uint8Array }>(
-  trait: PendingTransactions.TransactionTrait<T>,
+  trait: TransactionTraits.TransactionTrait<T>,
   epoch: ProtocolVersion.ProtocolVersion.Range,
-): PendingTransactions.TransactionTrait<FinalizedTx> => {
+): TransactionTraits.TransactionTrait<FinalizedTx> => {
   const [stamp] = epoch;
   const carried = (handle: AnyTx): T => Either.getOrThrow(WalletTransaction.unwrapWithin<T>(handle, epoch));
   return {
@@ -253,7 +253,7 @@ const overHandles = <T extends { serialize: () => Uint8Array }>(
  */
 export const finalizedTransactionTraits = (
   forkVersion: ProtocolVersion.ProtocolVersion,
-): PendingTransactions.VersionedTransactionTrait<FinalizedTx> =>
+): TransactionTraits.VersionedTransactionTrait<FinalizedTx> =>
   Either.getOrThrow(
     ProtocolVersion.makeRegistryFromActivations(
       forkVersion > ProtocolVersion.MinSupportedVersion
@@ -369,7 +369,7 @@ const lifecycleTraitOf = <T extends (V8AnyTransaction | V9AnyTransaction) & Ledg
   readErased: (bytes: Uint8Array) => T,
   dustGracePeriodSeconds: () => bigint,
   epoch: ProtocolVersion.ProtocolVersion.Range,
-): PendingTransactions.TransactionTrait<LifecycleTx> => {
+): TransactionTraits.TransactionTrait<LifecycleTx> => {
   const [stamp] = epoch;
   const own = (held: LifecycleTx): T =>
     Option.getOrThrowWith(
@@ -437,7 +437,7 @@ const v9LifecycleTrait = (epoch: ProtocolVersion.ProtocolVersion.Range) =>
  */
 export const lifecycleTransactionTraits = (
   forkVersion: ProtocolVersion.ProtocolVersion,
-): PendingTransactions.VersionedTransactionTrait<LifecycleTx> =>
+): TransactionTraits.VersionedTransactionTrait<LifecycleTx> =>
   Either.getOrThrow(
     ProtocolVersion.makeRegistryFromActivations(
       forkVersion > ProtocolVersion.MinSupportedVersion

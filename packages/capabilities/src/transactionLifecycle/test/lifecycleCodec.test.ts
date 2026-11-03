@@ -20,7 +20,7 @@ import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DateTime, Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as Lifecycle from '../lifecycle.js';
-import type * as PendingTransactions from '../pendingTransactions.js';
+import type * as TransactionTraits from '../transactionTraits.js';
 
 type LedgerTx = Readonly<{ ledger: 'v8' | 'v9'; ids: readonly string[] }>;
 
@@ -31,7 +31,7 @@ const LIFETIME_MS: Record<LedgerTx['ledger'], number> = { v8: 60 * 60 * 1000, v9
  * A trait that reads only its own ledger's transactions, and prefixes every fact it reads with its ledger, so a test
  * can tell which trait a record's facts came from.
  */
-const ledgerTrait = (ledger: LedgerTx['ledger']): PendingTransactions.TransactionTrait<LedgerTx> => ({
+const ledgerTrait = (ledger: LedgerTx['ledger']): TransactionTraits.TransactionTrait<LedgerTx> => ({
   isTx: (data): data is LedgerTx =>
     typeof data === 'object' && data !== null && 'ledger' in data && 'ids' in data && data.ledger === ledger,
   serialize: (tx) => Buffer.from(JSON.stringify(tx), 'utf-8'),
@@ -54,7 +54,7 @@ const V9_FORK = ProtocolVersion.ProtocolVersion(2_000_000n);
 const V8_VERSION = ProtocolVersion.ProtocolVersion(1_000n);
 const V9_VERSION = ProtocolVersion.ProtocolVersion(2_000_001n);
 
-const traits: PendingTransactions.VersionedTransactionTrait<LedgerTx> = Either.getOrThrow(
+const traits: TransactionTraits.VersionedTransactionTrait<LedgerTx> = Either.getOrThrow(
   ProtocolVersion.makeRegistryFromActivations([
     { sinceVersion: ProtocolVersion.MinSupportedVersion, value: ledgerTrait('v8') },
     { sinceVersion: V9_FORK, value: ledgerTrait('v9') },

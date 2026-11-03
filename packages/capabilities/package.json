@@ -40,9 +40,9 @@
       "types": "./dist/submission/index.d.ts",
       "import": "./dist/submission/index.js"
     },
-    "./pendingTransactions": {
-      "types": "./dist/pendingTransactions/index.d.ts",
-      "import": "./dist/pendingTransactions/index.js"
+    "./transactionLifecycle": {
+      "types": "./dist/transactionLifecycle/index.d.ts",
+      "import": "./dist/transactionLifecycle/index.js"
     },
     "./proving": {
       "types": "./dist/proving/index.d.ts",

@@ -32,7 +32,7 @@ import {
   type UnprovenTx,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { type Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either } from 'effect';
 import * as rx from 'rxjs';
@@ -238,7 +238,7 @@ const expectNothingLeftBooked = (
   // What was awaiting an answer before the builder ran, such as a Dust registration the simulator never reports
   // included, is all that may still be: the builder leaves no live record of its own.
   expect(live.map((record) => record.identifiers)).toStrictEqual(
-    before.pending.filter(isAwaiting).map((entry) => entry.identifiers),
+    before.lifecycle.filter(isAwaiting).map((entry) => entry.identifiers),
   );
 };
 

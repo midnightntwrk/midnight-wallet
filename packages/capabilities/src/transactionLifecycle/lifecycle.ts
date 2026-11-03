@@ -26,19 +26,16 @@
 import { ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Buffer } from 'buffer';
 import { Array as Arr, Data, DateTime, Either, Match, Option, ParseResult, pipe, Schema, type SchemaAST } from 'effect';
+import { SNAPSHOT_FORMAT_VERSION, upgradeSnapshotV1ToV2 } from './SnapshotFormat.js';
 import {
   type FailedTransactionResult,
+  type Inputs,
   type TransactionTrait,
   traitForVersion,
   type VersionedTransactionTrait,
-} from './pendingTransactions.js';
-import { SNAPSHOT_FORMAT_VERSION, upgradeSnapshotV1ToV2 } from './SnapshotFormat.js';
+} from './transactionTraits.js';
 
-/**
- * Ids of the coins a transaction spends, per wallet: unshielded coins as `intentHash#outputNo`, shielded coins by
- * nullifier.
- */
-export type Inputs = Readonly<{ unshielded: readonly string[]; shielded?: readonly string[] }>;
+export type { Inputs } from './transactionTraits.js';
 
 /** Why a submitted transaction will never be included: the chain refused it, or its TTL passed while it waited. */
 export type RejectedVerdict = FailedTransactionResult | Readonly<{ status: 'TTL_PASSED' }>;

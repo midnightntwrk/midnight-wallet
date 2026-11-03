@@ -39,7 +39,7 @@ import {
   type TransactionTrait,
   traitForVersion,
   type VersionedTransactionTrait,
-} from './pendingTransactions.js';
+} from './transactionTraits.js';
 
 /** Where the indexer the default service polls is. */
 export type IndexerClientConnection = {
@@ -48,7 +48,7 @@ export type IndexerClientConnection = {
 };
 
 /** What the default service is built from. */
-export type DefaultPendingTransactionsServiceConfiguration = {
+export type DefaultTransactionLifecycleServiceConfiguration = {
   indexerClientConnection: IndexerClientConnection;
 };
 
@@ -278,7 +278,7 @@ export type TransactionLifecycleService<TTransaction> = {
 export type TransactionLifecycleServiceInitParams<TTransaction> = {
   txTraits: VersionedTransactionTrait<TTransaction>;
   initialState?: Lifecycle.TransactionLifecycle<TTransaction>;
-  configuration: DefaultPendingTransactionsServiceConfiguration;
+  configuration: DefaultTransactionLifecycleServiceConfiguration;
   /** What every move and sweep reads the time from; the system clock when left out. */
   clock?: WallClock;
 };
@@ -345,7 +345,7 @@ export class TransactionLifecycleServiceImpl<TTransaction> implements Transactio
   static restore<TTransaction>(
     data: string,
     txTraits: VersionedTransactionTrait<TTransaction>,
-    configuration: DefaultPendingTransactionsServiceConfiguration,
+    configuration: DefaultTransactionLifecycleServiceConfiguration,
     clock?: WallClock,
   ): Promise<TransactionLifecycleServiceImpl<TTransaction>> {
     return pipe(
@@ -362,13 +362,13 @@ export class TransactionLifecycleServiceImpl<TTransaction> implements Transactio
 
   #effectService: TransactionLifecycleServiceEffect<TTransaction>;
   #scope: Scope.CloseableScope;
-  #configuration: DefaultPendingTransactionsServiceConfiguration;
+  #configuration: DefaultTransactionLifecycleServiceConfiguration;
   #clock: Clock.Clock;
 
   constructor(
     effectService: TransactionLifecycleServiceEffect<TTransaction>,
     scope: Scope.CloseableScope,
-    configuration: DefaultPendingTransactionsServiceConfiguration,
+    configuration: DefaultTransactionLifecycleServiceConfiguration,
     clock: Clock.Clock,
   ) {
     this.#effectService = effectService;

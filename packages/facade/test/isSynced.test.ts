@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { type ShieldedWalletState } from '@midnightntwrk/wallet-sdk-shielded';
 import { type UnshieldedWalletState } from '@midnightntwrk/wallet-sdk-unshielded-wallet';

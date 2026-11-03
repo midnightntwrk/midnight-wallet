@@ -16,7 +16,7 @@
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
+import { type TransactionTraits } from '@midnightntwrk/wallet-sdk-capabilities';
 import { Array as Arr, DateTime, Duration, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import {
@@ -243,8 +243,8 @@ const factsTransaction = (parts: FactsParts): unknown => ({
  * Type cast required because: each trait is typed against its own ledger's `FinalizedTransaction`, a nominal class with
  * a private constructor, while the members under test read only the structural fields the stub carries.
  */
-const reading = (trait: (typeof traits)[number][1]): PendingTransactions.TransactionTrait<unknown> =>
-  trait as unknown as PendingTransactions.TransactionTrait<unknown>;
+const reading = (trait: (typeof traits)[number][1]): TransactionTraits.TransactionTrait<unknown> =>
+  trait as unknown as TransactionTraits.TransactionTrait<unknown>;
 
 const at = (offset: Duration.DurationInput): Date => DateTime.toDate(DateTime.addDuration(creationTime, offset));
 

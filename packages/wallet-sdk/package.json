@@ -41,9 +41,9 @@
       "types": "./dist/capabilities/codecs.d.ts",
       "import": "./dist/capabilities/codecs.js"
     },
-    "./capabilities/pendingTransactions": {
-      "types": "./dist/capabilities/pendingTransactions.d.ts",
-      "import": "./dist/capabilities/pendingTransactions.js"
+    "./capabilities/transactionLifecycle": {
+      "types": "./dist/capabilities/transactionLifecycle.d.ts",
+      "import": "./dist/capabilities/transactionLifecycle.js"
     },
     "./capabilities/proving": {
       "types": "./dist/capabilities/proving.d.ts",

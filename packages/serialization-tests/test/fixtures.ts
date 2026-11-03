@@ -14,7 +14,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ProtocolVersion, TransactionHistoryFormat } from '@midnightntwrk/wallet-sdk-abstractions';
-import { LifecycleFormat } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { LifecycleFormat } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { Serialization as DustV1Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { Serialization as DustV2Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import { Serialization as ShieldedV1Serialization } from '@midnightntwrk/wallet-sdk-shielded/v1';
@@ -49,7 +49,7 @@ export type Writer = (typeof WRITERS)[number];
  * Each has its own format-version line: the transaction history is on `v2` while the four others are still on `v1`,
  * because a format version belongs to a surface, not to a release.
  */
-export const SURFACES = ['shielded', 'unshielded', 'dust', 'tx-history', 'pending-transactions'] as const;
+export const SURFACES = ['shielded', 'unshielded', 'dust', 'tx-history', 'transaction-lifecycle'] as const;
 
 export type Surface = (typeof SURFACES)[number];
 
@@ -66,14 +66,14 @@ export const currentVersionOf: Record<Writer, Record<Surface, string>> = {
     unshielded: UnshieldedV1Serialization.SNAPSHOT_FORMAT_VERSION,
     dust: DustV1Serialization.SNAPSHOT_FORMAT_VERSION,
     'tx-history': TransactionHistoryFormat.CURRENT_FORMAT_VERSION,
-    'pending-transactions': LifecycleFormat.SNAPSHOT_FORMAT_VERSION,
+    'transaction-lifecycle': LifecycleFormat.SNAPSHOT_FORMAT_VERSION,
   },
   v2: {
     shielded: ShieldedV2Serialization.SNAPSHOT_FORMAT_VERSION,
     unshielded: UnshieldedV2Serialization.SNAPSHOT_FORMAT_VERSION,
     dust: DustV2Serialization.SNAPSHOT_FORMAT_VERSION,
     'tx-history': TransactionHistoryFormat.CURRENT_FORMAT_VERSION,
-    'pending-transactions': LifecycleFormat.SNAPSHOT_FORMAT_VERSION,
+    'transaction-lifecycle': LifecycleFormat.SNAPSHOT_FORMAT_VERSION,
   },
 };
 
@@ -101,8 +101,24 @@ export type Fixture = {
   readonly writtenBy: { readonly name: string; readonly version: string };
 };
 
+/**
+ * Format versions whose frozen fixtures sit under the name their surface had when they were written.
+ *
+ * The transaction lifecycle store was the pending transactions store while every release that wrote `v1` shipped.
+ * Published fixtures are frozen, so those stay where they were captured; every later version is captured under the
+ * surface's own name.
+ */
+const FOLDERS_BY_VERSION: Partial<Record<Surface, Readonly<Record<string, string>>>> = {
+  'transaction-lifecycle': { v1: 'pending-transactions' },
+};
+
+/** The folder holding a surface's frozen fixtures of one format version. */
+const folderOf = (surface: Surface, formatVersion: string): string =>
+  FOLDERS_BY_VERSION[surface]?.[formatVersion] ?? surface;
+
 const read = (surface: Surface, formatVersion: string, file: string): Fixture => {
-  const raw = JSON.parse(readFileSync(join(FIXTURES_DIR, surface, formatVersion, file), 'utf8')) as Record<
+  const folder = folderOf(surface, formatVersion);
+  const raw = JSON.parse(readFileSync(join(FIXTURES_DIR, folder, formatVersion, file), 'utf8')) as Record<
     string,
     unknown
   >;
@@ -111,7 +127,7 @@ const read = (surface: Surface, formatVersion: string, file: string): Fixture =>
     surface,
     formatVersion,
     origin,
-    id: `${surface}/${formatVersion}/${origin}`,
+    id: `${folder}/${formatVersion}/${origin}`,
     serialized: raw['serialized'] as string,
     expected: (raw['expected'] ?? {}) as Record<string, unknown>,
     writtenBy: { name: raw['name'] as string, version: raw['version'] as string },
@@ -132,7 +148,15 @@ const dirsIn = (path: string): readonly string[] =>
  * @param surface - The persisted surface.
  * @returns The version folder names, e.g. `['v1', 'v2']`.
  */
-export const frozenVersionsOf = (surface: Surface): readonly string[] => dirsIn(join(FIXTURES_DIR, surface));
+export const frozenVersionsOf = (surface: Surface): readonly string[] =>
+  [
+    ...new Set([
+      ...dirsIn(join(FIXTURES_DIR, surface)),
+      ...Object.entries(FOLDERS_BY_VERSION[surface] ?? {})
+        .filter(([formatVersion, folder]) => existsSync(join(FIXTURES_DIR, folder, formatVersion)))
+        .map(([formatVersion]) => formatVersion),
+    ]),
+  ].sort();
 
 /**
  * Every frozen payload for a surface, across every format version it has fixtures for.
@@ -142,7 +166,7 @@ export const frozenVersionsOf = (surface: Surface): readonly string[] => dirsIn(
  */
 export const fixturesFor = (surface: Surface): readonly Fixture[] =>
   frozenVersionsOf(surface).flatMap((formatVersion) =>
-    readdirSync(join(FIXTURES_DIR, surface, formatVersion))
+    readdirSync(join(FIXTURES_DIR, folderOf(surface, formatVersion), formatVersion))
       .filter((file) => file.endsWith('.json'))
       .sort()
       .map((file) => read(surface, formatVersion, file)),
@@ -189,7 +213,7 @@ export const baselineFilesFor = (writer: Writer, surface: Surface): readonly str
  * @returns Whether that reader could be handed that payload.
  */
 export const isHandedTo = (writer: Writer, surface: Surface, serialized: string): boolean => {
-  if (surface === 'tx-history' || surface === 'pending-transactions') return true;
+  if (surface === 'tx-history' || surface === 'transaction-lifecycle') return true;
   if (writer === 'v2') return true;
   const payload: unknown = JSON.parse(serialized);
   const declared =
@@ -234,7 +258,7 @@ export type Upgrade = Readonly<{ contentKey: string; renamed: Readonly<Record<st
  */
 const UPGRADES: Readonly<Partial<Record<Surface, Readonly<Record<string, Upgrade>>>>> = {
   // v2 keeps one lifecycle record per transaction under `records`, and a record began when its item was created.
-  'pending-transactions': { v1: { contentKey: 'records', renamed: { '[].creationTime': '[].createdAt' } } },
+  'transaction-lifecycle': { v1: { contentKey: 'records', renamed: { '[].creationTime': '[].createdAt' } } },
 };
 
 /**

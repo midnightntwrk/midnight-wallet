@@ -28,7 +28,7 @@ import {
   Sync as UnshieldedSync,
   V2Builder as UnshieldedV2Builder,
 } from '@midnightntwrk/wallet-sdk-unshielded-wallet/v2';
-import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either } from 'effect';
 import * as rx from 'rxjs';

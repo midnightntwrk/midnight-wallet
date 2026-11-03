@@ -113,8 +113,8 @@ stored, moves the record. A partial success sync reports moves nothing: the hist
 segments failed decides what is released, so the poller settles it. Whatever was released at the inferred end is
 harmless, because sync settles the spent coins. `Confirmed` is final against every other verdict, which replaces the
 precedence rule a late rejection needed: once the record knows of the inclusion, nothing moves it. The four status names
-`FacadeState.pending` already publishes keep their meaning; the other four are added. `FacadeState.pending` is one entry
-per record, read off it. `Rejected` says why: `Refused`, with the segments the chain reported, or `TTLPassed`, which has
+`FacadeState.pending` published keep their meaning; the other four are added. `FacadeState.lifecycle` is one entry per
+record, read off it. `Rejected` says why: `Refused`, with the segments the chain reported, or `TTLPassed`, which has
 none. `Confirmed` carries no segments, because the record keeps none. An entry holds its finalized transaction from
 `Finalized` on, and none while `Balanced`. Since an ended record stays until its TTL passes, an empty list no longer
 means nothing is awaited: `isAwaiting` tells the balanced, finalized and submitted entries from the ended ones.
@@ -168,7 +168,7 @@ dropped by the same sweep. The transaction history stays the durable record of a
 ### Stored format
 
 The store moves from `v1` to `v2` under [ADR-0008](0008-persisted-format-versioning.md), with its version constants and
-the one upgrade step in a ledger-free `pendingTransactions/SnapshotFormat.ts`, as the snapshot surfaces have. The step
+the one upgrade step in a ledger-free `transactionLifecycle/SnapshotFormat.ts`, as the snapshot surfaces have. The step
 fills in, never invents:
 
 - A `v1` reservation becomes a `Balanced` record with no transaction, keeping its identifiers, intent hashes, inputs and
@@ -187,7 +187,10 @@ fills in, never invents:
 The service becomes **`TransactionLifecycleService`**. It is not named after reservations, which ADR-0009 and ADR-0010
 use for one state, nor after pending transactions, which it now holds only some of. The rename ships in the major
 releases already on their way in the changesets pre-release, so stable users meet one break either way; the old names
-are not kept as deprecated aliases, and the changesets carry an old-to-new name table instead.
+are not kept as deprecated aliases, and the changesets carry an old-to-new name table instead. Everything named after
+the old service follows: the `capabilities` module and subpath become `transactionLifecycle`, its trait helpers
+`TransactionTraits`, and the facade view `FacadeState.pending` becomes `FacadeState.lifecycle`, of `LifecycleEntry`
+values with a `LifecycleStatus` each, read by `lifecycleEntriesOf`.
 
 ### Positive Consequences
 
@@ -201,8 +204,8 @@ are not kept as deprecated aliases, and the changesets carry an old-to-new name 
 
 ### Negative Consequences
 
-- A breaking change for anyone who implements or calls the service directly, and for `FacadeState.pending`: a major
-  release of `capabilities` and `facade`, and of `wallet-sdk` for its barrels.
+- A breaking change for anyone who implements or calls the service directly, and for `FacadeState.pending`, renamed
+  `FacadeState.lifecycle`: a major release of `capabilities` and `facade`, and of `wallet-sdk` for its barrels.
 - The store writes `v2`, which an earlier release refuses. Downgrading after this release has written the store loses
   the pending set, not coins: each wallet's own bookings and sweep are untouched.
 - Stored records grow: a `Balanced` record now holds an erased transaction where a reservation held a few ids.

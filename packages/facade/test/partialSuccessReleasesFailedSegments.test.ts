@@ -31,7 +31,7 @@ import {
   WalletTransaction,
   type FinalizedTx,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import type { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import type { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';

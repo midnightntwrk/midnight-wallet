@@ -15,7 +15,7 @@ import {
   type InclusionVerdict,
   Lifecycle,
   type TransactionLifecycleService,
-} from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+} from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { DateTime } from 'effect';
 import * as rx from 'rxjs';
 import { type LifecycleTx } from '../../src/transaction.js';

@@ -17,7 +17,7 @@ import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DateTime, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as Lifecycle from '../lifecycle.js';
-import type * as PendingTransactions from '../pendingTransactions.js';
+import type * as TransactionTraits from '../transactionTraits.js';
 
 /** A transaction is anything the facade can name; its form at each state is the facade's to choose. */
 type FakeTransaction = Readonly<{ form: 'erased' | 'finalized'; ids: readonly string[] }>;
@@ -186,7 +186,7 @@ const EPOCHS: ProtocolVersion.Registry<string> = {
     { range: ProtocolVersion.makeRange(FORK, ProtocolVersion.MaxSupportedVersion), value: 'ledger-v9' },
   ],
 };
-const REFUSED: PendingTransactions.FailedTransactionResult = {
+const REFUSED: TransactionTraits.FailedTransactionResult = {
   status: 'FAILURE',
   segments: [{ id: 0, success: false }],
 };
