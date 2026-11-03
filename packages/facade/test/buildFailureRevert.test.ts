@@ -28,12 +28,13 @@ import {
   type FinalizedTx,
   NetworkId,
   ProtocolVersion,
+  type UnboundTx,
   type UnprovenTx,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { Effect } from 'effect';
+import { Effect, Either } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { type FacadeState, type WalletFacade } from '../src/index.js';
@@ -371,6 +372,57 @@ describe('A builder that rejects at fee payment', () => {
       );
 
       expectNothingLeftBooked(before, after, pending);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/** The ledger transaction a handle carries, at the one epoch the simulator facade ever runs. */
+const opened = <T>(handle: FinalizedTx | UnboundTx): T =>
+  Either.getOrThrow(
+    WalletTransaction.unwrapWithin<T>(
+      handle,
+      ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MinSupportedVersion),
+    ),
+  );
+
+describe('A recipe whose finalizing fails after its balancing part was finalized', () => {
+  // The last step folds the balancing part into the caller's part. A crossing landing mid-finalize is caught there in
+  // the field, which the simulator cannot stage on demand, so the failure is injected into that step.
+  const FOLD_FAILED = 'folding the finalized balancing part in failed';
+
+  it('should leave every coin balancing a finalized transaction booked spendable, with nothing pending or reserved, when the merge fails', () =>
+    Effect.gen(function* () {
+      const { facade, keys, before } = yield* fundedFacade({ withDust: true });
+      const tx = finalized(callersTransaction(keys, { shielded: tokenValue(1n), night: tokenValue(1n) }));
+      const recipe = yield* Effect.promise(() => facade.balanceFinalizedTransaction(tx, { ttl: hourFromNow() }));
+      vi.spyOn(opened<ledger.FinalizedTransaction>(recipe.originalTransaction), 'merge').mockImplementation(() => {
+        throw new Error(FOLD_FAILED);
+      });
+
+      const { after, pending } = yield* afterRejection(facade, () => facade.finalizeRecipe(recipe), FOLD_FAILED);
+
+      expectNothingLeftBooked(before, after, pending);
+      expect(pending.all).toEqual([]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should leave every coin balancing an unbound transaction booked spendable, with nothing pending or reserved, when the bind fails', () =>
+    Effect.gen(function* () {
+      const { facade, keys, before } = yield* fundedFacade({ withDust: true });
+      // Proving binds the caller's intent, which in-place unshielded balancing refuses to extend, so the caller's
+      // unbound transaction asks only for shielded funds.
+      const tx = unbound(callersTransaction(keys, { shielded: tokenValue(1n) }));
+      const recipe = yield* Effect.promise(() => facade.balanceUnboundTransaction(tx, { ttl: hourFromNow() }));
+      expect(recipe.balancingTransaction).toBeDefined();
+      vi.spyOn(
+        opened<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>(recipe.baseTransaction),
+        'bind',
+      ).mockImplementation(() => {
+        throw new Error(FOLD_FAILED);
+      });
+
+      const { after, pending } = yield* afterRejection(facade, () => facade.finalizeRecipe(recipe), FOLD_FAILED);
+
+      expectNothingLeftBooked(before, after, pending);
+      expect(pending.all).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
