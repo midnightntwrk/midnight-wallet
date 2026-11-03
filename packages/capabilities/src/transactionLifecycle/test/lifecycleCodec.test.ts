@@ -107,29 +107,100 @@ const restore = (serialized: string): Either.Either<Lifecycle.TransactionLifecyc
 
 const parseObject = (serialized: string): Record<string, unknown> => JSON.parse(serialized) as Record<string, unknown>;
 
+/** One record in every state, with and without its transaction, as the store holds them. */
+const EVERY_STATE: Lifecycle.TransactionLifecycle<LedgerTx> = {
+  records: [
+    heldRecord({ ledger: 'v9', ids: ['balanced'] }, V9_VERSION, LifecycleState.Balanced()),
+    bareRecord(LifecycleState.Balanced()),
+    heldRecord({ ledger: 'v8', ids: ['finalized'] }, V8_VERSION, LifecycleState.Finalized()),
+    heldRecord({ ledger: 'v9', ids: ['submitted'] }, V9_VERSION, LifecycleState.Submitted(), Option.some(SUBMITTED_AT)),
+    heldRecord({ ledger: 'v9', ids: ['confirmed'] }, V9_VERSION, LifecycleState.Confirmed(), Option.some(SUBMITTED_AT)),
+    heldRecord(
+      { ledger: 'v9', ids: ['refused'] },
+      V9_VERSION,
+      LifecycleState.Rejected({
+        verdict: {
+          status: 'PARTIAL_SUCCESS',
+          segments: [
+            { id: 0, success: true },
+            { id: 1, success: false },
+          ],
+        },
+      }),
+      Option.some(SUBMITTED_AT),
+    ),
+    heldRecord(
+      { ledger: 'v9', ids: ['timed-out'] },
+      V9_VERSION,
+      LifecycleState.Rejected({ verdict: { status: 'TTL_PASSED' } }),
+      Option.some(SUBMITTED_AT),
+    ),
+    heldRecord(
+      { ledger: 'v8', ids: ['orphaned'] },
+      V8_VERSION,
+      LifecycleState.Orphaned({ authoredFor: V8_VERSION, chainNow: V9_VERSION }),
+    ),
+    bareRecord(LifecycleState.Expired()),
+    heldRecord({ ledger: 'v9', ids: ['reverted'] }, V9_VERSION, LifecycleState.Reverted()),
+  ],
+};
+
+/** A record holding its transaction, as format v2 writes it. */
+const heldWire = (
+  tx: LedgerTx,
+  protocolVersion: ProtocolVersion.ProtocolVersion,
+  state: Record<string, unknown>,
+  submittedAt?: string,
+): Record<string, unknown> => ({
+  tx: hexOf(tx),
+  protocolVersion: String(protocolVersion),
+  identifiers: tx.ids,
+  intentHashes: tx.ids.map((id) => `${tx.ledger}-intent-${id}`),
+  inputs: { unshielded: tx.ids.map((id) => `${tx.ledger}-coin-${id}#0`) },
+  ttl: '2026-01-01T01:00:00.000Z',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  ...(submittedAt === undefined ? {} : { submittedAt }),
+  state,
+});
+
+/** A record that never held its transaction, as format v2 writes it. */
+const bareWire = (state: Record<string, unknown>): Record<string, unknown> => ({
+  identifiers: ['bare-id'],
+  intentHashes: ['bare-intent'],
+  inputs: { unshielded: ['bare-coin#0'], shielded: ['bare-nullifier'] },
+  ttl: '2026-01-01T01:00:00.000Z',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  state,
+});
+
 describe('Storing the lifecycle records', () => {
   it('should read back every record it wrote, in every state, exactly as it was', () => {
-    const state: Lifecycle.TransactionLifecycle<LedgerTx> = {
+    const restored = restore(Lifecycle.serialize(EVERY_STATE, traits));
+
+    expect(restored).toStrictEqual(Either.right(EVERY_STATE));
+  });
+
+  // A store this build writes is handed back to every later build, so the v2 shape of each state is pinned here. A
+  // change that only round-trips (writer and reader renamed together) still breaks every v2 store already written,
+  // and needs a v3 with its own upgrade step instead.
+  it('should write every state in exactly the v2 shape a later build must still read', () => {
+    const SUBMITTED = '2026-01-01T00:02:00.000Z';
+
+    const written = parseObject(Lifecycle.serialize(EVERY_STATE, traits));
+
+    expect(written).toStrictEqual({
+      version: 'v2',
       records: [
-        heldRecord({ ledger: 'v9', ids: ['balanced'] }, V9_VERSION, LifecycleState.Balanced()),
-        bareRecord(LifecycleState.Balanced()),
-        heldRecord({ ledger: 'v8', ids: ['finalized'] }, V8_VERSION, LifecycleState.Finalized()),
-        heldRecord(
-          { ledger: 'v9', ids: ['submitted'] },
-          V9_VERSION,
-          LifecycleState.Submitted(),
-          Option.some(SUBMITTED_AT),
-        ),
-        heldRecord(
-          { ledger: 'v9', ids: ['confirmed'] },
-          V9_VERSION,
-          LifecycleState.Confirmed(),
-          Option.some(SUBMITTED_AT),
-        ),
-        heldRecord(
+        heldWire({ ledger: 'v9', ids: ['balanced'] }, V9_VERSION, { _tag: 'Balanced' }),
+        bareWire({ _tag: 'Balanced' }),
+        heldWire({ ledger: 'v8', ids: ['finalized'] }, V8_VERSION, { _tag: 'Finalized' }),
+        heldWire({ ledger: 'v9', ids: ['submitted'] }, V9_VERSION, { _tag: 'Submitted' }, SUBMITTED),
+        heldWire({ ledger: 'v9', ids: ['confirmed'] }, V9_VERSION, { _tag: 'Confirmed' }, SUBMITTED),
+        heldWire(
           { ledger: 'v9', ids: ['refused'] },
           V9_VERSION,
-          LifecycleState.Rejected({
+          {
+            _tag: 'Rejected',
             verdict: {
               status: 'PARTIAL_SUCCESS',
               segments: [
@@ -137,28 +208,24 @@ describe('Storing the lifecycle records', () => {
                 { id: 1, success: false },
               ],
             },
-          }),
-          Option.some(SUBMITTED_AT),
+          },
+          SUBMITTED,
         ),
-        heldRecord(
+        heldWire(
           { ledger: 'v9', ids: ['timed-out'] },
           V9_VERSION,
-          LifecycleState.Rejected({ verdict: { status: 'TTL_PASSED' } }),
-          Option.some(SUBMITTED_AT),
+          { _tag: 'Rejected', verdict: { status: 'TTL_PASSED' } },
+          SUBMITTED,
         ),
-        heldRecord(
-          { ledger: 'v8', ids: ['orphaned'] },
-          V8_VERSION,
-          LifecycleState.Orphaned({ authoredFor: V8_VERSION, chainNow: V9_VERSION }),
-        ),
-        bareRecord(LifecycleState.Expired()),
-        heldRecord({ ledger: 'v9', ids: ['reverted'] }, V9_VERSION, LifecycleState.Reverted()),
+        heldWire({ ledger: 'v8', ids: ['orphaned'] }, V8_VERSION, {
+          _tag: 'Orphaned',
+          authoredFor: String(V8_VERSION),
+          chainNow: String(V9_VERSION),
+        }),
+        bareWire({ _tag: 'Expired' }),
+        heldWire({ ledger: 'v9', ids: ['reverted'] }, V9_VERSION, { _tag: 'Reverted' }),
       ],
-    };
-
-    const restored = restore(Lifecycle.serialize(state, traits));
-
-    expect(restored).toStrictEqual(Either.right(state));
+    });
   });
 
   it('should write format v2, holding the records and nothing else the state did not carry', () => {
@@ -308,6 +375,27 @@ describe('Reading a store written in v1', () => {
     expect(restored).toStrictEqual(
       Either.right({ records: [bareRecord(LifecycleState.Balanced()), bareRecord(LifecycleState.Expired())] }),
     );
+  });
+
+  it('should refuse a damaged v1 store naming what is wrong in it, because v1 is a version this build reads', () => {
+    const stored = JSON.stringify({
+      version: 'v1',
+      transactions: [],
+      reservations: [
+        {
+          identifiers: ['bare-id'],
+          intentHashes: ['bare-intent'],
+          inputs: { unshielded: ['bare-coin#0'] },
+          createdAt: '2026-01-01T00:00:00.000Z',
+          expired: false,
+        },
+      ],
+    });
+
+    const reason = String(Either.getLeft(restore(stored)).pipe(Option.getOrThrow));
+
+    expect(reason).toContain('"ttl"');
+    expect(reason).not.toContain('"v2"');
   });
 });
 
