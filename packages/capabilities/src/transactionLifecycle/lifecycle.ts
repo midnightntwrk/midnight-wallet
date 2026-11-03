@@ -306,8 +306,9 @@ export const confirmed = <TTransaction>(
   );
 
 /**
- * Records that the chain refused a submitted transaction. A transaction never submitted is left as it was: no chain was
- * asked to include it.
+ * Records that the chain refused a finalized or submitted transaction. A finalized one counts too, because another
+ * party may have submitted it, as in a swap, and the chain's answer about it is a fact. A balanced one is left as it
+ * was: it is not yet proven, so no chain can have been asked to include it.
  *
  * @example
  *   const refused = rejected(state, [...tx.identifiers()], { status: 'FAILURE', segments });
@@ -322,7 +323,7 @@ export const rejected = <TTransaction>(
   identifiers: readonly string[],
   verdict: FailedTransactionResult,
 ): TransactionLifecycle<TTransaction> =>
-  settle(state, isCoveredBy(identifiers), ['Submitted'], () => LifecycleState.Rejected({ verdict }));
+  settle(state, isCoveredBy(identifiers), ['Finalized', 'Submitted'], () => LifecycleState.Rejected({ verdict }));
 
 /** Whether the epoch `authoredFor` belongs to has ended by `chainNow`. A version no epoch serves has not. */
 const hasEpochEnded = <TEpoch>(
