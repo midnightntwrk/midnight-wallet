@@ -375,7 +375,18 @@ export const dropFinished = <TTransaction>(
 /**
  * The unshielded coin ids some live transaction still accounts for.
  *
+ * A final record accounts for none: a confirmed transaction's coins are spent on chain, and every other final state's
+ * coins are free. Read from the inputs each record keeps, so a record that never held its transaction still counts.
+ *
+ * @example
+ *   const spokenFor = coveredUnshieldedIds(lifecycle);
+ *
  * @param state The records.
  * @returns Every such coin id, without repeats.
  */
-export const coveredUnshieldedIds = <TTransaction>(_state: TransactionLifecycle<TTransaction>): readonly string[] => [];
+export const coveredUnshieldedIds = <TTransaction>(state: TransactionLifecycle<TTransaction>): readonly string[] =>
+  pipe(
+    Arr.filter(state.records, isLive),
+    Arr.flatMap((record) => record.inputs.unshielded),
+    Arr.dedupe,
+  );
