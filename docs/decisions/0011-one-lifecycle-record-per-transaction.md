@@ -171,7 +171,9 @@ fills in, never invents:
 - A `v1` pending item becomes a `Submitted` record, as `FacadeState.pending` showed it, keeping its transaction,
   creation time and protocol version. It has no submission time: `v1` kept only when it was finalized. Its identifiers,
   intent hashes, inputs and TTL were never stored, so the reader takes them from the transaction, through the trait
-  registered for its version. `v1` stored no verdicts, so none carries over; the poller asks again.
+  registered for its version; an item stored before transactions were stamped is read with the oldest trait and keeps
+  its version unknown, so a fork never orphans it. A `v2` writer stores all four on every record, and the reader takes a
+  stored fact over one read off the transaction. `v1` stored no verdicts, so none carries over; the poller asks again.
 - Unknown top-level fields are carried through, as every reader of this store already does.
 
 ### Name

@@ -11,7 +11,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, expect, it } from 'vitest';
-import { SURFACES, WRITERS, fixturesFor, isHandedTo, type Fixture, type Surface, type Writer } from './fixtures.js';
+import {
+  SURFACES,
+  WRITERS,
+  fixturesFor,
+  isHandedTo,
+  upgradeOf,
+  type Fixture,
+  type Surface,
+  type Upgrade,
+  type Writer,
+} from './fixtures.js';
 import { rewriteWithCurrentCode } from './rewrite.js';
 
 /**
@@ -97,12 +107,17 @@ const contentOf = (payload: unknown, key: string | undefined = contentKeyOf(payl
 const isTheUnshieldedKeyUpgrade = (writer: Writer, surface: Surface, path: string): boolean =>
   writer === 'v2' && surface === 'unshielded' && path === 'publicKey.publicKey';
 
-/** Paths whose values differ between a stored payload and what this build writes back for it. */
-const changedPaths = (stored: unknown, written: unknown): readonly string[] => {
+/**
+ * Paths whose values differ between a stored payload and what this build writes back for it, each path an upgrade
+ * renamed compared under its new name.
+ */
+const changedPaths = (stored: unknown, written: unknown, upgrade: Upgrade | undefined): readonly string[] => {
   const key = contentKeyOf(stored) ?? contentKeyOf(written);
   const before = valuesByPath(contentOf(stored, key));
-  const after = valuesByPath(contentOf(written, key));
-  return Object.keys(before).filter((path) => JSON.stringify(before[path]) !== JSON.stringify(after[path]));
+  const after = valuesByPath(contentOf(written, upgrade?.contentKey ?? key));
+  return Object.keys(before).filter(
+    (path) => JSON.stringify(before[path]) !== JSON.stringify(after[upgrade?.renamed[path] ?? path]),
+  );
 };
 
 // Paired the way routing pairs them: `isHandedTo` leaves out the V1 reader against a payload written past the fork,
@@ -125,9 +140,11 @@ describe('reading a stored payload and writing it back changes none of its value
     async ({ writer, surface, fixture }: { writer: Writer; surface: Surface; fixture: Fixture; id: string }) => {
       const rewritten = await rewriteWithCurrentCode(writer, surface, fixture.serialized);
 
-      const changed = changedPaths(JSON.parse(fixture.serialized), JSON.parse(rewritten)).filter(
-        (path) => !isTheUnshieldedKeyUpgrade(writer, surface, path),
-      );
+      const changed = changedPaths(
+        JSON.parse(fixture.serialized),
+        JSON.parse(rewritten),
+        upgradeOf(surface, fixture.serialized, rewritten),
+      ).filter((path) => !isTheUnshieldedKeyUpgrade(writer, surface, path));
 
       expect({ id: fixture.id, changed }).toEqual({ id: fixture.id, changed: [] });
     },

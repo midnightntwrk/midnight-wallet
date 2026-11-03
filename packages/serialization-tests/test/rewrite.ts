@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { Serialization as DustV1Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { Serialization as DustV2Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
@@ -45,10 +45,7 @@ type Rewriter = (serialized: string) => Promise<string> | string;
 const singleWriterRewriters: Pick<Record<Surface, Rewriter>, 'tx-history' | 'pending-transactions'> = {
   'tx-history': (s) => InMemoryTransactionHistoryStorage.restore(s, WalletEntrySchema, mergeWalletEntries).serialize(),
   'pending-transactions': (s) =>
-    PendingTransactions.serialize(
-      EitherOps.getOrThrowLeft(PendingTransactions.deserialize(s, pendingTxTraits)),
-      pendingTxTraits,
-    ),
+    Lifecycle.serialize(EitherOps.getOrThrowLeft(Lifecycle.deserialize(s, pendingTxTraits)), pendingTxTraits),
 };
 
 const shieldedV1 = ShieldedV1Serialization.makeDefaultV1SerializationCapability();

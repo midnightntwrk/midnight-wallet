@@ -21,7 +21,7 @@ it was written, by a version we no longer ship.
 | Unshielded snapshot | `unshielded-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v1` (V1), `v2` (V2) |
 | Dust snapshot | `dust-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v2` (both) |
 | Transaction history | `abstractions/src/InMemoryTransactionHistoryStorage.ts` | `v2` |
-| Pending transactions | `capabilities/src/pendingTransactions/pendingTransactions.ts` | `v1` |
+| Pending transactions | `capabilities/src/pendingTransactions/lifecycle.ts` | `v2` |
 
 The three snapshot surfaces have two writers each — the V1 variant on ledger-v8 and the V2 variant on ledger-v9 — and
 each package keeps its version constants, and any upgrade step, in a ledger-free `src/SnapshotFormat.ts` that both

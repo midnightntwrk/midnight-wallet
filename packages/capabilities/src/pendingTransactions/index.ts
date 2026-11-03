@@ -16,3 +16,4 @@
 export * from './pendingTransactionsService.js';
 export * as PendingTransactions from './pendingTransactions.js';
 export * as Lifecycle from './lifecycle.js';
+export * as LifecycleFormat from './SnapshotFormat.js';

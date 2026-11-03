@@ -23,9 +23,16 @@
  *   does.
  */
 
-import { ProtocolVersion, type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Array as Arr, Data, DateTime, Either, Option, type ParseResult, pipe } from 'effect';
-import { type FailedTransactionResult, type VersionedTransactionTrait } from './pendingTransactions.js';
+import { ProtocolVersion, SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Buffer } from 'buffer';
+import { Array as Arr, Data, DateTime, Either, Match, Option, ParseResult, pipe, Schema, type SchemaAST } from 'effect';
+import {
+  type FailedTransactionResult,
+  type TransactionTrait,
+  traitForVersion,
+  type VersionedTransactionTrait,
+} from './pendingTransactions.js';
+import { SNAPSHOT_FORMAT_VERSION, upgradeSnapshotV1ToV2 } from './SnapshotFormat.js';
 
 /**
  * Ids of the coins a transaction spends, per wallet: unshielded coins as `intentHash#outputNo`, shielded coins by
@@ -61,7 +68,10 @@ export type LifecycleRecord<TTransaction> = Readonly<{
   inputs: Inputs;
   /** From this instant the ledger rejects the transaction. */
   ttl: Date;
-  /** The version the transaction's bytes were built for; `none` only for a record that never held its transaction. */
+  /**
+   * The version the transaction's bytes were built for; `none` for a record that never held its transaction, or one
+   * stored before transactions were stamped, which is read with the oldest trait and never orphaned.
+   */
   protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>;
   /** The transaction in the form for its state; `none` only for a record that never held its transaction. */
   tx: Option.Option<TTransaction>;
@@ -409,8 +419,201 @@ export const coveredUnshieldedIds = <TTransaction>(state: TransactionLifecycle<T
     Arr.dedupe,
   );
 
+const SegmentsSchema = Schema.Array(Schema.Struct({ id: Schema.Number, success: Schema.Boolean }));
+
+const RejectedVerdictSchema = Schema.Union(
+  Schema.Struct({ status: Schema.Literal('FAILURE', 'PARTIAL_SUCCESS'), segments: SegmentsSchema }),
+  Schema.Struct({ status: Schema.Literal('TTL_PASSED') }),
+);
+
+/** A state as stored: its tag, and whatever the state carries beside it. */
+const WireStateSchema = Schema.Union(
+  Schema.TaggedStruct('Balanced', {}),
+  Schema.TaggedStruct('Finalized', {}),
+  Schema.TaggedStruct('Submitted', {}),
+  Schema.TaggedStruct('Confirmed', {}),
+  Schema.TaggedStruct('Rejected', { verdict: RejectedVerdictSchema }),
+  Schema.TaggedStruct('Orphaned', {
+    authoredFor: ProtocolVersion.ProtocolVersionSchema,
+    chainNow: ProtocolVersion.ProtocolVersionSchema,
+  }),
+  Schema.TaggedStruct('Expired', {}),
+  Schema.TaggedStruct('Reverted', {}),
+);
+
+const isWireState = Schema.is(Schema.typeSchema(WireStateSchema));
+
+/** Builds each state with its own constructor, so a read state is the same value the transitions make. */
+const StateSchema = Schema.transform(
+  WireStateSchema,
+  Schema.declare((value: unknown): value is LifecycleState => isWireState(value)),
+  {
+    strict: true,
+    decode: (wire) =>
+      Match.valueTags(wire, {
+        Balanced: () => LifecycleState.Balanced(),
+        Finalized: () => LifecycleState.Finalized(),
+        Submitted: () => LifecycleState.Submitted(),
+        Confirmed: () => LifecycleState.Confirmed(),
+        Rejected: ({ verdict }) => LifecycleState.Rejected({ verdict }),
+        Orphaned: ({ authoredFor, chainNow }) => LifecycleState.Orphaned({ authoredFor, chainNow }),
+        Expired: () => LifecycleState.Expired(),
+        Reverted: () => LifecycleState.Reverted(),
+      }),
+    encode: (state) => state,
+  },
+);
+
+const InputsSchema = Schema.Struct({
+  unshielded: Schema.Array(Schema.String),
+  shielded: Schema.optionalWith(Schema.Array(Schema.String), { exact: true }),
+});
+
 /**
- * Writes the records in the current stored format.
+ * A record as stored. Its identifiers, intent hashes, inputs and TTL may be absent only beside its transaction, which
+ * they are then read from: a store upgraded from `v1` never recorded them for a pending item.
+ */
+const WireRecordSchema = Schema.Struct({
+  tx: Schema.optionalWith(Schema.String, { exact: true }),
+  protocolVersion: Schema.optionalWith(ProtocolVersion.ProtocolVersionSchema, { as: 'Option', exact: true }),
+  identifiers: Schema.optionalWith(Schema.Array(Schema.String), { exact: true }),
+  intentHashes: Schema.optionalWith(Schema.Array(Schema.String), { exact: true }),
+  inputs: Schema.optionalWith(InputsSchema, { exact: true }),
+  ttl: Schema.optionalWith(Schema.Date, { exact: true }),
+  createdAt: Schema.DateTimeUtc,
+  submittedAt: Schema.optionalWith(Schema.DateTimeUtc, { as: 'Option', exact: true }),
+  state: StateSchema,
+});
+
+type WireRecord = typeof WireRecordSchema.Type;
+
+type Facts = Pick<LifecycleRecord<unknown>, 'identifiers' | 'intentHashes' | 'inputs' | 'ttl'>;
+
+/** The facts a record stored, each one it lacks read off its transaction by `trait`. A stored fact always wins. */
+const factsOf = <TTransaction>(wire: WireRecord, tx: TTransaction, trait: TransactionTrait<TTransaction>): Facts => ({
+  identifiers: wire.identifiers ?? trait.ids(tx),
+  intentHashes: wire.intentHashes ?? trait.intentHashes(tx),
+  inputs: wire.inputs ?? trait.inputs(tx),
+  ttl: wire.ttl ?? trait.ttl(tx, wire.createdAt),
+});
+
+/** The facts of a record that never held its transaction: all stored, since nothing else could supply them. */
+const storedFactsOf = (wire: WireRecord): Option.Option<Facts> =>
+  wire.identifiers !== undefined &&
+  wire.intentHashes !== undefined &&
+  wire.inputs !== undefined &&
+  wire.ttl !== undefined
+    ? Option.some({
+        identifiers: wire.identifiers,
+        intentHashes: wire.intentHashes,
+        inputs: wire.inputs,
+        ttl: wire.ttl,
+      })
+    : Option.none();
+
+const RecordSchema = <TTransaction>(
+  traits: VersionedTransactionTrait<TTransaction>,
+): Schema.Schema<LifecycleRecord<TTransaction>, Schema.Schema.Encoded<typeof WireRecordSchema>> => {
+  const DomainSchema = Schema.declare(
+    (value: unknown): value is LifecycleRecord<TTransaction> =>
+      typeof value === 'object' && value !== null && 'state' in value && 'identifiers' in value,
+  );
+
+  /** The trait a record's transaction is read and written with: the one for its version, or the oldest without one. */
+  const traitOf = (
+    protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
+    ast: SchemaAST.AST,
+    actual: unknown,
+  ): Either.Either<TransactionTrait<TTransaction>, ParseResult.ParseIssue> =>
+    Either.fromOption(
+      traitForVersion(traits, protocolVersion),
+      () =>
+        new ParseResult.Type(
+          ast,
+          actual,
+          `No transaction trait is registered for protocol version ${Option.getOrElse(protocolVersion, () => 'unknown' as const)}.`,
+        ),
+    );
+
+  return Schema.asSchema(
+    Schema.transformOrFail(WireRecordSchema, DomainSchema, {
+      strict: true,
+      decode: (wire, _options, ast) => {
+        const rest = {
+          protocolVersion: wire.protocolVersion,
+          createdAt: wire.createdAt,
+          submittedAt: wire.submittedAt,
+          state: wire.state,
+        };
+        return wire.tx === undefined
+          ? pipe(
+              storedFactsOf(wire),
+              Either.fromOption(
+                () =>
+                  new ParseResult.Type(
+                    ast,
+                    wire,
+                    'A record that holds no transaction must carry its identifiers, intent hashes, inputs and TTL.',
+                  ),
+              ),
+              Either.map((facts) => ({ ...facts, ...rest, tx: Option.none<TTransaction>() })),
+            )
+          : pipe(
+              traitOf(wire.protocolVersion, ast, wire),
+              Either.flatMap((trait) =>
+                Either.try({
+                  try: () => ({ trait, tx: trait.deserialize(Buffer.from(wire.tx ?? '', 'hex')) }),
+                  catch: (cause) =>
+                    new ParseResult.Type(ast, wire, `Could not read the recorded transaction: ${String(cause)}`),
+                }),
+              ),
+              Either.map(({ trait, tx }) => ({ ...factsOf(wire, tx, trait), ...rest, tx: Option.some(tx) })),
+            );
+      },
+      encode: (record, _options, ast) => {
+        const rest = {
+          protocolVersion: record.protocolVersion,
+          identifiers: record.identifiers,
+          intentHashes: record.intentHashes,
+          inputs: record.inputs,
+          ttl: record.ttl,
+          createdAt: record.createdAt,
+          submittedAt: record.submittedAt,
+          state: record.state,
+        };
+        return Option.match(record.tx, {
+          onNone: () => Either.right(rest),
+          onSome: (tx) =>
+            pipe(
+              traitOf(record.protocolVersion, ast, record),
+              Either.flatMap((trait) =>
+                Either.try({
+                  try: () => Buffer.from(trait.serialize(tx)).toString('hex'),
+                  catch: (cause) =>
+                    new ParseResult.Type(ast, record, `Could not write the recorded transaction: ${String(cause)}`),
+                }),
+              ),
+              Either.map((hex) => ({ ...rest, tx: hex })),
+            ),
+        });
+      },
+    }),
+  );
+};
+
+/**
+ * The stored shape in the current format version. Its own `fields` are the top-level members the format declares; any
+ * other member of a payload is an unknown field, carried rather than read.
+ */
+const StoredStruct = <TTransaction>(traits: VersionedTransactionTrait<TTransaction>) =>
+  Schema.Struct({
+    version: Schema.Literal(SNAPSHOT_FORMAT_VERSION),
+    records: Schema.Array(RecordSchema(traits)),
+  });
+
+/**
+ * Writes the records in the current stored format, with every top-level member a payload it was read from carried but
+ * this build does not declare.
  *
  * @example
  *   const stored = serialize(lifecycle, traits);
@@ -420,13 +623,27 @@ export const coveredUnshieldedIds = <TTransaction>(state: TransactionLifecycle<T
  * @returns The records as a JSON string.
  */
 export const serialize = <TTransaction>(
-  _state: TransactionLifecycle<TTransaction>,
-  _traits: VersionedTransactionTrait<TTransaction>,
-): string => JSON.stringify({});
+  state: TransactionLifecycle<TTransaction>,
+  traits: VersionedTransactionTrait<TTransaction>,
+): string => {
+  const encoded: unknown = Schema.encodeSync(StoredStruct(traits))({
+    version: SNAPSHOT_FORMAT_VERSION,
+    records: state.records,
+  });
+  const written = SnapshotFormat.isJsonObject(encoded) ? encoded : {};
+  return JSON.stringify({
+    ...written,
+    ...SnapshotFormat.unknownFieldsOf(state.unknownFields ?? {}, (key) => Object.hasOwn(written, key)),
+  });
+};
 
 /**
  * Reads records stored in any format version this build knows, upgrading an older one on the way.
  *
+ * @remarks
+ *   A record that holds its transaction but lacks a fact reads it off the transaction, with the trait registered for the
+ *   version the record was stamped with, or the oldest trait when it carries no stamp. A version this build does not
+ *   know is refused, never read as the current one.
  * @example
  *   const lifecycle = deserialize(stored, traits);
  *
@@ -435,6 +652,25 @@ export const serialize = <TTransaction>(
  * @returns The records, or why the payload could not be read.
  */
 export const deserialize = <TTransaction>(
-  _serialized: string,
-  _traits: VersionedTransactionTrait<TTransaction>,
-): Either.Either<TransactionLifecycle<TTransaction>, ParseResult.ParseError> => Either.right(empty());
+  serialized: string,
+  traits: VersionedTransactionTrait<TTransaction>,
+): Either.Either<TransactionLifecycle<TTransaction>, ParseResult.ParseError> =>
+  pipe(
+    serialized,
+    Schema.decodeUnknownEither(Schema.parseJson()),
+    Either.flatMap((parsed) => {
+      const json = upgradeSnapshotV1ToV2(parsed);
+      const schema = StoredStruct(traits);
+      return pipe(
+        Schema.decodeUnknownEither(schema)(json),
+        Either.map((data) =>
+          SnapshotFormat.withUnknownFields<TransactionLifecycle<TTransaction>>(
+            { records: data.records },
+            SnapshotFormat.isJsonObject(json)
+              ? SnapshotFormat.unknownFieldsOf(json, (key) => Object.hasOwn(schema.fields, key))
+              : {},
+          ),
+        ),
+      );
+    }),
+  );
