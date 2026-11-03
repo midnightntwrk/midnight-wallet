@@ -13,7 +13,7 @@
 /**
  * A builder that rejects hands the caller no transaction, so the caller has nothing to revert. Whatever the builder
  * booked before the failing step must therefore be released by the builder itself, in every wallet that booked, along
- * with the reservation record that stood for the booking.
+ * with the lifecycle record that stood for the booking.
  *
  * Each builder books in up to three wallets in sequence, so it can fail at three kinds of step:
  *
@@ -32,15 +32,17 @@ import {
   type UnprovenTx,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { type Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { type FacadeState, type WalletFacade } from '../src/index.js';
+import { type FacadeState, isAwaiting, type WalletFacade } from '../src/index.js';
+import { type LifecycleTx } from '../src/transaction.js';
 import {
   createSimulatorWalletFactories,
   deriveWalletKeys,
+  liveRecordsOf,
   makeSimulatorFacade,
   tokenValue,
   waitForShieldedCoins,
@@ -64,9 +66,6 @@ const hourFromNow = (): Date => new Date(Date.now() + 60 * 60 * 1000);
 
 const utxoKey = (coin: { utxo: { intentHash: string; outputNo: number } }): string =>
   `${coin.utxo.intentHash}#${coin.utxo.outputNo}`;
-
-const pendingSet = (facade: WalletFacade): Effect.Effect<PendingTransactions.PendingTransactions<FinalizedTx>> =>
-  Effect.promise(() => rx.firstValueFrom(facade.pendingTransactionsService.state()));
 
 /** What a booking would move out of the spendable set, in each of the three wallets. */
 const spendable = (state: FacadeState) => ({
@@ -128,13 +127,6 @@ const fundedFacade = ({ withDust }: { withDust: boolean }) =>
             ),
         ),
       );
-      yield* Effect.promise(() =>
-        rx.firstValueFrom(
-          facade.pendingTransactionsService
-            .state()
-            .pipe(rx.filter((p) => p.reservations.length === 0 && p.all.length === 0)),
-        ),
-      );
     }
 
     const before: FacadeState = yield* Effect.promise(() => rx.firstValueFrom(facade.state()));
@@ -190,8 +182,8 @@ const afterRejection = (facade: WalletFacade, build: () => Promise<unknown>, rea
     expect(String(failure.error)).toContain(reason);
 
     const after: FacadeState = yield* Effect.promise(() => rx.firstValueFrom(facade.state()));
-    const pending = yield* pendingSet(facade);
-    return { after, pending };
+    const live = yield* liveRecordsOf(facade);
+    return { after, live };
   });
 
 const INJECTED_FAILURE = 'the step after fee payment failed';
@@ -240,20 +232,24 @@ const recordFeePaymentFailure = (facade: WalletFacade): { readonly failures: unk
 const expectNothingLeftBooked = (
   before: FacadeState,
   after: FacadeState,
-  pending: PendingTransactions.PendingTransactions<FinalizedTx>,
+  live: ReadonlyArray<Lifecycle.LifecycleRecord<LifecycleTx>>,
 ): void => {
   expect(spendable(after)).toEqual(spendable(before));
-  expect(pending.reservations).toEqual([]);
+  // What was awaiting an answer before the builder ran, such as a Dust registration the simulator never reports
+  // included, is all that may still be: the builder leaves no live record of its own.
+  expect(live.map((record) => record.identifiers)).toStrictEqual(
+    before.pending.filter(isAwaiting).map((entry) => entry.identifiers),
+  );
 };
 
 describe('A builder that rejects at fee payment', () => {
   const NO_DUST = 'could not balance dust';
 
-  it('should leave every coin a transfer booked spendable and no reservation behind, because the caller has no transaction to revert', () =>
+  it('should leave every coin a transfer booked spendable and no live record behind, because the caller has no transaction to revert', () =>
     Effect.gen(function* () {
       const { facade, before, shieldedAddress, unshieldedAddress } = yield* fundedFacade({ withDust: false });
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () =>
           facade.transferTransaction(
@@ -272,14 +268,14 @@ describe('A builder that rejects at fee payment', () => {
         NO_DUST,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should leave every coin a swap booked spendable and no reservation behind, because the caller has no transaction to revert', () =>
+  it('should leave every coin a swap booked spendable and no live record behind, because the caller has no transaction to revert', () =>
     Effect.gen(function* () {
       const { facade, before, unshieldedAddress } = yield* fundedFacade({ withDust: false });
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () =>
           facade.initSwap(
@@ -295,21 +291,21 @@ describe('A builder that rejects at fee payment', () => {
         NO_DUST,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should leave every coin balancing an unproven transaction booked spendable and no reservation behind, because the caller has no transaction to revert', () =>
+  it('should leave every coin balancing an unproven transaction booked spendable and no live record behind, because the caller has no transaction to revert', () =>
     Effect.gen(function* () {
       const { facade, keys, before } = yield* fundedFacade({ withDust: false });
       const tx = unproven(callersTransaction(keys, { shielded: tokenValue(1n), night: tokenValue(1n) }));
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () => facade.balanceUnprovenTransaction(tx, { ttl: hourFromNow() }),
         NO_DUST,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('should leave the caller’s own Night inputs booked when balancing an unproven transaction in place, because only the coins the wallet added are its booking to release', () =>
@@ -333,7 +329,7 @@ describe('A builder that rejects at fee payment', () => {
         ),
       );
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () => facade.balanceUnprovenTransaction(tx, { ttl: hourFromNow() }),
         NO_DUST,
@@ -341,37 +337,37 @@ describe('A builder that rejects at fee payment', () => {
 
       expect(spendable(after).unshielded.filter((id) => callersInputs.includes(id))).toEqual([]);
       expect(spendable(after)).toEqual(spendable(booked));
-      expect(pending.reservations).toEqual([]);
+      expect(live).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should leave every coin balancing an unbound transaction booked spendable and no reservation behind, because the caller has no transaction to revert', () =>
+  it('should leave every coin balancing an unbound transaction booked spendable and no live record behind, because the caller has no transaction to revert', () =>
     Effect.gen(function* () {
       const { facade, keys, before } = yield* fundedFacade({ withDust: false });
       // Proving binds the caller's intent, which in-place unshielded balancing refuses to extend, so the caller's
       // unbound transaction asks only for shielded funds.
       const tx = unbound(callersTransaction(keys, { shielded: tokenValue(1n) }));
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () => facade.balanceUnboundTransaction(tx, { ttl: hourFromNow() }),
         NO_DUST,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should leave every coin balancing a finalized transaction booked spendable and no reservation behind, because the caller has no transaction to revert', () =>
+  it('should leave every coin balancing a finalized transaction booked spendable and no live record behind, because the caller has no transaction to revert', () =>
     Effect.gen(function* () {
       const { facade, keys, before } = yield* fundedFacade({ withDust: false });
       const tx = finalized(callersTransaction(keys, { shielded: tokenValue(1n), night: tokenValue(1n) }));
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () => facade.balanceFinalizedTransaction(tx, { ttl: hourFromNow() }),
         NO_DUST,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
@@ -389,7 +385,7 @@ describe('A recipe whose finalizing fails after its balancing part was finalized
   // the field, which the simulator cannot stage on demand, so the failure is injected into that step.
   const FOLD_FAILED = 'folding the finalized balancing part in failed';
 
-  it('should leave every coin balancing a finalized transaction booked spendable, with nothing pending or reserved, when the merge fails', () =>
+  it('should leave every coin balancing a finalized transaction booked spendable, with no live record, when the merge fails', () =>
     Effect.gen(function* () {
       const { facade, keys, before } = yield* fundedFacade({ withDust: true });
       const tx = finalized(callersTransaction(keys, { shielded: tokenValue(1n), night: tokenValue(1n) }));
@@ -398,13 +394,12 @@ describe('A recipe whose finalizing fails after its balancing part was finalized
         throw new Error(FOLD_FAILED);
       });
 
-      const { after, pending } = yield* afterRejection(facade, () => facade.finalizeRecipe(recipe), FOLD_FAILED);
+      const { after, live } = yield* afterRejection(facade, () => facade.finalizeRecipe(recipe), FOLD_FAILED);
 
-      expectNothingLeftBooked(before, after, pending);
-      expect(pending.all).toEqual([]);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should leave every coin balancing an unbound transaction booked spendable, with nothing pending or reserved, when the bind fails', () =>
+  it('should leave every coin balancing an unbound transaction booked spendable, with no live record, when the bind fails', () =>
     Effect.gen(function* () {
       const { facade, keys, before } = yield* fundedFacade({ withDust: true });
       // Proving binds the caller's intent, which in-place unshielded balancing refuses to extend, so the caller's
@@ -419,10 +414,9 @@ describe('A recipe whose finalizing fails after its balancing part was finalized
         throw new Error(FOLD_FAILED);
       });
 
-      const { after, pending } = yield* afterRejection(facade, () => facade.finalizeRecipe(recipe), FOLD_FAILED);
+      const { after, live } = yield* afterRejection(facade, () => facade.finalizeRecipe(recipe), FOLD_FAILED);
 
-      expectNothingLeftBooked(before, after, pending);
-      expect(pending.all).toEqual([]);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
@@ -478,7 +472,7 @@ describe('A builder that rejects at its second wallet', () => {
     Effect.gen(function* () {
       const { facade, before, shieldedAddress, unshieldedAddress } = yield* fundedFacade({ withDust: false });
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () =>
           facade.transferTransaction(
@@ -497,14 +491,14 @@ describe('A builder that rejects at its second wallet', () => {
         NO_FUNDS,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('should leave the shielded coins a swap booked spendable when the unshielded wallet cannot cover its part', () =>
     Effect.gen(function* () {
       const { facade, before, unshieldedAddress } = yield* fundedFacade({ withDust: false });
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () =>
           facade.initSwap(
@@ -520,7 +514,7 @@ describe('A builder that rejects at its second wallet', () => {
         NO_FUNDS,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('should leave the shielded coins balancing an unproven transaction booked spendable when the unshielded wallet cannot cover its part', () =>
@@ -528,7 +522,7 @@ describe('A builder that rejects at its second wallet', () => {
       const { facade, keys, before } = yield* fundedFacade({ withDust: false });
       const tx = unproven(callersTransaction(keys, { shielded: tokenValue(1n), night: MORE_NIGHT_THAN_HELD }));
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () =>
           facade.balanceUnprovenTransaction(tx, {
@@ -538,7 +532,7 @@ describe('A builder that rejects at its second wallet', () => {
         NO_FUNDS,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('should leave the shielded coins balancing an unbound transaction booked spendable when the unshielded wallet cannot extend it', () =>
@@ -547,22 +541,22 @@ describe('A builder that rejects at its second wallet', () => {
       // The caller's proven intent asks for Night, and in-place unshielded balancing cannot add to a bound intent.
       const tx = unbound(callersTransaction(keys, { shielded: tokenValue(1n), night: tokenValue(1n) }));
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () =>
           facade.balanceUnboundTransaction(tx, { ttl: hourFromNow(), tokenKindsToBalance: ['shielded', 'unshielded'] }),
         'already bound',
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should leave the unshielded coins balancing a finalized transaction booked spendable, and no reservation behind, when the shielded wallet cannot cover its part', () =>
+  it('should leave the unshielded coins balancing a finalized transaction booked spendable, and no live record behind, when the shielded wallet cannot cover its part', () =>
     Effect.gen(function* () {
       const { facade, keys, before } = yield* fundedFacade({ withDust: false });
       const tx = finalized(callersTransaction(keys, { shielded: MORE_SHIELDED_THAN_HELD, night: tokenValue(1n) }));
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () =>
           facade.balanceFinalizedTransaction(tx, {
@@ -572,17 +566,17 @@ describe('A builder that rejects at its second wallet', () => {
         NO_FUNDS,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
 describe('A builder that rejects after fee payment', () => {
-  it('should leave every coin a transfer booked spendable, Dust included, and no reservation behind', () =>
+  it('should leave every coin a transfer booked spendable, Dust included, and no live record behind', () =>
     Effect.gen(function* () {
       const { facade, before, shieldedAddress, unshieldedAddress } = yield* fundedFacade({ withDust: true });
       failAfterFeePayment(facade);
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () =>
           facade.transferTransaction(
@@ -601,15 +595,15 @@ describe('A builder that rejects after fee payment', () => {
         INJECTED_FAILURE,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should leave every coin a swap booked spendable, Dust included, and no reservation behind', () =>
+  it('should leave every coin a swap booked spendable, Dust included, and no live record behind', () =>
     Effect.gen(function* () {
       const { facade, before, unshieldedAddress } = yield* fundedFacade({ withDust: true });
       failAfterFeePayment(facade);
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () =>
           facade.initSwap(
@@ -625,51 +619,51 @@ describe('A builder that rejects after fee payment', () => {
         INJECTED_FAILURE,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should leave every coin balancing an unproven transaction booked spendable, Dust included, and no reservation behind', () =>
+  it('should leave every coin balancing an unproven transaction booked spendable, Dust included, and no live record behind', () =>
     Effect.gen(function* () {
       const { facade, keys, before } = yield* fundedFacade({ withDust: true });
       failAfterFeePayment(facade);
       const tx = unproven(callersTransaction(keys, { shielded: tokenValue(1n), night: tokenValue(1n) }));
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () => facade.balanceUnprovenTransaction(tx, { ttl: hourFromNow() }),
         INJECTED_FAILURE,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should leave every coin balancing an unbound transaction booked spendable, Dust included, and no reservation behind', () =>
+  it('should leave every coin balancing an unbound transaction booked spendable, Dust included, and no live record behind', () =>
     Effect.gen(function* () {
       const { facade, keys, before } = yield* fundedFacade({ withDust: true });
       failAfterFeePayment(facade);
       const tx = unbound(callersTransaction(keys, { shielded: tokenValue(1n) }));
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () => facade.balanceUnboundTransaction(tx, { ttl: hourFromNow() }),
         INJECTED_FAILURE,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should leave every coin balancing a finalized transaction booked spendable, Dust included, and no reservation behind', () =>
+  it('should leave every coin balancing a finalized transaction booked spendable, Dust included, and no live record behind', () =>
     Effect.gen(function* () {
       const { facade, keys, before } = yield* fundedFacade({ withDust: true });
       failAfterFeePayment(facade);
       const tx = finalized(callersTransaction(keys, { shielded: tokenValue(1n), night: tokenValue(1n) }));
 
-      const { after, pending } = yield* afterRejection(
+      const { after, live } = yield* afterRejection(
         facade,
         () => facade.balanceFinalizedTransaction(tx, { ttl: hourFromNow() }),
         INJECTED_FAILURE,
       );
 
-      expectNothingLeftBooked(before, after, pending);
+      expectNothingLeftBooked(before, after, live);
     }).pipe(Effect.scoped, Effect.runPromise));
 });

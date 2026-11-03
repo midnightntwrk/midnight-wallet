@@ -14,14 +14,13 @@
  * A transfer the caller builds and then abandons — never proves, submits or reverts — leaves its shielded coins booked.
  * The shielded wallet expires that booking itself, against the chain's time, so the coins come back without anything
  * the caller or the facade has to do, across a restart too. Until then the booking is visible, both in the wallet's
- * state and as a reservation the facade records, so a stuck coin can be told from a missing one.
+ * state and as a lifecycle record the facade keeps, so a stuck coin can be told from a missing one.
  *
  * The wallet counts a booking's lifetime from the first sync update that sees it, so the chain's clock is moved past a
  * lifetime twice: once for the wallet to see the booking, and once for the lifetime to pass.
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { type FinalizedTx, NetworkId, NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { NetworkId, NoOpTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { CustomShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import {
@@ -36,6 +35,8 @@ import { type FacadeState, type WalletEntry, type WalletFacade } from '../src/in
 import {
   createSimulatorWalletFactories,
   deriveWalletKeys,
+  lifecycleOf,
+  liveRecordsOf,
   makeSimulatorFacade,
   tokenValue,
   waitForShieldedCoins,
@@ -57,9 +58,6 @@ const TEN_MINUTES_S = 10n * 60n;
 
 const stateWhere = (facade: WalletFacade, predicate: (state: FacadeState) => boolean): Effect.Effect<FacadeState> =>
   Effect.promise(() => rx.firstValueFrom(facade.state().pipe(rx.filter(predicate), rx.timeout({ first: 5_000 }))));
-
-const pendingSet = (facade: WalletFacade): Effect.Effect<PendingTransactions.PendingTransactions<FinalizedTx>> =>
-  Effect.promise(() => rx.firstValueFrom(facade.pendingTransactionsService.state()));
 
 /** A facade holding one shielded coin, and a transfer of part of it to itself that books that coin. */
 const fundedFacade = () =>
@@ -202,27 +200,30 @@ describe('A shielded transfer the caller abandons', () => {
       expect(released.shielded.reservedCoins).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should be recorded as a reservation naming the coins it booked, so they have an owner outside the wallet state', () =>
+  it('should be recorded as a balanced record naming the coins it booked, so they have an owner outside the wallet state', () =>
     Effect.gen(function* () {
       const { facade, before, transfer } = yield* fundedFacade();
       const [coin] = before.shielded.availableCoins;
 
       yield* transfer(facade);
-      const { reservations } = yield* pendingSet(facade);
+      const live = yield* liveRecordsOf(facade);
 
-      expect(reservations).toHaveLength(1);
-      expect(reservations[0].inputs.shielded).toEqual([coin.nullifier]);
-      expect(reservations[0].inputs.unshielded).toEqual([]);
+      expect(live.map((record) => record.state)).toStrictEqual([{ _tag: 'Balanced' }]);
+      expect(live[0].inputs.shielded).toEqual([coin.nullifier]);
+      expect(live[0].inputs.unshielded).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should drop that reservation once the transaction itself is being tracked', () =>
+  it('should move that same record to finalized once the transaction is finalized, rather than keeping a second one', () =>
     Effect.gen(function* () {
       const { facade, transfer } = yield* fundedFacade();
 
       const recipe = yield* transfer(facade);
-      expect((yield* pendingSet(facade)).reservations).toHaveLength(1);
+      const balanced = (yield* lifecycleOf(facade)).records;
+      expect(balanced.map((record) => record.state)).toStrictEqual([{ _tag: 'Balanced' }]);
       yield* Effect.promise(() => facade.finalizeRecipe(recipe));
 
-      expect((yield* pendingSet(facade)).reservations).toEqual([]);
+      const finalized = (yield* lifecycleOf(facade)).records;
+      expect(finalized.map((record) => record.state)).toStrictEqual([{ _tag: 'Finalized' }]);
+      expect(finalized.map((record) => record.identifiers)).toStrictEqual(balanced.map((record) => record.identifiers));
     }).pipe(Effect.scoped, Effect.runPromise));
 });

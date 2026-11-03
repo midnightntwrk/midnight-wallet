@@ -54,7 +54,6 @@ import {
   getShieldedSeed,
   getUnshieldedSeed,
   shieldedAt,
-  SilentPendingTransactions,
   sleep,
   unshieldedAt,
 } from './utils/index.js';
@@ -124,7 +123,6 @@ describe('a sync-reported inclusion', () => {
       dust: () => dust,
       provingService: () => createV8MockProvingService(),
       submissionService: () => acceptingSubmission,
-      pendingTransactionsService: () => new SilentPendingTransactions(),
       transactionLifecycleService: () => lifecycle,
     });
   };

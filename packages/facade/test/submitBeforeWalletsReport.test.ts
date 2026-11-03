@@ -33,15 +33,14 @@ import {
   type FinalizedTx,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { DustWallet, type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { DateTime, type Option } from 'effect';
 import * as rx from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type ResolvedConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
-import { finalizedTransactionTraits } from '../src/transaction.js';
+import { lifecycleTransactionTraits } from '../src/transaction.js';
 import {
   createV8MockProvingService,
   drivenBy,
@@ -50,7 +49,7 @@ import {
   getShieldedSeed,
   getUnshieldedSeed,
   shieldedAt,
-  SilentPendingTransactions,
+  DrivenLifecycle,
   unshieldedAt,
 } from './utils/index.js';
 
@@ -63,33 +62,12 @@ const v8Version = ProtocolVersion.ProtocolVersion(3n);
 /** Where all three are once they have crossed it. */
 const v9Version = ProtocolVersion.ProtocolVersion(forkVersion + 1n);
 
-/** A pending set that keeps its state with the shipped pure transforms, so what it books decides what it orphans. */
-class PureStatePendingTransactions extends SilentPendingTransactions {
-  readonly #traits = finalizedTransactionTraits(forkVersion);
-
-  override addPendingTransaction(
-    tx: FinalizedTx,
-    protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
-  ): Promise<void> {
-    this.states.next(
-      PendingTransactions.addPendingTransaction(
-        this.states.value,
-        tx,
-        DateTime.unsafeMake(Date.now()),
-        this.#traits,
-        protocolVersion,
-      ),
-    );
-    return Promise.resolve();
-  }
-
-  override clear(tx: FinalizedTx): Promise<void> {
-    this.states.next(PendingTransactions.clear(this.states.value, tx, this.#traits));
-    return Promise.resolve();
-  }
+/** A lifecycle service that orphans with the shipped pure transition, so what it records decides what it orphans. */
+class OrphaningLifecycle extends DrivenLifecycle {
+  readonly #traits = lifecycleTransactionTraits(forkVersion);
 
   override orphanBeyond(chainNow: ProtocolVersion.ProtocolVersion): Promise<void> {
-    this.states.next(PendingTransactions.orphanBeyond(this.states.value, this.#traits, chainNow));
+    this.states.next(Lifecycle.orphanBeyond(this.states.value, this.#traits, chainNow));
     return Promise.resolve();
   }
 }
@@ -148,7 +126,7 @@ describe('a transaction submitted before every wallet has reported a version', (
     drivenBy(unshielded, unshieldedStates);
     drivenBy(dust, dustStates);
 
-    const pending = new PureStatePendingTransactions();
+    const lifecycle = new OrphaningLifecycle();
     facade = await WalletFacade.init({
       configuration,
       shielded: () => shielded,
@@ -156,7 +134,7 @@ describe('a transaction submitted before every wallet has reported a version', (
       dust: () => dust,
       provingService: () => createV8MockProvingService(),
       submissionService: () => acceptingSubmission,
-      pendingTransactionsService: () => pending,
+      transactionLifecycleService: () => lifecycle,
     });
 
     const submitted: FinalizedTx = WalletTransaction.adopt(

@@ -53,7 +53,6 @@ import {
   getShieldedSeed,
   getUnshieldedSeed,
   shieldedAt,
-  SilentPendingTransactions,
   unshieldedAt,
 } from './utils/index.js';
 
@@ -144,7 +143,6 @@ describe('WalletFacade.adoptTransaction', () => {
       unshielded: () => unshielded,
       dust: () => dust,
       provingService: () => createV8MockProvingService(),
-      pendingTransactionsService: () => new SilentPendingTransactions(),
     });
   });
 

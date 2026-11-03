@@ -49,7 +49,6 @@ import {
   getShieldedSeed,
   getUnshieldedSeed,
   shieldedAt,
-  SilentPendingTransactions,
   sleep,
   unshieldedAt,
 } from './utils/index.js';
@@ -113,7 +112,6 @@ describe('what a rejected transaction releases', () => {
       dust: () => dust,
       provingService: () => createV8MockProvingService(),
       submissionService: () => acceptingSubmission,
-      pendingTransactionsService: () => new SilentPendingTransactions(),
       transactionLifecycleService: () => driven,
     });
   };

@@ -39,7 +39,6 @@ import {
   getDustSeed,
   getShieldedSeed,
   getUnshieldedSeed,
-  SilentPendingTransactions,
   sleep,
 } from './utils/index.js';
 
@@ -78,7 +77,6 @@ describe('A pending transaction the fork left behind', () => {
       unshielded: () => unshielded,
       dust: () => dust,
       provingService: () => createV8MockProvingService(),
-      pendingTransactionsService: () => new SilentPendingTransactions(),
       transactionLifecycleService: () => lifecycle,
       // There is no node here: a submission that is accepted at once lets a test observe what the facade books.
       submissionService: () => ({

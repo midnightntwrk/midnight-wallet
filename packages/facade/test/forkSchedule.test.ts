@@ -42,7 +42,7 @@ import {
   drivenBy,
   dustAt,
   shieldedAt,
-  SilentPendingTransactions,
+  DrivenLifecycle,
   unshieldedAt,
 } from './utils/index.js';
 
@@ -187,7 +187,7 @@ describe('WalletFacade.init', () => {
       dust: wallet((config) => DustWallet(config).startWithSeed(keys.seeds.dust)),
       clock: service(() => Clock.systemClock),
       submissionService: service(() => unusedSubmission),
-      pendingTransactionsService: service(() => new SilentPendingTransactions()),
+      transactionLifecycleService: service(() => new DrivenLifecycle()),
       provingService: service(() => createV8MockProvingService()),
       fetchBlockData: service(() => unusedBlockData),
       validationService: service(() => unusedValidation),
@@ -269,7 +269,6 @@ describe('WalletFacade.init', () => {
       unshielded: () => unshielded,
       dust: () => dust,
       provingService: () => createV8MockProvingService(),
-      pendingTransactionsService: () => new SilentPendingTransactions(),
     });
     facades.push(facade);
 

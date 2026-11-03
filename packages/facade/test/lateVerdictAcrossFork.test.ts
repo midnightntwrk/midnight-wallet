@@ -66,7 +66,6 @@ import {
   getShieldedSeed,
   getUnshieldedSeed,
   shieldedAt,
-  SilentPendingTransactions,
   sleep,
   unshieldedAt,
 } from './utils/index.js';
@@ -142,7 +141,6 @@ describe('a verdict that arrives after the wallets have crossed the boundary', (
       dust: () => dust,
       provingService: () => createV8MockProvingService(),
       submissionService: () => acceptingSubmission,
-      pendingTransactionsService: () => new SilentPendingTransactions(),
       transactionLifecycleService: () => lifecycle,
     });
   });
