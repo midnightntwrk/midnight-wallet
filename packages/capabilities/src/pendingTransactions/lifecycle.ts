@@ -18,8 +18,9 @@
  *
  * @remarks
  *   The states, what moves a record between them and what each stores are decided in ADR 0011. Every transition here is
- *   total: an event that does not apply to a record leaves it as it was, so a final state never moves. No transition
- *   frees a coin; each wallet's own sweep does.
+ *   total: an event that does not apply to a record leaves it as it was, so a final state never moves, save that a
+ *   reported inclusion overrules an end the wallet only inferred. No transition frees a coin; each wallet's own sweep
+ *   does.
  */
 
 import { ProtocolVersion, type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
@@ -231,22 +232,34 @@ export const submitted = <TTransaction>(
 ): TransactionLifecycle<TTransaction> =>
   moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Submitted(), keptFrom(now), Option.some(now));
 
+/** Whether the chain itself refused the transaction, rather than the wallet concluding it from the TTL. */
+const isRejectedByChain = (state: LifecycleState): boolean =>
+  state._tag === 'Rejected' && state.verdict.status !== 'TTL_PASSED';
+
 /**
  * Records that a transaction was included, whichever live state its record is in: inclusion is a fact, and nothing
  * overrules it afterwards.
+ *
+ * It also overrules an end the wallet only inferred (expired, rejected at its TTL, orphaned, reverted): a block's time
+ * is within the transaction's TTL, so an inclusion reported after such an end happened before it.
  *
  * @example
  *   const included = confirmed(state, [...tx.identifiers()]);
  *
  * @param state The records.
  * @param identifiers The included transaction's identifiers.
- * @returns The records with the transaction confirmed; a final record is left as it was.
+ * @returns The records with the transaction confirmed; a record whose end the chain reported is left as it was.
  */
 export const confirmed = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
   identifiers: readonly string[],
 ): TransactionLifecycle<TTransaction> =>
-  settle(state, isCoveredBy(identifiers), LIVE, () => LifecycleState.Confirmed());
+  settle(
+    state,
+    (record) => isCoveredBy(identifiers)(record) && !isRejectedByChain(record.state),
+    [...LIVE, ...ENDED_UNSPENT],
+    () => LifecycleState.Confirmed(),
+  );
 
 /**
  * Records that the chain refused a submitted transaction. A transaction never submitted is left as it was: no chain was

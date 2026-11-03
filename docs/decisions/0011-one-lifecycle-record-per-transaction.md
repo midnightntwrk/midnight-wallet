@@ -56,16 +56,16 @@ site.
 
 ### States
 
-| State       | Entered from                         | Entered by                                                                                                                                                                                         | The record stores              |
-| ----------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `Balanced`  | nothing                              | `transferTransaction`, `initSwap`, `balanceFinalizedTransaction`, `balanceUnboundTransaction`, `balanceUnprovenTransaction`, `registerNightUtxosForDustGeneration`, `deregisterFromDustGeneration` | the transaction, proofs erased |
-| `Finalized` | `Balanced`, or nothing               | `finalizeTransaction`, `finalizeRecipe`; a transaction the facade did not balance enters here                                                                                                      | the finalized transaction      |
-| `Submitted` | `Balanced`, `Finalized`, or nothing  | `submitTransaction`; an adopted transaction, or one proven outside the facade, enters here                                                                                                         | the finalized transaction      |
-| `Confirmed` | `Balanced`, `Finalized`, `Submitted` | its inclusion, from sync or the poller, whoever submitted it                                                                                                                                       | unchanged                      |
-| `Rejected`  | `Submitted`                          | the chain refused it, or its TTL passed while submitted                                                                                                                                            | unchanged, with the verdict    |
-| `Orphaned`  | `Balanced`, `Finalized`, `Submitted` | the wallets crossed past the epoch it was built for                                                                                                                                                | unchanged, with the verdict    |
-| `Expired`   | `Balanced`, `Finalized`              | its TTL passed before it was submitted                                                                                                                                                             | unchanged                      |
-| `Reverted`  | `Balanced`, `Finalized`, `Submitted` | `revert`, `revertTransaction`, a builder that failed part-way, a submission that threw                                                                                                             | unchanged                      |
+| State       | Entered from                                                                                   | Entered by                                                                                                                                                                                         | The record stores              |
+| ----------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `Balanced`  | nothing                                                                                        | `transferTransaction`, `initSwap`, `balanceFinalizedTransaction`, `balanceUnboundTransaction`, `balanceUnprovenTransaction`, `registerNightUtxosForDustGeneration`, `deregisterFromDustGeneration` | the transaction, proofs erased |
+| `Finalized` | `Balanced`, or nothing                                                                         | `finalizeTransaction`, `finalizeRecipe`; a transaction the facade did not balance enters here                                                                                                      | the finalized transaction      |
+| `Submitted` | `Balanced`, `Finalized`, or nothing                                                            | `submitTransaction`; an adopted transaction, or one proven outside the facade, enters here                                                                                                         | the finalized transaction      |
+| `Confirmed` | `Balanced`, `Finalized`, `Submitted`; `Expired`, `Rejected` at its TTL, `Orphaned`, `Reverted` | its inclusion, from sync or the poller, whoever submitted it; reported late, it overrules an end the wallet only inferred                                                                          | unchanged                      |
+| `Rejected`  | `Submitted`                                                                                    | the chain refused it, or its TTL passed while submitted                                                                                                                                            | unchanged, with the verdict    |
+| `Orphaned`  | `Balanced`, `Finalized`, `Submitted`                                                           | the wallets crossed past the epoch it was built for                                                                                                                                                | unchanged, with the verdict    |
+| `Expired`   | `Balanced`, `Finalized`                                                                        | its TTL passed before it was submitted                                                                                                                                                             | unchanged                      |
+| `Reverted`  | `Balanced`, `Finalized`, `Submitted`                                                           | `revert`, `revertTransaction`, a builder that failed part-way, a submission that threw                                                                                                             | unchanged                      |
 
 ```mermaid
 stateDiagram-v2
@@ -91,6 +91,10 @@ stateDiagram-v2
   Orphaned --> Balanced: balanced again
   Expired --> Balanced: balanced again
   Reverted --> Balanced: balanced again
+  Expired --> Confirmed: included, reported late
+  Rejected --> Confirmed: included, reported late (TTL passed only)
+  Orphaned --> Confirmed: included, reported late
+  Reverted --> Confirmed: included, reported late
   Confirmed --> [*]: dropped after TTL
   Rejected --> [*]: dropped after TTL
   Orphaned --> [*]: dropped after TTL
@@ -98,12 +102,16 @@ stateDiagram-v2
   Reverted --> [*]: dropped after TTL
 ```
 
-`Confirmed`, `Rejected`, `Orphaned`, `Expired` and `Reverted` are final: no verdict moves them. The one way out of
-`Rejected`, `Orphaned`, `Expired` or `Reverted` is balancing the same spend again, whose coins were never spent on
-chain; that replaces the record with a new `Balanced` one, so a spend keeps one record. `Confirmed` is final against
-every other verdict, which replaces the precedence rule a late rejection needed: once the record knows of the inclusion,
-nothing moves it. The four status names `FacadeState.pending` already publishes keep their meaning; the other four are
-added.
+`Confirmed`, `Rejected`, `Orphaned`, `Expired` and `Reverted` are final: no other verdict moves them. Two ways out
+remain. Balancing the same spend again, whose coins were never spent on chain, replaces a `Rejected`, `Orphaned`,
+`Expired` or `Reverted` record with a new `Balanced` one, so a spend keeps one record. And an inclusion reported after
+the wallet ended a record by its own inference (`Expired`, `Rejected` because its TTL passed, `Orphaned`, `Reverted`)
+moves it to `Confirmed`: a block's time is within the transaction's TTL, so the inclusion happened first and sync only
+saw it late. An inference gives way to a fact. A `Rejected` the chain reported is itself an inclusion and stays.
+Whatever was released at the inferred end is harmless, because sync settles the spent coins. `Confirmed` is final
+against every other verdict, which replaces the precedence rule a late rejection needed: once the record knows of the
+inclusion, nothing moves it. The four status names `FacadeState.pending` already publishes keep their meaning; the other
+four are added.
 
 **No transition frees a coin.** Each wallet's own sweep and the facade's release-on-failure stay the only releasers, as
 ADR-0009 and ADR-0010 have them. A record moving to `Expired` or `Reverted` says the coins are no longer spoken for,
