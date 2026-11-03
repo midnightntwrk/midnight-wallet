@@ -23,7 +23,7 @@
  */
 
 import { type ProtocolVersion, type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Data, type DateTime, type Option } from 'effect';
+import { Array as Arr, Data, DateTime, Option, pipe } from 'effect';
 import { type FailedTransactionResult } from './pendingTransactions.js';
 
 /**
@@ -92,44 +92,121 @@ export type TransactionFacts<TTransaction> = Readonly<{
 /** No transaction recorded. */
 export const empty = <TTransaction>(): TransactionLifecycle<TTransaction> => ({ records: [] });
 
+type StateTag = LifecycleState['_tag'];
+
+/** The states a record can still leave. Every other state is final. */
+const LIVE: ReadonlyArray<StateTag> = ['Balanced', 'Finalized', 'Submitted'];
+
+const isLive = <TTransaction>(record: LifecycleRecord<TTransaction>): boolean => LIVE.includes(record.state._tag);
+
+/** A record stands for the same spend as a transaction when they share any identifier. */
+const isCoveredBy =
+  (identifiers: readonly string[]) =>
+  <TTransaction>(record: LifecycleRecord<TTransaction>): boolean =>
+    record.identifiers.some((id) => identifiers.includes(id));
+
+const earliest = (times: ReadonlyArray<DateTime.Utc>): Option.Option<DateTime.Utc> =>
+  Arr.match(times, { onEmpty: () => Option.none(), onNonEmpty: (all) => Option.some(Arr.min(all, DateTime.Order)) });
+
 /**
- * Records a transaction as balanced.
+ * Moves the live records `facts` covers into `target`, folded into one record that the facts describe.
+ *
+ * Only live records take part: a final one is never moved, and stays beside the record that replaces the spend. When a
+ * live covered record is in a state the move cannot start from, nothing changes. When none is covered, the record
+ * begins here.
+ */
+const moveTo = <TTransaction>(
+  state: TransactionLifecycle<TTransaction>,
+  facts: TransactionFacts<TTransaction>,
+  from: ReadonlyArray<StateTag>,
+  target: LifecycleState,
+  createdAt: (folded: ReadonlyArray<LifecycleRecord<TTransaction>>) => DateTime.Utc,
+): TransactionLifecycle<TTransaction> => {
+  const [rest, covered] = Arr.partition(
+    state.records,
+    (record) => isLive(record) && isCoveredBy(facts.identifiers)(record),
+  );
+  return covered.every((record) => from.includes(record.state._tag))
+    ? {
+        ...state,
+        records: Arr.append(rest, {
+          identifiers: facts.identifiers,
+          intentHashes: facts.intentHashes,
+          inputs: facts.inputs,
+          ttl: facts.ttl,
+          protocolVersion: Option.some(facts.protocolVersion),
+          tx: Option.some(facts.tx),
+          createdAt: createdAt(covered),
+          state: target,
+        }),
+      }
+    : state;
+};
+
+/** A record keeps the time it began through every move, and folding several keeps the earliest. */
+const keptFrom =
+  (now: DateTime.Utc) =>
+  <TTransaction>(folded: ReadonlyArray<LifecycleRecord<TTransaction>>): DateTime.Utc =>
+    pipe(
+      earliest(folded.map((record) => record.createdAt)),
+      Option.getOrElse(() => now),
+    );
+
+/**
+ * Records a transaction as balanced, replacing a balanced record of the same spend: balancing it again begins it anew.
+ *
+ * @example
+ *   const held = balanced(state, { tx: erased, identifiers, intentHashes, inputs, ttl, protocolVersion }, now);
  *
  * @param state The records.
  * @param facts The balanced transaction, with its proofs erased.
  * @param now When it was balanced.
- * @returns The records with the transaction balanced.
+ * @returns The records with the transaction balanced, or unchanged when the spend has already moved past balancing.
  */
 export const balanced = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
-  _facts: TransactionFacts<TTransaction>,
-  _now: DateTime.Utc,
-): TransactionLifecycle<TTransaction> => state;
+  facts: TransactionFacts<TTransaction>,
+  now: DateTime.Utc,
+): TransactionLifecycle<TTransaction> => moveTo(state, facts, ['Balanced'], LifecycleState.Balanced(), () => now);
 
 /**
- * Records a transaction as finalized.
+ * Records a transaction as finalized, from balanced or from nothing. Every record the finalized transaction covers is
+ * folded into one, because merging the parts of a recipe makes one transaction.
+ *
+ * @example
+ *   const proven = finalized(
+ *     state,
+ *     { tx: finalizedTx, identifiers, intentHashes, inputs, ttl, protocolVersion },
+ *     now,
+ *   );
  *
  * @param state The records.
  * @param facts The finalized transaction.
  * @param now When it was finalized.
- * @returns The records with the transaction finalized.
+ * @returns The records with the transaction finalized, or unchanged when the spend has already been submitted.
  */
 export const finalized = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
-  _facts: TransactionFacts<TTransaction>,
-  _now: DateTime.Utc,
-): TransactionLifecycle<TTransaction> => state;
+  facts: TransactionFacts<TTransaction>,
+  now: DateTime.Utc,
+): TransactionLifecycle<TTransaction> =>
+  moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Finalized({ finalizedAt: now }), keptFrom(now));
 
 /**
- * Records a transaction as submitted.
+ * Records a transaction as submitted, from balanced, finalized or nothing: a transaction proven outside the facade
+ * arrives still balanced, and an adopted one arrives unrecorded.
+ *
+ * @example
+ *   const sent = submitted(state, { tx: finalizedTx, identifiers, intentHashes, inputs, ttl, protocolVersion }, now);
  *
  * @param state The records.
  * @param facts The submitted transaction.
  * @param now When it was submitted.
- * @returns The records with the transaction submitted.
+ * @returns The records with the transaction submitted, or unchanged when it already was.
  */
 export const submitted = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
-  _facts: TransactionFacts<TTransaction>,
-  _now: DateTime.Utc,
-): TransactionLifecycle<TTransaction> => state;
+  facts: TransactionFacts<TTransaction>,
+  now: DateTime.Utc,
+): TransactionLifecycle<TTransaction> =>
+  moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Submitted({ submittedAt: now }), keptFrom(now));
