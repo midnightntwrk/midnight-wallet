@@ -294,7 +294,6 @@ describe('A transaction in a final state', () => {
       (state: Lifecycle.TransactionLifecycle<FakeTransaction>) => Lifecycle.TransactionLifecycle<FakeTransaction>,
     ]
   > = [
-    ['an inclusion', (state) => Lifecycle.confirmed(state, ['id-a'])],
     ['a rejection', (state) => Lifecycle.rejected(state, ['id-a'], REFUSED)],
     ['a fork crossing', (state) => Lifecycle.orphanBeyond(state, EPOCHS, V9)],
     ['a revert', (state) => Lifecycle.reverted(state, ['id-a'])],
@@ -310,6 +309,48 @@ describe('A transaction in a final state', () => {
       expect(apply(before)).toStrictEqual(before);
     },
   );
+
+  // A block's time is within the TTL, so an inclusion sync reports late happened before the wallet gave up on the
+  // transaction. These ends are the wallet's inference; the inclusion is a fact.
+  it.each([
+    Lifecycle.LifecycleState.Expired(),
+    Lifecycle.LifecycleState.Rejected({ verdict: { status: 'TTL_PASSED' } }),
+    Lifecycle.LifecycleState.Orphaned({ authoredFor: V8, chainNow: V9 }),
+    Lifecycle.LifecycleState.Reverted(),
+  ])(
+    'should confirm a $_tag record once it is reported included, because the wallet only inferred that end',
+    (inferred) => {
+      const before = holding(inferred, { submittedAt: Option.some(SUBMITTED_AT) });
+
+      expect(Lifecycle.confirmed(before, ['id-a']).records).toStrictEqual(
+        nowIn(before, Lifecycle.LifecycleState.Confirmed()),
+      );
+    },
+  );
+
+  it.each([
+    Lifecycle.LifecycleState.Confirmed(),
+    Lifecycle.LifecycleState.Rejected({ verdict: REFUSED }),
+    Lifecycle.LifecycleState.Rejected({
+      verdict: {
+        status: 'PARTIAL_SUCCESS',
+        segments: [
+          { id: 0, success: true },
+          { id: 1, success: false },
+        ],
+      },
+    }),
+  ])('should stay $_tag after an inclusion is reported, because the chain itself reported how it ended', (reported) => {
+    const before = holding(reported);
+
+    expect(Lifecycle.confirmed(before, ['id-a'])).toStrictEqual(before);
+  });
+
+  it('should leave a record whose inferred end shares no identifier with the included transaction as it was', () => {
+    const before = holding(Lifecycle.LifecycleState.Expired());
+
+    expect(Lifecycle.confirmed(before, ['id-other'])).toStrictEqual(before);
+  });
 
   it.each(FINAL_STATES.filter((final) => final._tag !== 'Confirmed'))(
     'should begin the spend anew when it is balanced again after it was $_tag, keeping one record per spend',
