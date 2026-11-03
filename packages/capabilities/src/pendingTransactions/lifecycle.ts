@@ -317,3 +317,27 @@ export const reverted = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
   identifiers: readonly string[],
 ): TransactionLifecycle<TTransaction> => settle(state, isCoveredBy(identifiers), LIVE, () => LifecycleState.Reverted());
+
+/**
+ * Ends every live record whose TTL `now` has passed: one never submitted expires, and a submitted one is rejected.
+ *
+ * @param state The records.
+ * @param now The instant to expire against.
+ * @returns The records with every passed TTL acted on, or the same state when none has passed.
+ */
+export const expire = <TTransaction>(
+  state: TransactionLifecycle<TTransaction>,
+  _now: DateTime.Utc,
+): TransactionLifecycle<TTransaction> => state;
+
+/**
+ * Drops every final record whose TTL `now` has passed.
+ *
+ * @param state The records.
+ * @param now The instant to drop against.
+ * @returns The records without them, or the same state when none is due.
+ */
+export const dropFinished = <TTransaction>(
+  state: TransactionLifecycle<TTransaction>,
+  _now: DateTime.Utc,
+): TransactionLifecycle<TTransaction> => state;

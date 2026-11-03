@@ -337,3 +337,120 @@ describe('A transaction in a final state', () => {
     expect(Lifecycle.balanced(before, facts('erased', ['id-a']), at('2026-01-01T00:03:00.000Z'))).toStrictEqual(before);
   });
 });
+
+// The ledger accepts an intent while its TTL is at or after the block's timestamp, so a TTL is passed only once `now`
+// is strictly later than it.
+const AT_TTL = DateTime.unsafeMake(TTL);
+const PAST_TTL = at('2026-01-01T01:00:00.001Z');
+const BEFORE_TTL = at('2026-01-01T00:59:59.999Z');
+
+describe('A transaction whose TTL passes', () => {
+  it.each(LIVE_STATES.slice(0, 2))('should expire a $_tag record, because it was never submitted', (unsubmitted) => {
+    const before = holding(unsubmitted);
+
+    expect(Lifecycle.expire(before, PAST_TTL).records).toStrictEqual(nowIn(before, Lifecycle.LifecycleState.Expired()));
+  });
+
+  it('should reject a submitted record, because no chain will include it any more', () => {
+    const before = holding(Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT }));
+
+    expect(Lifecycle.expire(before, PAST_TTL).records).toStrictEqual(
+      nowIn(before, Lifecycle.LifecycleState.Rejected({ verdict: { status: 'TTL_PASSED' } })),
+    );
+  });
+
+  it('should expire a record that never held its transaction, by the TTL it recorded', () => {
+    const before = holding(Lifecycle.LifecycleState.Balanced(), { tx: Option.none(), protocolVersion: Option.none() });
+
+    expect(Lifecycle.expire(before, PAST_TTL).records).toStrictEqual(nowIn(before, Lifecycle.LifecycleState.Expired()));
+  });
+
+  it.each([
+    ['at', AT_TTL],
+    ['before', BEFORE_TTL],
+  ] as const)(
+    'should hand back the same state %s the TTL instant, because the ledger still accepts the transaction',
+    (_when, now) => {
+      const before: Lifecycle.TransactionLifecycle<FakeTransaction> = {
+        records: LIVE_STATES.map((live, index) => recordOf(facts('finalized', [`id-${index}`]), BALANCED_AT, live)),
+      };
+
+      expect(Lifecycle.expire(before, now)).toBe(before);
+    },
+  );
+
+  it.each(FINAL_STATES)('should leave a $_tag record as it was, because a final state never moves', (final) => {
+    const before = holding(final);
+
+    expect(Lifecycle.expire(before, PAST_TTL)).toBe(before);
+  });
+
+  it('should end only the records whose TTL has passed', () => {
+    const later = recordOf(
+      facts('erased', ['id-later'], { ttl: new Date('2026-01-01T03:00:00.000Z') }),
+      BALANCED_AT,
+      Lifecycle.LifecycleState.Balanced(),
+    );
+    const before: Lifecycle.TransactionLifecycle<FakeTransaction> = {
+      records: [...holding(Lifecycle.LifecycleState.Balanced()).records, later],
+    };
+
+    expect(Lifecycle.expire(before, PAST_TTL).records).toStrictEqual([
+      { ...before.records[0], state: Lifecycle.LifecycleState.Expired() },
+      later,
+    ]);
+  });
+});
+
+describe('A finished transaction leaving the store', () => {
+  it.each(FINAL_STATES)(
+    'should drop a $_tag record once its TTL has passed, because no verdict can conflict with it any more',
+    (final) => {
+      expect(Lifecycle.dropFinished(holding(final), PAST_TTL).records).toStrictEqual([]);
+    },
+  );
+
+  it.each([
+    ['at', AT_TTL],
+    ['before', BEFORE_TTL],
+  ] as const)(
+    'should hand back the same state %s the TTL instant, so a confirmed transaction stays visible for its lifetime',
+    (_when, now) => {
+      const before: Lifecycle.TransactionLifecycle<FakeTransaction> = {
+        records: FINAL_STATES.map((final, index) => recordOf(facts('finalized', [`id-${index}`]), BALANCED_AT, final)),
+      };
+
+      expect(Lifecycle.dropFinished(before, now)).toBe(before);
+    },
+  );
+
+  it.each(LIVE_STATES)('should keep a $_tag record whatever its TTL, because ending it is expiry’s to do', (live) => {
+    const before = holding(live);
+
+    expect(Lifecycle.dropFinished(before, PAST_TTL)).toBe(before);
+  });
+
+  it('should drop only the final records whose TTL has passed', () => {
+    const live = recordOf(facts('finalized', ['id-live']), BALANCED_AT, Lifecycle.LifecycleState.Balanced());
+    const stillVisible = recordOf(
+      facts('finalized', ['id-later'], { ttl: new Date('2026-01-01T03:00:00.000Z') }),
+      BALANCED_AT,
+      Lifecycle.LifecycleState.Confirmed(),
+    );
+    const before: Lifecycle.TransactionLifecycle<FakeTransaction> = {
+      records: [...holding(Lifecycle.LifecycleState.Confirmed()).records, live, stillVisible],
+    };
+
+    expect(Lifecycle.dropFinished(before, PAST_TTL).records).toStrictEqual([live, stillVisible]);
+  });
+
+  it('should show an expired record once before dropping it, when expiry and the drop run in turn', () => {
+    const before = holding(Lifecycle.LifecycleState.Finalized({ finalizedAt: FINALIZED_AT }));
+
+    const expired = Lifecycle.expire(before, PAST_TTL);
+    const swept = Lifecycle.dropFinished(expired, PAST_TTL);
+
+    expect(expired.records.map((record) => record.state._tag)).toStrictEqual(['Expired']);
+    expect(swept.records).toStrictEqual([]);
+  });
+});
