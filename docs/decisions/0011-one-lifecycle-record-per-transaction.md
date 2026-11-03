@@ -121,6 +121,8 @@ which is what `coveredUnshieldedIds` reads; it does not hand them back.
 - **Its TTL**: the earliest TTL of the transaction's intents, which is when the ledger stops accepting it; the caller's
   TTL only for a transaction with no intent. A reservation records the caller's TTL today, which can differ from the one
   the unshielded wallet booked with.
+- **When it was submitted**, set on entering `Submitted` and kept through whatever verdict follows, so a `Confirmed` or
+  `Rejected` record still says when it was sent. A record never submitted has none.
 - **Its state and verdict**, so a restart shows what the store showed before it stopped, without polling again.
 
 ### Why the erased form is safe to store

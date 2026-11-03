@@ -130,7 +130,8 @@ const earliest = (times: ReadonlyArray<DateTime.Utc>): Option.Option<DateTime.Ut
  * Replaces the records `facts` covers with one record in `target`, which the facts describe.
  *
  * When any covered record is in a state the move cannot start from, nothing changes, so a final state is left alone
- * unless the move names it. When none is covered, the record begins here.
+ * unless the move names it. When none is covered, the record begins here. No move starts from `Submitted`, so the
+ * submission time is the one `target` brings, never one a covered record held.
  */
 const moveTo = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
@@ -138,6 +139,7 @@ const moveTo = <TTransaction>(
   from: ReadonlyArray<StateTag>,
   target: LifecycleState,
   createdAt: (folded: ReadonlyArray<LifecycleRecord<TTransaction>>) => DateTime.Utc,
+  submittedAt: Option.Option<DateTime.Utc>,
 ): TransactionLifecycle<TTransaction> => {
   const [rest, covered] = Arr.partition(state.records, isCoveredBy(facts.identifiers));
   return covered.every((record) => from.includes(record.state._tag))
@@ -151,7 +153,7 @@ const moveTo = <TTransaction>(
           protocolVersion: Option.some(facts.protocolVersion),
           tx: Option.some(facts.tx),
           createdAt: createdAt(covered),
-          submittedAt: Option.none(),
+          submittedAt,
           state: target,
         }),
       }
@@ -185,7 +187,7 @@ export const balanced = <TTransaction>(
   facts: TransactionFacts<TTransaction>,
   now: DateTime.Utc,
 ): TransactionLifecycle<TTransaction> =>
-  moveTo(state, facts, ['Balanced', ...ENDED_UNSPENT], LifecycleState.Balanced(), () => now);
+  moveTo(state, facts, ['Balanced', ...ENDED_UNSPENT], LifecycleState.Balanced(), () => now, Option.none());
 
 /**
  * Records a transaction as finalized, from balanced or from nothing. Every record the finalized transaction covers is
@@ -208,7 +210,7 @@ export const finalized = <TTransaction>(
   facts: TransactionFacts<TTransaction>,
   now: DateTime.Utc,
 ): TransactionLifecycle<TTransaction> =>
-  moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Finalized(), keptFrom(now));
+  moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Finalized(), keptFrom(now), Option.none());
 
 /**
  * Records a transaction as submitted, from balanced, finalized or nothing: a transaction proven outside the facade
@@ -227,7 +229,7 @@ export const submitted = <TTransaction>(
   facts: TransactionFacts<TTransaction>,
   now: DateTime.Utc,
 ): TransactionLifecycle<TTransaction> =>
-  moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Submitted(), keptFrom(now));
+  moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Submitted(), keptFrom(now), Option.some(now));
 
 /**
  * Records that a transaction was included, whichever live state its record is in: inclusion is a fact, and nothing
