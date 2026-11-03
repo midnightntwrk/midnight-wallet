@@ -136,9 +136,11 @@ export class TransactionLifecycleServiceEffectImpl<
   /**
    * Each tick asks the indexer first and sweeps after, so an inclusion found on the tick a TTL passes is recorded
    * before the TTL could end the record: the inclusion happened within the TTL.
+   *
+   * The ticks are drained within the provided scope, so closing that scope stops the poller.
    */
   startPolling(ticks: Stream.Stream<unknown>): Effect.Effect<void, Error, QueryClient | Scope.Scope> {
-    return ticks.pipe(Stream.runForEach(() => pipe(this.poll(), Effect.andThen(this.sweep()))));
+    return ticks.pipe(Stream.runForEachScoped(() => pipe(this.poll(), Effect.andThen(this.sweep()))));
   }
 
   balanced(facts: Lifecycle.TransactionFacts<TTransaction>): Effect.Effect<void> {
