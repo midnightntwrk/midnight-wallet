@@ -311,9 +311,10 @@ export const expireReservations = <TTransaction>(
 /**
  * The unshielded coin ids some spend still accounts for.
  *
- * Every reservation's inputs, plus the inputs of every transaction being tracked. Both halves are needed: a reservation
- * covers a transaction that was balanced and never submitted, and registering a transaction drops the reservation
- * standing in for it, so from submission onwards only the tracked transaction says the coins are spoken for.
+ * Every unexpired reservation's inputs, plus the inputs of every transaction being tracked. Both halves are needed: a
+ * reservation covers a transaction that was balanced and never submitted, and registering a transaction drops the
+ * reservation standing in for it, so from submission onwards only the tracked transaction says the coins are spoken
+ * for. An expired reservation covers nothing: no chain can accept its transaction any more, so its coins are free.
  *
  * @example
  *   const spokenFor = coveredUnshieldedIds(pending, (tx) => ownInputIdsOf(tx));
@@ -328,7 +329,7 @@ export const coveredUnshieldedIds = <TTransaction>(
 ): readonly string[] =>
   pipe(
     Arr.appendAll(
-      Arr.flatMap(state.reservations, (reservation) => reservation.inputs.unshielded),
+      Arr.flatMap(state.reservations, (reservation) => (reservation.expired ? [] : reservation.inputs.unshielded)),
       Arr.flatMap(state.all, (item) => unshieldedInputsOf(item.tx)),
     ),
     Arr.dedupe,
