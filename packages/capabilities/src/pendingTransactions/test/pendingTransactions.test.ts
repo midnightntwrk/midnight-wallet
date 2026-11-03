@@ -34,6 +34,9 @@ const txTrait: PendingTransactions.TransactionTrait<FakeTransaction> = {
     return HashSet.size(HashSet.intersection(a, b)) === smaller;
   },
   hasTTLExpired: () => false,
+  intentHashes: () => [],
+  inputs: () => ({ unshielded: [] }),
+  ttl: () => new Date(0),
 };
 
 const traits = PendingTransactions.singleTrait(txTrait);
@@ -440,6 +443,9 @@ describe('Reservations across a two-version trait registry', () => {
         owns(otherTx) &&
         (tx.ids.every((id) => otherTx.ids.includes(id)) || otherTx.ids.every((id) => tx.ids.includes(id))),
       hasTTLExpired: () => false,
+      intentHashes: () => [],
+      inputs: () => ({ unshielded: [] }),
+      ttl: () => new Date(0),
     };
   };
 

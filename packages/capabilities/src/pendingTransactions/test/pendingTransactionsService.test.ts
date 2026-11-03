@@ -144,6 +144,9 @@ const FakeTransaction = new (class {
 
       return result;
     },
+    intentHashes: () => [],
+    inputs: () => ({ unshielded: [] }),
+    ttl: (tx) => new Date(tx.ttlSeconds * 1000),
   };
 
   // This fixture speaks one protocol version, so it registers its trait for every version.

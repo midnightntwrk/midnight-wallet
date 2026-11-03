@@ -36,6 +36,9 @@ const traitOf = (era: FakeTx['era']): PendingTransactions.TransactionTrait<FakeT
     tx.era === otherTx.era &&
     (tx.ids.every((id) => otherTx.ids.includes(id)) || otherTx.ids.every((id) => tx.ids.includes(id))),
   hasTTLExpired: () => false,
+  intentHashes: () => [],
+  inputs: () => ({ unshielded: [] }),
+  ttl: () => new Date(0),
   serialize: (tx) => Buffer.from(JSON.stringify(tx), 'utf-8'),
   deserialize: (bytes) => {
     const parsed = JSON.parse(Buffer.from(bytes).toString('utf-8')) as FakeTx;

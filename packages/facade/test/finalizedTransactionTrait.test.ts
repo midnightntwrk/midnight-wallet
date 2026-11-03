@@ -15,9 +15,15 @@
 
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
-import { Array as Arr, DateTime, Duration } from 'effect';
+import { ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
+import { Array as Arr, DateTime, Duration, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { v8FinalizedTransactionTrait, v9FinalizedTransactionTrait } from '../src/transaction.js';
+import {
+  finalizedTransactionTraits,
+  v8FinalizedTransactionTrait,
+  v9FinalizedTransactionTrait,
+} from '../src/transaction.js';
 
 /**
  * Both ledger versions' traits read a transaction the same way — identifiers, a TTL, offers, dust spends — against
@@ -171,4 +177,215 @@ describe.each(traits)('%s finalizedTransactionTrait', (_label, trait, dustGraceP
       expect(hasTTLExpired(trait, tx, justAfterGracePeriod)).toBe(true);
     });
   });
+});
+
+type Spend = Readonly<{ intentHash: string; outputNo: number }>;
+
+type FactsIntent = Readonly<{
+  segment: number;
+  ttl: Date;
+  dustSpends?: number;
+  guaranteedSpends?: readonly Spend[];
+  fallibleSpends?: readonly Spend[];
+}>;
+
+type FactsParts = Readonly<{
+  /** Absent for a transaction with no intent at all, such as a rewards claim. */
+  intents?: readonly FactsIntent[];
+  guaranteedNullifiers?: readonly string[];
+  /** One list of nullifiers per fallible segment, segments numbered from 1. */
+  fallibleNullifiers?: ReadonlyArray<readonly string[]>;
+}>;
+
+/**
+ * Builds the smallest transaction-shaped value the facts a lifecycle record keeps are read from: each intent's TTL,
+ * Dust spends, hash and unshielded spends, and the Zswap inputs of the shielded offers. Each intent hashes to
+ * `intent-<segment>`, so a hash taken with the wrong segment shows. It serializes, so it can be sealed in a handle.
+ */
+const factsTransaction = (parts: FactsParts): unknown => ({
+  intents:
+    parts.intents === undefined
+      ? undefined
+      : new Map(
+          parts.intents.map((intent) => [
+            intent.segment,
+            {
+              ttl: intent.ttl,
+              dustActions:
+                (intent.dustSpends ?? 0) === 0 ? undefined : { spends: Arr.makeBy(intent.dustSpends ?? 0, () => ({})) },
+              intentHash: (segment: number) => `intent-${segment}`,
+              guaranteedUnshieldedOffer:
+                intent.guaranteedSpends === undefined ? undefined : { inputs: intent.guaranteedSpends },
+              fallibleUnshieldedOffer:
+                intent.fallibleSpends === undefined ? undefined : { inputs: intent.fallibleSpends },
+            },
+          ]),
+        ),
+  guaranteedOffer:
+    parts.guaranteedNullifiers === undefined
+      ? undefined
+      : { inputs: parts.guaranteedNullifiers.map((nullifier) => ({ nullifier })) },
+  fallibleOffer:
+    parts.fallibleNullifiers === undefined
+      ? undefined
+      : new Map(
+          parts.fallibleNullifiers.map((nullifiers, index) => [
+            index + 1,
+            { inputs: nullifiers.map((nullifier) => ({ nullifier })) },
+          ]),
+        ),
+  serialize: () => new Uint8Array(),
+});
+
+/**
+ * One trait, widened to read the structural stub.
+ *
+ * Type cast required because: each trait is typed against its own ledger's `FinalizedTransaction`, a nominal class with
+ * a private constructor, while the members under test read only the structural fields the stub carries.
+ */
+const reading = (trait: (typeof traits)[number][1]): PendingTransactions.TransactionTrait<unknown> =>
+  trait as unknown as PendingTransactions.TransactionTrait<unknown>;
+
+const at = (offset: Duration.DurationInput): Date => DateTime.toDate(DateTime.addDuration(creationTime, offset));
+
+describe.each(traits)('%s finalizedTransactionTrait, the facts a lifecycle record keeps', (_label, trait, grace) => {
+  const read = reading(trait);
+  const gracePeriod = Duration.seconds(Number(grace));
+  const graceEnds = at(gracePeriod);
+  const beyondGrace = at(Duration.sum(gracePeriod, Duration.hours(1)));
+  const lessBeyondGrace = at(Duration.sum(gracePeriod, Duration.minutes(30)));
+  const withinGrace = at(Duration.seconds(1));
+
+  describe('ttl', () => {
+    it('should end at the earliest intent TTL when the transaction spends no Dust and carries no shielded offer', () => {
+      const tx = factsTransaction({
+        intents: [
+          { segment: 1, ttl: beyondGrace },
+          { segment: 2, ttl: lessBeyondGrace },
+        ],
+      });
+
+      expect(read.ttl(tx, creationTime)).toStrictEqual(lessBeyondGrace);
+    });
+
+    it('should end once the Dust grace period after creation has passed for a transaction with no intent, so a rewards claim the indexer never reports still ends', () => {
+      expect(read.ttl(factsTransaction({}), creationTime)).toStrictEqual(graceEnds);
+    });
+
+    it.each([
+      ['spends Dust', { intents: [{ segment: 1, ttl: beyondGrace, dustSpends: 1 }] }],
+      [
+        'carries a guaranteed shielded offer',
+        { intents: [{ segment: 1, ttl: beyondGrace }], guaranteedNullifiers: [] },
+      ],
+      ['carries a fallible shielded offer', { intents: [{ segment: 1, ttl: beyondGrace }], fallibleNullifiers: [[]] }],
+    ] as const)(
+      'should end once the Dust grace period after creation has passed when the transaction %s, before a later intent TTL',
+      (_what, parts) => {
+        expect(read.ttl(factsTransaction(parts), creationTime)).toStrictEqual(graceEnds);
+      },
+    );
+
+    it('should end at an intent TTL that comes before the Dust grace period does, whatever else the transaction carries', () => {
+      const tx = factsTransaction({
+        intents: [{ segment: 1, ttl: withinGrace, dustSpends: 1 }],
+        guaranteedNullifiers: [],
+      });
+
+      expect(read.ttl(tx, creationTime)).toStrictEqual(withinGrace);
+    });
+
+    it('should agree with hasTTLExpired: valid at its TTL instant, expired just after it', () => {
+      const tx = factsTransaction({ intents: [{ segment: 1, ttl: lessBeyondGrace }] });
+      const ttl = DateTime.unsafeMake(read.ttl(tx, creationTime));
+
+      expect(read.hasTTLExpired(tx, creationTime, ttl)).toBe(false);
+      expect(read.hasTTLExpired(tx, creationTime, DateTime.addDuration(ttl, Duration.millis(1)))).toBe(true);
+    });
+  });
+
+  describe('intentHashes', () => {
+    it('should name each intent by its hash, taken with the segment it sits in', () => {
+      const tx = factsTransaction({
+        intents: [
+          { segment: 1, ttl: beyondGrace },
+          { segment: 2, ttl: beyondGrace },
+        ],
+      });
+
+      expect([...read.intentHashes(tx)].toSorted()).toStrictEqual(['intent-1', 'intent-2']);
+    });
+
+    it('should name none for a transaction with no intent', () => {
+      expect(read.intentHashes(factsTransaction({}))).toStrictEqual([]);
+    });
+  });
+
+  describe('inputs', () => {
+    it('should name every unshielded coin of every intent by intent hash and output number, and every shielded coin by nullifier', () => {
+      const tx = factsTransaction({
+        intents: [
+          {
+            segment: 1,
+            ttl: beyondGrace,
+            guaranteedSpends: [{ intentHash: 'h-a', outputNo: 0 }],
+            fallibleSpends: [{ intentHash: 'h-b', outputNo: 3 }],
+          },
+          { segment: 2, ttl: beyondGrace, fallibleSpends: [{ intentHash: 'h-c', outputNo: 1 }] },
+        ],
+        guaranteedNullifiers: ['n-guaranteed'],
+        fallibleNullifiers: [['n-fallible-1'], ['n-fallible-2a', 'n-fallible-2b']],
+      });
+
+      const inputs = read.inputs(tx);
+
+      expect([...inputs.unshielded].toSorted()).toStrictEqual(['h-a#0', 'h-b#3', 'h-c#1']);
+      expect([...(inputs.shielded ?? [])].toSorted()).toStrictEqual([
+        'n-fallible-1',
+        'n-fallible-2a',
+        'n-fallible-2b',
+        'n-guaranteed',
+      ]);
+    });
+
+    it('should leave shielded inputs out when the transaction spends no shielded coin, as a reservation always has', () => {
+      const tx = factsTransaction({
+        intents: [{ segment: 1, ttl: beyondGrace, guaranteedSpends: [{ intentHash: 'h-a', outputNo: 0 }] }],
+        guaranteedNullifiers: [],
+      });
+
+      expect(read.inputs(tx)).toStrictEqual({ unshielded: ['h-a#0'] });
+    });
+
+    it('should name nothing for a transaction that spends nothing', () => {
+      expect(read.inputs(factsTransaction({}))).toStrictEqual({ unshielded: [] });
+    });
+  });
+});
+
+describe('finalizedTransactionTraits, the facts a lifecycle record keeps', () => {
+  const FORK = ProtocolVersion.V9NativeForkVersion;
+  const registry = finalizedTransactionTraits(FORK);
+  const ttl = new Date(DateTime.toEpochMillis(creationTime) + 1000);
+  const stub = factsTransaction({
+    intents: [{ segment: 1, ttl, guaranteedSpends: [{ intentHash: 'h-a', outputNo: 0 }] }],
+    guaranteedNullifiers: ['n-a'],
+  });
+
+  it.each([
+    ['ledger-v8', ProtocolVersion.MinSupportedVersion],
+    ['ledger-v9', FORK],
+  ] as const)(
+    'should read them through the handle the facade carries, with the %s trait its stamp selects',
+    (_ledger, stamp) => {
+      // Type cast required because: `adopt` seals any serializable transaction, and the stub is one; its static type is
+      // `unknown` only so that it can stand in for either ledger's class.
+      const handle = WalletTransaction.adopt('Finalized', stub as { serialize: () => Uint8Array }, stamp);
+      const trait = Option.getOrThrow(ProtocolVersion.select(registry, stamp));
+
+      expect(trait.intentHashes(handle)).toStrictEqual(['intent-1']);
+      expect(trait.inputs(handle)).toStrictEqual({ unshielded: ['h-a#0'], shielded: ['n-a'] });
+      expect(trait.ttl(handle, creationTime)).toStrictEqual(ttl);
+    },
+  );
 });

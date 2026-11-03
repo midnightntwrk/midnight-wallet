@@ -23,6 +23,15 @@ export type TransactionTrait<TTransaction> = {
   areAllTxIdsIncluded: (tx: TTransaction, txIds: readonly string[]) => boolean;
   isOneIncludedInOther: (tx: TTransaction, otherTx: TTransaction) => boolean;
   hasTTLExpired: (tx: TTransaction, txCreationTime: DateTime.Utc, now: DateTime.Utc) => boolean;
+  /** The hash of each intent the transaction carries: the value the ledger stamps on the coins it creates. */
+  intentHashes: (tx: TTransaction) => readonly string[];
+  /**
+   * Every coin the transaction spends, whoever owns it: unshielded coins as `intentHash#outputNo`, shielded coins by
+   * nullifier, with `shielded` absent when it spends none.
+   */
+  inputs: (tx: TTransaction) => Reservation['inputs'];
+  /** The instant after which the transaction can no longer be included, for one created at `createdAt`. */
+  ttl: (tx: TTransaction, createdAt: DateTime.Utc) => Date;
   serialize: (tx: TTransaction) => Uint8Array;
   deserialize: (serialized: Uint8Array) => TTransaction;
   isTx: (tx: unknown) => tx is TTransaction;

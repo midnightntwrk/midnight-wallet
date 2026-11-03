@@ -114,6 +114,9 @@ export const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<l
     return tx.identifiers()[0];
   },
   hasTTLExpired: hasTTLExpiredUnder(() => ledgerV9.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds),
+  intentHashes: () => [],
+  inputs: () => ({ unshielded: [] }),
+  ttl: () => new Date(0),
   ids(tx: ledgerV9.FinalizedTransaction): readonly string[] {
     return tx.identifiers();
   },
@@ -151,6 +154,9 @@ export const v8FinalizedTransactionTrait: PendingTransactions.TransactionTrait<l
     return tx.identifiers()[0];
   },
   hasTTLExpired: hasTTLExpiredUnder(() => ledgerV8.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds),
+  intentHashes: () => [],
+  inputs: () => ({ unshielded: [] }),
+  ttl: () => new Date(0),
   ids(tx) {
     return tx.identifiers();
   },
@@ -192,6 +198,9 @@ const overHandles = <T extends { serialize: () => Uint8Array }>(
     areAllTxIdsIncluded: (tx, txIds) => trait.areAllTxIdsIncluded(carried(tx), txIds),
     isOneIncludedInOther: (tx, otherTx) => trait.isOneIncludedInOther(carried(tx), carried(otherTx)),
     hasTTLExpired: (tx, creationTime, now) => trait.hasTTLExpired(carried(tx), creationTime, now),
+    intentHashes: () => [],
+    inputs: () => ({ unshielded: [] }),
+    ttl: () => new Date(0),
     serialize: (tx) => trait.serialize(carried(tx)),
     deserialize: (serialized) => WalletTransaction.adopt('Finalized', trait.deserialize(serialized), stamp),
     isTx: (tx: unknown): tx is FinalizedTx =>
