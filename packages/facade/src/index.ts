@@ -104,7 +104,7 @@ import {
   type WellFormedStrictnessFlags,
   withLedgerParameters,
 } from '@midnightntwrk/wallet-sdk-capabilities/validation';
-import { finalizedTransactionTraits, txHistoryHash } from './transaction.js';
+import { coinIdsOf, finalizedTransactionTraits, txHistoryHash } from './transaction.js';
 
 /**
  * The traits pending transactions are read with, exported so a test that restores a stored pending-transaction payload
@@ -746,10 +746,6 @@ export class FacadeState {
 }
 
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
-
-/** How a coin is named wherever it is referred to without being carried: in a reservation, and in a release by id. */
-const coinIdsOf = (utxos: readonly { intentHash: string; outputNo: number }[]): readonly string[] =>
-  utxos.map((utxo) => `${utxo.intentHash}#${utxo.outputNo}`);
 
 /**
  * What a transaction of either ledger version says about its own identity, which is all a reservation needs of it.

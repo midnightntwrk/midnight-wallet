@@ -126,9 +126,12 @@ which is what `coveredUnshieldedIds` reads; it does not hand them back.
   finalized transaction, which holds no secret.
 - **Its inputs, per wallet**, as the reservation does today. They are derivable from the stored transaction, but a
   record upgraded from a stored reservation has no transaction to derive them from (see Stored format).
-- **Its TTL**: the earliest TTL of the transaction's intents, which is when the ledger stops accepting it; the caller's
-  TTL only for a transaction with no intent. A reservation records the caller's TTL today, which can differ from the one
-  the unshielded wallet booked with.
+- **Its TTL**, read off the transaction by the trait registered for its version, by the one rule the wallet already
+  expires transactions with: the earliest TTL of its intents, which is when the ledger stops accepting it; and, when it
+  spends Dust, carries shielded offers or has no intent at all, the Dust grace period after the record began if that
+  comes first. That backstop is what ends a rewards or bridge claim, which has no intent and which the indexer never
+  reports. No record takes the caller's TTL: a reservation records it today, which can differ from the one the
+  unshielded wallet booked with, and neither finalizing nor restoring has one to give.
 - **When it was submitted**, set on entering `Submitted` and kept through whatever verdict follows, so a `Confirmed` or
   `Rejected` record still says when it was sent. A record never submitted has none.
 - **Its state and verdict**, so a restart shows what the store showed before it stopped, without polling again.

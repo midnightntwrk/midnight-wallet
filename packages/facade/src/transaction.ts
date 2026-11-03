@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { Array as Arr, DateTime, Duration, Either, HashSet, Option, Order, pipe } from 'effect';
+import { Array as Arr, DateTime, Duration, Either, HashSet, Order } from 'effect';
 import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
 import {
   ProtocolVersion,
@@ -48,58 +48,87 @@ export const txHistoryHash = (tx: { transactionHash: () => unknown; serialize: (
   }
 };
 
-/** What the TTL rule reads off a finalized transaction; the same on ledger-v8 and ledger-v9, so both traits share it. */
-type TTLBearingTransaction = {
+/** How a coin is named wherever it is referred to without being carried: in a record, and in a release by id. */
+export const coinIdsOf = (utxos: readonly { intentHash: string; outputNo: number }[]): readonly string[] =>
+  utxos.map((utxo) => `${utxo.intentHash}#${utxo.outputNo}`);
+
+type SpentCoins = { readonly inputs: readonly { readonly intentHash: string; readonly outputNo: number }[] };
+type ShieldedOffer = { readonly inputs: readonly { readonly nullifier: string }[] };
+
+/**
+ * What a lifecycle record's facts are read off a finalized transaction; the same on ledger-v8 and ledger-v9, so both
+ * traits share it.
+ */
+type FactsBearingTransaction = {
   readonly intents:
     | ReadonlyMap<
         number,
-        { readonly ttl: Date; readonly dustActions?: { readonly spends: readonly unknown[] } | undefined }
+        {
+          readonly ttl: Date;
+          readonly dustActions?: { readonly spends: readonly unknown[] } | undefined;
+          intentHash(segmentId: number): string;
+          readonly guaranteedUnshieldedOffer: SpentCoins | undefined;
+          readonly fallibleUnshieldedOffer: SpentCoins | undefined;
+        }
       >
     | undefined;
-  readonly guaranteedOffer: unknown;
-  readonly fallibleOffer: { readonly size: number } | undefined;
+  readonly guaranteedOffer: ShieldedOffer | undefined;
+  readonly fallibleOffer: ReadonlyMap<number, ShieldedOffer> | undefined;
 };
 
 /**
- * The one TTL rule, closed over the ledger whose grace period it reads: a transaction has expired once the earliest of
- * its intent TTLs has passed, or, when it spends dust, carries shielded offers, or carries no intent at all, once the
- * dust grace period after its creation has. The grace period is the wallet's own backstop rather than a ledger rule; it
- * is what lets a rewards or bridge claim, which has no intents and no offers and which the indexer never reports a
- * status for, leave the pending set at all.
+ * The one TTL rule, closed over the ledger whose grace period it reads: a transaction can be included until the
+ * earliest of its intent TTLs, or, when it spends Dust, carries shielded offers, or carries no intent at all, until the
+ * Dust grace period after its creation if that comes first. The grace period is the wallet's own backstop rather than a
+ * ledger rule; it is what lets a rewards or bridge claim, which has no intents and no offers and which the indexer
+ * never reports a status for, leave the pending set at all.
  */
-const hasTTLExpiredUnder =
+const ttlUnder =
   (dustGracePeriodSeconds: () => bigint) =>
-  (tx: TTLBearingTransaction, creationTime: DateTime.Utc, now: DateTime.Utc): boolean => {
-    const intentTTLs = pipe(
-      tx.intents?.values().toArray() ?? [],
-      Arr.map((i) => i.ttl),
-      Arr.filterMap(DateTime.make),
-    );
-    const hasDustPayments = pipe(
-      tx.intents?.values().toArray() ?? [],
-      Arr.flatMap((i) => i.dustActions?.spends ?? []),
-      Arr.isNonEmptyArray,
-    );
+  (tx: FactsBearingTransaction, createdAt: DateTime.Utc): Date => {
+    const intents = [...(tx.intents?.values() ?? [])];
+    const intentTTLs = Arr.filterMap(intents, (intent) => DateTime.make(intent.ttl));
+    const spendsDust = intents.some((intent) => (intent.dustActions?.spends.length ?? 0) > 0);
     const hasShieldedOffers = tx.guaranteedOffer != null || (tx.fallibleOffer?.size ?? 0) > 0;
-    const hasNoDeadlineOfItsOwn = Arr.isEmptyReadonlyArray(intentTTLs);
-    const maybeShieldedTTL: readonly DateTime.Utc[] =
-      hasDustPayments || hasShieldedOffers || hasNoDeadlineOfItsOwn
-        ? pipe(creationTime, DateTime.addDuration(Duration.seconds(Number(dustGracePeriodSeconds()))), Arr.of)
-        : Arr.empty();
-
-    return pipe(
-      intentTTLs,
-      Arr.appendAll(maybeShieldedTTL),
-      (arr: readonly DateTime.Utc[]): Option.Option<DateTime.Utc> =>
-        Arr.isNonEmptyReadonlyArray(arr)
-          ? Option.some(Arr.min(arr, Order.mapInput(Order.Date, DateTime.toDate)))
-          : Option.none(),
-      Option.match({
-        onNone: () => false,
-        onSome: (finalTTL: DateTime.Utc) => DateTime.distance(finalTTL, now) > 0,
+    const backstop = DateTime.addDuration(createdAt, Duration.seconds(Number(dustGracePeriodSeconds())));
+    return DateTime.toDate(
+      Arr.match(intentTTLs, {
+        onEmpty: () => backstop,
+        onNonEmpty: (ttls) => {
+          const earliest = Arr.min(ttls, DateTime.Order);
+          return spendsDust || hasShieldedOffers ? DateTime.min(earliest, backstop) : earliest;
+        },
       }),
     );
   };
+
+/** Passed, not reached: a transaction is still valid at the instant its TTL names. */
+const hasTTLExpiredUnder =
+  (dustGracePeriodSeconds: () => bigint) =>
+  (tx: FactsBearingTransaction, creationTime: DateTime.Utc, now: DateTime.Utc): boolean =>
+    DateTime.toEpochMillis(now) > ttlUnder(dustGracePeriodSeconds)(tx, creationTime).getTime();
+
+/** Each intent's hash, taken with the segment it sits in, as the ledger stamps it on the coins the intent creates. */
+const intentHashesOf = (tx: FactsBearingTransaction): readonly string[] =>
+  [...(tx.intents?.entries() ?? [])].map(([segment, intent]) => intent.intentHash(segment));
+
+/** Every coin the transaction spends, whoever owns it; `shielded` only when it spends a shielded coin. */
+const inputsOf = (tx: FactsBearingTransaction): PendingTransactions.Reservation['inputs'] => {
+  const unshielded = coinIdsOf(
+    [...(tx.intents?.values() ?? [])].flatMap((intent) => [
+      ...(intent.guaranteedUnshieldedOffer?.inputs ?? []),
+      ...(intent.fallibleUnshieldedOffer?.inputs ?? []),
+    ]),
+  );
+  const shielded = [
+    ...(tx.guaranteedOffer?.inputs ?? []),
+    ...[...(tx.fallibleOffer?.values() ?? [])].flatMap((offer) => offer.inputs),
+  ].map((input) => input.nullifier);
+  return shielded.length === 0 ? { unshielded } : { unshielded, shielded };
+};
+
+const v9DustGracePeriod = (): bigint => ledgerV9.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds;
+const v8DustGracePeriod = (): bigint => ledgerV8.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds;
 
 export const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<ledgerV9.FinalizedTransaction> = {
   areAllTxIdsIncluded(tx: ledgerV9.FinalizedTransaction, txIds: readonly string[]): boolean {
@@ -113,10 +142,10 @@ export const v9FinalizedTransactionTrait: PendingTransactions.TransactionTrait<l
   firstId(tx: ledgerV9.FinalizedTransaction): string {
     return tx.identifiers()[0];
   },
-  hasTTLExpired: hasTTLExpiredUnder(() => ledgerV9.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds),
-  intentHashes: () => [],
-  inputs: () => ({ unshielded: [] }),
-  ttl: () => new Date(0),
+  hasTTLExpired: hasTTLExpiredUnder(v9DustGracePeriod),
+  intentHashes: intentHashesOf,
+  inputs: inputsOf,
+  ttl: ttlUnder(v9DustGracePeriod),
   ids(tx: ledgerV9.FinalizedTransaction): readonly string[] {
     return tx.identifiers();
   },
@@ -153,10 +182,10 @@ export const v8FinalizedTransactionTrait: PendingTransactions.TransactionTrait<l
   firstId(tx) {
     return tx.identifiers()[0];
   },
-  hasTTLExpired: hasTTLExpiredUnder(() => ledgerV8.LedgerParameters.initialParameters().dust.dustGracePeriodSeconds),
-  intentHashes: () => [],
-  inputs: () => ({ unshielded: [] }),
-  ttl: () => new Date(0),
+  hasTTLExpired: hasTTLExpiredUnder(v8DustGracePeriod),
+  intentHashes: intentHashesOf,
+  inputs: inputsOf,
+  ttl: ttlUnder(v8DustGracePeriod),
   ids(tx) {
     return tx.identifiers();
   },
@@ -198,9 +227,9 @@ const overHandles = <T extends { serialize: () => Uint8Array }>(
     areAllTxIdsIncluded: (tx, txIds) => trait.areAllTxIdsIncluded(carried(tx), txIds),
     isOneIncludedInOther: (tx, otherTx) => trait.isOneIncludedInOther(carried(tx), carried(otherTx)),
     hasTTLExpired: (tx, creationTime, now) => trait.hasTTLExpired(carried(tx), creationTime, now),
-    intentHashes: () => [],
-    inputs: () => ({ unshielded: [] }),
-    ttl: () => new Date(0),
+    intentHashes: (tx) => trait.intentHashes(carried(tx)),
+    inputs: (tx) => trait.inputs(carried(tx)),
+    ttl: (tx, createdAt) => trait.ttl(carried(tx), createdAt),
     serialize: (tx) => trait.serialize(carried(tx)),
     deserialize: (serialized) => WalletTransaction.adopt('Finalized', trait.deserialize(serialized), stamp),
     isTx: (tx: unknown): tx is FinalizedTx =>
