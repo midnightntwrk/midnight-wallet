@@ -319,6 +319,13 @@ export const reverted = <TTransaction>(
 ): TransactionLifecycle<TTransaction> => settle(state, isCoveredBy(identifiers), LIVE, () => LifecycleState.Reverted());
 
 /**
+ * Passed, not reached: the ledger accepts an intent while its TTL is at or after the block's timestamp, so a
+ * transaction is still valid at the instant its TTL names.
+ */
+const hasTtlPassed = <TTransaction>(record: LifecycleRecord<TTransaction>, now: DateTime.Utc): boolean =>
+  record.ttl.getTime() < DateTime.toEpochMillis(now);
+
+/**
  * Ends every live record whose TTL `now` has passed: one never submitted expires, and a submitted one is rejected.
  *
  * @param state The records.
@@ -327,8 +334,26 @@ export const reverted = <TTransaction>(
  */
 export const expire = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
-  _now: DateTime.Utc,
-): TransactionLifecycle<TTransaction> => state;
+  now: DateTime.Utc,
+): TransactionLifecycle<TTransaction> => {
+  const isDue = (record: LifecycleRecord<TTransaction>): boolean => isLive(record) && hasTtlPassed(record, now);
+  return Arr.some(state.records, isDue)
+    ? {
+        ...state,
+        records: state.records.map((record) =>
+          isDue(record)
+            ? {
+                ...record,
+                state:
+                  record.state._tag === 'Submitted'
+                    ? LifecycleState.Rejected({ verdict: { status: 'TTL_PASSED' } })
+                    : LifecycleState.Expired(),
+              }
+            : record,
+        ),
+      }
+    : state;
+};
 
 /**
  * Drops every final record whose TTL `now` has passed.
@@ -339,5 +364,10 @@ export const expire = <TTransaction>(
  */
 export const dropFinished = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
-  _now: DateTime.Utc,
-): TransactionLifecycle<TTransaction> => state;
+  now: DateTime.Utc,
+): TransactionLifecycle<TTransaction> => {
+  const isDue = (record: LifecycleRecord<TTransaction>): boolean => !isLive(record) && hasTtlPassed(record, now);
+  return Arr.some(state.records, isDue)
+    ? { ...state, records: Arr.filter(state.records, (record) => !isDue(record)) }
+    : state;
+};
