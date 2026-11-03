@@ -74,7 +74,7 @@ describe('Wallet Facade handling pending transactions', () => {
     await facade?.stop();
   });
 
-  it('releases nothing when a finalized transaction misses its TTL before it is submitted, because each wallet sweeps the coins it booked at that TTL', async () => {
+  it('releases only the Dust a finalized transaction booked when it misses its TTL before it is submitted, because the dust wallet holds a spend until its own grace period runs out while the other wallets sweep at that TTL', async () => {
     const spiedShieldedRevert = vi.spyOn(shielded, 'revertTransaction');
     const spiedUnshieldedRevert = vi.spyOn(unshielded, 'revertTransaction');
     const spiedDustRevert = vi.spyOn(dust, 'revertTransaction');
@@ -102,7 +102,8 @@ describe('Wallet Facade handling pending transactions', () => {
     expect(endsSeen).toContain('Expired');
     expect(spiedShieldedRevert).not.toHaveBeenCalled();
     expect(spiedUnshieldedRevert).not.toHaveBeenCalled();
-    expect(spiedDustRevert).not.toHaveBeenCalled();
+    expect(spiedDustRevert).toHaveBeenCalledTimes(1);
+    expect(spiedDustRevert).toHaveBeenCalledWith(finalized);
     // Read off the state's own projection now, rather than through the pending set's trait machinery: what an
     // application sees is a list of transactions with a status each.
     const finalizedIds = Either.getOrThrow(
@@ -114,5 +115,46 @@ describe('Wallet Facade handling pending transactions', () => {
     expect(
       state.lifecycle.filter((entry) => Option.isSome(entry.transaction)).map((entry) => [...entry.identifiers].sort()),
     ).toContainEqual([...finalizedIds].sort());
+  });
+
+  it('releases only the Dust a balanced transaction booked when it misses its TTL without ever being finalized, because the dust wallet matches the booking by what the proof-erased transaction still carries', async () => {
+    const spiedShieldedRevert = vi.spyOn(shielded, 'revertTransaction');
+    const spiedUnshieldedRevert = vi.spyOn(unshielded, 'revertTransaction');
+    const spiedDustRevert = vi.spyOn(dust, 'revertTransaction');
+    const endsSeen = new Set<string>();
+    const watching = facade.transactionLifecycleService
+      .state()
+      .subscribe((lifecycle) => lifecycle.records.forEach((record) => endsSeen.add(record.state._tag)));
+
+    const ttl = new Date(Date.now() + 10);
+    const transaction = WalletTransaction.adopt(
+      'Unproven',
+      // The wallets here have never synced, so the facade is on the ledger-v8 side of the boundary.
+      ledgerV8.Transaction.fromParts(configuration.networkId, undefined, undefined, ledgerV8.Intent.new(ttl)),
+      ProtocolVersion.MinSupportedVersion,
+    );
+
+    // Balanced with nothing to add, so the record is left without any wallet having been asked for coins.
+    const recipe = await facade.balanceUnprovenTransaction(transaction, { ttl, tokenKindsToBalance: [] });
+
+    await sleep(2); //Buffer for processing
+
+    watching.unsubscribe();
+
+    expect(endsSeen).toContain('Balanced');
+    expect(endsSeen).toContain('Expired');
+    expect(spiedShieldedRevert).not.toHaveBeenCalled();
+    expect(spiedUnshieldedRevert).not.toHaveBeenCalled();
+    expect(spiedDustRevert).toHaveBeenCalledTimes(1);
+    const identifiersOf = (tx: Parameters<DustWallet['revertTransaction']>[0]): readonly string[] =>
+      [
+        ...Either.getOrThrow(
+          WalletTransaction.unwrapWithin<ledgerV8.UnprovenTransaction>(
+            tx,
+            ProtocolVersion.epochOf(tx.protocolVersion, configuration.forks.v9),
+          ),
+        ).identifiers(),
+      ].sort();
+    expect(identifiersOf(spiedDustRevert.mock.calls[0][0])).toStrictEqual(identifiersOf(recipe.transaction));
   });
 });
