@@ -19,9 +19,11 @@ import {
   InMemoryTransactionHistoryStorage,
   NetworkId,
   ProtocolVersion,
+  SerializedTransaction,
   WalletTransaction,
   type FinalizedTx,
 } from '@midnightntwrk/wallet-sdk-abstractions';
+import { SubmissionEvent, type SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
@@ -108,6 +110,21 @@ describe('A pending transaction the fork left behind', () => {
       dust: () => dust,
       provingService: () => createV8MockProvingService(),
       pendingTransactionsService: () => pending,
+      // There is no node here: a submission that is accepted at once lets a test observe what the facade books.
+      submissionService: () => ({
+        // Type cast required because: the overloaded submit signature is stated once by the service type; this fake
+        // answers the status the facade waits for, which is the only one it ever asks for.
+        submitTransaction: ((): Promise<SubmissionEvent> =>
+          Promise.resolve(
+            SubmissionEvent.Finalized({
+              tx: SerializedTransaction.of(new Uint8Array()),
+              txHash: '',
+              blockHash: '',
+              blockHeight: 0n,
+            }),
+          )) as SubmissionService<FinalizedTx>['submitTransaction'],
+        close: () => Promise.resolve(),
+      }),
     });
     // The wallets are not started: these tests observe the state the facade already has, and starting them
     // would open indexer subscriptions this suite has no indexer for.
@@ -156,6 +173,23 @@ describe('A pending transaction the fork left behind', () => {
     const entry = pending.recorded.added.find((added) => added.tx === finalized);
     expect(entry).toBeDefined();
     expect(entry?.protocolVersion).toStrictEqual(Option.some(observed.activeProtocolVersion));
+  });
+
+  it('stamps a submitted transaction with the version its own bytes were built for, not the one the wallets report', async () => {
+    const observed = await rx.firstValueFrom(facade.state());
+    // Inside the wallets' epoch, so the facade accepts it, yet not the version they report.
+    const builtFor = ProtocolVersion.ProtocolVersion(observed.activeProtocolVersion + 1n);
+    const submitted: FinalizedTx = WalletTransaction.adopt(
+      'Finalized',
+      ledgerV8.Transaction.fromParts(configuration.networkId),
+      builtFor,
+    );
+
+    await facade.submitTransaction(submitted);
+
+    const entry = pending.recorded.added.find((added) => added.tx === submitted);
+    expect(entry).toBeDefined();
+    expect(entry?.protocolVersion).toStrictEqual(Option.some(builtFor));
   });
 
   it('reverts an orphaned transaction and records why it will never be included', async () => {
