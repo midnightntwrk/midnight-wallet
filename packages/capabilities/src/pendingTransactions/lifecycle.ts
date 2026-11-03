@@ -371,3 +371,11 @@ export const dropFinished = <TTransaction>(
     ? { ...state, records: Arr.filter(state.records, (record) => !isDue(record)) }
     : state;
 };
+
+/**
+ * The unshielded coin ids some live transaction still accounts for.
+ *
+ * @param state The records.
+ * @returns Every such coin id, without repeats.
+ */
+export const coveredUnshieldedIds = <TTransaction>(_state: TransactionLifecycle<TTransaction>): readonly string[] => [];

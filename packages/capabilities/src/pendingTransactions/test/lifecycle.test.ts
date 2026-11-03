@@ -454,3 +454,43 @@ describe('A finished transaction leaving the store', () => {
     expect(swept.records).toStrictEqual([]);
   });
 });
+
+describe('Coins a live transaction still accounts for', () => {
+  // Restored bookings are released once sync reaches the tip, and this is the set that survives that release.
+  it.each(LIVE_STATES)('should cover the unshielded coins of a $_tag record', (live) => {
+    expect(Lifecycle.coveredUnshieldedIds(holding(live))).toStrictEqual(['id-a#0']);
+  });
+
+  it.each(FINAL_STATES)(
+    'should cover nothing for a $_tag record, because its coins are either spent on chain or free',
+    (final) => {
+      expect(Lifecycle.coveredUnshieldedIds(holding(final))).toStrictEqual([]);
+    },
+  );
+
+  it('should cover the coins of a record that never held its transaction, by the inputs it recorded', () => {
+    const upgraded = holding(Lifecycle.LifecycleState.Balanced(), {
+      tx: Option.none(),
+      protocolVersion: Option.none(),
+    });
+
+    expect(Lifecycle.coveredUnshieldedIds(upgraded)).toStrictEqual(['id-a#0']);
+  });
+
+  it('should name a coin once when two live records both spend it, and leave out shielded inputs', () => {
+    const shared = recordOf(
+      facts('finalized', ['id-b'], { inputs: { unshielded: ['id-a#0', 'id-b#0'], shielded: ['nullifier-b'] } }),
+      BALANCED_AT,
+      Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT }),
+    );
+    const state: Lifecycle.TransactionLifecycle<FakeTransaction> = {
+      records: [...holding(Lifecycle.LifecycleState.Balanced()).records, shared],
+    };
+
+    expect([...Lifecycle.coveredUnshieldedIds(state)].toSorted()).toStrictEqual(['id-a#0', 'id-b#0']);
+  });
+
+  it('should cover nothing when nothing is recorded', () => {
+    expect(Lifecycle.coveredUnshieldedIds(empty)).toStrictEqual([]);
+  });
+});
