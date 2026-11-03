@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { Array as Arr, DateTime, Duration, Either, HashSet, Order } from 'effect';
+import { Array as Arr, DateTime, Duration, Either, HashSet, Option, Order, pipe } from 'effect';
 import { type PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
 import {
   ProtocolVersion,
@@ -294,44 +294,157 @@ export type LifecycleTx = Readonly<{
   transaction: V8AnyTransaction | V9AnyTransaction;
 }>;
 
-/** The balanced transaction `handle` carries, with its proofs erased. */
+const isV8Transaction = (tx: unknown): tx is V8AnyTransaction => tx instanceof ledgerV8.Transaction;
+const isV9Transaction = (tx: unknown): tx is V9AnyTransaction => tx instanceof ledgerV9.Transaction;
+
+/** The ledger transaction `handle` carries, refused unless it is of the ledger the handle's version names. */
+const carriedIn = (
+  handle: AnyTx,
+  forkVersion: ProtocolVersion.ProtocolVersion,
+): V8AnyTransaction | V9AnyTransaction => {
+  const carried = Either.getOrThrow(
+    WalletTransaction.unwrapWithin<unknown>(handle, ProtocolVersion.epochOf(handle.protocolVersion, forkVersion)),
+  );
+  const isOwnLedger = handle.protocolVersion >= forkVersion ? isV9Transaction : isV8Transaction;
+  return Option.getOrThrowWith(
+    Option.liftPredicate(carried, (tx): tx is V8AnyTransaction | V9AnyTransaction => isOwnLedger(tx)),
+    () => new Error(`A transaction stamped ${handle.protocolVersion} does not belong to that version's ledger.`),
+  );
+};
+
+/**
+ * The balanced transaction `handle` carries, with its proofs erased: identifiers, intent hashes and inputs survive
+ * erasure, so the record still matches the transaction once it is proven and bound.
+ *
+ * @example
+ *   const held = erasedOf(balancedHandle, configuration.forks.v9);
+ *
+ * @param handle The balanced transaction, at any stage.
+ * @param forkVersion The protocol version this chain forks at, which says which ledger the handle's bytes are.
+ * @returns The transaction as a balanced record holds it.
+ */
 export const erasedOf = (handle: AnyTx, forkVersion: ProtocolVersion.ProtocolVersion): LifecycleTx => ({
   protocolVersion: handle.protocolVersion,
-  transaction: Either.getOrThrow(
-    WalletTransaction.unwrapWithin<V9AnyTransaction>(
-      handle,
-      ProtocolVersion.epochOf(handle.protocolVersion, forkVersion),
-    ),
-  ),
+  transaction: carriedIn(handle, forkVersion).eraseProofs(),
 });
 
-/** The finalized transaction `handle` carries, as it is. */
-export const lifecycleTxOf = (handle: FinalizedTx, forkVersion: ProtocolVersion.ProtocolVersion): LifecycleTx =>
-  erasedOf(handle, forkVersion);
+/**
+ * The finalized transaction `handle` carries, as it is.
+ *
+ * @example
+ *   const held = lifecycleTxOf(finalizedHandle, configuration.forks.v9);
+ *
+ * @param handle The finalized transaction.
+ * @param forkVersion The protocol version this chain forks at, which says which ledger the handle's bytes are.
+ * @returns The transaction as a finalized or submitted record holds it.
+ */
+export const lifecycleTxOf = (handle: FinalizedTx, forkVersion: ProtocolVersion.ProtocolVersion): LifecycleTx => ({
+  protocolVersion: handle.protocolVersion,
+  transaction: carriedIn(handle, forkVersion),
+});
 
-/** The traits lifecycle records are read with, split at the protocol version this chain forks at. */
+type LedgerTransaction = FactsBearingTransaction & { identifiers(): string[]; serialize(): Uint8Array };
+
+/**
+ * One ledger's reading of a record's transaction, whatever its proof state. The bytes are read as proven first, then as
+ * proof-erased; which of the two a record holds is its state's to say, never the bytes', because a simulated prover
+ * finalizes a transaction by erasing its proofs.
+ */
+const lifecycleTraitOf = <T extends (V8AnyTransaction | V9AnyTransaction) & LedgerTransaction>(
+  isOwn: (tx: unknown) => tx is T,
+  readProven: (bytes: Uint8Array) => T,
+  readErased: (bytes: Uint8Array) => T,
+  dustGracePeriodSeconds: () => bigint,
+  epoch: ProtocolVersion.ProtocolVersion.Range,
+): PendingTransactions.TransactionTrait<LifecycleTx> => {
+  const [stamp] = epoch;
+  const own = (held: LifecycleTx): T =>
+    Option.getOrThrowWith(
+      Option.liftPredicate(held.transaction, isOwn),
+      () => new Error(`A transaction stamped ${held.protocolVersion} was handed to another ledger's trait.`),
+    );
+  const ids = (held: LifecycleTx): readonly string[] => own(held).identifiers();
+  return {
+    ids,
+    firstId: (held) => ids(held)[0],
+    areAllTxIdsIncluded: (held, txIds) =>
+      HashSet.isSubset(HashSet.fromIterable(ids(held)), HashSet.fromIterable(txIds)),
+    isOneIncludedInOther: (held, other) => {
+      const heldIds = HashSet.fromIterable(ids(held));
+      const otherIds = HashSet.fromIterable(ids(other));
+      const smallerSize = Order.min(Order.number)(HashSet.size(heldIds), HashSet.size(otherIds));
+      return HashSet.size(HashSet.intersection(heldIds, otherIds)) === smallerSize;
+    },
+    hasTTLExpired: (held, creationTime, now) =>
+      hasTTLExpiredUnder(dustGracePeriodSeconds)(own(held), creationTime, now),
+    intentHashes: (held) => intentHashesOf(own(held)),
+    inputs: (held) => inputsOf(own(held)),
+    ttl: (held, createdAt) => ttlUnder(dustGracePeriodSeconds)(own(held), createdAt),
+    serialize: (held) => own(held).serialize(),
+    deserialize: (bytes) => ({
+      protocolVersion: stamp,
+      transaction: pipe(
+        Either.try(() => readProven(bytes)),
+        Either.orElse(() => Either.try(() => readErased(bytes))),
+        Either.getOrThrow,
+      ),
+    }),
+    isTx: (held: unknown): held is LifecycleTx =>
+      typeof held === 'object' && held !== null && 'transaction' in held && isOwn(held.transaction),
+  };
+};
+
+const v8LifecycleTrait = (epoch: ProtocolVersion.ProtocolVersion.Range) =>
+  lifecycleTraitOf(
+    isV8Transaction,
+    (bytes) => ledgerV8.Transaction.deserialize('signature', 'proof', 'binding', bytes),
+    (bytes) => ledgerV8.Transaction.deserialize('signature', 'no-proof', 'no-binding', bytes),
+    v8DustGracePeriod,
+    epoch,
+  );
+
+const v9LifecycleTrait = (epoch: ProtocolVersion.ProtocolVersion.Range) =>
+  lifecycleTraitOf(
+    isV9Transaction,
+    (bytes) => ledgerV9.Transaction.deserialize('signature', 'proof', 'binding', bytes),
+    (bytes) => ledgerV9.Transaction.deserialize('signature', 'no-proof', 'no-binding', bytes),
+    v9DustGracePeriod,
+    epoch,
+  );
+
+/**
+ * The traits lifecycle records are read with, split at the protocol version this chain forks at: one per ledger, each
+ * reading only its own ledger's transactions, as {@link finalizedTransactionTraits} does for handles.
+ *
+ * @example
+ *   const traits = lifecycleTransactionTraits(configuration.forks.v9);
+ *
+ * @param forkVersion The protocol version this chain forks at.
+ * @returns The registry the transaction lifecycle service reads with.
+ */
 export const lifecycleTransactionTraits = (
-  _forkVersion: ProtocolVersion.ProtocolVersion,
+  forkVersion: ProtocolVersion.ProtocolVersion,
 ): PendingTransactions.VersionedTransactionTrait<LifecycleTx> =>
   Either.getOrThrow(
-    ProtocolVersion.makeRegistryFromActivations([
-      {
-        sinceVersion: ProtocolVersion.MinSupportedVersion,
-        value: {
-          ids: () => [],
-          firstId: () => '',
-          areAllTxIdsIncluded: () => false,
-          isOneIncludedInOther: () => false,
-          hasTTLExpired: () => false,
-          intentHashes: () => [],
-          inputs: () => ({ unshielded: [] }),
-          ttl: (_tx, createdAt) => DateTime.toDate(createdAt),
-          serialize: () => new Uint8Array(),
-          deserialize: () => {
-            throw new Error('not implemented');
-          },
-          isTx: (_tx: unknown): _tx is LifecycleTx => false,
-        },
-      },
-    ]),
+    ProtocolVersion.makeRegistryFromActivations(
+      forkVersion > ProtocolVersion.MinSupportedVersion
+        ? [
+            {
+              sinceVersion: ProtocolVersion.MinSupportedVersion,
+              value: v8LifecycleTrait(ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, forkVersion)),
+            },
+            {
+              sinceVersion: forkVersion,
+              value: v9LifecycleTrait(ProtocolVersion.epochOf(forkVersion, forkVersion)),
+            },
+          ]
+        : [
+            {
+              sinceVersion: ProtocolVersion.MinSupportedVersion,
+              value: v9LifecycleTrait(
+                ProtocolVersion.epochOf(ProtocolVersion.MinSupportedVersion, ProtocolVersion.MinSupportedVersion),
+              ),
+            },
+          ],
+    ),
   );
