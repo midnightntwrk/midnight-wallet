@@ -1891,6 +1891,8 @@ export class WalletFacade {
     try {
       // The bytes' own version, never the wallets' reading: a crossing can land between building and submitting.
       await this.pendingTransactionsService.addPendingTransaction(tx, Option.some(tx.protocolVersion));
+      // Recorded before it is sent, like the history entry: an inclusion can be reported before submission returns.
+      await this.transactionLifecycleService.submitted(this.#factsOf(lifecycleTxOf(tx, this.#forkVersion)));
       // Insert before awaiting submission so the entry exists while the tx is in flight — the per-wallet sync
       // handlers' gotFinalized call clears the pending entry on confirmation.
       const key = submitTxHistoryKey(carried);

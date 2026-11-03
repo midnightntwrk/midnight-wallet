@@ -161,6 +161,7 @@ const moveTo = <TTransaction>(
   target: LifecycleState,
   createdAt: (folded: ReadonlyArray<LifecycleRecord<TTransaction>>) => DateTime.Utc,
   submittedAt: Option.Option<DateTime.Utc>,
+  ttl: (folded: ReadonlyArray<LifecycleRecord<TTransaction>>) => Date = () => facts.ttl,
 ): TransactionLifecycle<TTransaction> => {
   const [rest, covered] = Arr.partition(state.records, isCoveredBy(facts.identifiers));
   return covered.every((record) => from.includes(record.state._tag))
@@ -170,7 +171,7 @@ const moveTo = <TTransaction>(
           identifiers: facts.identifiers,
           intentHashes: facts.intentHashes,
           inputs: facts.inputs,
-          ttl: facts.ttl,
+          ttl: ttl(covered),
           protocolVersion: Option.some(facts.protocolVersion),
           tx: Option.some(facts.tx),
           createdAt: createdAt(covered),
@@ -180,6 +181,16 @@ const moveTo = <TTransaction>(
       }
     : state;
 };
+
+/**
+ * A record keeps the earliest TTL known for its spend through every move. The facts read a TTL against the instant of
+ * the move, so where it is the Dust grace period after the record began, a later move reads a later one than the
+ * transaction has.
+ */
+const keptTtl =
+  <TTransaction>(facts: TransactionFacts<TTransaction>) =>
+  (folded: ReadonlyArray<LifecycleRecord<TTransaction>>): Date =>
+    new Date(Math.min(facts.ttl.getTime(), ...folded.map((record) => record.ttl.getTime())));
 
 /** A record keeps the time it began through every move, and folding several keeps the earliest. */
 const keptFrom =
@@ -231,7 +242,15 @@ export const finalized = <TTransaction>(
   facts: TransactionFacts<TTransaction>,
   now: DateTime.Utc,
 ): TransactionLifecycle<TTransaction> =>
-  moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Finalized(), keptFrom(now), Option.none());
+  moveTo(
+    state,
+    facts,
+    ['Balanced', 'Finalized'],
+    LifecycleState.Finalized(),
+    keptFrom(now),
+    Option.none(),
+    keptTtl(facts),
+  );
 
 /**
  * Records a transaction as submitted, from balanced, finalized or nothing: a transaction proven outside the facade
@@ -250,7 +269,15 @@ export const submitted = <TTransaction>(
   facts: TransactionFacts<TTransaction>,
   now: DateTime.Utc,
 ): TransactionLifecycle<TTransaction> =>
-  moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Submitted(), keptFrom(now), Option.some(now));
+  moveTo(
+    state,
+    facts,
+    ['Balanced', 'Finalized'],
+    LifecycleState.Submitted(),
+    keptFrom(now),
+    Option.some(now),
+    keptTtl(facts),
+  );
 
 /** Whether the chain itself refused the transaction, rather than the wallet concluding it from the TTL. */
 const isRejectedByChain = (state: LifecycleState): boolean =>
