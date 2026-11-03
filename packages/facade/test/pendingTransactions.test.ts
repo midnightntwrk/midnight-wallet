@@ -73,10 +73,14 @@ describe('Wallet Facade handling pending transactions', () => {
     await facade?.stop();
   });
 
-  it('reverts transaction after it misses TTL and was not submitted yet', async () => {
+  it('releases nothing when a finalized transaction misses its TTL before it is submitted, because each wallet sweeps the coins it booked at that TTL', async () => {
     const spiedShieldedRevert = vi.spyOn(shielded, 'revertTransaction');
     const spiedUnshieldedRevert = vi.spyOn(unshielded, 'revertTransaction');
     const spiedDustRevert = vi.spyOn(dust, 'revertTransaction');
+    const endsSeen = new Set<string>();
+    const watching = facade.transactionLifecycleService
+      .state()
+      .subscribe((lifecycle) => lifecycle.records.forEach((record) => endsSeen.add(record.state._tag)));
 
     const ttl = new Date(Date.now() + 10);
     const transaction = WalletTransaction.adopt(
@@ -92,9 +96,12 @@ describe('Wallet Facade handling pending transactions', () => {
 
     await sleep(2); //Buffer for processing
 
-    expect(spiedShieldedRevert).toHaveBeenCalled();
-    expect(spiedUnshieldedRevert).toHaveBeenCalled();
-    expect(spiedDustRevert).toHaveBeenCalled();
+    watching.unsubscribe();
+
+    expect(endsSeen).toContain('Expired');
+    expect(spiedShieldedRevert).not.toHaveBeenCalled();
+    expect(spiedUnshieldedRevert).not.toHaveBeenCalled();
+    expect(spiedDustRevert).not.toHaveBeenCalled();
     // Read off the state's own projection now, rather than through the pending set's trait machinery: what an
     // application sees is a list of transactions with a status each.
     expect(state.pending.map((entry) => entry.transaction)).toContain(finalized);
