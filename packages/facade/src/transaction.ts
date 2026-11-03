@@ -448,3 +448,32 @@ export const lifecycleTransactionTraits = (
           ],
     ),
   );
+
+/**
+ * The transaction a recipe's parts make once merged, each part held as a lifecycle record holds it. Parts of one recipe
+ * are all built for one ledger, so a part of another is refused rather than merged.
+ *
+ * @example
+ *   const whole = mergedLifecycleTxs(BalancingRecipe.getTransactions(recipe).map((part) => erasedOf(part, fork)));
+ *
+ * @param parts The parts, the first of which stamps the result.
+ * @returns The merged transaction.
+ */
+export const mergedLifecycleTxs = (parts: Arr.NonEmptyReadonlyArray<LifecycleTx>): LifecycleTx =>
+  Arr.reduce(Arr.tailNonEmpty(parts), Arr.headNonEmpty(parts), (merged, part) => ({
+    ...merged,
+    transaction: Option.getOrThrowWith(
+      mergedOnOneLedger(merged.transaction, part.transaction),
+      () => new Error('The parts of one recipe were built for different ledgers.'),
+    ),
+  }));
+
+const mergedOnOneLedger = (
+  left: V8AnyTransaction | V9AnyTransaction,
+  right: V8AnyTransaction | V9AnyTransaction,
+): Option.Option<V8AnyTransaction | V9AnyTransaction> =>
+  isV9Transaction(left) && isV9Transaction(right)
+    ? Option.some(left.merge(right))
+    : isV8Transaction(left) && isV8Transaction(right)
+      ? Option.some(left.merge(right))
+      : Option.none();

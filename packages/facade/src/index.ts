@@ -85,6 +85,7 @@ import {
 } from 'rxjs';
 import {
   type DefaultPendingTransactionsServiceConfiguration,
+  type Lifecycle,
   PendingTransactions,
   type PendingTransactionsService,
   PendingTransactionsServiceImpl,
@@ -108,9 +109,11 @@ import {
 } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import {
   coinIdsOf,
+  erasedOf,
   finalizedTransactionTraits,
   lifecycleTransactionTraits,
   type LifecycleTx,
+  mergedLifecycleTxs,
   txHistoryHash,
 } from './transaction.js';
 
@@ -1164,6 +1167,9 @@ export class WalletFacade {
   /** Where the chain hands over from one ledger version to the next, which is what divides the two epochs. */
   readonly #forkVersion: ProtocolVersion.ProtocolVersion;
 
+  /** The traits lifecycle records are read with, split at {@link #forkVersion}. */
+  readonly #lifecycleTraits: PendingTransactions.VersionedTransactionTrait<LifecycleTx>;
+
   /**
    * Constructor is private on purpose - much of initialization of the facade is potentially asynchronous, and adding
    * new parameters is a breaking change to the users Use {@link WalletFacade.init} instead
@@ -1193,6 +1199,7 @@ export class WalletFacade {
     this.validationService = validationService;
     this.#txHistoryStorage = txHistoryStorage;
     this.#forkVersion = forkVersion;
+    this.#lifecycleTraits = lifecycleTransactionTraits(forkVersion);
     this.clock = clock;
     this.#pendingSubscription = this.pendingTransactionsService
       .state()
@@ -1505,6 +1512,37 @@ export class WalletFacade {
       createdAt: DateTime.unsafeFromDate(this.clock.now()),
       expired: false,
     });
+  }
+
+  /**
+   * What the lifecycle record of `held` says about it, read off the transaction by the trait for the version it was
+   * built for: its identifiers, intent hashes, every coin it spends, and its TTL as of now.
+   */
+  #factsOf(held: LifecycleTx): Lifecycle.TransactionFacts<LifecycleTx> {
+    const trait = Option.getOrThrowWith(
+      PendingTransactions.traitForVersion(this.#lifecycleTraits, Option.some(held.protocolVersion)),
+      () => new Error(`No lifecycle trait is registered for protocol version ${held.protocolVersion}.`),
+    );
+    return {
+      tx: held,
+      identifiers: trait.ids(held),
+      intentHashes: trait.intentHashes(held),
+      inputs: trait.inputs(held),
+      ttl: trait.ttl(held, DateTime.unsafeFromDate(this.clock.now())),
+      protocolVersion: held.protocolVersion,
+    };
+  }
+
+  /**
+   * Records the whole transaction a balancing recipe finalizes into as balanced, its proofs erased: one record per
+   * balancing call, naming every coin that transaction spends, since nothing else says they are spoken for until it is
+   * finalized.
+   */
+  async #recordBalanced(recipe: BalancingRecipe): Promise<void> {
+    const parts = BalancingRecipe.getTransactions(recipe).map((part) => erasedOf(part, this.#forkVersion));
+    if (Arr.isNonEmptyReadonlyArray(parts)) {
+      await this.transactionLifecycleService.balanced(this.#factsOf(mergedLifecycleTxs(parts)));
+    }
   }
 
   /**
@@ -1915,13 +1953,15 @@ export class WalletFacade {
       throw new Error('No balancing transaction was created. Please check your transaction.');
     }
 
-    return {
+    const recipe: FinalizedTransactionRecipe = {
       type: 'FINALIZED_TRANSACTION',
       protocolVersion: this.currentVersion(),
       originalTransaction: tx,
       balancingTransaction: balancingTx,
       ...pricedBlockOf(dustResult),
     };
+    await this.#releasingOnFailure(afterDust, () => this.#recordBalanced(recipe));
+    return recipe;
   }
 
   /**
@@ -1984,13 +2024,15 @@ export class WalletFacade {
       throw new Error('No balancing transaction was created. Please check your transaction.');
     }
 
-    return {
+    const recipe: UnboundTransactionRecipe = {
       type: 'UNBOUND_TRANSACTION',
       protocolVersion: this.currentVersion(),
       baseTransaction: baseTx,
       balancingTransaction: balancingTransaction ?? undefined,
       ...pricedBlockOf(dustResult),
     };
+    await this.#releasingOnFailure(afterDust, () => this.#recordBalanced(recipe));
+    return recipe;
   }
 
   /**
@@ -2051,12 +2093,14 @@ export class WalletFacade {
       this.mergeUnprovenTransactions(mergedTx, feeBalancingTx),
     ))!;
 
-    return {
+    const recipe: UnprovenTransactionRecipe = {
       type: 'UNPROVEN_TRANSACTION',
       protocolVersion: this.currentVersion(),
       transaction: balancedTx,
       ...pricedBlockOf(dustResult),
     };
+    await this.#releasingOnFailure(afterDust, () => this.#recordBalanced(recipe));
+    return recipe;
   }
 
   /**
@@ -2286,12 +2330,14 @@ export class WalletFacade {
       this.mergeUnprovenTransactions(mergedTxs, feeBalancingTx),
     ))!;
 
-    return {
+    const recipe: UnprovenTransactionRecipe = {
       type: 'UNPROVEN_TRANSACTION',
       protocolVersion: this.currentVersion(),
       transaction: finalTx,
       ...pricedBlockOf(dustResult),
     };
+    await this.#releasingOnFailure(afterDust, () => this.#recordBalanced(recipe));
+    return recipe;
   }
 
   /**
@@ -2420,12 +2466,14 @@ export class WalletFacade {
       this.mergeUnprovenTransactions(combinedTx, feeBalancingTx),
     ))!;
 
-    return {
+    const recipe: UnprovenTransactionRecipe = {
       type: 'UNPROVEN_TRANSACTION',
       protocolVersion: this.currentVersion(),
       transaction: finalTx,
       ...pricedBlockOf(dustResult),
     };
+    await this.#releasingOnFailure(afterDust, () => this.#recordBalanced(recipe));
+    return recipe;
   }
 
   /**
@@ -2476,11 +2524,13 @@ export class WalletFacade {
       signDustRegistration,
     );
 
-    return {
+    const recipe: UnprovenTransactionRecipe = {
       type: 'UNPROVEN_TRANSACTION',
       protocolVersion: this.currentVersion(),
       transaction: dustRegistrationTx,
     };
+    await this.#releasingOnFailure([this.#unshieldedBooking(dustRegistrationTx)], () => this.#recordBalanced(recipe));
+    return recipe;
   }
 
   /**
@@ -2521,11 +2571,13 @@ export class WalletFacade {
       nightVerifyingKey,
       signDustRegistration,
     );
-    return {
+    const recipe: UnprovenTransactionRecipe = {
       type: 'UNPROVEN_TRANSACTION',
       protocolVersion: this.currentVersion(),
       transaction: dustDeregistrationTx,
     };
+    await this.#releasingOnFailure([this.#unshieldedBooking(dustDeregistrationTx)], () => this.#recordBalanced(recipe));
+    return recipe;
   }
 
   async revert(txOrRecipe: AnyTx | BalancingRecipe, reason?: string): Promise<void> {
