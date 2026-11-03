@@ -19,20 +19,13 @@
  * whole transaction the recipe finalizes into, with its proofs erased, so it names every coin that transaction spends.
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { type SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
-import {
-  type AnyTx,
-  type FinalizedTx,
-  NetworkId,
-  ProtocolVersion,
-  WalletTransaction,
-} from '@midnightntwrk/wallet-sdk-abstractions';
+import { type AnyTx, NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, Option } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { BalancingRecipe, type FacadeState, WalletFacade } from '../src/index.js';
+import { BalancingRecipe, type FacadeState, type WalletFacade } from '../src/index.js';
 import { type LifecycleTx } from '../src/transaction.js';
 import {
   createSimulatorWalletFactories,
@@ -542,12 +535,8 @@ describe('A reverted transaction’s lifecycle record', () => {
     Effect.gen(function* () {
       const { facade } = yield* fundedFacade({
         submissionService: () => ({
-          // Type cast required because: the overloaded submit signature is stated once by the service type; this fake
-          // refuses every submission, whichever status it was asked to wait for.
-          submitTransaction: ((): Promise<never> =>
-            Promise.reject(
-              new Error('the node refused the transaction'),
-            )) as SubmissionService<FinalizedTx>['submitTransaction'],
+          // Refuses every submission, whichever status it was asked to wait for.
+          submitTransaction: (): Promise<never> => Promise.reject(new Error('the node refused the transaction')),
           close: () => Promise.resolve(),
         }),
       });
