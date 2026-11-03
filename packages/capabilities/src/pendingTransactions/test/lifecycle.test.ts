@@ -44,11 +44,12 @@ const facts = (
   ...overrides,
 });
 
-/** The record the facts describe, as it stands in `state` since `createdAt`. */
+/** The record the facts describe, as it stands in `state` since `createdAt`, submitted at `submittedAt` if ever. */
 const recordOf = (
   given: Lifecycle.TransactionFacts<FakeTransaction>,
   createdAt: DateTime.Utc,
   state: Lifecycle.LifecycleState,
+  submittedAt: Option.Option<DateTime.Utc> = Option.none(),
 ): Lifecycle.LifecycleRecord<FakeTransaction> => ({
   identifiers: given.identifiers,
   intentHashes: given.intentHashes,
@@ -57,6 +58,7 @@ const recordOf = (
   protocolVersion: Option.some(given.protocolVersion),
   tx: Option.some(given.tx),
   createdAt,
+  submittedAt,
   state,
 });
 
@@ -90,9 +92,7 @@ describe('A transaction moving from balanced to submitted', () => {
       FINALIZED_AT,
     );
 
-    expect(state.records).toStrictEqual([
-      recordOf(final, BALANCED_AT, Lifecycle.LifecycleState.Finalized({ finalizedAt: FINALIZED_AT })),
-    ]);
+    expect(state.records).toStrictEqual([recordOf(final, BALANCED_AT, Lifecycle.LifecycleState.Finalized())]);
   });
 
   it('should begin a record at finalized for a transaction the facade did not balance', () => {
@@ -100,9 +100,7 @@ describe('A transaction moving from balanced to submitted', () => {
 
     const state = Lifecycle.finalized(empty, final, FINALIZED_AT);
 
-    expect(state.records).toStrictEqual([
-      recordOf(final, FINALIZED_AT, Lifecycle.LifecycleState.Finalized({ finalizedAt: FINALIZED_AT })),
-    ]);
+    expect(state.records).toStrictEqual([recordOf(final, FINALIZED_AT, Lifecycle.LifecycleState.Finalized())]);
   });
 
   it('should fold every record the finalized transaction covers into one, because merging parts makes one transaction', () => {
@@ -113,9 +111,7 @@ describe('A transaction moving from balanced to submitted', () => {
 
     const state = Lifecycle.finalized(both, merged, mergedAt);
 
-    expect(state.records).toStrictEqual([
-      recordOf(merged, BALANCED_AT, Lifecycle.LifecycleState.Finalized({ finalizedAt: mergedAt })),
-    ]);
+    expect(state.records).toStrictEqual([recordOf(merged, BALANCED_AT, Lifecycle.LifecycleState.Finalized())]);
   });
 
   it('should move a finalized record to submitted at the time it was submitted, not the time it was finalized', () => {
@@ -124,7 +120,7 @@ describe('A transaction moving from balanced to submitted', () => {
     const state = Lifecycle.submitted(Lifecycle.finalized(empty, final, FINALIZED_AT), final, SUBMITTED_AT);
 
     expect(state.records).toStrictEqual([
-      recordOf(final, FINALIZED_AT, Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT })),
+      recordOf(final, FINALIZED_AT, Lifecycle.LifecycleState.Submitted(), Option.some(SUBMITTED_AT)),
     ]);
   });
 
@@ -138,7 +134,7 @@ describe('A transaction moving from balanced to submitted', () => {
     );
 
     expect(state.records).toStrictEqual([
-      recordOf(final, BALANCED_AT, Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT })),
+      recordOf(final, BALANCED_AT, Lifecycle.LifecycleState.Submitted(), Option.some(SUBMITTED_AT)),
     ]);
   });
 
@@ -148,7 +144,7 @@ describe('A transaction moving from balanced to submitted', () => {
     const state = Lifecycle.submitted(empty, final, SUBMITTED_AT);
 
     expect(state.records).toStrictEqual([
-      recordOf(final, SUBMITTED_AT, Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT })),
+      recordOf(final, SUBMITTED_AT, Lifecycle.LifecycleState.Submitted(), Option.some(SUBMITTED_AT)),
     ]);
   });
 
@@ -205,8 +201,8 @@ const holding = (
 
 const LIVE_STATES: ReadonlyArray<Lifecycle.LifecycleState> = [
   Lifecycle.LifecycleState.Balanced(),
-  Lifecycle.LifecycleState.Finalized({ finalizedAt: FINALIZED_AT }),
-  Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT }),
+  Lifecycle.LifecycleState.Finalized(),
+  Lifecycle.LifecycleState.Submitted(),
 ];
 
 const FINAL_STATES: ReadonlyArray<Lifecycle.LifecycleState> = [
@@ -233,7 +229,7 @@ describe('A transaction reaching its outcome', () => {
   });
 
   it('should reject a submitted record with the verdict the chain reported', () => {
-    const before = holding(Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT }));
+    const before = holding(Lifecycle.LifecycleState.Submitted());
 
     expect(Lifecycle.rejected(before, ['id-a'], REFUSED).records).toStrictEqual(
       nowIn(before, Lifecycle.LifecycleState.Rejected({ verdict: REFUSED })),
@@ -258,7 +254,7 @@ describe('A transaction reaching its outcome', () => {
   });
 
   it('should leave a record of the epoch the chain is in as it was', () => {
-    const before = holding(Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT }), {
+    const before = holding(Lifecycle.LifecycleState.Submitted(), {
       protocolVersion: Option.some(V9),
     });
 
@@ -280,13 +276,9 @@ describe('A transaction reaching its outcome', () => {
   });
 
   it('should move only the records that share an identifier with the transaction', () => {
-    const other = recordOf(
-      facts('finalized', ['id-other']),
-      BALANCED_AT,
-      Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT }),
-    );
+    const other = recordOf(facts('finalized', ['id-other']), BALANCED_AT, Lifecycle.LifecycleState.Submitted());
     const before: Lifecycle.TransactionLifecycle<FakeTransaction> = {
-      records: [...holding(Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT })).records, other],
+      records: [...holding(Lifecycle.LifecycleState.Submitted()).records, other],
     };
 
     expect(Lifecycle.confirmed(before, ['id-a']).records).toContainEqual(other);
@@ -352,7 +344,7 @@ describe('A transaction whose TTL passes', () => {
   });
 
   it('should reject a submitted record, because no chain will include it any more', () => {
-    const before = holding(Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT }));
+    const before = holding(Lifecycle.LifecycleState.Submitted());
 
     expect(Lifecycle.expire(before, PAST_TTL).records).toStrictEqual(
       nowIn(before, Lifecycle.LifecycleState.Rejected({ verdict: { status: 'TTL_PASSED' } })),
@@ -445,7 +437,7 @@ describe('A finished transaction leaving the store', () => {
   });
 
   it('should show an expired record once before dropping it, when expiry and the drop run in turn', () => {
-    const before = holding(Lifecycle.LifecycleState.Finalized({ finalizedAt: FINALIZED_AT }));
+    const before = holding(Lifecycle.LifecycleState.Finalized());
 
     const expired = Lifecycle.expire(before, PAST_TTL);
     const swept = Lifecycle.dropFinished(expired, PAST_TTL);
@@ -481,7 +473,7 @@ describe('Coins a live transaction still accounts for', () => {
     const shared = recordOf(
       facts('finalized', ['id-b'], { inputs: { unshielded: ['id-a#0', 'id-b#0'], shielded: ['nullifier-b'] } }),
       BALANCED_AT,
-      Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT }),
+      Lifecycle.LifecycleState.Submitted(),
     );
     const state: Lifecycle.TransactionLifecycle<FakeTransaction> = {
       records: [...holding(Lifecycle.LifecycleState.Balanced()).records, shared],
@@ -492,5 +484,49 @@ describe('Coins a live transaction still accounts for', () => {
 
   it('should cover nothing when nothing is recorded', () => {
     expect(Lifecycle.coveredUnshieldedIds(empty)).toStrictEqual([]);
+  });
+});
+
+describe('When a transaction was submitted', () => {
+  const final = facts('finalized', ['id-a']);
+  const sent = Lifecycle.submitted(Lifecycle.finalized(empty, final, FINALIZED_AT), final, SUBMITTED_AT);
+
+  it.each([
+    ['Confirmed', 'an inclusion', (state: typeof sent) => Lifecycle.confirmed(state, ['id-a'])],
+    ['Rejected', 'a rejection', (state: typeof sent) => Lifecycle.rejected(state, ['id-a'], REFUSED)],
+    ['Rejected', 'its TTL passing', (state: typeof sent) => Lifecycle.expire(state, PAST_TTL)],
+    ['Orphaned', 'a fork crossing', (state: typeof sent) => Lifecycle.orphanBeyond(state, EPOCHS, V9)],
+    ['Reverted', 'a revert', (state: typeof sent) => Lifecycle.reverted(state, ['id-a'])],
+  ] as const)(
+    'should still know when it was submitted once %s after %s, because the verdict replaces the state',
+    (tag, _event, apply) => {
+      const after = apply(sent);
+
+      expect(after.records.map((record) => [record.state._tag, record.submittedAt])).toStrictEqual([
+        [tag, Option.some(SUBMITTED_AT)],
+      ]);
+    },
+  );
+
+  it('should keep the first submission time when it is submitted again, because a submitted record does not move', () => {
+    const again = Lifecycle.submitted(sent, final, at('2026-01-01T00:04:00.000Z'));
+
+    expect(again.records.map((record) => record.submittedAt)).toStrictEqual([Option.some(SUBMITTED_AT)]);
+  });
+
+  it('should hold no submission time for a record that ended without being submitted', () => {
+    const abandoned = Lifecycle.reverted(Lifecycle.finalized(empty, final, FINALIZED_AT), ['id-a']);
+
+    expect(abandoned.records.map((record) => record.submittedAt)).toStrictEqual([Option.none()]);
+  });
+
+  it('should forget the submission time when the spend is balanced again after a rejection, because it begins anew', () => {
+    const rebalanced = Lifecycle.balanced(
+      Lifecycle.rejected(sent, ['id-a'], REFUSED),
+      facts('erased', ['id-a']),
+      at('2026-01-01T00:04:00.000Z'),
+    );
+
+    expect(rebalanced.records.map((record) => record.submittedAt)).toStrictEqual([Option.none()]);
   });
 });

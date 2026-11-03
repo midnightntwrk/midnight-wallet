@@ -38,8 +38,8 @@ export type RejectedVerdict = FailedTransactionResult | Readonly<{ status: 'TTL_
 /** Where a transaction is in its lifecycle. */
 export type LifecycleState = Data.TaggedEnum<{
   Balanced: Record<never, never>;
-  Finalized: { readonly finalizedAt: DateTime.Utc };
-  Submitted: { readonly submittedAt: DateTime.Utc };
+  Finalized: Record<never, never>;
+  Submitted: Record<never, never>;
   Confirmed: Record<never, never>;
   Rejected: { readonly verdict: RejectedVerdict };
   Orphaned: {
@@ -66,6 +66,8 @@ export type LifecycleRecord<TTransaction> = Readonly<{
   tx: Option.Option<TTransaction>;
   /** When the record began, whichever state it began in. */
   createdAt: DateTime.Utc;
+  /** When the transaction was submitted, kept through its verdict; `none` while it never was. */
+  submittedAt: Option.Option<DateTime.Utc>;
   state: LifecycleState;
 }>;
 
@@ -149,6 +151,7 @@ const moveTo = <TTransaction>(
           protocolVersion: Option.some(facts.protocolVersion),
           tx: Option.some(facts.tx),
           createdAt: createdAt(covered),
+          submittedAt: Option.none(),
           state: target,
         }),
       }
@@ -205,7 +208,7 @@ export const finalized = <TTransaction>(
   facts: TransactionFacts<TTransaction>,
   now: DateTime.Utc,
 ): TransactionLifecycle<TTransaction> =>
-  moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Finalized({ finalizedAt: now }), keptFrom(now));
+  moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Finalized(), keptFrom(now));
 
 /**
  * Records a transaction as submitted, from balanced, finalized or nothing: a transaction proven outside the facade
@@ -224,7 +227,7 @@ export const submitted = <TTransaction>(
   facts: TransactionFacts<TTransaction>,
   now: DateTime.Utc,
 ): TransactionLifecycle<TTransaction> =>
-  moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Submitted({ submittedAt: now }), keptFrom(now));
+  moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Submitted(), keptFrom(now));
 
 /**
  * Records that a transaction was included, whichever live state its record is in: inclusion is a fact, and nothing
