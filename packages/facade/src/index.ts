@@ -86,6 +86,7 @@ import {
 } from 'rxjs';
 import {
   type DefaultPendingTransactionsServiceConfiguration,
+  type InclusionVerdict,
   Lifecycle,
   PendingTransactions,
   type PendingTransactionsService,
@@ -176,6 +177,41 @@ const newlyEnded = (
 /** The fallible segments a verdict says the chain did not apply; none for a verdict that carries no segments. */
 const failedSegmentsOf = (result: PendingTransactions.TransactionResult): ReadonlyArray<number> =>
   'segments' in result ? result.segments.filter((segment) => !segment.success).map((segment) => segment.id) : [];
+
+/**
+ * The verdict a history entry's status gives, where it gives enough to act on. A partial success gives none: what it
+ * releases depends on which segments failed, which only the indexer reports, so the poller settles it.
+ */
+const inclusionVerdictOf = (
+  status: TransactionHistoryStorage.TransactionHistoryStatus | undefined,
+): Option.Option<InclusionVerdict> =>
+  status === 'SUCCESS'
+    ? Option.some({ status: 'SUCCESS' })
+    : status === 'FAILURE'
+      ? Option.some({ status: 'FAILURE', segments: [] })
+      : Option.none();
+
+/**
+ * `storage`, with every inclusion a wallet's sync writes also moving the transaction's lifecycle record, once the write
+ * has succeeded: a record must not show an inclusion the history failed to keep.
+ */
+const feedingInclusions = (
+  storage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>,
+  lifecycle: TransactionLifecycleService<LifecycleTx>,
+): TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry> => ({
+  getAll: () => storage.getAll(),
+  get: (hash) => storage.get(hash),
+  serialize: () => storage.serialize(),
+  gotPending: (entry) => storage.gotPending(entry),
+  gotRejected: (entry) => storage.gotRejected(entry),
+  gotFinalized: async (entry) => {
+    await storage.gotFinalized(entry);
+    await Option.match(inclusionVerdictOf(entry.status), {
+      onNone: () => Promise.resolve(),
+      onSome: (verdict) => lifecycle.included(entry.identifiers, verdict),
+    });
+  },
+});
 import {
   type DustAddress,
   type ShieldedAddress,
@@ -1150,9 +1186,15 @@ export class WalletFacade {
         ? initParams.provingService(configuration)
         : WalletFacade.makeDefaultProvingService(configuration),
     );
-    const shielded = await Promise.resolve(initParams.shielded(configuration));
-    const unshielded = await Promise.resolve(initParams.unshielded(configuration));
-    const dust = await Promise.resolve(initParams.dust(configuration));
+    // The wallets write what their sync saw included into the storage they are handed, so handing them one that also
+    // moves the lifecycle records confirms a transaction even when no poll saw it land.
+    const walletsConfiguration = {
+      ...configuration,
+      txHistoryStorage: feedingInclusions(configuration.txHistoryStorage, transactionLifecycleService),
+    };
+    const shielded = await Promise.resolve(initParams.shielded(walletsConfiguration));
+    const unshielded = await Promise.resolve(initParams.unshielded(walletsConfiguration));
+    const dust = await Promise.resolve(initParams.dust(walletsConfiguration));
     const fetchBlockData: BlockDataFetcher = await Promise.resolve(
       initParams.fetchBlockData ? initParams.fetchBlockData(configuration) : makeDefaultBlockDataFetcher(configuration),
     );

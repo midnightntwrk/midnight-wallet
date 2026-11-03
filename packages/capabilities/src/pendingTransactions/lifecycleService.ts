@@ -149,8 +149,12 @@ export class TransactionLifecycleServiceEffectImpl<
     return SubscriptionRef.update(this.#state, (state) => Lifecycle.orphanBeyond(state, this.#txTraits, chainNow));
   }
 
-  included(_identifiers: readonly string[], _verdict: InclusionVerdict): Effect.Effect<void> {
-    return Effect.void;
+  included(identifiers: readonly string[], verdict: InclusionVerdict): Effect.Effect<void> {
+    return SubscriptionRef.update(this.#state, (state) =>
+      verdict.status === 'SUCCESS'
+        ? Lifecycle.confirmed(state, identifiers)
+        : Lifecycle.rejected(state, identifiers, verdict),
+    );
   }
 
   /**
@@ -187,12 +191,7 @@ export class TransactionLifecycleServiceEffectImpl<
             Effect.flatMap(
               Option.match({
                 onNone: () => Effect.void,
-                onSome: (verdict) =>
-                  SubscriptionRef.update(this.#state, (state) =>
-                    verdict.status === 'SUCCESS'
-                      ? Lifecycle.confirmed(state, identifiers)
-                      : Lifecycle.rejected(state, identifiers, verdict),
-                  ),
+                onSome: (verdict) => this.included(identifiers, verdict),
               }),
             ),
           ),

@@ -107,11 +107,13 @@ remain. Balancing the same spend again, whose coins were never spent on chain, r
 `Expired` or `Reverted` record with a new `Balanced` one, so a spend keeps one record. And an inclusion reported after
 the wallet ended a record by its own inference (`Expired`, `Rejected` because its TTL passed, `Orphaned`, `Reverted`)
 moves it to `Confirmed`: a block's time is within the transaction's TTL, so the inclusion happened first and sync only
-saw it late. An inference gives way to a fact. A `Rejected` the chain reported is itself an inclusion and stays.
-Whatever was released at the inferred end is harmless, because sync settles the spent coins. `Confirmed` is final
-against every other verdict, which replaces the precedence rule a late rejection needed: once the record knows of the
-inclusion, nothing moves it. The four status names `FacadeState.pending` already publishes keep their meaning; the other
-four are added.
+saw it late. An inference gives way to a fact. A `Rejected` the chain reported is itself an inclusion and stays. Sync
+reports an inclusion through the history storage the wallets write into, which the facade wraps so that each write, once
+stored, moves the record. A partial success sync reports moves nothing: the history keeps no segments, and which
+segments failed decides what is released, so the poller settles it. Whatever was released at the inferred end is
+harmless, because sync settles the spent coins. `Confirmed` is final against every other verdict, which replaces the
+precedence rule a late rejection needed: once the record knows of the inclusion, nothing moves it. The four status names
+`FacadeState.pending` already publishes keep their meaning; the other four are added.
 
 **No transition frees a coin.** Each wallet's own sweep and the facade's release-on-failure stay the only releasers, as
 ADR-0009 and ADR-0010 have them. A record moving to `Expired` or `Reverted` says the coins are no longer spoken for,
