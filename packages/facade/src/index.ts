@@ -806,7 +806,11 @@ export type LifecycleStatus =
  *   the ones still awaiting an answer from the rest with {@link isAwaiting}, not by the list being empty.
  */
 export type LifecycleEntry = Readonly<{
-  /** What ties the entry to its transaction at every stage: proving and binding leave identifiers unchanged. */
+  /**
+   * What ties the entry to its transaction. Proving and binding leave identifiers unchanged. The one exception is
+   * balancing a transaction that is already finalized: until the recipe is finalized, the entry names only the
+   * balancing part's identifiers, and finalizing adds the finalized transaction's.
+   */
   identifiers: readonly string[];
   /**
    * The finalized transaction, as the handle an application carries.
