@@ -381,3 +381,77 @@ describe('A balanced transaction’s lifecycle record', () => {
       expectOneBalancedRecord(result, result.intentTtl);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
+
+/** The records that hold any identifier of `tx`. */
+const recordsCovering = (lifecycle: Lifecycle.TransactionLifecycle<LifecycleTx>, tx: AnyTx) => {
+  const ids = carried<{ identifiers(): string[] }>(tx).identifiers();
+  return lifecycle.records.filter((record) => record.identifiers.some((id) => ids.includes(id)));
+};
+
+describe('A finalized transaction’s lifecycle record', () => {
+  it.each([
+    {
+      recipe: 'an unproven recipe of one part',
+      balance: (facade: WalletFacade, _keys: WalletKeys, ttl: Date) =>
+        facade.unshielded
+          .getAddress()
+          .then((address) =>
+            facade.transferTransaction(
+              [{ type: 'unshielded', outputs: [{ type: NIGHT, receiverAddress: address, amount: tokenValue(1n) }] }],
+              { ttl },
+            ),
+          ),
+    },
+    {
+      recipe: 'a finalized recipe of two parts',
+      balance: (facade: WalletFacade, keys: WalletKeys, ttl: Date) =>
+        facade.balanceFinalizedTransaction(finalized(callersTransaction(keys, ttl)), { ttl }),
+    },
+    {
+      recipe: 'an unbound recipe',
+      balance: (facade: WalletFacade, keys: WalletKeys, ttl: Date) =>
+        facade.balanceUnboundTransaction(unbound(callersShieldedTransaction(keys)), { ttl }),
+    },
+  ])(
+    'should fold $recipe into one finalized record holding the finalized transaction, begun when it was balanced by the facade’s clock',
+    ({ balance }) =>
+      Effect.gen(function* () {
+        const { facade, keys } = yield* fundedFacade();
+        yield* withDust(facade, keys);
+        const ttl = ttlOn(facade);
+        const balancedAt = facade.clock.now();
+
+        const recipe = yield* Effect.promise((): Promise<BalancingRecipe> => balance(facade, keys, ttl));
+        const finalizedTx = yield* Effect.promise(() => facade.finalizeRecipe(recipe));
+
+        const records = recordsCovering(yield* lifecycleOf(facade), finalizedTx);
+        expect(records).toHaveLength(1);
+        const [record] = records;
+        expect(record.state).toStrictEqual({ _tag: 'Finalized' });
+        expect([...record.identifiers].sort()).toStrictEqual(
+          [...carried<{ identifiers(): string[] }>(finalizedTx).identifiers()].sort(),
+        );
+        expect(
+          Option.map(record.tx, (held) => Buffer.from(held.transaction.serialize()).toString('hex')),
+        ).toStrictEqual(
+          Option.some(Buffer.from(carried<{ serialize(): Uint8Array }>(finalizedTx).serialize()).toString('hex')),
+        );
+        expect(record.createdAt.epochMillis).toBe(balancedAt.getTime());
+        expect(record.submittedAt).toStrictEqual(Option.none());
+      }).pipe(Effect.scoped, Effect.runPromise),
+  );
+
+  it('should begin a finalized record for a transaction the facade did not balance, when the facade’s clock says', () =>
+    Effect.gen(function* () {
+      const { facade, keys } = yield* fundedFacade();
+      const finalizedAt = facade.clock.now();
+
+      const finalizedTx = yield* Effect.promise(() =>
+        facade.finalizeTransaction(unproven(callersShieldedTransaction(keys))),
+      );
+
+      const records = recordsCovering(yield* lifecycleOf(facade), finalizedTx);
+      expect(records.map((record) => record.state)).toStrictEqual([{ _tag: 'Finalized' }]);
+      expect(records.map((record) => record.createdAt.epochMillis)).toStrictEqual([finalizedAt.getTime()]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
