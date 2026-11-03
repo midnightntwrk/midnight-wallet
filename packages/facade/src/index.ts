@@ -55,7 +55,7 @@ import { DustSectionSchema, mergeDustSections } from '@midnightntwrk/wallet-sdk-
 import { Clock } from '@midnightntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { Array as Arr, DateTime, Either, Option, pipe, Schema } from 'effect';
+import { Array as Arr, Cause, DateTime, Effect, Either, Option, pipe, Schema } from 'effect';
 import {
   type AnyTx,
   type FinalizedTx,
@@ -1311,13 +1311,16 @@ export class WalletFacade {
         map((lifecycle) => lifecycle.records),
         pairwise(),
         concatMap(([previous, current]) => newlyEnded(previous, current)),
-        concatMap(async ({ tx, result }) => {
-          if (!(await this.reconcileFinalizedTransaction(tx, result, await this.#txHistoryStorage.getAll()))) {
-            await (result.status === 'PARTIAL_SUCCESS'
-              ? this.#revertFailedSegments(tx, failedSegmentsOf(result))
-              : this.#releaseRejected(tx, rejectionReason(result)));
-          }
-        }),
+        // One end that cannot be handled is logged and left, never let through: an error here would end the
+        // subscription, and no record ending after it would ever be released. Coins it leaves booked are not lost;
+        // each wallet booked them with the transaction's TTL and sweeps them itself once it passes.
+        concatMap(({ tx, result }) =>
+          this.#releaseEnded(tx, result).catch((error: unknown) =>
+            Effect.runPromise(
+              Effect.logError('Could not release an ended transaction; its TTL frees its coins', Cause.die(error)),
+            ),
+          ),
+        ),
       )
       .subscribe();
 
@@ -2622,6 +2625,18 @@ export class WalletFacade {
     await this.#releaseAll(tx)
       .then(() => this.transactionLifecycleService.reverted(this.#identifiersOf(tx)))
       .then(() => this.#recordRejection(tx, reason));
+  }
+
+  /**
+   * Releases what a transaction that ended rejected or orphaned had booked, unless the history shows the chain included
+   * it: then sync owns its coins, and releasing them would offer ones already spent.
+   */
+  async #releaseEnded(tx: FinalizedTx, result: PendingTransactions.TransactionResult): Promise<void> {
+    if (!(await this.reconcileFinalizedTransaction(tx, result, await this.#txHistoryStorage.getAll()))) {
+      await (result.status === 'PARTIAL_SUCCESS'
+        ? this.#revertFailedSegments(tx, failedSegmentsOf(result))
+        : this.#releaseRejected(tx, rejectionReason(result)));
+    }
   }
 
   /**
