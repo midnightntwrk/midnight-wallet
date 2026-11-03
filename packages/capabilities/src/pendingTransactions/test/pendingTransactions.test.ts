@@ -280,6 +280,17 @@ describe('Coins a spend still accounts for', () => {
     ]);
   });
 
+  it('should not cover the coins of an expired reservation, because no chain can accept its transaction any more', () => {
+    const held = [
+      reservation({ identifiers: ['id-live'], inputs: { unshielded: ['aa11#0'] }, ttl: new Date('2026-01-01T03:00Z') }),
+      reservation({ identifiers: ['id-gone'], inputs: { unshielded: ['4b0f#0'] }, ttl: TTL }),
+    ].reduce(PendingTransactions.addReservation, empty);
+    const state = PendingTransactions.expireReservations(held, at('2026-01-01T02:00:00.000Z'));
+    expect(PendingTransactions.allExpiredReservations(state).map((r) => r.identifiers)).toEqual([['id-gone']]);
+
+    expect(PendingTransactions.coveredUnshieldedIds(state, unshieldedInputsOf)).toEqual(['aa11#0']);
+  });
+
   it('covers nothing when nothing is tracked and nothing is reserved', () => {
     expect(PendingTransactions.coveredUnshieldedIds(empty, unshieldedInputsOf)).toEqual([]);
   });
