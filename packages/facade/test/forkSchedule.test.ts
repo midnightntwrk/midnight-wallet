@@ -150,56 +150,100 @@ describe('WalletFacade.init', () => {
   const unusedBlockData: BlockDataFetcher = () => Promise.reject(new Error('not under test'));
   const unusedValidation: WalletFacade['validationService'] = { validateTx: () => Promise.resolve() };
 
-  /** One per factory in {@link InitParams}: the three wallets and the six services. */
-  const factoryCount = 9;
+  /** One per wallet factory in {@link InitParams}. */
+  const walletFactoryCount = 3;
+  /** One per service factory in {@link InitParams}. */
+  const serviceFactoryCount = 6;
 
   /**
-   * Builds a facade from the configuration each factory is handed, and returns what each was handed.
+   * Builds a facade from the configuration each factory is handed, and returns what each wallet and service factory was
+   * handed.
    *
    * @remarks
    *   The wallets are real and shipped, built the way an application builds them — from the factory's own argument — and
    *   never started, since this suite has no indexer to subscribe to.
    */
-  const initRecording = async (given: DefaultConfiguration): Promise<readonly ResolvedConfiguration[]> => {
-    const handed: ResolvedConfiguration[] = [];
+  const initRecording = async (
+    given: DefaultConfiguration,
+  ): Promise<Readonly<{ wallets: readonly ResolvedConfiguration[]; services: readonly ResolvedConfiguration[] }>> => {
+    const wallets: ResolvedConfiguration[] = [];
+    const services: ResolvedConfiguration[] = [];
     const recording =
+      (into: ResolvedConfiguration[]) =>
       <T>(make: (config: ResolvedConfiguration) => T) =>
       (config: ResolvedConfiguration): T => {
-        handed.push(config);
+        into.push(config);
         return make(config);
       };
+    const wallet = recording(wallets);
+    const service = recording(services);
 
     const facade = await WalletFacade.init({
       configuration: given,
-      shielded: recording((config) => ShieldedWallet(config).startWithSeed(keys.seeds.shielded)),
-      unshielded: recording((config) =>
+      shielded: wallet((config) => ShieldedWallet(config).startWithSeed(keys.seeds.shielded)),
+      unshielded: wallet((config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(keys.unshieldedKeystore)),
       ),
-      dust: recording((config) => DustWallet(config).startWithSeed(keys.seeds.dust)),
-      clock: recording(() => Clock.systemClock),
-      submissionService: recording(() => unusedSubmission),
-      pendingTransactionsService: recording(() => new SilentPendingTransactions()),
-      provingService: recording(() => createV8MockProvingService()),
-      fetchBlockData: recording(() => unusedBlockData),
-      validationService: recording(() => unusedValidation),
+      dust: wallet((config) => DustWallet(config).startWithSeed(keys.seeds.dust)),
+      clock: service(() => Clock.systemClock),
+      submissionService: service(() => unusedSubmission),
+      pendingTransactionsService: service(() => new SilentPendingTransactions()),
+      provingService: service(() => createV8MockProvingService()),
+      fetchBlockData: service(() => unusedBlockData),
+      validationService: service(() => unusedValidation),
     });
     facades.push(facade);
-    return handed;
+    return { wallets, services };
   };
 
-  it('hands every factory the configuration with `DefaultForkSchedule` filled in, when it names no `forks`', async () => {
-    const handed = await initRecording(configuration);
+  /** A configuration with a history storage of its own, so what a test writes into it stays in that test. */
+  const withOwnHistory = (): DefaultConfiguration => ({
+    ...configuration,
+    txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+  });
 
-    expect(handed).toHaveLength(factoryCount);
-    handed.forEach((config) => expect(config).toStrictEqual({ ...configuration, forks: DefaultForkSchedule }));
+  it('hands every service factory the configuration with `DefaultForkSchedule` filled in, when it names no `forks`', async () => {
+    const { services } = await initRecording(configuration);
+
+    expect(services).toHaveLength(serviceFactoryCount);
+    services.forEach((config) => expect(config).toStrictEqual({ ...configuration, forks: DefaultForkSchedule }));
+  });
+
+  it('hands every wallet factory the same configuration but for a history storage that also moves the lifecycle records', async () => {
+    const { wallets } = await initRecording(configuration);
+
+    expect(wallets).toHaveLength(walletFactoryCount);
+    wallets.forEach(({ txHistoryStorage, ...rest }) => {
+      const { txHistoryStorage: given, ...expected } = { ...configuration, forks: DefaultForkSchedule };
+      expect(rest).toStrictEqual(expected);
+      expect(txHistoryStorage).not.toBe(given);
+    });
+  });
+
+  it('writes what each wallet records through to the history storage the configuration names', async () => {
+    const given = withOwnHistory();
+    const { wallets } = await initRecording(given);
+
+    await Promise.all(
+      wallets.map((config, n) =>
+        config.txHistoryStorage.gotPending({ hash: `hash-${n}`, identifiers: [`id-${n}`], submittedAt: new Date() }),
+      ),
+    );
+
+    expect((await given.txHistoryStorage.getAll()).map((entry) => entry.hash).toSorted()).toStrictEqual([
+      'hash-0',
+      'hash-1',
+      'hash-2',
+    ]);
   });
 
   it('hands every factory the `forks` a configuration does name, untouched', async () => {
     const forks: ProtocolVersion.ForkSchedule = { v9: ProtocolVersion.ProtocolVersion(7n) };
 
-    const handed = await initRecording({ ...configuration, forks });
+    const { wallets, services } = await initRecording({ ...configuration, forks });
+    const handed = [...wallets, ...services];
 
-    expect(handed).toHaveLength(factoryCount);
+    expect(handed).toHaveLength(walletFactoryCount + serviceFactoryCount);
     handed.forEach((config) => expect(config.forks).toBe(forks));
   });
 

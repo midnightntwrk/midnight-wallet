@@ -169,6 +169,35 @@ describe('The transaction lifecycle service', () => {
       ]);
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise));
 
+  it('should confirm a transaction reported included with success, keeping its record until its TTL', () =>
+    Effect.gen(function* () {
+      const service = new TransactionLifecycleServiceEffectImpl(traits);
+      const spend = facts(['id-a', 'id-b']);
+
+      yield* setClock(BALANCED_AT);
+      yield* service.submitted(spend);
+      yield* service.included(['id-a', 'id-b'], { status: 'SUCCESS' });
+
+      expect(yield* currentRecords(service)).toStrictEqual([
+        recordOf(spend, BALANCED_AT, Lifecycle.LifecycleState.Confirmed(), Option.some(BALANCED_AT)),
+      ]);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise));
+
+  it('should reject a transaction reported included with a failure, keeping the chain’s verdict', () =>
+    Effect.gen(function* () {
+      const service = new TransactionLifecycleServiceEffectImpl(traits);
+      const spend = facts(['id-a']);
+      const verdict = { status: 'FAILURE', segments: [{ id: 0, success: false }] } as const;
+
+      yield* setClock(BALANCED_AT);
+      yield* service.submitted(spend);
+      yield* service.included(['id-a'], verdict);
+
+      expect(yield* currentRecords(service)).toStrictEqual([
+        recordOf(spend, BALANCED_AT, Lifecycle.LifecycleState.Rejected({ verdict }), Option.some(BALANCED_AT)),
+      ]);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise));
+
   describe('on a tick', () => {
     it.each([
       {

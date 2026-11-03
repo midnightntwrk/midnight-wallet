@@ -42,6 +42,9 @@ import {
   type VersionedTransactionTrait,
 } from './pendingTransactions.js';
 
+/** What the chain made of a transaction it included: applied whole, or failed in some or all of its segments. */
+export type InclusionVerdict = Readonly<{ status: 'SUCCESS' }> | FailedTransactionResult;
+
 /** Holds one lifecycle record per transaction and moves it as the facade and the chain report events. */
 export type TransactionLifecycleServiceEffect<TTransaction> = {
   /**
@@ -61,6 +64,8 @@ export type TransactionLifecycleServiceEffect<TTransaction> = {
   reverted: (identifiers: readonly string[]) => Effect.Effect<void>;
   /** Gives up on every live transaction built for an epoch the chain has left by `chainNow`. */
   orphanBeyond: (chainNow: ProtocolVersion.ProtocolVersion) => Effect.Effect<void>;
+  /** Records that a block included the transaction holding any of `identifiers`, with the chain's `verdict`. */
+  included: (identifiers: readonly string[], verdict: InclusionVerdict) => Effect.Effect<void>;
 };
 
 /**
@@ -144,6 +149,10 @@ export class TransactionLifecycleServiceEffectImpl<
     return SubscriptionRef.update(this.#state, (state) => Lifecycle.orphanBeyond(state, this.#txTraits, chainNow));
   }
 
+  included(_identifiers: readonly string[], _verdict: InclusionVerdict): Effect.Effect<void> {
+    return Effect.void;
+  }
+
   /**
    * Ends what has passed its TTL, then drops it, as two writes: a record that ends because its TTL passed is due to be
    * dropped at once, so publishing between them is the only way a caller ever sees that end.
@@ -203,8 +212,6 @@ export class TransactionLifecycleServiceEffectImpl<
   }
 }
 
-type Verdict = Readonly<{ status: 'SUCCESS' }> | FailedTransactionResult;
-
 /**
  * What the indexer reports for `tx`: the result of a regular transaction carrying every one of its identifiers, or
  * nothing while it has none. A query that fails reports nothing, so the next tick asks again.
@@ -212,7 +219,7 @@ type Verdict = Readonly<{ status: 'SUCCESS' }> | FailedTransactionResult;
 const verdictOf = <TTransaction>(
   tx: TTransaction,
   trait: TransactionTrait<TTransaction>,
-): Effect.Effect<Option.Option<Verdict>, never, QueryClient> =>
+): Effect.Effect<Option.Option<InclusionVerdict>, never, QueryClient> =>
   pipe(
     TransactionStatus,
     Effect.flatMap((query) => query({ transactionId: trait.firstId(tx) })),
@@ -228,7 +235,7 @@ const verdictOf = <TTransaction>(
     Effect.catchAll((error) =>
       pipe(
         Effect.logWarning(error, 'Could not ask the indexer about a transaction; asking again next tick'),
-        Effect.as(Option.none<Verdict>()),
+        Effect.as(Option.none<InclusionVerdict>()),
       ),
     ),
   );
@@ -237,7 +244,7 @@ const verdictOf = <TTransaction>(
 const verdictFrom = (result: {
   readonly status: string;
   readonly segments?: ReadonlyArray<{ readonly id: number; readonly success: boolean }> | null;
-}): Option.Option<Verdict> => {
+}): Option.Option<InclusionVerdict> => {
   const segments = (result.segments ?? []).map(({ id, success }) => ({ id, success }));
   return result.status === 'SUCCESS'
     ? Option.some({ status: 'SUCCESS' })
@@ -256,6 +263,7 @@ export type TransactionLifecycleService<TTransaction> = {
   submitted: (facts: Lifecycle.TransactionFacts<TTransaction>) => Promise<void>;
   reverted: (identifiers: readonly string[]) => Promise<void>;
   orphanBeyond: (chainNow: ProtocolVersion.ProtocolVersion) => Promise<void>;
+  included: (identifiers: readonly string[], verdict: InclusionVerdict) => Promise<void>;
 };
 
 export type TransactionLifecycleServiceInitParams<TTransaction> = {
@@ -404,5 +412,9 @@ export class TransactionLifecycleServiceImpl<TTransaction> implements Transactio
 
   orphanBeyond(chainNow: ProtocolVersion.ProtocolVersion): Promise<void> {
     return this.#run(this.#effectService.orphanBeyond(chainNow));
+  }
+
+  included(identifiers: readonly string[], verdict: InclusionVerdict): Promise<void> {
+    return this.#run(this.#effectService.included(identifiers, verdict));
   }
 }

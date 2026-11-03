@@ -12,6 +12,7 @@
 // limitations under the License.
 import { type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
+  type InclusionVerdict,
   Lifecycle,
   type TransactionLifecycleService,
 } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
@@ -66,6 +67,14 @@ export class DrivenLifecycle implements TransactionLifecycleService<LifecycleTx>
   orphanBeyond(chainNow: ProtocolVersion.ProtocolVersion): Promise<void> {
     this.orphanedBeyond.push(chainNow);
     return Promise.resolve();
+  }
+
+  included(identifiers: readonly string[], verdict: InclusionVerdict): Promise<void> {
+    return this.#move((state) =>
+      verdict.status === 'SUCCESS'
+        ? Lifecycle.confirmed(state, identifiers)
+        : Lifecycle.rejected(state, identifiers, verdict),
+    );
   }
 
   /** Ends every live record as the chain's verdict says. */
