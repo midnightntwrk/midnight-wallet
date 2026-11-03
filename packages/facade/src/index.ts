@@ -1128,8 +1128,8 @@ export class WalletFacade {
    * The protocol version the wallets have all reached, as last observed.
    *
    * @remarks
-   *   `Option.none()` until the three wallets have each emitted once. A transaction stamped with `none` is never
-   *   orphaned, so an unobserved version costs a transaction nothing but the ability to be given up on early.
+   *   `Option.none()` until the three wallets have each emitted once. It decides the version the facade acts at, never
+   *   the stamp a pending transaction is booked with: that comes from the transaction's own bytes.
    */
   #observedProtocolVersion = new BehaviorSubject<Option.Option<ProtocolVersion.ProtocolVersion>>(Option.none());
 
@@ -1810,7 +1810,8 @@ export class WalletFacade {
     const carried = this.accept<Carried>(tx);
     const identifiers = carried.identifiers();
     try {
-      await this.pendingTransactionsService.addPendingTransaction(tx, this.#observedProtocolVersion.getValue());
+      // The bytes' own version, never the wallets' reading: a crossing can land between building and submitting.
+      await this.pendingTransactionsService.addPendingTransaction(tx, Option.some(tx.protocolVersion));
       // Insert before awaiting submission so the entry exists while the tx is in flight — the per-wallet sync
       // handlers' gotFinalized call clears the pending entry on confirmation.
       const key = submitTxHistoryKey(carried);
