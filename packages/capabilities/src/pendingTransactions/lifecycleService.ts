@@ -19,6 +19,7 @@ import { HttpQueryClient, type QueryClient } from '@midnightntwrk/wallet-sdk-ind
 import { EitherOps, ObservableOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
   Array as Arr,
+  Clock,
   DateTime,
   DefaultServices,
   Duration,
@@ -261,6 +262,25 @@ export type TransactionLifecycleServiceInitParams<TTransaction> = {
   txTraits: VersionedTransactionTrait<TTransaction>;
   initialState?: Lifecycle.TransactionLifecycle<TTransaction>;
   configuration: DefaultPendingTransactionsServiceConfiguration;
+  /** What every move and sweep reads the time from; the system clock when left out. */
+  clock?: WallClock;
+};
+
+/** A source of the current time, as the facade keeps one. */
+export type WallClock = Readonly<{ now: () => Date }>;
+
+/** The Effect clock that reads `wallClock`, sleeping as the system clock does. */
+const effectClockOf = (wallClock: WallClock): Clock.Clock => {
+  const system = Clock.make();
+  const millis = (): number => wallClock.now().getTime();
+  return {
+    [Clock.ClockTypeId]: Clock.ClockTypeId,
+    unsafeCurrentTimeMillis: millis,
+    currentTimeMillis: Effect.sync(millis),
+    unsafeCurrentTimeNanos: () => BigInt(millis()) * 1_000_000n,
+    currentTimeNanos: Effect.sync(() => BigInt(millis()) * 1_000_000n),
+    sleep: (duration) => system.sleep(duration),
+  };
 };
 
 /**
@@ -289,6 +309,7 @@ export class TransactionLifecycleServiceImpl<TTransaction> implements Transactio
             new TransactionLifecycleServiceEffectImpl(initParams.txTraits, initParams.initialState),
             scope,
             initParams.configuration,
+            pipe(Option.fromNullable(initParams.clock), Option.map(effectClockOf), Option.getOrElse(Clock.make)),
           ),
       ),
       Effect.runPromise,
@@ -301,18 +322,22 @@ export class TransactionLifecycleServiceImpl<TTransaction> implements Transactio
    * @param data What `Lifecycle.serialize` wrote.
    * @param txTraits The traits each record's transaction is read with.
    * @param configuration The indexer to poll.
+   * @param clock What every move and sweep reads the time from; the system clock when left out.
    * @returns The service, not yet polling; rejects with why the payload could not be read.
    */
   static restore<TTransaction>(
     data: string,
     txTraits: VersionedTransactionTrait<TTransaction>,
     configuration: DefaultPendingTransactionsServiceConfiguration,
+    clock?: WallClock,
   ): Promise<TransactionLifecycleServiceImpl<TTransaction>> {
     return pipe(
       Lifecycle.deserialize(data, txTraits),
       EitherOps.toEffect,
       Effect.flatMap((initialState) =>
-        Effect.promise(() => TransactionLifecycleServiceImpl.init({ txTraits, initialState, configuration })),
+        Effect.promise(() =>
+          TransactionLifecycleServiceImpl.init({ txTraits, initialState, configuration, ...(clock ? { clock } : {}) }),
+        ),
       ),
       Effect.runPromise,
     );
@@ -321,21 +346,30 @@ export class TransactionLifecycleServiceImpl<TTransaction> implements Transactio
   #effectService: TransactionLifecycleServiceEffect<TTransaction>;
   #scope: Scope.CloseableScope;
   #configuration: DefaultPendingTransactionsServiceConfiguration;
+  #clock: Clock.Clock;
 
   constructor(
     effectService: TransactionLifecycleServiceEffect<TTransaction>,
     scope: Scope.CloseableScope,
     configuration: DefaultPendingTransactionsServiceConfiguration,
+    clock: Clock.Clock,
   ) {
     this.#effectService = effectService;
     this.#scope = scope;
     this.#configuration = configuration;
+    this.#clock = clock;
+  }
+
+  /** Runs one move against the service's clock, so every record is stamped with the time its caller keeps. */
+  #run(move: Effect.Effect<void>): Promise<void> {
+    return Effect.runPromise(Effect.withClock(move, this.#clock));
   }
 
   start(): Promise<void> {
     return this.#effectService
       .startPolling(Stream.tick(Duration.seconds(1)))
       .pipe(
+        Effect.withClock(this.#clock),
         Effect.provide(HttpQueryClient.layer({ url: this.#configuration.indexerClientConnection.indexerHttpUrl })),
         Effect.provideService(Scope.Scope, this.#scope),
         Effect.provide(DefaultServices.liveServices),
@@ -353,22 +387,22 @@ export class TransactionLifecycleServiceImpl<TTransaction> implements Transactio
   }
 
   balanced(facts: Lifecycle.TransactionFacts<TTransaction>): Promise<void> {
-    return Effect.runPromise(this.#effectService.balanced(facts));
+    return this.#run(this.#effectService.balanced(facts));
   }
 
   finalized(facts: Lifecycle.TransactionFacts<TTransaction>): Promise<void> {
-    return Effect.runPromise(this.#effectService.finalized(facts));
+    return this.#run(this.#effectService.finalized(facts));
   }
 
   submitted(facts: Lifecycle.TransactionFacts<TTransaction>): Promise<void> {
-    return Effect.runPromise(this.#effectService.submitted(facts));
+    return this.#run(this.#effectService.submitted(facts));
   }
 
   reverted(identifiers: readonly string[]): Promise<void> {
-    return Effect.runPromise(this.#effectService.reverted(identifiers));
+    return this.#run(this.#effectService.reverted(identifiers));
   }
 
   orphanBeyond(chainNow: ProtocolVersion.ProtocolVersion): Promise<void> {
-    return Effect.runPromise(this.#effectService.orphanBeyond(chainNow));
+    return this.#run(this.#effectService.orphanBeyond(chainNow));
   }
 }

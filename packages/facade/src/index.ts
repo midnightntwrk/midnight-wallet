@@ -110,6 +110,7 @@ import {
 import {
   coinIdsOf,
   erasedOf,
+  lifecycleTxOf,
   finalizedTransactionTraits,
   lifecycleTransactionTraits,
   type LifecycleTx,
@@ -974,10 +975,11 @@ export class WalletFacade {
 
   private static makeDefaultTransactionLifecycleService<
     TConfig extends DefaultPendingTransactionsServiceConfiguration & { forks: ProtocolVersion.ForkSchedule },
-  >(config: TConfig): Promise<TransactionLifecycleServiceImpl<LifecycleTx>> {
+  >(config: TConfig, clock: Clock.Clock): Promise<TransactionLifecycleServiceImpl<LifecycleTx>> {
     return TransactionLifecycleServiceImpl.init<LifecycleTx>({
       configuration: config,
       txTraits: lifecycleTransactionTraits(config.forks.v9),
+      clock,
     });
   }
 
@@ -1096,10 +1098,12 @@ export class WalletFacade {
         ? initParams.pendingTransactionsService(configuration)
         : WalletFacade.makeDefaultPendingTransactionsService(configuration),
     );
+    // Resolved first: the default lifecycle service stamps its records with the clock the facade keeps.
+    const clock = await Promise.resolve(initParams.clock ? initParams.clock(configuration) : Clock.systemClock);
     const transactionLifecycleService = await Promise.resolve(
       initParams.transactionLifecycleService
         ? initParams.transactionLifecycleService(configuration)
-        : WalletFacade.makeDefaultTransactionLifecycleService(configuration),
+        : WalletFacade.makeDefaultTransactionLifecycleService(configuration, clock),
     );
     const provingService = await Promise.resolve(
       initParams.provingService
@@ -1109,7 +1113,6 @@ export class WalletFacade {
     const shielded = await Promise.resolve(initParams.shielded(configuration));
     const unshielded = await Promise.resolve(initParams.unshielded(configuration));
     const dust = await Promise.resolve(initParams.dust(configuration));
-    const clock = await Promise.resolve(initParams.clock ? initParams.clock(configuration) : Clock.systemClock);
     const fetchBlockData: BlockDataFetcher = await Promise.resolve(
       initParams.fetchBlockData ? initParams.fetchBlockData(configuration) : makeDefaultBlockDataFetcher(configuration),
     );
@@ -1543,6 +1546,14 @@ export class WalletFacade {
     if (Arr.isNonEmptyReadonlyArray(parts)) {
       await this.transactionLifecycleService.balanced(this.#factsOf(mergedLifecycleTxs(parts)));
     }
+  }
+
+  /**
+   * Records a finalized transaction, folding every record it covers into one: merging a recipe's parts makes one
+   * transaction, and each part already finalized on the way has a record of its own.
+   */
+  async #recordFinalized(finalizedTx: FinalizedTx): Promise<void> {
+    await this.transactionLifecycleService.finalized(this.#factsOf(lifecycleTxOf(finalizedTx, this.#forkVersion)));
   }
 
   /**
@@ -2153,6 +2164,7 @@ export class WalletFacade {
           finalizedTx,
           Option.some(finalizedTx.protocolVersion),
         );
+        await this.#recordFinalized(finalizedTx);
         return finalizedTx;
       })
       .catch((error: unknown) =>
@@ -2258,6 +2270,7 @@ export class WalletFacade {
         finalizedTx,
         Option.some(finalizedTx.protocolVersion),
       );
+      await this.#recordFinalized(finalizedTx);
       return finalizedTx;
     } catch (error) {
       return await releaseAndRethrow(error, [
