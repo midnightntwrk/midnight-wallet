@@ -22,7 +22,7 @@
  *   frees a coin; each wallet's own sweep does.
  */
 
-import { type ProtocolVersion, type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, type SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Data, DateTime, Option, pipe } from 'effect';
 import { type FailedTransactionResult } from './pendingTransactions.js';
 
@@ -97,7 +97,23 @@ type StateTag = LifecycleState['_tag'];
 /** The states a record can still leave. Every other state is final. */
 const LIVE: ReadonlyArray<StateTag> = ['Balanced', 'Finalized', 'Submitted'];
 
+/** The final states in which the transaction's coins were never spent on chain, so the spend can begin again. */
+const ENDED_UNSPENT: ReadonlyArray<StateTag> = ['Rejected', 'Orphaned', 'Expired', 'Reverted'];
+
 const isLive = <TTransaction>(record: LifecycleRecord<TTransaction>): boolean => LIVE.includes(record.state._tag);
+
+/** Moves every record `applies` picks that is in one of the `from` states, leaving every other record as it was. */
+const settle = <TTransaction>(
+  state: TransactionLifecycle<TTransaction>,
+  applies: (record: LifecycleRecord<TTransaction>) => boolean,
+  from: ReadonlyArray<StateTag>,
+  to: (record: LifecycleRecord<TTransaction>) => LifecycleState,
+): TransactionLifecycle<TTransaction> => ({
+  ...state,
+  records: state.records.map((record) =>
+    applies(record) && from.includes(record.state._tag) ? { ...record, state: to(record) } : record,
+  ),
+});
 
 /** A record stands for the same spend as a transaction when they share any identifier. */
 const isCoveredBy =
@@ -109,11 +125,10 @@ const earliest = (times: ReadonlyArray<DateTime.Utc>): Option.Option<DateTime.Ut
   Arr.match(times, { onEmpty: () => Option.none(), onNonEmpty: (all) => Option.some(Arr.min(all, DateTime.Order)) });
 
 /**
- * Moves the live records `facts` covers into `target`, folded into one record that the facts describe.
+ * Replaces the records `facts` covers with one record in `target`, which the facts describe.
  *
- * Only live records take part: a final one is never moved, and stays beside the record that replaces the spend. When a
- * live covered record is in a state the move cannot start from, nothing changes. When none is covered, the record
- * begins here.
+ * When any covered record is in a state the move cannot start from, nothing changes, so a final state is left alone
+ * unless the move names it. When none is covered, the record begins here.
  */
 const moveTo = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
@@ -122,10 +137,7 @@ const moveTo = <TTransaction>(
   target: LifecycleState,
   createdAt: (folded: ReadonlyArray<LifecycleRecord<TTransaction>>) => DateTime.Utc,
 ): TransactionLifecycle<TTransaction> => {
-  const [rest, covered] = Arr.partition(
-    state.records,
-    (record) => isLive(record) && isCoveredBy(facts.identifiers)(record),
-  );
+  const [rest, covered] = Arr.partition(state.records, isCoveredBy(facts.identifiers));
   return covered.every((record) => from.includes(record.state._tag))
     ? {
         ...state,
@@ -154,6 +166,8 @@ const keptFrom =
 
 /**
  * Records a transaction as balanced, replacing a balanced record of the same spend: balancing it again begins it anew.
+ * So does balancing a spend whose record ended without its coins being spent on chain; a confirmed spend stays as it
+ * is, and so does one already finalized or submitted.
  *
  * @example
  *   const held = balanced(state, { tx: erased, identifiers, intentHashes, inputs, ttl, protocolVersion }, now);
@@ -167,7 +181,8 @@ export const balanced = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
   facts: TransactionFacts<TTransaction>,
   now: DateTime.Utc,
-): TransactionLifecycle<TTransaction> => moveTo(state, facts, ['Balanced'], LifecycleState.Balanced(), () => now);
+): TransactionLifecycle<TTransaction> =>
+  moveTo(state, facts, ['Balanced', ...ENDED_UNSPENT], LifecycleState.Balanced(), () => now);
 
 /**
  * Records a transaction as finalized, from balanced or from nothing. Every record the finalized transaction covers is
@@ -215,17 +230,25 @@ export const submitted = <TTransaction>(
  * Records that a transaction was included, whichever live state its record is in: inclusion is a fact, and nothing
  * overrules it afterwards.
  *
+ * @example
+ *   const included = confirmed(state, [...tx.identifiers()]);
+ *
  * @param state The records.
  * @param identifiers The included transaction's identifiers.
- * @returns The records with the transaction confirmed.
+ * @returns The records with the transaction confirmed; a final record is left as it was.
  */
 export const confirmed = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
-  _identifiers: readonly string[],
-): TransactionLifecycle<TTransaction> => state;
+  identifiers: readonly string[],
+): TransactionLifecycle<TTransaction> =>
+  settle(state, isCoveredBy(identifiers), LIVE, () => LifecycleState.Confirmed());
 
 /**
- * Records that the chain refused a submitted transaction.
+ * Records that the chain refused a submitted transaction. A transaction never submitted is left as it was: no chain was
+ * asked to include it.
+ *
+ * @example
+ *   const refused = rejected(state, [...tx.identifiers()], { status: 'FAILURE', segments });
  *
  * @param state The records.
  * @param identifiers The refused transaction's identifiers.
@@ -234,12 +257,28 @@ export const confirmed = <TTransaction>(
  */
 export const rejected = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
-  _identifiers: readonly string[],
-  _verdict: FailedTransactionResult,
-): TransactionLifecycle<TTransaction> => state;
+  identifiers: readonly string[],
+  verdict: FailedTransactionResult,
+): TransactionLifecycle<TTransaction> =>
+  settle(state, isCoveredBy(identifiers), ['Submitted'], () => LifecycleState.Rejected({ verdict }));
+
+/** Whether the epoch `authoredFor` belongs to has ended by `chainNow`. A version no epoch serves has not. */
+const hasEpochEnded = <TEpoch>(
+  epochs: ProtocolVersion.Registry<TEpoch>,
+  authoredFor: ProtocolVersion.ProtocolVersion,
+  chainNow: ProtocolVersion.ProtocolVersion,
+): boolean =>
+  pipe(
+    ProtocolVersion.selectEntry(epochs, authoredFor),
+    Option.exists((entry) => chainNow >= entry.range[1]),
+  );
 
 /**
- * Gives up on every live transaction built for an epoch the chain has left.
+ * Gives up on every live transaction built for an epoch the chain has left. A record whose version was never known is
+ * left as it was: that is no evidence it was left behind.
+ *
+ * @example
+ *   const stranded = orphanBeyond(state, traits, chainNow);
  *
  * @param state The records.
  * @param epochs The protocol version epochs, as the registry of traits keys them.
@@ -248,18 +287,33 @@ export const rejected = <TTransaction>(
  */
 export const orphanBeyond = <TTransaction, TEpoch>(
   state: TransactionLifecycle<TTransaction>,
-  _epochs: ProtocolVersion.Registry<TEpoch>,
-  _chainNow: ProtocolVersion.ProtocolVersion,
-): TransactionLifecycle<TTransaction> => state;
+  epochs: ProtocolVersion.Registry<TEpoch>,
+  chainNow: ProtocolVersion.ProtocolVersion,
+): TransactionLifecycle<TTransaction> => ({
+  ...state,
+  records: state.records.map((record) =>
+    pipe(
+      record.protocolVersion,
+      Option.filter((authoredFor) => isLive(record) && hasEpochEnded(epochs, authoredFor, chainNow)),
+      Option.match({
+        onNone: () => record,
+        onSome: (authoredFor) => ({ ...record, state: LifecycleState.Orphaned({ authoredFor, chainNow }) }),
+      }),
+    ),
+  ),
+});
 
 /**
  * Records that a transaction was reverted, so no chain will be asked to include it.
  *
+ * @example
+ *   const abandoned = reverted(state, [...tx.identifiers()]);
+ *
  * @param state The records.
  * @param identifiers The reverted transaction's identifiers.
- * @returns The records with the transaction reverted.
+ * @returns The records with the transaction reverted; a final record is left as it was.
  */
 export const reverted = <TTransaction>(
   state: TransactionLifecycle<TTransaction>,
-  _identifiers: readonly string[],
-): TransactionLifecycle<TTransaction> => state;
+  identifiers: readonly string[],
+): TransactionLifecycle<TTransaction> => settle(state, isCoveredBy(identifiers), LIVE, () => LifecycleState.Reverted());
