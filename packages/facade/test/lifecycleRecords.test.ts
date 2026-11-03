@@ -450,6 +450,33 @@ describe('A finalized transaction’s lifecycle record', () => {
       }).pipe(Effect.scoped, Effect.runPromise),
   );
 
+  it('should show in the facade’s state as balanced with no transaction, then as finalized with the finalized transaction and no submission time', () =>
+    Effect.gen(function* () {
+      const { facade } = yield* fundedFacade();
+      const entriesFor = (state: FacadeState, tx: AnyTx) => {
+        const ids = carried<{ identifiers(): string[] }>(tx).identifiers();
+        return state.pending.filter((entry) => entry.identifiers.some((id) => ids.includes(id)));
+      };
+      const bytesOf = (handle: AnyTx): string =>
+        Buffer.from(carried<{ serialize(): Uint8Array }>(handle).serialize()).toString('hex');
+
+      const recipe = yield* Effect.promise(() => selfTransfer(facade, ttlOn(facade)));
+      const [part] = BalancingRecipe.getTransactions(recipe);
+      const balancedEntries = entriesFor(yield* stateOf(facade), part);
+      expect(balancedEntries.map((entry) => [entry.status, entry.transaction, entry.submittedAt])).toStrictEqual([
+        [{ _tag: 'Balanced' }, Option.none(), Option.none()],
+      ]);
+
+      const finalizedTx = yield* Effect.promise(() => facade.finalizeRecipe(recipe));
+      const finalizedEntries = entriesFor(yield* stateOf(facade), finalizedTx);
+      expect(finalizedEntries.map((entry) => [entry.status, entry.submittedAt])).toStrictEqual([
+        [{ _tag: 'Finalized' }, Option.none()],
+      ]);
+      expect(finalizedEntries.map((entry) => Option.map(entry.transaction, bytesOf))).toStrictEqual([
+        Option.some(bytesOf(finalizedTx)),
+      ]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
   it('should begin a finalized record for a transaction the facade did not balance, when the facade’s clock says', () =>
     Effect.gen(function* () {
       const { facade, keys } = yield* fundedFacade();

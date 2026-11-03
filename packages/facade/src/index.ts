@@ -707,23 +707,34 @@ export const protocolPhaseOf = (
  *   user, and whether re-submitting the same bytes could ever help.
  */
 export type PendingStatus =
+  | Readonly<{ _tag: 'Balanced' }>
+  | Readonly<{ _tag: 'Finalized' }>
   | Readonly<{ _tag: 'Submitted' }>
-  | Readonly<{ _tag: 'Confirmed'; segments: readonly Readonly<{ id: number; success: boolean }>[] }>
-  | Readonly<{ _tag: 'Rejected'; segments: readonly Readonly<{ id: number; success: boolean }>[] }>
+  | Readonly<{ _tag: 'Confirmed' }>
+  | Readonly<{
+      _tag: 'Rejected';
+      reason:
+        | Readonly<{ _tag: 'Refused'; segments: readonly Readonly<{ id: number; success: boolean }>[] }>
+        | Readonly<{ _tag: 'TTLPassed' }>;
+    }>
   | Readonly<{
       _tag: 'Orphaned';
       /** The protocol version the transaction was authored for. */
       authoredFor: ProtocolVersion.ProtocolVersion;
       /** The protocol version the chain had reached when the wallet gave up on it. */
       chainNow: ProtocolVersion.ProtocolVersion;
-    }>;
+    }>
+  | Readonly<{ _tag: 'Expired' }>
+  | Readonly<{ _tag: 'Reverted' }>;
 
 /** A transaction the wallet has submitted and the chain has not finished answering for. */
 export type PendingTransaction = Readonly<{
+  /** What ties the entry to its transaction at every stage. */
+  identifiers: readonly string[];
   /** The transaction itself, as the handle an application carries. */
-  transaction: FinalizedTx;
+  transaction: Option.Option<FinalizedTx>;
   /** When the wallet recorded it as pending. */
-  submittedAt: DateTime.Utc;
+  submittedAt: Option.Option<DateTime.Utc>;
   /**
    * The protocol version it was authored for, when the wallet had observed one.
    *
@@ -736,39 +747,23 @@ export type PendingTransaction = Readonly<{
   status: PendingStatus;
 }>;
 
-/** Reads what has become of a transaction from the verdict the pending set holds, if it holds one. */
-const pendingStatusOf = (result: PendingTransactions.TransactionResult | undefined): PendingStatus => {
-  if (result === undefined) return { _tag: 'Submitted' };
-  switch (result.status) {
-    case 'SUCCESS':
-      return { _tag: 'Confirmed', segments: result.segments };
-    case 'FAILURE':
-    case 'PARTIAL_SUCCESS':
-      // A transaction only some of whose segments succeeded is still not a transaction that happened as submitted.
-      return { _tag: 'Rejected', segments: result.segments };
-    case 'ORPHANED_BY_FORK':
-      return { _tag: 'Orphaned', authoredFor: result.authoredFor, chainNow: result.chainNow };
-  }
-};
-
 /**
  * The pending transactions as an application reads them.
  *
- * @remarks
- *   A projection over the pending set the services keep, not a second copy of it: the facts are the same, stated as a
- *   list of transactions with a status each rather than as the bag the machinery works in.
- * @param pending The pending set.
- * @returns One entry per transaction, in the order the wallet recorded them.
+ * @param _lifecycle The lifecycle records.
+ * @returns One entry per record.
  */
 export const pendingTransactionsOf = (
-  pending: PendingTransactions.PendingTransactions<FinalizedTx>,
-): readonly PendingTransaction[] =>
-  pending.all.map((item) => ({
-    transaction: item.tx,
-    submittedAt: item.creationTime,
-    authoredFor: item.protocolVersion,
-    status: pendingStatusOf('result' in item ? item.result : undefined),
-  }));
+  _lifecycle: Lifecycle.TransactionLifecycle<LifecycleTx>,
+): readonly PendingTransaction[] => [];
+
+/**
+ * Whether a transaction still awaits an answer.
+ *
+ * @param _entry The entry.
+ * @returns Whether it awaits one.
+ */
+export const isAwaiting = (_entry: PendingTransaction): boolean => false;
 
 export class FacadeState {
   public readonly shielded: ShieldedWalletState;
@@ -822,7 +817,7 @@ export class FacadeState {
     shielded: ShieldedWalletState,
     unshielded: UnshieldedWalletState,
     dust: DustWalletState,
-    pending: PendingTransactions.PendingTransactions<FinalizedTx>,
+    pending: Lifecycle.TransactionLifecycle<LifecycleTx>,
     forkVersion: ProtocolVersion.ProtocolVersion = ProtocolVersion.MinSupportedVersion,
   ) {
     this.shielded = shielded;
@@ -1949,21 +1944,21 @@ export class WalletFacade {
       this.pendingTransactionsService.state(),
     ]).pipe(
       map(
-        ([shieldedState, unshieldedState, dustState, pending]) =>
-          new FacadeState(shieldedState, unshieldedState, dustState, pending, this.#forkVersion),
+        ([shieldedState, unshieldedState, dustState]) =>
+          new FacadeState(shieldedState, unshieldedState, dustState, Lifecycle.empty<LifecycleTx>(), this.#forkVersion),
       ),
     );
   }
 
   async waitForSyncedState(): Promise<FacadeState> {
-    const [shieldedState, unshieldedState, dustState, pending] = await Promise.all([
+    const [shieldedState, unshieldedState, dustState] = await Promise.all([
       this.shielded.waitForSyncedState(),
       this.unshielded.waitForSyncedState(),
       this.dust.waitForSyncedState(),
       firstValueFrom(this.pendingTransactionsService.state()),
     ]);
 
-    return new FacadeState(shieldedState, unshieldedState, dustState, pending, this.#forkVersion);
+    return new FacadeState(shieldedState, unshieldedState, dustState, Lifecycle.empty<LifecycleTx>(), this.#forkVersion);
   }
 
   /**

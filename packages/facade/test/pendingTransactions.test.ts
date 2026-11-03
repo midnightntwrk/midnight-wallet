@@ -28,6 +28,7 @@ import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { type ResolvedConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
 import { createV8MockProvingService, getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
 import * as rx from 'rxjs';
+import { Either, Option } from 'effect';
 
 vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 
@@ -104,6 +105,14 @@ describe('Wallet Facade handling pending transactions', () => {
     expect(spiedDustRevert).not.toHaveBeenCalled();
     // Read off the state's own projection now, rather than through the pending set's trait machinery: what an
     // application sees is a list of transactions with a status each.
-    expect(state.pending.map((entry) => entry.transaction)).toContain(finalized);
+    const finalizedIds = Either.getOrThrow(
+      WalletTransaction.unwrapWithin<ledgerV8.FinalizedTransaction>(
+        finalized,
+        ProtocolVersion.epochOf(finalized.protocolVersion, configuration.forks.v9),
+      ),
+    ).identifiers();
+    expect(
+      state.pending.filter((entry) => Option.isSome(entry.transaction)).map((entry) => [...entry.identifiers].sort()),
+    ).toContainEqual([...finalizedIds].sort());
   });
 });

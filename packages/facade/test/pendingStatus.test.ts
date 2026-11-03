@@ -12,124 +12,200 @@
 // limitations under the License.
 
 /**
- * What an application sees about the transactions it has submitted and the chain has not answered for yet.
+ * What an application sees of each transaction the wallet keeps a lifecycle record for.
  *
  * @remarks
- *   The machinery underneath already distinguishes every one of these: items are stamped with the version they were
- *   authored for, a fork gives the stranded ones their own verdict, and the wallet reverts them. What the state exposed
- *   was the machinery — a bag of items, some with a `result` field carrying an indexer-shaped status string, and the
- *   protocol-upgrade case indistinguishable from a chain rejection unless the reader knew to compare strings. These are
- *   the same facts as a tagged status an application can exhaust.
+ *   One entry per record, read off the record: its state as a tagged status an application can exhaust, the finalized
+ *   transaction once there is one, and when it was submitted once it was. A record stays until its TTL has passed,
+ *   ended or not, so an application tells the transactions still awaiting an answer from the rest with `isAwaiting`
+ *   rather than by the list being empty.
  */
-import {
-  type FinalizedTx,
-  NetworkId,
-  ProtocolVersion,
-  WalletTransaction,
-} from '@midnightntwrk/wallet-sdk-abstractions';
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
+import { NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
-import { DateTime, Option } from 'effect';
+import { DateTime, Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { pendingTransactionsOf } from '../src/index.js';
+import { isAwaiting, type PendingTransaction, pendingTransactionsOf } from '../src/index.js';
+import { type LifecycleTx } from '../src/transaction.js';
 
 const authoredFor = ProtocolVersion.MinSupportedVersion;
 const chainNow = ProtocolVersion.ProtocolVersion(2_000_000n);
-const submittedAt = DateTime.unsafeMake(1_700_000_000_000);
+const createdAt = DateTime.unsafeMake(1_700_000_000_000);
+const submittedAt = DateTime.unsafeMake(1_700_000_060_000);
+const identifiers = ['an-identifier'];
 
-const aTransaction = (): FinalizedTx =>
-  WalletTransaction.adopt('Finalized', ledgerV8.Transaction.fromParts(NetworkId.NetworkId.Undeployed), authoredFor);
-
-const held = (
-  tx: FinalizedTx,
-  result?: PendingTransactions.TransactionResult,
-): PendingTransactions.PendingTransactions<FinalizedTx> => ({
-  all: [
-    {
-      tx,
-      creationTime: submittedAt,
-      protocolVersion: Option.some(authoredFor),
-      ...(result !== undefined ? { result } : {}),
-    },
-  ],
-  reservations: [],
+const aTransaction = (): LifecycleTx => ({
+  protocolVersion: authoredFor,
+  transaction: ledgerV8.Transaction.fromParts(NetworkId.NetworkId.Undeployed),
 });
 
-describe('a transaction the chain has not answered for', () => {
-  it('is submitted, and carries the transaction and when it was submitted', () => {
-    const tx = aTransaction();
-
-    expect(pendingTransactionsOf(held(tx))).toStrictEqual([
-      {
-        transaction: tx,
-        submittedAt,
-        authoredFor: Option.some(authoredFor),
-        status: { _tag: 'Submitted' },
-      },
-    ]);
-  });
+const aRecord = (
+  state: Lifecycle.LifecycleState,
+  overrides: Partial<Lifecycle.LifecycleRecord<LifecycleTx>> = {},
+): Lifecycle.LifecycleRecord<LifecycleTx> => ({
+  identifiers,
+  intentHashes: [],
+  inputs: { unshielded: [] },
+  ttl: new Date(1_700_003_600_000),
+  protocolVersion: Option.some(authoredFor),
+  tx: Option.some(aTransaction()),
+  createdAt,
+  submittedAt: Option.none(),
+  state,
+  ...overrides,
 });
 
-describe('a transaction the chain rejected', () => {
-  it('is rejected, with the segments the chain reported', () => {
-    const tx = aTransaction();
-    const segments = [{ id: 0, success: false }];
+const onlyEntryOf = (record: Lifecycle.LifecycleRecord<LifecycleTx>): PendingTransaction => {
+  const entries = pendingTransactionsOf({ records: [record] });
+  expect(entries).toHaveLength(1);
+  return entries[0];
+};
 
-    expect(pendingTransactionsOf(held(tx, { status: 'FAILURE', segments }))[0].status).toStrictEqual({
-      _tag: 'Rejected',
-      segments,
+/** The ledger transaction an entry's handle carries, so a test can tell it is the very one the record holds. */
+const carriedBy = (entry: PendingTransaction): Option.Option<unknown> =>
+  Option.map(entry.transaction, (handle) =>
+    Either.getOrThrow(
+      WalletTransaction.unwrapWithin<unknown>(
+        handle,
+        ProtocolVersion.epochOf(handle.protocolVersion, ProtocolVersion.MinSupportedVersion),
+      ),
+    ),
+  );
+
+describe('a balanced transaction', () => {
+  it('is balanced, with no transaction yet, because the record holds it with its proofs erased', () => {
+    const entry = onlyEntryOf(aRecord(Lifecycle.LifecycleState.Balanced()));
+
+    expect(entry).toStrictEqual({
+      identifiers,
+      transaction: Option.none(),
+      submittedAt: Option.none(),
+      authoredFor: Option.some(authoredFor),
+      status: { _tag: 'Balanced' },
     });
   });
+});
 
-  it('is rejected when only some segments succeeded, which is still not a transaction that happened', () => {
-    const tx = aTransaction();
+describe('a finalized transaction', () => {
+  it('is finalized, not submitted, and carries the finalized transaction the record holds, stamped as the record says', () => {
+    const held = aTransaction();
+    const entry = onlyEntryOf(aRecord(Lifecycle.LifecycleState.Finalized(), { tx: Option.some(held) }));
+
+    expect(entry.status).toStrictEqual({ _tag: 'Finalized' });
+    expect(entry.submittedAt).toStrictEqual(Option.none());
+    expect(Option.map(entry.transaction, (handle) => [handle.stage, handle.protocolVersion])).toStrictEqual(
+      Option.some(['Finalized', authoredFor]),
+    );
+    expect(Option.getOrThrow(carriedBy(entry))).toBe(held.transaction);
+  });
+
+  it('carries no transaction when its record does not hold one, as a record kept from an older format may not', () => {
+    const entry = onlyEntryOf(aRecord(Lifecycle.LifecycleState.Finalized(), { tx: Option.none() }));
+
+    expect(entry.transaction).toStrictEqual(Option.none());
+    expect(entry.identifiers).toStrictEqual(identifiers);
+  });
+});
+
+describe('a submitted transaction', () => {
+  it('is submitted, and says when it was submitted', () => {
+    const held = aTransaction();
+    const entry = onlyEntryOf(
+      aRecord(Lifecycle.LifecycleState.Submitted(), { tx: Option.some(held), submittedAt: Option.some(submittedAt) }),
+    );
+
+    expect(entry.status).toStrictEqual({ _tag: 'Submitted' });
+    expect(entry.submittedAt).toStrictEqual(Option.some(submittedAt));
+    expect(Option.getOrThrow(carriedBy(entry))).toBe(held.transaction);
+  });
+});
+
+describe('a transaction the chain confirmed', () => {
+  it('is confirmed, and still says when it was submitted', () => {
+    const entry = onlyEntryOf(aRecord(Lifecycle.LifecycleState.Confirmed(), { submittedAt: Option.some(submittedAt) }));
+
+    expect(entry.status).toStrictEqual({ _tag: 'Confirmed' });
+    expect(entry.submittedAt).toStrictEqual(Option.some(submittedAt));
+  });
+});
+
+describe('a transaction that will never be included', () => {
+  it('is rejected as refused, with the segments the chain reported, when the chain failed it', () => {
+    const segments = [{ id: 0, success: false }];
+
+    expect(
+      onlyEntryOf(aRecord(Lifecycle.LifecycleState.Rejected({ verdict: { status: 'FAILURE', segments } }))).status,
+    ).toStrictEqual({ _tag: 'Rejected', reason: { _tag: 'Refused', segments } });
+  });
+
+  it('is rejected as refused when only some segments succeeded, which is still not a transaction that happened', () => {
     const segments = [
       { id: 0, success: true },
       { id: 1, success: false },
     ];
 
-    expect(pendingTransactionsOf(held(tx, { status: 'PARTIAL_SUCCESS', segments }))[0].status).toStrictEqual({
-      _tag: 'Rejected',
-      segments,
-    });
+    expect(
+      onlyEntryOf(aRecord(Lifecycle.LifecycleState.Rejected({ verdict: { status: 'PARTIAL_SUCCESS', segments } })))
+        .status,
+    ).toStrictEqual({ _tag: 'Rejected', reason: { _tag: 'Refused', segments } });
+  });
+
+  it('is rejected because its TTL passed, with no segments, when it was submitted and the chain never included it', () => {
+    expect(
+      onlyEntryOf(aRecord(Lifecycle.LifecycleState.Rejected({ verdict: { status: 'TTL_PASSED' } }))).status,
+    ).toStrictEqual({ _tag: 'Rejected', reason: { _tag: 'TTLPassed' } });
+  });
+
+  it('is expired when its TTL passed before it was submitted', () => {
+    expect(onlyEntryOf(aRecord(Lifecycle.LifecycleState.Expired())).status).toStrictEqual({ _tag: 'Expired' });
+  });
+
+  it('is reverted when the wallet gave its coins back', () => {
+    expect(onlyEntryOf(aRecord(Lifecycle.LifecycleState.Reverted())).status).toStrictEqual({ _tag: 'Reverted' });
   });
 });
 
 describe('a transaction a protocol upgrade left behind', () => {
   it('is orphaned, and says which version it was authored for and which the chain reached', () => {
-    const tx = aTransaction();
-
-    expect(
-      pendingTransactionsOf(held(tx, { status: 'ORPHANED_BY_FORK', authoredFor, chainNow }))[0].status,
-    ).toStrictEqual({ _tag: 'Orphaned', authoredFor, chainNow });
-  });
-
-  it('is not the same as a rejection, because the chain never said anything about it', () => {
-    // The distinction the previous shape could not make without comparing status strings: the node rejected this,
-    // versus this can never be submitted at all.
-    const rejected = pendingTransactionsOf(held(aTransaction(), { status: 'FAILURE', segments: [] }))[0];
-    const orphaned = pendingTransactionsOf(
-      held(aTransaction(), { status: 'ORPHANED_BY_FORK', authoredFor, chainNow }),
-    )[0];
-
-    expect(rejected.status._tag).not.toBe(orphaned.status._tag);
-  });
-});
-
-describe('a transaction the chain confirmed', () => {
-  it('is confirmed, for the moment before the wallet clears it', () => {
-    const tx = aTransaction();
-    const segments = [{ id: 0, success: true }];
-
-    expect(pendingTransactionsOf(held(tx, { status: 'SUCCESS', segments }))[0].status).toStrictEqual({
-      _tag: 'Confirmed',
-      segments,
+    expect(onlyEntryOf(aRecord(Lifecycle.LifecycleState.Orphaned({ authoredFor, chainNow }))).status).toStrictEqual({
+      _tag: 'Orphaned',
+      authoredFor,
+      chainNow,
     });
   });
 });
 
-describe('an empty pending set', () => {
-  it('is an empty list, which is what an application checks for', () => {
-    expect(pendingTransactionsOf(PendingTransactions.empty())).toStrictEqual([]);
+describe('the transactions an application waits on', () => {
+  it.each([
+    { state: Lifecycle.LifecycleState.Balanced(), awaiting: true },
+    { state: Lifecycle.LifecycleState.Finalized(), awaiting: true },
+    { state: Lifecycle.LifecycleState.Submitted(), awaiting: true },
+    { state: Lifecycle.LifecycleState.Confirmed(), awaiting: false },
+    { state: Lifecycle.LifecycleState.Rejected({ verdict: { status: 'TTL_PASSED' } }), awaiting: false },
+    { state: Lifecycle.LifecycleState.Orphaned({ authoredFor, chainNow }), awaiting: false },
+    { state: Lifecycle.LifecycleState.Expired(), awaiting: false },
+    { state: Lifecycle.LifecycleState.Reverted(), awaiting: false },
+  ])(
+    'are awaiting an answer when $state._tag is $awaiting, because only a live record can still move',
+    ({ state, awaiting }) => {
+      expect(isAwaiting(onlyEntryOf(aRecord(state)))).toBe(awaiting);
+    },
+  );
+});
+
+describe('the records', () => {
+  it('give one entry each, in the order the wallet keeps them', () => {
+    const entries = pendingTransactionsOf({
+      records: [
+        aRecord(Lifecycle.LifecycleState.Submitted(), { identifiers: ['first'] }),
+        aRecord(Lifecycle.LifecycleState.Confirmed(), { identifiers: ['second'] }),
+      ],
+    });
+
+    expect(entries.map((entry) => entry.identifiers)).toStrictEqual([['first'], ['second']]);
+  });
+
+  it('give an empty list when there are none', () => {
+    expect(pendingTransactionsOf(Lifecycle.empty())).toStrictEqual([]);
   });
 });

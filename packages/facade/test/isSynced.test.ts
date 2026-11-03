@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
+import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { type ShieldedWalletState } from '@midnightntwrk/wallet-sdk-shielded';
 import { type UnshieldedWalletState } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
@@ -34,7 +34,7 @@ const facadeState = (complete: { shielded: boolean; unshielded: boolean; dust: b
     progressing(complete.shielded) as unknown as ShieldedWalletState,
     progressing(complete.unshielded) as unknown as UnshieldedWalletState,
     progressing(complete.dust) as unknown as DustWalletState,
-    PendingTransactions.empty(),
+    Lifecycle.empty(),
   );
 
 describe('FacadeState.isSynced', () => {
