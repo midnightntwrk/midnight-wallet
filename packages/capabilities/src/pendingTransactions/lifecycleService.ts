@@ -34,13 +34,23 @@ import {
 } from 'effect';
 import type * as rx from 'rxjs';
 import * as Lifecycle from './lifecycle.js';
-import { type DefaultPendingTransactionsServiceConfiguration } from './pendingTransactionsService.js';
 import {
   type FailedTransactionResult,
   type TransactionTrait,
   traitForVersion,
   type VersionedTransactionTrait,
 } from './pendingTransactions.js';
+
+/** Where the indexer the default service polls is. */
+export type IndexerClientConnection = {
+  indexerHttpUrl: string;
+  indexerWsUrl?: string;
+};
+
+/** What the default service is built from. */
+export type DefaultPendingTransactionsServiceConfiguration = {
+  indexerClientConnection: IndexerClientConnection;
+};
 
 /** What the chain made of a transaction it included: applied whole, or failed in some or all of its segments. */
 export type InclusionVerdict = Readonly<{ status: 'SUCCESS' }> | FailedTransactionResult;

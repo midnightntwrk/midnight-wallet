@@ -13,7 +13,6 @@
  * limitations under the License.
  */
 
-export * from './pendingTransactionsService.js';
 export * as PendingTransactions from './pendingTransactions.js';
 export * as Lifecycle from './lifecycle.js';
 export * from './lifecycleService.js';

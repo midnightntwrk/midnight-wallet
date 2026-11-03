@@ -38,7 +38,7 @@ sync(): Stream.Stream<Update> → Capability.apply(state, update) → Subscripti
 **Canonical examples:**
 
 - `packages/unshielded-wallet/src/v2/UnshieldedState.ts` - Pure state transformations (`v1` is its ledger-v8 twin)
-- `packages/capabilities/src/pendingTransactions/pendingTransactionsService.ts` - Service orchestrating pure updates
+- `packages/capabilities/src/pendingTransactions/lifecycleService.ts` - Service orchestrating pure updates
 
 ### Parse, Don't Validate
 
@@ -618,17 +618,17 @@ should still follow the same functional principles.
 
 When implementing new features, refer to these exemplary files:
 
-| Pattern                              | File                                                                          |
-| ------------------------------------ | ----------------------------------------------------------------------------- |
-| Trait/typeclass (dictionary passing) | `packages/capabilities/src/pendingTransactions/pendingTransactions.ts`        |
-| PolyFunction dispatch (ADT handling) | `packages/utilities/src/polyFunction.ts`                                      |
-| Either utilities                     | `packages/utilities/src/EitherOps.ts`                                         |
-| Monoid, dual functions               | `packages/utilities/src/ArrayOps.ts`                                          |
-| Tagged enum ADT                      | `packages/runtime/src/abstractions/StateChange.ts`                            |
-| Service/Capability separation        | `packages/capabilities/src/pendingTransactions/pendingTransactionsService.ts` |
-| Pure state transformations           | `packages/unshielded-wallet/src/v2/UnshieldedState.ts`                        |
-| Parse don't validate                 | `packages/address-format/src/index.ts`                                        |
-| Branded types                        | `packages/abstractions/src/ProtocolVersion.ts`                                |
+| Pattern                              | File                                                                   |
+| ------------------------------------ | ---------------------------------------------------------------------- |
+| Trait/typeclass (dictionary passing) | `packages/capabilities/src/pendingTransactions/pendingTransactions.ts` |
+| PolyFunction dispatch (ADT handling) | `packages/utilities/src/polyFunction.ts`                               |
+| Either utilities                     | `packages/utilities/src/EitherOps.ts`                                  |
+| Monoid, dual functions               | `packages/utilities/src/ArrayOps.ts`                                   |
+| Tagged enum ADT                      | `packages/runtime/src/abstractions/StateChange.ts`                     |
+| Service/Capability separation        | `packages/capabilities/src/pendingTransactions/lifecycleService.ts`    |
+| Pure state transformations           | `packages/unshielded-wallet/src/v2/UnshieldedState.ts`                 |
+| Parse don't validate                 | `packages/address-format/src/index.ts`                                 |
+| Branded types                        | `packages/abstractions/src/ProtocolVersion.ts`                         |
 
 ## Documentation Standards
 

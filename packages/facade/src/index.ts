@@ -89,8 +89,6 @@ import {
   type InclusionVerdict,
   Lifecycle,
   PendingTransactions,
-  type PendingTransactionsService,
-  PendingTransactionsServiceImpl,
   type TransactionLifecycleService,
   TransactionLifecycleServiceImpl,
 } from '@midnightntwrk/wallet-sdk-capabilities';
@@ -114,7 +112,6 @@ import {
   erasedOf,
   finalizedOf,
   lifecycleTxOf,
-  finalizedTransactionTraits,
   lifecycleTransactionTraits,
   type LifecycleTx,
   mergedLifecycleTxs,
@@ -887,24 +884,15 @@ export class FacadeState {
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 /**
- * What a transaction of either ledger version says about its own identity, which is all a reservation needs of it.
+ * What a transaction of either ledger version says about its own identity.
  *
  * @remarks
- *   Structural on purpose: both ledger versions name a transaction the same way, and a reservation outlives the crossing,
- *   so what is recorded about one must not depend on which version wrote it.
+ *   Structural on purpose: both ledger versions name a transaction the same way, and a transaction submitted before a
+ *   crossing is still read after it, so reading one must not depend on which version wrote it.
  */
 type IdentifiedTransaction = Readonly<{
   identifiers(): string[];
   intents: ReadonlyMap<number, { intentHash(segmentId: number): string }> | undefined;
-}>;
-
-/**
- * The coins a transaction spends from shielded funds, as the nullifiers of its Zswap inputs. Structural for the same
- * reason as {@link IdentifiedTransaction}: both ledger versions name an input's nullifier the same way.
- */
-type ShieldedSpends = Readonly<{
-  guaranteedOffer: { readonly inputs: readonly { readonly nullifier: string }[] } | undefined;
-  fallibleOffer: ReadonlyMap<number, { readonly inputs: readonly { readonly nullifier: string }[] }> | undefined;
 }>;
 
 /** Undoes one booking a builder took, in the wallet that took it. */
@@ -1035,9 +1023,6 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
   /** Optional factory for the clock abstraction. Defaults to system clock (`() => new Date()`). */
   clock?: (config: ResolvedConfiguration<TConfig>) => MaybePromise<Clock.Clock>;
   submissionService?: (config: ResolvedConfiguration<TConfig>) => MaybePromise<SubmissionService<FinalizedTx>>;
-  pendingTransactionsService?: (
-    config: ResolvedConfiguration<TConfig>,
-  ) => MaybePromise<PendingTransactionsService<FinalizedTx>>;
   /**
    * Optional factory for the service holding one lifecycle record per transaction. Defaults to one polling
    * `configuration.indexerClientConnection`.
@@ -1089,15 +1074,6 @@ export class WalletFacade {
     // A handle serializes itself, which is all submission needs of a transaction — and the one thing every ledger
     // version's transaction does identically.
     return makeDefaultSubmissionService<FinalizedTx>(config);
-  }
-
-  private static makeDefaultPendingTransactionsService<
-    TConfig extends DefaultPendingTransactionsServiceConfiguration & { forks: ProtocolVersion.ForkSchedule },
-  >(config: TConfig): Promise<PendingTransactionsServiceImpl<FinalizedTx>> {
-    return PendingTransactionsServiceImpl.init<FinalizedTx>({
-      configuration: config,
-      txTraits: finalizedTransactionTraits(config.forks.v9),
-    });
   }
 
   private static makeDefaultTransactionLifecycleService<
@@ -1207,9 +1183,8 @@ export class WalletFacade {
    *   {@link Promise} or not).
    * - `submissionService` - needs to implement {@link SubmissionService} for a {@link ledgerV9.FinalizedTransaction} to
    *   submit transactions to the network, default uses Node RPC connection
-   * - `pendingTransactionsService` - needs to implement {@link PendingTransactionsService} for a
-   *   {@link ledgerV9.FinalizedTransaction} to keep track of pending transactions, default uses in-memory
-   *   implementation
+   * - `transactionLifecycleService` - needs to implement {@link TransactionLifecycleService} for a {@link LifecycleTx} to
+   *   keep one lifecycle record per transaction, default polls `configuration.indexerClientConnection`
    * - `provingService` - needs to implement {@link VersionedProvingService} to prove it, default uses proving server
    * - `clock` - needs to implement {@link Clock.Clock} for getting current time, default uses system clock
    */
@@ -1219,11 +1194,6 @@ export class WalletFacade {
       initParams.submissionService
         ? initParams.submissionService(configuration)
         : WalletFacade.makeDefaultSubmissionService(configuration),
-    );
-    const pendingTransactionsService = await Promise.resolve(
-      initParams.pendingTransactionsService
-        ? initParams.pendingTransactionsService(configuration)
-        : WalletFacade.makeDefaultPendingTransactionsService(configuration),
     );
     // Resolved first: the default lifecycle service stamps its records with the clock the facade keeps.
     const clock = await Promise.resolve(initParams.clock ? initParams.clock(configuration) : Clock.systemClock);
@@ -1266,7 +1236,6 @@ export class WalletFacade {
       unshielded,
       dust,
       submissionService,
-      pendingTransactionsService,
       provingService,
       validationService,
       configuration.txHistoryStorage,
@@ -1280,7 +1249,6 @@ export class WalletFacade {
   readonly unshielded: UnshieldedWalletAPI;
   readonly dust: DustWalletAPI<DustKeysByEpoch>;
   readonly submissionService: SubmissionService<FinalizedTx>;
-  readonly pendingTransactionsService: PendingTransactionsService<FinalizedTx>;
   /** One lifecycle record per transaction the facade balanced, finalized or submitted. */
   readonly transactionLifecycleService: TransactionLifecycleService<LifecycleTx>;
   readonly provingService: VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>;
@@ -1288,8 +1256,6 @@ export class WalletFacade {
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
   readonly clock: Clock.Clock;
   #pendingSubscription: Subscription;
-  #pendingSetVerdictSubscription: Subscription;
-  #expiredReservationSubscription: Subscription;
   #restoredBookingSubscription: Subscription;
   #protocolVersionSubscription: Subscription;
   /**
@@ -1318,7 +1284,6 @@ export class WalletFacade {
     unshieldedWallet: UnshieldedWalletAPI,
     dustWallet: DustWalletAPI<DustKeysByEpoch>,
     submissionService: SubmissionService<FinalizedTx>,
-    pendingTransactionsService: PendingTransactionsService<FinalizedTx>,
     provingService: VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>,
     validationService: VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>,
     txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>,
@@ -1331,7 +1296,6 @@ export class WalletFacade {
     this.unshielded = unshieldedWallet;
     this.dust = dustWallet;
     this.submissionService = submissionService;
-    this.pendingTransactionsService = pendingTransactionsService;
     this.provingService = provingService;
     this.validationService = validationService;
     this.#txHistoryStorage = txHistoryStorage;
@@ -1354,31 +1318,6 @@ export class WalletFacade {
               : this.#releaseRejected(tx, rejectionReason(result)));
           }
         }),
-      )
-      .subscribe();
-
-    // The pending set feeds only `FacadeState.pending` now: a verdict there drops the item and releases nothing,
-    // because releases follow the records' ends above.
-    this.#pendingSetVerdictSubscription = this.pendingTransactionsService
-      .state()
-      .pipe(
-        concatMap((pending) => PendingTransactions.allRejected(pending)),
-        concatMap((item) => this.pendingTransactionsService.clear(item.tx)),
-      )
-      .subscribe();
-
-    // A reservation past its TTL stands for a transaction the ledger will not accept, so the record has done its job
-    // and is dropped. It does not release the coins: the wallet books each one with the same TTL and sweeps them
-    // itself, so one mechanism owns release.
-    //
-    // Releasing from here as well would be a second sweep on a different clock, and a coin the wallet has already
-    // freed can be booked again for another transaction before this one fires. The ids a reservation holds say
-    // nothing about which booking currently holds them, so that release would free the wrong one.
-    this.#expiredReservationSubscription = this.pendingTransactionsService
-      .state()
-      .pipe(
-        concatMap((pending) => PendingTransactions.allExpiredReservations(pending)),
-        concatMap((reservation) => this.pendingTransactionsService.clearReservation(reservation.identifiers)),
       )
       .subscribe();
 
@@ -1594,72 +1533,6 @@ export class WalletFacade {
   }
 
   /**
-   * Records that a just-balanced transaction has unshielded coins reserved.
-   *
-   * Balancing books those coins, but nothing tracks the transaction until it is submitted, so a caller that abandons it
-   * in between leaves the coins spoken for with no record saying so. The reservation is that record, and it is matched
-   * to the transaction that eventually arrives by identifier, which proving and binding leave unchanged.
-   *
-   * Takes the transaction the unshielded wallet produced rather than the merged one: its inputs are exactly the coins
-   * booked here, and its identifiers are a subset of whatever the merged transaction ends up carrying.
-   */
-  async #reserve(unshieldedTx: AnyTx | undefined, ttl: Date): Promise<void> {
-    if (!unshieldedTx) {
-      return;
-    }
-
-    const { verifyingKey } = await firstValueFrom(this.unshielded.state);
-
-    await this.#reserveIds(unshieldedTx, this.#ownInputIds(unshieldedTx, verifyingKey), ttl);
-  }
-
-  /** Records `bookedIds` against `unshieldedTx`, or nothing at all when the transaction booked no coins. */
-  async #reserveIds(unshieldedTx: AnyTx, bookedIds: readonly string[], ttl: Date): Promise<void> {
-    if (bookedIds.length === 0) {
-      return;
-    }
-
-    await this.#recordReservation(unshieldedTx, { unshielded: bookedIds }, ttl);
-  }
-
-  /**
-   * Records that a transaction the shielded wallet built has shielded coins reserved, naming them by nullifier.
-   *
-   * The booking itself lives in the shielded wallet's state, which releases it once it expires; this record gives the
-   * coins an owner outside that state, so whoever reads the pending set can see what is holding them. Every input of
-   * such a transaction is one of this wallet's coins, booked for it.
-   */
-  async #reserveShielded(shieldedTx: AnyTx | undefined, ttl: Date): Promise<void> {
-    if (!shieldedTx) {
-      return;
-    }
-
-    const spends = this.#carried<ShieldedSpends>(shieldedTx);
-    const nullifiers = [
-      ...(spends.guaranteedOffer?.inputs ?? []),
-      ...[...(spends.fallibleOffer?.values() ?? [])].flatMap((offer) => offer.inputs),
-    ].map((input) => input.nullifier);
-    if (nullifiers.length === 0) {
-      return;
-    }
-
-    await this.#recordReservation(shieldedTx, { unshielded: [], shielded: nullifiers }, ttl);
-  }
-
-  async #recordReservation(tx: AnyTx, inputs: PendingTransactions.Reservation['inputs'], ttl: Date): Promise<void> {
-    const identity = this.#carried<IdentifiedTransaction>(tx);
-
-    await this.pendingTransactionsService.addReservation({
-      identifiers: identity.identifiers(),
-      intentHashes: [...(identity.intents?.entries() ?? [])].map(([segment, intent]) => intent.intentHash(segment)),
-      inputs,
-      ttl,
-      createdAt: DateTime.unsafeFromDate(this.clock.now()),
-      expired: false,
-    });
-  }
-
-  /**
    * What the lifecycle record of `held` says about it, read off the transaction by the trait for the version it was
    * built for: its identifiers, intent hashes, every coin it spends, and its TTL as of now.
    */
@@ -1699,7 +1572,7 @@ export class WalletFacade {
   }
 
   /**
-   * Balances a transaction in place and records only the coins the wallet itself booked doing so.
+   * Balances a transaction in place, and says how to release only the coins the wallet itself booked doing so.
    *
    * In-place balancing hands back the caller's own transaction with the wallet's inputs added, so the result names
    * coins from two sources: the ones coin selection just took, and any the caller had already put there. Only the first
@@ -1707,13 +1580,12 @@ export class WalletFacade {
    * and the caller's did not.
    *
    * Read off the two transactions, not off the wallet's published state: the wallet publishes its state on its own
-   * fiber, so a read taken as soon as the balancing call returns can still show the coins as available, and the booking
-   * would go unrecorded.
+   * fiber, so a read taken as soon as the balancing call returns can still show the coins as available, and the release
+   * would miss them.
    */
-  async #balanceInPlaceAndReserve<T extends AnyTx | undefined>(
+  async #balanceInPlace<T extends AnyTx | undefined>(
     tx: AnyTx,
     balance: () => Promise<T>,
-    ttl: Date,
   ): Promise<{ balanced: T; release: Release }> {
     const { verifyingKey } = await firstValueFrom(this.unshielded.state);
     const inputsBefore = new Set(this.#ownInputIds(tx, verifyingKey));
@@ -1724,22 +1596,14 @@ export class WalletFacade {
     }
 
     const newlyBooked = this.#ownInputIds(balanced, verifyingKey).filter((id) => !inputsBefore.has(id));
-    const release = this.#inPlaceUnshieldedBooking(balanced, newlyBooked);
-    await this.#releasingOnFailure([release], () => this.#reserveIds(balanced, newlyBooked, ttl));
+    const release = this.#inPlaceUnshieldedBooking(newlyBooked);
 
     return { balanced, release };
   }
 
-  /**
-   * Undoes a booking taken while balancing, together with the record that stood for it.
-   *
-   * The two always go together. A record left behind outlives the coins it named, and until its TTL passes it tells
-   * anything that reads it that a spend is still out there — holding coins at the next reconciliation that nothing is
-   * actually holding.
-   */
+  /** Undoes a booking the unshielded wallet took while balancing. */
   async #revertUnshieldedBooking(tx: AnyTx): Promise<void> {
     await this.unshielded.revertTransaction(tx);
-    await this.pendingTransactionsService.clearReservation([...this.#carried<IdentifiedTransaction>(tx).identifiers()]);
   }
 
   /**
@@ -1760,41 +1624,29 @@ export class WalletFacade {
     }
   }
 
-  /**
-   * Releases the coins the shielded wallet booked for `tx`, a transaction it built, with the record that stood for
-   * them.
-   */
+  /** Releases the coins the shielded wallet booked for `tx`, a transaction it built. */
   #shieldedBooking(tx: AnyTx | undefined): Release {
     return async () => {
       if (!tx) {
         return;
       }
       await this.shielded.revertTransaction(tx);
-      await this.pendingTransactionsService.clearReservation([
-        ...this.#carried<IdentifiedTransaction>(tx).identifiers(),
-      ]);
     };
   }
 
-  /**
-   * Releases the coins the unshielded wallet booked for `tx`, a transaction it built, with the record that stood for
-   * them.
-   */
+  /** Releases the coins the unshielded wallet booked for `tx`, a transaction it built. */
   #unshieldedBooking(tx: AnyTx | undefined): Release {
     return async () => (tx ? this.#revertUnshieldedBooking(tx) : undefined);
   }
 
   /**
-   * Releases `bookedIds`, the coins the unshielded wallet booked balancing a caller's transaction in place into
-   * `balanced`, with the record that stood for them. The coins the caller had already put there are not the wallet's
-   * booking, so they stay as they were; releasing the whole transaction would free them too.
+   * Releases `bookedIds`, the coins the unshielded wallet booked balancing a caller's transaction in place. The coins
+   * the caller had already put there are not the wallet's booking, so they stay as they were; releasing the whole
+   * transaction would free them too.
    */
-  #inPlaceUnshieldedBooking(balanced: AnyTx, bookedIds: readonly string[]): Release {
+  #inPlaceUnshieldedBooking(bookedIds: readonly string[]): Release {
     return async () => {
       await this.unshielded.revertUtxos(bookedIds);
-      await this.pendingTransactionsService.clearReservation([
-        ...this.#carried<IdentifiedTransaction>(balanced).identifiers(),
-      ]);
     };
   }
 
@@ -1936,7 +1788,6 @@ export class WalletFacade {
       nightVerifyingKey,
       ttl,
     );
-    await this.#reserve(txWithOffers, ttl);
 
     // Step 3 — Dust attaches its DustActions onto the intent the unshielded wallet just built.
     // If this fails we must unbook the UTxOs so the caller can retry.
@@ -2032,7 +1883,6 @@ export class WalletFacade {
     const identifiers = carried.identifiers();
     try {
       // The bytes' own version, never the wallets' reading: a crossing can land between building and submitting.
-      await this.pendingTransactionsService.addPendingTransaction(tx, Option.some(tx.protocolVersion));
       // Recorded before it is sent, like the history entry: an inclusion can be reported before submission returns.
       await this.transactionLifecycleService.submitted(this.#factsOf(lifecycleTxOf(tx, this.#forkVersion)));
       // Insert before awaiting submission so the entry exists while the tx is in flight — the per-wallet sync
@@ -2077,13 +1927,11 @@ export class WalletFacade {
       ? await this.unshielded.balanceFinalizedTransaction(tx)
       : undefined;
     const afterUnshielded = [this.#unshieldedBooking(unshieldedBalancingTx)];
-    await this.#releasingOnFailure(afterUnshielded, () => this.#reserve(unshieldedBalancingTx, ttl));
 
     const shieldedBalancingTx = await this.#releasingOnFailure(afterUnshielded, () =>
       shouldBalanceShielded ? this.shielded.balanceTransaction(tx, ttl) : undefined,
     );
     const afterShielded = [...afterUnshielded, this.#shieldedBooking(shieldedBalancingTx)];
-    await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedBalancingTx, ttl));
 
     // Step 2: Merge unshielded and shielded balancing
     const mergedBalancingTx = await this.#releasingOnFailure(afterShielded, () =>
@@ -2146,12 +1994,11 @@ export class WalletFacade {
     // Step 1: Run unshielded and shielded balancing
     const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx, ttl) : undefined;
     const afterShielded = [this.#shieldedBooking(shieldedBalancingTx)];
-    await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedBalancingTx, ttl));
 
     // For unbound transactions, unshielded balancing happens in place not with a balancing transaction
     const unshieldedBalancing = await this.#releasingOnFailure(afterShielded, () =>
       shouldBalanceUnshielded
-        ? this.#balanceInPlaceAndReserve(tx, () => this.unshielded.balanceUnboundTransaction(tx), ttl)
+        ? this.#balanceInPlace(tx, () => this.unshielded.balanceUnboundTransaction(tx))
         : undefined,
     );
     const balancedUnshieldedTx = unshieldedBalancing?.balanced;
@@ -2217,12 +2064,11 @@ export class WalletFacade {
     // Step 1: Run unshielded and shielded balancing
     const shieldedBalancingTx = shouldBalanceShielded ? await this.shielded.balanceTransaction(tx, ttl) : undefined;
     const afterShielded = [this.#shieldedBooking(shieldedBalancingTx)];
-    await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedBalancingTx, ttl));
 
     // For unproven transactions, unshielded balancing happens in place
     const unshieldedBalancing = await this.#releasingOnFailure(afterShielded, () =>
       shouldBalanceUnshielded
-        ? this.#balanceInPlaceAndReserve(tx, () => this.unshielded.balanceUnprovenTransaction(tx), ttl)
+        ? this.#balanceInPlace(tx, () => this.unshielded.balanceUnprovenTransaction(tx))
         : undefined,
     );
     const balancedUnshieldedTx = unshieldedBalancing?.balanced;
@@ -2304,10 +2150,6 @@ export class WalletFacade {
         }
       })
       .then(async (finalizedTx) => {
-        await this.pendingTransactionsService.addPendingTransaction(
-          finalizedTx,
-          Option.some(finalizedTx.protocolVersion),
-        );
         await this.#recordFinalized(finalizedTx);
         return finalizedTx;
       })
@@ -2378,7 +2220,7 @@ export class WalletFacade {
   }
 
   /**
-   * Proves and binds an unproven transaction, and records it as pending.
+   * Proves and binds an unproven transaction, and records it as finalized.
    *
    * @remarks
    *   Proved at the version stamped on the transaction itself, which is the version that fixed its bytes, and sealed at
@@ -2387,15 +2229,15 @@ export class WalletFacade {
    *
    *   Where they have moved to decides one thing only, and it is decided again once the proof is back: a crossing while
    *   the transaction was in flight leaves it belonging to an epoch the wallets have left, and no chain they are on can
-   *   include it. Such a transaction is refused rather than sealed, and nothing is recorded as pending for it — a
-   *   pending entry would only wait out a TTL for an inclusion that cannot happen — while the reservations it made in
-   *   the three wallets are given back like those of any other failure here.
+   *   include it. Such a transaction is refused rather than sealed, and no record is made for it — a record would only
+   *   wait out a TTL for an inclusion that cannot happen — while the bookings it made in the three wallets are given
+   *   back like those of any other failure here.
    * @param tx The unproven transaction.
    * @returns The finalized transaction, stamped with the version it was authored at.
    * @throws {@link WalletTransactionUnwrapError} When the wallets left the transaction's epoch while it was being
    *   proved, or were never in it, or when another copy of the abstractions package sealed the handle.
-   * @throws {AggregateError} When giving back a reservation failed as well, so a booking may remain until it expires:
-   *   `errors` holds the original failure first, then each failed release.
+   * @throws {AggregateError} When giving back a booking failed as well, so it may remain until it expires: `errors`
+   *   holds the original failure first, then each failed release.
    */
   async finalizeTransaction(tx: UnprovenTx): Promise<FinalizedTx> {
     // Checked before anything is attempted: a transaction refused on its stamp has been handed to nothing, so there is
@@ -2410,10 +2252,6 @@ export class WalletFacade {
       // during proving can change, and this is where it is caught.
       this.accept<CarriedUnproven>(tx);
       const finalizedTx = this.seal('Finalized', unboundTx.bind(), tx.protocolVersion);
-      await this.pendingTransactionsService.addPendingTransaction(
-        finalizedTx,
-        Option.some(finalizedTx.protocolVersion),
-      );
       await this.#recordFinalized(finalizedTx);
       return finalizedTx;
     } catch (error) {
@@ -2464,13 +2302,11 @@ export class WalletFacade {
     const shieldedTx =
       shieldedOutputs.length > 0 ? await this.shielded.transferTransaction(shieldedOutputs, ttl) : undefined;
     const afterShielded = [this.#shieldedBooking(shieldedTx)];
-    await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedTx, ttl));
 
     const unshieldedTx = await this.#releasingOnFailure(afterShielded, () =>
       unshieldedOutputs.length > 0 ? this.unshielded.transferTransaction(unshieldedOutputs, ttl) : undefined,
     );
     const afterUnshielded = [...afterShielded, this.#unshieldedBooking(unshieldedTx)];
-    await this.#releasingOnFailure(afterUnshielded, () => this.#reserve(unshieldedTx, ttl));
 
     const mergedTxs = (await this.#releasingOnFailure(afterUnshielded, () =>
       this.mergeUnprovenTransactions(shieldedTx, unshieldedTx),
@@ -2597,13 +2433,11 @@ export class WalletFacade {
       ? await this.shielded.initSwap(shieldedInputs ?? {}, shieldedOutputs, ttl)
       : undefined;
     const afterShielded = [this.#shieldedBooking(shieldedTx)];
-    await this.#releasingOnFailure(afterShielded, () => this.#reserveShielded(shieldedTx, ttl));
 
     const unshieldedTx = await this.#releasingOnFailure(afterShielded, () =>
       hasUnshieldedPart ? this.unshielded.initSwap(unshieldedInputs ?? {}, unshieldedOutputs, ttl) : undefined,
     );
     const afterUnshielded = [...afterShielded, this.#unshieldedBooking(unshieldedTx)];
-    await this.#releasingOnFailure(afterUnshielded, () => this.#reserve(unshieldedTx, ttl));
 
     const combinedTx = await this.#releasingOnFailure(afterUnshielded, () => {
       const merged = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx);
@@ -2779,9 +2613,8 @@ export class WalletFacade {
       await this.#revertFailedSegments(tx, failedSegmentsOf(result));
     } else if (entry.status === 'FAILURE') {
       await this.#releaseRejected(tx);
-    } else {
-      await this.pendingTransactionsService.clear(tx);
     }
+    // A success needs nothing released: sync settles the coins it spent.
     return true;
   }
 
@@ -2835,11 +2668,8 @@ export class WalletFacade {
     ]).then(() => this.#recordRejection(tx));
   }
 
-  /** Drops a released transaction from the pending set and records it as rejected in the history. */
+  /** Records a released transaction as rejected in the history. */
   async #recordRejection(tx: AnyTx, reason?: string): Promise<void> {
-    // Reverting is total over the stages: a transaction at any of them may have booked coins, and the pending set
-    // recognises only the finalized ones. Narrowing rather than casting is what says so.
-    await this.pendingTransactionsService.clear(tx as FinalizedTx);
     // Read at the epoch the transaction was built for, not the one the facade now acts at. A verdict on a
     // transaction submitted before a protocol boundary can only arrive after it — a chain rejection, a TTL run out,
     // or the wallet giving up on bytes that can never be included — and by then the facade has crossed. The pending
@@ -2893,7 +2723,6 @@ export class WalletFacade {
       this.shielded.start(shieldedKeysOf(material)),
       this.unshielded.start(),
       !options.manualSync ? this.dust.start(dustKeysOf(material)) : undefined,
-      this.pendingTransactionsService.start(),
       this.transactionLifecycleService.start(),
     ]);
   }
@@ -2937,12 +2766,9 @@ export class WalletFacade {
       this.unshielded.stop(),
       this.dust.stop(),
       this.submissionService.close(),
-      this.pendingTransactionsService.stop(),
       this.transactionLifecycleService.stop(),
       Promise.resolve(this.#pendingSubscription?.unsubscribe()),
-      Promise.resolve(this.#pendingSetVerdictSubscription?.unsubscribe()),
       Promise.resolve(this.#protocolVersionSubscription?.unsubscribe()),
-      Promise.resolve(this.#expiredReservationSubscription?.unsubscribe()),
       Promise.resolve(this.#restoredBookingSubscription?.unsubscribe()),
     ]);
   }
