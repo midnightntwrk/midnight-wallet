@@ -2648,7 +2648,20 @@ export class WalletFacade {
       this.shielded.revertTransaction(tx),
       this.unshielded.revertTransaction(tx),
       this.dust.revertTransaction(tx),
-    ]).then(() => this.#recordRejection(tx, reason));
+    ])
+      .then(() => this.transactionLifecycleService.reverted(this.#identifiersOf(tx)))
+      .then(() => this.#recordRejection(tx, reason));
+  }
+
+  /**
+   * The identifiers of `tx`, read at the epoch it was built for; none for a transaction no epoch can read, which no
+   * record can stand for either.
+   */
+  #identifiersOf(tx: AnyTx): readonly string[] {
+    return Either.match(WalletTransaction.unwrapWithin<IdentifiedTransaction>(tx, this.epochOf(tx.protocolVersion)), {
+      onLeft: () => [],
+      onRight: (carried) => carried.identifiers(),
+    });
   }
 
   /**
