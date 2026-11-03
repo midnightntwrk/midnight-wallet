@@ -2029,6 +2029,19 @@ export class WalletFacade {
     };
   }
 
+  /**
+   * Proves and binds every part of a balancing recipe and folds them into one finalized transaction, tracked as
+   * pending.
+   *
+   * @remarks
+   *   A failure at any step gives back everything the recipe booked, in all three wallets, and drops any part already
+   *   recorded as pending. Its coins are then free for other transactions to take, so balance the transaction anew
+   *   rather than finalize the same recipe again.
+   * @param recipe The recipe a balancing method returned.
+   * @returns The finalized transaction, stamped with the version its caller's part was authored at.
+   * @throws {AggregateError} When giving back the recipe's bookings failed as well, so a booking may remain until it
+   *   expires: `errors` holds the original failure first, then the failed release.
+   */
   async finalizeRecipe(recipe: BalancingRecipe): Promise<FinalizedTx> {
     return Promise.resolve(recipe)
       .then(async (recipe): Promise<FinalizedTx> => {
@@ -2067,7 +2080,12 @@ export class WalletFacade {
           Option.some(finalizedTx.protocolVersion),
         );
         return finalizedTx;
-      });
+      })
+      .catch((error: unknown) =>
+        // A rejection hands the caller no transaction to submit, yet the balancing part may already be finalized and
+        // pending: the whole recipe is given back, as a builder that fails gives back what it booked.
+        releaseAndRethrow(error, [() => this.revert(recipe)]),
+      );
   }
 
   async signRecipe(recipe: BalancingRecipe, signSegment: SignSegment): Promise<BalancingRecipe> {
