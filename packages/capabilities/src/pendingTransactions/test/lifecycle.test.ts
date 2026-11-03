@@ -17,6 +17,7 @@ import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DateTime, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import * as Lifecycle from '../lifecycle.js';
+import type * as PendingTransactions from '../pendingTransactions.js';
 
 /** A transaction is anything the facade can name; its form at each state is the facade's to choose. */
 type FakeTransaction = Readonly<{ form: 'erased' | 'finalized'; ids: readonly string[] }>;
@@ -178,5 +179,161 @@ describe('A transaction moving from balanced to submitted', () => {
     );
 
     expect(state.records.map((record) => record.protocolVersion)).toStrictEqual([Option.some(v9)]);
+  });
+});
+
+const FORK = ProtocolVersion.V9NativeForkVersion;
+const V9 = ProtocolVersion.ProtocolVersion(FORK + 1n);
+const EPOCHS: ProtocolVersion.Registry<string> = {
+  entries: [
+    { range: ProtocolVersion.makeRange(ProtocolVersion.MinSupportedVersion, FORK), value: 'ledger-v8' },
+    { range: ProtocolVersion.makeRange(FORK, ProtocolVersion.MaxSupportedVersion), value: 'ledger-v9' },
+  ],
+};
+const REFUSED: PendingTransactions.FailedTransactionResult = {
+  status: 'FAILURE',
+  segments: [{ id: 0, success: false }],
+};
+
+/** A store holding one record of `id-a`, already in `state`. */
+const holding = (
+  state: Lifecycle.LifecycleState,
+  overrides: Partial<Lifecycle.LifecycleRecord<FakeTransaction>> = {},
+): Lifecycle.TransactionLifecycle<FakeTransaction> => ({
+  records: [{ ...recordOf(facts('finalized', ['id-a']), BALANCED_AT, state), ...overrides }],
+});
+
+const LIVE_STATES: ReadonlyArray<Lifecycle.LifecycleState> = [
+  Lifecycle.LifecycleState.Balanced(),
+  Lifecycle.LifecycleState.Finalized({ finalizedAt: FINALIZED_AT }),
+  Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT }),
+];
+
+const FINAL_STATES: ReadonlyArray<Lifecycle.LifecycleState> = [
+  Lifecycle.LifecycleState.Confirmed(),
+  Lifecycle.LifecycleState.Rejected({ verdict: REFUSED }),
+  Lifecycle.LifecycleState.Orphaned({ authoredFor: V8, chainNow: V9 }),
+  Lifecycle.LifecycleState.Expired(),
+  Lifecycle.LifecycleState.Reverted(),
+];
+
+/** The record in a one-record store, in its new state and otherwise as it was. */
+const nowIn = (
+  before: Lifecycle.TransactionLifecycle<FakeTransaction>,
+  state: Lifecycle.LifecycleState,
+): ReadonlyArray<Lifecycle.LifecycleRecord<FakeTransaction>> => before.records.map((record) => ({ ...record, state }));
+
+describe('A transaction reaching its outcome', () => {
+  it.each(LIVE_STATES)('should confirm a $_tag record once it is included, because inclusion is a fact', (live) => {
+    const before = holding(live);
+
+    expect(Lifecycle.confirmed(before, ['id-a']).records).toStrictEqual(
+      nowIn(before, Lifecycle.LifecycleState.Confirmed()),
+    );
+  });
+
+  it('should reject a submitted record with the verdict the chain reported', () => {
+    const before = holding(Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT }));
+
+    expect(Lifecycle.rejected(before, ['id-a'], REFUSED).records).toStrictEqual(
+      nowIn(before, Lifecycle.LifecycleState.Rejected({ verdict: REFUSED })),
+    );
+  });
+
+  it.each(LIVE_STATES.slice(0, 2))(
+    'should leave a $_tag record as it was on a rejection, because no chain was asked to include it',
+    (unsubmitted) => {
+      const before = holding(unsubmitted);
+
+      expect(Lifecycle.rejected(before, ['id-a'], REFUSED)).toStrictEqual(before);
+    },
+  );
+
+  it.each(LIVE_STATES)('should orphan a $_tag record built for an epoch the chain has left', (live) => {
+    const before = holding(live);
+
+    expect(Lifecycle.orphanBeyond(before, EPOCHS, V9).records).toStrictEqual(
+      nowIn(before, Lifecycle.LifecycleState.Orphaned({ authoredFor: V8, chainNow: V9 })),
+    );
+  });
+
+  it('should leave a record of the epoch the chain is in as it was', () => {
+    const before = holding(Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT }), {
+      protocolVersion: Option.some(V9),
+    });
+
+    expect(Lifecycle.orphanBeyond(before, EPOCHS, V9)).toStrictEqual(before);
+  });
+
+  it('should never orphan a record whose version was never known, because that is no evidence it was left behind', () => {
+    const before = holding(Lifecycle.LifecycleState.Balanced(), { protocolVersion: Option.none(), tx: Option.none() });
+
+    expect(Lifecycle.orphanBeyond(before, EPOCHS, V9)).toStrictEqual(before);
+  });
+
+  it.each(LIVE_STATES)('should revert a $_tag record', (live) => {
+    const before = holding(live);
+
+    expect(Lifecycle.reverted(before, ['id-a']).records).toStrictEqual(
+      nowIn(before, Lifecycle.LifecycleState.Reverted()),
+    );
+  });
+
+  it('should move only the records that share an identifier with the transaction', () => {
+    const other = recordOf(
+      facts('finalized', ['id-other']),
+      BALANCED_AT,
+      Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT }),
+    );
+    const before: Lifecycle.TransactionLifecycle<FakeTransaction> = {
+      records: [...holding(Lifecycle.LifecycleState.Submitted({ submittedAt: SUBMITTED_AT })).records, other],
+    };
+
+    expect(Lifecycle.confirmed(before, ['id-a']).records).toContainEqual(other);
+    expect(Lifecycle.reverted(before, ['id-a']).records).toContainEqual(other);
+    expect(Lifecycle.rejected(before, ['id-a'], REFUSED).records).toContainEqual(other);
+  });
+});
+
+describe('A transaction in a final state', () => {
+  const events: ReadonlyArray<
+    readonly [
+      string,
+      (state: Lifecycle.TransactionLifecycle<FakeTransaction>) => Lifecycle.TransactionLifecycle<FakeTransaction>,
+    ]
+  > = [
+    ['an inclusion', (state) => Lifecycle.confirmed(state, ['id-a'])],
+    ['a rejection', (state) => Lifecycle.rejected(state, ['id-a'], REFUSED)],
+    ['a fork crossing', (state) => Lifecycle.orphanBeyond(state, EPOCHS, V9)],
+    ['a revert', (state) => Lifecycle.reverted(state, ['id-a'])],
+    ['finalizing it', (state) => Lifecycle.finalized(state, facts('finalized', ['id-a']), FINALIZED_AT)],
+    ['submitting it', (state) => Lifecycle.submitted(state, facts('finalized', ['id-a']), SUBMITTED_AT)],
+  ];
+
+  it.each(FINAL_STATES.flatMap((final) => events.map(([event, apply]) => [final._tag, event, final, apply] as const)))(
+    'should stay %s after %s, because a final state never moves',
+    (_tag, _event, final, apply) => {
+      const before = holding(final);
+
+      expect(apply(before)).toStrictEqual(before);
+    },
+  );
+
+  it.each(FINAL_STATES.filter((final) => final._tag !== 'Confirmed'))(
+    'should begin the spend anew when it is balanced again after it was $_tag, keeping one record per spend',
+    (final) => {
+      const again = facts('erased', ['id-a']);
+      const later = at('2026-01-01T00:03:00.000Z');
+
+      expect(Lifecycle.balanced(holding(final), again, later).records).toStrictEqual([
+        recordOf(again, later, Lifecycle.LifecycleState.Balanced()),
+      ]);
+    },
+  );
+
+  it('should stay confirmed when the spend is balanced again, because its coins are already spent on chain', () => {
+    const before = holding(Lifecycle.LifecycleState.Confirmed());
+
+    expect(Lifecycle.balanced(before, facts('erased', ['id-a']), at('2026-01-01T00:03:00.000Z'))).toStrictEqual(before);
   });
 });

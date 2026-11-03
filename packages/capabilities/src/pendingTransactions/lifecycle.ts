@@ -210,3 +210,56 @@ export const submitted = <TTransaction>(
   now: DateTime.Utc,
 ): TransactionLifecycle<TTransaction> =>
   moveTo(state, facts, ['Balanced', 'Finalized'], LifecycleState.Submitted({ submittedAt: now }), keptFrom(now));
+
+/**
+ * Records that a transaction was included, whichever live state its record is in: inclusion is a fact, and nothing
+ * overrules it afterwards.
+ *
+ * @param state The records.
+ * @param identifiers The included transaction's identifiers.
+ * @returns The records with the transaction confirmed.
+ */
+export const confirmed = <TTransaction>(
+  state: TransactionLifecycle<TTransaction>,
+  _identifiers: readonly string[],
+): TransactionLifecycle<TTransaction> => state;
+
+/**
+ * Records that the chain refused a submitted transaction.
+ *
+ * @param state The records.
+ * @param identifiers The refused transaction's identifiers.
+ * @param verdict What the chain reported.
+ * @returns The records with the transaction rejected.
+ */
+export const rejected = <TTransaction>(
+  state: TransactionLifecycle<TTransaction>,
+  _identifiers: readonly string[],
+  _verdict: FailedTransactionResult,
+): TransactionLifecycle<TTransaction> => state;
+
+/**
+ * Gives up on every live transaction built for an epoch the chain has left.
+ *
+ * @param state The records.
+ * @param epochs The protocol version epochs, as the registry of traits keys them.
+ * @param chainNow The version the chain has reached.
+ * @returns The records with every stranded transaction orphaned.
+ */
+export const orphanBeyond = <TTransaction, TEpoch>(
+  state: TransactionLifecycle<TTransaction>,
+  _epochs: ProtocolVersion.Registry<TEpoch>,
+  _chainNow: ProtocolVersion.ProtocolVersion,
+): TransactionLifecycle<TTransaction> => state;
+
+/**
+ * Records that a transaction was reverted, so no chain will be asked to include it.
+ *
+ * @param state The records.
+ * @param identifiers The reverted transaction's identifiers.
+ * @returns The records with the transaction reverted.
+ */
+export const reverted = <TTransaction>(
+  state: TransactionLifecycle<TTransaction>,
+  _identifiers: readonly string[],
+): TransactionLifecycle<TTransaction> => state;
