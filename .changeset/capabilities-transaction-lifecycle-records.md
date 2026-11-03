@@ -24,3 +24,7 @@ BREAKING CHANGE — renamed and reshaped, with no deprecated aliases:
 | `TransactionTrait.hasTTLExpired`, `isOneIncludedInOther` | removed; a trait now provides `intentHashes`, `inputs` and `ttl` |
 | `PendingTransactions` state functions, reservations and items | `Lifecycle` (`LifecycleRecord`, `LifecycleState` and the moves between them) |
 | `PendingTransactions.serialize`, `deserialize` | `Lifecycle.serialize`, `Lifecycle.deserialize`; format versions in `LifecycleFormat` |
+
+Migrating: rename imports and names as the table says. A custom service adds `serializeState()`; a custom
+`TransactionTrait` adds `intentHashes`, `inputs` and `ttl`. Applications that use the facade follow the step-by-step
+guide in the `@midnightntwrk/wallet-sdk-facade` changelog for this release.

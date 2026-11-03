@@ -36,3 +36,71 @@ BREAKING CHANGE — renamed and reshaped, with no deprecated aliases:
 | a partial success shown as `Rejected { segments }` | `PartialSuccess { segments }` |
 | `!state.pending.length` | `!state.lifecycle.some(isAwaiting)` |
 | `finalizedTransactionTraits` entries' `hasTTLExpired`, `isOneIncludedInOther` | `intentHashes`, `inputs`, `ttl` |
+
+## Migrating
+
+1. **Read `state.lifecycle`, not `state.pending`.** Each entry's `transaction` and `submittedAt` are now `Option`s.
+
+   ```ts
+   // Before
+   state.pending.map((pending) => pending.transaction);
+   // After
+   state.lifecycle.flatMap((entry) => Option.toArray(entry.transaction));
+   ```
+
+2. **Wait with `isAwaiting`, not for an empty list.** Ended entries stay listed until their TTL passes, so a check for
+   an empty list could wait up to an hour.
+
+   ```ts
+   // Before
+   await firstValueFrom(facade.state().pipe(filter((state) => state.pending.length === 0)));
+   // After
+   await firstValueFrom(facade.state().pipe(filter((state) => !state.lifecycle.some(isAwaiting))));
+   ```
+
+3. **Match the new statuses.** `Confirmed` has no `segments`. `Rejected` has a `reason`. A partial success is its own
+   status, not a `Rejected`: the chain included the transaction and applied part of it, so do not re-submit it.
+
+   ```ts
+   switch (entry.status._tag) {
+     case 'Balanced':
+     case 'Finalized':
+     case 'Submitted':
+       return 'waiting';
+     case 'Confirmed':
+       return 'done';
+     case 'PartialSuccess':
+       return `applied in part: ${entry.status.segments.filter((s) => !s.success).length} segments failed`;
+     case 'Rejected':
+       return entry.status.reason._tag === 'Refused' ? 'refused by the chain' : 'TTL passed after submission';
+     case 'Orphaned':
+       return 'the chain moved past its protocol version: build it again';
+     case 'Expired':
+       return 'TTL passed before it was submitted';
+     case 'Reverted':
+       return 'given back by the wallet';
+   }
+   ```
+
+4. **Rename the service.** `facade.pendingTransactionsService` is now `facade.transactionLifecycleService`, and the
+   `InitParams.pendingTransactionsService(config)` factory is now `InitParams.transactionLifecycleService(config, { clock })`.
+   Pass the clock on, so a restored service keeps the facade's time.
+
+5. **Save and restore the store.** On restore, a store written by an earlier release (format `v1`) is read and upgraded.
+   Once saved again it is `v2`, which earlier releases refuse, so keep the old string if you may roll back.
+
+   ```ts
+   const stored = await facade.transactionLifecycleService.serializeState();
+
+   await WalletFacade.init({
+     // ...
+     transactionLifecycleService: (config, { clock }) =>
+       TransactionLifecycleServiceImpl.restore(stored, lifecycleTransactionTraits(config.forks.v9), config, clock),
+   });
+   ```
+
+6. **Custom service or trait.** A custom service must also implement `serializeState()`. A custom `TransactionTrait`
+   adds `intentHashes`, `inputs` and `ttl`, and drops `hasTTLExpired` and `isOneIncludedInOther`.
+
+7. **Imports.** Replace the `pendingTransactions` subpath with `transactionLifecycle`, in
+   `@midnightntwrk/wallet-sdk-capabilities` and in `@midnightntwrk/wallet-sdk/capabilities`.

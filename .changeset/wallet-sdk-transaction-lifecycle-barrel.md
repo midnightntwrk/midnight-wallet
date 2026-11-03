@@ -8,3 +8,6 @@ BREAKING CHANGE — `@midnightntwrk/wallet-sdk/capabilities/pendingTransactions`
 `@midnightntwrk/wallet-sdk/capabilities/transactionLifecycle`, with no alias. The names re-exported from the root,
 `/facade`, `/capabilities` and the `Capabilities` namespace change as listed in the `wallet-sdk-facade` and
 `wallet-sdk-capabilities` changelogs.
+
+Migrating: replace the `pendingTransactions` subpath with `transactionLifecycle`, then follow the step-by-step guide in
+the `@midnightntwrk/wallet-sdk-facade` changelog for this release.
