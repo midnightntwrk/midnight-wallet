@@ -26,6 +26,7 @@
 import * as ledger from '@midnightntwrk/ledger-v9';
 import {
   type FinalizedTx,
+  InMemoryTransactionHistoryStorage,
   NetworkId,
   ProtocolVersion,
   type UnboundTx,
@@ -37,11 +38,18 @@ import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { type FacadeState, isAwaiting, type WalletFacade } from '../src/index.js';
+import {
+  type FacadeState,
+  isAwaiting,
+  mergeWalletEntries,
+  WalletEntrySchema,
+  type WalletFacade,
+} from '../src/index.js';
 import { type LifecycleTx } from '../src/transaction.js';
 import {
   createSimulatorWalletFactories,
   deriveWalletKeys,
+  lifecycleOf,
   liveRecordsOf,
   makeSimulatorFacade,
   tokenValue,
@@ -95,7 +103,13 @@ const fundedFacade = ({ withDust }: { withDust: boolean }) =>
       blockProducer: V9.immediateBlockProducer(),
     });
     const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
-    const facade = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config));
+    // The facade's own history, kept apart from the wallets' sync, so what the facade writes there can be read back.
+    const history = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
+    const facade = yield* makeSimulatorFacade(
+      { ...config, txHistoryStorage: history },
+      keys,
+      createSimulatorWalletFactories(config),
+    );
 
     yield* waitForShieldedCoins(facade);
     yield* waitForUnshieldedBalance(facade, NIGHT, 1n);
@@ -133,7 +147,7 @@ const fundedFacade = ({ withDust }: { withDust: boolean }) =>
     const shieldedAddress = yield* Effect.promise(() => facade.shielded.getAddress());
     const unshieldedAddress = yield* Effect.promise(() => facade.unshielded.getAddress());
 
-    return { facade, keys, before, shieldedAddress, unshieldedAddress };
+    return { facade, keys, before, shieldedAddress, unshieldedAddress, history };
   });
 
 /**
@@ -417,6 +431,138 @@ describe('A recipe whose finalizing fails after its balancing part was finalized
       const { after, live } = yield* afterRejection(facade, () => facade.finalizeRecipe(recipe), FOLD_FAILED);
 
       expectNothingLeftBooked(before, after, live);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should give back each part of a finalized-transaction recipe once and write no history entry when the merge fails, because nothing was ever submitted', () =>
+    Effect.gen(function* () {
+      const { facade, keys, history } = yield* fundedFacade({ withDust: true });
+      const tx = finalized(callersTransaction(keys, { shielded: tokenValue(1n), night: tokenValue(1n) }));
+      const recipe = yield* Effect.promise(() => facade.balanceFinalizedTransaction(tx, { ttl: hourFromNow() }));
+      vi.spyOn(opened<ledger.FinalizedTransaction>(recipe.originalTransaction), 'merge').mockImplementation(() => {
+        throw new Error(FOLD_FAILED);
+      });
+      const historyBefore = yield* Effect.promise(() => history.getAll());
+      const releases = spyOnReleases(facade);
+
+      yield* afterRejection(facade, () => facade.finalizeRecipe(recipe), FOLD_FAILED);
+
+      expect(releasedParts(releases, [recipe.originalTransaction, recipe.balancingTransaction])).toStrictEqual(
+        onceEach(2),
+      );
+      expect(yield* Effect.promise(() => history.getAll())).toStrictEqual(historyBefore);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should give back each part of an unbound-transaction recipe once and write no history entry when the bind fails, because nothing was ever submitted', () =>
+    Effect.gen(function* () {
+      const { facade, keys, history } = yield* fundedFacade({ withDust: true });
+      const tx = unbound(callersTransaction(keys, { shielded: tokenValue(1n) }));
+      const recipe = yield* Effect.promise(() => facade.balanceUnboundTransaction(tx, { ttl: hourFromNow() }));
+      expect(recipe.balancingTransaction).toBeDefined();
+      vi.spyOn(
+        opened<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>(recipe.baseTransaction),
+        'bind',
+      ).mockImplementation(() => {
+        throw new Error(FOLD_FAILED);
+      });
+      const historyBefore = yield* Effect.promise(() => history.getAll());
+      const releases = spyOnReleases(facade);
+
+      yield* afterRejection(facade, () => facade.finalizeRecipe(recipe), FOLD_FAILED);
+
+      expect(releasedParts(releases, [recipe.baseTransaction, recipe.balancingTransaction])).toStrictEqual(onceEach(2));
+      expect(yield* Effect.promise(() => history.getAll())).toStrictEqual(historyBefore);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+const PROVING_FAILED = 'the prover could not prove it';
+
+/** Makes every proof the facade asks for fail, as a prover that is down or refuses the transaction does. */
+const failProving = (facade: WalletFacade): void => {
+  vi.spyOn(facade.provingService, 'prove').mockRejectedValue(new Error(PROVING_FAILED));
+};
+
+const spyOnReleases = (facade: WalletFacade) => ({
+  shielded: vi.spyOn(facade.shielded, 'revertTransaction'),
+  unshielded: vi.spyOn(facade.unshielded, 'revertTransaction'),
+  dust: vi.spyOn(facade.dust, 'revertTransaction'),
+});
+
+/**
+ * Which part each wallet was asked to give back on each call, as the part's position in `parts`, sorted: a part given
+ * back twice shows twice, and a transaction that is no part shows as -1.
+ */
+const releasedParts = (releases: ReturnType<typeof spyOnReleases>, parts: readonly unknown[]) => ({
+  shielded: releases.shielded.mock.calls.map(([tx]) => parts.indexOf(tx)).sort(),
+  unshielded: releases.unshielded.mock.calls.map(([tx]) => parts.indexOf(tx)).sort(),
+  dust: releases.dust.mock.calls.map(([tx]) => parts.indexOf(tx)).sort(),
+});
+
+/** Every one of `count` parts given back exactly once, by each wallet. */
+const onceEach = (count: number) => {
+  const positions = Array.from({ length: count }, (_, position) => position);
+  return { shielded: positions, unshielded: positions, dust: positions };
+};
+
+/** The states of the records that were not there before, by their identifiers. */
+const statesOfNewRecords = (
+  before: Lifecycle.TransactionLifecycle<LifecycleTx>,
+  after: Lifecycle.TransactionLifecycle<LifecycleTx>,
+): readonly string[] => {
+  const known = new Set(before.records.map((record) => record.identifiers.join(',')));
+  return after.records.filter((record) => !known.has(record.identifiers.join(','))).map((record) => record.state._tag);
+};
+
+describe('A recipe whose proving fails', () => {
+  it('should give its only part back once in each wallet, write no history entry and end its record reverted, because nothing was ever submitted', () =>
+    Effect.gen(function* () {
+      const { facade, keys, history } = yield* fundedFacade({ withDust: true });
+      const lifecycleBefore = yield* lifecycleOf(facade);
+      const tx = unproven(callersTransaction(keys, { shielded: tokenValue(1n), night: tokenValue(1n) }));
+      const recipe = yield* Effect.promise(() => facade.balanceUnprovenTransaction(tx, { ttl: hourFromNow() }));
+      const historyBefore = yield* Effect.promise(() => history.getAll());
+      failProving(facade);
+      const releases = spyOnReleases(facade);
+
+      yield* afterRejection(facade, () => facade.finalizeRecipe(recipe), PROVING_FAILED);
+
+      expect(releasedParts(releases, [recipe.transaction])).toStrictEqual(onceEach(1));
+      expect(yield* Effect.promise(() => history.getAll())).toStrictEqual(historyBefore);
+      expect(statesOfNewRecords(lifecycleBefore, yield* lifecycleOf(facade))).toStrictEqual(['Reverted']);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should give each part of a finalized-transaction recipe back once in each wallet, write no history entry and end its record reverted, when proving its balancing part fails', () =>
+    Effect.gen(function* () {
+      const { facade, keys, history } = yield* fundedFacade({ withDust: true });
+      const lifecycleBefore = yield* lifecycleOf(facade);
+      const tx = finalized(callersTransaction(keys, { shielded: tokenValue(1n), night: tokenValue(1n) }));
+      const recipe = yield* Effect.promise(() => facade.balanceFinalizedTransaction(tx, { ttl: hourFromNow() }));
+      const historyBefore = yield* Effect.promise(() => history.getAll());
+      failProving(facade);
+      const releases = spyOnReleases(facade);
+
+      yield* afterRejection(facade, () => facade.finalizeRecipe(recipe), PROVING_FAILED);
+
+      expect(releasedParts(releases, [recipe.originalTransaction, recipe.balancingTransaction])).toStrictEqual(
+        onceEach(2),
+      );
+      expect(yield* Effect.promise(() => history.getAll())).toStrictEqual(historyBefore);
+      expect(statesOfNewRecords(lifecycleBefore, yield* lifecycleOf(facade))).toStrictEqual(['Reverted']);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+describe('A transaction whose finalizing fails at proving', () => {
+  it('should end its record reverted, not left awaiting, because its coins were given back and no chain will be asked to include it', () =>
+    Effect.gen(function* () {
+      const { facade, keys } = yield* fundedFacade({ withDust: true });
+      const lifecycleBefore = yield* lifecycleOf(facade);
+      const tx = unproven(callersTransaction(keys, { shielded: tokenValue(1n), night: tokenValue(1n) }));
+      const recipe = yield* Effect.promise(() => facade.balanceUnprovenTransaction(tx, { ttl: hourFromNow() }));
+      expect(statesOfNewRecords(lifecycleBefore, yield* lifecycleOf(facade))).toStrictEqual(['Balanced']);
+      failProving(facade);
+
+      yield* afterRejection(facade, () => facade.finalizeTransaction(recipe.transaction), PROVING_FAILED);
+
+      expect(statesOfNewRecords(lifecycleBefore, yield* lifecycleOf(facade))).toStrictEqual(['Reverted']);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
