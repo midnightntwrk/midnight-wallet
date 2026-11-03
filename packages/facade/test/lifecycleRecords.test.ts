@@ -19,13 +19,20 @@
  * whole transaction the recipe finalizes into, with its proofs erased, so it names every coin that transaction spends.
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { type AnyTx, NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
+import { type SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
+import {
+  type AnyTx,
+  type FinalizedTx,
+  NetworkId,
+  ProtocolVersion,
+  WalletTransaction,
+} from '@midnightntwrk/wallet-sdk-abstractions';
 import { type Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, Option } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { BalancingRecipe, type FacadeState, type WalletFacade } from '../src/index.js';
+import { BalancingRecipe, type FacadeState, WalletFacade } from '../src/index.js';
 import { type LifecycleTx } from '../src/transaction.js';
 import {
   createSimulatorWalletFactories,
@@ -71,7 +78,7 @@ const carried = <T>(handle: AnyTx): T =>
   );
 
 /** A facade holding shielded tokens and Night, with Dust generated from its Night to pay fees with. */
-const fundedFacade = () =>
+const fundedFacade = (overrides: Partial<Parameters<typeof WalletFacade.init>[0]> = {}) =>
   Effect.gen(function* () {
     const keys = deriveWalletKeys(SEED, NETWORK_ID);
     const simulator = yield* V9.Simulator.init({
@@ -95,7 +102,7 @@ const fundedFacade = () =>
       blockProducer: V9.immediateBlockProducer(),
     });
     const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
-    const facade = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config));
+    const facade = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config), overrides);
 
     yield* waitForShieldedCoins(facade);
     yield* waitForUnshieldedBalance(facade, NIGHT, 1n);
@@ -492,5 +499,76 @@ describe('A submitted transaction’s lifecycle record', () => {
         Option.some(submittedAt.getTime()),
       ]);
       expect(records.map((record) => record.createdAt.epochMillis)).toStrictEqual([balancedAt.getTime()]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+/** An unshielded transfer to the wallet's own address, paying no fee, so no Dust is needed to build it. */
+const selfTransfer = (facade: WalletFacade, ttl: Date, amount = tokenValue(1n)) =>
+  facade.unshielded
+    .getAddress()
+    .then((address) =>
+      facade.transferTransaction(
+        [{ type: 'unshielded', outputs: [{ type: NIGHT, receiverAddress: address, amount }] }],
+        { ttl, payFees: false },
+      ),
+    );
+
+describe('A reverted transaction’s lifecycle record', () => {
+  it.each([
+    {
+      reverting: 'a balanced recipe',
+      revert: (facade: WalletFacade, recipe: BalancingRecipe) => facade.revert(recipe).then(() => recipe),
+    },
+    {
+      reverting: 'a finalized transaction',
+      revert: (facade: WalletFacade, recipe: BalancingRecipe) =>
+        facade.finalizeRecipe(recipe).then((finalizedTx) => facade.revert(finalizedTx).then(() => recipe)),
+    },
+  ])('should end as reverted when $reverting is reverted, because no chain will be asked to include it', ({ revert }) =>
+    Effect.gen(function* () {
+      const { facade } = yield* fundedFacade();
+      const recipe = yield* Effect.promise(() => selfTransfer(facade, ttlOn(facade)));
+
+      yield* Effect.promise(() => revert(facade, recipe));
+
+      const [part] = BalancingRecipe.getTransactions(recipe);
+      expect(recordsCovering(yield* lifecycleOf(facade), part).map((record) => record.state)).toStrictEqual([
+        { _tag: 'Reverted' },
+      ]);
+    }).pipe(Effect.scoped, Effect.runPromise),
+  );
+
+  it('should end as reverted when submitting it throws, because the facade gives its coins back', () =>
+    Effect.gen(function* () {
+      const { facade } = yield* fundedFacade({
+        submissionService: () => ({
+          // Type cast required because: the overloaded submit signature is stated once by the service type; this fake
+          // refuses every submission, whichever status it was asked to wait for.
+          submitTransaction: ((): Promise<never> =>
+            Promise.reject(
+              new Error('the node refused the transaction'),
+            )) as SubmissionService<FinalizedTx>['submitTransaction'],
+          close: () => Promise.resolve(),
+        }),
+      });
+      const recipe = yield* Effect.promise(() => selfTransfer(facade, ttlOn(facade)));
+      const finalizedTx = yield* Effect.promise(() => facade.finalizeRecipe(recipe));
+
+      const failure = yield* Effect.flip(Effect.tryPromise(() => facade.submitTransaction(finalizedTx)));
+
+      expect(String(failure.error)).toContain('the node refused the transaction');
+      expect(recordsCovering(yield* lifecycleOf(facade), finalizedTx).map((record) => record.state)).toStrictEqual([
+        { _tag: 'Reverted' },
+      ]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should not be left live by a builder that fails, because the builder gives back what it booked', () =>
+    Effect.gen(function* () {
+      const { facade } = yield* fundedFacade();
+      const recordsBefore = (yield* lifecycleOf(facade)).records;
+
+      yield* Effect.flip(Effect.tryPromise(() => selfTransfer(facade, ttlOn(facade), tokenValue(10_000_000n))));
+
+      expect((yield* lifecycleOf(facade)).records).toStrictEqual(recordsBefore);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
