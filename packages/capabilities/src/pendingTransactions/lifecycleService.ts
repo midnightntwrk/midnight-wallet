@@ -14,11 +14,27 @@
  */
 
 import { type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { TransactionStatus } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { type QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { DateTime, Effect, type ParseResult, pipe, type Scope, Stream, SubscriptionRef } from 'effect';
+import {
+  Array as Arr,
+  DateTime,
+  Effect,
+  Option,
+  type ParseResult,
+  pipe,
+  type Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import * as Lifecycle from './lifecycle.js';
-import { type VersionedTransactionTrait } from './pendingTransactions.js';
+import {
+  type FailedTransactionResult,
+  type TransactionTrait,
+  traitForVersion,
+  type VersionedTransactionTrait,
+} from './pendingTransactions.js';
 
 /** Holds one lifecycle record per transaction and moves it as the facade and the chain report events. */
 export type TransactionLifecycleServiceEffect<TTransaction> = {
@@ -94,8 +110,12 @@ export class TransactionLifecycleServiceEffectImpl<
     );
   }
 
+  /**
+   * Each tick asks the indexer first and sweeps after, so an inclusion found on the tick a TTL passes is recorded
+   * before the TTL could end the record: the inclusion happened within the TTL.
+   */
   startPolling(ticks: Stream.Stream<unknown>): Effect.Effect<void, Error, QueryClient | Scope.Scope> {
-    return ticks.pipe(Stream.runForEach(() => this.sweep()));
+    return ticks.pipe(Stream.runForEach(() => pipe(this.poll(), Effect.andThen(this.sweep()))));
   }
 
   balanced(facts: Lifecycle.TransactionFacts<TTransaction>): Effect.Effect<void> {
@@ -129,6 +149,44 @@ export class TransactionLifecycleServiceEffectImpl<
     );
   }
 
+  /**
+   * Asks the indexer about every live record that holds its transaction, whichever live state it is in, so a
+   * transaction submitted outside the facade is confirmed too. A record without its transaction has nothing to ask by.
+   */
+  private poll(): Effect.Effect<void, never, QueryClient> {
+    return pipe(
+      SubscriptionRef.get(this.#state),
+      Effect.map((state) =>
+        Arr.filterMap(state.records, (record) =>
+          Lifecycle.isLive(record)
+            ? Option.all({ tx: record.tx, trait: traitForVersion(this.#txTraits, record.protocolVersion) }).pipe(
+                Option.map((asked) => ({ ...asked, identifiers: record.identifiers })),
+              )
+            : Option.none(),
+        ),
+      ),
+      Effect.flatMap((asked) =>
+        Effect.forEach(asked, ({ tx, trait, identifiers }) =>
+          pipe(
+            verdictOf(tx, trait),
+            Effect.flatMap(
+              Option.match({
+                onNone: () => Effect.void,
+                onSome: (verdict) =>
+                  SubscriptionRef.update(this.#state, (state) =>
+                    verdict.status === 'SUCCESS'
+                      ? Lifecycle.confirmed(state, identifiers)
+                      : Lifecycle.rejected(state, identifiers, verdict),
+                  ),
+              }),
+            ),
+          ),
+        ),
+      ),
+      Effect.asVoid,
+    );
+  }
+
   private moveNow(
     move: (
       state: Lifecycle.TransactionLifecycle<TTransaction>,
@@ -138,3 +196,46 @@ export class TransactionLifecycleServiceEffectImpl<
     return SubscriptionRef.updateEffect(this.#state, (state) => Effect.map(DateTime.now, (now) => move(state, now)));
   }
 }
+
+type Verdict = Readonly<{ status: 'SUCCESS' }> | FailedTransactionResult;
+
+/**
+ * What the indexer reports for `tx`: the result of a regular transaction carrying every one of its identifiers, or
+ * nothing while it has none. A query that fails reports nothing, so the next tick asks again.
+ */
+const verdictOf = <TTransaction>(
+  tx: TTransaction,
+  trait: TransactionTrait<TTransaction>,
+): Effect.Effect<Option.Option<Verdict>, never, QueryClient> =>
+  pipe(
+    TransactionStatus,
+    Effect.flatMap((query) => query({ transactionId: trait.firstId(tx) })),
+    Effect.map((result) =>
+      Arr.findFirst(result.transactions, (reported) =>
+        // Only a regular transaction carries the identifiers and result this needs, and the wallet only submits
+        // regular ones; every other variant, including ones a later schema adds, is ignored.
+        reported.__typename === 'RegularTransaction' && trait.areAllTxIdsIncluded(tx, reported.identifiers)
+          ? verdictFrom(reported.transactionResult)
+          : Option.none(),
+      ),
+    ),
+    Effect.catchAll((error) =>
+      pipe(
+        Effect.logWarning(error, 'Could not ask the indexer about a transaction; asking again next tick'),
+        Effect.as(Option.none<Verdict>()),
+      ),
+    ),
+  );
+
+/** A final result as a verdict, segments stripped to what the chain decided; any other status is no verdict yet. */
+const verdictFrom = (result: {
+  readonly status: string;
+  readonly segments?: ReadonlyArray<{ readonly id: number; readonly success: boolean }> | null;
+}): Option.Option<Verdict> => {
+  const segments = (result.segments ?? []).map(({ id, success }) => ({ id, success }));
+  return result.status === 'SUCCESS'
+    ? Option.some({ status: 'SUCCESS' })
+    : result.status === 'FAILURE' || result.status === 'PARTIAL_SUCCESS'
+      ? Option.some({ status: result.status, segments })
+      : Option.none();
+};

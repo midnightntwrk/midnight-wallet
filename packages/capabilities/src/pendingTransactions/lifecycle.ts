@@ -113,7 +113,17 @@ const LIVE: ReadonlyArray<StateTag> = ['Balanced', 'Finalized', 'Submitted'];
 /** The final states in which the transaction's coins were never spent on chain, so the spend can begin again. */
 const ENDED_UNSPENT: ReadonlyArray<StateTag> = ['Rejected', 'Orphaned', 'Expired', 'Reverted'];
 
-const isLive = <TTransaction>(record: LifecycleRecord<TTransaction>): boolean => LIVE.includes(record.state._tag);
+/**
+ * Whether a record can still leave its state: balanced, finalized or submitted.
+ *
+ * @example
+ *   const open = state.records.filter(isLive);
+ *
+ * @param record The record.
+ * @returns `true` while some event can still move it.
+ */
+export const isLive = <TTransaction>(record: LifecycleRecord<TTransaction>): boolean =>
+  LIVE.includes(record.state._tag);
 
 /** Moves every record `applies` picks that is in one of the `from` states, leaving every other record as it was. */
 const settle = <TTransaction>(
