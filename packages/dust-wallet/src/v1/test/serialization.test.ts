@@ -17,7 +17,7 @@ import { Either, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
-import { type Dust, type DustWithNullifier } from '../types/Dust.js';
+import { type Dust, type PendingDust } from '../types/Dust.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const dustParameters = LedgerParameters.initialParameters().dust;
@@ -101,7 +101,7 @@ describe('V1 dust snapshot pending Dust', () => {
   const capability = makeDefaultV1SerializationCapability();
   const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
 
-  const pendingCoin = ((): DustWithNullifier => {
+  const pendingCoin = ((): PendingDust => {
     const coin: Dust = {
       initialValue: 1_000_000n,
       owner: secretKey.publicKey,
@@ -111,7 +111,11 @@ describe('V1 dust snapshot pending Dust', () => {
       backingNight: 'ab'.repeat(32),
       mtIndex: 3n,
     };
-    return { ...coin, nullifier: dustNullifier(coin, secretKey) };
+    return {
+      coin,
+      nullifier: dustNullifier(coin, secretKey),
+      declaredTime: new Date('2026-01-01T00:02:30.000Z'),
+    };
   })();
 
   // A wallet whose pending transaction spent `pendingCoin`: the coin is booked as pending, not yet settled.

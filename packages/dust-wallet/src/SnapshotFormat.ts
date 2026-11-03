@@ -49,18 +49,22 @@ export const V2_SNAPSHOT_FORMAT_VERSION = 'v2';
 export const SNAPSHOT_FORMAT_VERSION = V2_SNAPSHOT_FORMAT_VERSION;
 
 /**
- * A Dust coin a pending transaction has spent, nullifier included, as both variants encode it in `pendingDust`. Every
- * field is a primitive, so one schema here serves both ledgers; `ctime` as an ISO string keeps its milliseconds.
+ * One booking of a Dust coin by a pending transaction, as both variants encode it in `pendingDust`: the coin, its
+ * nullifier, and the time the spending transaction declared. Every field is a primitive, so one schema here serves both
+ * ledgers; a date as an ISO string keeps its milliseconds.
  */
 export const PendingDustSchema = Schema.Struct({
-  initialValue: Schema.BigInt,
-  owner: Schema.BigInt,
-  nonce: Schema.BigInt,
-  seq: Schema.Number,
-  ctime: Schema.Date,
-  backingNight: Schema.String,
-  mtIndex: Schema.BigInt,
+  coin: Schema.Struct({
+    initialValue: Schema.BigInt,
+    owner: Schema.BigInt,
+    nonce: Schema.BigInt,
+    seq: Schema.Number,
+    ctime: Schema.Date,
+    backingNight: Schema.String,
+    mtIndex: Schema.BigInt,
+  }),
   nullifier: Schema.BigInt,
+  declaredTime: Schema.Date,
 });
 
 /**

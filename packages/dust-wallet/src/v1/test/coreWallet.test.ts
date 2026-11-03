@@ -106,7 +106,29 @@ describe('CoreWallet pending Dust', () => {
     const reverted = CoreWallet.revertTransaction(bothSpent, secondTransaction);
 
     expect(backingNightsOf(reverted)).toEqual([decaying.qdo.backingNight, second.qdo.backingNight]);
-    expect(reverted.pendingDust.map((coin) => coin.nonce)).toEqual([first.qdo.nonce]);
+    expect(reverted.pendingDust.map(({ coin }) => coin.nonce)).toEqual([first.qdo.nonce]);
+  });
+
+  it('should keep a coin locked for the later transaction that spent it again, because a late revert releases only the booking its own transaction made', () => {
+    const [firstTransaction, spentByFirst] = spendInTransaction(syncedWallet(), first, spendTime);
+    const lockEnd = new Date(spendTime.getTime() + Number(dustParameters.dustGracePeriodSeconds) * 1000);
+    const [afterLock] = CoreWallet.applyEventsWithChanges(spentByFirst, secretKey, [], lockEnd);
+    expect(afterLock.pendingDust).toEqual([]);
+    const [, spentAgain] = spendInTransaction(afterLock, first, new Date(lockEnd.getTime() + 10_000));
+
+    const reverted = CoreWallet.revertTransaction(spentAgain, firstTransaction);
+
+    expect(backingNightsOf(reverted)).not.toContain(first.qdo.backingNight);
+    expect(reverted.pendingDust).toEqual(spentAgain.pendingDust);
+  });
+
+  it('should release a coin spent part-way through a second, because the transaction declares its time in whole seconds', () => {
+    const [transaction, spent] = spendInTransaction(syncedWallet(), first, new Date(spendTime.getTime() + 789));
+
+    const reverted = CoreWallet.revertTransaction(spent, transaction);
+
+    expect(backingNightsOf(reverted)).toContain(first.qdo.backingNight);
+    expect(reverted.pendingDust).toEqual([]);
   });
 
   it('should add no value when reverting a spend whose coin decayed to nothing while pending, so the next sync leaves the state as it was', () => {
@@ -126,7 +148,7 @@ describe('CoreWallet pending Dust', () => {
     const [transaction, spent] = spendInTransaction(syncedWallet(), first, spendTime);
     const [afterSync] = CoreWallet.applyEventsWithChanges(spent, secretKey, [], secondsAfterCreation(151));
 
-    expect(afterSync.pendingDust.map((coin) => coin.nonce)).toEqual([first.qdo.nonce]);
+    expect(afterSync.pendingDust.map(({ coin }) => coin.nonce)).toEqual([first.qdo.nonce]);
 
     const reverted = CoreWallet.revertTransaction(afterSync, transaction);
 
@@ -162,7 +184,7 @@ describe('CoreWallet pending Dust', () => {
 
     const [atCreation] = CoreWallet.applyEventsWithChanges(spent, secretKey, [], created);
 
-    expect(atCreation.pendingDust.map((coin) => coin.nonce)).toEqual([first.qdo.nonce]);
+    expect(atCreation.pendingDust.map(({ coin }) => coin.nonce)).toEqual([first.qdo.nonce]);
   });
 
   it('should keep a coin pending within the second it was created, because the ledger counts time in whole seconds', () => {
@@ -175,7 +197,7 @@ describe('CoreWallet pending Dust', () => {
       new Date(created.getTime() + 500),
     );
 
-    expect(withinCreationSecond.pendingDust.map((coin) => coin.nonce)).toEqual([first.qdo.nonce]);
+    expect(withinCreationSecond.pendingDust.map(({ coin }) => coin.nonce)).toEqual([first.qdo.nonce]);
   });
 
   it('should stop counting a coin as pending when the state has no generation for it, because the ledger drops such a coin', () => {
@@ -183,7 +205,7 @@ describe('CoreWallet pending Dust', () => {
     const orphan = { ...second.qdo, backingNight: 'dd'.repeat(32), nonce: second.qdo.nonce + 1n };
     const withOrphanPending: CoreWallet = {
       ...synced,
-      pendingDust: [{ ...orphan, nullifier: dustNullifier(orphan, secretKey) }],
+      pendingDust: [{ coin: orphan, nullifier: dustNullifier(orphan, secretKey), declaredTime: spendTime }],
     };
 
     const [afterSync] = CoreWallet.applyEventsWithChanges(withOrphanPending, secretKey, [], spendTime);

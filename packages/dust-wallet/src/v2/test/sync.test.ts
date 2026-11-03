@@ -293,7 +293,7 @@ describe('V2 projections sync of pending Dust', () => {
     // Well past the point the coin is worth nothing, and still inside the lock taken at `spendTime`.
     const afterDecay = secondsAfterCreation(400);
 
-    expect(spent.pendingDust.map((coin) => coin.nonce)).toEqual([decaying.qdo.nonce]);
+    expect(spent.pendingDust.map(({ coin }) => coin.nonce)).toEqual([decaying.qdo.nonce]);
     const lockEnd = new Date(spendTime.getTime() + Number(dustParameters.dustGracePeriodSeconds) * 1000);
     expect(afterDecay.getTime()).toBeLessThan(lockEnd.getTime());
 
@@ -346,7 +346,7 @@ describe('V2 projections sync of pending Dust', () => {
 
     it('should stop counting a pending coin once its lock runs out, so a coin back among the utxos is not also pending', () => {
       const spent = spentGenerating();
-      expect(spent.pendingDust.map((coin) => coin.nonce)).toEqual([generating.qdo.nonce]);
+      expect(spent.pendingDust.map(({ coin }) => coin.nonce)).toEqual([generating.qdo.nonce]);
       expect(spent.state.utxos).toEqual([]);
 
       const [synced] = makeEventLessSyncCapability().applyUpdate(spent, emptyUpdateAt(spent, lockEnd), fullSpan);
@@ -364,7 +364,7 @@ describe('V2 projections sync of pending Dust', () => {
 
       expect(synced.state.utxos).toEqual([]);
       expect(synced.state.walletBalance(withinLock)).toBe(0n);
-      expect(synced.pendingDust.map((coin) => coin.nonce)).toEqual([generating.qdo.nonce]);
+      expect(synced.pendingDust.map(({ coin }) => coin.nonce)).toEqual([generating.qdo.nonce]);
     });
   });
 });

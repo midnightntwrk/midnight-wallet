@@ -23,7 +23,7 @@ import { Either, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import { makeDefaultV2SerializationCapability } from '../Serialization.js';
-import { type DustWithNullifier } from '../types/Dust.js';
+import { type PendingDust } from '../types/Dust.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const dustParameters = LedgerParameters.initialParameters().dust;
@@ -108,7 +108,7 @@ describe('V2 dust snapshot pending Dust', () => {
   const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
   const backingNight = 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90';
 
-  const pendingCoin = (): DustWithNullifier => {
+  const pendingCoin = (): PendingDust => {
     const qdo: QualifiedDustOutput = {
       initialValue: 2_500_000_000_000n,
       owner: secretKey.publicKey,
@@ -118,7 +118,11 @@ describe('V2 dust snapshot pending Dust', () => {
       backingNight,
       mtIndex: 42n,
     };
-    return { ...qdo, nullifier: dustNullifier(qdo, secretKey) };
+    return {
+      coin: qdo,
+      nullifier: dustNullifier(qdo, secretKey),
+      declaredTime: new Date('2026-09-14T10:22:00.000Z'),
+    };
   };
 
   /** A wallet whose pending transaction has spent one Dust coin that no sync has yet settled. */

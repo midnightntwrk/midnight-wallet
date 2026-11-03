@@ -27,7 +27,7 @@ import {
 } from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion, type SnapshotFormat, SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Array as Arr, HashMap, Option, pipe } from 'effect';
-import { type Dust, type DustWithNullifier } from './types/Dust.js';
+import { type Dust, type PendingDust } from './types/Dust.js';
 import { type CoinWithValue } from './CoinsAndBalances.js';
 import { type NetworkId, type UnprovenDustSpend } from './types/ledger.js';
 import {
@@ -52,13 +52,16 @@ export const PublicKey = {
   },
 };
 
+/** `date` truncated to whole seconds, as the ledger keeps the time a transaction declares in its `dustActions`. */
+const toWholeSeconds = (date: Date): Date => new Date(Math.floor(date.getTime() / 1000) * 1000);
+
 export type CoreWallet = Readonly<{
   state: DustLocalState;
   publicKey: PublicKey;
   protocolVersion: ProtocolVersion.ProtocolVersion;
   progress: SyncProgress.SyncProgress;
   networkId: NetworkId;
-  pendingDust: Array<DustWithNullifier>;
+  pendingDust: Array<PendingDust>;
   /**
    * The snapshot fields this variant's schema does not declare, exactly as they were read, written back with the next
    * snapshot so a later release that wrote them still finds them. Absent when the snapshot carried none.
@@ -89,7 +92,7 @@ export const CoreWallet = {
   restore(
     localState: DustLocalState,
     publicKey: PublicKey,
-    pendingTokens: Array<DustWithNullifier>,
+    pendingTokens: Array<PendingDust>,
     syncProgress: Omit<SyncProgress.SyncProgressData, 'isConnected'>,
     protocolVersion: bigint,
     networkId: NetworkId,
@@ -190,17 +193,17 @@ export const CoreWallet = {
    * @returns The coins of `pendingDust` still pending, in their original order.
    */
   settlePendingDust(
-    pendingDust: Array<DustWithNullifier>,
+    pendingDust: Array<PendingDust>,
     beforeTtls: DustLocalState,
     afterTtls: DustLocalState,
     spentNonces: ReadonlyArray<DustNonce>,
     time: Date,
-  ): Array<DustWithNullifier> {
+  ): Array<PendingDust> {
     if (pendingDust.length === 0) return pendingDust;
     const spent = new Set(spentNonces);
     const wholeSeconds = (date: Date): number => Math.floor(date.getTime() / 1000);
-    const backUnlocked = (coin: DustWithNullifier): boolean =>
-      afterTtls.findUtxoByNullifier(coin.nullifier) !== undefined;
+    const backUnlocked = ({ nullifier }: PendingDust): boolean =>
+      afterTtls.findUtxoByNullifier(nullifier) !== undefined;
     const decayedAway = (coin: Dust): boolean =>
       pipe(
         Option.fromNullable(beforeTtls.generationInfo(coin)),
@@ -211,7 +214,9 @@ export const CoreWallet = {
             updatedValue(coin.ctime, coin.initialValue, genInfo, time, beforeTtls.params) === 0n,
         }),
       );
-    return pendingDust.filter((coin) => !spent.has(coin.nonce) && !backUnlocked(coin) && !decayedAway(coin));
+    return pendingDust.filter(
+      (pending) => !spent.has(pending.coin.nonce) && !backUnlocked(pending) && !decayedAway(pending.coin),
+    );
   },
 
   applyDustGenerations(
@@ -315,7 +320,9 @@ export const CoreWallet = {
    *   partially successful transaction ran its guaranteed segment, where every Dust spend sits, so its coins are spent
    *   and are settled by sync instead. Each coin is put back unlocked. `processTtls` cannot target coins: run at the
    *   end of the grace period, it would also drop every coin that decays to nothing by then and release coins other
-   *   pending transactions hold.
+   *   pending transactions hold. A coin is matched by its nullifier together with the time the transaction declared,
+   *   because a coin whose lock ran out can be booked again by a later transaction under the same nullifier, and that
+   *   booking is not this transaction's to release.
    * @example
    *   ```ts
    *   const released = CoreWallet.applyFailed(wallet, neverIncludedTransaction);
@@ -326,16 +333,22 @@ export const CoreWallet = {
    * @returns The wallet with those coins unlocked and no longer pending; every other coin as it was.
    */
   applyFailed(wallet: CoreWallet, tx: Transaction<Signaturish, Proofish, Bindingish>): CoreWallet {
-    const spentNullifiers = new Set(
-      [...(tx.intents?.values() ?? [])].flatMap((intent) =>
-        (intent.dustActions?.spends ?? []).map((spend) => spend.oldNullifier),
+    const bookingKey = (nullifier: DustNullifier, declaredTime: Date): string =>
+      `${nullifier}@${declaredTime.getTime()}`;
+    const revertedBookings = new Set(
+      [...(tx.intents?.values() ?? [])].flatMap(({ dustActions }) =>
+        dustActions === undefined
+          ? []
+          : dustActions.spends.map((spend) => bookingKey(spend.oldNullifier, dustActions.ctime)),
       ),
     );
-    const [kept, released] = Arr.partition(wallet.pendingDust, (coin) => spentNullifiers.has(coin.nullifier));
+    const [kept, released] = Arr.partition(wallet.pendingDust, (pending) =>
+      revertedBookings.has(bookingKey(pending.nullifier, pending.declaredTime)),
+    );
 
     return {
       ...wallet,
-      state: released.reduce((state, { nullifier, ...coin }) => state.addUtxo(nullifier, coin), wallet.state),
+      state: released.reduce((state, { nullifier, coin }) => state.addUtxo(nullifier, coin), wallet.state),
       pendingDust: kept,
     };
   },
@@ -379,15 +392,18 @@ export const CoreWallet = {
         [[], wallet.state, wallet.pendingDust] as [
           ReadonlyArray<UnprovenDustSpend>,
           DustLocalState,
-          Array<DustWithNullifier>,
+          Array<PendingDust>,
         ],
         ([spends, localState, pending], { token: coinToSpend, value: takeFee }) => {
           const [newState, dustSpend] = localState.spend(secretKey, coinToSpend, takeFee, currentTime);
-          const newPending = [...pending, { ...coinToSpend, nullifier: dustSpend.oldNullifier }];
+          const newPending = [
+            ...pending,
+            { coin: coinToSpend, nullifier: dustSpend.oldNullifier, declaredTime: toWholeSeconds(currentTime) },
+          ];
           return [Arr.append(spends, dustSpend), newState, newPending] as [
             ReadonlyArray<UnprovenDustSpend>,
             DustLocalState,
-            Array<DustWithNullifier>,
+            Array<PendingDust>,
           ];
         },
       ),
@@ -395,7 +411,7 @@ export const CoreWallet = {
     return [output, { ...wallet, state: newState, pendingDust: newPending }];
   },
 
-  pendingDustToMap(coins: Array<DustWithNullifier>): Map<DustNullifier, Dust> {
-    return new Map<DustNullifier, Dust>(coins.map(({ nullifier, ...coins }) => [nullifier, coins]));
+  pendingDustToMap(coins: Array<PendingDust>): Map<DustNullifier, Dust> {
+    return new Map<DustNullifier, Dust>(coins.map(({ nullifier, coin }) => [nullifier, coin]));
   },
 };
