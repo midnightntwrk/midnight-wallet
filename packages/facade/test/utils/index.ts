@@ -15,3 +15,4 @@ export * from './drivenStates.js';
 export * from './silentPendingTransactions.js';
 export * from './forkingFacade.js';
 export * from './unbound.js';
+export * from './drivenLifecycle.js';

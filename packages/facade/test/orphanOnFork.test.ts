@@ -27,7 +27,7 @@ import { SubmissionEvent, type SubmissionService } from '@midnightntwrk/wallet-s
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { DateTime, Option } from 'effect';
+import { Option } from 'effect';
 import * as rx from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ResolvedConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
@@ -35,6 +35,7 @@ import { finalizedTransactionTraits } from '../src/transaction.js';
 
 import {
   createV8MockProvingService,
+  DrivenLifecycle,
   getDustSeed,
   getShieldedSeed,
   getUnshieldedSeed,
@@ -44,45 +45,13 @@ import {
 
 vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 
-type Recorded = Readonly<{
-  added: { tx: FinalizedTx; protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion> }[];
-  cleared: FinalizedTx[];
-  orphanedBeyond: ProtocolVersion.ProtocolVersion[];
-}>;
-
-/**
- * A pending-transactions service the test drives directly: it records what the facade asks of it, and lets the test
- * push a pending state so the facade's reaction to an orphaned entry is observable without a real fork.
- */
-class RecordingPendingTransactions extends SilentPendingTransactions {
-  readonly recorded: Recorded = { added: [], cleared: [], orphanedBeyond: [] };
-
-  override addPendingTransaction(
-    tx: FinalizedTx,
-    protocolVersion: Option.Option<ProtocolVersion.ProtocolVersion>,
-  ): Promise<void> {
-    this.recorded.added.push({ tx, protocolVersion });
-    return Promise.resolve();
-  }
-
-  override clear(tx: FinalizedTx): Promise<void> {
-    this.recorded.cleared.push(tx);
-    return Promise.resolve();
-  }
-
-  override orphanBeyond(chainNow: ProtocolVersion.ProtocolVersion): Promise<void> {
-    this.recorded.orphanedBeyond.push(chainNow);
-    return Promise.resolve();
-  }
-}
-
 describe('A pending transaction the fork left behind', () => {
   let configuration: ResolvedConfiguration;
   let facade: WalletFacade;
   let shielded: ShieldedWallet;
   let unshielded: UnshieldedWallet;
   let dust: DustWallet;
-  let pending: RecordingPendingTransactions;
+  let lifecycle: DrivenLifecycle;
 
   beforeEach(async () => {
     configuration = WalletFacade.resolveConfiguration({
@@ -101,7 +70,7 @@ describe('A pending transaction the fork left behind', () => {
     shielded = await ShieldedWallet(configuration).startWithSeed(shieldedSeed);
     unshielded = await UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
     dust = await DustWallet(configuration).startWithSeed(dustSeed, ledgerV9.LedgerParameters.initialParameters().dust);
-    pending = new RecordingPendingTransactions();
+    lifecycle = new DrivenLifecycle();
 
     facade = await WalletFacade.init({
       configuration,
@@ -109,7 +78,8 @@ describe('A pending transaction the fork left behind', () => {
       unshielded: () => unshielded,
       dust: () => dust,
       provingService: () => createV8MockProvingService(),
-      pendingTransactionsService: () => pending,
+      pendingTransactionsService: () => new SilentPendingTransactions(),
+      transactionLifecycleService: () => lifecycle,
       // There is no node here: a submission that is accepted at once lets a test observe what the facade books.
       submissionService: () => ({
         // Type cast required because: the overloaded submit signature is stated once by the service type; this fake
@@ -157,22 +127,21 @@ describe('A pending transaction the fork left behind', () => {
     expect(observed.protocol).toStrictEqual({ _tag: 'Settled', version: observed.activeProtocolVersion });
   });
 
-  it('asks the pending set to give up on everything the wallets have moved past', async () => {
+  it('asks the lifecycle records to give up on everything the wallets have moved past', async () => {
     await sleep(0.2);
 
     const observed = await rx.firstValueFrom(facade.state());
 
-    expect(pending.recorded.orphanedBeyond).toContainEqual(observed.activeProtocolVersion);
+    expect(lifecycle.orphanedBeyond).toContainEqual(observed.activeProtocolVersion);
   });
 
   it('stamps a newly pending transaction with the protocol version the wallets have reached', async () => {
     const observed = await rx.firstValueFrom(facade.state());
 
-    const finalized = await facade.finalizeTransaction(anyTransaction());
+    await facade.finalizeTransaction(anyTransaction());
 
-    const entry = pending.recorded.added.find((added) => added.tx === finalized);
-    expect(entry).toBeDefined();
-    expect(entry?.protocolVersion).toStrictEqual(Option.some(observed.activeProtocolVersion));
+    const [record] = lifecycle.states.value.records;
+    expect(record.protocolVersion).toStrictEqual(Option.some(observed.activeProtocolVersion));
   });
 
   it('stamps a submitted transaction with the version its own bytes were built for, not the one the wallets report', async () => {
@@ -187,9 +156,8 @@ describe('A pending transaction the fork left behind', () => {
 
     await facade.submitTransaction(submitted);
 
-    const entry = pending.recorded.added.find((added) => added.tx === submitted);
-    expect(entry).toBeDefined();
-    expect(entry?.protocolVersion).toStrictEqual(Option.some(builtFor));
+    const [record] = lifecycle.states.value.records;
+    expect(record.protocolVersion).toStrictEqual(Option.some(builtFor));
   });
 
   it('reverts an orphaned transaction and records why it will never be included', async () => {
@@ -199,28 +167,15 @@ describe('A pending transaction the fork left behind', () => {
 
     const finalized = await facade.finalizeTransaction(anyTransaction());
 
-    pending.states.next({
-      all: [
-        {
-          tx: finalized,
-          creationTime: DateTime.unsafeMake(Date.now()),
-          protocolVersion: Option.some(ProtocolVersion.MinSupportedVersion),
-          result: {
-            status: 'ORPHANED_BY_FORK',
-            authoredFor: ProtocolVersion.MinSupportedVersion,
-            chainNow: ProtocolVersion.V9NativeForkVersion,
-          },
-        },
-      ],
-      reservations: [],
-    });
+    lifecycle.orphaned(ProtocolVersion.MinSupportedVersion, ProtocolVersion.V9NativeForkVersion);
 
     await sleep(0.2);
 
     expect(spiedShieldedRevert).toHaveBeenCalled();
     expect(spiedUnshieldedRevert).toHaveBeenCalled();
     expect(spiedDustRevert).toHaveBeenCalled();
-    expect(pending.recorded.cleared).toContain(finalized);
+    expect(lifecycle.revertedIds).toStrictEqual([]);
+    expect(lifecycle.states.value.records.map((record) => record.state._tag)).toStrictEqual(['Orphaned']);
 
     const entries = await facade.getAllFromTxHistory();
     const rejected = entries.filter((entry) => entry.lifecycle.status === 'rejected');
