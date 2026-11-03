@@ -110,7 +110,7 @@ import { coinIdsOf, finalizedTransactionTraits, txHistoryHash } from './transact
  * The traits pending transactions are read with, exported so a test that restores a stored pending-transaction payload
  * reads it exactly as the wallet does. Building a second trait for that would be testing the copy, not the wallet.
  */
-export { finalizedTransactionTraits } from './transaction.js';
+export { finalizedTransactionTraits, lifecycleTransactionTraits, type LifecycleTx } from './transaction.js';
 
 /**
  * Why the wallet gave up on a transaction, for the history entry.

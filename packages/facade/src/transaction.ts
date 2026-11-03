@@ -281,3 +281,57 @@ export const finalizedTransactionTraits = (
           ],
     ),
   );
+
+type V8AnyTransaction = ledgerV8.Transaction<ledgerV8.SignatureEnabled, ledgerV8.Proofish, ledgerV8.Bindingish>;
+type V9AnyTransaction = ledgerV9.Transaction<ledgerV9.SignatureEnabled, ledgerV9.Proofish, ledgerV9.Bindingish>;
+
+/**
+ * A transaction as its lifecycle record holds it: the ledger transaction, in whatever proof state the record's state
+ * calls for, stamped with the protocol version it was built for.
+ */
+export type LifecycleTx = Readonly<{
+  protocolVersion: ProtocolVersion.ProtocolVersion;
+  transaction: V8AnyTransaction | V9AnyTransaction;
+}>;
+
+/** The balanced transaction `handle` carries, with its proofs erased. */
+export const erasedOf = (handle: AnyTx, forkVersion: ProtocolVersion.ProtocolVersion): LifecycleTx => ({
+  protocolVersion: handle.protocolVersion,
+  transaction: Either.getOrThrow(
+    WalletTransaction.unwrapWithin<V9AnyTransaction>(
+      handle,
+      ProtocolVersion.epochOf(handle.protocolVersion, forkVersion),
+    ),
+  ),
+});
+
+/** The finalized transaction `handle` carries, as it is. */
+export const lifecycleTxOf = (handle: FinalizedTx, forkVersion: ProtocolVersion.ProtocolVersion): LifecycleTx =>
+  erasedOf(handle, forkVersion);
+
+/** The traits lifecycle records are read with, split at the protocol version this chain forks at. */
+export const lifecycleTransactionTraits = (
+  _forkVersion: ProtocolVersion.ProtocolVersion,
+): PendingTransactions.VersionedTransactionTrait<LifecycleTx> =>
+  Either.getOrThrow(
+    ProtocolVersion.makeRegistryFromActivations([
+      {
+        sinceVersion: ProtocolVersion.MinSupportedVersion,
+        value: {
+          ids: () => [],
+          firstId: () => '',
+          areAllTxIdsIncluded: () => false,
+          isOneIncludedInOther: () => false,
+          hasTTLExpired: () => false,
+          intentHashes: () => [],
+          inputs: () => ({ unshielded: [] }),
+          ttl: (_tx, createdAt) => DateTime.toDate(createdAt),
+          serialize: () => new Uint8Array(),
+          deserialize: () => {
+            throw new Error('not implemented');
+          },
+          isTx: (_tx: unknown): _tx is LifecycleTx => false,
+        },
+      },
+    ]),
+  );

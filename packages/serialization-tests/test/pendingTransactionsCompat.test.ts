@@ -13,7 +13,11 @@
 import { Lifecycle, PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
 import { DateTime, Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { DefaultForkSchedule, finalizedTransactionTraits } from '@midnightntwrk/wallet-sdk-facade';
+import {
+  DefaultForkSchedule,
+  finalizedTransactionTraits,
+  lifecycleTransactionTraits,
+} from '@midnightntwrk/wallet-sdk-facade';
 import { fixturesFor } from './fixtures.js';
 
 /**
@@ -109,6 +113,27 @@ describe('pending transactions written by published releases', () => {
         expect(records.map((record) => record.inputs)).toStrictEqual(records.map(() => ({ unshielded: [] })));
         expect(records.map((record) => record.ttl)).toStrictEqual(
           records.map(() => new Date(DateTime.toEpochMillis(creationTime) + 3 * 60 * 60 * 1000)),
+        );
+      });
+    });
+
+    // The traits the wallet holds its records with read a transaction in any proof state; these fixtures were written
+    // proven, so this is where reading the proven form is pinned.
+    describe('read with the traits the wallet holds its lifecycle records with', () => {
+      const lifecycleTraits = lifecycleTransactionTraits(DefaultForkSchedule.v9);
+      // Type cast required because: the fixture is a v1 payload, whose envelope holds each transaction's hex as `tx`.
+      const stored = (JSON.parse(fixture.serialized) as { transactions: ReadonlyArray<{ tx: string }> }).transactions;
+
+      it('should hold each proven transaction under the identifiers it was written with, and write back its bytes', () => {
+        const read = Lifecycle.deserialize(fixture.serialized, lifecycleTraits);
+        expect(Either.isRight(read)).toBe(true);
+        const records = Either.getOrThrow(read).records;
+        const oldestTrait = Option.getOrThrow(PendingTransactions.headTrait(lifecycleTraits));
+        const txs = records.map((record) => Option.getOrThrow(record.tx));
+
+        expect(records.map((record) => record.identifiers)).toEqual(fixture.expected['identifiers']);
+        expect(txs.map((tx) => Buffer.from(oldestTrait.serialize(tx)).toString('hex'))).toStrictEqual(
+          stored.map((item) => item.tx),
         );
       });
     });
