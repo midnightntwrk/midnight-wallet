@@ -34,9 +34,10 @@ const createdAt = DateTime.unsafeMake(1_700_000_000_000);
 const submittedAt = DateTime.unsafeMake(1_700_000_060_000);
 const identifiers = ['an-identifier'];
 
-const aTransaction = (): LifecycleTx => ({
+const aTransaction = (form: LifecycleTx['form'] = 'Finalized'): LifecycleTx => ({
   protocolVersion: authoredFor,
   transaction: ledgerV8.Transaction.fromParts(NetworkId.NetworkId.Undeployed),
+  form,
 });
 
 const aRecord = (
@@ -162,6 +163,59 @@ describe('a transaction that will never be included', () => {
 
   it('is reverted when the wallet gave its coins back', () => {
     expect(onlyEntryOf(aRecord(Lifecycle.LifecycleState.Reverted())).status).toStrictEqual({ _tag: 'Reverted' });
+  });
+});
+
+describe('a transaction that ended', () => {
+  const ENDS = [
+    Lifecycle.LifecycleState.Confirmed(),
+    Lifecycle.LifecycleState.Orphaned({ authoredFor, chainNow }),
+    Lifecycle.LifecycleState.Expired(),
+    Lifecycle.LifecycleState.Reverted(),
+  ];
+
+  it.each(ENDS)(
+    'carries no transaction when it ended $_tag while only balanced, because the record holds it with its proofs erased',
+    (state) => {
+      expect(onlyEntryOf(aRecord(state, { tx: Option.some(aTransaction('Erased')) })).transaction).toStrictEqual(
+        Option.none(),
+      );
+    },
+  );
+
+  it.each(ENDS)('carries the finalized transaction when it ended $_tag after it was finalized', (state) => {
+    const held = aTransaction('Finalized');
+
+    expect(Option.getOrThrow(carriedBy(onlyEntryOf(aRecord(state, { tx: Option.some(held) }))))).toBe(held.transaction);
+  });
+
+  // A finalized transaction is submitted, and only a submitted one is refused, so these states say the record holds it
+  // finalized whatever form the bytes it was read back from suggest.
+  it.each([
+    Lifecycle.LifecycleState.Finalized(),
+    Lifecycle.LifecycleState.Submitted(),
+    Lifecycle.LifecycleState.Rejected({ verdict: { status: 'TTL_PASSED' } }),
+  ])('carries the transaction while $_tag even when it was read back proof-erased', (state) => {
+    const held = aTransaction('Erased');
+
+    expect(Option.getOrThrow(carriedBy(onlyEntryOf(aRecord(state, { tx: Option.some(held) }))))).toBe(held.transaction);
+  });
+});
+
+describe('the handle an entry carries', () => {
+  it('is stamped with the version its record was built for, even when the transaction was read back at the start of its epoch', () => {
+    const builtFor = ProtocolVersion.ProtocolVersion(1n);
+    const readBack = { ...aTransaction(), protocolVersion: ProtocolVersion.MinSupportedVersion };
+
+    const entry = onlyEntryOf(
+      aRecord(Lifecycle.LifecycleState.Submitted(), {
+        tx: Option.some(readBack),
+        protocolVersion: Option.some(builtFor),
+      }),
+    );
+
+    expect(Option.map(entry.transaction, (handle) => handle.protocolVersion)).toStrictEqual(Option.some(builtFor));
+    expect(entry.authoredFor).toStrictEqual(Option.some(builtFor));
   });
 });
 

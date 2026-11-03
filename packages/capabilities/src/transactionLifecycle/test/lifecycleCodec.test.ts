@@ -409,3 +409,62 @@ describe('Carrying the top-level members this build does not declare', () => {
     expect(rewrite(fromV2)).toStrictEqual({ version: 'v2', records: [], laterMember: { kept: true } });
   });
 });
+
+/**
+ * A transaction whose form its bytes do not say: the bytes hold only its identifiers, and the form is kept beside them,
+ * as the facade keeps whether it holds a transaction finalized or with its proofs erased.
+ */
+type FormedTx = Readonly<{ ids: readonly string[]; form: string }>;
+
+const formedTrait: TransactionTraits.TransactionTrait<FormedTx> = {
+  isTx: (data): data is FormedTx => typeof data === 'object' && data !== null && 'ids' in data && 'form' in data,
+  serialize: (tx) => Buffer.from(JSON.stringify({ ids: tx.ids }), 'utf-8'),
+  formOf: (tx) => tx.form,
+  deserialize: (bytes, form) => ({
+    // Type cast required because: the bytes are only ever ones `serialize` wrote.
+    ...(JSON.parse(Buffer.from(bytes).toString('utf-8')) as { ids: readonly string[] }),
+    form: form ?? 'read off the bytes',
+  }),
+  ids: (tx) => tx.ids,
+  firstId: (tx) => tx.ids[0],
+  areAllTxIdsIncluded: (tx, ids) => tx.ids.every((id) => ids.includes(id)),
+  intentHashes: (tx) => tx.ids.map((id) => `intent-${id}`),
+  inputs: (tx) => ({ unshielded: tx.ids.map((id) => `coin-${id}#0`) }),
+  ttl: () => TTL,
+};
+
+const formedTraits: TransactionTraits.VersionedTransactionTrait<FormedTx> = Either.getOrThrow(
+  ProtocolVersion.makeRegistryFromActivations([
+    { sinceVersion: ProtocolVersion.MinSupportedVersion, value: formedTrait },
+  ]),
+);
+
+describe('Storing a transaction whose form its bytes do not say', () => {
+  const formed: Lifecycle.TransactionLifecycle<FormedTx> = {
+    records: [
+      {
+        identifiers: ['id-a'],
+        intentHashes: ['intent-id-a'],
+        inputs: { unshielded: ['coin-id-a#0'] },
+        ttl: TTL,
+        protocolVersion: Option.some(V9_VERSION),
+        tx: Option.some({ ids: ['id-a'], form: 'kept beside the bytes' }),
+        createdAt: CREATED_AT,
+        submittedAt: Option.none(),
+        state: LifecycleState.Expired(),
+      },
+    ],
+  };
+
+  it('should store the form the trait names beside the bytes', () => {
+    expect(parseObject(Lifecycle.serialize(formed, formedTraits))).toMatchObject({
+      records: [{ txForm: 'kept beside the bytes' }],
+    });
+  });
+
+  it('should hand the stored form back to the trait, so the record reads back exactly as it was written', () => {
+    expect(Lifecycle.deserialize(Lifecycle.serialize(formed, formedTraits), formedTraits)).toStrictEqual(
+      Either.right(formed),
+    );
+  });
+});

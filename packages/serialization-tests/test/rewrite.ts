@@ -17,7 +17,7 @@ import { Serialization as DustV2Serialization } from '@midnightntwrk/wallet-sdk-
 import {
   DefaultForkSchedule,
   WalletEntrySchema,
-  finalizedTransactionTraits,
+  lifecycleTransactionTraits,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
 import {
@@ -34,10 +34,10 @@ import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { fixturesFor, type Fixture, type Surface, type Writer } from './fixtures.js';
 
 /**
- * The registry the wallet itself reads pending transactions with, built from the fork schedule the facade presets, so a
+ * The registry the facade itself keeps its lifecycle records with, built from the fork schedule it presets, so a
  * payload is rewritten here exactly as it would be by a wallet an application hands it back to.
  */
-const pendingTxTraits = finalizedTransactionTraits(DefaultForkSchedule.v9);
+const lifecycleTraits = lifecycleTransactionTraits(DefaultForkSchedule.v9);
 
 type Rewriter = (serialized: string) => Promise<string> | string;
 
@@ -45,7 +45,7 @@ type Rewriter = (serialized: string) => Promise<string> | string;
 const singleWriterRewriters: Pick<Record<Surface, Rewriter>, 'tx-history' | 'transaction-lifecycle'> = {
   'tx-history': (s) => InMemoryTransactionHistoryStorage.restore(s, WalletEntrySchema, mergeWalletEntries).serialize(),
   'transaction-lifecycle': (s) =>
-    Lifecycle.serialize(EitherOps.getOrThrowLeft(Lifecycle.deserialize(s, pendingTxTraits)), pendingTxTraits),
+    Lifecycle.serialize(EitherOps.getOrThrowLeft(Lifecycle.deserialize(s, lifecycleTraits)), lifecycleTraits),
 };
 
 const shieldedV1 = ShieldedV1Serialization.makeDefaultV1SerializationCapability();

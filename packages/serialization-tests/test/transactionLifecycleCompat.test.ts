@@ -13,20 +13,16 @@
 import { Lifecycle, TransactionTraits } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { DateTime, Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
-import {
-  DefaultForkSchedule,
-  finalizedTransactionTraits,
-  lifecycleTransactionTraits,
-} from '@midnightntwrk/wallet-sdk-facade';
+import { DefaultForkSchedule, lifecycleEntriesOf, lifecycleTransactionTraits } from '@midnightntwrk/wallet-sdk-facade';
 import { fixturesFor } from './fixtures.js';
 
 /**
- * The registry the wallet itself reads finalized transactions with, built from the fork schedule the facade presets.
- * Every fixture here was written before the v9 fork and carries no protocol-version stamp, so the registry's oldest
- * trait — ledger-v8's — is the one that reads it, exactly as it would for a stored payload an application hands back.
- * Building a one-epoch registry instead would route the bytes to ledger-v9, whose deserializer refuses them.
+ * The registry the facade itself keeps its lifecycle records with, built from the fork schedule it presets. Every
+ * fixture here was written before the v9 fork and carries no protocol-version stamp, so the registry's oldest trait —
+ * ledger-v8's — is the one that reads it, exactly as it would for a stored payload an application hands back. Building
+ * a one-epoch registry instead would route the bytes to ledger-v9, whose deserializer refuses them.
  */
-const traits = finalizedTransactionTraits(DefaultForkSchedule.v9);
+const traits = lifecycleTransactionTraits(DefaultForkSchedule.v9);
 
 const fixtures = fixturesFor('transaction-lifecycle');
 
@@ -40,6 +36,8 @@ describe('transaction lifecycle stores written by published releases', () => {
   });
 
   describe.each(fixtures)('$id (written by $writtenBy.name $writtenBy.version)', (fixture) => {
+    const lifecycle = () => Either.getOrThrow(Lifecycle.deserialize(fixture.serialized, traits));
+
     it('should still be stored under the v1 envelope', () => {
       const written: unknown = JSON.parse(fixture.serialized);
 
@@ -49,7 +47,6 @@ describe('transaction lifecycle stores written by published releases', () => {
     // Read as lifecycle records, each pending item is a submitted record: v1 showed it as submitted, kept only when it
     // was finalized, and stored none of the facts a record carries, so those come off the transaction itself.
     describe('read as lifecycle records', () => {
-      const lifecycle = () => Either.getOrThrow(Lifecycle.deserialize(fixture.serialized, traits));
       const oldestTrait = Option.getOrThrow(TransactionTraits.headTrait(traits));
       const creationTime = DateTime.unsafeMake(fixture.expected['creationTime'] as string);
 
@@ -91,21 +88,28 @@ describe('transaction lifecycle stores written by published releases', () => {
 
     // The traits the wallet holds its records with read a transaction in any proof state; these fixtures were written
     // proven, so this is where reading the proven form is pinned.
-    describe('read with the traits the wallet holds its lifecycle records with', () => {
-      const lifecycleTraits = lifecycleTransactionTraits(DefaultForkSchedule.v9);
+    describe('read in the proven form v1 stored it', () => {
       // Type cast required because: the fixture is a v1 payload, whose envelope holds each transaction's hex as `tx`.
       const stored = (JSON.parse(fixture.serialized) as { transactions: ReadonlyArray<{ tx: string }> }).transactions;
 
-      it('should hold each proven transaction under the identifiers it was written with, and write back its bytes', () => {
-        const read = Lifecycle.deserialize(fixture.serialized, lifecycleTraits);
-        expect(Either.isRight(read)).toBe(true);
-        const records = Either.getOrThrow(read).records;
-        const oldestTrait = Option.getOrThrow(TransactionTraits.headTrait(lifecycleTraits));
+      it('should hold each proven transaction as finalized, and write back its bytes', () => {
+        const records = lifecycle().records;
+        const oldestTrait = Option.getOrThrow(TransactionTraits.headTrait(traits));
         const txs = records.map((record) => Option.getOrThrow(record.tx));
 
-        expect(records.map((record) => record.identifiers)).toEqual(fixture.expected['identifiers']);
+        expect(txs.map((tx) => tx.form)).toStrictEqual(txs.map(() => 'Finalized'));
         expect(txs.map((tx) => Buffer.from(oldestTrait.serialize(tx)).toString('hex'))).toStrictEqual(
           stored.map((item) => item.tx),
+        );
+      });
+
+      it('should show an application each transaction as submitted, carrying the finalized transaction it stored', () => {
+        const entries = lifecycleEntriesOf(lifecycle());
+
+        expect(entries.map((entry) => entry.status)).toStrictEqual(entries.map(() => ({ _tag: 'Submitted' })));
+        expect(entries.map((entry) => entry.identifiers)).toEqual(fixture.expected['identifiers']);
+        expect(entries.map((entry) => Option.map(entry.transaction, (tx) => tx.stage))).toStrictEqual(
+          entries.map(() => Option.some('Finalized')),
         );
       });
     });

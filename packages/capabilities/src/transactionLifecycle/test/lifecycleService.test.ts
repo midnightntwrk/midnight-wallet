@@ -22,9 +22,10 @@ import {
 import { type Query, QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
 import { Chunk, DateTime, Effect, Either, Fiber, Option, pipe, Ref, Stream, TestClock, TestContext } from 'effect';
+import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import * as Lifecycle from '../lifecycle.js';
-import { TransactionLifecycleServiceEffectImpl } from '../lifecycleService.js';
+import { TransactionLifecycleServiceEffectImpl, TransactionLifecycleServiceImpl } from '../lifecycleService.js';
 import type * as TransactionTraits from '../transactionTraits.js';
 
 type FakeTransaction = Readonly<{ ids: readonly string[] }>;
@@ -282,6 +283,62 @@ describe('The transaction lifecycle service', () => {
         recordOf(sent, SUBMITTED_AT, Lifecycle.LifecycleState.Submitted(), Option.some(SUBMITTED_AT)),
       ]);
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise));
+});
+
+/**
+ * A caller saves the store through the service itself, as it saves a wallet's snapshot, so the bytes are always written
+ * with the traits the service reads them with and never with a set the caller picked.
+ */
+describe('Saving the lifecycle records through the service', () => {
+  /** A store a later build wrote, carrying a top-level member this build does not declare. */
+  const STORED_BY_LATER_BUILD = JSON.stringify({ version: 'v2', records: [], writtenByLaterBuild: { kept: true } });
+
+  it('should write the records it holds in the stored format, so restoring them gives each back in its state', () =>
+    Effect.gen(function* () {
+      const service = new TransactionLifecycleServiceEffectImpl(traits);
+      const sent = facts(['id-a']);
+      const held = facts(['id-b']);
+
+      yield* setClock(BALANCED_AT);
+      yield* service.balanced(held);
+      yield* setClock(SUBMITTED_AT);
+      yield* service.submitted(sent);
+
+      const stored = yield* service.serializeState();
+      const restored = yield* TransactionLifecycleServiceEffectImpl.restore(stored, traits);
+
+      expect(JSON.parse(stored)).toMatchObject({ version: 'v2' });
+      expect(yield* currentRecords(restored)).toStrictEqual([
+        recordOf(held, BALANCED_AT, Lifecycle.LifecycleState.Balanced()),
+        recordOf(sent, SUBMITTED_AT, Lifecycle.LifecycleState.Submitted(), Option.some(SUBMITTED_AT)),
+      ]);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise));
+
+  it('should write back the members a restored store carried that this build does not know', () =>
+    Effect.gen(function* () {
+      const restored = yield* TransactionLifecycleServiceEffectImpl.restore(STORED_BY_LATER_BUILD, traits);
+
+      expect(JSON.parse(yield* restored.serializeState())).toStrictEqual(JSON.parse(STORED_BY_LATER_BUILD));
+    }).pipe(Effect.runPromise));
+
+  it('should save and restore through the promise service the facade holds, with the traits it was built with', async () => {
+    const configuration = { indexerClientConnection: { indexerHttpUrl: 'http://indexer.invalid' } };
+    const clock = { now: () => DateTime.toDate(SUBMITTED_AT) };
+    const service = await TransactionLifecycleServiceImpl.init({ txTraits: traits, configuration, clock });
+    const sent = facts(['id-a']);
+
+    await service.submitted(sent);
+    const restored = await TransactionLifecycleServiceImpl.restore(
+      await service.serializeState(),
+      traits,
+      configuration,
+      clock,
+    );
+
+    expect((await rx.firstValueFrom(restored.state())).records).toStrictEqual([
+      recordOf(sent, SUBMITTED_AT, Lifecycle.LifecycleState.Submitted(), Option.some(SUBMITTED_AT)),
+    ]);
+  });
 });
 
 type StatusQuery = Query.Query.QueryFn<TransactionStatusQuery, TransactionStatusQueryVariables>;

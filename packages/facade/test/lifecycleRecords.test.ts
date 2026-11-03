@@ -20,13 +20,16 @@
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { type AnyTx, NetworkId, ProtocolVersion, WalletTransaction } from '@midnightntwrk/wallet-sdk-abstractions';
-import { type Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
+import {
+  Lifecycle,
+  TransactionLifecycleServiceImpl,
+} from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, Option } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { BalancingRecipe, type FacadeState, type WalletFacade } from '../src/index.js';
-import { type LifecycleTx } from '../src/transaction.js';
+import { lifecycleTransactionTraits, type LifecycleTx } from '../src/transaction.js';
 import {
   createSimulatorWalletFactories,
   deriveWalletKeys,
@@ -586,5 +589,101 @@ describe('A reverted transaction’s lifecycle record', () => {
       yield* Effect.flip(Effect.tryPromise(() => selfTransfer(facade, ttlOn(facade), tokenValue(10_000_000n))));
 
       expect((yield* lifecycleOf(facade)).records).toStrictEqual(recordsBefore);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+describe('A lifecycle service the application restores from the store it kept', () => {
+  // The simulator's clock is far from the system's, so a record stamped by any other clock shows it at once.
+  it('should stamp its records with the facade’s clock, which the facade hands the factory that builds it', () =>
+    Effect.gen(function* () {
+      const { facade, keys } = yield* fundedFacade({
+        transactionLifecycleService: (configuration, { clock }) =>
+          TransactionLifecycleServiceImpl.restore(
+            Lifecycle.serialize(Lifecycle.empty<LifecycleTx>(), lifecycleTransactionTraits(configuration.forks.v9)),
+            lifecycleTransactionTraits(configuration.forks.v9),
+            configuration,
+            clock,
+          ),
+      });
+      const finalizedAt = facade.clock.now();
+      expect(Math.abs(finalizedAt.getTime() - Date.now())).toBeGreaterThan(60_000);
+
+      const finalizedTx = yield* Effect.promise(() =>
+        facade.finalizeTransaction(unproven(callersShieldedTransaction(keys))),
+      );
+
+      expect(
+        recordsCovering(yield* lifecycleOf(facade), finalizedTx).map((record) => record.createdAt.epochMillis),
+      ).toStrictEqual([finalizedAt.getTime()]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+describe('The lifecycle store the application saves through the facade', () => {
+  // An unproven transaction carries every proof preimage: the coin and Dust secret keys, coin values and nonces. The
+  // store must hold a balanced transaction with its proofs erased, so no saved string carries a secret.
+  it('should hold no proof preimage for a balanced spend, only the transaction with its proofs erased', () =>
+    Effect.gen(function* () {
+      const { facade, keys } = yield* fundedFacade();
+      yield* withDust(facade, keys);
+      const shieldedAddress = yield* Effect.promise(() => facade.shielded.getAddress());
+      yield* Effect.promise(() =>
+        facade.transferTransaction(
+          [
+            {
+              type: 'shielded',
+              outputs: [{ type: SHIELDED, receiverAddress: shieldedAddress, amount: tokenValue(1n) }],
+            },
+          ],
+          { ttl: ttlOn(facade) },
+        ),
+      );
+
+      const saved = JSON.parse(yield* Effect.promise(() => facade.transactionLifecycleService.serializeState())) as {
+        records: readonly { state: { _tag: string }; tx?: string; txForm?: string }[];
+      };
+      const balanced = saved.records.filter((record) => record.state._tag === 'Balanced');
+      const bytesOf = (record: { tx?: string }) => Buffer.from(record.tx ?? '', 'hex');
+
+      expect(balanced).toHaveLength(1);
+      expect(balanced.map((record) => record.txForm)).toStrictEqual(['Erased']);
+      expect(balanced.map((record) => bytesOf(record).toString('latin1').includes('proof-preimage'))).toStrictEqual([
+        false,
+      ]);
+      expect(() =>
+        ledger.Transaction.deserialize('signature', 'no-proof', 'no-binding', bytesOf(balanced[0])),
+      ).not.toThrow();
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  // Saving through the service writes with the traits the facade built it with, so the application never picks a set:
+  // the facade's records hold proof-erased and finalized transactions, which only the facade's own traits can write.
+  it('should be saved by the facade’s own service, and restore every record it held', () =>
+    Effect.gen(function* () {
+      const { facade, keys } = yield* fundedFacade();
+      yield* Effect.promise(() => facade.finalizeTransaction(unproven(callersShieldedTransaction(keys))));
+      const held = yield* lifecycleOf(facade);
+      expect(held.records).not.toHaveLength(0);
+
+      const saved = yield* Effect.promise(() => facade.transactionLifecycleService.serializeState());
+
+      // A ledger transaction is a WASM object, which two separate reads never make the same object: each record is
+      // compared field by field, its transaction by its bytes, the form it is held in, and its stamp.
+      const comparable = (lifecycle: Lifecycle.TransactionLifecycle<LifecycleTx>) =>
+        lifecycle.records.map((record) => ({
+          ...record,
+          tx: Option.map(record.tx, (tx) => ({
+            bytes: Buffer.from(tx.transaction.serialize()).toString('hex'),
+            form: tx.form,
+            protocolVersion: tx.protocolVersion,
+          })),
+        }));
+
+      // Read back as an application restoring it would: with the facade's traits at the facade's own fork, which the
+      // simulator facade puts at the bottom of the range.
+      expect(
+        Either.map(
+          Lifecycle.deserialize(saved, lifecycleTransactionTraits(ProtocolVersion.MinSupportedVersion)),
+          comparable,
+        ),
+      ).toStrictEqual(Either.right(comparable(held)));
     }).pipe(Effect.scoped, Effect.runPromise));
 });

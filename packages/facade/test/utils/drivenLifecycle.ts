@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   type InclusionVerdict,
   Lifecycle,
@@ -18,7 +18,7 @@ import {
 } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { DateTime } from 'effect';
 import * as rx from 'rxjs';
-import { type LifecycleTx } from '../../src/transaction.js';
+import { lifecycleTransactionTraits, type LifecycleTx } from '../../src/transaction.js';
 
 /**
  * A lifecycle service the test drives: every move the facade makes is applied with the real transitions, it never
@@ -74,6 +74,13 @@ export class DrivenLifecycle implements TransactionLifecycleService<LifecycleTx>
       verdict.status === 'SUCCESS'
         ? Lifecycle.confirmed(state, identifiers)
         : Lifecycle.rejected(state, identifiers, verdict),
+    );
+  }
+
+  /** Writes the records as the real service does, with the facade's own traits at the default v9 fork. */
+  serializeState(): Promise<string> {
+    return Promise.resolve(
+      Lifecycle.serialize(this.states.value, lifecycleTransactionTraits(ProtocolVersion.V9NativeForkVersion)),
     );
   }
 
