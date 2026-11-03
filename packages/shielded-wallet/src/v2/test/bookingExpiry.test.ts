@@ -365,6 +365,31 @@ const bookedAcrossSegments = (): {
   };
 };
 
+/**
+ * A caught-up wallet whose two coins are booked for one transaction with nothing guaranteed: one spent in the fallible
+ * offer at segment 1, the other in the fallible offer at segment 2, both bookings already seen by sync.
+ */
+const bookedInTwoFallibleSegments = (): {
+  wallet: CoreWallet;
+  tx: ledger.UnprovenTransaction;
+  segmentOne: ledger.QualifiedShieldedCoinInfo;
+  segmentTwo: ledger.QualifiedShieldedCoinInfo;
+} => {
+  const wallet = walletWithTwoCoins();
+  const [segmentOne, segmentTwo] = [...wallet.state.coins];
+  const [[segmentOneOffer], spentOne] = CoreWallet.spendCoins(wallet, keys(), [segmentOne], 1);
+  const [[segmentTwoOffer], spentBoth] = CoreWallet.spendCoins(spentOne, keys(), [segmentTwo], 2);
+  return {
+    wallet: syncAt(spentBoth, bookedAt),
+    tx: ledger.Transaction.fromParts(networkId, undefined, segmentOneOffer).addZswapOffer(
+      { tag: 'specific', value: 2 },
+      segmentTwoOffer,
+    ),
+    segmentOne,
+    segmentTwo,
+  };
+};
+
 /** The nonces of the coins the ledger holds as spent by a transaction not yet settled. */
 const pendingSpendNonces = (wallet: CoreWallet): readonly ledger.Nonce[] =>
   [...wallet.state.pendingSpends.values()].map(([coin]) => coin.nonce);
@@ -389,6 +414,19 @@ describe('A shielded transaction whose fallible segments partly failed', () => {
     const reverted = CoreWallet.revertFailedSegments(wallet, tx, [1]);
 
     expect(reverted.bookings).toEqual({ [guaranteed.nonce]: wallet.bookings?.[guaranteed.nonce] });
+  });
+
+  it('should release only the coins of the listed failed segments, because a fallible segment not listed was applied', () => {
+    const { wallet, tx, segmentOne, segmentTwo } = bookedInTwoFallibleSegments();
+    expect(new Set(tx.fallibleOffer?.keys())).toEqual(new Set([1, 2]));
+    expect(pendingSpendNonces(wallet)).toHaveLength(2);
+    expect(Object.keys(wallet.bookings ?? {})).toHaveLength(2);
+
+    const reverted = CoreWallet.revertFailedSegments(wallet, tx, [1]);
+
+    expect(availableNonces(reverted)).toEqual([segmentOne.nonce]);
+    expect(pendingSpendNonces(reverted)).toEqual([segmentTwo.nonce]);
+    expect(reverted.bookings).toEqual({ [segmentTwo.nonce]: wallet.bookings?.[segmentTwo.nonce] });
   });
 
   it('should change nothing booked when no segment failed, because every coin it spent was spent on chain', () => {
