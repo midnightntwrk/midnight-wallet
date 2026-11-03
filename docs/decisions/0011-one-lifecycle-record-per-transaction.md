@@ -67,9 +67,43 @@ site.
 | `Expired`   | `Balanced`, `Finalized`              | its TTL passed before it was submitted                                                                                                                                                             | unchanged                      |
 | `Reverted`  | `Balanced`, `Finalized`, `Submitted` | `revert`, `revertTransaction`, a builder that failed part-way, a submission that threw                                                                                                             | unchanged                      |
 
-`Confirmed`, `Rejected`, `Orphaned`, `Expired` and `Reverted` are final. `Confirmed` is final against every other
-verdict, which replaces the precedence rule a late rejection needed: once the record knows of the inclusion, nothing
-moves it. The four status names `FacadeState.pending` already publishes keep their meaning; the other four are added.
+```mermaid
+stateDiagram-v2
+  [*] --> Balanced: balance
+  [*] --> Finalized: finalize, not balanced here
+  [*] --> Submitted: submit, adopted
+  Balanced --> Finalized: finalize
+  Balanced --> Submitted: submit, proven outside
+  Finalized --> Submitted: submit
+  Balanced --> Confirmed: included
+  Finalized --> Confirmed: included
+  Submitted --> Confirmed: included
+  Submitted --> Rejected: refused, or TTL passed
+  Balanced --> Orphaned: fork crossed
+  Finalized --> Orphaned: fork crossed
+  Submitted --> Orphaned: fork crossed
+  Balanced --> Expired: TTL passed
+  Finalized --> Expired: TTL passed
+  Balanced --> Reverted: revert or build failed
+  Finalized --> Reverted: revert or build failed
+  Submitted --> Reverted: revert or submit threw
+  Rejected --> Balanced: balanced again
+  Orphaned --> Balanced: balanced again
+  Expired --> Balanced: balanced again
+  Reverted --> Balanced: balanced again
+  Confirmed --> [*]: dropped after TTL
+  Rejected --> [*]: dropped after TTL
+  Orphaned --> [*]: dropped after TTL
+  Expired --> [*]: dropped after TTL
+  Reverted --> [*]: dropped after TTL
+```
+
+`Confirmed`, `Rejected`, `Orphaned`, `Expired` and `Reverted` are final: no verdict moves them. The one way out of
+`Rejected`, `Orphaned`, `Expired` or `Reverted` is balancing the same spend again, whose coins were never spent on
+chain; that replaces the record with a new `Balanced` one, so a spend keeps one record. `Confirmed` is final against
+every other verdict, which replaces the precedence rule a late rejection needed: once the record knows of the inclusion,
+nothing moves it. The four status names `FacadeState.pending` already publishes keep their meaning; the other four are
+added.
 
 **No transition frees a coin.** Each wallet's own sweep and the facade's release-on-failure stay the only releasers, as
 ADR-0009 and ADR-0010 have them. A record moving to `Expired` or `Reverted` says the coins are no longer spoken for,
