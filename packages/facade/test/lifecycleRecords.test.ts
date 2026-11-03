@@ -186,6 +186,15 @@ const unbound = (tx: ledger.UnprovenTransaction) =>
 const finalized = (tx: ledger.UnprovenTransaction) =>
   WalletTransaction.adopt('Finalized', tx.mockProve().bind(), ProtocolVersion.MinSupportedVersion);
 
+/**
+ * The forms the simulator finalizes into: its prover erases proofs, so a recipe whose caller part is to be merged with
+ * a finalized balancing part must carry the caller's transaction erased too, or the two forms cannot merge.
+ */
+const simulatedFinalized = (tx: ledger.UnprovenTransaction) =>
+  WalletTransaction.adopt('Finalized', tx.eraseProofs().bind(), ProtocolVersion.MinSupportedVersion);
+const simulatedUnbound = (tx: ledger.UnprovenTransaction) =>
+  WalletTransaction.adopt('Unbound', tx.eraseProofs(), ProtocolVersion.MinSupportedVersion);
+
 type Built = Readonly<{ recipe: BalancingRecipe; callersCoins: readonly string[] }>;
 
 /**
@@ -405,12 +414,12 @@ describe('A finalized transaction’s lifecycle record', () => {
     {
       recipe: 'a finalized recipe of two parts',
       balance: (facade: WalletFacade, keys: WalletKeys, ttl: Date) =>
-        facade.balanceFinalizedTransaction(finalized(callersTransaction(keys, ttl)), { ttl }),
+        facade.balanceFinalizedTransaction(simulatedFinalized(callersShieldedTransaction(keys)), { ttl }),
     },
     {
       recipe: 'an unbound recipe',
       balance: (facade: WalletFacade, keys: WalletKeys, ttl: Date) =>
-        facade.balanceUnboundTransaction(unbound(callersShieldedTransaction(keys)), { ttl }),
+        facade.balanceUnboundTransaction(simulatedUnbound(callersShieldedTransaction(keys)), { ttl }),
     },
   ])(
     'should fold $recipe into one finalized record holding the finalized transaction, begun when it was balanced by the facade’s clock',
