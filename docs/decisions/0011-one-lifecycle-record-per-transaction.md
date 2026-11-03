@@ -163,9 +163,12 @@ the one upgrade step in a ledger-free `pendingTransactions/SnapshotFormat.ts`, a
 fills in, never invents:
 
 - A `v1` reservation becomes a `Balanced` record with no transaction, keeping its identifiers, intent hashes, inputs and
-  TTL. Its version is unknown, so a fork never orphans it; its TTL still ends it.
+  TTL; one already marked expired becomes `Expired`. Its version is unknown, so a fork never orphans it; its TTL still
+  ends it.
 - A `v1` pending item becomes a `Submitted` record, as `FacadeState.pending` showed it, keeping its transaction,
-  creation time and protocol version. A recorded verdict carries over.
+  creation time and protocol version. It has no submission time: `v1` kept only when it was finalized. Its identifiers,
+  intent hashes, inputs and TTL were never stored, so the reader takes them from the transaction, through the trait
+  registered for its version. `v1` stored no verdicts, so none carries over; the poller asks again.
 - Unknown top-level fields are carried through, as every reader of this store already does.
 
 ### Name
