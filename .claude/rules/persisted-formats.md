@@ -19,7 +19,7 @@ it was written, by a version we no longer ship.
 | --- | --- | --- |
 | Shielded snapshot | `shielded-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v1` (both) |
 | Unshielded snapshot | `unshielded-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v1` (V1), `v2` (V2) |
-| Dust snapshot | `dust-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v1` (both) |
+| Dust snapshot | `dust-wallet/src/v1/Serialization.ts` and `src/v2/Serialization.ts` | `v2` (both) |
 | Transaction history | `abstractions/src/InMemoryTransactionHistoryStorage.ts` | `v2` |
 | Pending transactions | `capabilities/src/pendingTransactions/pendingTransactions.ts` | `v1` |
 

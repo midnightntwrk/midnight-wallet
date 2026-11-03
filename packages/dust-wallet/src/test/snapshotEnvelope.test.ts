@@ -102,6 +102,8 @@ const expectedPaths = [
   'protocolVersion',
   'publicKey.publicKey',
   'state',
+  // The Dust pending transactions have spent, so a restored wallet can still release it. Empty for these wallets.
+  'pendingDust[]',
 ];
 
 describe('the dust snapshot envelope', () => {

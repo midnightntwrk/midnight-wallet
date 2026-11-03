@@ -21,6 +21,15 @@ export type {
   UtxoWithMeta,
 } from '../../types/DustWalletTypes.js';
 
-export type DustWithNullifier = Dust & {
+/** A Dust coin a pending transaction has spent: one booking of that coin, which a revert of that transaction releases. */
+export type PendingDust = Readonly<{
+  /** The coin as it was before the spend. Its own `ctime` is when the coin was created, not when it was spent. */
+  coin: Dust;
   nullifier: DustNullifier;
-};
+  /**
+   * The time the spending transaction declared in `dustActions.ctime`, in whole seconds as the ledger keeps it. The
+   * ledger locks the coin until `declaredTime + dustGracePeriodSeconds`, and a coin can only be booked again after
+   * that, so this tells one booking of a coin from a later one.
+   */
+  declaredTime: Date;
+}>;

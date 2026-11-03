@@ -77,7 +77,7 @@ export const makeDefaultCoinsAndBalancesCapability = (
     });
 
   const availableDustTokens = (state: CoreWallet): Dust[] => {
-    const pendingSpends = new Set([...state.pendingDust.values()].map((coin) => coin.nonce));
+    const pendingSpends = new Set(state.pendingDust.map(({ coin }) => coin.nonce));
     return pipe(
       state.state.utxos,
       Arr.filter((coin) => !pendingSpends.has(coin.nonce)),
@@ -88,7 +88,11 @@ export const makeDefaultCoinsAndBalancesCapability = (
     toFullInfo(state, availableDustTokens(state), resolveTime(state, time));
 
   const getPendingCoins = (state: CoreWallet, time?: Date): readonly DustFullInfo[] =>
-    toFullInfo(state, state.pendingDust, resolveTime(state, time));
+    toFullInfo(
+      state,
+      state.pendingDust.map(({ coin }) => coin),
+      resolveTime(state, time),
+    );
 
   const getTotalCoins = (state: CoreWallet, time?: Date): ReadonlyArray<DustFullInfo> => {
     const effectiveTime = resolveTime(state, time);
