@@ -571,3 +571,35 @@ describe('When a transaction was submitted', () => {
     expect(rebalanced.records.map((record) => record.submittedAt)).toStrictEqual([Option.none()]);
   });
 });
+
+describe('The TTL a record keeps as it moves', () => {
+  // The facade reads a TTL off the transaction at each move, against the instant of that move; where the TTL is the
+  // Dust grace period after the record began, a later instant reads a later TTL than the transaction really has.
+  const LATER_TTL = new Date('2026-01-01T03:00:00.000Z');
+
+  it.each([
+    ['finalized', Lifecycle.finalized],
+    ['submitted', Lifecycle.submitted],
+  ] as const)(
+    'should keep the earliest TTL known for the spend when it is %s, so a TTL read later never extends its life',
+    (_move, move) => {
+      const balancing = Lifecycle.balanced(empty, facts('erased', ['id-a']), BALANCED_AT);
+
+      const state = move(balancing, facts('finalized', ['id-a'], { ttl: LATER_TTL }), SUBMITTED_AT);
+
+      expect(state.records.map((record) => record.ttl)).toStrictEqual([TTL]);
+    },
+  );
+
+  it('should take the TTL a spend balanced again brings, because its earlier record ended and its TTL with it', () => {
+    const ended = Lifecycle.expire(
+      Lifecycle.balanced(empty, facts('erased', ['id-a']), BALANCED_AT),
+      at('2026-01-01T02:00:00.000Z'),
+    );
+    const again = facts('erased', ['id-a'], { ttl: new Date('2026-01-01T04:00:00.000Z') });
+
+    const state = Lifecycle.balanced(ended, again, at('2026-01-01T02:00:00.000Z'));
+
+    expect(state.records.map((record) => record.ttl)).toStrictEqual([again.ttl]);
+  });
+});

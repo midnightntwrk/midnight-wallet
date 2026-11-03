@@ -101,7 +101,7 @@ const fundedFacade = () =>
     yield* waitForUnshieldedBalance(facade, NIGHT, 1n);
     yield* simulator.fastForward(10_000n);
 
-    return { facade, keys };
+    return { facade, keys, simulator };
   });
 
 /** Registers every Night coin for Dust generation and waits until the Dust it generates can pay fees. */
@@ -462,5 +462,35 @@ describe('A finalized transaction’s lifecycle record', () => {
       const records = recordsCovering(yield* lifecycleOf(facade), finalizedTx);
       expect(records.map((record) => record.state)).toStrictEqual([{ _tag: 'Finalized' }]);
       expect(records.map((record) => record.createdAt.epochMillis)).toStrictEqual([finalizedAt.getTime()]);
+    }).pipe(Effect.scoped, Effect.runPromise));
+});
+
+describe('A submitted transaction’s lifecycle record', () => {
+  it('should move the finalized record to submitted at the time the facade’s clock shows when it is submitted, keeping when it began', () =>
+    Effect.gen(function* () {
+      const { facade, keys, simulator } = yield* fundedFacade();
+      yield* withDust(facade, keys);
+      const ttl = ttlOn(facade);
+      const balancedAt = facade.clock.now();
+      const address = yield* Effect.promise(() => facade.unshielded.getAddress());
+      const recipe = yield* Effect.promise(() =>
+        facade.transferTransaction(
+          [{ type: 'unshielded', outputs: [{ type: NIGHT, receiverAddress: address, amount: tokenValue(1n) }] }],
+          { ttl },
+        ),
+      );
+      const finalizedTx = yield* Effect.promise(() => facade.finalizeRecipe(recipe));
+
+      yield* simulator.fastForward(60n);
+      const submittedAt = facade.clock.now();
+      expect(submittedAt.getTime()).toBeGreaterThan(balancedAt.getTime());
+      yield* Effect.promise(() => facade.submitTransaction(finalizedTx));
+
+      const records = recordsCovering(yield* lifecycleOf(facade), finalizedTx);
+      expect(records.map((record) => record.state)).toStrictEqual([{ _tag: 'Submitted' }]);
+      expect(records.map((record) => Option.map(record.submittedAt, (at) => at.epochMillis))).toStrictEqual([
+        Option.some(submittedAt.getTime()),
+      ]);
+      expect(records.map((record) => record.createdAt.epochMillis)).toStrictEqual([balancedAt.getTime()]);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
