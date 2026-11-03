@@ -21,7 +21,24 @@ import {
 } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { type Query, QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Chunk, DateTime, Effect, Either, Fiber, Option, pipe, Ref, Stream, TestClock, TestContext } from 'effect';
+import {
+  Chunk,
+  DateTime,
+  Deferred,
+  Effect,
+  Either,
+  Exit,
+  Fiber,
+  identity,
+  Option,
+  pipe,
+  Ref,
+  Scope,
+  Stream,
+  TestClock,
+  TestContext,
+  TestServices,
+} from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import * as Lifecycle from '../lifecycle.js';
@@ -552,5 +569,48 @@ describe('The transaction lifecycle service polling the indexer', () => {
       yield* tickAgainst(service, indexerOf([], asked));
 
       expect([...(yield* Ref.get(asked))].sort()).toStrictEqual(['id-balanced', 'id-finalized', 'id-submitted']);
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise));
+
+  it('should make no indexer query once the scope it polls in is closed, so stopping the service stops the poller', () =>
+    Effect.gen(function* () {
+      const service = new TransactionLifecycleServiceEffectImpl(traits);
+      const scope = yield* Scope.make();
+      const firstQuery = yield* Deferred.make<void>();
+      const closed = yield* Deferred.make<void>();
+      const queriedAfterClose = yield* Deferred.make<void>();
+      const indexer: StatusQuery = () =>
+        pipe(
+          Deferred.succeed(firstQuery, undefined),
+          Effect.andThen(Deferred.isDone(closed)),
+          Effect.andThen((isClosed) => (isClosed ? Deferred.succeed(queriedAfterClose, undefined) : Effect.void)),
+          Effect.as<TransactionStatusQuery>({ transactions: [] }),
+        );
+
+      yield* setClock(BALANCED_AT);
+      yield* service.submitted(SPEND);
+      yield* setClock(BEFORE_TTL);
+
+      // Ticks without end, so only the closed scope can stop the poller.
+      const poller = yield* service.startPolling(Stream.repeatEffect(Effect.yieldNow())).pipe(
+        Effect.provideService(TransactionStatus.tag, indexer),
+        // Type cast required because: the stubbed status query above never reaches a client.
+        Effect.provideService(QueryClient, {} as unknown as QueryClient.Service),
+        Effect.provideService(Scope.Scope, scope),
+        Effect.fork,
+      );
+
+      yield* Deferred.await(firstQuery);
+      yield* Scope.close(scope, Exit.void);
+      yield* Deferred.succeed(closed, undefined);
+
+      // Waits on the real clock, so a poller that keeps going fails the test instead of hanging it.
+      const queried = yield* Deferred.await(queriedAfterClose).pipe(
+        Effect.as(true),
+        Effect.timeoutTo({ duration: '1 second', onSuccess: identity, onTimeout: () => false }),
+        TestServices.provideLive,
+      );
+      yield* Fiber.interrupt(poller);
+
+      expect(queried, 'the poller queried the indexer after its scope was closed').toBe(false);
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise));
 });
