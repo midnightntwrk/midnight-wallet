@@ -113,7 +113,11 @@ stored, moves the record. A partial success sync reports moves nothing: the hist
 segments failed decides what is released, so the poller settles it. Whatever was released at the inferred end is
 harmless, because sync settles the spent coins. `Confirmed` is final against every other verdict, which replaces the
 precedence rule a late rejection needed: once the record knows of the inclusion, nothing moves it. The four status names
-`FacadeState.pending` already publishes keep their meaning; the other four are added.
+`FacadeState.pending` already publishes keep their meaning; the other four are added. `FacadeState.pending` is one entry
+per record, read off it. `Rejected` says why: `Refused`, with the segments the chain reported, or `TTLPassed`, which has
+none. `Confirmed` carries no segments, because the record keeps none. An entry holds its finalized transaction from
+`Finalized` on, and none while `Balanced`. Since an ended record stays until its TTL passes, an empty list no longer
+means nothing is awaited: `isAwaiting` tells the balanced, finalized and submitted entries from the ended ones.
 
 **No transition frees a coin.** Each wallet's own sweep and the facade's release-on-failure stay the only releasers, as
 ADR-0009 and ADR-0010 have them. A record moving to `Expired` or `Reverted` says the coins are no longer spoken for,

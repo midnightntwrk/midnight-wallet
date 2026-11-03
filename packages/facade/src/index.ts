@@ -696,15 +696,22 @@ export const protocolPhaseOf = (
 };
 
 /**
- * What has become of a transaction the wallet submitted.
+ * What has become of a transaction the wallet keeps a lifecycle record for.
  *
  * @remarks
- *   Tagged rather than a status string, and deliberately: `Orphaned` and `Rejected` are different facts about the world
- *   and the difference matters to what an application should do next. A rejection is the chain's verdict — the node saw
- *   the transaction and refused it. An orphaned transaction has no verdict at all and never will: its bytes were
- *   authored under a protocol version the chain has moved past, and nothing can include them afterwards. The wallet has
- *   already unbooked its coins and recorded the rejection either way; what differs is what an application can tell a
- *   user, and whether re-submitting the same bytes could ever help.
+ *   Tagged rather than a status string, and deliberately: each tag is a different fact about the transaction, and the
+ *   difference matters to what an application does next.
+ *
+ *   - `Balanced`, `Finalized` and `Submitted` still await an answer (see {@link isAwaiting}): the coins stay booked, and the
+ *       transaction may yet be included.
+ *   - `Confirmed`: the chain included it.
+ *   - `Rejected`: it will never be included. `Refused` is the chain's verdict — the node saw the transaction and failed it,
+ *       wholly or in some segments, which is still not a transaction that happened as submitted. `TTLPassed` means it
+ *       was submitted and its TTL passed with no inclusion seen.
+ *   - `Orphaned`: no verdict at all, and there never will be one. Its bytes were authored under a protocol version the
+ *       chain has moved past, and nothing can include them afterwards; re-submitting the same bytes could never help.
+ *   - `Expired`: its TTL passed before it was submitted.
+ *   - `Reverted`: the wallet gave its coins back, so no chain will be asked to include it.
  */
 export type PendingStatus =
   | Readonly<{ _tag: 'Balanced' }>
@@ -713,6 +720,7 @@ export type PendingStatus =
   | Readonly<{ _tag: 'Confirmed' }>
   | Readonly<{
       _tag: 'Rejected';
+      /** Why it will never be included: the chain's refusal, with the segments it reported, or its TTL passing. */
       reason:
         | Readonly<{ _tag: 'Refused'; segments: readonly Readonly<{ id: number; success: boolean }>[] }>
         | Readonly<{ _tag: 'TTLPassed' }>;
@@ -727,13 +735,25 @@ export type PendingStatus =
   | Readonly<{ _tag: 'Expired' }>
   | Readonly<{ _tag: 'Reverted' }>;
 
-/** A transaction the wallet has submitted and the chain has not finished answering for. */
+/**
+ * A transaction the wallet keeps a lifecycle record for, from the moment it is balanced until its TTL has passed.
+ *
+ * @remarks
+ *   An entry stays after its transaction has ended, until its TTL passes, so an application can read how it ended. Tell
+ *   the ones still awaiting an answer from the rest with {@link isAwaiting}, not by the list being empty.
+ */
 export type PendingTransaction = Readonly<{
-  /** What ties the entry to its transaction at every stage. */
+  /** What ties the entry to its transaction at every stage: proving and binding leave identifiers unchanged. */
   identifiers: readonly string[];
-  /** The transaction itself, as the handle an application carries. */
+  /**
+   * The finalized transaction, as the handle an application carries.
+   *
+   * @remarks
+   *   `Option.none()` while it is only balanced, since the wallet holds it with its proofs erased until it is finalized,
+   *   and for a record kept from an older format that did not hold its transaction.
+   */
   transaction: Option.Option<FinalizedTx>;
-  /** When the wallet recorded it as pending. */
+  /** When it was submitted, once it was. */
   submittedAt: Option.Option<DateTime.Utc>;
   /**
    * The protocol version it was authored for, when the wallet had observed one.
@@ -747,23 +767,59 @@ export type PendingTransaction = Readonly<{
   status: PendingStatus;
 }>;
 
+/** Reads what has become of a transaction off its record's state. */
+const pendingStatusOf = (state: Lifecycle.LifecycleState): PendingStatus =>
+  Lifecycle.LifecycleState.$match(state, {
+    Balanced: (): PendingStatus => ({ _tag: 'Balanced' }),
+    Finalized: (): PendingStatus => ({ _tag: 'Finalized' }),
+    Submitted: (): PendingStatus => ({ _tag: 'Submitted' }),
+    Confirmed: (): PendingStatus => ({ _tag: 'Confirmed' }),
+    Rejected: ({ verdict }): PendingStatus => ({
+      _tag: 'Rejected',
+      reason: verdict.status === 'TTL_PASSED' ? { _tag: 'TTLPassed' } : { _tag: 'Refused', segments: verdict.segments },
+    }),
+    Orphaned: ({ authoredFor, chainNow }): PendingStatus => ({ _tag: 'Orphaned', authoredFor, chainNow }),
+    Expired: (): PendingStatus => ({ _tag: 'Expired' }),
+    Reverted: (): PendingStatus => ({ _tag: 'Reverted' }),
+  });
+
 /**
  * The pending transactions as an application reads them.
  *
- * @param _lifecycle The lifecycle records.
- * @returns One entry per record.
+ * @remarks
+ *   A projection over the lifecycle records the wallet keeps, not a second copy of them: the same facts, stated as a list
+ *   of transactions with a status each.
+ * @example
+ *   const entries = pendingTransactionsOf(await firstValueFrom(facade.transactionLifecycleService.state()));
+ *
+ * @param lifecycle The lifecycle records.
+ * @returns One entry per record, in the order the wallet keeps them.
  */
 export const pendingTransactionsOf = (
-  _lifecycle: Lifecycle.TransactionLifecycle<LifecycleTx>,
-): readonly PendingTransaction[] => [];
+  lifecycle: Lifecycle.TransactionLifecycle<LifecycleTx>,
+): readonly PendingTransaction[] =>
+  lifecycle.records.map((record) => ({
+    identifiers: record.identifiers,
+    // A balanced record holds its transaction with the proofs erased, which is no finalized transaction.
+    transaction: record.state._tag === 'Balanced' ? Option.none() : Option.map(record.tx, finalizedOf),
+    submittedAt: record.submittedAt,
+    authoredFor: record.protocolVersion,
+    status: pendingStatusOf(record.state),
+  }));
+
+const AWAITING: ReadonlyArray<PendingStatus['_tag']> = ['Balanced', 'Finalized', 'Submitted'];
 
 /**
- * Whether a transaction still awaits an answer.
+ * Whether a transaction still awaits an answer: balanced, finalized or submitted, so it may yet be included and its
+ * coins stay booked. Every other status is an end.
  *
- * @param _entry The entry.
- * @returns Whether it awaits one.
+ * @example
+ *   const settled = await firstValueFrom(facade.state().pipe(filter((state) => !state.pending.some(isAwaiting))));
+ *
+ * @param entry The pending entry.
+ * @returns `true` while it awaits one.
  */
-export const isAwaiting = (_entry: PendingTransaction): boolean => false;
+export const isAwaiting = (entry: PendingTransaction): boolean => AWAITING.includes(entry.status._tag);
 
 export class FacadeState {
   public readonly shielded: ShieldedWalletState;
@@ -817,13 +873,13 @@ export class FacadeState {
     shielded: ShieldedWalletState,
     unshielded: UnshieldedWalletState,
     dust: DustWalletState,
-    pending: Lifecycle.TransactionLifecycle<LifecycleTx>,
+    lifecycle: Lifecycle.TransactionLifecycle<LifecycleTx>,
     forkVersion: ProtocolVersion.ProtocolVersion = ProtocolVersion.MinSupportedVersion,
   ) {
     this.shielded = shielded;
     this.unshielded = unshielded;
     this.dust = dust;
-    this.pending = pendingTransactionsOf(pending);
+    this.pending = pendingTransactionsOf(lifecycle);
     this.#forkVersion = forkVersion;
   }
 }
@@ -1941,24 +1997,24 @@ export class WalletFacade {
       this.shielded.state,
       this.unshielded.state,
       this.dust.state,
-      this.pendingTransactionsService.state(),
+      this.transactionLifecycleService.state(),
     ]).pipe(
       map(
-        ([shieldedState, unshieldedState, dustState]) =>
-          new FacadeState(shieldedState, unshieldedState, dustState, Lifecycle.empty<LifecycleTx>(), this.#forkVersion),
+        ([shieldedState, unshieldedState, dustState, lifecycle]) =>
+          new FacadeState(shieldedState, unshieldedState, dustState, lifecycle, this.#forkVersion),
       ),
     );
   }
 
   async waitForSyncedState(): Promise<FacadeState> {
-    const [shieldedState, unshieldedState, dustState] = await Promise.all([
+    const [shieldedState, unshieldedState, dustState, lifecycle] = await Promise.all([
       this.shielded.waitForSyncedState(),
       this.unshielded.waitForSyncedState(),
       this.dust.waitForSyncedState(),
-      firstValueFrom(this.pendingTransactionsService.state()),
+      firstValueFrom(this.transactionLifecycleService.state()),
     ]);
 
-    return new FacadeState(shieldedState, unshieldedState, dustState, Lifecycle.empty<LifecycleTx>(), this.#forkVersion);
+    return new FacadeState(shieldedState, unshieldedState, dustState, lifecycle, this.#forkVersion);
   }
 
   /**

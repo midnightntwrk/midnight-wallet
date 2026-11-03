@@ -38,6 +38,7 @@ import {
   createKeystore,
   DustWallet,
   InMemoryTransactionHistoryStorage,
+  isAwaiting,
   mergeWalletEntries,
   PublicKey,
   ShieldedWallet,
@@ -161,7 +162,9 @@ switch (state.protocol._tag) {
 // the coins so the funds are spendable again, and records `orphaned-by-protocol-upgrade` in transaction history so an
 // application can tell a user why. Re-submitting the same bytes could never help; re-authoring is the answer.
 const orphaned = state.pending.flatMap((entry) => (entry.status._tag === 'Orphaned' ? [entry.status] : []));
-console.log(`Pending transactions: ${state.pending.length}, of which orphaned by the fork: ${orphaned.length}`);
+console.log(
+  `Transactions awaiting an answer: ${state.pending.filter(isAwaiting).length}; orphaned by the fork: ${orphaned.length}`,
+);
 orphaned.forEach((status) => console.log(`  authored for ${status.authoredFor}, chain had reached ${status.chainNow}`));
 
 // ---------------------------------------------------------------------------------------------------------------------
