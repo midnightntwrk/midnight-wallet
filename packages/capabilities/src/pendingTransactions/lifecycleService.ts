@@ -15,20 +15,25 @@
 
 import { type ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { TransactionStatus } from '@midnightntwrk/wallet-sdk-indexer-client';
-import { type QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
-import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { HttpQueryClient, type QueryClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
+import { EitherOps, ObservableOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
   Array as Arr,
   DateTime,
+  DefaultServices,
+  Duration,
   Effect,
+  Exit,
   Option,
   type ParseResult,
   pipe,
-  type Scope,
+  Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
+import type * as rx from 'rxjs';
 import * as Lifecycle from './lifecycle.js';
+import { type DefaultPendingTransactionsServiceConfiguration } from './pendingTransactionsService.js';
 import {
   type FailedTransactionResult,
   type TransactionTrait,
@@ -239,3 +244,131 @@ const verdictFrom = (result: {
       ? Option.some({ status: result.status, segments })
       : Option.none();
 };
+
+/** The {@link TransactionLifecycleServiceEffect} as the facade drives it: promises in, an observable out. */
+export type TransactionLifecycleService<TTransaction> = {
+  start: () => Promise<void>;
+  stop: () => Promise<void>;
+  state: () => rx.Observable<Lifecycle.TransactionLifecycle<TTransaction>>;
+  balanced: (facts: Lifecycle.TransactionFacts<TTransaction>) => Promise<void>;
+  finalized: (facts: Lifecycle.TransactionFacts<TTransaction>) => Promise<void>;
+  submitted: (facts: Lifecycle.TransactionFacts<TTransaction>) => Promise<void>;
+  reverted: (identifiers: readonly string[]) => Promise<void>;
+  orphanBeyond: (chainNow: ProtocolVersion.ProtocolVersion) => Promise<void>;
+};
+
+export type TransactionLifecycleServiceInitParams<TTransaction> = {
+  txTraits: VersionedTransactionTrait<TTransaction>;
+  initialState?: Lifecycle.TransactionLifecycle<TTransaction>;
+  configuration: DefaultPendingTransactionsServiceConfiguration;
+};
+
+/**
+ * Runs a {@link TransactionLifecycleServiceEffectImpl}, polling the configured indexer once a second between `start` and
+ * `stop`.
+ *
+ * @example
+ *   const service = await TransactionLifecycleServiceImpl.init({ txTraits, configuration });
+ *   await service.start();
+ */
+export class TransactionLifecycleServiceImpl<TTransaction> implements TransactionLifecycleService<TTransaction> {
+  /**
+   * Builds a service, empty or holding `initialState`.
+   *
+   * @param initParams The traits records are read with, the indexer to poll, and any records to begin with.
+   * @returns The service, not yet polling.
+   */
+  static init<TTransaction>(
+    initParams: TransactionLifecycleServiceInitParams<TTransaction>,
+  ): Promise<TransactionLifecycleServiceImpl<TTransaction>> {
+    return pipe(
+      Scope.make(),
+      Effect.map(
+        (scope) =>
+          new TransactionLifecycleServiceImpl<TTransaction>(
+            new TransactionLifecycleServiceEffectImpl(initParams.txTraits, initParams.initialState),
+            scope,
+            initParams.configuration,
+          ),
+      ),
+      Effect.runPromise,
+    );
+  }
+
+  /**
+   * Builds a service holding the records a previous one stored.
+   *
+   * @param data What `Lifecycle.serialize` wrote.
+   * @param txTraits The traits each record's transaction is read with.
+   * @param configuration The indexer to poll.
+   * @returns The service, not yet polling; rejects with why the payload could not be read.
+   */
+  static restore<TTransaction>(
+    data: string,
+    txTraits: VersionedTransactionTrait<TTransaction>,
+    configuration: DefaultPendingTransactionsServiceConfiguration,
+  ): Promise<TransactionLifecycleServiceImpl<TTransaction>> {
+    return pipe(
+      Lifecycle.deserialize(data, txTraits),
+      EitherOps.toEffect,
+      Effect.flatMap((initialState) =>
+        Effect.promise(() => TransactionLifecycleServiceImpl.init({ txTraits, initialState, configuration })),
+      ),
+      Effect.runPromise,
+    );
+  }
+
+  #effectService: TransactionLifecycleServiceEffect<TTransaction>;
+  #scope: Scope.CloseableScope;
+  #configuration: DefaultPendingTransactionsServiceConfiguration;
+
+  constructor(
+    effectService: TransactionLifecycleServiceEffect<TTransaction>,
+    scope: Scope.CloseableScope,
+    configuration: DefaultPendingTransactionsServiceConfiguration,
+  ) {
+    this.#effectService = effectService;
+    this.#scope = scope;
+    this.#configuration = configuration;
+  }
+
+  start(): Promise<void> {
+    return this.#effectService
+      .startPolling(Stream.tick(Duration.seconds(1)))
+      .pipe(
+        Effect.provide(HttpQueryClient.layer({ url: this.#configuration.indexerClientConnection.indexerHttpUrl })),
+        Effect.provideService(Scope.Scope, this.#scope),
+        Effect.provide(DefaultServices.liveServices),
+        Effect.runFork,
+        () => Promise.resolve(),
+      );
+  }
+
+  stop(): Promise<void> {
+    return pipe(Scope.close(this.#scope, Exit.succeed(undefined)), Effect.runPromise);
+  }
+
+  state(): rx.Observable<Lifecycle.TransactionLifecycle<TTransaction>> {
+    return this.#effectService.state().pipe(ObservableOps.fromStream);
+  }
+
+  balanced(facts: Lifecycle.TransactionFacts<TTransaction>): Promise<void> {
+    return Effect.runPromise(this.#effectService.balanced(facts));
+  }
+
+  finalized(facts: Lifecycle.TransactionFacts<TTransaction>): Promise<void> {
+    return Effect.runPromise(this.#effectService.finalized(facts));
+  }
+
+  submitted(facts: Lifecycle.TransactionFacts<TTransaction>): Promise<void> {
+    return Effect.runPromise(this.#effectService.submitted(facts));
+  }
+
+  reverted(identifiers: readonly string[]): Promise<void> {
+    return Effect.runPromise(this.#effectService.reverted(identifiers));
+  }
+
+  orphanBeyond(chainNow: ProtocolVersion.ProtocolVersion): Promise<void> {
+    return Effect.runPromise(this.#effectService.orphanBeyond(chainNow));
+  }
+}

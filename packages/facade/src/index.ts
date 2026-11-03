@@ -88,6 +88,8 @@ import {
   PendingTransactions,
   type PendingTransactionsService,
   PendingTransactionsServiceImpl,
+  type TransactionLifecycleService,
+  TransactionLifecycleServiceImpl,
 } from '@midnightntwrk/wallet-sdk-capabilities';
 import {
   type AnyLedgerParameters,
@@ -104,7 +106,13 @@ import {
   type WellFormedStrictnessFlags,
   withLedgerParameters,
 } from '@midnightntwrk/wallet-sdk-capabilities/validation';
-import { coinIdsOf, finalizedTransactionTraits, txHistoryHash } from './transaction.js';
+import {
+  coinIdsOf,
+  finalizedTransactionTraits,
+  lifecycleTransactionTraits,
+  type LifecycleTx,
+  txHistoryHash,
+} from './transaction.js';
 
 /**
  * The traits pending transactions are read with, exported so a test that restores a stored pending-transaction payload
@@ -899,6 +907,13 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
   pendingTransactionsService?: (
     config: ResolvedConfiguration<TConfig>,
   ) => MaybePromise<PendingTransactionsService<FinalizedTx>>;
+  /**
+   * Optional factory for the service holding one lifecycle record per transaction. Defaults to one polling
+   * `configuration.indexerClientConnection`.
+   */
+  transactionLifecycleService?: (
+    config: ResolvedConfiguration<TConfig>,
+  ) => MaybePromise<TransactionLifecycleService<LifecycleTx>>;
   provingService?: (
     config: ResolvedConfiguration<TConfig>,
   ) => MaybePromise<VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>>;
@@ -951,6 +966,15 @@ export class WalletFacade {
     return PendingTransactionsServiceImpl.init<FinalizedTx>({
       configuration: config,
       txTraits: finalizedTransactionTraits(config.forks.v9),
+    });
+  }
+
+  private static makeDefaultTransactionLifecycleService<
+    TConfig extends DefaultPendingTransactionsServiceConfiguration & { forks: ProtocolVersion.ForkSchedule },
+  >(config: TConfig): Promise<TransactionLifecycleServiceImpl<LifecycleTx>> {
+    return TransactionLifecycleServiceImpl.init<LifecycleTx>({
+      configuration: config,
+      txTraits: lifecycleTransactionTraits(config.forks.v9),
     });
   }
 
@@ -1069,6 +1093,11 @@ export class WalletFacade {
         ? initParams.pendingTransactionsService(configuration)
         : WalletFacade.makeDefaultPendingTransactionsService(configuration),
     );
+    const transactionLifecycleService = await Promise.resolve(
+      initParams.transactionLifecycleService
+        ? initParams.transactionLifecycleService(configuration)
+        : WalletFacade.makeDefaultTransactionLifecycleService(configuration),
+    );
     const provingService = await Promise.resolve(
       initParams.provingService
         ? initParams.provingService(configuration)
@@ -1104,6 +1133,7 @@ export class WalletFacade {
       configuration.txHistoryStorage,
       configuration.forks.v9,
       clock,
+      transactionLifecycleService,
     );
   }
 
@@ -1112,6 +1142,8 @@ export class WalletFacade {
   readonly dust: DustWalletAPI<DustKeysByEpoch>;
   readonly submissionService: SubmissionService<FinalizedTx>;
   readonly pendingTransactionsService: PendingTransactionsService<FinalizedTx>;
+  /** One lifecycle record per transaction the facade balanced, finalized or submitted. */
+  readonly transactionLifecycleService: TransactionLifecycleService<LifecycleTx>;
   readonly provingService: VersionedProvingService<AnyVersionUnboundTransaction, AnyVersionUnprovenTransaction>;
   readonly validationService: VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>;
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
@@ -1148,8 +1180,10 @@ export class WalletFacade {
     validationService: VersionedValidationService<AnyVersionValidatableTransaction, AnyLedgerParameters>,
     txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>,
     forkVersion: ProtocolVersion.ProtocolVersion,
-    clock: Clock.Clock = Clock.systemClock,
+    clock: Clock.Clock,
+    transactionLifecycleService: TransactionLifecycleService<LifecycleTx>,
   ) {
+    this.transactionLifecycleService = transactionLifecycleService;
     this.shielded = shieldedWallet;
     this.unshielded = unshieldedWallet;
     this.dust = dustWallet;
@@ -2625,6 +2659,7 @@ export class WalletFacade {
       this.unshielded.start(),
       !options.manualSync ? this.dust.start(dustKeysOf(material)) : undefined,
       this.pendingTransactionsService.start(),
+      this.transactionLifecycleService.start(),
     ]);
   }
 
@@ -2668,6 +2703,7 @@ export class WalletFacade {
       this.dust.stop(),
       this.submissionService.close(),
       this.pendingTransactionsService.stop(),
+      this.transactionLifecycleService.stop(),
       Promise.resolve(this.#pendingSubscription?.unsubscribe()),
       Promise.resolve(this.#protocolVersionSubscription?.unsubscribe()),
       Promise.resolve(this.#expiredReservationSubscription?.unsubscribe()),
