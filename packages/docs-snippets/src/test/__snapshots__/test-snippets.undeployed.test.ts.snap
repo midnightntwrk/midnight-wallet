@@ -1510,3 +1510,12 @@ Could not restore the transaction-history payload (format v9, unknown-version): 
 ",
 ]
 `;
+
+exports[`Snippet outputs > without network > should output the correct result for 'transaction-lifecycle-persistence' 1`] = `
+[
+  "saved format v2
+restored records true
+refused true
+",
+]
+`;
