@@ -46,8 +46,8 @@ export type Writer = (typeof WRITERS)[number];
 /**
  * The five persisted surfaces — the strings the SDK hands an application to store and hand back later.
  *
- * Each has its own format-version line: the transaction history is on `v2` while the four others are still on `v1`,
- * because a format version belongs to a surface, not to a release.
+ * Each has its own format-version line, because a format version belongs to a surface, not to a release: the shielded
+ * snapshot is still on `v1` while the transaction history and the transaction lifecycle store are on `v2`.
  */
 export const SURFACES = ['shielded', 'unshielded', 'dust', 'tx-history', 'transaction-lifecycle'] as const;
 
