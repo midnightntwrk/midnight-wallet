@@ -36,7 +36,13 @@ export type TransactionTrait<TTransaction> = {
   /** The instant after which the transaction can no longer be included, for one created at `createdAt`. */
   ttl: (tx: TTransaction, createdAt: DateTime.Utc) => Date;
   serialize: (tx: TTransaction) => Uint8Array;
-  deserialize: (serialized: Uint8Array) => TTransaction;
+  /**
+   * What the bytes alone do not say about the transaction, stored beside them and handed back to `deserialize`; left
+   * out by a trait whose transactions are their bytes.
+   */
+  formOf?: (tx: TTransaction) => string;
+  /** Reads the bytes `serialize` wrote, with the form `formOf` named when they were written, if it named one. */
+  deserialize: (serialized: Uint8Array, form?: string) => TTransaction;
   isTx: (tx: unknown) => tx is TTransaction;
 };
 export type HasTransactionTrait<TTransaction> = { txTrait: TransactionTrait<TTransaction> };

@@ -509,6 +509,8 @@ const InputsSchema = Schema.Struct({
  */
 const WireRecordSchema = Schema.Struct({
   tx: Schema.optionalWith(Schema.String, { exact: true }),
+  /** What the trait said about the transaction that its bytes do not, when it said anything. */
+  txForm: Schema.optionalWith(Schema.String, { exact: true }),
   protocolVersion: Schema.optionalWith(ProtocolVersion.ProtocolVersionSchema, { as: 'Option', exact: true }),
   identifiers: Schema.optionalWith(Schema.Array(Schema.String), { exact: true }),
   intentHashes: Schema.optionalWith(Schema.Array(Schema.String), { exact: true }),
@@ -596,7 +598,7 @@ const RecordSchema = <TTransaction>(
               traitOf(wire.protocolVersion, ast, wire),
               Either.flatMap((trait) =>
                 Either.try({
-                  try: () => ({ trait, tx: trait.deserialize(Buffer.from(wire.tx ?? '', 'hex')) }),
+                  try: () => ({ trait, tx: trait.deserialize(Buffer.from(wire.tx ?? '', 'hex'), wire.txForm) }),
                   catch: (cause) =>
                     new ParseResult.Type(ast, wire, `Could not read the recorded transaction: ${String(cause)}`),
                 }),
@@ -622,12 +624,15 @@ const RecordSchema = <TTransaction>(
               traitOf(record.protocolVersion, ast, record),
               Either.flatMap((trait) =>
                 Either.try({
-                  try: () => Buffer.from(trait.serialize(tx)).toString('hex'),
+                  try: () => ({
+                    tx: Buffer.from(trait.serialize(tx)).toString('hex'),
+                    ...(trait.formOf === undefined ? {} : { txForm: trait.formOf(tx) }),
+                  }),
                   catch: (cause) =>
                     new ParseResult.Type(ast, record, `Could not write the recorded transaction: ${String(cause)}`),
                 }),
               ),
-              Either.map((hex) => ({ ...rest, tx: hex })),
+              Either.map((written) => ({ ...rest, ...written })),
             ),
         });
       },

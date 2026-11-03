@@ -76,6 +76,8 @@ export type TransactionLifecycleServiceEffect<TTransaction> = {
   orphanBeyond: (chainNow: ProtocolVersion.ProtocolVersion) => Effect.Effect<void>;
   /** Records that a block included the transaction holding any of `identifiers`, with the chain's `verdict`. */
   included: (identifiers: readonly string[], verdict: InclusionVerdict) => Effect.Effect<void>;
+  /** The records as they stand, written in the stored format with the traits the service reads them with. */
+  serializeState: () => Effect.Effect<string>;
 };
 
 /**
@@ -164,6 +166,13 @@ export class TransactionLifecycleServiceEffectImpl<
       verdict.status === 'SUCCESS'
         ? Lifecycle.confirmed(state, identifiers)
         : Lifecycle.rejected(state, identifiers, verdict),
+    );
+  }
+
+  serializeState(): Effect.Effect<string> {
+    return pipe(
+      SubscriptionRef.get(this.#state),
+      Effect.map((state) => Lifecycle.serialize(state, this.#txTraits)),
     );
   }
 
@@ -273,6 +282,7 @@ export type TransactionLifecycleService<TTransaction> = {
   reverted: (identifiers: readonly string[]) => Promise<void>;
   orphanBeyond: (chainNow: ProtocolVersion.ProtocolVersion) => Promise<void>;
   included: (identifiers: readonly string[], verdict: InclusionVerdict) => Promise<void>;
+  serializeState: () => Promise<string>;
 };
 
 export type TransactionLifecycleServiceInitParams<TTransaction> = {
@@ -425,5 +435,17 @@ export class TransactionLifecycleServiceImpl<TTransaction> implements Transactio
 
   included(identifiers: readonly string[], verdict: InclusionVerdict): Promise<void> {
     return this.#run(this.#effectService.included(identifiers, verdict));
+  }
+
+  /**
+   * Writes the records as they stand, with the traits the service was built with, for {@link restore} to read back.
+   *
+   * @example
+   *   const stored = await facade.transactionLifecycleService.serializeState();
+   *
+   * @returns The store, in the current format version.
+   */
+  serializeState(): Promise<string> {
+    return Effect.runPromise(this.#effectService.serializeState());
   }
 }

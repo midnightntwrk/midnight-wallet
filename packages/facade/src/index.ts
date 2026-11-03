@@ -150,6 +150,38 @@ const endResultOf = (state: Lifecycle.LifecycleState): Option.Option<Transaction
 const recordKey = (record: Lifecycle.LifecycleRecord<LifecycleTx>): string => record.identifiers.join(',');
 
 /**
+ * The states only a finalized transaction reaches: it is finalized, then submitted, and only a submitted one is
+ * refused. A record in any of them holds its transaction finalized whatever form its stored bytes were read back in.
+ */
+const HOLDS_FINALIZED: ReadonlyArray<Lifecycle.LifecycleState['_tag']> = ['Finalized', 'Submitted', 'Rejected'];
+
+/**
+ * The finalized transaction a record holds, stamped with the version the record says it was built for; none while it
+ * holds only the balanced transaction with its proofs erased, which is no finalized transaction, at whatever state the
+ * record has reached since.
+ *
+ * @remarks
+ *   A transaction read back from a store is stamped at the start of its epoch, because bytes carry no version; the record
+ *   carries the one it was built for, which is the stamp its handle was recorded with.
+ */
+const finalizedHeldBy = (record: Lifecycle.LifecycleRecord<LifecycleTx>): Option.Option<FinalizedTx> =>
+  heldAsFinalized({
+    ...record,
+    // A balanced record is moved there by balancing alone, which never hands it a finalized transaction.
+    tx: Option.filter(
+      record.tx,
+      (held) =>
+        record.state._tag !== 'Balanced' && (held.form === 'Finalized' || HOLDS_FINALIZED.includes(record.state._tag)),
+    ),
+  });
+
+/** The handle for the transaction a record holds, for a caller that already knows it holds it finalized. */
+const heldAsFinalized = (record: Lifecycle.LifecycleRecord<LifecycleTx>): Option.Option<FinalizedTx> =>
+  Option.map(record.tx, (held) =>
+    finalizedOf({ ...held, protocolVersion: Option.getOrElse(record.protocolVersion, () => held.protocolVersion) }),
+  );
+
+/**
  * The transactions whose records went from finalized or submitted to rejected or orphaned between two emissions, with
  * the verdict each release is decided by.
  *
@@ -166,7 +198,8 @@ const newlyEnded = (
   );
   return Arr.filterMap(current, (record) =>
     wasHeldFinalized.has(recordKey(record))
-      ? Option.all({ tx: Option.map(record.tx, finalizedOf), result: endResultOf(record.state) })
+      ? // Held finalized: it was finalized or submitted on the emission before.
+        Option.all({ tx: heldAsFinalized(record), result: endResultOf(record.state) })
       : Option.none(),
   );
 };
@@ -746,8 +779,10 @@ export type LifecycleEntry = Readonly<{
    * The finalized transaction, as the handle an application carries.
    *
    * @remarks
-   *   `Option.none()` while it is only balanced, since the wallet holds it with its proofs erased until it is finalized,
-   *   and for a record kept from an older format that did not hold its transaction.
+   *   `Option.none()` while it is only balanced, since the wallet holds it with its proofs erased until it is finalized;
+   *   for one that ended without ever being finalized (expired, reverted, orphaned, or confirmed after it was proven
+   *   elsewhere), which the wallet still holds erased; and for a record kept from an older format that did not hold its
+   *   transaction.
    */
   transaction: Option.Option<FinalizedTx>;
   /** When it was submitted, once it was. */
@@ -795,8 +830,7 @@ const lifecycleStatusOf = (state: Lifecycle.LifecycleState): LifecycleStatus =>
 export const lifecycleEntriesOf = (lifecycle: Lifecycle.TransactionLifecycle<LifecycleTx>): readonly LifecycleEntry[] =>
   lifecycle.records.map((record) => ({
     identifiers: record.identifiers,
-    // A balanced record holds its transaction with the proofs erased, which is no finalized transaction.
-    transaction: record.state._tag === 'Balanced' ? Option.none() : Option.map(record.tx, finalizedOf),
+    transaction: finalizedHeldBy(record),
     submittedAt: record.submittedAt,
     authoredFor: record.protocolVersion,
     status: lifecycleStatusOf(record.state),
@@ -1024,9 +1058,17 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
   /**
    * Optional factory for the service holding one lifecycle record per transaction. Defaults to one polling
    * `configuration.indexerClientConnection`.
+   *
+   * @remarks
+   *   This is where an application hands back the store it kept: `facade.transactionLifecycleService.serializeState()`
+   *   writes it, with the traits the service reads it with, and the factory restores it with
+   *   `TransactionLifecycleServiceImpl.restore(stored, lifecycleTransactionTraits(config.forks.v9), config, clock)`.
+   *   `clock` is the facade's own, so a restored service stamps and expires its records by the time the facade keeps,
+   *   as the default service does.
    */
   transactionLifecycleService?: (
     config: ResolvedConfiguration<TConfig>,
+    deps: { clock: Clock.Clock },
   ) => MaybePromise<TransactionLifecycleService<LifecycleTx>>;
   provingService?: (
     config: ResolvedConfiguration<TConfig>,
@@ -1193,11 +1235,12 @@ export class WalletFacade {
         ? initParams.submissionService(configuration)
         : WalletFacade.makeDefaultSubmissionService(configuration),
     );
-    // Resolved first: the default lifecycle service stamps its records with the clock the facade keeps.
+    // Resolved first: the lifecycle service, the default or one the application builds, stamps its records with the
+    // clock the facade keeps.
     const clock = await Promise.resolve(initParams.clock ? initParams.clock(configuration) : Clock.systemClock);
     const transactionLifecycleService = await Promise.resolve(
       initParams.transactionLifecycleService
-        ? initParams.transactionLifecycleService(configuration)
+        ? initParams.transactionLifecycleService(configuration, { clock })
         : WalletFacade.makeDefaultTransactionLifecycleService(configuration, clock),
     );
     const provingService = await Promise.resolve(

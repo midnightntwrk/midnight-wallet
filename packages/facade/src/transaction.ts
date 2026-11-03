@@ -269,6 +269,13 @@ type V9AnyTransaction = ledgerV9.Transaction<ledgerV9.SignatureEnabled, ledgerV9
 export type LifecycleTx = Readonly<{
   protocolVersion: ProtocolVersion.ProtocolVersion;
   transaction: V8AnyTransaction | V9AnyTransaction;
+  /**
+   * Which form the record holds it in: `Erased`, the balanced transaction with its proofs erased, which is no finalized
+   * transaction; or `Finalized`. Kept beside the bytes because a record that ends while only balanced must not be read
+   * as holding a finalized one. Read back from stored bytes, proven bytes are `Finalized` and proof-erased ones
+   * `Erased`, since a simulated prover's finalized transaction has the erased form too.
+   */
+  form: 'Erased' | 'Finalized';
 }>;
 
 const isV8Transaction = (tx: unknown): tx is V8AnyTransaction => tx instanceof ledgerV8.Transaction;
@@ -303,6 +310,7 @@ const carriedIn = (
 export const erasedOf = (handle: AnyTx, forkVersion: ProtocolVersion.ProtocolVersion): LifecycleTx => ({
   protocolVersion: handle.protocolVersion,
   transaction: carriedIn(handle, forkVersion).eraseProofs(),
+  form: 'Erased',
 });
 
 /**
@@ -318,6 +326,7 @@ export const erasedOf = (handle: AnyTx, forkVersion: ProtocolVersion.ProtocolVer
 export const lifecycleTxOf = (handle: FinalizedTx, forkVersion: ProtocolVersion.ProtocolVersion): LifecycleTx => ({
   protocolVersion: handle.protocolVersion,
   transaction: carriedIn(handle, forkVersion),
+  form: 'Finalized',
 });
 
 /**
@@ -363,14 +372,20 @@ const lifecycleTraitOf = <T extends (V8AnyTransaction | V9AnyTransaction) & Ledg
     inputs: (held) => inputsOf(own(held)),
     ttl: (held, createdAt) => ttlUnder(dustGracePeriodSeconds)(own(held), createdAt),
     serialize: (held) => own(held).serialize(),
-    deserialize: (bytes) => ({
-      protocolVersion: stamp,
-      transaction: pipe(
-        Either.try(() => readProven(bytes)),
-        Either.orElse(() => Either.try(() => readErased(bytes))),
+    formOf: (held) => held.form,
+    // The stored form wins over what the bytes suggest: a finalized transaction may carry no proofs. Bytes stored
+    // without a form, as a v1 store's were, are finalized when they carry proofs and erased when they do not.
+    deserialize: (bytes, storedForm) =>
+      pipe(
+        Either.try(() => ({ transaction: readProven(bytes), form: 'Finalized' as const })),
+        Either.orElse(() => Either.try(() => ({ transaction: readErased(bytes), form: 'Erased' as const }))),
+        Either.map((read) => ({
+          protocolVersion: stamp,
+          transaction: read.transaction,
+          form: storedForm === 'Finalized' || storedForm === 'Erased' ? storedForm : read.form,
+        })),
         Either.getOrThrow,
       ),
-    }),
     isTx: (held: unknown): held is LifecycleTx =>
       typeof held === 'object' && held !== null && 'transaction' in held && isOwn(held.transaction),
   };
@@ -448,6 +463,8 @@ export const mergedLifecycleTxs = (parts: Arr.NonEmptyReadonlyArray<LifecycleTx>
       mergedOnOneLedger(merged.transaction, part.transaction),
       () => new Error('The parts of one recipe were built for different ledgers.'),
     ),
+    // Merged with an erased part, the whole is no finalized transaction either.
+    form: merged.form === 'Finalized' && part.form === 'Finalized' ? 'Finalized' : 'Erased',
   }));
 
 const mergedOnOneLedger = (
