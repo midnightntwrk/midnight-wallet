@@ -60,7 +60,7 @@ site.
 | ----------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | `Balanced`  | nothing                                                                                        | `transferTransaction`, `initSwap`, `balanceFinalizedTransaction`, `balanceUnboundTransaction`, `balanceUnprovenTransaction`, `registerNightUtxosForDustGeneration`, `deregisterFromDustGeneration` | the transaction, proofs erased |
 | `Finalized` | `Balanced`, or nothing                                                                         | `finalizeTransaction`, `finalizeRecipe`; a transaction the facade did not balance enters here                                                                                                      | the finalized transaction      |
-| `Submitted` | `Balanced`, `Finalized`, or nothing                                                            | `submitTransaction`; an adopted transaction, or one proven outside the facade, enters here                                                                                                         | the finalized transaction      |
+| `Submitted` | `Balanced`, `Finalized`, `Reverted`, or nothing                                                | `submitTransaction`; an adopted transaction, or one proven outside the facade, enters here; a reverted one sent again re-enters                                                                    | the finalized transaction      |
 | `Confirmed` | `Balanced`, `Finalized`, `Submitted`; `Expired`, `Rejected` at its TTL, `Orphaned`, `Reverted` | its inclusion, from sync or the poller, whoever submitted it; reported late, it overrules an end the wallet only inferred                                                                          | unchanged                      |
 | `Rejected`  | `Finalized`, `Submitted`                                                                       | the chain refused it, whoever submitted it, or its TTL passed while submitted                                                                                                                      | unchanged, with the verdict    |
 | `Orphaned`  | `Balanced`, `Finalized`, `Submitted`                                                           | the wallets crossed past the epoch it was built for                                                                                                                                                | unchanged, with the verdict    |
@@ -92,6 +92,7 @@ stateDiagram-v2
   Orphaned --> Balanced: balanced again
   Expired --> Balanced: balanced again
   Reverted --> Balanced: balanced again
+  Reverted --> Submitted: sent again
   Expired --> Confirmed: included, reported late
   Rejected --> Confirmed: included, reported late (TTL passed only)
   Orphaned --> Confirmed: included, reported late
@@ -103,28 +104,29 @@ stateDiagram-v2
   Reverted --> [*]: dropped after TTL
 ```
 
-`Confirmed`, `Rejected`, `Orphaned`, `Expired` and `Reverted` are final: no other verdict moves them. Two ways out
+`Confirmed`, `Rejected`, `Orphaned`, `Expired` and `Reverted` are final: no other verdict moves them. Three ways out
 remain. Balancing the same spend again, whose coins were never spent on chain, replaces a `Rejected`, `Orphaned`,
-`Expired` or `Reverted` record with a new `Balanced` one, so a spend keeps one record. And an inclusion reported after
-the wallet ended a record by its own inference (`Expired`, `Rejected` because its TTL passed, `Orphaned`, `Reverted`)
-moves it to `Confirmed`: a block's time is within the transaction's TTL, so the inclusion happened first and sync only
-saw it late. An inference gives way to a fact. A `Rejected` the chain reported is itself an inclusion and stays. Sync
-reports an inclusion through the history storage the wallets write into, which the facade wraps so that each write, once
-stored, moves the record. A partial success sync reports moves nothing: the history keeps no segments, and which
-segments failed decides what is released, so the poller settles it. Whatever was released at the inferred end is
-harmless, because sync settles the spent coins. `Confirmed` is final against every other verdict, which replaces the
-precedence rule a late rejection needed: once the record knows of the inclusion, nothing moves it. A finalized record
-takes the chain's refusal as a submitted one does, because another party may have submitted it, as in a swap; a balanced
-one cannot have reached a chain. The four status names `FacadeState.pending` published keep their meaning, except that a
-partial success, which `Rejected` covered, is now `PartialSuccess`; the other five are added. `FacadeState.lifecycle` is
-one entry per record, read off it. `PartialSuccess` carries the segments the chain reported: the chain included the
-transaction and applied some of it, so it is not a transaction that never happened. `Rejected` says why: `Refused`, with
-the segments the chain reported, or `TTLPassed`, which has none. `Confirmed` carries no segments, because the record
-keeps none. An entry holds its finalized transaction from `Finalized` on, and none while `Balanced` or once a record
-that was only ever balanced has ended: its transaction is still the erased form, which is no finalized transaction. The
-facade keeps which form it holds beside the transaction. Since an ended record stays until its TTL passes, an empty list
-no longer means nothing is awaited: `isAwaiting` tells the balanced, finalized and submitted entries from the ended
-ones.
+`Expired` or `Reverted` record with a new `Balanced` one, so a spend keeps one record. Sending a reverted transaction
+again, as a caller does after a submission that threw, moves it to `Submitted`: once sent it is in flight, whatever the
+wallet concluded before. And an inclusion reported after the wallet ended a record by its own inference (`Expired`,
+`Rejected` because its TTL passed, `Orphaned`, `Reverted`) moves it to `Confirmed`: a block's time is within the
+transaction's TTL, so the inclusion happened first and sync only saw it late. An inference gives way to a fact. A
+`Rejected` the chain reported is itself an inclusion and stays. Sync reports an inclusion through the history storage
+the wallets write into, which the facade wraps so that each write, once stored, moves the record. A partial success sync
+reports moves nothing: the history keeps no segments, and which segments failed decides what is released, so the poller
+settles it. Whatever was released at the inferred end is harmless, because sync settles the spent coins. `Confirmed` is
+final against every other verdict, which replaces the precedence rule a late rejection needed: once the record knows of
+the inclusion, nothing moves it. A finalized record takes the chain's refusal as a submitted one does, because another
+party may have submitted it, as in a swap; a balanced one cannot have reached a chain. The four status names
+`FacadeState.pending` published keep their meaning, except that a partial success, which `Rejected` covered, is now
+`PartialSuccess`; the other five are added. `FacadeState.lifecycle` is one entry per record, read off it.
+`PartialSuccess` carries the segments the chain reported: the chain included the transaction and applied some of it, so
+it is not a transaction that never happened. `Rejected` says why: `Refused`, with the segments the chain reported, or
+`TTLPassed`, which has none. `Confirmed` carries no segments, because the record keeps none. An entry holds its
+finalized transaction from `Finalized` on, and none while `Balanced` or once a record that was only ever balanced has
+ended: its transaction is still the erased form, which is no finalized transaction. The facade keeps which form it holds
+beside the transaction. Since an ended record stays until its TTL passes, an empty list no longer means nothing is
+awaited: `isAwaiting` tells the balanced, finalized and submitted entries from the ended ones.
 
 **No transition frees a coin.** Each wallet's own sweep and the facade's release-on-failure stay the only releasers, as
 ADR-0009 and ADR-0010 have them. A record moving to `Expired` or `Reverted` says the coins are no longer spoken for,

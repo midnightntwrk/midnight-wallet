@@ -250,8 +250,9 @@ export const finalized = <TTransaction>(
   );
 
 /**
- * Records a transaction as submitted, from balanced, finalized or nothing: a transaction proven outside the facade
- * arrives still balanced, and an adopted one arrives unrecorded.
+ * Records a transaction as submitted, from balanced, finalized, reverted or nothing: a transaction proven outside the
+ * facade arrives still balanced, and an adopted one arrives unrecorded. A reverted one is sent again after a submission
+ * that threw: once it is sent it is in flight, whatever the wallet concluded before.
  *
  * @example
  *   const sent = submitted(state, { tx: finalizedTx, identifiers, intentHashes, inputs, ttl, protocolVersion }, now);
@@ -269,7 +270,7 @@ export const submitted = <TTransaction>(
   moveTo(
     state,
     facts,
-    ['Balanced', 'Finalized'],
+    ['Balanced', 'Finalized', 'Reverted'],
     LifecycleState.Submitted(),
     keptFrom(now),
     Option.some(now),
