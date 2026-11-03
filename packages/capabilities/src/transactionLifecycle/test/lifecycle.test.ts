@@ -236,14 +236,37 @@ describe('A transaction reaching its outcome', () => {
     );
   });
 
-  it.each(LIVE_STATES.slice(0, 2))(
-    'should leave a $_tag record as it was on a rejection, because no chain was asked to include it',
-    (unsubmitted) => {
-      const before = holding(unsubmitted);
+  // A finalized transaction can reach the chain without this wallet submitting it (another party may submit it, as in
+  // a swap), so the chain's refusal of it is a fact and ends its record.
+  it('should reject a finalized record with the FAILURE verdict, because another party may have submitted it', () => {
+    const before = holding(Lifecycle.LifecycleState.Finalized());
 
-      expect(Lifecycle.rejected(before, ['id-a'], REFUSED)).toStrictEqual(before);
-    },
-  );
+    expect(Lifecycle.rejected(before, ['id-a'], REFUSED).records).toStrictEqual(
+      nowIn(before, Lifecycle.LifecycleState.Rejected({ verdict: REFUSED })),
+    );
+  });
+
+  it('should reject a finalized record with the PARTIAL_SUCCESS verdict and its segments, because another party may have submitted it', () => {
+    const partial: TransactionTraits.FailedTransactionResult = {
+      status: 'PARTIAL_SUCCESS',
+      segments: [
+        { id: 0, success: true },
+        { id: 1, success: false },
+      ],
+    };
+    const before = holding(Lifecycle.LifecycleState.Finalized());
+
+    expect(Lifecycle.rejected(before, ['id-a'], partial).records).toStrictEqual(
+      nowIn(before, Lifecycle.LifecycleState.Rejected({ verdict: partial })),
+    );
+  });
+
+  // A balanced record holds only a proof-erased transaction, which no chain can have been asked to include.
+  it('should leave a balanced record as it was on a rejection, because its proof-erased transaction cannot reach a chain', () => {
+    const before = holding(Lifecycle.LifecycleState.Balanced());
+
+    expect(Lifecycle.rejected(before, ['id-a'], REFUSED)).toStrictEqual(before);
+  });
 
   it.each(LIVE_STATES)('should orphan a $_tag record built for an epoch the chain has left', (live) => {
     const before = holding(live);

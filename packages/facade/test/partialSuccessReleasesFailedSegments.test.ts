@@ -31,14 +31,21 @@ import {
   WalletTransaction,
   type FinalizedTx,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import type { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
+import type { InclusionVerdict, Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type ResolvedConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
+import {
+  isAwaiting,
+  lifecycleEntriesOf,
+  type ResolvedConfiguration,
+  WalletEntrySchema,
+  WalletFacade,
+  mergeWalletEntries,
+} from '../src/index.js';
 
 import {
   createV8MockProvingService,
@@ -286,6 +293,62 @@ describe('what a rejected transaction releases', () => {
     expect(reverts.dust).not.toHaveBeenCalled();
     expect(reverts.shieldedSegments).not.toHaveBeenCalled();
     expect(reverts.unshieldedSegments).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A transaction finalized here and handed to someone else to submit, as a swap is: the record never passes through
+   * submitted, yet the chain can still include it and refuse it.
+   */
+  const finalizedForAnotherToSubmit = (): Promise<FinalizedTx> =>
+    facade.finalizeTransaction(
+      WalletTransaction.adopt(
+        'Unproven',
+        ledgerV8.Transaction.fromParts(
+          configuration.networkId,
+          undefined,
+          undefined,
+          ledgerV8.Intent.new(new Date(Date.now() + 60_000)),
+        ),
+        ProtocolVersion.MinSupportedVersion,
+      ),
+    );
+
+  /** The chain's verdict, as an inclusion the lifecycle service was told of by identifiers. */
+  const chainIncludes = async (verdict: InclusionVerdict): Promise<void> => {
+    const [record] = lifecycle.states.value.records;
+    await lifecycle.included(record.identifiers, verdict);
+    await sleep(0.2);
+  };
+
+  it('should reject a finalized transaction someone else submitted that the chain refused, and release everything it booked, because the chain applied none of it', async () => {
+    const tx = await finalizedForAnotherToSubmit();
+    expect(lifecycle.states.value.records.map((record) => record.state._tag)).toStrictEqual(['Finalized']);
+    const reverts = spyOnReverts();
+
+    await chainIncludes({ status: 'FAILURE', segments: [] });
+
+    expectStillRejected();
+    expect(reverts.shielded.mock.calls).toStrictEqual([[tx]]);
+    expect(reverts.unshielded.mock.calls).toStrictEqual([[tx]]);
+    expect(reverts.dust.mock.calls).toStrictEqual([[tx]]);
+    expect(reverts.shieldedSegments).not.toHaveBeenCalled();
+    expect(reverts.unshieldedSegments).not.toHaveBeenCalled();
+  });
+
+  it('should release only the failed segments of a finalized transaction someone else submitted that landed as a partial success, because the chain spent what the rest booked', async () => {
+    const tx = await finalizedForAnotherToSubmit();
+    expect(lifecycle.states.value.records.map((record) => record.state._tag)).toStrictEqual(['Finalized']);
+    const reverts = spyOnReverts();
+
+    await chainIncludes(partialSuccess);
+
+    // Ended, whichever status a partial success shows as: the chain has answered.
+    expect(lifecycleEntriesOf(lifecycle.states.value).filter(isAwaiting)).toStrictEqual([]);
+    expect(reverts.shieldedSegments.mock.calls).toStrictEqual([[tx, [2]]]);
+    expect(reverts.unshieldedSegments.mock.calls).toStrictEqual([[tx, [2]]]);
+    expect(reverts.shielded).not.toHaveBeenCalled();
+    expect(reverts.unshielded).not.toHaveBeenCalled();
+    expect(reverts.dust).not.toHaveBeenCalled();
   });
 
   it('should release nothing for a record that was already rejected when the facade started, because the session that saw the verdict released its coins', async () => {
