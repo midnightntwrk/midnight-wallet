@@ -139,18 +139,6 @@ describe('a transaction that will never be included', () => {
     ).toStrictEqual({ _tag: 'Rejected', reason: { _tag: 'Refused', segments } });
   });
 
-  it('is rejected as refused when only some segments succeeded, which is still not a transaction that happened', () => {
-    const segments = [
-      { id: 0, success: true },
-      { id: 1, success: false },
-    ];
-
-    expect(
-      onlyEntryOf(aRecord(Lifecycle.LifecycleState.Rejected({ verdict: { status: 'PARTIAL_SUCCESS', segments } })))
-        .status,
-    ).toStrictEqual({ _tag: 'Rejected', reason: { _tag: 'Refused', segments } });
-  });
-
   it('is rejected because its TTL passed, with no segments, when it was submitted and the chain never included it', () => {
     expect(
       onlyEntryOf(aRecord(Lifecycle.LifecycleState.Rejected({ verdict: { status: 'TTL_PASSED' } }))).status,
@@ -216,6 +204,23 @@ describe('the handle an entry carries', () => {
 
     expect(Option.map(entry.transaction, (handle) => handle.protocolVersion)).toStrictEqual(Option.some(builtFor));
     expect(entry.authoredFor).toStrictEqual(Option.some(builtFor));
+  });
+});
+
+describe('a transaction the chain included with only some segments applied', () => {
+  const segments = [
+    { id: 0, success: true },
+    { id: 1, success: false },
+  ];
+  const partiallyApplied = () =>
+    onlyEntryOf(aRecord(Lifecycle.LifecycleState.Rejected({ verdict: { status: 'PARTIAL_SUCCESS', segments } })));
+
+  it('is a partial success, with the segments the chain reported, because what it applied happened and is not undone', () => {
+    expect(partiallyApplied().status).toStrictEqual({ _tag: 'PartialSuccess', segments });
+  });
+
+  it('is not awaiting an answer, because the chain has given one', () => {
+    expect(isAwaiting(partiallyApplied())).toBe(false);
   });
 });
 
