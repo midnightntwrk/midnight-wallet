@@ -378,6 +378,15 @@ const PAST_TTL = at('2026-01-01T01:00:00.001Z');
 const BEFORE_TTL = at('2026-01-01T00:59:59.999Z');
 
 describe('A transaction whose TTL passes', () => {
+  it.each(LIVE_STATES)(
+    'should leave a $_tag record live at the very instant its TTL names, because the transaction is still valid then',
+    (live) => {
+      const before = holding(live);
+
+      expect(Lifecycle.expire(before, DateTime.unsafeMake(TTL)).records).toStrictEqual(before.records);
+    },
+  );
+
   it.each(LIVE_STATES.slice(0, 2))('should expire a $_tag record, because it was never submitted', (unsubmitted) => {
     const before = holding(unsubmitted);
 
