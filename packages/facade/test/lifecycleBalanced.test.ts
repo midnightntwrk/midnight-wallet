@@ -45,8 +45,12 @@ const NIGHT = ledger.nativeToken().raw;
 const SHIELDED = ledger.shieldedToken().raw;
 const SEED = '0000000000000000000000000000000000000000000000000000000000000001';
 
-/** An hour ahead, on a whole second: an intent's TTL is kept to the second, and the record's TTL is read off it. */
-const TTL = new Date(Math.ceil((Date.now() + 60 * 60 * 1000) / 1000) * 1000);
+/**
+ * An hour ahead of the facade's own clock, on a whole second: an intent's TTL is kept to the second, and the record's
+ * TTL is read off it against that clock, whose Dust grace period of three hours comes later.
+ */
+const ttlOn = (facade: WalletFacade): Date =>
+  new Date(Math.ceil((facade.clock.now().getTime() + 60 * 60 * 1000) / 1000) * 1000);
 
 const utxoKey = (coin: { utxo: { intentHash: string; outputNo: number } }): string =>
   `${coin.utxo.intentHash}#${coin.utxo.outputNo}`;
@@ -135,6 +139,7 @@ const withDust = (facade: WalletFacade, keys: WalletKeys) =>
  */
 const callersTransaction = (
   keys: WalletKeys,
+  ttl: Date,
   spends: ReadonlyArray<FacadeState['unshielded']['availableCoins'][number]> = [],
 ) => {
   const shieldedCoin = ledger.createShieldedCoinInfo(SHIELDED, tokenValue(1n));
@@ -143,7 +148,7 @@ const callersTransaction = (
     shieldedCoin.type,
     shieldedCoin.value,
   );
-  const intent = ledger.Intent.new(TTL);
+  const intent = ledger.Intent.new(ttl);
   intent.guaranteedUnshieldedOffer = ledger.UnshieldedOffer.new(
     spends.map((coin) => ({ ...coin.utxo, owner: keys.signatureVerifyingKey })),
     [
@@ -156,6 +161,22 @@ const callersTransaction = (
     [],
   );
   return ledger.Transaction.fromParts(NETWORK_ID, shieldedOffer, undefined, intent);
+};
+
+/**
+ * A caller's transaction paying out shielded tokens it does not hold and carrying no intent: an unbound transaction's
+ * intents are already proven, so the unshielded wallet does not balance it in place, and only balancing books here.
+ */
+const callersShieldedTransaction = (keys: WalletKeys) => {
+  const shieldedCoin = ledger.createShieldedCoinInfo(SHIELDED, tokenValue(1n));
+  return ledger.Transaction.fromParts(
+    NETWORK_ID,
+    ledger.ZswapOffer.fromOutput(
+      ledger.ZswapOutput.new(shieldedCoin, 0, keys.shieldedKeys.coinPublicKey, keys.shieldedKeys.encryptionPublicKey),
+      shieldedCoin.type,
+      shieldedCoin.value,
+    ),
+  );
 };
 
 const unproven = (tx: ledger.UnprovenTransaction) =>
@@ -188,11 +209,16 @@ const balancedThrough = (facade: WalletFacade, build: () => Promise<Built>) =>
     const parts = BalancingRecipe.getTransactions(recipe);
     const identifiers = parts.flatMap((part) => carried<{ identifiers(): string[] }>(part).identifiers());
 
-    return { added, bookedUnshielded, bookedShielded, callersCoins, identifiers, parts };
+    const intentTtls = parts.flatMap((part) => [
+      ...(carried<{ intents?: ReadonlyMap<number, { ttl: Date }> }>(part).intents?.values() ?? []),
+    ]);
+    const intentTtl = new Date(Math.min(...intentTtls.map((intent) => intent.ttl.getTime())));
+
+    return { added, bookedUnshielded, bookedShielded, callersCoins, identifiers, parts, intentTtl };
   });
 
 /** Checks the record a balancing call left against what the call booked and the recipe it returned. */
-const expectOneBalancedRecord = (result: Effect.Effect.Success<ReturnType<typeof balancedThrough>>) => {
+const expectOneBalancedRecord = (result: Effect.Effect.Success<ReturnType<typeof balancedThrough>>, ttl: Date) => {
   const { added, bookedUnshielded, bookedShielded, callersCoins, identifiers, parts } = result;
 
   expect(added).toHaveLength(1);
@@ -201,7 +227,7 @@ const expectOneBalancedRecord = (result: Effect.Effect.Success<ReturnType<typeof
   expect([...record.identifiers].sort()).toStrictEqual([...identifiers].sort());
   expect([...record.inputs.unshielded].sort()).toStrictEqual([...bookedUnshielded, ...callersCoins].sort());
   expect(record.inputs.shielded ?? []).toHaveLength(bookedShielded);
-  expect(record.ttl).toStrictEqual(TTL);
+  expect(record.ttl).toStrictEqual(ttl);
   expect(record.protocolVersion).toStrictEqual(Option.some(parts[0].protocolVersion));
   expect(Option.isSome(record.tx)).toBe(true);
 };
@@ -210,7 +236,7 @@ describe('A balanced transaction’s lifecycle record', () => {
   it.each([
     {
       entryPoint: 'transferTransaction',
-      build: (facade: WalletFacade) => async (): Promise<Built> => {
+      build: (facade: WalletFacade, _keys: WalletKeys, ttl: Date) => async (): Promise<Built> => {
         const [shieldedAddress, unshieldedAddress] = await Promise.all([
           facade.shielded.getAddress(),
           facade.unshielded.getAddress(),
@@ -226,14 +252,14 @@ describe('A balanced transaction’s lifecycle record', () => {
               outputs: [{ type: NIGHT, receiverAddress: unshieldedAddress, amount: tokenValue(1n) }],
             },
           ],
-          { ttl: TTL },
+          { ttl },
         );
         return { recipe, callersCoins: [] };
       },
     },
     {
       entryPoint: 'initSwap',
-      build: (facade: WalletFacade) => async (): Promise<Built> => {
+      build: (facade: WalletFacade, _keys: WalletKeys, ttl: Date) => async (): Promise<Built> => {
         const unshieldedAddress = await facade.unshielded.getAddress();
         const recipe = await facade.initSwap(
           { shielded: { [SHIELDED]: tokenValue(1n) } },
@@ -243,29 +269,29 @@ describe('A balanced transaction’s lifecycle record', () => {
               outputs: [{ type: NIGHT, amount: tokenValue(1n), receiverAddress: unshieldedAddress }],
             },
           ],
-          { ttl: TTL, payFees: true },
+          { ttl, payFees: true },
         );
         return { recipe, callersCoins: [] };
       },
     },
     {
       entryPoint: 'balanceFinalizedTransaction',
-      build: (facade: WalletFacade, keys: WalletKeys) => async (): Promise<Built> => ({
-        recipe: await facade.balanceFinalizedTransaction(finalized(callersTransaction(keys)), { ttl: TTL }),
+      build: (facade: WalletFacade, keys: WalletKeys, ttl: Date) => async (): Promise<Built> => ({
+        recipe: await facade.balanceFinalizedTransaction(finalized(callersTransaction(keys, ttl)), { ttl }),
         callersCoins: [],
       }),
     },
     {
       entryPoint: 'balanceUnboundTransaction',
-      build: (facade: WalletFacade, keys: WalletKeys) => async (): Promise<Built> => ({
-        recipe: await facade.balanceUnboundTransaction(unbound(callersTransaction(keys)), { ttl: TTL }),
+      build: (facade: WalletFacade, keys: WalletKeys, ttl: Date) => async (): Promise<Built> => ({
+        recipe: await facade.balanceUnboundTransaction(unbound(callersShieldedTransaction(keys)), { ttl }),
         callersCoins: [],
       }),
     },
     {
       entryPoint: 'balanceUnprovenTransaction',
-      build: (facade: WalletFacade, keys: WalletKeys) => async (): Promise<Built> => ({
-        recipe: await facade.balanceUnprovenTransaction(unproven(callersTransaction(keys)), { ttl: TTL }),
+      build: (facade: WalletFacade, keys: WalletKeys, ttl: Date) => async (): Promise<Built> => ({
+        recipe: await facade.balanceUnprovenTransaction(unproven(callersTransaction(keys, ttl)), { ttl }),
         callersCoins: [],
       }),
     },
@@ -274,7 +300,9 @@ describe('A balanced transaction’s lifecycle record', () => {
       const { facade, keys } = yield* fundedFacade();
       yield* withDust(facade, keys);
 
-      expectOneBalancedRecord(yield* balancedThrough(facade, build(facade, keys)));
+      const ttl = ttlOn(facade);
+
+      expectOneBalancedRecord(yield* balancedThrough(facade, build(facade, keys, ttl)), ttl);
     }).pipe(Effect.scoped, Effect.runPromise),
   );
 
@@ -285,6 +313,7 @@ describe('A balanced transaction’s lifecycle record', () => {
     Effect.gen(function* () {
       const { facade, keys } = yield* fundedFacade();
       yield* withDust(facade, keys);
+      const ttl = ttlOn(facade);
       // A transaction of the caller's own, built through the wallet, books the coin the caller then reuses: the state a
       // caller's coin is in when it hands the wallet a transaction that already spends it.
       const unshieldedAddress = yield* Effect.promise(() => facade.unshielded.getAddress());
@@ -296,20 +325,20 @@ describe('A balanced transaction’s lifecycle record', () => {
               outputs: [{ type: NIGHT, receiverAddress: unshieldedAddress, amount: tokenValue(1n) }],
             },
           ],
-          { ttl: TTL, payFees: false },
+          { ttl, payFees: false },
         ),
       );
       const [callersCoin] = (yield* stateOf(facade)).unshielded.pendingCoins;
 
       const result = yield* balancedThrough(facade, async () => ({
-        recipe: await facade.balanceUnprovenTransaction(unproven(callersTransaction(keys, [callersCoin])), {
-          ttl: TTL,
+        recipe: await facade.balanceUnprovenTransaction(unproven(callersTransaction(keys, ttl, [callersCoin])), {
+          ttl,
         }),
         callersCoins: [utxoKey(callersCoin)],
       }));
 
       expect(result.bookedUnshielded).not.toContain(utxoKey(callersCoin));
-      expectOneBalancedRecord(result);
+      expectOneBalancedRecord(result, ttl);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('should be left by registerNightUtxosForDustGeneration, naming the Night coins it registers', () =>
@@ -317,16 +346,17 @@ describe('A balanced transaction’s lifecycle record', () => {
       const { facade, keys } = yield* fundedFacade();
       const registering = yield* stateOf(facade);
 
-      expectOneBalancedRecord(
-        yield* balancedThrough(facade, async () => ({
-          recipe: await facade.registerNightUtxosForDustGeneration(
-            registering.unshielded.availableCoins,
-            keys.signatureVerifyingKey,
-            keys.unshieldedKeystore.signDataAsync,
-          ),
-          callersCoins: [],
-        })),
-      );
+      const result = yield* balancedThrough(facade, async () => ({
+        recipe: await facade.registerNightUtxosForDustGeneration(
+          registering.unshielded.availableCoins,
+          keys.signatureVerifyingKey,
+          keys.unshieldedKeystore.signDataAsync,
+        ),
+        callersCoins: [],
+      }));
+
+      // A Dust action is built with the facade's own TTL, so the record's is the one its intent carries.
+      expectOneBalancedRecord(result, result.intentTtl);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('should be left by deregisterFromDustGeneration, naming the Night coins it deregisters', () =>
@@ -338,15 +368,16 @@ describe('A balanced transaction’s lifecycle record', () => {
       );
       expect(registered.length).toBeGreaterThan(0);
 
-      expectOneBalancedRecord(
-        yield* balancedThrough(facade, async () => ({
-          recipe: await facade.deregisterFromDustGeneration(
-            registered,
-            keys.signatureVerifyingKey,
-            keys.unshieldedKeystore.signDataAsync,
-          ),
-          callersCoins: [],
-        })),
-      );
+      const result = yield* balancedThrough(facade, async () => ({
+        recipe: await facade.deregisterFromDustGeneration(
+          registered,
+          keys.signatureVerifyingKey,
+          keys.unshieldedKeystore.signDataAsync,
+        ),
+        callersCoins: [],
+      }));
+
+      // A Dust action is built with the facade's own TTL, so the record's is the one its intent carries.
+      expectOneBalancedRecord(result, result.intentTtl);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
