@@ -101,9 +101,15 @@ describe('pending transactions written by published releases', () => {
         expect(records.map((record) => record.intentHashes)).toStrictEqual(
           txs.map((tx) => oldestTrait.intentHashes(tx)),
         );
-        expect(records.flatMap((record) => record.intentHashes).length).toBeGreaterThan(0);
         expect(records.map((record) => record.inputs)).toStrictEqual(txs.map((tx) => oldestTrait.inputs(tx)));
         expect(records.map((record) => record.ttl)).toStrictEqual(txs.map((tx) => oldestTrait.ttl(tx, creationTime)));
+        // Each fixture transaction is one shielded output: no intent and nothing spent, so no intent hashes, no inputs,
+        // and a TTL that is the Dust grace period of three hours after the record began.
+        expect(records.map((record) => record.intentHashes)).toStrictEqual(records.map(() => []));
+        expect(records.map((record) => record.inputs)).toStrictEqual(records.map(() => ({ unshielded: [] })));
+        expect(records.map((record) => record.ttl)).toStrictEqual(
+          records.map(() => new Date(DateTime.toEpochMillis(creationTime) + 3 * 60 * 60 * 1000)),
+        );
       });
     });
   });
