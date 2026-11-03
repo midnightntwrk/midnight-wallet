@@ -79,13 +79,14 @@ import {
   firstValueFrom,
   map,
   type Observable,
+  pairwise,
   type Subscription,
   take,
   tap,
 } from 'rxjs';
 import {
   type DefaultPendingTransactionsServiceConfiguration,
-  type Lifecycle,
+  Lifecycle,
   PendingTransactions,
   type PendingTransactionsService,
   PendingTransactionsServiceImpl,
@@ -110,6 +111,7 @@ import {
 import {
   coinIdsOf,
   erasedOf,
+  finalizedOf,
   lifecycleTxOf,
   finalizedTransactionTraits,
   lifecycleTransactionTraits,
@@ -133,6 +135,44 @@ export { finalizedTransactionTraits, lifecycleTransactionTraits, type LifecycleT
  */
 const rejectionReason = (result: PendingTransactions.TransactionResult): string | undefined =>
   result.status === 'ORPHANED_BY_FORK' ? 'orphaned-by-protocol-upgrade' : undefined;
+
+/** The end a record reached, as the verdict a release is decided by; none for an end that releases nothing. */
+const endResultOf = (state: Lifecycle.LifecycleState): Option.Option<PendingTransactions.TransactionResult> => {
+  switch (state._tag) {
+    case 'Rejected':
+      // A TTL that passed is a refusal no chain applied any of, so it releases as a failure with no segments.
+      return Option.some(state.verdict.status === 'TTL_PASSED' ? { status: 'FAILURE', segments: [] } : state.verdict);
+    case 'Orphaned':
+      return Option.some({ status: 'ORPHANED_BY_FORK', authoredFor: state.authoredFor, chainNow: state.chainNow });
+    default:
+      return Option.none();
+  }
+};
+
+const recordKey = (record: Lifecycle.LifecycleRecord<LifecycleTx>): string => record.identifiers.join(',');
+
+/**
+ * The transactions whose records went from finalized or submitted to rejected or orphaned between two emissions, with
+ * the verdict each release is decided by.
+ *
+ * @remarks
+ *   A balanced record holds its transaction with the proofs erased, which no stage of a handle describes, and the coins
+ *   it booked carry the same TTL in each wallet, so each wallet's sweep releases them; it is never released from here.
+ */
+const newlyEnded = (
+  previous: ReadonlyArray<Lifecycle.LifecycleRecord<LifecycleTx>>,
+  current: ReadonlyArray<Lifecycle.LifecycleRecord<LifecycleTx>>,
+): ReadonlyArray<Readonly<{ tx: FinalizedTx; result: PendingTransactions.TransactionResult }>> => {
+  const wasHeldFinalized = new Set(
+    previous.filter((record) => record.state._tag === 'Finalized' || record.state._tag === 'Submitted').map(recordKey),
+  );
+  return Arr.filterMap(current, (record) =>
+    wasHeldFinalized.has(recordKey(record))
+      ? Option.all({ tx: Option.map(record.tx, finalizedOf), result: endResultOf(record.state) })
+      : Option.none(),
+  );
+};
+
 /** The fallible segments a verdict says the chain did not apply; none for a verdict that carries no segments. */
 const failedSegmentsOf = (result: PendingTransactions.TransactionResult): ReadonlyArray<number> =>
   'segments' in result ? result.segments.filter((segment) => !segment.success).map((segment) => segment.id) : [];
@@ -1155,6 +1195,7 @@ export class WalletFacade {
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
   readonly clock: Clock.Clock;
   #pendingSubscription: Subscription;
+  #pendingSetVerdictSubscription: Subscription;
   #expiredReservationSubscription: Subscription;
   #restoredBookingSubscription: Subscription;
   #protocolVersionSubscription: Subscription;
@@ -1204,19 +1245,32 @@ export class WalletFacade {
     this.#forkVersion = forkVersion;
     this.#lifecycleTraits = lifecycleTransactionTraits(forkVersion);
     this.clock = clock;
-    this.#pendingSubscription = this.pendingTransactionsService
+    // Releases react to a record's end, not to its state: a final record stays until its TTL and is published on every
+    // tick, and releasing it again could free coins booked since for another transaction. The first emission is the
+    // baseline, so a record restored already ended was released by the session that saw it end.
+    this.#pendingSubscription = this.transactionLifecycleService
+      .state()
+      .pipe(
+        map((lifecycle) => lifecycle.records),
+        pairwise(),
+        concatMap(([previous, current]) => newlyEnded(previous, current)),
+        concatMap(async ({ tx, result }) => {
+          if (!(await this.reconcileFinalizedTransaction(tx, result, await this.#txHistoryStorage.getAll()))) {
+            await (result.status === 'PARTIAL_SUCCESS'
+              ? this.#revertFailedSegments(tx, failedSegmentsOf(result))
+              : this.#releaseRejected(tx, rejectionReason(result)));
+          }
+        }),
+      )
+      .subscribe();
+
+    // The pending set feeds only `FacadeState.pending` now: a verdict there drops the item and releases nothing,
+    // because releases follow the records' ends above.
+    this.#pendingSetVerdictSubscription = this.pendingTransactionsService
       .state()
       .pipe(
         concatMap((pending) => PendingTransactions.allRejected(pending)),
-        concatMap(async (item) => {
-          if (
-            !(await this.reconcileFinalizedTransaction(item.tx, item.result, await this.#txHistoryStorage.getAll()))
-          ) {
-            await (item.result.status === 'PARTIAL_SUCCESS'
-              ? this.#revertFailedSegments(item.tx, failedSegmentsOf(item.result))
-              : this.revert(item.tx, rejectionReason(item.result)));
-          }
-        }),
+        concatMap((item) => this.pendingTransactionsService.clear(item.tx)),
       )
       .subscribe();
 
@@ -1237,13 +1291,12 @@ export class WalletFacade {
 
     // Coins a previous process left booked would otherwise sit until their transactions' TTLs, which can be an hour.
     // Once sync reaches the tip, every transaction this address is party to has been applied, so a coin still booked
-    // was never spent — unless a reservation or a transaction being tracked says the spend is still out there. Both
-    // halves matter: registering a transaction drops the reservation standing in for it, so from submission onwards
-    // the tracked transaction is the only thing saying its coins are spoken for.
+    // was never spent, unless a live record says the spend is still out there: from balancing to its end, a record
+    // names every coin its transaction spends.
     //
-    // This only sees what the services were given. A pending-transactions service restored from storage covers the
-    // spends a previous process submitted; one started empty covers none of them, and a restored booking whose
-    // transaction is still in the mempool is released here.
+    // This only sees the records the service was given. A lifecycle service restored from storage covers the spends a
+    // previous process recorded; one started empty covers none of them, and a restored booking whose transaction is
+    // still in the mempool is released here.
     this.#restoredBookingSubscription = this.unshielded.state
       .pipe(
         filter((unshielded) => unshielded.progress.isStrictlyComplete()),
@@ -1252,12 +1305,8 @@ export class WalletFacade {
         // feeding itself: releasing publishes new state, which would otherwise satisfy this same condition again.
         take(1),
         concatMap(async () => {
-          const { verifyingKey } = await firstValueFrom(this.unshielded.state);
-          const pending = await firstValueFrom(this.pendingTransactionsService.state());
-          const stillSpokenFor = PendingTransactions.coveredUnshieldedIds(pending, (tx) =>
-            this.#ownInputIds(tx, verifyingKey),
-          );
-          await this.unshielded.releaseRestoredPending(stillSpokenFor);
+          const lifecycle = await firstValueFrom(this.transactionLifecycleService.state());
+          await this.unshielded.releaseRestoredPending(Lifecycle.coveredUnshieldedIds(lifecycle));
         }),
       )
       .subscribe();
@@ -1277,7 +1326,7 @@ export class WalletFacade {
         tap((version) => this.#observedProtocolVersion.next(Option.some(version))),
         // Nothing fallible belongs here: this chain is the only writer of the observed version, and an orphaned
         // transaction sync already saw included is reconciled by the pending subscription like any other verdict.
-        concatMap((version) => this.pendingTransactionsService.orphanBeyond(version)),
+        concatMap((version) => this.transactionLifecycleService.orphanBeyond(version)),
       )
       .subscribe();
   }
@@ -2636,7 +2685,7 @@ export class WalletFacade {
     if (entry.status === 'PARTIAL_SUCCESS') {
       await this.#revertFailedSegments(tx, failedSegmentsOf(result));
     } else if (entry.status === 'FAILURE') {
-      await this.revertTransaction(tx);
+      await this.#releaseRejected(tx);
     } else {
       await this.pendingTransactionsService.clear(tx);
     }
@@ -2644,13 +2693,26 @@ export class WalletFacade {
   }
 
   async revertTransaction(tx: AnyTx, reason?: string): Promise<void> {
+    await this.#releaseAll(tx)
+      .then(() => this.transactionLifecycleService.reverted(this.#identifiersOf(tx)))
+      .then(() => this.#recordRejection(tx, reason));
+  }
+
+  /**
+   * Releases everything a transaction no chain applied had booked, and records it as rejected, leaving its record at
+   * the end it reached: a rejected or orphaned transaction was not reverted.
+   */
+  async #releaseRejected(tx: FinalizedTx, reason?: string): Promise<void> {
+    await this.#releaseAll(tx).then(() => this.#recordRejection(tx, reason));
+  }
+
+  /** Releases every coin and every Dust each wallet booked for `tx`. */
+  async #releaseAll(tx: AnyTx): Promise<void> {
     await Promise.all([
       this.shielded.revertTransaction(tx),
       this.unshielded.revertTransaction(tx),
       this.dust.revertTransaction(tx),
-    ])
-      .then(() => this.transactionLifecycleService.reverted(this.#identifiersOf(tx)))
-      .then(() => this.#recordRejection(tx, reason));
+    ]);
   }
 
   /**
@@ -2785,6 +2847,7 @@ export class WalletFacade {
       this.pendingTransactionsService.stop(),
       this.transactionLifecycleService.stop(),
       Promise.resolve(this.#pendingSubscription?.unsubscribe()),
+      Promise.resolve(this.#pendingSetVerdictSubscription?.unsubscribe()),
       Promise.resolve(this.#protocolVersionSubscription?.unsubscribe()),
       Promise.resolve(this.#expiredReservationSubscription?.unsubscribe()),
       Promise.resolve(this.#restoredBookingSubscription?.unsubscribe()),

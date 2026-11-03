@@ -343,6 +343,19 @@ export const lifecycleTxOf = (handle: FinalizedTx, forkVersion: ProtocolVersion.
   transaction: carriedIn(handle, forkVersion),
 });
 
+/**
+ * The handle for a transaction a finalized or submitted record holds: the record keeps its bytes as they were
+ * finalized, and its stamp beside them.
+ *
+ * @example
+ *   const tx = finalizedOf(record.tx);
+ *
+ * @param held The transaction as the record holds it.
+ * @returns The finalized handle it was recorded from.
+ */
+export const finalizedOf = (held: LifecycleTx): FinalizedTx =>
+  WalletTransaction.adopt('Finalized', held.transaction, held.protocolVersion);
+
 type LedgerTransaction = FactsBearingTransaction & { identifiers(): string[]; serialize(): Uint8Array };
 
 /**
