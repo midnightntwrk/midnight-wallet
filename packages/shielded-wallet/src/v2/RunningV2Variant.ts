@@ -43,7 +43,7 @@ import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 import { type CoinSelection } from '@midnightntwrk/wallet-sdk-capabilities';
 import { type CoreWallet } from './CoreWallet.js';
-import { type AppliedBatch, type RecordableChange, releaseCompleteChanges } from './HeldChanges.js';
+import { type RecordableChange, releaseCompleteChanges } from './HeldChanges.js';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
@@ -282,12 +282,13 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
             try: () => {
               const [newState, { changes, protocolVersion, firstAppliedSource, lastAppliedSource }] =
                 this.#v2Context.syncCapability.applyUpdate(state, update, this.#context.activationRange);
-              // Type cast required because: the sources are optional on `ChangesResult` but required here.
+              // A capability that names no applied transaction gives no sign a batch ended inside one, so nothing is held
+              // and each change is recorded as soon as it is applied.
               const applied = {
                 changes: changes.map((change) => ({ change, protocolVersion })),
-                firstAppliedSource,
-                lastAppliedSource,
-              } as AppliedBatch;
+                firstAppliedSource: firstAppliedSource ?? Option.none(),
+                lastAppliedSource: lastAppliedSource ?? Option.none(),
+              };
               // A wallet that has moved past this variant's versions is about to be handed over, and the runtime closes
               // this variant rather than ending its timeline. No transaction spans two versions, so whatever this
               // variant applied is whole and must be recorded now.
