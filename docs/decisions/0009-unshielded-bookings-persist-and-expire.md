@@ -191,6 +191,8 @@ arrive_. Both accessors predate this decision.
 
 ## Links
 
+- Refined by [ADR-0011](0011-one-lifecycle-record-per-transaction.md) — the reservation becomes the `Balanced` state of
+  one lifecycle record per transaction, and holds the transaction with its proofs erased.
 - Refines [ADR-0001](0001-bloc-wallet-state.md) — state lives in refs and is transformed by pure functions; this ADR
   changes what the unshielded wallet's state records, not how it is held or published.
 - Constrained by [ADR-0006](0006-structure-for-flexibility-and-robustness.md) — the state shape belongs to a variant, so

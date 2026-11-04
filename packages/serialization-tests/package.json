@@ -27,6 +27,7 @@
     "@midnightntwrk/wallet-sdk-utilities": "workspace:*",
     "effect": "3.22.3",
     "typescript": "5.9.3",
-    "wallet-sdk-abstractions-2.1.0": "npm:@midnightntwrk/wallet-sdk-abstractions@2.1.0"
+    "wallet-sdk-abstractions-2.1.0": "npm:@midnightntwrk/wallet-sdk-abstractions@2.1.0",
+    "wallet-sdk-capabilities-3.3.1": "npm:@midnightntwrk/wallet-sdk-capabilities@3.3.1"
   }
 }

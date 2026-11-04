@@ -48,7 +48,7 @@ import { Effect } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { type FacadeStartMaterial, type WalletEntry, WalletFacade } from '../src/index.js';
-import { createV8MockProvingService, SilentPendingTransactions } from './utils/index.js';
+import { createV8MockProvingService, DrivenLifecycle } from './utils/index.js';
 
 vi.setConfig({ testTimeout: 30_000 });
 
@@ -68,10 +68,7 @@ const v9DustParameters = ledgerV9.LedgerParameters.initialParameters().dust;
  * A facade whose shielded and dust wallets were restored from snapshots their own V1 variants wrote, and so hold no key
  * material until the facade starts them.
  */
-const facadeOverRestoredWallets = (
-  seeds: WalletSeeds,
-  pendingTransactions: SilentPendingTransactions = new SilentPendingTransactions(),
-) =>
+const facadeOverRestoredWallets = (seeds: WalletSeeds, lifecycle: DrivenLifecycle = new DrivenLifecycle()) =>
   Effect.gen(function* () {
     const v8Chain = yield* V8.Simulator.init({
       networkId: NETWORK_ID,
@@ -244,15 +241,15 @@ const facadeOverRestoredWallets = (
           unshielded: () => unshielded,
           dust: () => dust,
           provingService: () => createV8MockProvingService(),
-          pendingTransactionsService: () => pendingTransactions,
+          transactionLifecycleService: () => lifecycle,
         }),
       ),
       (facade) => Effect.promise(() => facade.stop()),
     );
   });
 
-/** A pending service that records each time it is started, so a test can tell a first start from a second. */
-class StartRecordingPendingTransactions extends SilentPendingTransactions {
+/** A lifecycle service that records each time it is started, so a test can tell a first start from a second. */
+class StartRecordingLifecycle extends DrivenLifecycle {
   readonly starts: null[] = [];
 
   override start(): Promise<void> {
@@ -317,8 +314,8 @@ describe('A facade asked to synchronize by hand over wallets restored below fork
 
   it('refuses manualSync in start(), before starting anything', () =>
     Effect.gen(function* () {
-      const pendingTransactions = new StartRecordingPendingTransactions();
-      const facade = yield* facadeOverRestoredWallets(seeds, pendingTransactions);
+      const lifecycle = new StartRecordingLifecycle();
+      const facade = yield* facadeOverRestoredWallets(seeds, lifecycle);
       const dustVersion = yield* dustVersionOf(facade);
       expect(dustVersion).toBeLessThan(forkVersion);
 
@@ -326,19 +323,19 @@ describe('A facade asked to synchronize by hand over wallets restored below fork
 
       expect(rejection).toBeInstanceOf(ManualSyncUnsupportedError);
       expect(rejection).toMatchObject({ protocolVersion: dustVersion });
-      expect(pendingTransactions.starts).toHaveLength(0);
+      expect(lifecycle.starts).toHaveLength(0);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('resumes them in the background when started again without it, each service started once', () =>
     Effect.gen(function* () {
-      const pendingTransactions = new StartRecordingPendingTransactions();
-      const facade = yield* facadeOverRestoredWallets(seeds, pendingTransactions);
+      const lifecycle = new StartRecordingLifecycle();
+      const facade = yield* facadeOverRestoredWallets(seeds, lifecycle);
       yield* rejectionOf(facade.start(seeds, { manualSync: true }));
 
       const synced = yield* startAndSync(facade, seeds);
 
       expect(synced.activeProtocolVersion).toBeLessThan(forkVersion);
-      expect(pendingTransactions.starts).toHaveLength(1);
+      expect(lifecycle.starts).toHaveLength(1);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('refuses doSync with the error itself, not a wrapper around it', () =>

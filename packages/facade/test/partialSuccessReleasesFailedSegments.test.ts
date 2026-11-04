@@ -31,41 +31,37 @@ import {
   WalletTransaction,
   type FinalizedTx,
 } from '@midnightntwrk/wallet-sdk-abstractions';
-import type { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import type { InclusionVerdict, Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { DustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import { DateTime, Option } from 'effect';
 import * as rx from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type ResolvedConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
+import {
+  isAwaiting,
+  lifecycleEntriesOf,
+  type ResolvedConfiguration,
+  WalletEntrySchema,
+  WalletFacade,
+  mergeWalletEntries,
+} from '../src/index.js';
 
 import {
   createV8MockProvingService,
+  DrivenLifecycle,
   drivenBy,
   dustAt,
   getDustSeed,
   getShieldedSeed,
   getUnshieldedSeed,
   shieldedAt,
-  SilentPendingTransactions,
   sleep,
   unshieldedAt,
 } from './utils/index.js';
 
 /** Below the v9 fork, where a ledger-v8 transaction belongs. */
 const v8Version = ProtocolVersion.ProtocolVersion(3n);
-
-/** A pending service the suite drives: the facade's reaction to a verdict is what is under test, not the polling. */
-class DrivenPendingTransactions extends SilentPendingTransactions {
-  readonly cleared: FinalizedTx[] = [];
-
-  override clear(tx: FinalizedTx): Promise<void> {
-    this.cleared.push(tx);
-    return Promise.resolve();
-  }
-}
 
 /** A submission service that accepts, so the pending history entry is written the way a real submission writes it. */
 const acceptingSubmission: SubmissionService<FinalizedTx> = {
@@ -83,7 +79,7 @@ const acceptingSubmission: SubmissionService<FinalizedTx> = {
 };
 
 /** The guaranteed segment and fallible segment 1 ran; fallible segment 2 did not. */
-const partialSuccess: PendingTransactions.TransactionResult = {
+const partialSuccess: Lifecycle.RejectedVerdict = {
   status: 'PARTIAL_SUCCESS',
   segments: [
     { id: 0, success: true },
@@ -95,18 +91,11 @@ const partialSuccess: PendingTransactions.TransactionResult = {
 describe('what a rejected transaction releases', () => {
   let configuration: ResolvedConfiguration;
   let facade: WalletFacade;
-  let pending: DrivenPendingTransactions;
+  let lifecycle: DrivenLifecycle;
+  let restoredFacade: WalletFacade | undefined;
 
-  beforeEach(async () => {
-    configuration = {
-      networkId: NetworkId.NetworkId.Undeployed,
-      forks: { v9: ProtocolVersion.V9NativeForkVersion },
-      relayURL: new URL('http://localhost:9944'),
-      indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
-      provingServerUrl: new URL('http://localhost:6300'),
-      costParameters: { feeBlocksMargin: 0 },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
-    };
+  /** A facade over fresh wallets, recording into `driven`. */
+  const facadeOver = async (driven: DrivenLifecycle): Promise<WalletFacade> => {
     const seed = '0000000000000000000000000000000000000000000000000000000000000004';
     const keystore = createKeystore({ kind: 'schnorr', secret: getUnshieldedSeed(seed) }, configuration.networkId);
 
@@ -123,21 +112,35 @@ describe('what a rejected transaction releases', () => {
     drivenBy(unshielded, new rx.BehaviorSubject(unshieldedAt(await rx.firstValueFrom(unshielded.state), v8Version)));
     drivenBy(dust, new rx.BehaviorSubject(dustAt(await rx.firstValueFrom(dust.state), v8Version)));
 
-    pending = new DrivenPendingTransactions();
-
-    facade = await WalletFacade.init({
+    return WalletFacade.init({
       configuration,
       shielded: () => shielded,
       unshielded: () => unshielded,
       dust: () => dust,
       provingService: () => createV8MockProvingService(),
       submissionService: () => acceptingSubmission,
-      pendingTransactionsService: () => pending,
+      transactionLifecycleService: () => driven,
     });
+  };
+
+  beforeEach(async () => {
+    configuration = {
+      networkId: NetworkId.NetworkId.Undeployed,
+      forks: { v9: ProtocolVersion.V9NativeForkVersion },
+      relayURL: new URL('http://localhost:9944'),
+      indexerClientConnection: { indexerHttpUrl: 'http://localhost:8080' },
+      provingServerUrl: new URL('http://localhost:6300'),
+      costParameters: { feeBlocksMargin: 0 },
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+    };
+    lifecycle = new DrivenLifecycle();
+    facade = await facadeOver(lifecycle);
+    restoredFacade = undefined;
   });
 
   afterEach(async () => {
     await facade?.stop();
+    await restoredFacade?.stop();
   });
 
   const submitted = async (): Promise<FinalizedTx> => {
@@ -157,42 +160,38 @@ describe('what a rejected transaction releases', () => {
     return finalized;
   };
 
-  /** The verdict, as the pending set reports it once it has one. */
-  const verdictArrives = async (tx: FinalizedTx, result: PendingTransactions.TransactionResult): Promise<void> => {
-    pending.states.next({
-      all: [
-        {
-          tx,
-          creationTime: DateTime.unsafeMake(Date.now()),
-          protocolVersion: Option.some(ProtocolVersion.MinSupportedVersion),
-          result,
-        },
-      ],
-      reservations: [],
-    });
+  /** The verdict, as the lifecycle service records it once it has one. */
+  const verdictArrives = async (result: Lifecycle.RejectedVerdict): Promise<void> => {
+    lifecycle.verdict(result);
     await sleep(0.2);
   };
 
-  const spyOnReverts = () => ({
-    shielded: vi.spyOn(facade.shielded, 'revertTransaction'),
-    unshielded: vi.spyOn(facade.unshielded, 'revertTransaction'),
-    dust: vi.spyOn(facade.dust, 'revertTransaction'),
-    shieldedSegments: vi.spyOn(facade.shielded, 'revertFailedSegments'),
-    unshieldedSegments: vi.spyOn(facade.unshielded, 'revertFailedSegments'),
+  /** Releasing the coins is not reverting the transaction: the record keeps the chain's verdict. */
+  const expectStillRejected = (): void => {
+    expect(lifecycle.revertedIds).toStrictEqual([]);
+    expect(lifecycle.states.value.records.map((record) => record.state._tag)).toStrictEqual(['Rejected']);
+  };
+
+  const spyOnReverts = (on: WalletFacade = facade) => ({
+    shielded: vi.spyOn(on.shielded, 'revertTransaction'),
+    unshielded: vi.spyOn(on.unshielded, 'revertTransaction'),
+    dust: vi.spyOn(on.dust, 'revertTransaction'),
+    shieldedSegments: vi.spyOn(on.shielded, 'revertFailedSegments'),
+    unshieldedSegments: vi.spyOn(on.unshielded, 'revertFailedSegments'),
   });
 
   it('should release only the failed segments of a partially successful transaction, because the chain spent what the rest booked', async () => {
     const tx = await submitted();
     const reverts = spyOnReverts();
 
-    await verdictArrives(tx, partialSuccess);
+    await verdictArrives(partialSuccess);
 
     expect(reverts.shieldedSegments).toHaveBeenCalledWith(tx, [2]);
     expect(reverts.unshieldedSegments).toHaveBeenCalledWith(tx, [2]);
     expect(reverts.shielded).not.toHaveBeenCalled();
     expect(reverts.unshielded).not.toHaveBeenCalled();
     expect(reverts.dust).not.toHaveBeenCalled();
-    expect(pending.cleared).toContain(tx);
+    expectStillRejected();
   });
 
   it('should release only the failed segments when sync has already recorded the transaction as a partial success, because the chain spent the rest either way', async () => {
@@ -207,14 +206,14 @@ describe('what a rejected transaction releases', () => {
     });
     const reverts = spyOnReverts();
 
-    await verdictArrives(tx, partialSuccess);
+    await verdictArrives(partialSuccess);
 
     expect(reverts.shieldedSegments).toHaveBeenCalledWith(tx, [2]);
     expect(reverts.unshieldedSegments).toHaveBeenCalledWith(tx, [2]);
     expect(reverts.shielded).not.toHaveBeenCalled();
     expect(reverts.unshielded).not.toHaveBeenCalled();
     expect(reverts.dust).not.toHaveBeenCalled();
-    expect(pending.cleared).toContain(tx);
+    expectStillRejected();
     expect((await facade.getAllFromTxHistory()).map((recorded) => recorded.lifecycle.status)).toStrictEqual([
       'finalized',
     ]);
@@ -224,13 +223,149 @@ describe('what a rejected transaction releases', () => {
     const tx = await submitted();
     const reverts = spyOnReverts();
 
-    await verdictArrives(tx, { status: 'FAILURE', segments: [] });
+    await verdictArrives({ status: 'FAILURE', segments: [] });
 
     expect(reverts.shielded).toHaveBeenCalledWith(tx);
     expect(reverts.unshielded).toHaveBeenCalledWith(tx);
     expect(reverts.dust).toHaveBeenCalledWith(tx);
     expect(reverts.shieldedSegments).not.toHaveBeenCalled();
     expect(reverts.unshieldedSegments).not.toHaveBeenCalled();
-    expect(pending.cleared).toContain(tx);
+    expectStillRejected();
+  });
+
+  it('should release everything a transaction whose TTL passed while it waited booked, because no chain will apply any of it', async () => {
+    const tx = await submitted();
+    const reverts = spyOnReverts();
+
+    await verdictArrives({ status: 'TTL_PASSED' });
+
+    expect(reverts.shielded).toHaveBeenCalledWith(tx);
+    expect(reverts.unshielded).toHaveBeenCalledWith(tx);
+    expect(reverts.dust).toHaveBeenCalledWith(tx);
+    expect(reverts.shieldedSegments).not.toHaveBeenCalled();
+    expectStillRejected();
+    expect((await facade.getAllFromTxHistory()).map((recorded) => recorded.lifecycle.status)).toStrictEqual([
+      'rejected',
+    ]);
+  });
+
+  it('should release everything an orphaned transaction booked and record why, leaving the record orphaned', async () => {
+    const tx = await submitted();
+    const reverts = spyOnReverts();
+
+    lifecycle.orphaned(tx.protocolVersion, ProtocolVersion.V9NativeForkVersion);
+    await sleep(0.2);
+
+    expect(reverts.shielded).toHaveBeenCalledWith(tx);
+    expect(reverts.unshielded).toHaveBeenCalledWith(tx);
+    expect(reverts.dust).toHaveBeenCalledWith(tx);
+    expect(lifecycle.revertedIds).toStrictEqual([]);
+    expect(lifecycle.states.value.records.map((record) => record.state._tag)).toStrictEqual(['Orphaned']);
+    const [entry] = await facade.getAllFromTxHistory();
+    expect(entry.lifecycle.status === 'rejected' ? entry.lifecycle.reason : undefined).toBe(
+      'orphaned-by-protocol-upgrade',
+    );
+  });
+
+  it('should release a rejected transaction once, however often its record is published again, because a second release could free coins booked since', async () => {
+    await submitted();
+    const reverts = spyOnReverts();
+
+    await verdictArrives({ status: 'FAILURE', segments: [] });
+    lifecycle.republish();
+    lifecycle.republish();
+    await sleep(0.2);
+
+    expect(reverts.shielded).toHaveBeenCalledTimes(1);
+    expect(reverts.unshielded).toHaveBeenCalledTimes(1);
+    expect(reverts.dust).toHaveBeenCalledTimes(1);
+  });
+
+  it('should release nothing for a confirmed transaction, because the chain spent its coins', async () => {
+    await submitted();
+    const reverts = spyOnReverts();
+
+    lifecycle.verdict({ status: 'SUCCESS' });
+    await sleep(0.2);
+
+    expect(reverts.shielded).not.toHaveBeenCalled();
+    expect(reverts.unshielded).not.toHaveBeenCalled();
+    expect(reverts.dust).not.toHaveBeenCalled();
+    expect(reverts.shieldedSegments).not.toHaveBeenCalled();
+    expect(reverts.unshieldedSegments).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A transaction finalized here and handed to someone else to submit, as a swap is: the record never passes through
+   * submitted, yet the chain can still include it and refuse it.
+   */
+  const finalizedForAnotherToSubmit = (): Promise<FinalizedTx> =>
+    facade.finalizeTransaction(
+      WalletTransaction.adopt(
+        'Unproven',
+        ledgerV8.Transaction.fromParts(
+          configuration.networkId,
+          undefined,
+          undefined,
+          ledgerV8.Intent.new(new Date(Date.now() + 60_000)),
+        ),
+        ProtocolVersion.MinSupportedVersion,
+      ),
+    );
+
+  /** The chain's verdict, as an inclusion the lifecycle service was told of by identifiers. */
+  const chainIncludes = async (verdict: InclusionVerdict): Promise<void> => {
+    const [record] = lifecycle.states.value.records;
+    await lifecycle.included(record.identifiers, verdict);
+    await sleep(0.2);
+  };
+
+  it('should reject a finalized transaction someone else submitted that the chain refused, and release everything it booked, because the chain applied none of it', async () => {
+    const tx = await finalizedForAnotherToSubmit();
+    expect(lifecycle.states.value.records.map((record) => record.state._tag)).toStrictEqual(['Finalized']);
+    const reverts = spyOnReverts();
+
+    await chainIncludes({ status: 'FAILURE', segments: [] });
+
+    expectStillRejected();
+    expect(reverts.shielded.mock.calls).toStrictEqual([[tx]]);
+    expect(reverts.unshielded.mock.calls).toStrictEqual([[tx]]);
+    expect(reverts.dust.mock.calls).toStrictEqual([[tx]]);
+    expect(reverts.shieldedSegments).not.toHaveBeenCalled();
+    expect(reverts.unshieldedSegments).not.toHaveBeenCalled();
+  });
+
+  it('should release only the failed segments of a finalized transaction someone else submitted that landed as a partial success, because the chain spent what the rest booked', async () => {
+    const tx = await finalizedForAnotherToSubmit();
+    expect(lifecycle.states.value.records.map((record) => record.state._tag)).toStrictEqual(['Finalized']);
+    const reverts = spyOnReverts();
+
+    await chainIncludes(partialSuccess);
+
+    // Ended, whichever status a partial success shows as: the chain has answered.
+    expect(lifecycleEntriesOf(lifecycle.states.value).filter(isAwaiting)).toStrictEqual([]);
+    expect(reverts.shieldedSegments.mock.calls).toStrictEqual([[tx, [2]]]);
+    expect(reverts.unshieldedSegments.mock.calls).toStrictEqual([[tx, [2]]]);
+    expect(reverts.shielded).not.toHaveBeenCalled();
+    expect(reverts.unshielded).not.toHaveBeenCalled();
+    expect(reverts.dust).not.toHaveBeenCalled();
+  });
+
+  it('should release nothing for a record that was already rejected when the facade started, because the session that saw the verdict released its coins', async () => {
+    await submitted();
+    await facade.stop();
+    lifecycle.verdict({ status: 'FAILURE', segments: [] });
+    const restored = new DrivenLifecycle(lifecycle.states.value);
+    restoredFacade = await facadeOver(restored);
+    const reverts = spyOnReverts(restoredFacade);
+
+    restored.republish();
+    await sleep(0.2);
+
+    expect(reverts.shielded).not.toHaveBeenCalled();
+    expect(reverts.unshielded).not.toHaveBeenCalled();
+    expect(reverts.dust).not.toHaveBeenCalled();
+    expect(reverts.shieldedSegments).not.toHaveBeenCalled();
+    expect(reverts.unshieldedSegments).not.toHaveBeenCalled();
   });
 });

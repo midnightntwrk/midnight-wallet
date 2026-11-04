@@ -386,7 +386,7 @@ from the superficially similar one of protocol versions and hard forks.
 
 **Persisted surface** — a string the SDK gives the application to store and hand back. There are five, each stored
 independently by the application: the shielded, unshielded and dust wallet snapshots, the transaction history, and the
-pending transactions. The facade does not compose them into one blob.
+transaction lifecycle records. The facade does not compose them into one blob.
 
 **Format version** — the version of a persisted surface's encoded shape, written into the payload as
 `{ version: 'vN', ... }`. Each surface has its own line: the transaction history is on `v2` while the other four are on

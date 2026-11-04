@@ -53,7 +53,7 @@ const SINGLE_OBJECT_SURFACES = [
   'shielded',
   'unshielded',
   'dust',
-  'pending-transactions',
+  'transaction-lifecycle',
 ] as const satisfies readonly Surface[];
 
 describe('a reader keeps a top-level field it does not know, and writes it back unchanged', () => {

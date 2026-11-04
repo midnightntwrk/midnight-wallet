@@ -16,6 +16,7 @@ import {
   SURFACES,
   WRITERS,
   isHandedTo,
+  upgradeOf,
   currentVersionOf,
   declaredVersionOf,
   fixturesFor,
@@ -128,8 +129,9 @@ describe('reading a stored payload and writing it back keeps everything it carri
       const written: unknown = JSON.parse(rewritten);
 
       const key = contentKeyOf(stored) ?? contentKeyOf(written);
-      const before = uniqueSorted(keyPaths(contentOf(stored, key)));
-      const after = uniqueSorted(keyPaths(contentOf(written, key)));
+      const upgrade = upgradeOf(surface, fixture.serialized, rewritten);
+      const before = uniqueSorted(keyPaths(contentOf(stored, key)).map((path) => upgrade?.renamed[path] ?? path));
+      const after = uniqueSorted(keyPaths(contentOf(written, upgrade?.contentKey ?? key)));
 
       const lost = before.filter((path) => !after.includes(path));
 

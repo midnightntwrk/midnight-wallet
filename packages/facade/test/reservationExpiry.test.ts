@@ -11,27 +11,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /**
- * One thing releases a booked coin: the wallet's own sweep, at the coin's TTL. A reservation records which coins a
+ * One thing releases a booked coin: the wallet's own sweep, at the coin's TTL. A balanced record names which coins a
  * balanced transaction took, and expires on the same instant, but expiring is not a second way to release them.
  *
  * The two are on different clocks — the wallet sweeps as sync updates arrive, the service polls once a second — and a
- * coin freed by the first can be booked again before the second fires. A release driven by the reservation would then
- * free a booking taken for a different transaction, since the ids alone say nothing about which booking holds them.
+ * coin freed by the first can be booked again before the second fires. A release driven by the record would then free a
+ * booking taken for a different transaction, since the ids alone say nothing about which booking holds them.
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
-import { type FinalizedTx, NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import {
-  PendingTransactions,
-  type PendingTransactionsService,
-} from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { DateTime, Effect } from 'effect';
+import { DateTime, Effect, Option } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import { type FacadeState } from '../src/index.js';
 import {
   createSimulatorWalletFactories,
   deriveWalletKeys,
+  DrivenLifecycle,
   makeSimulatorFacade,
   tokenValue,
   waitForUnshieldedBalance,
@@ -58,41 +56,7 @@ const nightGenesisMint = (
   verifyingKey,
 });
 
-/**
- * A pending-transactions service whose state this test drives directly, so an expired reservation can be presented at a
- * chosen moment rather than waited for.
- */
-const controllablePendingService = (): PendingTransactionsService<FinalizedTx> & {
-  emit: (state: PendingTransactions.PendingTransactions<FinalizedTx>) => void;
-  current: () => PendingTransactions.PendingTransactions<FinalizedTx>;
-} => {
-  const subject = new rx.BehaviorSubject<PendingTransactions.PendingTransactions<FinalizedTx>>(
-    PendingTransactions.empty(),
-  );
-
-  return {
-    start: () => Promise.resolve(),
-    stop: () => Promise.resolve(),
-    state: () => subject.asObservable(),
-    // Nothing here submits, so tracking never starts.
-    addPendingTransaction: () => Promise.resolve(),
-    clear: () => Promise.resolve(),
-    // The simulator never crosses a protocol boundary, so there is never anything to orphan.
-    orphanBeyond: () => Promise.resolve(),
-    addReservation: (reservation) => {
-      subject.next(PendingTransactions.addReservation(subject.value, reservation));
-      return Promise.resolve();
-    },
-    clearReservation: (identifiers) => {
-      subject.next(PendingTransactions.clearReservation(subject.value, identifiers));
-      return Promise.resolve();
-    },
-    emit: (state) => subject.next(state),
-    current: () => subject.value,
-  };
-};
-
-describe('A reservation reaching its expiry', () => {
+describe('A balanced record reaching its expiry', () => {
   const fundedFacade = () =>
     Effect.gen(function* () {
       const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
@@ -101,9 +65,9 @@ describe('A reservation reaching its expiry', () => {
         blockProducer: V9.immediateBlockProducer(),
       });
       const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
-      const pending = controllablePendingService();
+      const lifecycle = new DrivenLifecycle();
       const facade = yield* makeSimulatorFacade(config, keys, createSimulatorWalletFactories(config), {
-        pendingTransactionsService: () => pending,
+        transactionLifecycleService: () => lifecycle,
       });
 
       yield* waitForUnshieldedBalance(facade, NIGHT, 1n);
@@ -117,14 +81,14 @@ describe('A reservation reaching its expiry', () => {
         },
       ];
 
-      return { facade, keys, simulator, transfer, pending };
+      return { facade, keys, simulator, transfer, lifecycle };
     });
 
   it('leaves a booking alone, because only the wallet sweep releases a coin', () =>
-    // The expired reservation below names the booked coin but stands for a different spend, which is exactly the
+    // The expired record below names the booked coin but stands for a different spend, which is exactly the
     // shape the two clocks produce: an abandoned transaction's record outliving the coin it once held.
     Effect.gen(function* () {
-      const { facade, transfer, pending } = yield* fundedFacade();
+      const { facade, transfer, lifecycle } = yield* fundedFacade();
 
       yield* Effect.promise(() =>
         facade.transferTransaction(transfer(tokenValue(1n)), {
@@ -138,16 +102,22 @@ describe('A reservation reaching its expiry', () => {
       expect(bookedIds.length).toBeGreaterThan(0);
 
       // An older spend, already gone, whose record names the same coins and has just passed its TTL.
-      pending.emit(
-        PendingTransactions.addReservation(PendingTransactions.empty(), {
-          identifiers: ['an-abandoned-spend'],
-          intentHashes: [],
-          inputs: { unshielded: bookedIds },
-          ttl: new Date(Date.now() - 1000),
-          createdAt: DateTime.unsafeNow(),
-          expired: true,
-        }),
-      );
+      lifecycle.states.next({
+        records: [
+          ...lifecycle.states.value.records,
+          {
+            identifiers: ['an-abandoned-spend'],
+            intentHashes: [],
+            inputs: { unshielded: bookedIds },
+            ttl: new Date(Date.now() - 1000),
+            protocolVersion: Option.some(ProtocolVersion.MinSupportedVersion),
+            tx: Option.none(),
+            createdAt: DateTime.unsafeNow(),
+            submittedAt: Option.none(),
+            state: Lifecycle.LifecycleState.Expired(),
+          },
+        ],
+      });
 
       yield* Effect.promise(
         () =>
@@ -160,7 +130,5 @@ describe('A reservation reaching its expiry', () => {
 
       expect(after.unshielded.pendingCoins.map(utxoKey).toSorted()).toEqual(bookedIds.toSorted());
       expect(after.unshielded.availableCoins.map(utxoKey)).not.toContain(bookedIds[0]);
-      // The record itself is what expiry retires.
-      expect(pending.current().reservations).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 });

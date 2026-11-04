@@ -14,7 +14,7 @@ export * from './balancer/index.js';
 export * from './chainVersion/index.js';
 export * from './codecs/index.js';
 export * from './liveness/index.js';
-export * from './pendingTransactions/index.js';
+export * from './transactionLifecycle/index.js';
 export * from './proving/index.js';
 export * from './signatures/index.js';
 export * from './simulation/index.js';
