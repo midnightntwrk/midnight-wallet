@@ -8,7 +8,11 @@ Additions since 4.x
   projections instead of replaying every Dust event. It runs in finite passes, repeated in the background every
   `backgroundSyncInterval` (default 5 s); every pass, idle or not, re-resolves the wallet's nullifiers. It needs
   ledger-v9 and does not hand over across a fork by itself: compose it as the V2 sync of a `CustomForkingDustWallet`
-  whose V1 variant replays events.
+  whose V1 variant replays events. A restored projections wallet resumes from the block its last pass reached. A wallet
+  that replays events refuses a projections snapshot at restore with `SnapshotSyncMismatchError`
+  (`Wallet.SnapshotSyncMismatch`) rather than misread its position; a `SyncService` declares what it `resumesFrom`,
+  which both shipped services do. `SyncService.DustProjectionsUpdate` names the update it applies, so the composed
+  wallet's type is `ForkingDustWallet<WalletSyncUpdate, DustProjectionsUpdate>`, with the first from `./v1`.
 - **Stepped sync.** `DustWallet.stepSync(keys)` runs one pass and returns; it completes only when the V2 variant uses a
   finite-pass sync such as the projections sync. Below `forks.v9`, where the V1 variant has no stepped sync, it rejects
   with `ManualSyncUnsupportedError` (`isManualSyncUnsupportedError`).

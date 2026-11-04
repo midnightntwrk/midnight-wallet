@@ -104,6 +104,8 @@ const expectedPaths = [
   'state',
   // The Dust pending transactions have spent, so a restored wallet can still release it. Empty for these wallets.
   'pendingDust[]',
+  // Which synchronization recorded `offset`, so a wallet that cannot resume from it refuses the snapshot at restore.
+  'syncKind',
 ];
 
 describe('the dust snapshot envelope', () => {

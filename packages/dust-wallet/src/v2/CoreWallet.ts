@@ -30,6 +30,7 @@ import { Array as Arr, HashMap, Option, pipe } from 'effect';
 import { type Dust, type PendingDust } from './types/Dust.js';
 import { type CoinWithValue } from './CoinsAndBalances.js';
 import { type NetworkId, type UnprovenDustSpend } from './types/ledger.js';
+import { type SyncKind } from '../SnapshotFormat.js';
 import {
   type CollapsedMerkleTree,
   type NewDustGeneration,
@@ -60,6 +61,11 @@ export type CoreWallet = Readonly<{
   publicKey: PublicKey;
   protocolVersion: ProtocolVersion.ProtocolVersion;
   progress: SyncProgress.SyncProgress;
+  /**
+   * Which synchronization moved `progress`, and so which of its indexes is the position it resumes from. Set by the
+   * sync capability that moves it; a restore that cannot resume from it is refused. See {@link SyncKind}.
+   */
+  syncKind: SyncKind;
   networkId: NetworkId;
   pendingDust: Array<PendingDust>;
   /**
@@ -85,10 +91,18 @@ export const CoreWallet = {
       networkId,
       pendingDust: [],
       progress: SyncProgress.createSyncProgress(),
+      // Index 0, which event replay reads as "nothing applied yet" and no other synchronization reads at all.
+      syncKind: 'events',
       protocolVersion: ProtocolVersion.MinSupportedVersion,
     };
   },
 
+  /**
+   * A wallet as a snapshot left it.
+   *
+   * @param syncKind Which synchronization moved `syncProgress`. Required, because it decides whether a wallet that
+   *   replays events may resume from it, and a guess in the wrong direction is the one that misreads a position.
+   */
   restore(
     localState: DustLocalState,
     publicKey: PublicKey,
@@ -96,6 +110,7 @@ export const CoreWallet = {
     syncProgress: Omit<SyncProgress.SyncProgressData, 'isConnected'>,
     protocolVersion: bigint,
     networkId: NetworkId,
+    syncKind: SyncKind,
   ): CoreWallet {
     return {
       state: localState,
@@ -103,6 +118,7 @@ export const CoreWallet = {
       networkId,
       pendingDust: pendingTokens,
       progress: SyncProgress.createSyncProgress(syncProgress),
+      syncKind,
       protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
     };
   },
@@ -143,6 +159,8 @@ export const CoreWallet = {
       networkId: previous.networkId,
       pendingDust: [],
       progress: SyncProgress.createSyncProgress({ ...previous.progress, isConnected: false }),
+      // The V1 variant only ever replays events, so the position it hands over is a dust event id.
+      syncKind: 'events',
       protocolVersion: ProtocolVersion.ProtocolVersion(previous.protocolVersion),
     };
   },

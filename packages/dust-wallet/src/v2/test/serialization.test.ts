@@ -134,6 +134,7 @@ describe('V2 dust snapshot pending Dust', () => {
       { appliedIndex: 0n, highestRelevantWalletIndex: 0n, highestIndex: 0n, highestRelevantIndex: 0n },
       ProtocolVersion.MinSupportedVersion,
       networkId,
+      'events',
     );
 
   /** A snapshot as the first format wrote it: stamped 'v1', with no pending Dust recorded. */

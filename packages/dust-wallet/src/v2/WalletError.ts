@@ -84,8 +84,32 @@ export class OutOfOrderSyncUpdateError extends Data.TaggedError('Wallet.OutOfOrd
   readonly received: bigint;
 }> {}
 
+/**
+ * A snapshot whose position the projections sync recorded, restored into a wallet whose synchronization replays dust
+ * events.
+ *
+ * @remarks
+ *   A projections pass saves its position as the height of the block it last synced to, not as a dust event id, so a
+ *   wallet that replays events cannot resume from it: it would subscribe from an id that names an unrelated event, and
+ *   either wait for events that never arrive or skip the ones in between. Refused at restore, before anything runs. The
+ *   wallet that wrote the snapshot, or any other that synchronizes by projections, restores it; otherwise start the
+ *   wallet afresh.
+ * @example
+ *   ```ts
+ *   if (error._tag === 'Wallet.SnapshotSyncMismatch') await startFromSeedInstead();
+ *   ```;
+ */
+export class SnapshotSyncMismatchError extends Data.TaggedError('Wallet.SnapshotSyncMismatch')<{
+  readonly message: string;
+  /** The synchronization that saved the snapshot's position. */
+  readonly syncKind: 'projections';
+  /** The kind of position this wallet's synchronization resumes from. */
+  readonly resumesFrom: 'events';
+}> {}
+
 export type WalletError =
   | SnapshotFormat.SnapshotRestoreError
+  | SnapshotSyncMismatchError
   | OtherWalletError
   | SyncWalletError
   | TransactingError

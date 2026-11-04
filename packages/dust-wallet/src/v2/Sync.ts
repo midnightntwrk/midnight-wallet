@@ -57,7 +57,13 @@ import {
 } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type URLError, WsURL } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { OtherWalletError, OutOfOrderSyncUpdateError, SyncWalletError, type WalletError } from './WalletError.js';
+import {
+  OtherWalletError,
+  OutOfOrderSyncUpdateError,
+  SnapshotSyncMismatchError,
+  SyncWalletError,
+  type WalletError,
+} from './WalletError.js';
 import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from './types/ledger.js';
@@ -89,6 +95,9 @@ import {
   readNullifierBlockParameters,
   tryReadEvent,
 } from './SyncSchema.js';
+// The update the projections service emits and its capability applies, exported beside them so an application can name
+// the wallet it composes from them — `ForkingDustWallet<V1 WalletSyncUpdate, DustProjectionsUpdate>`.
+export type { DustProjectionsUpdate } from './SyncSchema.js';
 import {
   bigintToLeHex,
   calculatePrefixLength,
@@ -98,6 +107,7 @@ import {
   uniqueArray,
 } from './Utils.js';
 import { type Dust } from './types/index.js';
+import { type SyncKind } from '../SnapshotFormat.js';
 import { type DustTimelineStart } from '../types/DustWalletTypes.js';
 
 /**
@@ -137,7 +147,46 @@ export interface SyncService<TState, TStartAux, TUpdate> {
   blockData: (height?: number) => Effect.Effect<BlockData, WalletError>;
   /** How often background synchronization re-runs {@link SyncService.updates}. See {@link BackgroundRepeat}. */
   readonly backgroundRepeat: BackgroundRepeat;
+  /**
+   * The kind of position {@link SyncService.updates} resumes from, so a restore can refuse a snapshot whose position
+   * means something else (see {@link resumableBy}).
+   *
+   * @remarks
+   *   Optional so that a service written before positions were told apart keeps working: one that does not say is handed
+   *   every snapshot, as it always was.
+   */
+  readonly resumesFrom?: SyncKind;
 }
+
+/**
+ * The restored wallet, if a sync service that resumes from `resumesFrom` can continue from the position it carries.
+ *
+ * @remarks
+ *   Only one pairing is refused: a projections position handed to a service that replays dust events, which would take a
+ *   block height for an event id. Every other one resumes safely. A projections pass resumes from the trees in the
+ *   ledger state and from the block height it saved, which a position it did not save leaves at `0` — every dtime
+ *   update — so it takes any snapshot; and a service that does not say what it resumes from is handed everything, as
+ *   before.
+ * @param wallet The wallet a snapshot restored.
+ * @param resumesFrom What the sync service that will continue it resumes from.
+ * @returns The wallet unchanged, or the refusal.
+ */
+export const resumableBy = (
+  wallet: CoreWallet,
+  resumesFrom: SyncService<CoreWallet, unknown, unknown>['resumesFrom'],
+): Either.Either<CoreWallet, SnapshotSyncMismatchError> =>
+  resumesFrom === 'events' && wallet.syncKind === 'projections'
+    ? Either.left(
+        new SnapshotSyncMismatchError({
+          message:
+            'This dust snapshot was written by a wallet that synchronizes by projections, and this wallet replays dust ' +
+            'events: its position is a block height, not an event id. Restore it with a wallet that ' +
+            'synchronizes by projections, or start this one afresh.',
+          syncKind: 'projections',
+          resumesFrom: 'events',
+        }),
+      )
+    : Either.right(wallet);
 
 export type ChangesResult = {
   readonly changes: DustStateChanges[];
@@ -555,6 +604,8 @@ export const makeDefaultSyncService = (
   return {
     // A long-lived indexer subscription: the one pass never ends, so there is nothing to repeat.
     backgroundRepeat: BackgroundRepeat.Once(),
+    // The subscription is opened at `appliedIndex`, read as a dust event id.
+    resumesFrom: 'events',
     updates: (
       state: CoreWallet,
       secretKey: DustSecretKey,
@@ -925,6 +976,8 @@ export const makeEventLessSyncService = (
   return {
     // Each pass ends its own stream, so background synchronization has to be told to run another one.
     backgroundRepeat: BackgroundRepeat.WithDelay({ delay: Duration.millis(config.backgroundSyncInterval ?? 5_000) }),
+    // A pass starts from the trees in the ledger state, and never reads `appliedIndex` as anything.
+    resumesFrom: 'projections',
     updates: (
       state: CoreWallet,
       secretKey: DustSecretKey,
@@ -1251,11 +1304,14 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
 
       // `appliedIndex` stops at the last event this variant actually replayed. The next variant resumes one below it
       // on an inclusive cursor, so the deferred suffix is re-fetched rather than skipped.
-      const updatedState = CoreWallet.updateProgress(annotateVersion(newState, observedVersion), {
-        appliedIndex: applied.length === 0 ? appliedIndex : BigInt(applied.at(-1)!.id),
-        highestRelevantWalletIndex,
-        isConnected: true,
-      });
+      const updatedState = CoreWallet.updateProgress(
+        { ...annotateVersion(newState, observedVersion), syncKind: 'events' },
+        {
+          appliedIndex: applied.length === 0 ? appliedIndex : BigInt(applied.at(-1)!.id),
+          highestRelevantWalletIndex,
+          isConnected: true,
+        },
+      );
 
       return [
         updatedState,
@@ -1301,13 +1357,17 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
     ): [CoreWallet, ChangesResult] {
       if (isProgressUpdate(update)) {
         return [
-          CoreWallet.updateProgress(state, {
-            appliedIndex: BigInt(update.appliedIndex ?? state.progress.appliedIndex),
-            highestRelevantWalletIndex: BigInt(
-              update.highestRelevantIndex ?? state.progress.highestRelevantWalletIndex,
-            ),
-            isConnected: true,
-          }),
+          // From the first report on, `appliedIndex` is this pass's work count, so the position is a projections one.
+          CoreWallet.updateProgress(
+            { ...state, syncKind: 'projections' },
+            {
+              appliedIndex: BigInt(update.appliedIndex ?? state.progress.appliedIndex),
+              highestRelevantWalletIndex: BigInt(
+                update.highestRelevantIndex ?? state.progress.highestRelevantWalletIndex,
+              ),
+              isConnected: true,
+            },
+          ),
           { changes: [], protocolVersion: Number(state.protocolVersion) },
         ];
       }
@@ -1387,9 +1447,10 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         throw new OtherWalletError({ message: 'Root hashes don`t match' });
       }
 
-      const updatedWallet = CoreWallet.updateProgress(walletAtLatestBlock, {
-        highestIndex: BigInt(update.latestBlock.height),
-      });
+      const updatedWallet = CoreWallet.updateProgress(
+        { ...walletAtLatestBlock, syncKind: 'projections' },
+        { highestIndex: BigInt(update.latestBlock.height) },
+      );
 
       return [updatedWallet, { changes, protocolVersion: Number(state.protocolVersion) }];
     },
