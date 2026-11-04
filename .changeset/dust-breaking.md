@@ -23,8 +23,9 @@ Breaking changes since 4.x
   types, and an ECDSA one is refused below `forks.v9`.
 - **API types.** `DustWalletAPI<TKeys = never, TSerialized>`: `start(keys)` takes the wallet's own keys type, and the
   API requires `stepSync` and `ensureFeeCoverage`. `DustWalletState.state` is sealed: read it with `coreStateOf` from
-  `./v1` or `./v2`. The state loses `capabilities`, `services` and `mapState` (use `fromVariant`),
-  `DustWalletCapabilities` and `DustWalletServices` are removed, and the shared types live in `DustWalletTypes`.
+  `./v1` or `./v2`. The state loses `capabilities`, `services` and `mapState` (use `fromVariant`), and its constructor
+  takes `(protocolVersion, state, projections)` in place of `(state, capabilities, services)`. `DustWalletCapabilities`
+  and `DustWalletServices` are removed, and the shared types live in `DustWalletTypes`.
 - **Subpaths.** `./v1` exports the ledger-v8 variant and no longer the wallet API: import `DustWallet`,
   `CustomDustWallet`, `DustWalletAPI`, `DustWalletState` and `DefaultDustConfiguration` from the package root. Its
   `Simulator` is the capabilities `V8` simulator.
@@ -33,8 +34,13 @@ Breaking changes since 4.x
 - **Custom sync and core state.** A `SyncService` declares how background synchronization repeats its `updates`, as a
   required `backgroundRepeat`: `BackgroundRepeat.Once()` for a long-lived subscription, or
   `BackgroundRepeat.WithDelay({ delay })`. Sync updates are tagged `Events` or `VersionSignal`, `applyUpdate` receives
-  the protocol-version range its variant owns, and `BlockData` requires `protocolVersion`. `CoreWallet.pendingDust`
-  holds `PendingDust` entries (`{ coin, nullifier, declaredTime }`), and `DustWithNullifier` is removed.
+  the protocol-version range its variant owns, and `BlockData` requires `protocolVersion`. A custom variant
+  (`V1Variant`, `V2Variant`) must supply `startAux`, the `StartMaterial.StartAuxCapability` its builder sets with
+  `withStartAux(Defaults)`, and takes an optional fifth type parameter for the previous variant's state.
+  `CoreWallet.pendingDust` holds `PendingDust` entries (`{ coin, nullifier, declaredTime }`), and `DustWithNullifier` is
+  removed.
+- **Errors.** The `WalletError` union of `./v1` and `./v2` gains `SnapshotRestoreError`, `OutOfOrderSyncUpdateError` and
+  `InsufficientDustForFeeError`, so an exhaustive match over it must handle them.
 - **Snapshots.** Snapshots are format `v2`, recording the variant that wrote them and the Dust still pending; 4.x
   snapshots are read and upgraded. Once this release has saved a wallet, going back to 4.x means restoring it from its
   seed. An unreadable snapshot is refused with `SnapshotRestoreError` instead of `Wallet.Other`, and `restore` throws

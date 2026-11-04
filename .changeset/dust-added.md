@@ -23,8 +23,8 @@ Additions since 4.x
   `claimableFeePayment` in Specks, and an `estimate` of when generation will cover it (`Reachable`, with the seconds and
   the moment, or `Unreachable`, with the reason). One class serves both variants, so `instanceof` recognises it;
   `isInsufficientDustForFeeError` is the guard. `ensureFeeCoverage(currentTime, nightUtxos, feePayment, fee)` rejects
-  with it, `feeCoverageEstimate` computes the estimate, and `claimableFeePayment(dustState, nightUtxos, now)` gives the
-  amount `waitForGeneratedDust` waits for.
+  with it, the coins-and-balances capability's `feeCoverageEstimate` computes the estimate, and
+  `claimableFeePayment(dustState, nightUtxos, now)` gives the amount `waitForGeneratedDust` waits for.
 - **Restoring.** A snapshot restores on the variant that wrote it. `DustWallet(configuration).tryRestore` returns an
   `Either` instead of throwing, `peekProtocolVersion` reads a snapshot's protocol version, and a snapshot in a format
   version this build does not know is refused with `SnapshotRestoreError` (`unknown-version`). Snapshot fields this
@@ -34,4 +34,4 @@ Additions since 4.x
   both variants from your own builders, and `dustVariantConfigurations` gives each its own ledger version's parameters
   from plain rates (see also `asV8DustParameters` and `asV9DustParameters`). A wallet with no traffic of its own still
   notices the fork, re-asking the chain's tip every 30 seconds (`versionWatch.intervalMs` of the variants'
-  `Sync.DefaultSyncConfiguration`, not of `DefaultDustConfiguration`; zero or less disables it).
+  `SyncService.DefaultSyncConfiguration`, not of `DefaultDustConfiguration`; zero or less disables it).

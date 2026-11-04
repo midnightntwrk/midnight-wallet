@@ -30,9 +30,12 @@ Breaking changes since 3.x
   deadline and read `progress.indexerLiveness`. Tune the check with `livenessConfiguration` and `livenessPollInterval`.
   `SyncProgressData` gains a required `indexerLiveness`, defaulted by `createSyncProgress()`.
 - **API types.** `UnshieldedWalletState.state` is sealed: read it with `coreStateOf` from `./v1` or `./v2`. The state
-  loses `capabilities`, `services` and `mapState` (use `fromVariant`), and `UnshieldedWalletCapabilities` and
-  `UnshieldedWalletServices` are removed. `UnshieldedWalletAPI` requires `revertFailedSegments`, `revertUtxos` and
+  loses `capabilities`, `services` and `mapState` (use `fromVariant`), and its constructor takes
+  `(protocolVersion, state, projections)` in place of `(state, capabilities, services)`. `UnshieldedWalletCapabilities`
+  and `UnshieldedWalletServices` are removed. `UnshieldedWalletAPI` requires `revertFailedSegments`, `revertUtxos` and
   `releaseRestoredPending`.
+- **Errors.** The `WalletError` union of `./v1` and `./v2` gains `SnapshotRestoreError` and `OutOfOrderSyncUpdateError`,
+  and that of `./v2` also `SchemeMismatchError`, so an exhaustive match over it must handle them.
 - **`CustomUnshieldedWallet`** composes one ledger-v9 variant, from a V2 builder, instead of a ledger-v8 one; its start
   stays synchronous, and it cannot cross a fork.
 - **Custom implementations.** `SyncService.livenessUpdates` is required: a source with nothing to check emits one

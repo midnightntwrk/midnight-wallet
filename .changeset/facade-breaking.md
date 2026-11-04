@@ -42,13 +42,17 @@ restored from a snapshot crosses too.
   keystore's `signDataAsync` is one. Verifying keys and signatures are tagged `{ tag, value }` objects.
 - **One lifecycle record per transaction.** `facade.pendingTransactionsService` is now
   `facade.transactionLifecycleService`, built by `InitParams.transactionLifecycleService(config, { clock })`.
-  `FacadeState.pending` is replaced by `FacadeState.lifecycle`: one `LifecycleEntry` per transaction, whose `status` is
-  `Balanced`, `Finalized`, `Submitted`, `Confirmed`, `PartialSuccess` (with `segments`), `Rejected` (with a `reason`:
-  `Refused` with `segments`, or `TTLPassed`), `Orphaned`, `Expired` or `Reverted`, and whose `transaction` and
-  `submittedAt` are `Option`s, empty until it is finalized and until it is submitted. Ended entries stay listed until
-  their TTL passes, so wait with `isAwaiting` rather than for an empty list. The service saves format `v2`: a store
-  saved by 4.x is read and upgraded, and 4.x cannot read `v2`. A custom `TransactionTrait` provides `intentHashes`,
-  `inputs` and `ttl`, and no longer `hasTTLExpired` or `isOneIncludedInOther`.
+  `FacadeState.pending` is replaced by `FacadeState.lifecycle`: one `LifecycleEntry` per transaction, carrying its
+  `identifiers`, the protocol version it was authored for (`authoredFor`, an `Option`), and a `status` of `Balanced`,
+  `Finalized`, `Submitted`, `Confirmed`, `PartialSuccess` (with `segments`), `Rejected` (with a `reason`: `Refused` with
+  `segments`, or `TTLPassed`), `Orphaned`, `Expired` or `Reverted`. Its `transaction` is an `Option` that is `Some` once
+  the transaction is finalized, and stays `none` for one that ended without being finalized or was read from an older
+  store that did not hold it; `submittedAt` is `Some` once it is submitted. Ended entries stay listed until their TTL
+  passes, so wait with `isAwaiting` rather than for an empty list. `FacadeState`'s constructor takes
+  `(shielded, unshielded, dust, lifecycle, forkVersion?)` in place of `(shielded, unshielded, dust, pending)`. The
+  service saves format `v2`: a store saved by 4.x is read and upgraded, and 4.x cannot read `v2`. A custom
+  `TransactionTrait` provides `intentHashes`, `inputs` and `ttl`, and no longer `hasTTLExpired` or
+  `isOneIncludedInOther`.
 - **Rejections.** A first-time Dust registration whose generated Dust cannot yet pay its own fee rejects with
   `InsufficientDustForFeeError` rather than a plain `Error`. A builder (`transferTransaction`, `initSwap`, the
   `balance*Transaction` methods), `finalizeTransaction` or `finalizeRecipe` that fails part-way releases what it booked

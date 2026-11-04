@@ -17,10 +17,11 @@ Additions since 2.x
 - `IndexerLiveness`, the verdict of cross-checking an indexer against a node (`InSync`, `Ahead`, `Behind`, `Unknown`,
   `WrongNetwork`, `Unavailable` or `Skipped`), with `evaluate`, `evaluateTips`, `blocksSyncCompletion`, `equivalent` and
   `sameBlockHash`.
-- `SnapshotFormat`, `SnapshotRouting` and `TransactionHistoryFormat`, the versioning the wallet packages apply to what
-  they save. A snapshot records its format `version` and the variant that wrote it (`writtenBy`), is routed to that
-  variant on restore, and is refused with `SnapshotRestoreError` when its version is unknown. Fields a reader does not
-  declare are kept and written back (`readSnapshotWithUnknownFields`, `writeSnapshot`, `withUnknownFields`), so a field
-  written by a later release survives a rollback.
+- `SnapshotFormat`, `SnapshotRouting` and `TransactionHistoryFormat`, the primitives with which a wallet package
+  versions what it saves: it records a snapshot's format `version` and the variant that wrote it (`versionField`,
+  `writtenByField`), routes a snapshot to that variant on restore (`routeSnapshot`), and refuses an unknown version with
+  `SnapshotRestoreError` (`readSnapshot`). With `readSnapshotWithUnknownFields`, `writeSnapshot` and `withUnknownFields`
+  it keeps the fields it does not declare and writes them back, so a field written by a later release survives a
+  rollback.
 - `Token.night`, `TokenType`, `parseTokenType` and `InvalidTokenTypeError`, so token types need no ledger import;
   `VariantState`, the sealed state a wallet exposes; `UnshieldedUtxo`; `NetworkId.StageNet`.
