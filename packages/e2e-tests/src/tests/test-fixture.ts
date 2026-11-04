@@ -252,8 +252,11 @@ export class TestContainersFixture {
     };
   }
 
-  public getDustWalletConfig(): DefaultDustV2Configuration {
+  public getDustWalletConfig(): DefaultDustV2Configuration & { skipLedgerV8DustHistory: boolean } {
     return {
+      // A fresh wallet on a chain that crossed the v9 fork starts its Dust at the boundary instead of replaying the
+      // ledger-v8 history; on a chain that runs ledger-v9 from its first block there is nothing to skip.
+      skipLedgerV8DustHistory: true,
       networkId: this.getNetworkId(),
       costParameters: {
         feeBlocksMargin: 5,
