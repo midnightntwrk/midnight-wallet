@@ -18,6 +18,7 @@ import {
   Effect,
   Exit,
   Fiber,
+  Option,
   Ref,
   Scope,
   Stream,
@@ -25,14 +26,22 @@ import {
   TestClock,
   TestContext,
 } from 'effect';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { V8 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { StateChange, VersionChangeType } from '@midnightntwrk/wallet-sdk-runtime/abstractions';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
 import { RunningV1Variant } from '../RunningV1Variant.js';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
-import { type ChangesResult, type SyncCapability, type SyncService } from '../Sync.js';
+import {
+  type ChangesResult,
+  type EventsSyncUpdate,
+  type SyncCapability,
+  type SyncService,
+  WalletSyncUpdate,
+  makeEventsSyncCapability,
+} from '../Sync.js';
 import { makeDefaultTransactingCapability } from '../Transacting.js';
 import { type TransactionHistoryService } from '../TransactionHistory.js';
 
@@ -243,5 +252,175 @@ describe('RunningV1Variant.state protocol version signalling', () => {
     expect(versionChangesOf(collected)).toEqual([]);
     // The stream still reports the state itself, so an empty result would be a false pass.
     expect(Chunk.toArray(collected).filter(StateChange.isState).length).toBeGreaterThan(0);
+  });
+});
+
+describe('RunningV1Variant.startSync tx-history of a transfer split across sync batches', () => {
+  const keys = (): ledger.ZswapSecretKeys => ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 5));
+  const stranger = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 6));
+  const activationRange = ProtocolVersion.makeRange(
+    ProtocolVersion.ProtocolVersion(0n),
+    ProtocolVersion.ProtocolVersion(7n),
+  );
+  const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
+
+  type Chain = Readonly<{
+    /** The genesis mint paying this wallet the coin the transfer spends. */
+    mintHex: string;
+    /** The transfer's events in chain order: its input (the spend), then its two outputs (payment, change). */
+    transferHex: readonly string[];
+    transferHash: string;
+  }>;
+
+  /**
+   * A real chain holding one coin of this wallet and one transfer spending it: 100 to a stranger, 400 back as change.
+   * Kept encoded, as the indexer serves it, because the ledger consumes the event objects it replays.
+   */
+  const buildChain = (): Promise<Chain> =>
+    Effect.gen(function* () {
+      const simulator = yield* V8.Simulator.init({
+        genesisMints: [
+          { type: 'shielded' as const, tokenType: ledger.shieldedToken().raw, amount: 500n, recipient: keys() },
+        ],
+      });
+      const genesis = Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
+      const [mint] = V8.getLastBlockEvents(genesis);
+      const funded = new ledger.ZswapLocalState().replayEvents(keys(), [ledger.Event.deserialize(mint.serialize())]);
+      const coin = [...funded.coins][0];
+      const [, input] = funded.spend(keys(), coin, 0);
+      const output = (value: bigint, to: ledger.ZswapSecretKeys) => {
+        const info = ledger.createShieldedCoinInfo(coin.type, value);
+        return ledger.ZswapOffer.fromOutput(
+          ledger.ZswapOutput.new(info, 0, to.coinPublicKey, to.encryptionPublicKey),
+          info.type,
+          info.value,
+        );
+      };
+      const offer = ledger.ZswapOffer.fromInput(input, coin.type, coin.value)
+        .merge(output(100n, stranger))
+        .merge(output(400n, keys()));
+      yield* simulator.submitTransaction(ledger.Transaction.fromParts(networkId, offer).eraseProofs(), {
+        strictness: {},
+      });
+      const after = Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
+      const transfer = V8.getLastBlockEvents(after);
+      return {
+        mintHex: hex(mint.serialize()),
+        transferHex: transfer.map((event) => hex(event.serialize())),
+        transferHash: transfer[0].source.transactionHash,
+      };
+    }).pipe(Effect.scoped, Effect.runPromise);
+
+  let chain: Chain;
+  beforeAll(async () => {
+    chain = await buildChain();
+    expect(chain.transferHex.map((raw) => ledger.Event.deserialize(Buffer.from(raw, 'hex')).content.tag)).toEqual([
+      'zswapInput',
+      'zswapOutput',
+      'zswapOutput',
+    ]);
+  });
+
+  /** The wallet before the transfer: holding the minted coin, the mint applied as event 1. */
+  const fundedWallet = (): CoreWallet => {
+    const [wallet] = CoreWallet.replayEventsWithChanges(CoreWallet.initEmpty(keys(), networkId), keys(), [
+      ledger.Event.deserialize(Buffer.from(chain.mintHex, 'hex')),
+    ]);
+    return wallet;
+  };
+
+  /** The transfer's events as ids 2..4, cut into consecutive sync batches of the given sizes. */
+  const transferIn = (sizes: readonly number[]): readonly WalletSyncUpdate[] => {
+    const maxId = 1 + chain.transferHex.length;
+    const items = chain.transferHex.map((raw, i): EventsSyncUpdate => ({
+      _tag: 'EventsSyncUpdate',
+      id: i + 2,
+      protocolVersion: 3,
+      maxId,
+      raw,
+    }));
+    return sizes.map((size, i) => {
+      const start = sizes.slice(0, i).reduce((sum, n) => sum + n, 0);
+      return WalletSyncUpdate.create(items.slice(start, start + size), keys(), new Date('2026-11-04T12:00:00Z'));
+    });
+  };
+
+  type Written = Readonly<{ received: number; spent: number }>;
+
+  /**
+   * Syncs the funded wallet through `updates`, and returns every tx-history write made for the transfer.
+   *
+   * @param timeline `'ends'` closes the sync timeline after the last update; `'stays open'` keeps it open, as a live
+   *   source does, so nothing can be recorded on the strength of the timeline having ended.
+   */
+  const writesOfTransfer = (
+    updates: readonly WalletSyncUpdate[],
+    timeline: 'ends' | 'stays open' = 'ends',
+  ): Promise<readonly Written[]> =>
+    Effect.gen(function* () {
+      const writes = yield* Ref.make<readonly (Written & { source: string })[]>([]);
+      const historyService: TransactionHistoryService = {
+        getTransactionDetails: (hash) =>
+          Effect.succeed({
+            hash,
+            block: { hash: 'block-hash', height: 2, timestamp: 1_700_000_000 },
+            status: 'SUCCESS' as const,
+            identifiers: [],
+          }),
+        put: (change) =>
+          Ref.update(writes, (all) => [
+            ...all,
+            { source: change.source, received: change.receivedCoins.length, spent: change.spentCoins.length },
+          ]),
+      };
+      const coinsAndBalancesCapability = makeDefaultCoinsAndBalancesCapability();
+      const keysCapability = makeDefaultKeysCapability();
+      const coinSelection = () => undefined;
+      const context: RunningV1Variant.Context<string, WalletSyncUpdate, ledger.FinalizedTransaction, null> = {
+        serializationCapability: makeDefaultV1SerializationCapability(),
+        syncService: {
+          updates: () =>
+            timeline === 'ends'
+              ? Stream.fromIterable(updates)
+              : Stream.concat(Stream.fromIterable(updates), Stream.never),
+        },
+        syncCapability: makeEventsSyncCapability(),
+        transactingCapability: makeDefaultTransactingCapability({ networkId }, () => ({
+          coinSelection,
+          coinsAndBalancesCapability,
+          keysCapability,
+        })),
+        coinsAndBalancesCapability,
+        keysCapability,
+        coinSelection,
+        transactionHistoryService: historyService,
+      };
+      const scope = yield* Scope.make();
+      const stateRef = yield* SubscriptionRef.make(fundedWallet());
+      const variant = new RunningV1Variant(scope, { stateRef, activationRange }, context);
+
+      yield* Effect.forkIn(
+        variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope)),
+        scope,
+      );
+      // Sync and every write run in the variant's scope; let them all run before reading what was written.
+      yield* TestClock.adjust(Duration.minutes(1));
+      const written = yield* Ref.get(writes);
+      yield* Scope.close(scope, Exit.void);
+      return written
+        .filter((write) => write.source === chain.transferHash)
+        .map(({ received, spent }) => ({ received, spent }));
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+  it('should record the spent coin and the change together when the transfer arrives in one batch', async () => {
+    expect(await writesOfTransfer(transferIn([3]))).toEqual([{ received: 1, spent: 1 }]);
+  });
+
+  it('should record the spent coin and the change together when the batch boundary falls inside the transfer, so no reader ever sees the spend without its coins', async () => {
+    expect(await writesOfTransfer(transferIn([1, 2]))).toEqual([{ received: 1, spent: 1 }]);
+  });
+
+  it('should record a split transfer as soon as the wallet catches up, because a live timeline never ends to release it', async () => {
+    expect(await writesOfTransfer(transferIn([1, 2]), 'stays open')).toEqual([{ received: 1, spent: 1 }]);
   });
 });
