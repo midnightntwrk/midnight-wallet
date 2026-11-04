@@ -53,13 +53,16 @@ export type ChangesResult = {
   /**
    * The transaction of the first event this update applied, if it applied any. Nothing for a source that applies whole
    * blocks, since no transaction it applies can continue into its next update.
+   *
+   * Optional, so a capability that leaves both sources out still works: its changes are each recorded as soon as they
+   * are applied, and a transaction its batches cut in two is recorded in two parts that merge.
    */
-  readonly firstAppliedSource: Option.Option<string>;
+  readonly firstAppliedSource?: Option.Option<string>;
   /**
    * The transaction of the last event this update applied, if it applied any. Nothing for a source that applies whole
-   * blocks, since no transaction it applies can continue into its next update.
+   * blocks, since no transaction it applies can continue into its next update. Optional, as `firstAppliedSource` is.
    */
-  readonly lastAppliedSource: Option.Option<string>;
+  readonly lastAppliedSource?: Option.Option<string>;
 };
 
 export interface SyncCapability<TState, TUpdate, TResult> {

@@ -180,6 +180,57 @@ describe('RunningV2Variant.startSync tx-history fan-out', () => {
   });
 });
 
+describe('RunningV2Variant.startSync with a sync capability that does not name its applied transactions', () => {
+  it('should record every change at once, because nothing tells the variant a batch ended inside a transaction', async () => {
+    // A capability written before the applied-source fields existed returns only these two.
+    const twoFieldCapability: SyncCapability<CoreWallet, FakeSyncUpdate, ChangesResult> = {
+      applyUpdate: (state, sources) => [state, { changes: sources.map(changeOf), protocolVersion: 1 }],
+    };
+
+    const recorded = await Effect.gen(function* () {
+      const counters: FanOutCounters = {
+        inFlight: yield* Ref.make(0),
+        maxInFlight: yield* Ref.make(0),
+        recorded: yield* Ref.make(0),
+      };
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.init(new ledger.ZswapLocalState(), secretKeys, networkId),
+      );
+      const scope = yield* Scope.make();
+      const variant = new RunningV2Variant(
+        scope,
+        {
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+        },
+        {
+          ...variantContextOf([], trackingHistoryService(counters)),
+          // A live source: its timeline never ends, so only a release on the way can record a change.
+          syncService: {
+            updates: () => Stream.concat(Stream.fromIterable<FakeSyncUpdate>([['a1', 'a2'], ['b1']]), Stream.never),
+          },
+          syncCapability: twoFieldCapability,
+        },
+      );
+
+      yield* Effect.forkIn(
+        variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope)),
+        scope,
+      );
+      yield* TestClock.adjust(Duration.minutes(1));
+      const result = yield* Ref.get(counters.recorded);
+      yield* Scope.close(scope, Exit.void);
+      return result;
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+    expect(recorded).toBe(3);
+  });
+});
+
 describe('RunningV2Variant tx-history writes when the variant closes', () => {
   /**
    * Syncs one change whose lookup takes `lookup` to answer, closes the variant's scope while that lookup is in flight,
