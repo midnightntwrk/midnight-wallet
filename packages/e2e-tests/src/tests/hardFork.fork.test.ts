@@ -120,6 +120,18 @@ const phaseOf = (state: FacadeState): string =>
     ? `Settled@${state.protocol.version}`
     : `Crossing ${state.protocol.from}->${state.protocol.to} behind=[${state.protocol.behind.join(',')}]`;
 
+/**
+ * A shielded or dust wallet's sync position: how far it has applied, how far the source says there is, and whether it
+ * is connected.
+ */
+const syncPositionOf = (
+  progress: Readonly<{ appliedIndex: bigint; highestRelevantWalletIndex: bigint; isConnected: boolean }>,
+) => ({
+  applied: progress.appliedIndex,
+  highest: progress.highestRelevantWalletIndex,
+  connected: progress.isConnected,
+});
+
 const summarize = (state: FacadeState): string =>
   asJson({
     phase: phaseOf(state),
@@ -134,6 +146,18 @@ const summarize = (state: FacadeState): string =>
     shieldedBalances: state.shielded.balances,
     unshieldedBalances: state.unshielded.balances,
     awaiting: state.lifecycle.filter(isAwaiting).length,
+    // Each wallet's own sync position, because `synced` is the conjunction of all three: when it stays false, these say
+    // which wallet is behind, and whether the gap is in what it has applied or in what it has been told exists.
+    progress: {
+      shielded: syncPositionOf(state.shielded.progress),
+      unshielded: {
+        applied: state.unshielded.progress.appliedId,
+        highest: state.unshielded.progress.highestTransactionId,
+        connected: state.unshielded.progress.isConnected,
+        liveness: state.unshielded.progress.indexerLiveness._tag,
+      },
+      dust: syncPositionOf(state.dust.progress),
+    },
   });
 
 /** How a UTxO is named in both the wallet's state and a transaction's inputs. */
