@@ -17,3 +17,8 @@ mid catch-up records the part it applied and the rest merges onto it on resume. 
 tx-history writes still in flight: it waits up to 5 s for them, so a hand-over pauses and `stop()` takes up to 5 s
 longer while writes are pending. A write still retrying because the indexer lags behind the node is stopped after
 that, and its entry is not recorded.
+
+`Sync.ChangesResult`, which a sync capability passed to `withSync` returns, gains two optional fields:
+`firstAppliedSource` and `lastAppliedSource`, the transactions of the first and last events an update applied. The
+built-in capabilities fill them. A custom capability that leaves them out keeps working as before: each change it
+reports is recorded as soon as it is applied.
