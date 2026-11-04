@@ -10,10 +10,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Data, Deferred, Effect, Encoding, Exit, pipe, Scope } from 'effect';
+import { Cause, Data, Effect, Encoding, Exit, Fiber, pipe, Scope } from 'effect';
 import {
   NodeClient,
-  type NodeClientError,
+  NodeClientError,
   PolkadotNodeClient,
   SubmissionEvent as SubmissionEventImported,
 } from '@midnightntwrk/wallet-sdk-node-client/effect';
@@ -98,33 +98,32 @@ export const makeDefaultSubmissionServiceEffect = <
 >(
   config: DefaultSubmissionConfiguration,
 ): SubmissionServiceEffect<TTransaction> => {
-  //Using Deferred under the hood + allowing for "close" method in the service allows to keep resource usage in check and a synchronous API
-  type ScopeAndClient = { scope: Scope.CloseableScope; client: NodeClient.Service };
+  // The client is built in the background, so the service is usable at once, and in a scope the service owns. Closing
+  // interrupts a build still waiting for the node, which stops its connection attempt, then releases a built client.
+  const scope = Scope.make().pipe(Effect.runSync);
+  const clientBuild = PolkadotNodeClient.make({ nodeURL: config.relayURL }).pipe(
+    Effect.provideService(Scope.Scope, scope),
+    Effect.runFork,
+  );
 
-  const scopeAndClientDeferred = Deferred.make<ScopeAndClient, NodeClientError.NodeClientError>().pipe(Effect.runSync);
-
-  const makeScopeAndClient: Effect.Effect<ScopeAndClient, NodeClientError.NodeClientError> = Effect.gen(function* () {
-    const scope = yield* Scope.make();
-    const client = yield* PolkadotNodeClient.make({
-      nodeURL: config.relayURL,
-    }).pipe(Effect.provideService(Scope.Scope, scope));
-
-    return { scope, client };
-  });
-
-  void pipe(scopeAndClientDeferred, Deferred.complete(makeScopeAndClient), Effect.runPromise);
+  // A build interrupted by `close` never produced a client, so a submission arriving after it fails instead of waiting.
+  const client: Effect.Effect<NodeClient.Service, NodeClientError.NodeClientError> = pipe(
+    Fiber.await(clientBuild),
+    Effect.flatMap((exit) =>
+      Exit.isFailure(exit) && Cause.isInterruptedOnly(exit.cause)
+        ? Effect.fail(
+            new NodeClientError.ConnectionError({
+              message: `The submission service was closed before it connected to ${config.relayURL.toString()}`,
+            }),
+          )
+        : exit,
+    ),
+  );
 
   const submit = (transaction: TTransaction, waitForStatus: SubmissionEvent['_tag'] = 'InBlock') => {
     return pipe(
       NodeClient.sendMidnightTransactionAndWait(SerializedTransaction.from(transaction), waitForStatus),
-      Effect.provideServiceEffect(
-        NodeClient.NodeClient,
-        pipe(
-          scopeAndClientDeferred,
-          Deferred.await,
-          Effect.map(({ client }) => client),
-        ),
-      ),
+      Effect.provideServiceEffect(NodeClient.NodeClient, client),
       Effect.mapError((err) => new SubmissionError({ message: 'Transaction submission error', cause: err })),
     );
   };
@@ -132,12 +131,8 @@ export const makeDefaultSubmissionServiceEffect = <
   return {
     submitTransaction: submit as SubmitTransactionMethodEffect<TTransaction>,
     close(): Effect.Effect<void> {
-      return pipe(
-        scopeAndClientDeferred,
-        Deferred.await,
-        Effect.flatMap(({ scope }) => Scope.close(scope, Exit.void)),
-        Effect.ignoreLogged,
-      );
+      // Releasing the client is the last use of it, so a release that fails is logged rather than failing the caller.
+      return pipe(Fiber.interrupt(clientBuild), Effect.zipRight(Scope.close(scope, Exit.void)), Effect.ignoreLogged);
     },
   };
 };

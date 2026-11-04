@@ -11,13 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { Serialization as DustV1Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v1';
 import { Serialization as DustV2Serialization } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
 import {
   DefaultForkSchedule,
   WalletEntrySchema,
-  finalizedTransactionTraits,
+  lifecycleTransactionTraits,
   mergeWalletEntries,
 } from '@midnightntwrk/wallet-sdk-facade';
 import {
@@ -34,21 +34,18 @@ import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { fixturesFor, type Fixture, type Surface, type Writer } from './fixtures.js';
 
 /**
- * The registry the wallet itself reads pending transactions with, built from the fork schedule the facade presets, so a
+ * The registry the facade itself keeps its lifecycle records with, built from the fork schedule it presets, so a
  * payload is rewritten here exactly as it would be by a wallet an application hands it back to.
  */
-const pendingTxTraits = finalizedTransactionTraits(DefaultForkSchedule.v9);
+const lifecycleTraits = lifecycleTransactionTraits(DefaultForkSchedule.v9);
 
 type Rewriter = (serialized: string) => Promise<string> | string;
 
 /** The surfaces with one writer outside the twins, rewritten the same way whichever variant a case is filed under. */
-const singleWriterRewriters: Pick<Record<Surface, Rewriter>, 'tx-history' | 'pending-transactions'> = {
+const singleWriterRewriters: Pick<Record<Surface, Rewriter>, 'tx-history' | 'transaction-lifecycle'> = {
   'tx-history': (s) => InMemoryTransactionHistoryStorage.restore(s, WalletEntrySchema, mergeWalletEntries).serialize(),
-  'pending-transactions': (s) =>
-    PendingTransactions.serialize(
-      EitherOps.getOrThrowLeft(PendingTransactions.deserialize(s, pendingTxTraits)),
-      pendingTxTraits,
-    ),
+  'transaction-lifecycle': (s) =>
+    Lifecycle.serialize(EitherOps.getOrThrowLeft(Lifecycle.deserialize(s, lifecycleTraits)), lifecycleTraits),
 };
 
 const shieldedV1 = ShieldedV1Serialization.makeDefaultV1SerializationCapability();

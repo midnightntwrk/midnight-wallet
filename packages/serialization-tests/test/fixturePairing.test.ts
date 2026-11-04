@@ -70,7 +70,7 @@ describe('which reader a stored snapshot could be handed', () => {
   // the same way whichever writer a case is filed under.
   it('hands the unrouted surfaces to both readers regardless', () => {
     expect(isHandedTo('v1', 'tx-history', pastTheFork)).toBe(true);
-    expect(isHandedTo('v1', 'pending-transactions', pastTheFork)).toBe(true);
+    expect(isHandedTo('v1', 'transaction-lifecycle', pastTheFork)).toBe(true);
   });
 });
 

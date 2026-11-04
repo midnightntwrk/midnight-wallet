@@ -10,12 +10,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { InMemoryTransactionHistoryStorage } from '@midnightntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { Lifecycle, type TransactionTraits } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 import {
   InMemoryTransactionHistoryStorage as PublishedStorage,
   TransactionHistoryStorage as PublishedTransactionHistoryStorage,
 } from 'wallet-sdk-abstractions-2.1.0';
+import { PendingTransactions as PublishedPendingTransactions } from 'wallet-sdk-capabilities-3.3.1/pendingTransactions';
+import { DateTime, Either, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { fixturesFor } from './fixtures.js';
 
@@ -100,5 +103,88 @@ describe('a transaction history written by 2.1.0, handed to this build', () => {
     );
 
     expect(await restored.getAll()).toHaveLength(fixture.expected['entryCount'] as number);
+  });
+});
+
+/**
+ * The same one-way door, for the transaction lifecycle store. This build writes it as `v2`, one record per transaction;
+ * `@midnightntwrk/wallet-sdk-capabilities` 3.3.1, npm `latest`, only knows the `v1` store of pending items. The
+ * published release does the reading, installed under an alias, so the test checks what it actually does.
+ *
+ * Both sides read the same stand-in transaction, whose bytes are its JSON: the format is under test, not a ledger.
+ */
+type StandInTx = Readonly<{ ids: readonly string[] }>;
+
+const standInBytes = {
+  isTx: (data: unknown): data is StandInTx => typeof data === 'object' && data !== null && 'ids' in data,
+  serialize: (tx: StandInTx): Uint8Array => Buffer.from(JSON.stringify(tx), 'utf-8'),
+  deserialize: (bytes: Uint8Array): StandInTx => JSON.parse(Buffer.from(bytes).toString('utf-8')) as StandInTx,
+};
+
+const publishedTrait: PublishedPendingTransactions.TransactionTrait<StandInTx> = {
+  ...standInBytes,
+  ids: (tx) => tx.ids,
+  firstId: (tx) => tx.ids[0] ?? '',
+  areAllTxIdsIncluded: (tx, ids) => tx.ids.every((id) => ids.includes(id)),
+  isOneIncludedInOther: () => false,
+  hasTTLExpired: () => false,
+};
+
+const thisBuildTraits: TransactionTraits.VersionedTransactionTrait<StandInTx> = Either.getOrThrow(
+  ProtocolVersion.makeRegistryFromActivations([
+    {
+      sinceVersion: ProtocolVersion.MinSupportedVersion,
+      value: {
+        ...publishedTrait,
+        intentHashes: (tx) => tx.ids.map((id) => `intent-${id}`),
+        inputs: (tx) => ({ unshielded: tx.ids.map((id) => `coin-${id}#0`) }),
+        ttl: (_tx, createdAt) => new Date(DateTime.toEpochMillis(createdAt) + 60 * 60 * 1000),
+      },
+    },
+  ]),
+);
+
+/** A store holding one pending transaction, written by 3.3.1 itself. */
+const writtenByPublishedCapabilities = (): string =>
+  PublishedPendingTransactions.serialize(
+    PublishedPendingTransactions.addPendingTransaction(
+      PublishedPendingTransactions.empty<StandInTx>(),
+      { ids: ['identifier-1'] },
+      DateTime.unsafeMake('2026-04-01T00:00:00.000Z'),
+      publishedTrait,
+    ),
+    publishedTrait,
+  );
+
+/** That store, opened by this build and written back, as an application upgrading would. */
+const lifecycleWrittenByThisBuild = (): string =>
+  Lifecycle.serialize(
+    Either.getOrThrow(Lifecycle.deserialize(writtenByPublishedCapabilities(), thisBuildTraits)),
+    thisBuildTraits,
+  );
+
+describe('a transaction lifecycle store written by this build, handed back to the release before it', () => {
+  it('is written in the v2 format that release never knew, holding the transaction it was handed', () => {
+    expect(JSON.parse(lifecycleWrittenByThisBuild())).toMatchObject({
+      version: 'v2',
+      records: [{ identifiers: ['identifier-1'], state: { _tag: 'Submitted' } }],
+    });
+  });
+
+  // Loud, not quiet: a downgraded application finds out at once, instead of believing nothing was in flight.
+  it('cannot be read by 3.3.1, which refuses it naming the version it found rather than reading it as empty', () => {
+    const restored = PublishedPendingTransactions.deserialize(lifecycleWrittenByThisBuild(), publishedTrait);
+
+    expect(Either.isLeft(restored)).toBe(true);
+    expect(String(Either.getLeft(restored).pipe(Option.getOrThrow))).toContain('"v2"');
+  });
+
+  // The refusal above is about the format: the same release, with the same stand-in trait, reads its own store.
+  it('is refused for its format alone, because 3.3.1 reads the v1 store it wrote with the same transactions', () => {
+    const restored = PublishedPendingTransactions.deserialize(writtenByPublishedCapabilities(), publishedTrait);
+
+    expect(Either.map(restored, (state) => state.all.map((item) => item.tx))).toStrictEqual(
+      Either.right([{ ids: ['identifier-1'] }]),
+    );
   });
 });
