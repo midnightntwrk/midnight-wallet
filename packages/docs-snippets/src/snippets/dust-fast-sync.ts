@@ -115,8 +115,8 @@ const initWalletWithSeed = async (seed: Buffer) => {
     dust: (config) => fastSyncDustWallet(config).startWithSeed(seeds.dust),
   });
 
-  // The fast-syncing dust wallet joins background synchronization like any other; pass
-  // `manualSync: true` as the third argument and drive it with `wallet.doSync(seeds)`
+  // The fast-syncing dust wallet joins background synchronization like any other; start it
+  // with `wallet.start(seeds, { manualSync: true })` and drive it with `wallet.doSync(seeds)`
   // to control when snapshots are taken instead.
   await wallet.start(seeds);
 

@@ -296,9 +296,10 @@ export type DefaultSyncConfiguration = {
    * passes rather than over a live subscription — currently only the projections service. Ignored by the event-based
    * service, whose subscription never completes.
    *
-   * Lower values keep the wallet closer to the chain tip at the cost of more idle queries; a pass with nothing to do
-   * costs one block query, because the generation subscription and the commitment load both short-circuit on an
-   * unchanged tip. Passes never overlap regardless of this value: a pass that cannot take the sync lock yields to the
+   * Lower values keep the wallet closer to the chain tip at the cost of more idle queries. On an unchanged tip the
+   * generation subscription and the commitment load short-circuit, but every pass still resolves each nullifier the
+   * wallet holds, pending ones included, against the indexer, so an idle pass costs more on a wallet holding Dust than
+   * on an empty one. Passes never overlap regardless of this value: a pass that cannot take the sync lock yields to the
    * one already running and waits for the next interval.
    *
    * @default 5000

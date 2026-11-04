@@ -18,8 +18,9 @@
  *   One wallet, two ledger versions. Before the boundary the V1 variant reads the chain with the ledger version that
  *   produced it; from the boundary the V2 variant does, having been handed identity and a place in the timeline and
  *   nothing else. Which one is running is the runtime's business, not the application's: the wallet's public API speaks
- *   ledger-v9 throughout except for the keys it is started with — one ledger version's per side of the boundary, since
- *   that is where the two sides genuinely differ — and each variant takes its own side from what the wallet retained.
+ *   the SDK's own types (`ShieldedWalletTypes`) throughout except for the keys it is started with — one ledger
+ *   version's per side of the boundary, since that is where the two sides genuinely differ — and each variant takes its
+ *   own side from what the wallet retained.
  *
  *   `ShieldedWallet(configuration)` at the bottom is how this package ships it. `CustomForkingShieldedWallet` is the same
  *   wallet over builders the caller chooses, and `SingleVariantShieldedWallet.ts` is the composition that gives up the
@@ -183,7 +184,7 @@ export interface ForkingShieldedWalletClass<
   TConfiguration extends ForkingShieldedConfiguration = ForkingShieldedConfiguration,
 > extends WalletLike.BaseWalletClass<ForkingShieldedVariants<TV1SyncUpdate, TV2SyncUpdate>, TConfiguration> {
   /**
-   * Builds a wallet from a seed, and remembers the seed.
+   * Builds a wallet from a seed, and keeps the keys each ledger version derives from it, not the seed itself.
    *
    * @remarks
    *   The only start that can follow the chain the whole way. The seed is the one piece of key material that crosses a
@@ -255,7 +256,7 @@ export interface ForkingShieldedWalletClass<
  *     { builder: new V1Builder().withDefaults(), configuration: v1Configuration },
  *     { builder: new V2Builder().withDefaults().withMigration(makeCrossLedgerMigration), configuration: v2Configuration },
  *   );
- *   const wallet = Wallet.startWithSeed(seed);
+ *   const wallet = await Wallet.startWithSeed(seed);
  *   ```;
  *
  * @param configuration What the wallet layer needs: the network, and where the boundary lies.

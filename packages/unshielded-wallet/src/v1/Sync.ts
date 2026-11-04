@@ -14,9 +14,9 @@ import { BigInt as EBigInt, Effect, type Scope, Stream, Schema, pipe, Either, Ha
 import { IndexerLiveness, ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import { CoreWallet } from './CoreWallet.js';
 import { UtxoWithMeta } from './UnshieldedState.js';
-// The simulation package re-exports the ledger-v9 twin unqualified and offers both lines as `V8`/`V9` namespaces. This
-// variant must name `V8` explicitly: the two twins are structurally identical, so the unqualified (v9) import
-// typechecks here perfectly well and would silently hand ledger-v9 objects to ledger-v8 WASM at runtime.
+// The simulation entry offers each ledger version's simulator as a `V8`/`V9` namespace, and this variant takes `V8`.
+// The two twins are structurally identical, so taking `V9` by mistake would typecheck here perfectly well and silently
+// hand ledger-v9 objects to ledger-v8 WASM at runtime.
 import { V8 as Simulation } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import {
   DEFAULT_LIVENESS_CONFIGURATION,

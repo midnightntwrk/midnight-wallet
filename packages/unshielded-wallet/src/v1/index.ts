@@ -27,9 +27,9 @@ export * from './RunningV1Variant.js';
 export { V8 as Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 export * as WalletError from './WalletError.js';
 export * from './CoreWallet.js';
-// Unlike the ledger-v9 variant, whose keystore is the package-root one, this variant carries its own: v8 keys are bare
-// hex strings where v9's are tagged records, so the two cannot share a module. Exported here because the `./v1` subpath
-// is the only way to reach it.
+// Each variant carries its own keystore: v8 keys are bare hex strings where v9's are tagged records, so the two cannot
+// share a module. The package root's `createKeystore` is the ledger-v9 one from `./v2`; this ledger-v8 one is exported
+// here because the `./v1` subpath is the only way to reach it.
 export * from './KeyStore.js';
 export * from './TransactionOps.js';
 export * as UnshieldedState from './UnshieldedState.js';

@@ -111,14 +111,14 @@ export class BlocklessFinalizedEntryError extends Data.TaggedError('Wallet.Block
 }> {}
 
 /**
- * A batch of zswap ledger events was not in ascending id order: an event arrived at or below the one before it, or at
- * or below the applied cursor.
+ * A batch of zswap ledger events was not in ascending id order: an event arrived at or below the one before it.
  *
  * @remarks
- *   Order is all the wallet can check: zswap events share one id sequence with dust and contract events in the indexer,
- *   so gaps in the stream are normal and a skipped event is only ever caught by the ledger's own insertion check. The
- *   whole batch is refused, nothing is applied and the cursor stays, so the running variant retries from the same
- *   place.
+ *   Events at or below the applied cursor are re-deliveries and are dropped before the order is checked, so only the
+ *   events above the cursor are compared. Order is all the wallet can check: zswap events share one id sequence with
+ *   dust and contract events in the indexer, so gaps in the stream are normal and a skipped event is only ever caught
+ *   by the ledger's own insertion check. The whole batch is refused, nothing is applied and the cursor stays, so the
+ *   running variant retries from the same place.
  * @example
  *   ```ts
  *   if (error._tag === 'Wallet.OutOfOrderSyncUpdate') console.warn(`expected above ${error.expected}, got ${error.received}`);
@@ -126,7 +126,7 @@ export class BlocklessFinalizedEntryError extends Data.TaggedError('Wallet.Block
  */
 export class OutOfOrderSyncUpdateError extends Data.TaggedError('Wallet.OutOfOrderSyncUpdate')<{
   readonly message: string;
-  /** The id the delivered event had to exceed: its predecessor in the batch, or the applied cursor. */
+  /** The id the delivered event had to exceed: the one before it among the events above the applied cursor. */
   readonly expected: bigint;
   /** The event id the source delivered instead. */
   readonly received: bigint;

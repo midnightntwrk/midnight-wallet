@@ -104,10 +104,10 @@ written by one model and restored into the other resumes from a position that is
 never reports synced. Hard-coding `DustWallet(...)` as the restore target while the run uses projections does exactly
 that.
 
-Snapshots on disk are protected from this automatically: they are stored per model, so switching models finds no
-snapshot and rebuilds from scratch rather than resuming wrongly, with no cache to clear by hand. That protection does
-not extend to state serialized and restored in memory within a test — hence the rule above. The shielded and unshielded
-snapshots are model-independent and shared.
+Snapshots on disk are protected from this automatically: `saveState` writes the shielded and Dust states together, to
+one file per model (`snapshotPath`), so switching models finds no snapshot and rebuilds from scratch rather than
+resuming wrongly, with no cache to clear by hand. The unshielded state is not saved, because a restore never reads it.
+That protection does not extend to state serialized and restored in memory within a test — hence the rule above.
 
 ## Peer dependencies
 

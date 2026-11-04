@@ -162,8 +162,9 @@ exist only in ledger-v9, and no published ledger-v8 (checked through 8.1.1, the 
 There is no v8-compatible implementation of them anywhere, so the path cannot be back-ported. **Decided 2026-08-19: the
 V1 variant keeps event-replay sync permanently; no ledger change is being requested to close this.**
 
-Everything else in `./v1` does track the current variant with the ledger swapped — including the sync lock, the one-shot
-`sync` entry point, and typed (non-defect) `blockData` failures.
+Everything else in `./v1` tracks the V2 variant with the ledger swapped, including the sync lock and typed (non-defect)
+`blockData` failures, except the one-shot `sync` entry point: the V1 variant synchronizes in the background only,
+because the one sync service the SDK ships that runs in finite passes, the projections one, needs ledger-v9.
 
 ## License
 
