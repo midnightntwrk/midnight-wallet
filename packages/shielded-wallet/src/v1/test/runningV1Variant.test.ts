@@ -65,7 +65,16 @@ const syncServiceOf = (batches: readonly FakeSyncUpdate[]): SyncService<CoreWall
 });
 
 const fakeSyncCapability: SyncCapability<CoreWallet, FakeSyncUpdate, ChangesResult> = {
-  applyUpdate: (state, sources) => [state, { changes: sources.map(changeOf), protocolVersion: 1 }],
+  // Each fake transaction arrives whole, so none is ever cut.
+  applyUpdate: (state, sources) => [
+    state,
+    {
+      changes: sources.map(changeOf),
+      protocolVersion: 1,
+      firstAppliedSource: Option.none(),
+      lastAppliedSource: Option.none(),
+    },
+  ],
 };
 
 type FanOutCounters = {

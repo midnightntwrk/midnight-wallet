@@ -43,19 +43,22 @@ const joinChanges = (earlier: RecordableChange, later: RecordableChange): Record
  *
  * @remarks
  *   A transaction's events are contiguous but a sync batch can end inside them: a spend's input comes before its outputs,
- *   so a cut there leaves the spent coin in one batch and the change in the next. Only the batch's last transaction can
- *   be cut, and only while the wallet has not caught up with its source, so that one is held and joined with the head
- *   of the next batch when it shares its source. Recording it any earlier would let a reader see the transaction with
- *   half its coins.
+ *   so a cut there leaves the spent coin in one batch and the change in the next. Only the transaction of the last
+ *   event applied can have been cut, so a change is held only when it belongs to that transaction and the wallet is not
+ *   yet complete; the next batch then either continues the transaction, and its head change is joined on, or applies
+ *   another transaction's event first, which proves the held one ended. A batch that applies nothing proves nothing, so
+ *   a held change stays held across it. Recording a cut transaction any earlier would let a reader see it with half its
+ *   coins.
  * @param held The change held back from the previous batch, if any.
  * @param applied This batch's changes, in chain order, with the transactions of its first and last applied events.
- * @param caughtUp Whether the wallet has applied every event its source holds, which completes every transaction.
+ * @param complete Whether nothing more of any applied transaction can follow: the wallet has applied every event its
+ *   source holds, or the source has moved past this variant's protocol versions, which no transaction spans.
  * @returns The changes to record now, and the one to hold until the next batch.
  */
 export const releaseCompleteChanges = (
   held: Option.Option<RecordableChange>,
   applied: AppliedBatch,
-  caughtUp: boolean,
+  complete: boolean,
 ): readonly [readonly RecordableChange[], Option.Option<RecordableChange>] => {
   const batch = applied.changes;
   const joined = Option.match(held, {
@@ -65,7 +68,11 @@ export const releaseCompleteChanges = (
         ? [joinChanges(earlier, batch[0]), ...batch.slice(1)]
         : [earlier, ...batch],
   });
-  return caughtUp || joined.length === 0
-    ? [joined, Option.none()]
-    : [joined.slice(0, -1), Option.some(joined[joined.length - 1])];
+  // A batch that applied nothing leaves the held change's transaction as the last one the wallet has seen.
+  const lastSeenSource = Option.orElse(applied.lastAppliedSource, () =>
+    Option.map(held, (earlier) => earlier.change.source),
+  );
+  const last = joined.at(-1);
+  const mayBeCut = !complete && last !== undefined && Option.contains(lastSeenSource, last.change.source);
+  return mayBeCut ? [joined.slice(0, -1), Option.some(last)] : [joined, Option.none()];
 };

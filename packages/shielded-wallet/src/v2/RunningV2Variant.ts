@@ -247,13 +247,20 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
           Effect.try({
             try: () => {
-              const [newState, { changes, protocolVersion }] = this.#v2Context.syncCapability.applyUpdate(
-                state,
-                update,
-                this.#context.activationRange,
-              );
-              const batch = changes.map((change) => ({ change, protocolVersion }));
-              return [{ batch, caughtUp: newState.progress.isStrictlyComplete() }, newState] as const;
+              const [newState, { changes, protocolVersion, firstAppliedSource, lastAppliedSource }] =
+                this.#v2Context.syncCapability.applyUpdate(state, update, this.#context.activationRange);
+              const applied = {
+                changes: changes.map((change) => ({ change, protocolVersion })),
+                firstAppliedSource,
+                lastAppliedSource,
+              };
+              // A wallet that has moved past this variant's versions is about to be handed over, and the runtime closes
+              // this variant rather than ending its timeline. No transaction spans two versions, so whatever this
+              // variant applied is whole and must be recorded now.
+              const complete =
+                newState.progress.isStrictlyComplete() ||
+                !ProtocolVersion.withinRange(newState.protocolVersion, this.#context.activationRange);
+              return [{ applied, complete }, newState] as const;
             },
             catch: (err) =>
               new OtherWalletError({
@@ -262,20 +269,15 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
               }),
           }),
         ).pipe(
-          Effect.flatMap(({ batch, caughtUp }) =>
-            Ref.modify(this.#heldChange, (held) =>
-              releaseCompleteChanges(
-                held,
-                { changes: batch, firstAppliedSource: Option.none(), lastAppliedSource: Option.none() },
-                caughtUp,
-              ),
-            ),
+          Effect.flatMap(({ applied, complete }) =>
+            Ref.modify(this.#heldChange, (held) => releaseCompleteChanges(held, applied, complete)),
           ),
-          Effect.flatMap((complete) => this.#record(complete)),
+          Effect.flatMap((released) => this.#record(released)),
         ),
       ),
-      // A transaction's events share one block and one protocol version, so none continues past the end of this
-      // variant's timeline: whatever is still held when it ends is complete.
+      // Only a source that ends gets here: a finite one, as in tests. A live source never ends, and a hand-over closes
+      // this variant's scope instead, which is why the batch that moves past this variant's versions releases what it
+      // holds itself. Nothing held can continue past a source's last event, so it is complete.
       Stream.concat(
         Stream.fromEffect(
           pipe(
