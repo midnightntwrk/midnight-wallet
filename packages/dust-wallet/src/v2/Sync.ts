@@ -104,6 +104,7 @@ import {
   uniqueArray,
 } from './Utils.js';
 import { type Dust } from './types/index.js';
+import { type SyncKind } from '../SnapshotFormat.js';
 import { type DustTimelineStart } from '../types/DustWalletTypes.js';
 
 /**
@@ -151,7 +152,7 @@ export interface SyncService<TState, TStartAux, TUpdate> {
    *   Optional so that a service written before positions were told apart keeps working: one that does not say is handed
    *   every snapshot, as it always was.
    */
-  readonly resumesFrom?: 'events' | 'projections';
+  readonly resumesFrom?: SyncKind;
 }
 
 /**
@@ -159,9 +160,10 @@ export interface SyncService<TState, TStartAux, TUpdate> {
  *
  * @remarks
  *   Only one pairing is refused: a projections position handed to a service that replays dust events, which would take a
- *   work count for an event id. Every other one resumes safely. A projections pass reads its position from the trees in
- *   the ledger state and replaces `appliedIndex` on its first report, so it takes any snapshot; and a service that does
- *   not say what it resumes from is handed everything, as before.
+ *   block height for an event id. Every other one resumes safely. A projections pass resumes from the trees in the
+ *   ledger state and from the block height it saved, which a position it did not save leaves at `0` — every dtime
+ *   update — so it takes any snapshot; and a service that does not say what it resumes from is handed everything, as
+ *   before.
  * @param wallet The wallet a snapshot restored.
  * @param resumesFrom What the sync service that will continue it resumes from.
  * @returns The wallet unchanged, or the refusal.
@@ -170,14 +172,14 @@ export const resumableBy = (
   wallet: CoreWallet,
   resumesFrom: SyncService<CoreWallet, unknown, unknown>['resumesFrom'],
 ): Either.Either<CoreWallet, SnapshotSyncMismatchError> =>
-  resumesFrom === 'events' && wallet.syncedBy === 'projections'
+  resumesFrom === 'events' && wallet.syncKind === 'projections'
     ? Either.left(
         new SnapshotSyncMismatchError({
           message:
             'This dust snapshot was written by a wallet that synchronizes by projections, and this wallet replays dust ' +
-            'events: its position is a projections work count, not an event id. Restore it with a wallet that ' +
+            'events: its position is a block height, not an event id. Restore it with a wallet that ' +
             'synchronizes by projections, or start this one afresh.',
-          syncedBy: 'projections',
+          syncKind: 'projections',
           resumesFrom: 'events',
         }),
       )
@@ -1300,7 +1302,7 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
       // `appliedIndex` stops at the last event this variant actually replayed. The next variant resumes one below it
       // on an inclusive cursor, so the deferred suffix is re-fetched rather than skipped.
       const updatedState = CoreWallet.updateProgress(
-        { ...annotateVersion(newState, observedVersion), syncedBy: 'events' },
+        { ...annotateVersion(newState, observedVersion), syncKind: 'events' },
         {
           appliedIndex: applied.length === 0 ? appliedIndex : BigInt(applied.at(-1)!.id),
           highestRelevantWalletIndex,
@@ -1354,7 +1356,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         return [
           // From the first report on, `appliedIndex` is this pass's work count, so the position is a projections one.
           CoreWallet.updateProgress(
-            { ...state, syncedBy: 'projections' },
+            { ...state, syncKind: 'projections' },
             {
               appliedIndex: BigInt(update.appliedIndex ?? state.progress.appliedIndex),
               highestRelevantWalletIndex: BigInt(
@@ -1443,7 +1445,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
       }
 
       const updatedWallet = CoreWallet.updateProgress(
-        { ...walletAtLatestBlock, syncedBy: 'projections' },
+        { ...walletAtLatestBlock, syncKind: 'projections' },
         { highestIndex: BigInt(update.latestBlock.height) },
       );
 

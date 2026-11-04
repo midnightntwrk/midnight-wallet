@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
-import { SnapshotFormat } from '@midnightntwrk/wallet-sdk-abstractions';
+import { SnapshotFormat, type SyncProgress } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
@@ -19,7 +19,8 @@ import {
   PendingDustSchema,
   SNAPSHOT_FORMAT_VERSION,
   SNAPSHOT_FORMAT_VERSIONS,
-  SyncedBySchema,
+  type SyncKind,
+  SyncKindSchema,
   upgradeSnapshotV1ToV2,
 } from '../SnapshotFormat.js';
 // Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.
@@ -81,13 +82,44 @@ const SnapshotSchema = Schema.Struct({
   state: HexedState,
   protocolVersion: Schema.BigInt,
   networkId: Schema.String,
+  // The position the synchronization named by `syncKind` resumes from: see {@link offsetOf}.
   offset: Schema.optional(Schema.BigInt),
-  // Which synchronization recorded `offset`, because the two that this variant can run mean different things by it.
-  syncedBy: SyncedBySchema,
+  // Which synchronization moved the position, because the two that this variant can run resume from different ones.
+  syncKind: SyncKindSchema,
   pendingDust: Schema.Array(PendingDustSchema),
 });
 
 type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
+
+/**
+ * The position a wallet's synchronization resumes from, as a snapshot saves it in `offset`.
+ *
+ * @remarks
+ *   Event replay resumes from the last event it applied, `appliedIndex`. A projections pass resumes from the height of
+ *   the block its last pass synced to, `highestIndex`; its `appliedIndex` is a count of the work a pass has done, which
+ *   the next pass works out again from the ledger state, so it is not saved.
+ * @param wallet The wallet being saved.
+ * @returns What the snapshot records as `offset`.
+ */
+const offsetOf = (wallet: CoreWallet): bigint =>
+  wallet.syncKind === 'projections' ? wallet.progress.highestIndex : wallet.progress.appliedIndex;
+
+/**
+ * The progress a snapshot's `offset` restores, put back where the synchronization that saved it reads it.
+ *
+ * @param syncKind Which synchronization saved `offset`.
+ * @param offset The saved position; `0` when the snapshot recorded none.
+ * @returns The restored progress, every index it does not carry at `0`.
+ */
+const progressFromOffset = (
+  syncKind: SyncKind,
+  offset: bigint,
+): Omit<SyncProgress.SyncProgressData, 'isConnected'> => ({
+  appliedIndex: syncKind === 'projections' ? 0n : offset,
+  highestRelevantWalletIndex: 0n,
+  highestIndex: syncKind === 'projections' ? offset : 0n,
+  highestRelevantIndex: 0n,
+});
 
 export const makeDefaultV2SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   return {
@@ -99,8 +131,8 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         state: w.state,
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
-        offset: w.progress?.appliedIndex,
-        syncedBy: { kind: w.syncedBy },
+        offset: offsetOf(w),
+        syncKind: w.syncKind,
         pendingDust: w.pendingDust,
       });
 
@@ -123,15 +155,10 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
                   snapshot.state,
                   snapshot.publicKey,
                   [...snapshot.pendingDust],
-                  {
-                    appliedIndex: snapshot.offset ?? 0n,
-                    highestRelevantWalletIndex: 0n,
-                    highestIndex: 0n,
-                    highestRelevantIndex: 0n,
-                  },
+                  progressFromOffset(snapshot.syncKind, snapshot.offset ?? 0n),
                   snapshot.protocolVersion,
                   snapshot.networkId,
-                  snapshot.syncedBy.kind,
+                  snapshot.syncKind,
                 ),
                 unknownFields,
               ),

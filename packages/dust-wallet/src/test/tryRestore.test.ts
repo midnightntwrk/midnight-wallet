@@ -104,17 +104,16 @@ describe('a Dust wallet restored from a snapshot it cannot read', () => {
  * wallet resumes with.
  *
  * @remarks
- *   The two synchronizations keep their position in the same `appliedIndex`, and mean different things by it. Event
- *   replay keeps the id of the last dust ledger event it applied, and resumes the subscription from it. A projections
- *   pass keeps a count of the Merkle indices and nullifier scans it has worked through, which is not an event id at
- *   all. A wallet that replays events, handed a projections position, would subscribe from an id that names an
- *   unrelated event: past the last one, it would wait forever for events that never arrive; below it, it would skip the
- *   dust in between. Neither surfaces as an error once the wallet runs, because a failed pass is retried rather than
- *   reported — so the refusal has to come at restore, where the application decides what to do with a snapshot it
- *   cannot use.
+ *   The two synchronizations save their position in the same `offset`, and mean different things by it. Event replay
+ *   saves the id of the last dust ledger event it applied, and resumes the subscription from it. A projections pass
+ *   saves the height of the block it last synced to, which is not an event id at all. A wallet that replays events,
+ *   handed a projections position, would subscribe from an id that names an unrelated event: past the last one, it
+ *   would wait forever for events that never arrive; below it, it would skip the dust in between. Neither surfaces as
+ *   an error once the wallet runs, because a failed pass is retried rather than reported — so the refusal has to come
+ *   at restore, where the application decides what to do with a snapshot it cannot use.
  *
- *   The other direction is safe and stays accepted: a projections pass resumes from the trees in the ledger state itself
- *   and replaces `appliedIndex` with its own count on its first report.
+ *   The other direction is safe and stays accepted: a projections pass resumes from the trees in the ledger state itself,
+ *   and handed an event position it asks for every dtime update rather than misreading the event id as a height.
  */
 describe('a Dust wallet restored from a snapshot whose position another synchronization recorded', () => {
   const forkVersion = configuration.forks.v9;
@@ -130,7 +129,7 @@ describe('a Dust wallet restored from a snapshot whose position another synchron
       forkVersion,
     );
 
-  /** Saved after a projections pass reported its progress, so its `appliedIndex` is that pass's work count. */
+  /** Saved after a projections pass reported its progress, so its position is a projections one. */
   const projectionsSnapshot = (): string => {
     const [reported] = SyncService.makeEventLessSyncCapability().applyUpdate(
       pastTheFork(),
@@ -165,13 +164,13 @@ describe('a Dust wallet restored from a snapshot whose position another synchron
   const stopIfRestored = (restored: Either.Either<{ stop(): Promise<void> }, unknown>): Promise<void> =>
     Either.match(restored, { onLeft: () => Promise.resolve(), onRight: (wallet) => wallet.stop() });
 
-  it('is refused by a wallet that replays dust events, which would read the work count as an event id', async () => {
+  it('is refused by a wallet that replays dust events, which would read the block height as an event id', async () => {
     const restored = DustWallet(configuration).tryRestore(projectionsSnapshot());
     await stopIfRestored(restored);
 
     expect(Option.getOrUndefined(Either.getLeft(restored))).toMatchObject({
       _tag: 'Wallet.SnapshotSyncMismatch',
-      syncedBy: 'projections',
+      syncKind: 'projections',
       resumesFrom: 'events',
     });
   });

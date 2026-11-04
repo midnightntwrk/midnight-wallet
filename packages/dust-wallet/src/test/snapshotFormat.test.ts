@@ -60,9 +60,9 @@ describe('the dust snapshot format versions', () => {
 });
 
 describe('upgrading a dust snapshot from v1 to v2', () => {
-  it('adds an empty pendingDust and an event syncedBy and stamps the new version, because a v1 snapshot recorded no pending Dust and was written by event replay', () => {
+  it('adds an empty pendingDust and an events syncKind and stamps the new version, because a v1 snapshot recorded no pending Dust and was written by event replay', () => {
     expect(upgradeSnapshotV1ToV2(v1Snapshot())).toEqual(
-      v1Snapshot({ version: 'v2', pendingDust: [], syncedBy: { kind: 'events' } }),
+      v1Snapshot({ version: 'v2', pendingDust: [], syncKind: 'events' }),
     );
   });
 
@@ -73,7 +73,7 @@ describe('upgrading a dust snapshot from v1 to v2', () => {
       ...unversioned,
       version: 'v2',
       pendingDust: [],
-      syncedBy: { kind: 'events' },
+      syncKind: 'events',
     });
   });
 
@@ -83,15 +83,15 @@ describe('upgrading a dust snapshot from v1 to v2', () => {
     expect(upgradeSnapshotV1ToV2(withPending)).toEqual({
       ...withPending,
       version: 'v2',
-      syncedBy: { kind: 'events' },
+      syncKind: 'events',
     });
   });
 
-  it('keeps a syncedBy that is already there, so the step never overwrites what a snapshot recorded', () => {
+  it('keeps a syncKind that is already there, so the step never overwrites what a snapshot recorded', () => {
     // Not the value the step would fill in, so keeping it is visible.
-    const withSyncedBy = v1Snapshot({ syncedBy: { kind: 'projections' } });
+    const withSyncKind = v1Snapshot({ syncKind: 'projections' });
 
-    expect(upgradeSnapshotV1ToV2(withSyncedBy)).toEqual({ ...withSyncedBy, version: 'v2', pendingDust: [] });
+    expect(upgradeSnapshotV1ToV2(withSyncKind)).toEqual({ ...withSyncKind, version: 'v2', pendingDust: [] });
   });
 
   it('is idempotent: applying it twice is applying it once', () => {
