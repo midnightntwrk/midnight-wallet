@@ -231,14 +231,18 @@ describe('RunningV2Variant tx-history writes when the variant closes', () => {
     }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
 
   it('should finish recording a change whose lookup is still in flight when the variant closes, because a hand-over closes the variant rather than waiting for its writes', async () => {
-    expect(await closeWhileLookupInFlight(Duration.seconds(10), Duration.seconds(11))).toEqual({
+    expect(await closeWhileLookupInFlight(Duration.seconds(2), Duration.seconds(3))).toEqual({
       recorded: 1,
       closed: true,
     });
   });
 
-  it('should give up on a write still in flight 30 s after the variant closes, so a lookup that never answers cannot hold up a hand-over', async () => {
-    expect(await closeWhileLookupInFlight(Duration.infinity, Duration.seconds(31))).toEqual({
+  it('should give up on a write still in flight 5 s after the variant closes, so a lookup retrying through indexer lag holds up a hand-over or a stop for no longer than that', async () => {
+    expect(await closeWhileLookupInFlight(Duration.infinity, Duration.seconds(4))).toEqual({
+      recorded: 0,
+      closed: false,
+    });
+    expect(await closeWhileLookupInFlight(Duration.infinity, Duration.seconds(6))).toEqual({
       recorded: 0,
       closed: true,
     });
@@ -451,6 +455,15 @@ describe('RunningV2Variant.startSync tx-history of a transfer split across sync 
   const writesOfTransfer = (
     updates: readonly WalletSyncUpdate[],
     timeline: 'ends' | 'stays open' = 'ends',
+  ): Promise<readonly Written[]> => writesOfTransferAcrossSessions([updates], timeline);
+
+  /**
+   * Like {@link writesOfTransfer}, but syncs the funded wallet through one variant per session, all on the same state:
+   * each variant is closed, as a stop closes it, before the next one starts with the next session's updates.
+   */
+  const writesOfTransferAcrossSessions = (
+    sessions: readonly (readonly WalletSyncUpdate[])[],
+    timeline: 'ends' | 'stays open',
   ): Promise<readonly Written[]> =>
     Effect.gen(function* () {
       const writes = yield* Ref.make<readonly (Written & { source: string })[]>([]);
@@ -471,7 +484,9 @@ describe('RunningV2Variant.startSync tx-history of a transfer split across sync 
       const coinsAndBalancesCapability = makeDefaultCoinsAndBalancesCapability();
       const keysCapability = makeDefaultKeysCapability();
       const coinSelection = () => undefined;
-      const context: RunningV2Variant.Context<string, WalletSyncUpdate, ledger.FinalizedTransaction, null> = {
+      const contextOf = (
+        updates: readonly WalletSyncUpdate[],
+      ): RunningV2Variant.Context<string, WalletSyncUpdate, ledger.FinalizedTransaction, null> => ({
         serializationCapability: makeDefaultV2SerializationCapability(),
         syncService: {
           updates: () =>
@@ -489,19 +504,27 @@ describe('RunningV2Variant.startSync tx-history of a transfer split across sync 
         keysCapability,
         coinSelection,
         transactionHistoryService: historyService,
-      };
-      const scope = yield* Scope.make();
+      });
       const stateRef = yield* SubscriptionRef.make(fundedWallet());
-      const variant = new RunningV2Variant(scope, { stateRef, activationRange }, context);
-
-      yield* Effect.forkIn(
-        variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope)),
-        scope,
+      yield* Effect.forEach(
+        sessions,
+        (updates) =>
+          Effect.gen(function* () {
+            const scope = yield* Scope.make();
+            const variant = new RunningV2Variant(scope, { stateRef, activationRange }, contextOf(updates));
+            yield* Effect.forkIn(
+              variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope)),
+              scope,
+            );
+            // Let sync and every write run before closing the variant, then let the close itself finish.
+            yield* TestClock.adjust(Duration.minutes(1));
+            const closing = yield* Effect.fork(Scope.close(scope, Exit.void));
+            yield* TestClock.adjust(Duration.minutes(1));
+            yield* Fiber.join(closing);
+          }),
+        { discard: true },
       );
-      // Sync and every write run in the variant's scope; let them all run before reading what was written.
-      yield* TestClock.adjust(Duration.minutes(1));
       const written = yield* Ref.get(writes);
-      yield* Scope.close(scope, Exit.void);
       return written
         .filter((write) => write.source === chain.transferHash)
         .map(({ received, spent }) => ({ received, spent }));
@@ -517,6 +540,14 @@ describe('RunningV2Variant.startSync tx-history of a transfer split across sync 
 
   it('should record a split transfer as soon as the wallet catches up, because a live timeline never ends to release it', async () => {
     expect(await writesOfTransfer(transferIn([1, 2]), 'stays open')).toEqual([{ received: 1, spent: 1 }]);
+  });
+
+  it('should record the held part of a split transfer when the wallet is stopped mid catch-up, so the rest merges onto it on resume rather than standing alone without the spent coin', async () => {
+    const [spend, outputs] = transferIn([1, 2]);
+    expect(await writesOfTransferAcrossSessions([[spend], [outputs]], 'stays open')).toEqual([
+      { received: 0, spent: 1 },
+      { received: 1, spent: 0 },
+    ]);
   });
 
   /**
