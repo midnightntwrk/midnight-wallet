@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
+import type * as ledger from '@midnightntwrk/ledger-v9';
 import { Option } from 'effect';
 
 /** One transaction's changes to the wallet, with the protocol version they were applied under. */
@@ -21,11 +21,11 @@ export type RecordableChange = Readonly<{
 
 const joinChanges = (earlier: RecordableChange, later: RecordableChange): RecordableChange => ({
   protocolVersion: earlier.protocolVersion,
-  change: new ledger.ZswapStateChanges(
-    earlier.change.source,
-    [...earlier.change.receivedCoins, ...later.change.receivedCoins],
-    [...earlier.change.spentCoins, ...later.change.spentCoins],
-  ),
+  change: {
+    source: earlier.change.source,
+    receivedCoins: [...earlier.change.receivedCoins, ...later.change.receivedCoins],
+    spentCoins: [...earlier.change.spentCoins, ...later.change.spentCoins],
+  },
 });
 
 /**
