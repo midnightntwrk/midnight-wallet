@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, type Scope, Stream, Schema, pipe, Either, HashMap, Match, Option } from 'effect';
+import { BigInt as EBigInt, Effect, type Scope, Stream, Schema, pipe, Either, HashMap, Match, Option } from 'effect';
 import { IndexerLiveness, ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import { CoreWallet } from './CoreWallet.js';
 import { UtxoWithMeta } from './UnshieldedState.js';
@@ -260,6 +260,11 @@ const applyVersionSignal = (state: CoreWallet, signal: VersionSignalSyncUpdate):
  *   carries is deliberately not read here: the source splits that off into its own `VersionSignal`, which is the only
  *   message allowed to annotate, and which alone carries the gate in {@link applyVersionSignal}. Annotating from both
  *   places would put the gate on one route and not the other.
+ *
+ *   The far end only ever rises. A frame is a reading the source took at some moment, served from a cache and sent on a
+ *   timer of its own, while transactions are sent as soon as they are indexed — so a frame can arrive after a
+ *   transaction it predates. Lowering the far end to it would report a gap that is not there, and the wallet would read
+ *   as unsynchronized until the next frame, which on an idle address the source sends only minutes apart.
  * @param state The wallet to record on.
  * @param progress The frame.
  * @returns The wallet with the far end of its cursor moved and marked connected.
@@ -267,7 +272,7 @@ const applyVersionSignal = (state: CoreWallet, signal: VersionSignalSyncUpdate):
 const applyProgress = (state: CoreWallet, progress: ProgressUpdate): Either.Either<CoreWallet, never> =>
   Either.right(
     CoreWallet.updateProgress(state, {
-      highestTransactionId: BigInt(progress.highestTransactionId),
+      highestTransactionId: EBigInt.max(state.progress.highestTransactionId, BigInt(progress.highestTransactionId)),
       isConnected: true,
     }),
   );
@@ -322,6 +327,11 @@ const placeTransaction = (
  *
  * @remarks
  *   The history is written only once the fold has succeeded, so a rejected transaction leaves no trace there either.
+ *
+ *   Both ends of the cursor move. A delivered transaction proves the address's timeline reaches at least its id, so the
+ *   far end is raised to it rather than left waiting for a progress frame to say so — the source sends those on a timer
+ *   that backs off while the address is idle, and until one came the wallet would read as unsynchronized over a state
+ *   it had already brought up to date.
  * @param state The wallet to fold into.
  * @param update The delivered transaction.
  * @param getContext Where the transaction history lives.
@@ -340,7 +350,11 @@ const foldTransaction = (
 
   return folded.pipe(
     Either.map((wallet) => {
-      const advanced = CoreWallet.updateProgress(wallet, { appliedId: BigInt(update.transaction.id) });
+      const appliedId = BigInt(update.transaction.id);
+      const advanced = CoreWallet.updateProgress(wallet, {
+        appliedId,
+        highestTransactionId: EBigInt.max(wallet.progress.highestTransactionId, appliedId),
+      });
       Effect.runFork(getContext().transactionHistoryService.put(update));
       return sweep(annotateVersion(advanced, update.transaction.protocolVersion));
     }),
