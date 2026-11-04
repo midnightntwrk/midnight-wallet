@@ -1,5 +1,22 @@
 # @midnightntwrk/wallet-sdk-address-format
 
+## 4.0.0-rc.1
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 3.x
+
+  - Built on `@midnightntwrk/ledger-v9` `1.0.0-rc.7` instead of `@midnight-ntwrk/ledger-v8`, so importing the package
+    loads the ledger-v9 WASM module. `ShieldedEncryptionSecretKey` (its constructor, `zswap` and `codec.decode`) holds a
+    ledger-v9 `EncryptionSecretKey`: do not hand it to ledger-v8 APIs. The Bech32m encoding of every address type is
+    unchanged.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 3.x
+
+  - `DustAddress.hexString`, the address's serialized bytes as hex.
+
 ## 4.0.0-rc.0
 
 ### Patch Changes
