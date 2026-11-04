@@ -12,5 +12,8 @@ batch's last applied event. It writes it once, with every coin it spent and rece
 another transaction's event, the wallet catches up with the indexer, or the wallet moves past the variant's protocol
 versions. A transaction followed by another in the same batch is written straight away.
 
-Closing a variant at a hand-over no longer cuts off tx-history writes still in flight: it waits up to 30 s for them to
-finish before stopping them.
+Closing the wallet, or its variant at a hand-over, writes any transaction it is still holding, so a wallet stopped
+mid catch-up records the part it applied and the rest merges onto it on resume. Closing also no longer cuts off
+tx-history writes still in flight: it waits up to 5 s for them, so a hand-over pauses and `stop()` takes up to 5 s
+longer while writes are pending. A write still retrying because the indexer lags behind the node is stopped after
+that, and its entry is not recorded.
