@@ -119,10 +119,11 @@ import {
 } from './transaction.js';
 
 /**
- * The traits pending transactions are read with, exported so a test that restores a stored pending-transaction payload
- * reads it exactly as the wallet does. Building a second trait for that would be testing the copy, not the wallet.
+ * The traits the facade reads its lifecycle records with, exported so an application restoring a saved lifecycle store
+ * reads it exactly as the facade does: `TransactionLifecycleServiceImpl.restore(stored,
+ * lifecycleTransactionTraits(config.forks.v9), config, clock)`.
  */
-export { finalizedTransactionTraits, lifecycleTransactionTraits, type LifecycleTx } from './transaction.js';
+export { lifecycleTransactionTraits, type LifecycleTx } from './transaction.js';
 
 /**
  * Why the wallet gave up on a transaction, for the history entry.
