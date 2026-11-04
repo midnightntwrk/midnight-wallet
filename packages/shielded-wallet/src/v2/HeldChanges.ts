@@ -19,6 +19,16 @@ export type RecordableChange = Readonly<{
   protocolVersion: number;
 }>;
 
+/** A sync batch's changes, with the transactions of the first and last events it applied. */
+export type AppliedBatch = Readonly<{
+  /** The batch's changes, in chain order. */
+  changes: readonly RecordableChange[];
+  /** The transaction of the first event the batch applied, if it applied any. */
+  firstAppliedSource: Option.Option<string>;
+  /** The transaction of the last event the batch applied, if it applied any. */
+  lastAppliedSource: Option.Option<string>;
+}>;
+
 const joinChanges = (earlier: RecordableChange, later: RecordableChange): RecordableChange => ({
   protocolVersion: earlier.protocolVersion,
   change: {
@@ -38,15 +48,16 @@ const joinChanges = (earlier: RecordableChange, later: RecordableChange): Record
  *   of the next batch when it shares its source. Recording it any earlier would let a reader see the transaction with
  *   half its coins.
  * @param held The change held back from the previous batch, if any.
- * @param batch This batch's changes, in chain order.
+ * @param applied This batch's changes, in chain order, with the transactions of its first and last applied events.
  * @param caughtUp Whether the wallet has applied every event its source holds, which completes every transaction.
  * @returns The changes to record now, and the one to hold until the next batch.
  */
 export const releaseCompleteChanges = (
   held: Option.Option<RecordableChange>,
-  batch: readonly RecordableChange[],
+  applied: AppliedBatch,
   caughtUp: boolean,
 ): readonly [readonly RecordableChange[], Option.Option<RecordableChange>] => {
+  const batch = applied.changes;
   const joined = Option.match(held, {
     onNone: () => batch,
     onSome: (earlier) =>

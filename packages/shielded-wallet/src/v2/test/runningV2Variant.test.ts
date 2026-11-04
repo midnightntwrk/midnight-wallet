@@ -270,6 +270,8 @@ describe('RunningV2Variant.startSync tx-history of a transfer split across sync 
     /** The transfer's events in chain order: its input (the spend), then its two outputs (payment, change). */
     transferHex: readonly string[];
     transferHash: string;
+    /** The events of a later transaction that does not touch this wallet: the stranger sending its 100 to itself. */
+    strangerHex: readonly string[];
   }>;
 
   /**
@@ -304,10 +306,29 @@ describe('RunningV2Variant.startSync tx-history of a transfer split across sync 
       });
       const after = Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
       const transfer = V9.getLastBlockEvents(after);
+      const strangers = new ledger.ZswapLocalState().replayEvents(
+        stranger,
+        [mint, ...transfer].map((event) => ledger.Event.deserialize(event.serialize())),
+      );
+      const strangersCoin = [...strangers.coins][0];
+      const [, strangersInput] = strangers.spend(stranger, strangersCoin, 0);
+      const toItself = ledger.createShieldedCoinInfo(strangersCoin.type, strangersCoin.value);
+      const strangersOffer = ledger.ZswapOffer.fromInput(strangersInput, strangersCoin.type, strangersCoin.value).merge(
+        ledger.ZswapOffer.fromOutput(
+          ledger.ZswapOutput.new(toItself, 0, stranger.coinPublicKey, stranger.encryptionPublicKey),
+          toItself.type,
+          toItself.value,
+        ),
+      );
+      yield* simulator.submitTransaction(ledger.Transaction.fromParts(networkId, strangersOffer).eraseProofs(), {
+        strictness: {},
+      });
+      const afterStranger = Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
       return {
         mintHex: hex(mint.serialize()),
         transferHex: transfer.map((event) => hex(event.serialize())),
         transferHash: transfer[0].source.transactionHash,
+        strangerHex: V9.getLastBlockEvents(afterStranger).map((event) => hex(event.serialize())),
       };
     }).pipe(Effect.scoped, Effect.runPromise);
 
@@ -449,5 +470,26 @@ describe('RunningV2Variant.startSync tx-history of a transfer split across sync 
     expect(await writesOfTransfer(transferThenNextVersionIn([1, 3]), 'stays open')).toEqual([
       { received: 1, spent: 1 },
     ]);
+  });
+
+  /**
+   * One batch holding the whole transfer as ids 2..4 and then the stranger's transaction, while the source reports ten
+   * more events beyond them, so the wallet is still catching up when the batch is applied.
+   */
+  const transferThenStrangerInOneBatch = (): readonly WalletSyncUpdate[] => {
+    const raws = [...chain.transferHex, ...chain.strangerHex];
+    const maxId = 1 + raws.length + 10;
+    const items = raws.map((raw, i): EventsSyncUpdate => ({
+      _tag: 'EventsSyncUpdate',
+      id: i + 2,
+      protocolVersion: 3,
+      maxId,
+      raw,
+    }));
+    return [WalletSyncUpdate.create(items, keys(), new Date('2026-11-04T12:00:00Z'))];
+  };
+
+  it('should record a transfer while still catching up when a later transaction follows it in the same batch, because only a transaction the batch ends inside can have been cut', async () => {
+    expect(await writesOfTransfer(transferThenStrangerInOneBatch(), 'stays open')).toEqual([{ received: 1, spent: 1 }]);
   });
 });

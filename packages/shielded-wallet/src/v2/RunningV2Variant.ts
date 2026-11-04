@@ -263,7 +263,13 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
           }),
         ).pipe(
           Effect.flatMap(({ batch, caughtUp }) =>
-            Ref.modify(this.#heldChange, (held) => releaseCompleteChanges(held, batch, caughtUp)),
+            Ref.modify(this.#heldChange, (held) =>
+              releaseCompleteChanges(
+                held,
+                { changes: batch, firstAppliedSource: Option.none(), lastAppliedSource: Option.none() },
+                caughtUp,
+              ),
+            ),
           ),
           Effect.flatMap((complete) => this.#record(complete)),
         ),
