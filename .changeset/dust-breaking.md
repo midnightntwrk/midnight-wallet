@@ -38,13 +38,15 @@ Breaking changes since 4.x
   (`V1Variant`, `V2Variant`) must supply `startAux`, the `StartMaterial.StartAuxCapability` its builder sets with
   `withStartAux(Defaults)`, and takes an optional fifth type parameter for the previous variant's state.
   `CoreWallet.pendingDust` holds `PendingDust` entries (`{ coin, nullifier, declaredTime }`), and `DustWithNullifier` is
-  removed.
+  removed. `CoreWallet` records which sync moved its position as a required `syncKind` (`'events' | 'projections'`),
+  which `CoreWallet.restore` takes as its last argument.
 - **Errors.** The `WalletError` union of `./v1` and `./v2` gains `SnapshotRestoreError`, `OutOfOrderSyncUpdateError` and
-  `InsufficientDustForFeeError`, so an exhaustive match over it must handle them.
-- **Snapshots.** Snapshots are format `v2`, recording the variant that wrote them and the Dust still pending; 4.x
-  snapshots are read and upgraded. Once this release has saved a wallet, going back to 4.x means restoring it from its
-  seed. An unreadable snapshot is refused with `SnapshotRestoreError` instead of `Wallet.Other`, and `restore` throws
-  that tagged error.
+  `InsufficientDustForFeeError`, and that of `./v2` also `SnapshotSyncMismatchError`, so an exhaustive match over it must
+  handle them.
+- **Snapshots.** Snapshots are format `v2`, recording the variant that wrote them, the Dust still pending, and which
+  sync saved their position (`syncKind`); 4.x snapshots are read and upgraded. Once this release has saved a wallet,
+  going back to 4.x means restoring it from its seed. An unreadable snapshot is refused with `SnapshotRestoreError`
+  instead of `Wallet.Other`, and `restore` throws that tagged error.
 - **Transaction history.** `txHistoryStorage` is a `DustHistoryStorage`, and a `DustTransactionHistoryEntry` is the
   common lifecycle entry with an optional `dust` section. A custom `TransactionHistoryService` returns
   `TransactionDetails` with the `block` (`hash`, `height`, `timestamp`), the transaction's `identifiers` and its `fees`
