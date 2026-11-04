@@ -60,20 +60,38 @@ describe('the dust snapshot format versions', () => {
 });
 
 describe('upgrading a dust snapshot from v1 to v2', () => {
-  it('adds an empty pendingDust and stamps the new version, because a v1 snapshot recorded no pending Dust', () => {
-    expect(upgradeSnapshotV1ToV2(v1Snapshot())).toEqual(v1Snapshot({ version: 'v2', pendingDust: [] }));
+  it('adds an empty pendingDust and an event syncedBy and stamps the new version, because a v1 snapshot recorded no pending Dust and was written by event replay', () => {
+    expect(upgradeSnapshotV1ToV2(v1Snapshot())).toEqual(
+      v1Snapshot({ version: 'v2', pendingDust: [], syncedBy: { kind: 'events' } }),
+    );
   });
 
   it('treats a snapshot with no version as v1', () => {
     const { version: _version, ...unversioned } = v1Snapshot();
 
-    expect(upgradeSnapshotV1ToV2(unversioned)).toEqual({ ...unversioned, version: 'v2', pendingDust: [] });
+    expect(upgradeSnapshotV1ToV2(unversioned)).toEqual({
+      ...unversioned,
+      version: 'v2',
+      pendingDust: [],
+      syncedBy: { kind: 'events' },
+    });
   });
 
   it('keeps a pendingDust that is already there, so the step fills in what is missing and never overwrites', () => {
     const withPending = v1Snapshot({ pendingDust: [pendingCoin] });
 
-    expect(upgradeSnapshotV1ToV2(withPending)).toEqual({ ...withPending, version: 'v2' });
+    expect(upgradeSnapshotV1ToV2(withPending)).toEqual({
+      ...withPending,
+      version: 'v2',
+      syncedBy: { kind: 'events' },
+    });
+  });
+
+  it('keeps a syncedBy that is already there, so the step never overwrites what a snapshot recorded', () => {
+    // Not the value the step would fill in, so keeping it is visible.
+    const withSyncedBy = v1Snapshot({ syncedBy: { kind: 'projections' } });
+
+    expect(upgradeSnapshotV1ToV2(withSyncedBy)).toEqual({ ...withSyncedBy, version: 'v2', pendingDust: [] });
   });
 
   it('is idempotent: applying it twice is applying it once', () => {

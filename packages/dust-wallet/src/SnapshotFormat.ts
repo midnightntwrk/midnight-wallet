@@ -68,14 +68,41 @@ export const PendingDustSchema = Schema.Struct({
 });
 
 /**
+ * Which synchronization recorded a wallet's position, and so what its `appliedIndex` means.
+ *
+ * - `events`: the id of the last dust ledger event applied, which event replay resumes its subscription from. A wallet
+ *   nothing has been synchronized into is here too: its index is `0`, which event replay reads as "nothing applied
+ *   yet", and which no other synchronization reads at all.
+ * - `projections`: a count of the Merkle indices and nullifier scans a projections pass has worked through. Not an event
+ *   id, and never to be resumed from as one.
+ */
+export type SyncedBy = 'events' | 'projections';
+
+/**
+ * How a snapshot records {@link SyncedBy}: a required field of format `v2`, an object so that a kind can carry data of
+ * its own.
+ *
+ * @remarks
+ *   Required rather than optional because its value is derived from state an older build keeps changing: an older reader
+ *   would carry the field through unread while synchronizing some other way, and write back a claim about a position it
+ *   had since replaced.
+ */
+export const SyncedBySchema = Schema.Union(
+  Schema.Struct({ kind: Schema.Literal('events') }),
+  Schema.Struct({ kind: Schema.Literal('projections') }),
+);
+
+/**
  * Upgrades a decoded dust snapshot from format version `v1` to `v2`.
  *
  * @remarks
  *   A pure function on the decoded JSON, run before any schema, so the schema only ever has to describe one shape. It
  *   fills in what is missing and never overwrites what is there: a `v1` snapshot recorded no pending Dust, so it gains
- *   an empty `pendingDust` and the version becomes `v2`; everything else — known fields and unknown alike — passes
- *   through untouched. Anything that is not a `v1` (or unlabelled) snapshot object is handed back as it came, for the
- *   schema after it to refuse with a precise reason; and applying the step twice is applying it once.
+ *   an empty `pendingDust`; it gains a `syncedBy` of `events`, because every stable release that wrote `v1` synced by
+ *   event replay only, and projections were reachable on no release by default; and the version becomes `v2`.
+ *   Everything else — known fields and unknown alike — passes through untouched. Anything that is not a `v1` (or
+ *   unlabelled) snapshot object is handed back as it came, for the schema after it to refuse with a precise reason; and
+ *   applying the step twice is applying it once.
  * @param json The snapshot as decoded from its JSON string.
  * @returns The same snapshot in format `v2`, or the input unchanged when the step does not apply.
  */
@@ -83,6 +110,6 @@ export const upgradeSnapshotV1ToV2 = (json: unknown): unknown => {
   if (!SnapshotFormat.isJsonObject(json)) return json;
   const version = json['version'];
   return version === undefined || version === V1_SNAPSHOT_FORMAT_VERSION
-    ? { pendingDust: [], ...json, version: V2_SNAPSHOT_FORMAT_VERSION }
+    ? { pendingDust: [], syncedBy: { kind: 'events' }, ...json, version: V2_SNAPSHOT_FORMAT_VERSION }
     : json;
 };

@@ -172,7 +172,7 @@ describe('a Dust wallet restored from a snapshot whose position another synchron
     expect(Option.getOrUndefined(Either.getLeft(restored))).toMatchObject({
       _tag: 'Wallet.SnapshotSyncMismatch',
       syncedBy: 'projections',
-      resumesFrom: 'dustEvents',
+      resumesFrom: 'events',
     });
   });
 

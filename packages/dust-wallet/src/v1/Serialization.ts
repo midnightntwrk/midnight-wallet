@@ -67,6 +67,7 @@ import {
   PendingDustSchema,
   SNAPSHOT_FORMAT_VERSION,
   SNAPSHOT_FORMAT_VERSIONS,
+  SyncedBySchema,
   upgradeSnapshotV1ToV2,
 } from '../SnapshotFormat.js';
 
@@ -82,6 +83,10 @@ const SnapshotSchema = Schema.Struct({
   protocolVersion: Schema.BigInt,
   networkId: Schema.String,
   offset: Schema.optional(Schema.BigInt),
+  // Which synchronization recorded `offset`. Shared with the V2 variant, which can run either; this one only ever
+  // replays events, so it always writes `events` and has nothing to check on the way in: a snapshot this variant can
+  // decode holds a ledger-v8 state, which only event replay produces.
+  syncedBy: SyncedBySchema,
   pendingDust: Schema.Array(PendingDustSchema),
 });
 
@@ -98,6 +103,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
         offset: w.progress?.appliedIndex,
+        syncedBy: { kind: 'events' },
         pendingDust: w.pendingDust,
       });
 

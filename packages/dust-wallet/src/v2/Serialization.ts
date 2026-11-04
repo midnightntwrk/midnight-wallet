@@ -19,6 +19,7 @@ import {
   PendingDustSchema,
   SNAPSHOT_FORMAT_VERSION,
   SNAPSHOT_FORMAT_VERSIONS,
+  SyncedBySchema,
   upgradeSnapshotV1ToV2,
 } from '../SnapshotFormat.js';
 // Re-exported because the version this variant writes is part of its serialization surface, as on the V1 twin.
@@ -81,6 +82,8 @@ const SnapshotSchema = Schema.Struct({
   protocolVersion: Schema.BigInt,
   networkId: Schema.String,
   offset: Schema.optional(Schema.BigInt),
+  // Which synchronization recorded `offset`, because the two that this variant can run mean different things by it.
+  syncedBy: SyncedBySchema,
   pendingDust: Schema.Array(PendingDustSchema),
 });
 
@@ -97,6 +100,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
         offset: w.progress?.appliedIndex,
+        syncedBy: { kind: w.syncedBy },
         pendingDust: w.pendingDust,
       });
 
@@ -127,6 +131,7 @@ export const makeDefaultV2SerializationCapability = (): SerializationCapability<
                   },
                   snapshot.protocolVersion,
                   snapshot.networkId,
+                  snapshot.syncedBy.kind,
                 ),
                 unknownFields,
               ),
