@@ -180,6 +180,71 @@ describe('RunningV2Variant.startSync tx-history fan-out', () => {
   });
 });
 
+describe('RunningV2Variant tx-history writes when the variant closes', () => {
+  /**
+   * Syncs one change whose lookup takes `lookup` to answer, closes the variant's scope while that lookup is in flight,
+   * then lets `afterClose` pass on the clock.
+   *
+   * @returns Whether the change was recorded, and whether closing the scope had finished by then.
+   */
+  const closeWhileLookupInFlight = (lookup: Duration.Duration, afterClose: Duration.Duration) =>
+    Effect.gen(function* () {
+      const recorded = yield* Ref.make(0);
+      const historyService: TransactionHistoryService = {
+        getTransactionDetails: (hash) =>
+          Effect.sleep(lookup).pipe(
+            Effect.as({
+              hash,
+              block: { hash: 'block-hash', height: 1, timestamp: 1_700_000_000 },
+              status: 'SUCCESS' as const,
+              identifiers: [],
+            }),
+          ),
+        put: () => Ref.update(recorded, (n) => n + 1),
+      };
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+      const stateRef = yield* SubscriptionRef.make(
+        CoreWallet.init(new ledger.ZswapLocalState(), secretKeys, networkId),
+      );
+      const scope = yield* Scope.make();
+      const variant = new RunningV2Variant(
+        scope,
+        {
+          stateRef,
+          activationRange: ProtocolVersion.makeRange(
+            ProtocolVersion.MinSupportedVersion,
+            ProtocolVersion.MaxSupportedVersion,
+          ),
+        },
+        variantContextOf([['a1']], historyService),
+      );
+
+      yield* variant.startSync(null).pipe(Stream.runDrain, Effect.provideService(Scope.Scope, scope));
+      // The lookup starts and parks on the clock.
+      yield* TestClock.adjust(Duration.millis(1));
+
+      const closing = yield* Effect.fork(Scope.close(scope, Exit.void));
+      yield* TestClock.adjust(afterClose);
+      const closed = Option.isSome(yield* Fiber.poll(closing));
+      yield* Fiber.interrupt(closing);
+      return { recorded: yield* Ref.get(recorded), closed };
+    }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
+
+  it('should finish recording a change whose lookup is still in flight when the variant closes, because a hand-over closes the variant rather than waiting for its writes', async () => {
+    expect(await closeWhileLookupInFlight(Duration.seconds(10), Duration.seconds(11))).toEqual({
+      recorded: 1,
+      closed: true,
+    });
+  });
+
+  it('should give up on a write still in flight 30 s after the variant closes, so a lookup that never answers cannot hold up a hand-over', async () => {
+    expect(await closeWhileLookupInFlight(Duration.infinity, Duration.seconds(31))).toEqual({
+      recorded: 0,
+      closed: true,
+    });
+  });
+});
+
 describe('RunningV2Variant.state protocol version signalling', () => {
   /** The variant under test owns `[0, 7)`; 7 and above belong to whatever variant comes next. */
   const activationRange = ProtocolVersion.makeRange(
