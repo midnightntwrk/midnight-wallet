@@ -130,8 +130,17 @@ export const V1Tag: unique symbol = Symbol('V1');
 export const coreStateOf = (walletState: Readonly<{ state: VariantState }>): Option.Option<CoreWallet> =>
   VariantState.unwrapFor<CoreWallet>(walletState.state, V1Tag);
 
-/** How long closing a variant waits for its tx-history writes still in flight before interrupting them. */
-const WRITES_GRACE = Duration.seconds(30);
+/**
+ * How long closing a variant waits for its tx-history writes still in flight before interrupting them.
+ *
+ * @remarks
+ *   Every close waits: the runtime closes the variant both to hand over to the next one and to stop, so this bounds how
+ *   long a hand-over is paused and how long `stop()` takes. It is set near a normal lookup's time, which is enough for
+ *   the writes of the last few batches. A lookup still retrying while the indexer lags behind the node, which is
+ *   likeliest around a fork, can take minutes; waiting for it would stall the hand-over, so that write is interrupted
+ *   and its entry is lost.
+ */
+const WRITES_GRACE = Duration.seconds(5);
 
 export type DefaultRunningV1 = RunningV1Variant<
   string,
@@ -175,7 +184,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       Scope.addFinalizer(
         scope,
         pipe(
-          FiberSet.awaitEmpty(this.#writes),
+          // Runs after sync has stopped, so nothing is applied after this. A change still held is written as it is: the
+          // rest of its transaction is past the cursor, so on resume it arrives alone and its write merges onto this one.
+          Ref.getAndSet(this.#heldChange, Option.none()),
+          Effect.flatMap((held) => this.#record(Option.toArray(held))),
+          Effect.zipRight(FiberSet.awaitEmpty(this.#writes)),
           Effect.timeout(WRITES_GRACE),
           Effect.ignore,
           Effect.zipRight(Scope.close(this.#writesScope, Exit.void)),
