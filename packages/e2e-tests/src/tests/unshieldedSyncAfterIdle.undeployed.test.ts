@@ -31,10 +31,10 @@ import { PublicKey, UnshieldedWallet, createKeystore } from '@midnightntwrk/wall
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnightntwrk/wallet-sdk-utilities/testing';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
-import { setTimeout as sleep } from 'node:timers/promises';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { sleep } from './helpers/network.js';
 import { carried } from './helpers/transactions.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils.js';
 
@@ -46,9 +46,11 @@ vi.setConfig({ testTimeout: 900_000, hookTimeout: 300_000 });
  * @remarks
  *   The indexer's progress spacing for an idle address is 30 s, 60 s, 120 s and then 240 s, each ±20%, so the fourth
  *   message has gone out by 252 s at the latest and the next is at least 192 s after it. Waiting 260 s therefore lands
- *   the transfer inside a capped gap with well over a minute to spare, however the jitter fell.
+ *   the transfer inside a capped gap with well over a minute to spare, however the jitter fell. The spacing lives in
+ *   the indexer, not here: `indexer-api/src/infra/api/v4/subscription/unshielded.rs`, `polling.rs` and
+ *   `progress_cache.rs`. If it changes there, this wait must change with it.
  */
-const IDLE_MS = 260_000;
+const IDLE_SECONDS = 260;
 
 /** How long after the transfer reaches the receiver it may take to report itself synchronized. */
 const SYNCED_WITHIN_MS = 20_000;
@@ -150,7 +152,7 @@ describe('Unshielded sync after an idle period', () => {
 
   it('should report a quiet wallet synchronized within seconds of applying a transfer to it, because a transaction it has applied proves how far its timeline goes', async () => {
     await Promise.all([sender.waitForSyncedState(), receiver.waitForSyncedState()]);
-    await sleep(IDLE_MS);
+    await sleep(IDLE_SECONDS);
 
     const before = await receiver.waitForSyncedState();
     const appliedBefore = before.unshielded.progress.appliedId;
