@@ -95,6 +95,9 @@ import {
   readNullifierBlockParameters,
   tryReadEvent,
 } from './SyncSchema.js';
+// The update the projections service emits and its capability applies, exported beside them so an application can name
+// the wallet it composes from them — `ForkingDustWallet<V1 WalletSyncUpdate, DustProjectionsUpdate>`.
+export type { DustProjectionsUpdate } from './SyncSchema.js';
 import {
   bigintToLeHex,
   calculatePrefixLength,

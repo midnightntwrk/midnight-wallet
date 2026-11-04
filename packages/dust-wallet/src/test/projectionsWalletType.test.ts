@@ -29,7 +29,7 @@ import {
   dustVariantConfigurations,
   type ForkingDustWallet,
 } from '../index.js';
-import { SyncService as V1Sync, V1Builder } from '../v1/index.js';
+import { type SyncService as V1Sync, V1Builder } from '../v1/index.js';
 import { SyncService as V2Sync, TransactionHistory, V2Builder } from '../v2/index.js';
 
 const configuration: DefaultDustConfiguration = {
@@ -63,8 +63,8 @@ describe('a dust wallet that synchronizes by projections', () => {
     );
 
     // Assignability, which is what annotating a variable or a return type asks of it.
-    expectTypeOf(ProjectionsDustWallet.restore).returns.toExtend<
-      ForkingDustWallet<V1Sync.WalletSyncUpdate, V2Sync.DustProjectionsUpdate>
-    >();
+    expectTypeOf(ProjectionsDustWallet)
+      .toHaveProperty('restore')
+      .returns.toExtend<ForkingDustWallet<V1Sync.WalletSyncUpdate, V2Sync.DustProjectionsUpdate>>();
   });
 });
