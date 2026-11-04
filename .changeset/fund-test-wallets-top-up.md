@@ -11,4 +11,4 @@ checks now hold on a long-lived wallet.
 
 `eventLessDustWallet` now honours `skipLedgerV8DustHistory` as `DustWallet` does, and the testkit environment and the e2e
 fixture set it, so a new wallet on a network that crossed the v9 fork starts its Dust at the boundary instead of replaying the ledger-v8 history.
-On qanet this cuts a cold sync from about 36 minutes to under 30 seconds.
+On qanet this cuts a cold sync from about 36 minutes to under 30 seconds. The qanet preset's indexer subscription now uses the indexer host: the host it named does not serve it, so a wallet restored from a snapshot never connected and waited out its ten-minute catch-up before being rebuilt.

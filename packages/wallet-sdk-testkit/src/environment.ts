@@ -70,8 +70,7 @@ export const NETWORK_PRESETS: Record<RemoteNetwork, RemoteNetworkPreset> = {
   qanet: {
     networkId: NetworkId.NetworkId.QaNet,
     indexerHttpUrl: 'https://indexer.qanet.midnight.network/api/v4/graphql',
-    // NB: qanet ws is served from the `indexer-blue` host — preserved from upstream.
-    indexerWsUrl: 'wss://indexer-blue.qanet.midnight.network/api/v4/graphql/ws',
+    indexerWsUrl: 'wss://indexer.qanet.midnight.network/api/v4/graphql/ws',
     nodeUrl: 'wss://rpc.qanet.midnight.network',
   },
   preview: {

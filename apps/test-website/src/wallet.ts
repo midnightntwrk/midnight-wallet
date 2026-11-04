@@ -40,11 +40,10 @@ const indexerHttpUrl = (network: KnownNetwork): string =>
     ? `http://localhost:${LOCAL_INDEXER_PORT}/api/v4/graphql`
     : `https://indexer.${network}.midnight.network/api/v4/graphql`;
 
-// qanet's ws endpoint lives on the blue deployment, unlike its http endpoint.
 const indexerWsUrl = (network: KnownNetwork): string =>
   network === 'undeployed'
     ? `ws://localhost:${LOCAL_INDEXER_PORT}/api/v4/graphql/ws`
-    : `wss://${network === 'qanet' ? 'indexer-blue.qanet' : `indexer.${network}`}.midnight.network/api/v4/graphql/ws`;
+    : `wss://indexer.${network}.midnight.network/api/v4/graphql/ws`;
 
 const relayUrl = (network: KnownNetwork): string =>
   network === 'undeployed' ? `ws://localhost:${LOCAL_NODE_PORT_RPC}` : `wss://rpc.${network}.midnight.network`;

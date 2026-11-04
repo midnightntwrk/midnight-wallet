@@ -167,7 +167,7 @@ export class TestContainersFixture {
         return 'wss://indexer.devnet.midnight.network/api/v4/graphql/ws';
       }
       case 'qanet': {
-        return 'wss://indexer-blue.qanet.midnight.network/api/v4/graphql/ws';
+        return 'wss://indexer.qanet.midnight.network/api/v4/graphql/ws';
       }
       case 'preview': {
         return 'wss://indexer.preview.midnight.network/api/v4/graphql/ws';
