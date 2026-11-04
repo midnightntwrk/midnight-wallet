@@ -145,7 +145,7 @@ export const makeDefaultV2SerializationCapability = ({
         // Enforce scheme consistency at the deserialization trust boundary: the
         // stored address must derive from the stored verifying key. This rejects
         // relabelled or spliced snapshots — a key whose encoding does not match
-        // its scheme tag fails to decode (SnapshotRestoreError), and a key/address
+        // its scheme tag fails to decode (OtherWalletError), and a key/address
         // scheme mismatch is reported as a SchemeMismatchError.
         Either.flatMap((read) =>
           pipe(

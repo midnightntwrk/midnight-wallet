@@ -21,7 +21,7 @@
  *   is re-earned from a replay, so the wallet never passes through a state in which it has forgotten what it owns;
  *   `test/forkSimulation.test.ts` proves that, and proves the boundary transaction is applied exactly once, by the new
  *   variant. Which variant is running is the runtime's business, not the application's: the wallet's public API speaks
- *   ledger-v9 throughout.
+ *   the SDK's own types (`UnshieldedWalletTypes`) throughout.
  *
  *   This wallet retains nothing, and that is the honest difference from the shielded and dust wallets. Unshielded
  *   synchronization is watch-only — the address is public and signing is supplied per call by the caller — so
@@ -272,7 +272,7 @@ export const createKeystore = (secretKey: UnshieldedSecretKey, networkId: Networ
  *     { builder: new V1Builder().withDefaults(), configuration: v1Configuration },
  *     { builder: new V2Builder().withDefaults().withMigration(...), configuration: v2Configuration },
  *   );
- *   const wallet = Wallet.startWithPublicKey(publicKey);
+ *   const wallet = await Wallet.startWithPublicKey(publicKey);
  *   ```;
  *
  * @param configuration What the wallet layer needs: the network, and where the boundary lies.

@@ -1264,8 +1264,8 @@ export class WalletFacade {
    *   optional services/abstractions to provide, too. If not provided - default implementations will be used, each of
    *   them is initialized by a function taking the configuration and returning proper implementation (wrapped in a
    *   {@link Promise} or not).
-   * - `submissionService` - needs to implement {@link SubmissionService} for a {@link ledgerV9.FinalizedTransaction} to
-   *   submit transactions to the network, default uses Node RPC connection
+   * - `submissionService` - needs to implement {@link SubmissionService} for a {@link FinalizedTx} handle, of either ledger
+   *   version, to submit transactions to the network; the default uses a Node RPC connection
    * - `transactionLifecycleService` - needs to implement {@link TransactionLifecycleService} for a {@link LifecycleTx} to
    *   keep one lifecycle record per transaction, default polls `configuration.indexerClientConnection`
    * - `provingService` - needs to implement {@link VersionedProvingService} to prove it, default uses proving server
@@ -1787,7 +1787,7 @@ export class WalletFacade {
    * @example
    *   ```typescript
    *   // Reuse the block data captured during balancing — no extra fetch
-   *   const recipe = await facade.balanceFinalizedTransaction(tx, secretKeys, options);
+   *   const recipe = await facade.balanceFinalizedTransaction(tx, options);
    *   const finalizedTx = await facade.finalizeRecipe(recipe);
    *   await facade.validateTransaction(finalizedTx, {
    *     flags: { enforceBalancing: true, verifySignatures: true, enforceLimits: true },
@@ -2008,7 +2008,6 @@ export class WalletFacade {
    * yet balanced at this stage; `verifySignatures` is `true` because signatures are already present and must be valid.
    *
    * @param tx - The finalized transaction to balance.
-   * @param secretKeys - Secret keys for shielded and dust coin selection.
    * @param options - TTL for the balancing transaction, and optional subset of token kinds to balance.
    * @returns A {@link FinalizedTransactionRecipe} containing the original and balancing transactions.
    */
@@ -2077,7 +2076,6 @@ export class WalletFacade {
    * is not yet balanced and signatures are not yet present.
    *
    * @param tx - The unbound transaction to balance.
-   * @param secretKeys - Secret keys for shielded and dust coin selection.
    * @param options - TTL for the balancing transaction, and optional subset of token kinds to balance.
    * @returns An {@link UnboundTransactionRecipe} containing the base and optional balancing transactions.
    */
@@ -2147,7 +2145,6 @@ export class WalletFacade {
    * is not yet balanced and signatures are not yet present.
    *
    * @param tx - The unproven transaction to balance.
-   * @param secretKeys - Secret keys for shielded and dust coin selection.
    * @param options - TTL for the balancing transaction, and optional subset of token kinds to balance.
    * @returns An {@link UnprovenTransactionRecipe} containing the balanced transaction.
    */
