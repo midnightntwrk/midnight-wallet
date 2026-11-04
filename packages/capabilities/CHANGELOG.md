@@ -1,5 +1,120 @@
 # @midnightntwrk/wallet-sdk-capabilities
 
+## 4.0.0-rc.2
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 3.x
+
+  In 3.x this package served ledger-v8 alone. It now serves `@midnight-ntwrk/ledger-v8` and `@midnightntwrk/ledger-v9`
+  side by side, and its proving, simulation and submission names say which ledger version they serve.
+
+  - **Proving.** `ProvingService<TProven, TUnproven>` and `ProvingServiceEffect<TProven, TUnproven>` name the unproven
+    transaction they accept as well as the one they return, with no defaults, and fail with `ProvingFailure`. The 3.x
+    factories, all of them ledger-v8, are renamed:
+
+    | 3.x                                   | Now                                     |
+    | ------------------------------------- | --------------------------------------- |
+    | `fromProvingProvider(Effect)`         | `fromV8ProvingProvider(Effect)`         |
+    | `makeServerProvingServiceEffect`      | `makeV8ServerProvingServiceEffect`      |
+    | `makeWasmProvingServiceEffect`        | `makeV8WasmProvingServiceEffect`        |
+    | `makeSimulatorProvingService(Effect)` | `makeV8SimulatorProvingService(Effect)` |
+    | `UnboundTransaction`                  | `V8UnboundTransaction`                  |
+
+    `makeDefaultProvingService(Effect)`, `makeServerProvingService` and `makeWasmProvingService` are removed: use
+    `makeDefaultVersionedProvingService(configuration, forks)`, which routes each transaction to its ledger version's
+    backend, or a ledger-v9 factory such as `makeV9ServerProvingService`. `DefaultProvingConfiguration` is
+    `{ provingServerUrl?, provers? }`.
+
+  - **Pending transactions become transaction lifecycle records.** `./pendingTransactions` is replaced by
+    `./transactionLifecycle`, and `PendingTransactionsService`, `PendingTransactionsServiceImpl`,
+    `PendingTransactionsServiceEffect` and `PendingTransactionsServiceEffectImpl` by `TransactionLifecycleService`,
+    `TransactionLifecycleServiceImpl`, `TransactionLifecycleServiceEffect` and `TransactionLifecycleServiceEffectImpl`,
+    which keep one record per transaction (see the additions). `addPendingTransaction(tx)` becomes `submitted(facts)`
+    and `clear(tx)` becomes `reverted(identifiers)`; `state()` returns `{ records }`. `init` and `restore` take
+    `txTraits`, a trait per ledger version (wrap a single trait with `TransactionTraits.singleTrait`), and an optional
+    clock. A custom service implements the whole interface, `serializeState()` included. `PendingTransactions` and its
+    state functions are replaced by the `Lifecycle`, `TransactionTraits` and `LifecycleFormat` namespaces, and
+    `InitParams` and `DefaultPendingTransactionsServiceConfiguration` by `TransactionLifecycleServiceInitParams` and
+    `DefaultTransactionLifecycleServiceConfiguration`.
+  - **Transaction traits.** A `TransactionTrait` provides `intentHashes`, `inputs` and `ttl`, and no longer
+    `hasTTLExpired` or `isOneIncludedInOther`. It may add `formOf`, and `deserialize` takes an optional form.
+  - **Stored format.** The service saves format `v2`. A `v1` store saved by 3.x is read and upgraded; 3.x cannot read
+    `v2`.
+  - **Simulation.** The simulators are exported per ledger version: 3.x's `Simulator` and its helpers are now under
+    `V8`, ledger-v9's under `V9`, and no single-ledger simulator is exported unqualified. The deprecated
+    `getBlockEventsSince` is removed (use `getBlockEventsFrom`). `makeSimulatorSubmissionService` and
+    `SimulatorSubmissionConfiguration` are now `makeV9SimulatorSubmissionService` and
+    `V9SimulatorSubmissionConfiguration`, over the ledger-v9 simulator.
+  - **Submission.** `makeDefaultSubmissionService(Effect)` submits either ledger version's finalized transaction
+    (`AnyVersionFinalizedTransaction`) when no transaction type is named.
+  - **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `1.0.0-rc.7` beside `@midnight-ntwrk/ledger-v8`, and on
+    `@midnight-ntwrk/zkir-v2` `2.2.0-rc.6`.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 3.x
+
+  - **Proving by ledger version.** A `VersionedProvingService` routes each transaction to the backend of the ledger
+    version it was built for. `makeDefaultVersionedProvingService(Effect)(configuration, forks)` builds one from
+    `provers: { v8?, v9 }` (each `{ kind: 'server', url }` or `{ kind: 'wasm' }`) or from `provingServerUrl`, a proof
+    server under both keys; `provers` wins when both are given. It returns an `Either` that fails with
+    `ProvingConfigurationError` when neither is given. A version with no backend fails with
+    `UnsupportedProvingVersionError`, and a backend handed the other ledger version's transaction fails with
+    `ProvingEpochMismatchError`. Ledger-v9 backends: `fromV9ProvingProvider(Effect)`,
+    `makeV9ServerProvingService(Effect)`, `makeV9WasmProvingService(Effect)`, `makeV9WasmProvingServices` and
+    `makeV9SimulatorProvingService(Effect)`, with the `V8`, `V9` and `AnyVersion` transaction types. The in-process
+    backend proves each ledger version with that version's key material.
+  - **Transaction lifecycle.** `TransactionLifecycleService` keeps one record per transaction from balancing to its
+    final state: `Balanced`, `Finalized` and `Submitted`, ending `Confirmed`, `Rejected`, `Orphaned`, `Expired` or
+    `Reverted`. The wallet reports each step (`balanced`, `finalized`, `submitted`, `reverted`, and `included` for an
+    inclusion its own sync sees first), and the service settles submitted transactions against the indexer;
+    `orphanBeyond(chainNow)` ends every live record a protocol upgrade stranded. `balanced(facts)` expects the
+    transaction with its proofs erased, so a saved store holds no proof. An ended record stays until its TTL passes
+    (`Lifecycle.isLive`). `serializeState()` saves the store and `TransactionLifecycleServiceImpl.restore` reads it
+    back, keeping fields it does not declare. `stop()` guarantees that no indexer query runs after it resolves.
+  - **Validation** (`./validation`). A well-formedness check per ledger version, routed by
+    `makeDefaultVersionedValidationService(Effect)(dependencies, forks.v9)`:
+    `validateTx(tx, protocolVersion, { flags, blockData? })`. It validates against real ledger parameters, taken from
+    `blockData` when given and fetched otherwise (`makeDefaultBlockDataFetcher`), and refuses the other ledger version's
+    parameters with `LedgerParametersMismatchError`. Failures are tagged errors: `WellFormedError`,
+    `ValidationFetchError`. `withLedgerParameters` types block data whose parameters arrive as `unknown`.
+  - **New subpaths.** `./chainVersion` (`makeIndexerChainVersionProbe`, which asks the indexer the protocol version of
+    the chain's first block), `./codecs` (`LedgerParametersCodec`) and `./signatures` (`Signing`, the SDK's own
+    signature, signing-key and verifying-key shapes, with converters to and from ledger-v8's).
+  - **Fork simulation.** `ForkSimulator` drives one simulated chain across a protocol boundary, and the `V8` and `V9`
+    simulators schedule protocol versions (`scheduleFork`, `setProtocolVersion`).
+  - **Indexer liveness.** `LivenessServiceImpl` and `makeDefaultLivenessReads` cross-check an indexer's reported tip
+    against a node's finalized head, with `DEFAULT_LIVENESS_CONFIGURATION`, `DEFAULT_POLL_INTERVAL` (30 s) and
+    `DEFAULT_POLL_TIMEOUT` (20 s).
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 3.x
+
+  - Closing the default submission service no longer waits for a node that never connected: `close()` interrupts a
+    connection still in progress, and a submission made after that fails with a `SubmissionError`.
+  - The stored transaction set keeps the top-level fields this build does not declare, and writes them back.
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-node-client@2.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-prover-client@2.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0-rc.1
+
 ## 4.0.0-rc.1
 
 ### Major Changes

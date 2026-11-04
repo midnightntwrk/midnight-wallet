@@ -1,5 +1,132 @@
 # @midnightntwrk/wallet-sdk-unshielded-wallet
 
+## 4.0.0-rc.2
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 3.x
+
+  - **Two ledger versions.** `UnshieldedWallet(configuration)` runs a ledger-v8 variant (V1) below `forks.v9` and a
+    ledger-v9 variant (V2) from it, and hands the wallet over when the chain crosses. `forks` is required, and
+    `DefaultUnshieldedConfiguration` is declared by the package. `startWithPublicKey` returns a `Promise`: a fresh start
+    asks the chain the protocol version of its first block (`chainVersionProbe`, by default the indexer) to pick the
+    variant, falling back to V1 if the probe fails, and an ECDSA key always starts on V2.
+  - **Keys and signatures.** `createKeystore` takes an `UnshieldedSecretKey`, `{ kind: 'schnorr' | 'ecdsa', secret }`,
+    instead of a bare `Uint8Array` secret key, and keys and signatures are tagged `{ tag, value }` objects rather than
+    strings (`PublicKey.publicKey`, `getPublicKey()`). The ledger-v8 keystore, which takes a `Uint8Array` and has no
+    ECDSA, moves from the package root to `./v1`.
+  - **Asynchronous signing.** `signUnprovenTransaction` and `signUnboundTransaction` take a `SignSegment`,
+    `(data: Uint8Array) => Promise<Signature>`, so a signer whose secret never enters the process, such as an MPC
+    coordinator or an HSM, can sign. Keystores keep `signData` and add `signDataAsync`, which can be passed as the
+    signer directly: `wallet.signUnprovenTransaction(tx, keystore.signDataAsync)`. A signer that rejects fails with
+    `SignError`. Signing has moved off `TransactingCapability` into a per-variant `SigningService`.
+  - **Transactions.** Methods take and return `WalletTransaction` handles stamped with the protocol version they were
+    built for. A handle for the other ledger version is refused with `ProtocolVersionMismatchError`, except by
+    `revertTransaction` and `revertFailedSegments`, which ignore it.
+  - **Sync completion waits for indexer liveness.** The wallet cross-checks the indexer's reported tip against the
+    node's finalized head, polling `nodeClientConnection`, or else `relayURL`, every 30 seconds; a wallet that names
+    neither is not checked. `isStrictlyComplete()`, `isCompleteWithin()` and `waitForSyncedState()` also need a first
+    verdict that does not block: `Behind`, `Unknown` and `WrongNetwork` block, `InSync`, `Ahead`, `Unavailable` and
+    `Skipped` do not. A failed poll keeps a `Behind` or `WrongNetwork` verdict, so a node outage cannot release a caller
+    waiting on a stale indexer. Against a stale indexer `waitForSyncedState()` neither rejects nor times out: race it
+    against your own deadline and read `progress.indexerLiveness`. Tune the check with `livenessConfiguration` and
+    `livenessPollInterval`. `SyncProgressData` gains a required `indexerLiveness`, defaulted by `createSyncProgress()`.
+  - **API types.** `UnshieldedWalletState.state` is sealed: read it with `coreStateOf` from `./v1` or `./v2`. The state
+    loses `capabilities`, `services` and `mapState` (use `fromVariant`), and its constructor takes
+    `(protocolVersion, state, projections)` in place of `(state, capabilities, services)`.
+    `UnshieldedWalletCapabilities` and `UnshieldedWalletServices` are removed. `UnshieldedWalletAPI` requires
+    `revertFailedSegments`, `revertUtxos` and `releaseRestoredPending`.
+  - **Errors.** The `WalletError` union of `./v1` and `./v2` gains `SnapshotRestoreError` and
+    `OutOfOrderSyncUpdateError`, and that of `./v2` also `SchemeMismatchError`, so an exhaustive match over it must
+    handle them.
+  - **`CustomUnshieldedWallet`** composes one ledger-v9 variant, from a V2 builder, instead of a ledger-v8 one; its
+    start stays synchronous, and it cannot cross a fork.
+  - **Custom implementations.** `SyncService.livenessUpdates` is required: a source with nothing to check emits one
+    `IndexerLiveness.Skipped({ reason: 'no-liveness-feed' })` and ends. The sync update union gains `VersionSignal` and
+    indexer-liveness members, and `applyUpdate` receives the protocol-version range its variant owns.
+    `UnshieldedState.spend` and `spendByUtxo`, and `CoreWallet.spend` and `spendUtxos`, take the transaction's TTL, and
+    pending entries are `{ utxo, ttl, restored }`. `TransactingCapability` requires `revertFailedSegments`,
+    `revertUtxos` and `releaseRestoredPending`, and `TransactionOps` requires `collectSignableData`, `attachSignatures`
+    and `extractOwnFailedFallibleInputs`. The `./v1` `Simulator` is the capabilities `V8` simulator, without
+    `getBlockEventsSince`.
+  - **Transaction history.** `txHistoryStorage` is an `UnshieldedHistoryStorage`. An entry's `unshielded` section is
+    optional, and unshielded entries no longer record `fees`.
+  - **Snapshots.** V1 writes format `v1` and V2 writes `v2` (with a tagged key), each recording `writtenBy`; a 3.x
+    snapshot restores on V1 and crosses as schnorr. An unreadable snapshot is refused with `SnapshotRestoreError`, and
+    `restore` throws that tagged error. A snapshot whose stored address does not derive from its key is refused.
+  - **Indexer.** The sync reads `protocolVersion` from the indexer's progress frames and the block hash and height of
+    each transaction, so it needs an indexer that serves them. The SDK is tested against indexer `4.4.0-rc.6`.
+  - **Dependencies.** Depends on `@midnightntwrk/ledger-v9` `1.0.0-rc.7` beside `@midnight-ntwrk/ledger-v8`.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 3.x
+
+  - **ECDSA unshielded keys** on ledger-v9 (the V2 variant), beside schnorr. A wallet's scheme is enforced: a signature
+    in the other scheme is refused before it is attached (`SchemeMismatchError` on V2), so no partially signed
+    transaction reaches the network. `UnshieldedWalletState.verifyingKey` reports the wallet's key in the SDK's
+    `{ tag, value }` shape on either variant.
+  - **Following the chain across the v9 fork.** At the crossing every UTxO is carried, and bookings of transactions
+    still pending return to the available balance. Night UTxOs cross with `registeredForDustGeneration: false`, matching
+    what the indexer reports, so re-register them on ledger-v9. The protocol version is read off the sync's progress and
+    only increases.
+  - **Restoring.** A snapshot restores on the variant that wrote it. `UnshieldedWallet(configuration).tryRestore`
+    returns an `Either` instead of throwing, and the `UnshieldedRestore` namespace inspects a snapshot. Snapshot fields
+    this build does not declare are kept and written back.
+  - **Bookings.** A booking carries its transaction's TTL. `revertUtxos(ids)` releases booked coins by id,
+    `releaseRestoredPending(coveredIds)` releases bookings restored from a snapshot that no live transaction covers, and
+    `revertFailedSegments(tx, failedSegments)` releases the failed segments of a partially successful transaction.
+    `makeDefaultV1SerializationCapability` and `makeDefaultV2SerializationCapability` take an optional `{ clock }`.
+  - **`BridgeClaimTransaction`** is synced, as an implicitly successful transaction.
+  - **Composition and configuration.** A `./v2` subpath (the ledger-v9 variant) beside `./v1`; both export `Migration`,
+    `Signing` and `coreStateOf`, and their builders gain `withMigration(Defaults)` and `withSigning(Defaults)`.
+    `CustomForkingUnshieldedWallet` composes both variants from your own builders. The root exports
+    `UnshieldedWalletTypes`, `SignSegment`, `UnshieldedSecretKey`, `DefaultUnshieldedSyncConfiguration`,
+    `NodeClientConnection` and `resolveNodeEndpoint`.
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 3.x
+
+  - A booked UTxO is no longer re-admitted as available on resync, which doubled the balance and was saved that way. A
+    snapshot that holds one coin as both available and pending loads it as pending only, so such a wallet repairs itself
+    on its next start.
+  - Bookings are released once sync has caught up and their transaction's TTL has passed; a booking for a transaction
+    that was never submitted used to stay for good. Bookings restored from a 3.x snapshot, which carry no TTL, get one
+    hour from loading.
+  - Balancing a transaction in place books the coins it selects, and does not select one coin for two segments.
+  - A partially successful transaction releases only the coins booked in its failed fallible segments.
+  - Sync refuses a transaction delivered below its position (`OutOfOrderSyncUpdateError`), and the spend of a UTxO the
+    wallet does not hold, instead of applying them, and then retries from the same position. A boundary transaction the
+    indexer delivers again is ignored rather than applied and recorded twice.
+  - The wallet reports itself synced as soon as it applies a new transaction, rather than waiting for the indexer's next
+    progress message, which comes on a timer that backs off while the address is idle; a progress message older than an
+    applied transaction no longer holds it back.
+  - `isConnected` clears when the indexer subscription drops or ends, and the subscription is rebuilt in both cases; it
+    used to stay `true`. The sync's retry back-off is really capped at two minutes.
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-rc.1
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-runtime@2.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0-rc.1
+
 ## 4.0.0-rc.1
 
 ### Major Changes
