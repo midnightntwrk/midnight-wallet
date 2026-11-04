@@ -55,7 +55,6 @@ import {
   getShieldedSeed,
   getUnshieldedSeed,
   shieldedAt,
-  SilentPendingTransactions,
   unshieldedAt,
   v8UnboundOf,
   v9UnboundOf,
@@ -120,7 +119,6 @@ const facadeAt = async (kind: 'schnorr' | 'ecdsa', version: ProtocolVersion.Prot
     unshielded: () => unshielded,
     dust: () => dust,
     provingService: () => createV8MockProvingService(),
-    pendingTransactionsService: () => new SilentPendingTransactions(),
   });
   expect((await rx.firstValueFrom(facade.state())).activeProtocolVersion).toBe(version);
   return facade;

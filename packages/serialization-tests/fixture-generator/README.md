@@ -44,8 +44,8 @@ The old releases are `@midnight-ntwrk/*` packages on GitHub Packages, the same p
 //npm.pkg.github.com/:_authToken=<token>
 ```
 
-`ONLY` takes a comma-separated subset of `shielded,unshielded,dust,tx-history,pending-transactions`. Regenerate only the
-surface you have a reason to touch — every other fixture is a frozen record and must stay byte-identical.
+`ONLY` takes a comma-separated subset of `shielded,unshielded,dust,tx-history,transaction-lifecycle`. Regenerate only
+the surface you have a reason to touch — every other fixture is a frozen record and must stay byte-identical.
 
 Output lands in `../fixtures/<train>/<name>.json` (the generator's own layout). Move each file into the versioned layout
 the tests read, then let prettier settle the formatting:
@@ -56,6 +56,10 @@ mv ../fixtures/facade-4.1.0/unshielded-minimal.json  ../fixtures/unshielded/v1/f
 rmdir ../fixtures/facade-4.1.0
 yarn prettier --write "../fixtures/unshielded/v1/*.json"
 ```
+
+The transaction lifecycle store's `v1` fixtures stay in `../fixtures/pending-transactions/v1/`, the name the store had
+when every release that wrote `v1` shipped; frozen fixtures never move. Its `v2` and later fixtures go in
+`../fixtures/transaction-lifecycle/<version>/`. `FOLDERS_BY_VERSION` in `test/fixtures.ts` maps the one onto the other.
 
 Then recapture the drift baselines for that surface and confirm nothing else moved:
 

@@ -25,7 +25,7 @@
  * 1. a proving backend per ledger version (`provers`)
  * 2. the seed-first start, which is the primary and the only one that crosses a fork
  * 3. reading the protocol phase off the state (`Settled` / `Crossing`)
- * 4. finding transactions the fork orphaned (`PendingStatus.Orphaned`)
+ * 4. finding transactions the fork orphaned (`LifecycleStatus.Orphaned`)
  * 5. persisting and restoring (`serializeState` / `tryRestore`)
  *
  * The same configuration does the right thing on any chain: on one still below the boundary it runs on ledger-v8, on one
@@ -38,6 +38,7 @@ import {
   createKeystore,
   DustWallet,
   InMemoryTransactionHistoryStorage,
+  isAwaiting,
   mergeWalletEntries,
   PublicKey,
   ShieldedWallet,
@@ -160,8 +161,10 @@ switch (state.protocol._tag) {
 // for a timeout — it gives up as soon as it observes a version past the one the transaction was authored for, unbooks
 // the coins so the funds are spendable again, and records `orphaned-by-protocol-upgrade` in transaction history so an
 // application can tell a user why. Re-submitting the same bytes could never help; re-authoring is the answer.
-const orphaned = state.pending.flatMap((entry) => (entry.status._tag === 'Orphaned' ? [entry.status] : []));
-console.log(`Pending transactions: ${state.pending.length}, of which orphaned by the fork: ${orphaned.length}`);
+const orphaned = state.lifecycle.flatMap((entry) => (entry.status._tag === 'Orphaned' ? [entry.status] : []));
+console.log(
+  `Transactions awaiting an answer: ${state.lifecycle.filter(isAwaiting).length}; orphaned by the fork: ${orphaned.length}`,
+);
 orphaned.forEach((status) => console.log(`  authored for ${status.authoredFor}, chain had reached ${status.chainNow}`));
 
 // ---------------------------------------------------------------------------------------------------------------------

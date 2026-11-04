@@ -13,5 +13,7 @@
  * limitations under the License.
  */
 
-export * from './pendingTransactionsService.js';
-export * as PendingTransactions from './pendingTransactions.js';
+export * as TransactionTraits from './transactionTraits.js';
+export * as Lifecycle from './lifecycle.js';
+export * from './lifecycleService.js';
+export * as LifecycleFormat from './SnapshotFormat.js';

@@ -15,6 +15,7 @@ import * as v9 from '@midnightntwrk/wallet-sdk/ledger/v9';
 import {
   type FacadeState,
   generateRandomSeed,
+  isAwaiting,
   Token,
   type UnboundTx,
   WalletTransaction,
@@ -130,7 +131,7 @@ await sponsor.wallet
 const finalSponsorState = await rx.firstValueFrom(
   sponsor.wallet.state().pipe(
     rx.filter((s) => s.isSynced),
-    rx.filter((s) => s.pending.length === 0),
+    rx.filter((s) => !s.lifecycle.some(isAwaiting)),
   ),
 );
 const finalUserState = await user.wallet.waitForSyncedState();

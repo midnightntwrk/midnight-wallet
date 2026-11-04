@@ -37,6 +37,7 @@ import {
   type FinalizedTx,
   NoOpTransactionHistoryStorage,
   ProtocolVersion,
+  type TransactionHistoryStorage,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type WalletEntry } from '../../src/index.js';
@@ -144,6 +145,8 @@ export type SimulatorConfig = {
   simulator: V9.Simulator;
   networkId: NetworkId.NetworkId;
   costParameters: { feeBlocksMargin: number };
+  /** The facade's own history storage; one that keeps nothing when absent. */
+  txHistoryStorage?: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
 };
 
 /** A prover for the facade, which may hand it either ledger version's transactions. */
@@ -366,7 +369,7 @@ export const makeSimulatorFacade = (
           // Dummy values - not used in simulation mode
           indexerClientConnection: { indexerHttpUrl: 'http://unused' },
           relayURL: new URL('ws://unused'),
-          txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>(),
+          txHistoryStorage: config.txHistoryStorage ?? new NoOpTransactionHistoryStorage<WalletEntry>(),
         },
         shielded: () => factories.createShieldedWallet(keys.shieldedKeys),
         unshielded: () => factories.createUnshieldedWallet(keys.unshieldedKeystore),
