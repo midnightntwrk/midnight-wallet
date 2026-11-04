@@ -78,10 +78,9 @@ const isEmptyHash = (hash: string): boolean => /^(0x)?0*$/.test(hash);
  *   `WsProvider.disconnect()` is fire-and-forget: it dispatches the close frame and returns while the socket is still
  *   CLOSING, and `isConnected` only flips false once the close event fires. A caller that returns without waiting
  *   leaves the next `ensureConnection()` reading a stale `true`: it skips the reconnect, drops its readiness probe on
- *   the dying socket, sleeps `reconnectionDelay`, reconnects, and usually fails one more pre-open probe — seconds lost
- *   on every call. Locally the close-ack lands fast enough to hide this; against a remote node it does not. Both places
- *   that release the socket — the build in `make()` and the last call's `#deregister` — wait here, so the two cannot
- *   drift.
+ *   the dying socket, sleeps `reconnectionDelay` and reconnects — a second or more lost on every call. Locally the
+ *   close-ack lands fast enough to hide this; against a remote node it does not. Both places that release the socket —
+ *   the build in `make()` and the last call's `#deregister` — wait here, so the two cannot drift.
  *
  *   The wait shares the caller's bound. A node that completes the handshake and then goes half-open never acknowledges
  *   the close frame, and only ws's own 30-second close timeout would end the wait. A finite bound is therefore honoured
@@ -109,6 +108,43 @@ const disconnectAndAwaitClose = (api: ApiPromise, bound: Duration.Duration): Pro
       closeTimer.handle = setTimeout(resolve, toTimerMillis(bound));
     }
     void api.disconnect();
+  });
+
+/**
+ * Waits for the handshake of a socket that `connect()` has just started, whichever way it ends.
+ *
+ * @remarks
+ *   `connect()` resolves once the WebSocket is constructed, before it has opened; `isConnected` turns true only with
+ *   `connected`. A request sent in between is rejected with `WebSocket is not connected`, which polkadot.js prints at
+ *   error level before any caller can handle it, so a readiness probe sent then is certain to fail, is logged, and
+ *   costs the retry a `reconnectionDelay`.
+ *
+ *   A refused handshake ends with `disconnected` and no `connected`, and the wait ends with it: nothing else would end
+ *   it, because the provider stops retrying for good once `make()` has called `disconnect()`, and under the default
+ *   `reconnectionTimeout` no bound would either. The refusal is then one failed attempt for the retry loop.
+ *
+ *   An api already connected has nothing to wait for and settles at once. The check and the registration run in one
+ *   synchronous step, so no event can fall between them. Both listeners are removed once either fires or the wait is
+ *   interrupted, so reconnects do not accumulate them.
+ * @param api - The api whose socket is opening.
+ * @returns An effect that completes once the socket has opened or closed.
+ */
+const awaitHandshake = (api: ApiPromise): Effect.Effect<void> =>
+  Effect.async<void>((resume) => {
+    if (api.isConnected) {
+      return resume(Effect.void);
+    }
+    const removeListeners = (): void => {
+      api.off('connected', settle);
+      api.off('disconnected', settle);
+    };
+    const settle = (): void => {
+      removeListeners();
+      resume(Effect.void);
+    };
+    api.on('connected', settle);
+    api.on('disconnected', settle);
+    return Effect.sync(removeListeners);
   });
 
 export const DEFAULT_CONFIG = {
@@ -233,6 +269,16 @@ export class PolkadotNodeClient implements NodeClient.Service {
    *   reconnects through `ensureConnection`.
    */
   readonly #activeCalls: SynchronizedRef.SynchronizedRef<number>;
+  /**
+   * Admits one call at a time to opening the shared socket.
+   *
+   * @remarks
+   *   `connect()` is rejected while a socket already exists, and the rejection does not say whether that socket is still
+   *   opening or when it will. A call that arrives during another call's handshake therefore waits here rather than
+   *   calling `connect()` and probing early. Once admitted, it finds the socket open, or closed after a refused
+   *   handshake, in which case it opens one of its own.
+   */
+  readonly #opening = Effect.makeSemaphore(1).pipe(Effect.runSync);
 
   constructor(config: Config, api: ApiPromise, activeCalls: SynchronizedRef.SynchronizedRef<number>) {
     this.config = config;
@@ -275,12 +321,19 @@ export class PolkadotNodeClient implements NodeClient.Service {
           // bypasses the typed ConnectionError mapping below and kills the caller's fibre as a crash. A rejection here
           // is one failed attempt, not a verdict — the probe below decides usability and the schedule retries, with
           // the surrounding timeout as the overall bound. This also covers WsProvider's rejection when a WebSocket
-          // already exists (a connection in progress), which the repeat loop routinely races into.
-          Effect.tryPromise(async () => {
-            if (!this.api.isConnected) {
-              await this.api.connect();
-            }
-          }),
+          // already exists (a connection in progress): calls on this client wait for one another's handshakes, so only
+          // a handshake left unfinished by an interrupted call leads here.
+          pipe(
+            Effect.tryPromise(async () => {
+              if (!this.api.isConnected) {
+                await this.api.connect();
+              }
+            }),
+            // Only after a `connect()` that resolved: a socket now exists, and it will open or close. A rejected one may
+            // have left no socket at all, and so no event to wait for.
+            Effect.andThen(awaitHandshake(this.api)),
+            this.#opening.withPermits(1),
+          ),
           Effect.catchAll(() => Effect.void),
           // Readiness is established by making a call, not by reading `isConnected`. That flag goes true when the
           // socket opens, which is earlier than the api can serve requests: after `make()` disconnects to release the

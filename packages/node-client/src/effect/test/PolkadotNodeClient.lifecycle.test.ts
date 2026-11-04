@@ -241,9 +241,8 @@ describe('PolkadotNodeClient lifecycle', () => {
   it('waits for the socket to actually close when the last call releases it', async () => {
     // `api.disconnect()` returns while the socket is still CLOSING; `isConnected` clears only when the close event
     // fires. A release that does not wait leaves the next call reading a stale `true`: it skips `connect()`, drops its
-    // readiness probe on the dying socket, sleeps `reconnectionDelay`, reconnects, and usually fails one more pre-open
-    // probe — two seconds or more of a liveness read's ten-second budget. `make()` already waits for the event for this
-    // reason; the release path must too.
+    // readiness probe on the dying socket, sleeps `reconnectionDelay` and reconnects — a second or more of a liveness
+    // read's ten-second budget. `make()` already waits for the event for this reason; the release path must too.
     const { client } = await makeClient();
     mockApi.rpc.chain.getBlock.mockResolvedValue({ block: { extrinsics: [] } });
 
