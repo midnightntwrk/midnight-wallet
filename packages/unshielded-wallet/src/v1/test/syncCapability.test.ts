@@ -16,7 +16,7 @@
 // beyond the end of the variant's activation range is not applied AT ALL — no UTXO change, no `appliedId` bump, no
 // transaction-history write — and only its version is recorded, which is what triggers the hand-over. Because the
 // cursor did not move, the next variant re-fetches that same transaction and applies it exactly once.
-import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
+import { IndexerLiveness, NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Either, HashMap } from 'effect';
 import { describe, expect, it } from 'vitest';
@@ -324,5 +324,71 @@ describe('unshielded sync capability ordering', () => {
 
     expect(HashMap.size(afterSpend.state.availableUtxos)).toBe(0);
     expect(afterSpend.progress.appliedId).toBe(2n);
+  });
+});
+
+describe('unshielded sync capability completeness on a quiet address', () => {
+  // The source reports this address's highest transaction id on a progress message of its own, on a timer that backs
+  // off while the address is idle, and from a short-lived cache. A transaction is delivered as soon as it is indexed, so
+  // the progress message that would name it can arrive minutes later — or a stale one can arrive after it.
+  const caughtUp = (capability: ReturnType<typeof setup>['capability'], appliedId: number): CoreWallet =>
+    [
+      { type: 'IndexerLiveness' as const, verdict: IndexerLiveness.Skipped({ reason: 'no-node-configured' }) },
+      fixtureProgress(appliedId, 3),
+    ].reduce(
+      (wallet, update) => capability.applyUpdate(wallet, update, activeRange).pipe(EitherOps.getOrThrowLeft),
+      emptyWallet(3n, BigInt(appliedId)),
+    );
+
+  const applyNewTransaction = (capability: ReturnType<typeof setup>['capability'], wallet: CoreWallet): CoreWallet =>
+    capability
+      .applyUpdate(
+        wallet,
+        fixtureTransaction({ id: 9, protocolVersion: 3, createdUtxos: [fixtureUtxo(owner, 100n, 0)] }),
+        activeRange,
+      )
+      .pipe(EitherOps.getOrThrowLeft);
+
+  it('should report a caught-up wallet complete once it applies a new transaction, because a delivered transaction proves the address reaches at least that far', () => {
+    const { capability } = setup();
+    const before = caughtUp(capability, 1);
+    expect(before.progress.isStrictlyComplete()).toBe(true);
+
+    const result = applyNewTransaction(capability, before);
+
+    expect(result.progress.appliedId).toBe(9n);
+    expect(result.progress.highestTransactionId).toBe(9n);
+    expect(result.progress.isStrictlyComplete()).toBe(true);
+  });
+
+  it('should stay complete when a progress message older than an applied transaction arrives after it, so a stale tip cannot pull the wallet back', () => {
+    const { capability } = setup();
+    const applied = applyNewTransaction(capability, caughtUp(capability, 1));
+
+    const result = capability.applyUpdate(applied, fixtureProgress(1, 3), activeRange).pipe(EitherOps.getOrThrowLeft);
+
+    expect(result.progress.highestTransactionId).toBe(9n);
+    expect(result.progress.isStrictlyComplete()).toBe(true);
+  });
+
+  it('should report incomplete when progress names a transaction beyond the applied one, so a real gap still holds the wallet back', () => {
+    const { capability } = setup();
+    const applied = applyNewTransaction(capability, caughtUp(capability, 1));
+
+    const result = capability.applyUpdate(applied, fixtureProgress(12, 3), activeRange).pipe(EitherOps.getOrThrowLeft);
+
+    expect(result.progress.highestTransactionId).toBe(12n);
+    expect(result.progress.isStrictlyComplete()).toBe(false);
+  });
+
+  it('should leave the tip where it is for a transaction beyond the variant boundary, because the hand-over still owes it', () => {
+    const { capability } = setup();
+
+    const result = capability
+      .applyUpdate(caughtUp(capability, 1), fixtureTransaction({ id: 9, protocolVersion: 7 }), activeRange)
+      .pipe(EitherOps.getOrThrowLeft);
+
+    expect(result.progress.appliedId).toBe(1n);
+    expect(result.progress.highestTransactionId).toBe(1n);
   });
 });
