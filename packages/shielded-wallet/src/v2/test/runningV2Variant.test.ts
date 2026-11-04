@@ -423,4 +423,31 @@ describe('RunningV2Variant.startSync tx-history of a transfer split across sync 
   it('should record a split transfer as soon as the wallet catches up, because a live timeline never ends to release it', async () => {
     expect(await writesOfTransfer(transferIn([1, 2]), 'stays open')).toEqual([{ received: 1, spent: 1 }]);
   });
+
+  /**
+   * The transfer's events as ids 2..4, followed by id 5 from the protocol version after this variant's range, cut into
+   * consecutive sync batches of the given sizes. Event 5 is deferred to the next variant, so its bytes are never read.
+   */
+  const transferThenNextVersionIn = (sizes: readonly number[]): readonly WalletSyncUpdate[] => {
+    const maxId = 2 + chain.transferHex.length;
+    const transfer = chain.transferHex.map((raw, i): EventsSyncUpdate => ({
+      _tag: 'EventsSyncUpdate',
+      id: i + 2,
+      protocolVersion: 3,
+      maxId,
+      raw,
+    }));
+    const nextVersion: EventsSyncUpdate = { _tag: 'EventsSyncUpdate', id: maxId, protocolVersion: 7, maxId, raw: '' };
+    const items = [...transfer, nextVersion];
+    return sizes.map((size, i) => {
+      const start = sizes.slice(0, i).reduce((sum, n) => sum + n, 0);
+      return WalletSyncUpdate.create(items.slice(start, start + size), keys(), new Date('2026-11-04T12:00:00Z'));
+    });
+  };
+
+  it('should record a split transfer when the batch that completes it hands over to the next variant, because the runtime closes this variant rather than ending its timeline', async () => {
+    expect(await writesOfTransfer(transferThenNextVersionIn([1, 3]), 'stays open')).toEqual([
+      { received: 1, spent: 1 },
+    ]);
+  });
 });
