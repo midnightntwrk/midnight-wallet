@@ -17,3 +17,6 @@ Fixes and other changes since 1.x
 - Each of the client's calls waits for the socket to open before using it, so they work right after `make()`, and a call
   after an idle gap no longer waits an extra `reconnectionDelay`. A node that accepts the socket but fails three
   readiness probes in a row is reported as a `ConnectionError`.
+- `./testing` declares the packages it imports, `@effect/platform`, `tar-stream` and `testcontainers`, as optional peer
+  dependencies beside `@midnightntwrk/ledger-v9` and `@midnightntwrk/wallet-sdk-prover-client`; install them to use
+  it. 1.x left them undeclared, so `./testing` failed to resolve unless something else had installed them.
