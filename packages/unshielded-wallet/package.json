@@ -42,7 +42,7 @@
     "@midnightntwrk/wallet-sdk-indexer-client": "2.0.0-rc.1",
     "@midnightntwrk/wallet-sdk-runtime": "2.0.0-rc.1",
     "@midnightntwrk/wallet-sdk-utilities": "1.2.2-rc.0",
-    "effect": "^3.19.19",
+    "effect": "^4.0.0",
     "rxjs": "^7.8.2"
   },
   "scripts": {
@@ -60,7 +60,7 @@
   },
   "devDependencies": {
     "@midnightntwrk/wallet-sdk-hd": "^3.1.0-rc.0",
-    "@noble/curves": "1.9.7",
-    "@noble/hashes": "1.8.0"
+    "@noble/curves": "2.4.0",
+    "@noble/hashes": "2.4.0"
   }
 }

@@ -13,11 +13,11 @@
   "dependencies": {
     "@midnight-ntwrk/ledger-v8": "^8.1.0",
     "@midnightntwrk/ledger-v9": "1.0.0-rc.6",
-    "@noble/curves": "^1.8.1",
+    "@noble/curves": "^2.0.0",
     "@scure/base": "^2.0.0",
     "@scure/bip32": "^2.0.1",
     "@subsquid/scale-codec": "^4.0.1",
-    "commander": "^14.0.0"
+    "commander": "^15.0.0"
   },
   "devDependencies": {
     "tsx": "4.23.15"
