@@ -29,7 +29,7 @@ import type {
 } from '@midnightntwrk/wallet-sdk-indexer-client';
 import { QueryClient, SubscriptionClient } from '@midnightntwrk/wallet-sdk-indexer-client/effect';
 import { type ClientError, ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Cause, Chunk, Effect, Exit, Option, Stream } from 'effect';
+import { Cause, Chunk, Effect, Either, Exit, Option, Stream } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet, PublicKey } from '../CoreWallet.js';
 import {
@@ -54,6 +54,7 @@ import {
   StateUpdate,
 } from '../SyncSchema.js';
 import { leBigintToHex } from '../Utils.js';
+import { makeDefaultV2SerializationCapability } from '../Serialization.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -1096,6 +1097,107 @@ describe('V2 projections indexer request shape', () => {
       { start: 0, end: 4 },
       { start: 6, end: 8 },
       { start: 10, end: 11 },
+    ]);
+  });
+});
+
+/**
+ * Where a projections pass resumes after the wallet was saved and restored.
+ *
+ * @remarks
+ *   A pass asks the indexer for the dtime updates of the wallet's own generations after the block it last synced to — its
+ *   `dtimeCutoffHeight` — and `0` asks for all of them. The trees' first free indices, the rest of where a pass stands,
+ *   live in the ledger state and survive any restore; the height does not, unless the snapshot records it. Without it,
+ *   every restart of a long-lived wallet replays its whole dtime history again.
+ */
+describe('V2 projections resume height across a restore', () => {
+  const secretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+  const serialization = makeDefaultV2SerializationCapability();
+  const lastSyncedHeight = 169_512;
+
+  const notCalled = (name: string) => (): never => {
+    throw new Error(`${name} must not be called in this scenario`);
+  };
+
+  const rootHex = (root: bigint | undefined): string => (root !== undefined ? leBigintToHex(root) : '');
+
+  /** A block whose dust trees are empty, so a pass over an empty wallet has nothing to fetch but the generations. */
+  const blockAt = (height: number, wallet: CoreWallet): BlockData => ({
+    height,
+    hash: '00'.repeat(32),
+    protocolVersion: V9_NATIVE,
+    ledgerParameters: LedgerParameters.initialParameters(),
+    timestamp: new Date(1_700_000_000_000),
+    zswapEndIndex: 0,
+    dustCommitmentEndIndex: 0,
+    dustGenerationEndIndex: 0,
+    dustCommitmentMerkleTreeRoot: rootHex(wallet.state.commitmentTreeRoot()),
+    dustGenerationMerkleTreeRoot: rootHex(wallet.state.generatingTreeRoot()),
+  });
+
+  /**
+   * A wallet whose last projections pass finished at `height`: the update a pass ends with, adding and spending
+   * nothing.
+   */
+  const syncedByProjectionsTo = (height: number): CoreWallet => {
+    const empty = CoreWallet.initEmpty(dustParameters, secretKey, networkId);
+    const [synced] = makeEventLessSyncCapability().applyUpdate(
+      empty,
+      StateUpdate({
+        dustGenerations: { rawUpdates: [], newGenerations: [], generationDtimeUpdates: [] },
+        newUtxos: DustUtxoMap.create([]),
+        spentUtxos: DustUtxoMap.create([]),
+        collapsedCommitments: [],
+        latestBlock: blockAt(height, empty),
+      }),
+      fullSpan,
+    );
+    return synced;
+  };
+
+  const restored = (wallet: CoreWallet): CoreWallet =>
+    Either.getOrThrow(serialization.deserialize(null, serialization.serialize(wallet)));
+
+  /** Runs the next projections pass on `wallet` and returns the heights it asked for dtime updates after. */
+  const dtimeCutoffsOfNextPass = async (wallet: CoreWallet): Promise<readonly number[]> => {
+    const recorded: { cutoffs: number[] } = { cutoffs: [] };
+
+    const indexerSyncService: IndexerSyncService = {
+      // The chain has moved on since the pass that wrote the snapshot.
+      blockData: () => Effect.succeed(blockAt(lastSyncedHeight + 88, wallet)),
+      subscribeDustGenerations: (_address, dtimeCutoffHeight) => {
+        recorded.cutoffs.push(dtimeCutoffHeight);
+        return Stream.empty;
+      },
+      // An empty wallet tracks no nullifiers and its block has no commitments, so neither phase reaches the indexer.
+      subscribeDustNullifierTransactions: notCalled('subscribeDustNullifierTransactions'),
+      dustCommitmentMerkleTreeUpdate: notCalled('dustCommitmentMerkleTreeUpdate'),
+      connectionLayer: notCalled('connectionLayer'),
+      subscribeWallet: notCalled('subscribeWallet'),
+      queryClient: notCalled('queryClient'),
+    };
+
+    await doEventlessSync(wallet, secretKey, 7, indexerSyncService).pipe(
+      Stream.runDrain,
+      Effect.provideService(QueryClient, { query: notCalled('QueryClient.query') }),
+      Effect.provideService(SubscriptionClient, {
+        subscribe: notCalled('SubscriptionClient.subscribe'),
+        subscribeWithBackpressure: notCalled('SubscriptionClient.subscribeWithBackpressure'),
+      }),
+      Effect.scoped,
+      Effect.runPromise,
+    );
+
+    return recorded.cutoffs;
+  };
+
+  it('should resume from the height its last pass reached, so a restart does not replay its dtime updates from block 0', async () => {
+    expect(await dtimeCutoffsOfNextPass(restored(syncedByProjectionsTo(lastSyncedHeight)))).toEqual([lastSyncedHeight]);
+  });
+
+  it('should resume from block 0 when no projections pass wrote the snapshot, because then no height was recorded', async () => {
+    expect(await dtimeCutoffsOfNextPass(restored(CoreWallet.initEmpty(dustParameters, secretKey, networkId)))).toEqual([
+      0,
     ]);
   });
 });
