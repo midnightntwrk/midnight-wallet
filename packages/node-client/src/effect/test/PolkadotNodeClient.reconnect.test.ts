@@ -30,11 +30,13 @@ const socket: { state: SocketState; failedRequests: readonly string[] } = {
  * @remarks
  *   `connect()` resolves as soon as the WebSocket is constructed and leaves the socket connecting until the test
  *   completes the handshake with {@link completeHandshake}; only then does `isConnected` turn true and `connected` fire.
- *   `isConnected` stays true while the socket is closing, because the provider clears it only when the close event
- *   fires. A request on a socket that is not open fails, and polkadot.js logs every failed request at error level, so
- *   `socket.failedRequests` records what a consumer would have seen printed. The provider rejects a request on a
- *   connecting socket at once and one on a closing socket when the close lands; the fake rejects both at once, which
- *   fails the same requests. A `connect()` while a socket already exists is rejected, as the provider rejects it.
+ *   {@link refuseHandshake} ends it the other way, with `disconnected` and no open; nothing reconnects on its own after
+ *   that, because the provider's own retries stop for good once `make()` has called `disconnect()`. `isConnected` stays
+ *   true while the socket is closing, because the provider clears it only when the close event fires. A request on a
+ *   socket that is not open fails, and polkadot.js logs every failed request at error level, so `socket.failedRequests`
+ *   records what a consumer would have seen printed. The provider rejects a request on a connecting socket at once and
+ *   one on a closing socket when the close lands; the fake rejects both at once, which fails the same requests. A
+ *   `connect()` while a socket already exists is rejected, as the provider rejects it.
  */
 const fakeApi = {
   events: new EventEmitter(),
@@ -89,11 +91,47 @@ const fakeApi = {
   genesisHash: `0x${'00'.repeat(32)}`,
 };
 
-/** Completes the handshake of the connecting socket — the network's doing, not the client's. */
+/**
+ * Completes the handshake of the connecting socket — the network's doing, not the client's.
+ *
+ * @remarks
+ *   Only a socket that is connecting can open: with none in progress this does nothing, so a client that is waiting for a
+ *   handshake it never started is not woken by one.
+ */
 const completeHandshake = (): void => {
-  socket.state = 'open';
-  fakeApi.events.emit('connected');
+  if (socket.state === 'connecting') {
+    socket.state = 'open';
+    fakeApi.events.emit('connected');
+  }
 };
+
+/** Ends the connecting socket's handshake without opening it, as a node refusing the connection does. */
+const refuseHandshake = (): void => {
+  if (socket.state === 'connecting') {
+    socket.state = 'closed';
+    fakeApi.events.emit('disconnected');
+  }
+};
+
+/**
+ * Waits up to a second for a forked call to settle, then labels how it did.
+ *
+ * @remarks
+ *   A bound, not a wait: a call that is not held up settles at once, and only one sitting out a `reconnectionDelay` far
+ *   longer than the bound reaches it. The label makes a failing assertion say whether the call was still waiting or
+ *   failed, and why. A call still waiting is interrupted, so it does not outlive the test.
+ */
+const settleWithin = <A, E>(fiber: Fiber.Fiber<A, E>): Effect.Effect<string> =>
+  Fiber.await(fiber).pipe(
+    Effect.timeoutOption(Duration.seconds(1)),
+    Effect.tap(() => Fiber.interrupt(fiber)),
+    Effect.map(
+      Option.match({
+        onNone: () => 'still waiting',
+        onSome: Exit.match({ onSuccess: () => 'succeeded', onFailure: (cause) => Cause.pretty(cause) }),
+      }),
+    ),
+  );
 
 /** Waits until the client has driven the fake's socket into `state`. */
 const untilSocketIs = (state: SocketState) =>
@@ -131,7 +169,7 @@ describe('PolkadotNodeClient reconnect', () => {
     // scheduled a minute later.
     const reconnectionDelay = Duration.minutes(1);
 
-    const settled = await Effect.runPromise(
+    const outcome = await Effect.runPromise(
       Effect.gen(function* () {
         const client = yield* PolkadotNodeClient.make({ nodeURL: new URL('ws://127.0.0.1:9944'), reconnectionDelay });
         // `make()` released the socket, so the call below starts from the idle state every later call starts from.
@@ -141,20 +179,54 @@ describe('PolkadotNodeClient reconnect', () => {
         // `connect()` resolves to have sent that probe.
         yield* Effect.sleep(Duration.millis(50));
         completeHandshake();
-        // A bound, not a wait: a call that probes after the open finishes at once, and only one sitting out
-        // `reconnectionDelay` reaches it.
-        const settled = yield* Fiber.await(fiber).pipe(Effect.timeoutOption(Duration.seconds(1)));
-        yield* Fiber.interrupt(fiber);
-        return settled;
+        return yield* settleWithin(fiber);
       }).pipe(Effect.scoped),
     );
 
     expect(socket.failedRequests).toEqual([]);
-    // Compared as a label, so a failure says whether the call was still waiting or failed, and why.
-    const outcome = Option.match(settled, {
-      onNone: () => 'still waiting',
-      onSome: Exit.match({ onSuccess: () => 'succeeded', onFailure: (cause) => Cause.pretty(cause) }),
-    });
     expect(outcome).toBe('succeeded');
+  });
+
+  it('should retry after a handshake that closes without opening, so a refused connection is one failed attempt rather than a wait that never ends', async () => {
+    // Short, so the retry follows at once. `reconnectionTimeout` keeps its default, infinite, so nothing but the
+    // client's own retry can end a wait for an open that will not come.
+    const reconnectionDelay = Duration.millis(10);
+
+    const outcome = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* PolkadotNodeClient.make({ nodeURL: new URL('ws://127.0.0.1:9944'), reconnectionDelay });
+        const fiber = yield* Effect.forkDaemon(client.getFinalizedBlock());
+        yield* untilSocketIs('connecting');
+        refuseHandshake();
+        // The retry's handshake. Bounded, so a client that never retries reaches the assertion below, not the test's
+        // timeout; with no handshake in progress, `completeHandshake` then opens nothing.
+        yield* untilSocketIs('connecting').pipe(Effect.timeoutOption(Duration.seconds(1)));
+        completeHandshake();
+        return yield* settleWithin(fiber);
+      }).pipe(Effect.scoped),
+    );
+
+    expect(outcome).toBe('succeeded');
+  });
+
+  it("should hold a call that arrives during another call's handshake until that handshake opens, so concurrent calls neither fail a request nor wait reconnectionDelay", async () => {
+    // As in the first test: a call that probes before the open could not sit out its retry inside the test.
+    const reconnectionDelay = Duration.minutes(1);
+
+    const outcomes = await Effect.runPromise(
+      Effect.gen(function* () {
+        const client = yield* PolkadotNodeClient.make({ nodeURL: new URL('ws://127.0.0.1:9944'), reconnectionDelay });
+        const first = yield* Effect.forkDaemon(client.getFinalizedBlock());
+        yield* untilSocketIs('connecting');
+        // Started only once the first call's handshake is under way, as a second read on the same client is.
+        const second = yield* Effect.forkDaemon(client.getFinalizedBlock());
+        yield* Effect.sleep(Duration.millis(50));
+        completeHandshake();
+        return yield* Effect.all([settleWithin(first), settleWithin(second)], { concurrency: 'unbounded' });
+      }).pipe(Effect.scoped),
+    );
+
+    expect(socket.failedRequests).toEqual([]);
+    expect(outcomes).toEqual(['succeeded', 'succeeded']);
   });
 });
