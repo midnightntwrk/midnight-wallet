@@ -70,8 +70,7 @@ export const NETWORK_PRESETS: Record<RemoteNetwork, RemoteNetworkPreset> = {
   qanet: {
     networkId: NetworkId.NetworkId.QaNet,
     indexerHttpUrl: 'https://indexer.qanet.midnight.network/api/v4/graphql',
-    // NB: qanet ws is served from the `indexer-blue` host — preserved from upstream.
-    indexerWsUrl: 'wss://indexer-blue.qanet.midnight.network/api/v4/graphql/ws',
+    indexerWsUrl: 'wss://indexer.qanet.midnight.network/api/v4/graphql/ws',
     nodeUrl: 'wss://rpc.qanet.midnight.network',
   },
   preview: {
@@ -135,6 +134,9 @@ export const makeEnvironment = (
       // The same boundary the shielded configuration names, for the same reason: this testkit's environments all run
       // the ledger-v9-native node line, so the dust wallet reaches its V2 variant too.
       forks: ProtocolVersion.V9NativeForkSchedule,
+      // A fresh wallet on a network that crossed the v9 fork starts its Dust at the boundary instead of replaying the
+      // ledger-v8 history; on a network that runs ledger-v9 from its first block there is nothing to skip.
+      skipLedgerV8DustHistory: true,
     };
   },
   down: options.down ?? (async () => {}),

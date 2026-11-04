@@ -10,210 +10,436 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { firstValueFrom } from 'rxjs';
-import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnightntwrk/ledger-v9';
-import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import * as utils from './utils.js';
-import { exit } from 'node:process';
-import { logger } from './logger.js';
-import { type CombinedTokenTransfer } from '@midnightntwrk/wallet-sdk-facade';
+import * as rx from 'rxjs';
+import { randomBytes } from 'node:crypto';
 import { inspect } from 'node:util';
-import { Buffer } from 'buffer';
+import * as ledger from '@midnightntwrk/ledger-v9';
+import {
+  type CombinedTokenTransfer,
+  type FacadeState,
+  isFinalizedWalletEntry,
+  type UtxoWithMeta,
+} from '@midnightntwrk/wallet-sdk-facade';
+import { isInsufficientDustForFeeError } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { useTestContainersFixture } from './test-fixture.js';
+import { carried } from './helpers/transactions.js';
+import * as utils from './utils.js';
+import { logger } from './logger.js';
 
-/** Tests performing a token transfer */
+// Provisions the wallets the remote suites run against. Run it on its own with `yarn test-fund`; no other run selects
+// it, so a nightly or a bare `yarn test-e2e` never spends the funding wallet.
+//
+//   SEED                 the wallet the funds come from (a faucet wallet) — required
+//   SEED2                the test wallet to fund — required unless FUND_RANDOM_TARGET=true. Point it at whichever wallet
+//                        a suite runs on: the dust healthchecks' wallet (the suites' own SEED), NT_SEED, NT_SEED2, ...
+//   FUND_RANDOM_TARGET   `true` funds a freshly generated wallet instead of SEED2 and logs its seed
+//   SEED_STABLE          the balance-constant wallet; its test is skipped when unset
+//
+// These names mean something different here than in the suites, where SEED is a test wallet. `setup-env.ts` loads the
+// repository's `.env` with `override: true`, so values set on the command line are replaced by the `.env` ones: set
+// them in `.env`, or run from a checkout that has none.
 
-// Purpose of this script is to setup up the test wallets used for remote tests.
-// SEED should be a wallet with funds e.g. faucet wallet
-// SEED2 should be a wallet to receive funds to be used for testting
-describe('Set up test wallet', () => {
-  if (process.env['SEED2'] === undefined || process.env['SEED'] === undefined) {
-    logger.info('SEED or SEED2 or SEED_STABLE env vars not set');
-    exit(1);
+/** An empty value, as `NAME=` in `.env` leaves, counts as unset. */
+const envOf = (name: string): string | undefined => {
+  const value = process.env[name];
+  return value === undefined || value === '' ? undefined : value;
+};
+
+const fundedSeed = envOf('SEED');
+const useRandomTarget = envOf('FUND_RANDOM_TARGET') === 'true';
+const targetSeed = useRandomTarget ? randomBytes(32).toString('hex') : envOf('SEED2');
+const stableSeed = envOf('SEED_STABLE');
+
+const unshieldedTokenRaw = ledger.unshieldedToken().raw;
+
+/** The amount a test wallet normally receives in one UTxO. */
+const BASE_AMOUNT = utils.tNightAmount(1000n);
+/** One Night UTxO is this much larger and registered, so the wallet generates enough Dust to pay its own fees. */
+const DUST_GENERATOR_AMOUNT = BASE_AMOUNT * 10n;
+/**
+ * The dust healthchecks register two unregistered Night UTxOs and then deregister two registered ones, so the wallet
+ * needs at least two of each: the registered generator and one more registered UTxO, and two unregistered others.
+ *
+ * Registration belongs to the wallet's Night address, not to a UTxO: the ledger creates Dust generation for every Night
+ * output whose owner has a registration. Funding can therefore add unregistered UTxOs only to a wallet with no
+ * registered Night; Night sent to a registered wallet arrives registered.
+ */
+const MIN_NIGHT_UTXOS = 5;
+const MIN_UNREGISTERED_OTHERS = 2;
+const MIN_REGISTERED = 2;
+/**
+ * Shielded balances every test wallet holds at least: tNight, and the two native tokens the native-token transfer suite
+ * moves between its wallets. They are the stable wallet's amounts, which the stable wallet holds exactly.
+ */
+const TEST_WALLET_SHIELDED_MINIMUMS = [
+  utils.STABLE_WALLET.shielded,
+  utils.STABLE_WALLET.nativeToken1,
+  utils.STABLE_WALLET.nativeToken2,
+] as const;
+
+const syncTimeout = 90 * 60 * 1000;
+/** A single wait inside a test; shorter than the test's own timeout so a stalled stage reports which one it was. */
+const stageTimeout = 30 * 60 * 1000;
+const stopTimeout = 600_000;
+
+const balanceOf = (balances: Record<string, bigint>, tokenType: string): bigint => balances[tokenType] ?? 0n;
+
+const nightUtxosOf = (state: FacadeState): readonly UtxoWithMeta[] =>
+  state.unshielded.availableCoins.filter((coin) => coin.utxo.type === unshieldedTokenRaw);
+
+const isGenerator = (coin: UtxoWithMeta): boolean => coin.utxo.value >= DUST_GENERATOR_AMOUNT;
+
+const dustOf = (state: FacadeState): bigint => state.dust.balance(new Date());
+
+const holdsShieldedMinimums = (state: FacadeState): boolean =>
+  TEST_WALLET_SHIELDED_MINIMUMS.every(
+    ({ tokenType, amount }) => balanceOf(state.shielded.balances, tokenType) >= amount,
+  );
+
+/** What a set of transfers takes out of the sender, per balance kind and token. */
+const requiredFrom = (transfers: readonly CombinedTokenTransfer[]) =>
+  transfers.flatMap((transfer) =>
+    transfer.outputs.map((output) => ({ kind: transfer.type, tokenType: output.type, amount: output.amount })),
+  );
+
+/** Fails before anything is built when the funding wallet cannot cover every output it is about to send. */
+const assertFunderCovers = (state: FacadeState, transfers: readonly CombinedTokenTransfer[]): void => {
+  const groups = Object.groupBy(requiredFrom(transfers), ({ kind, tokenType }) => `${kind}:${tokenType}`);
+  const totals = Object.values(groups).flatMap((group = []) =>
+    group.slice(0, 1).map(({ kind, tokenType }) => ({
+      kind,
+      tokenType,
+      needed: group.reduce((total, r) => total + r.amount, 0n),
+    })),
+  );
+  const shortfalls = totals
+    .map((total) => ({ ...total, held: balanceOf(state[total.kind].balances, total.tokenType) }))
+    .filter(({ needed, held }) => held < needed);
+
+  expect(
+    shortfalls,
+    `Funding wallet (SEED) cannot cover the transfer: ${shortfalls
+      .map(({ kind, tokenType, needed, held }) => `${kind} ${tokenType} needs ${needed}, holds ${held}`)
+      .join('; ')}`,
+  ).toEqual([]);
+};
+
+/**
+ * Waits for a submitted transaction to finalize successfully. A rejected or expired transaction clears the wallet's
+ * pending coins just as a successful one does, so the outcome is read from the transaction history instead.
+ */
+const expectSucceeded = async (
+  wallet: utils.WalletInit,
+  finalized: Parameters<typeof wallet.wallet.submitTransaction>[0],
+  what: string,
+): Promise<void> => {
+  const txHash = carried<ledger.FinalizedTransaction>(finalized).transactionHash();
+  const entry = await utils.waitForTxInHistory(txHash, wallet.wallet);
+  expect(isFinalizedWalletEntry(entry) && entry.status, `${what} ${txHash} did not succeed`).toBe('SUCCESS');
+};
+
+const submitTransfer = async (sender: utils.WalletInit, transfers: CombinedTokenTransfer[]): Promise<string> => {
+  const recipe = await sender.wallet.transferTransaction(transfers, { ttl: new Date(Date.now() + 30 * 60 * 1000) });
+  const signed = await sender.wallet.signRecipe(recipe, sender.unshieldedKeystore.signDataAsync);
+  const finalized = await sender.wallet.finalizeRecipe(signed);
+  const txId = await sender.wallet.submitTransaction(finalized);
+  logger.info(`Funding transaction submitted: ${txId}`);
+  await expectSucceeded(sender, finalized, 'Funding transaction');
+  await utils.waitForFacadePendingClear(sender.wallet);
+  return txId;
+};
+
+const waitForState = (
+  wallet: utils.WalletInit,
+  predicate: (state: FacadeState) => boolean,
+  what: string,
+  timeoutMs: number = stageTimeout,
+) =>
+  rx.firstValueFrom(
+    wallet.wallet.state().pipe(
+      rx.filter((state) => state.isSynced && predicate(state)),
+      rx.timeout({
+        first: timeoutMs,
+        with: () => rx.throwError(() => new Error(`Timed out waiting for ${what}`)),
+      }),
+    ),
+  );
+
+/** How many times a registration is rebuilt after waiting out a fee shortfall before the script gives up. */
+const MAX_REGISTRATION_ATTEMPTS = 3;
+
+/**
+ * Registers Night UTxOs for Dust generation in one transaction. A wallet with no Dust yet pays the registration fee out
+ * of the Dust the UTxOs themselves have generated, so when that falls short the call is retried once generation is
+ * estimated to cover it. Each retry builds a new transaction whose fee can differ from the last, so a retry can fall
+ * short again; it is retried up to {@link MAX_REGISTRATION_ATTEMPTS} times.
+ */
+const registerForDust = async (wallet: utils.WalletInit, utxos: readonly UtxoWithMeta[]): Promise<void> => {
+  const register = (attempt: number): ReturnType<typeof wallet.wallet.registerNightUtxosForDustGeneration> =>
+    wallet.wallet
+      .registerNightUtxosForDustGeneration(
+        utxos,
+        wallet.unshieldedKeystore.getPublicKey(),
+        wallet.unshieldedKeystore.signDataAsync,
+      )
+      .catch((error: unknown) => waitOutShortfall(error, attempt));
+
+  const waitOutShortfall = async (error: unknown, attempt: number) => {
+    if (!isInsufficientDustForFeeError(error) || attempt >= MAX_REGISTRATION_ATTEMPTS) throw error;
+    if (error.estimate._tag !== 'Reachable') {
+      throw new Error(
+        `Night UTxOs worth ${utxos.map((u) => u.utxo.value).join(' + ')} can never pay their own registration fee ` +
+          `of ${error.fee} (${error.estimate.reason}); fund a larger generator`,
+      );
+    }
+    logger.info(
+      `Registered Night has ${error.claimableFeePayment} of the ${error.fee} Specks its registration costs; ` +
+        `waiting about ${error.estimate.seconds}s for it to generate the rest (attempt ${attempt})`,
+    );
+    await wallet.wallet.waitForGeneratedDust(utxos, error.fee, {
+      timeoutMs: Number(error.estimate.seconds) * 1000 + 60_000,
+    });
+    return register(attempt + 1);
+  };
+
+  const recipe = await register(1);
+
+  const finalized = await wallet.wallet.finalizeRecipe(recipe);
+  const txId = await wallet.wallet.submitTransaction(finalized);
+  logger.info(`Dust registration submitted: ${txId}`);
+  await expectSucceeded(wallet, finalized, 'Dust registration');
+};
+
+describe('Fund remote test wallets', () => {
+  if (fundedSeed === undefined) {
+    throw new Error('SEED must be set to a wallet that holds funds');
   }
-  const getFixture = useTestContainersFixture();
-  const fundedSeed = process.env['SEED'];
-  const ReceiverSeed = process.env['SEED2'];
-  const shieldedTokenRaw = ledger.shieldedToken().raw;
-  const unshieldedTokenRaw = ledger.unshieldedToken().raw;
-  const nativeToken1Raw = '0000000000000000000000000000000000000000000000000000000000000001';
-  const nativeToken2Raw = '0000000000000000000000000000000000000000000000000000000000000002';
-  const syncTimeout = (1 * 60 + 30) * 60 * 1000; // 1 hour + 30 minutes in milliseconds
-  const timeout = 600_000;
-  const outputValue = utils.tNightAmount(10n);
+  if (targetSeed === undefined) {
+    throw new Error('SEED2 must be set to the wallet to fund, or set FUND_RANDOM_TARGET=true to fund a new one');
+  }
 
+  const getFixture = useTestContainersFixture();
   let sender: utils.WalletInit;
-  let receiver: utils.WalletInit;
-  let fixture: TestContainersFixture;
-  let networkId: NetworkId.NetworkId;
+  let target: utils.WalletInit;
 
   beforeAll(async () => {
-    fixture = getFixture();
-    networkId = fixture.getNetworkId();
-
+    const fixture = getFixture();
+    if (useRandomTarget) {
+      logger.info(`Funding a newly generated wallet; save its seed to reuse it: ${targetSeed}`);
+    }
     sender = await utils.initWalletWithSeed(fundedSeed, fixture);
-    receiver = await utils.initWalletWithSeed(ReceiverSeed, fixture);
-    logger.info('Two wallets started');
+    target = await utils.initWalletWithSeed(targetSeed, fixture);
+    await Promise.all([sender.wallet.waitForSyncedState(), target.wallet.waitForSyncedState()]);
   }, syncTimeout);
 
   afterAll(async () => {
-    await sender.wallet.stop();
-    await receiver.wallet.stop();
-  }, timeout);
+    await Promise.all([sender?.wallet.stop(), target?.wallet.stop()]);
+  }, stopTimeout);
 
   test(
-    'Distributing tokens to test wallet',
+    'tops a test wallet up to five Night UTxOs, registered Night with Dust to pay fees, and its shielded minimums',
     async () => {
-      await Promise.all([sender.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
-      const initialState = await firstValueFrom(sender.wallet.state());
-      const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
-      const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
-      const initialDustBalance = initialState.dust.balance(new Date());
+      const before = await target.wallet.waitForSyncedState();
+      const nightBefore = nightUtxosOf(before);
+      const hasGenerator = nightBefore.some(isGenerator);
+      const others = nightBefore.filter((coin) => !isGenerator(coin));
+      const unregisteredOthers = others.filter((coin) => !coin.meta.registeredForDustGeneration);
+      const registeredBefore = nightBefore.filter((coin) => coin.meta.registeredForDustGeneration).length;
+      // A registered wallet receives Night already registered, so sending more raises its registered count. A wallet
+      // with none registers one of its others alongside the generator, so it needs one unregistered other to spare.
+      const baseCount = Math.max(
+        0,
+        MIN_NIGHT_UTXOS - 1 - others.length,
+        registeredBefore > 0
+          ? MIN_REGISTERED - registeredBefore
+          : MIN_UNREGISTERED_OTHERS + 1 - unregisteredOthers.length,
+      );
+      const nightAmounts = [
+        ...(hasGenerator ? [] : [DUST_GENERATOR_AMOUNT]),
+        ...Array.from({ length: baseCount }, () => BASE_AMOUNT),
+      ];
+      const shieldedShortfalls = TEST_WALLET_SHIELDED_MINIMUMS.map((minimum) => ({
+        ...minimum,
+        short: minimum.amount - balanceOf(before.shielded.balances, minimum.tokenType),
+      })).filter(({ short }) => short > 0n);
+      logger.info(
+        `Target balances — shielded: ${inspect(before.shielded.balances)}, unshielded: ${inspect(before.unshielded.balances)}`,
+      );
+      logger.info(
+        `Target holds ${nightBefore.length} Night UTxOs (generator: ${hasGenerator}, unregistered others: ` +
+          `${unregisteredOthers.length}); sending ${nightAmounts.length} Night UTxOs and shielded ` +
+          `[${shieldedShortfalls.map(({ label }) => label).join(', ')}]`,
+      );
 
-      logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
-      logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
-      logger.info(`Wallet 1 available dust: ${initialDustBalance}`);
-      logger.info(`Wallet 1 available shielded coins: ${initialState.shielded.availableCoins.length}`);
-      logger.info(inspect(initialState.shielded.availableCoins, { depth: null }));
-      logger.info(`Wallet 1 available unshielded coins: ${initialState.unshielded.availableCoins.length}`);
-      logger.info(inspect(initialState.unshielded.availableCoins, { depth: null }));
-      logger.info(`Wallet 1 address: ${utils.getUnshieldedAddress(networkId, initialState.unshielded.address)}`);
-
-      const initialReceiverState = await firstValueFrom(receiver.wallet.state());
-      const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw];
-      const initialReceiverUnshieldedBalance = initialReceiverState.unshielded.balances[unshieldedTokenRaw];
-      const receiverUnshieldedAddress = initialReceiverState.unshielded.address;
-      // logger.info(`Receiver unshielded address: ${receiverUnshieldedAddress}`);
-      logger.info(`Wallet 2: ${initialReceiverShieldedBalance} shielded tokens`);
-      logger.info(`Wallet 2: ${initialReceiverUnshieldedBalance} unshielded tokens`);
-      // logger.info(`Wallet 2 address: ${receiverUnshieldedAddress}`);
-      logger.info(inspect(initialReceiverState.shielded.availableCoins, { depth: null }));
-      logger.info(inspect(initialReceiverState.unshielded.availableCoins, { depth: null }));
-      // Sending shielded and unshielded tokens to receiver wallet
-      const outputsToCreate: CombinedTokenTransfer[] = [
-        {
-          type: 'shielded',
-          outputs: [
-            {
-              type: shieldedTokenRaw,
-              amount: outputValue,
-              receiverAddress: initialReceiverState.shielded.address,
-            },
-          ],
-        },
-        {
-          type: 'unshielded',
-          outputs: [
-            {
-              type: unshieldedTokenRaw,
-              amount: outputValue,
-              receiverAddress: receiverUnshieldedAddress,
-            },
-          ],
-        },
+      const transfers: CombinedTokenTransfer[] = [
+        ...(nightAmounts.length > 0
+          ? [
+              {
+                type: 'unshielded' as const,
+                outputs: nightAmounts.map((amount) => ({
+                  type: unshieldedTokenRaw,
+                  amount,
+                  receiverAddress: before.unshielded.address,
+                })),
+              },
+            ]
+          : []),
+        ...(shieldedShortfalls.length > 0
+          ? [
+              {
+                type: 'shielded' as const,
+                outputs: shieldedShortfalls.map(({ tokenType, short }) => ({
+                  type: tokenType,
+                  amount: short,
+                  receiverAddress: before.shielded.address,
+                })),
+              },
+            ]
+          : []),
       ];
 
-      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
-        ttl: new Date(Date.now() + 30 * 60 * 1000),
-      });
-      logger.info('Signing tx...');
-      logger.info(txRecipe);
-      const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, sender.unshieldedKeystore.signDataAsync);
-      logger.info('Transaction to prove...');
-      logger.info(signedTxRecipe.type.toString());
-      const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
-      logger.info('Submitting transaction...');
-      logger.info(Buffer.from(finalizedTx.serialize()).toString('hex'));
-      const txId = await sender.wallet.submitTransaction(finalizedTx);
-      logger.info('txProcessing');
-      logger.info('Transaction id: ' + txId);
+      if (transfers.length > 0) {
+        assertFunderCovers(await sender.wallet.waitForSyncedState(), transfers);
+        await submitTransfer(sender, transfers);
+        await waitForState(
+          target,
+          (state) =>
+            nightUtxosOf(state).length >= nightBefore.length + nightAmounts.length && holdsShieldedMinimums(state),
+          'the funded UTxOs to reach the target wallet',
+        );
+      } else {
+        logger.info('Target already holds the UTxOs and shielded balances it needs; nothing sent');
+      }
 
-      // Register unshielded tokens for dust generation
-      await utils.waitForUnshieldedCoinUpdate(receiver.wallet, initialReceiverState.unshielded.availableCoins.length);
-      const receiverStateAfterTransfer = await receiver.wallet.waitForSyncedState();
-      const unregisteredNightUtxos = receiverStateAfterTransfer.unshielded.availableCoins.filter(
-        (coin) => coin.utxo.type === unshieldedTokenRaw && coin.meta.registeredForDustGeneration === false,
+      const funded = await target.wallet.waitForSyncedState();
+      if (registeredBefore > 0) {
+        expect(
+          nightUtxosOf(funded).filter((coin) => coin.meta.registeredForDustGeneration).length,
+          'Night sent to a wallet with registered Night must arrive registered',
+        ).toBe(registeredBefore + nightAmounts.length);
+      }
+      const generators = nightUtxosOf(funded).filter(isGenerator);
+      expect(generators.length, 'No generator UTxO on the target wallet').toBeGreaterThan(0);
+      // The wallet needs Night registered for Dust generation, so it keeps generating, and Dust to pay fees with now.
+      // The dust healthchecks deregister registered UTxOs, the generator among them, and a deregistered wallet still
+      // holds decaying Dust for a while — so a Dust balance alone does not show the wallet will keep paying fees.
+      const anyRegistered = nightUtxosOf(funded).some((coin) => coin.meta.registeredForDustGeneration);
+      const dustBefore = dustOf(funded);
+      if (anyRegistered && dustBefore > 0n) {
+        logger.info(`Target has registered Night and ${dustBefore} Specks of Dust; not registering`);
+      } else {
+        const unregisteredGenerator = generators.find((coin) => !coin.meta.registeredForDustGeneration);
+        if (anyRegistered || unregisteredGenerator === undefined) {
+          logger.info('Target has registered Night but no Dust yet; waiting for it to generate');
+        } else {
+          // One base-amount UTxO is registered with the generator, so the deregistration healthcheck finds two.
+          const companion = nightUtxosOf(funded).find(
+            (coin) => !isGenerator(coin) && !coin.meta.registeredForDustGeneration,
+          );
+          await registerForDust(
+            target,
+            companion === undefined ? [unregisteredGenerator] : [unregisteredGenerator, companion],
+          );
+          // Registration spends the generator and recreates it, so it is pending until the transaction settles.
+          await utils.waitForFacadePendingClear(target.wallet);
+        }
+        await waitForState(
+          target,
+          (state) => dustOf(state) > 0n && nightUtxosOf(state).some((coin) => coin.meta.registeredForDustGeneration),
+          'the target wallet to have registered Night and Dust',
+        );
+      }
+
+      const final = await target.wallet.waitForSyncedState();
+      const nightFinal = nightUtxosOf(final);
+      logger.info(
+        nightFinal.map((coin) => `${coin.utxo.value} registered=${coin.meta.registeredForDustGeneration}`).join(', '),
       );
-      expect(unregisteredNightUtxos.length, 'No unregistered UTXOs found').toBeGreaterThan(0);
-      const dustRegistrationRecipe = await receiver.wallet.registerNightUtxosForDustGeneration(
-        [unregisteredNightUtxos[0]],
-        receiver.unshieldedKeystore.getPublicKey(),
-        receiver.unshieldedKeystore.signDataAsync,
+      expect(nightFinal.length).toBeGreaterThanOrEqual(MIN_NIGHT_UTXOS);
+      logger.info(`Target Dust: ${dustOf(final)} Specks`);
+      expect(dustOf(final), 'Target wallet holds no Dust').toBeGreaterThan(0n);
+      expect(
+        nightFinal.filter((coin) => coin.meta.registeredForDustGeneration).length,
+        'Registered Night UTxOs on the target wallet',
+      ).toBeGreaterThanOrEqual(MIN_REGISTERED);
+      const unregisteredOthersFinal = nightFinal.filter(
+        (coin) => !isGenerator(coin) && !coin.meta.registeredForDustGeneration,
+      ).length;
+      if (registeredBefore === 0) {
+        expect(unregisteredOthersFinal).toBeGreaterThanOrEqual(MIN_UNREGISTERED_OTHERS);
+      } else if (unregisteredOthersFinal < MIN_UNREGISTERED_OTHERS) {
+        logger.warn(
+          `Target holds ${unregisteredOthersFinal} unregistered Night UTxOs; the dust registration healthcheck needs ` +
+            `${MIN_UNREGISTERED_OTHERS}, and funding a registered wallet cannot add them`,
+        );
+      }
+      expect(holdsShieldedMinimums(final), `Shielded balances below minimum: ${inspect(final.shielded.balances)}`).toBe(
+        true,
       );
-      const finalizedDustTx = await receiver.wallet.finalizeRecipe(dustRegistrationRecipe);
-      logger.info('Submitting dust registration transaction...');
-      const dustRegistrationTxid = await receiver.wallet.submitTransaction(finalizedDustTx);
-      expect(dustRegistrationTxid).toBeDefined();
-      logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
     },
     syncTimeout,
   );
 
-  test(
-    'Is working for preparing the stable wallet',
+  test.skipIf(stableSeed === undefined)(
+    'tops the stable wallet up to the balances the balance-constant suite asserts',
     async () => {
-      const nativeToken1Amount = utils.tNightAmount(25n);
-      const nativeToken2Amount = utils.tNightAmount(50n);
+      const stable = await utils.initWalletWithSeed(stableSeed!, getFixture());
+      try {
+        const before = await stable.wallet.waitForSyncedState();
+        const current = utils.STABLE_WALLET_BALANCES.map((target) => ({
+          ...target,
+          held: balanceOf(before[target.kind].balances, target.tokenType),
+        }));
 
-      await Promise.all([sender.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
-      const initialState = await firstValueFrom(sender.wallet.state());
-      const initialNativeToken1Balance = initialState.shielded.balances[nativeToken1Raw];
-      const initialNativeToken2Balance = initialState.shielded.balances[nativeToken2Raw];
-      const initialDustBalance = initialState.dust.balance(new Date());
+        const over = current.filter(({ held, amount }) => held > amount);
+        if (over.length > 0) {
+          logger.warn(
+            `Stable wallet already holds more than its target, so nothing is sent: ${over
+              .map(({ label, held, amount }) => `${label} ${held} > ${amount}`)
+              .join('; ')}`,
+          );
+          return;
+        }
 
-      logger.info(`Wallet 1: ${initialNativeToken1Balance} native 1 tokens`);
-      logger.info(`Wallet 1: ${initialNativeToken2Balance} native 2 tokens`);
-      logger.info(`Wallet 1 available dust: ${initialDustBalance}`);
-      logger.info(`Wallet 1 available shielded coins: ${initialState.shielded.availableCoins.length}`);
-      logger.info(inspect(initialState.shielded.availableCoins, { depth: null }));
-      logger.info(`Wallet 1 available unshielded coins: ${initialState.unshielded.availableCoins.length}`);
+        const missing = current.filter(({ held, amount }) => held < amount);
+        if (missing.length === 0) {
+          logger.info('Stable wallet already holds its target balances; nothing sent');
+          return;
+        }
 
-      const initialReceiverState = await firstValueFrom(receiver.wallet.state());
-      const initialReceiverNativeToken1Balance = initialReceiverState.shielded.balances[nativeToken1Raw];
-      const initialReceiverNativeToken2Balance = initialReceiverState.shielded.balances[nativeToken2Raw];
-      const receiverShieldedAddress = initialReceiverState.shielded.address;
-      logger.info(`Wallet 2: ${initialReceiverNativeToken1Balance} native 1 tokens`);
-      logger.info(`Wallet 2: ${initialReceiverNativeToken2Balance} native 2 tokens`);
+        const shortOf = (kind: 'shielded' | 'unshielded') =>
+          missing
+            .filter((balance) => balance.kind === kind)
+            .map(({ tokenType, amount, held }) => ({ type: tokenType, amount: amount - held }));
+        const shieldedOutputs = shortOf('shielded').map((output) => ({
+          ...output,
+          receiverAddress: before.shielded.address,
+        }));
+        const unshieldedOutputs = shortOf('unshielded').map((output) => ({
+          ...output,
+          receiverAddress: before.unshielded.address,
+        }));
+        const transfers: CombinedTokenTransfer[] = [
+          ...(shieldedOutputs.length > 0 ? [{ type: 'shielded' as const, outputs: shieldedOutputs }] : []),
+          ...(unshieldedOutputs.length > 0 ? [{ type: 'unshielded' as const, outputs: unshieldedOutputs }] : []),
+        ];
+        logger.info(`Topping up the stable wallet: ${missing.map(({ label }) => label).join(', ')}`);
 
-      const outputsToCreate: CombinedTokenTransfer[] = [
-        {
-          type: 'shielded',
-          outputs: [
-            {
-              type: nativeToken1Raw,
-              amount: nativeToken1Amount,
-              receiverAddress: receiverShieldedAddress,
-            },
-            {
-              type: nativeToken2Raw,
-              amount: nativeToken2Amount,
-              receiverAddress: receiverShieldedAddress,
-            },
-          ],
-        },
-      ];
-
-      const txRecipe = await sender.wallet.transferTransaction(outputsToCreate, {
-        ttl: new Date(Date.now() + 30 * 60 * 1000),
-      });
-      logger.info('Signing tx...');
-      logger.info(txRecipe);
-      const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, sender.unshieldedKeystore.signDataAsync);
-      logger.info('Transaction to prove...');
-      logger.info(signedTxRecipe);
-      const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
-      logger.info('Submitting transaction...');
-      logger.info(Buffer.from(finalizedTx.serialize()).toString('hex'));
-      const txId = await sender.wallet.submitTransaction(finalizedTx);
-      logger.info('txProcessing');
-      logger.info('Transaction id: ' + txId);
-
-      await utils.waitForFacadePendingClear(sender.wallet);
-      await utils.waitForFacadePendingClear(receiver.wallet);
-      const finalReceiverState = await firstValueFrom(receiver.wallet.state());
-      expect(finalReceiverState.shielded.balances[nativeToken1Raw]).toBe(nativeToken1Amount);
-      expect(finalReceiverState.shielded.balances[nativeToken2Raw]).toBe(nativeToken2Amount);
+        assertFunderCovers(await sender.wallet.waitForSyncedState(), transfers);
+        await submitTransfer(sender, transfers);
+        const after = await waitForState(
+          stable,
+          (state) =>
+            utils.STABLE_WALLET_BALANCES.every(
+              (target) => balanceOf(state[target.kind].balances, target.tokenType) === target.amount,
+            ),
+          'the stable wallet to reach its target balances',
+        );
+        expect(after.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
+      } finally {
+        await stable.wallet.stop();
+      }
     },
-    timeout,
+    syncTimeout,
   );
 });

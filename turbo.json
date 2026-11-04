@@ -97,6 +97,19 @@
         "APP_INFRA_SECRET"
       ]
     },
+    "test-fund": {
+      "cache": false,
+      "env": [
+        "NETWORK",
+        "SEED",
+        "SEED2",
+        "SEED_STABLE",
+        "FUND_RANDOM_TARGET",
+        "DUST_SYNC",
+        "SYNC_CACHE",
+        "APP_INFRA_SECRET"
+      ]
+    },
     "build:wasm": {
       // The one Rust task in the repo: compiles packages/state-translation/wasm and emits the WASM package the loader
       // imports. Cached on the Cargo inputs, so a repeat build is instant rather than another six minutes of LTO.

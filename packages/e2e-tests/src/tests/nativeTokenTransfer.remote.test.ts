@@ -44,8 +44,7 @@ describe('Token transfer', () => {
   const outputValue = 10n;
   const shieldedTokenRaw = ledger.shieldedToken().raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
-  const nativeToken1Raw = '0000000000000000000000000000000000000000000000000000000000000001';
-  const nativeToken2Raw = '0000000000000000000000000000000000000000000000000000000000000002';
+  const { nativeToken1Raw, nativeToken2Raw } = utils;
 
   // Optional, as in the other remote suites: unset or empty, the wallets are built from scratch and nothing is saved.
   const syncCacheDir = process.env['SYNC_CACHE'];
@@ -182,7 +181,7 @@ describe('Token transfer', () => {
         initialState.unshielded.availableCoins.length,
       );
       expect(finalState.unshielded.pendingCoins.length).toBe(0);
-      expect(finalState.unshielded.totalCoins.length).toBeLessThanOrEqual(initialState.shielded.totalCoins.length);
+      expect(finalState.unshielded.totalCoins.length).toBeLessThanOrEqual(initialState.unshielded.totalCoins.length);
 
       const receiverTxEntry = await utils.waitForTxInHistory(txHash, receiver.wallet, {
         ready: (entry) => entry.shielded !== undefined,
@@ -217,6 +216,29 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${initialBalance}`);
       logger.info(`Wallet 1 available coins: ${initialState.shielded.availableCoins.length}`);
 
+      // Every input of a self-transaction is one of this wallet's coins and every output — the payment and any change —
+      // comes back to it, so its coin count moves by outputs minus inputs. The default coin selection spends the
+      // smallest coins first until the amount is covered, so both are known before the transaction is built: a larger
+      // smallest coin gives the payment plus change (+1), a coin of exactly the amount gives no change (+0), and several
+      // smaller coins lower the count. A long-lived wallet reaches each of these, so the expectation is derived from
+      // the coins it holds rather than fixed.
+      const tNightCoins = initialState.shielded.availableCoins
+        .filter((coin) => coin.coin.type === shieldedTokenRaw)
+        .map((coin) => coin.coin.value)
+        .toSorted((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      const runningTotals = tNightCoins.map((_, index) =>
+        tNightCoins.slice(0, index + 1).reduce((total, value) => total + value, 0n),
+      );
+      const expectedInputs = runningTotals.findIndex((total) => total >= outputValue) + 1;
+      expect(expectedInputs, 'The wallet cannot cover the self-transaction').toBeGreaterThan(0);
+      const expectedChange = runningTotals[expectedInputs - 1] - outputValue;
+      const expectedOutputs = expectedChange > 0n ? 2 : 1;
+      const expectedCoinDelta = expectedOutputs - expectedInputs;
+      logger.info(
+        `Expecting the self-transaction to spend ${expectedInputs} coins and create ${expectedOutputs} ` +
+          `(change ${expectedChange})`,
+      );
+
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
           type: 'shielded',
@@ -236,6 +258,14 @@ describe('Token transfer', () => {
       const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
+      const tx = carried<ledger.FinalizedTransaction>(finalizedTx);
+      const offers = [tx.guaranteedOffer, ...(tx.fallibleOffer?.values() ?? [])].filter((offer) => offer !== undefined);
+      const inputCount = offers.reduce((total, offer) => total + offer.inputs.length, 0);
+      const outputCount = offers.reduce((total, offer) => total + offer.outputs.length, 0);
+      logger.info(`Self-transaction spends ${inputCount} coins and creates ${outputCount}`);
+      expect(inputCount, 'Coins the self-transaction spends').toBe(expectedInputs);
+      expect(outputCount, 'Coins the self-transaction creates').toBe(expectedOutputs);
+
       await utils.waitForFacadePending(sender.wallet);
       await utils.waitForFacadePendingClear(sender.wallet);
       const finalState = await sender.wallet.waitForSyncedState();
@@ -243,8 +273,10 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${finalState.shielded.balances[shieldedTokenRaw]}`);
       expect(finalState.shielded.pendingCoins.length).toBe(0);
       expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(initialBalance);
-      expect(finalState.shielded.availableCoins.length).toBe(initialState.shielded.availableCoins.length + 1);
-      expect(finalState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length + 1);
+      expect(finalState.shielded.availableCoins.length).toBe(
+        initialState.shielded.availableCoins.length + expectedCoinDelta,
+      );
+      expect(finalState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length + expectedCoinDelta);
     },
     syncTimeout,
   );

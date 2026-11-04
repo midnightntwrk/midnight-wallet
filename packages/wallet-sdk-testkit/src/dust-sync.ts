@@ -10,6 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { Effect } from 'effect';
 import { makeIndexerChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import {
   CustomForkingDustWallet,
@@ -65,7 +66,17 @@ export type DustWalletFactory = (config: DefaultDustConfiguration) => {
 export const eventLessDustWallet: DustWalletFactory = (config) => {
   const { v1, v2, migration } = dustVariantConfigurations(config);
   return CustomForkingDustWallet(
-    { ...config, chainVersionProbe: config.chainVersionProbe ?? makeIndexerChainVersionProbe(config) },
+    {
+      ...config,
+      chainVersionProbe: config.chainVersionProbe ?? makeIndexerChainVersionProbe(config),
+      // Honoured here as `DustWallet` honours it: a fresh start on a chain past the boundary parks the V2 variant where
+      // the dust timeline reaches it, never reading the ledger-v8 dust history.
+      ...(config.skipLedgerV8DustHistory === true
+        ? {
+            dustTimelineStartProbe: () => Effect.runPromise(SyncService.findDustTimelineStart(config, config.forks.v9)),
+          }
+        : {}),
+    },
     { builder: new V1Builder().withDefaults(), configuration: v1 },
     {
       builder: new V2Builder()
