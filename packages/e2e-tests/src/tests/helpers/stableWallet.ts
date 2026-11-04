@@ -32,7 +32,7 @@ export const STABLE_WALLET = {
     label: 'shielded tNight',
     kind: 'shielded',
     tokenType: ledger.shieldedToken().raw,
-    amount: tNightAmount(10n),
+    amount: tNightAmount(1000n),
   },
   nativeToken1: { label: 'native token 1', kind: 'shielded', tokenType: nativeToken1Raw, amount: tNightAmount(25n) },
   nativeToken2: { label: 'native token 2', kind: 'shielded', tokenType: nativeToken2Raw, amount: tNightAmount(50n) },
@@ -40,7 +40,7 @@ export const STABLE_WALLET = {
     label: 'unshielded tNight',
     kind: 'unshielded',
     tokenType: ledger.unshieldedToken().raw,
-    amount: tNightAmount(10n),
+    amount: tNightAmount(1000n),
   },
 } as const satisfies Record<string, StableBalance>;
 

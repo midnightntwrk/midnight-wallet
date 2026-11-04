@@ -112,11 +112,11 @@ generated dust to run successfully. All remote tests spin up a local instance of
 
 The remote suites run on wallets that must already hold funds on the target network:
 
-| Suite                                 | Wallet                | Needs                                                                   |
-| ------------------------------------- | --------------------- | ----------------------------------------------------------------------- |
-| `dust.remote`, `tokenTransfer.remote` | `SEED` (and `SEED2`)  | Night UTxOs, two of them registered and two unregistered, and Dust      |
-| `nativeTokenTransfer.remote`          | `NT_SEED`, `NT_SEED2` | shielded native tokens `…01` and `…02`, and Dust to pay fees            |
-| `balanceConstant.remote`              | `SEED_STABLE`         | exactly 10 shielded tNight, 10 unshielded tNight, 25 `…01` and 50 `…02` |
+| Suite                                 | Wallet                | Needs                                                                       |
+| ------------------------------------- | --------------------- | --------------------------------------------------------------------------- |
+| `dust.remote`, `tokenTransfer.remote` | `SEED` (and `SEED2`)  | Night UTxOs, two of them registered and two unregistered, and Dust          |
+| `nativeTokenTransfer.remote`          | `NT_SEED`, `NT_SEED2` | shielded native tokens `…01` and `…02`, and Dust to pay fees                |
+| `balanceConstant.remote`              | `SEED_STABLE`         | exactly 1000 shielded tNight, 1000 unshielded tNight, 25 `…01` and 50 `…02` |
 
 `fundTestWallets.remote.test.ts` tops a wallet up to what these suites need. It only sends what is missing, so it is
 safe to run again. It spends real funds, so no other run selects it: run it with
@@ -139,11 +139,11 @@ Set them in the root `.env`: it is loaded with `override: true`, so values given
 
 Each test wallet is brought to:
 
-- at least five Night UTxOs, one of them 100 tNight (ten times the usual 10 tNight);
-- at least 10 shielded tNight, 25 of native token `…01` and 50 of `…02`;
-- Night registered for Dust generation, and Dust. A wallet with nothing registered has the 100 tNight UTxO and one 10
-  tNight UTxO registered together; the registration pays its own fee from the Dust they generate, which takes around ten
-  minutes on a new wallet.
+- at least five Night UTxOs, one of them 10,000 tNight (ten times the usual 1000 tNight);
+- at least 1000 shielded tNight, 25 of native token `…01` and 50 of `…02`;
+- Night registered for Dust generation, and Dust. A wallet with nothing registered has the 10,000 tNight UTxO and one
+  1000 tNight UTxO registered together; the registration pays its own fee from the Dust they generate, so a new wallet
+  waits for that before it registers — longer the smaller its Night.
 
 Dust registration belongs to a wallet's Night address, not to a UTxO: once a wallet is registered, every Night UTxO sent
 to it arrives registered. Funding can therefore add unregistered UTxOs only to a wallet with nothing registered, and

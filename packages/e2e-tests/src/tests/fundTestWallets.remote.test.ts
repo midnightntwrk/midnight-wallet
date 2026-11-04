@@ -53,7 +53,7 @@ const stableSeed = envOf('SEED_STABLE');
 const unshieldedTokenRaw = ledger.unshieldedToken().raw;
 
 /** The amount a test wallet normally receives in one UTxO. */
-const BASE_AMOUNT = utils.tNightAmount(10n);
+const BASE_AMOUNT = utils.tNightAmount(1000n);
 /** One Night UTxO is this much larger and registered, so the wallet generates enough Dust to pay its own fees. */
 const DUST_GENERATOR_AMOUNT = BASE_AMOUNT * 10n;
 /**
@@ -332,7 +332,7 @@ describe('Fund remote test wallets', () => {
         if (anyRegistered || unregisteredGenerator === undefined) {
           logger.info('Target has registered Night but no Dust yet; waiting for it to generate');
         } else {
-          // One 10 tNight UTxO is registered with the generator, so the deregistration healthcheck finds two.
+          // One base-amount UTxO is registered with the generator, so the deregistration healthcheck finds two.
           const companion = nightUtxosOf(funded).find(
             (coin) => !isGenerator(coin) && !coin.meta.registeredForDustGeneration,
           );
