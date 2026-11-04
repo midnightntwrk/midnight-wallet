@@ -77,13 +77,13 @@ subject to Docker Hub's rate limits. The node, indexer and proof server images c
 Every image tag is an environment variable with a default, so a run can be pointed at a different pairing without
 editing the compose file:
 
-| Variable             | Default        | Image                                                |
-| -------------------- | -------------- | ---------------------------------------------------- |
-| `FORK_FROM_NODE_TAG` | `1.0.1`        | node whose spec the chain starts from (ledger-v8)    |
-| `NODE_TAG`           | `2.1.0-beta.1` | node binary the chain runs on, and upgrades into     |
-| `TOOLKIT_TAG`        | `2.1.0-beta.1` | `midnight-node-toolkit`, submits the runtime upgrade |
-| `INDEXER_TAG`        | `4.4.0-rc.5`   | `indexer-standalone`                                 |
-| `PROOF_SERVER_TAG`   | `9.0.0-rc.7`   | `proof-server`                                       |
+| Variable             | Default       | Image                                                |
+| -------------------- | ------------- | ---------------------------------------------------- |
+| `FORK_FROM_NODE_TAG` | `1.0.1`       | node whose spec the chain starts from (ledger-v8)    |
+| `NODE_TAG`           | `2.1.0-rc.4`  | node binary the chain runs on, and upgrades into     |
+| `TOOLKIT_TAG`        | `2.1.0-rc.4`  | `midnight-node-toolkit`, submits the runtime upgrade |
+| `INDEXER_TAG`        | `4.4.0-rc.6`  | `indexer-standalone`                                 |
+| `PROOF_SERVER_TAG`   | `9.0.0-rc.10` | `proof-server`                                       |
 
 ```shell
 NETWORK=undeployed NODE_TAG=2.1.0-rc.1 yarn turbo test-fork
