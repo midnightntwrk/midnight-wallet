@@ -14,6 +14,8 @@ import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import {
   Option,
   Effect,
+  Exit,
+  FiberSet,
   pipe,
   Ref,
   type Record,
@@ -128,6 +130,9 @@ export const V1Tag: unique symbol = Symbol('V1');
 export const coreStateOf = (walletState: Readonly<{ state: VariantState }>): Option.Option<CoreWallet> =>
   VariantState.unwrapFor<CoreWallet>(walletState.state, V1Tag);
 
+/** How long closing a variant waits for its tx-history writes still in flight before interrupting them. */
+const WRITES_GRACE = Duration.seconds(30);
+
 export type DefaultRunningV1 = RunningV1Variant<
   string,
   EventsSyncUpdate,
@@ -150,6 +155,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   // The last transaction of a sync batch, held until it is known to be complete. It lives on the variant rather than in
   // the sync stream so a stream retry, which resumes past the events already applied, cannot drop it.
   readonly #heldChange = Ref.unsafeMake(Option.none<RecordableChange>());
+  // Tx-history writes run outside the variant's scope, because a hand-over closes that scope and a write cut off there
+  // is lost for good: the cursor has already moved past its events. Closing the variant waits for them instead, for at
+  // most `WRITES_GRACE`, and only then interrupts what is left.
+  readonly #writesScope = Effect.runSync(Scope.make());
+  readonly #writes = Effect.runSync(Scope.extend(FiberSet.make<void, never>(), this.#writesScope));
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
 
@@ -161,6 +171,17 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     this.#scope = scope;
     this.#context = context;
     this.#v1Context = v1Context;
+    Effect.runSync(
+      Scope.addFinalizer(
+        scope,
+        pipe(
+          FiberSet.awaitEmpty(this.#writes),
+          Effect.timeout(WRITES_GRACE),
+          Effect.ignore,
+          Effect.zipRight(Scope.close(this.#writesScope, Exit.void)),
+        ),
+      ),
+    );
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
         context.stateRef.changes.pipe(
@@ -232,9 +253,8 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
             // indexer queries is the variant-wide semaphore acquired around each lookup above.
             { discard: true, concurrency: 8 },
           ),
-          Effect.forkScoped,
+          FiberSet.run(this.#writes),
           Effect.asVoid,
-          Effect.provideService(Scope.Scope, this.#scope),
         );
   }
 
