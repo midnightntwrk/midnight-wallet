@@ -334,17 +334,32 @@ const balancingTransaction = (
   return Transaction.fromParts(networkId).addIntent({ tag: 'specific', value: segmentId }, intent);
 };
 
-/** What dust selection produces: the total fee of the balanced result and what each selected coin pays. */
+/**
+ * What dust selection produces: the total fee of the balanced result, what each selected coin pays, and the selected
+ * coins at their full value, in the same order, from which a balancing intent for a higher fee is distributed.
+ */
 type DustSelection = {
   readonly fee: bigint;
   readonly recipeInputs: ReadonlyArray<CoinWithValue<Dust>>;
+  readonly selectedCoins: ReadonlyArray<CoinWithValue<Dust>>;
 };
 
-/** A dust selection with the intent template it was priced with and the segment the balancing intent takes. */
+/**
+ * A dust selection with what it was priced against: the intent template, the segment the balancing intent takes, the
+ * transactions merged for pricing, and the dust they already carry.
+ */
 type DustBalancingRecipe = DustSelection & {
   readonly intentTemplate: Uint8Array;
   readonly segmentId: number;
+  readonly merged: Option.Option<MergedTransactions>;
+  readonly existingDust: bigint;
 };
+
+/**
+ * Settling passes a balancing intent gets before it is refused. The price only rises between passes and each rise is at
+ * most a byte of encoded size, so a pass or two settles it; the bound refuses rather than loop.
+ */
+const MAX_SETTLING_PASSES = 3;
 
 /** The pool ran out under the configured order before the fee was covered — an ordering artefact, retried largest-first. */
 class SelectionExhausted extends Data.TaggedError('DustBalancing.SelectionExhausted')<{
@@ -471,7 +486,7 @@ const selectDustInputs = (args: {
       const covered = BigIntOps.sumAll(inputs.map((input) => input.value));
       const deficit = fee - existingDust - covered;
       if (deficit <= 0n) {
-        return { fee, recipeInputs: distributeFeeAcrossInputs(inputs, fee - existingDust) };
+        return { fee, recipeInputs: distributeFeeAcrossInputs(inputs, fee - existingDust), selectedCoins: inputs };
       }
       const added = yield* selectForDeficit(
         remaining,
@@ -978,8 +993,9 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
    * Selects the dust inputs a balancing intent needs so that, merged with `transactions`, the result covers its own fee
    * — including the fee those inputs add — net of any dust the transactions already carry. `fee` is the total fee of
    * that merged result, the figure {@link estimateFee} reports; `recipeInputs` lists the selected coins in selection
-   * order, each valued at the part of the shortfall it pays. Both are empty when the transactions already cover their
-   * fee.
+   * order, each valued at the part of the shortfall it pays, and `selectedCoins` the same coins at full value. Both
+   * lists are empty when the transactions already cover their fee. `fee` prices each coin spent at full value; the
+   * intent {@link balanceTransactions} returns is priced again as built.
    *
    * Selection runs under the configured {@link CoinSelection} and is retried once largest-first only if that order
    * exhausts the pool; a selector that declines coins is honoured and reports insufficient funds directly.
@@ -1045,7 +1061,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         selectWithLargestFirstRetry(select, this.getCoinSelection()),
         toWalletError,
       );
-      return { ...selection, intentTemplate, segmentId: balancingSegmentOf(merged) };
+      return { ...selection, intentTemplate, segmentId: balancingSegmentOf(merged), merged, existingDust };
     });
   }
 
@@ -1063,6 +1079,30 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     );
   }
 
+  /**
+   * Builds the balancing transaction for `transactions` and books its dust spends as pending in the returned state.
+   *
+   * The returned balancing intent pays at least the fee, margin included, of `transactions` merged with it as returned.
+   * A spend's encoded size depends on the value it spends, so the intent is priced as built, with each coin spending
+   * its share of the fee, and is distributed again at the higher price whenever that price exceeds what it pays.
+   *
+   * @example
+   *   ```typescript
+   *   const [balancing, nextState] = Either.getOrThrow(
+   *     transacting.balanceTransactions(secretKey, state, [transaction], ttl, now, ledgerParameters),
+   *   );
+   *   ```;
+   *
+   * @param secretKey - The dust secret key that spends the selected coins.
+   * @param state - The wallet state the coins are spent from.
+   * @param transactions - The transactions being balanced.
+   * @param ttl - The time-to-live of the balancing intent.
+   * @param currentTime - The time the coins are spent at.
+   * @param ledgerParams - The ledger parameters the fee is computed under.
+   * @returns The balancing transaction, empty when the transactions already cover their fee, and the state with its
+   *   spends pending; `InsufficientFundsError` when the selected coins cannot pay the price of the intent that spends
+   *   them, `TransactingError` when its price does not settle.
+   */
   balanceTransactions(
     secretKey: DustSecretKey,
     state: CoreWallet,
@@ -1075,19 +1115,52 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
     return pipe(
       this.computeBalancingRecipe(secretKey, state, transactions, ttl, currentTime, ledgerParams),
-      Either.flatMap(({ recipeInputs, intentTemplate, segmentId }) =>
-        LedgerOps.ledgerTry((): [UnprovenTransaction, CoreWallet] =>
-          EArray.match(recipeInputs, {
-            // The transactions already cover their fee. An intent with empty `DustActions` is not well-formed, so
-            // there is nothing to add: an empty transaction merges into anything as the identity, and no dust is
-            // booked as pending.
-            onEmpty: () => [Transaction.fromParts(networkId), state],
-            onNonEmpty: (inputs) => {
-              const [spends, updatedState] = CoreWallet.spendCoins(state, secretKey, inputs, currentTime);
-              return [balancingTransaction(networkId, intentTemplate, spends, currentTime, segmentId), updatedState];
-            },
-          }),
-        ),
+      Either.flatMap(({ fee, selectedCoins, intentTemplate, segmentId, merged, existingDust }) =>
+        EArray.match(selectedCoins, {
+          // The transactions already cover their fee. An intent with empty `DustActions` is not well-formed, so
+          // there is nothing to add: an empty transaction merges into anything as the identity, and no dust is
+          // booked as pending.
+          onEmpty: () => Either.right<[UnprovenTransaction, CoreWallet]>([Transaction.fromParts(networkId), state]),
+          onNonEmpty: (coins) => {
+            const available = BigIntOps.sumAll(coins.map((coin) => coin.value));
+            const settle = (
+              price: bigint,
+              passesLeft: number,
+            ): Either.Either<[UnprovenTransaction, CoreWallet], WalletError> =>
+              Either.gen(this, function* () {
+                const [balancing, updatedState, priceAsBuilt] = yield* LedgerOps.ledgerTry(() => {
+                  const inputs = distributeFeeAcrossInputs(coins, price - existingDust);
+                  const [spends, spentState] = CoreWallet.spendCoins(state, secretKey, inputs, currentTime);
+                  const built = balancingTransaction(networkId, intentTemplate, spends, currentTime, segmentId);
+                  return [
+                    built,
+                    spentState,
+                    this.#feeOfPriced(withBalancing(merged, built).transaction, ledgerParams),
+                  ] as const;
+                });
+                if (priceAsBuilt <= price) {
+                  return [balancing, updatedState];
+                }
+                if (priceAsBuilt - existingDust > available) {
+                  return yield* Either.left(
+                    new InsufficientFundsError({
+                      message: `Insufficient Funds: the selected dust coins hold ${available}, short of the ${priceAsBuilt - existingDust} the balancing intent spending them costs`,
+                      tokenType: 'dust',
+                    }),
+                  );
+                }
+                if (passesLeft <= 1) {
+                  return yield* Either.left(
+                    new TransactingError({
+                      message: `The fee of the balancing intent did not settle within ${MAX_SETTLING_PASSES} passes; last priced at ${priceAsBuilt}`,
+                    }),
+                  );
+                }
+                return yield* settle(priceAsBuilt, passesLeft - 1);
+              });
+            return settle(fee, MAX_SETTLING_PASSES);
+          },
+        }),
       ),
     );
   }
