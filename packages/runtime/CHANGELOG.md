@@ -1,5 +1,48 @@
 # @midnightntwrk/wallet-sdk-runtime
 
+## 2.0.0
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 1.x
+
+  For code that implements its own variants or wallet classes.
+
+  - `Variant` requires `protocolVersionOf(state)`, the protocol version a state of the variant records. A wallet started
+    from state it already holds now reports that version rather than its variant's lower bound, and never one below the
+    variant's activation range. A variant whose state records no version returns `ProtocolVersion.MinSupportedVersion`,
+    which starts it at its lower bound as before.
+  - `Variant.migrateState` may fail with `WalletRuntimeError`.
+  - `stateChanges` and `rawState` emit `Runtime.RuntimeState`, which carries the tag of the variant that produced the
+    state.
+  - A wallet class (`BaseWalletClass`) has `variantFor` and `startAtVariant`.
+  - `VariantContext` requires `activationRange`, so code that starts a variant itself must pass one, and the `Runtime`
+    interface requires `onVariantActivation`, which a hand-written fake must provide.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 1.x
+
+  - Multi-variant wallets, already possible in 1.x, can hand a variant its own configuration and range:
+    `WalletBuilder.withVariant(sinceVersion, builder, configuration?)` takes a per-variant configuration, a variant
+    learns its range from `VariantContext.activationRange`, `Runtime.onVariantActivation` reports each hand-over to a
+    newly activated variant, and `Variant.selectByRange` picks the variant for a version.
+  - `StartMaterial` (in `./abstractions`) is the key material a wallet keeps so that each of its variants can derive the
+    keys it needs: a seed (`fromSeed`) or per-variant key material (`forVariants`, `forVariant`), read with `auxFor`,
+    `requireAuxFor`, `requireDerivedAuxFor` and `seedOf`. A variant asked to act without the key material it needs fails
+    with `MissingStartAuxError`.
+
+### Patch Changes
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [9907a64]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0
+
 ## 2.0.0-rc.2
 
 ### Major Changes

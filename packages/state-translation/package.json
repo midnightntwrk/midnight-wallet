@@ -1,7 +1,7 @@
 {
   "name": "@midnightntwrk/wallet-sdk-state-translation",
   "description": "Wallet-side access to the ledger's v8-to-v9 ledger state translation. Test and migration tooling; not published.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",

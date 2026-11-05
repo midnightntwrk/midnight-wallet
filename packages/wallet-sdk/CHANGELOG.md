@@ -1,5 +1,116 @@
 # @midnightntwrk/wallet-sdk
 
+## 2.0.0
+
+### Major Changes
+
+- 9907a64: build: depend on the final ledger, zkir and proof server releases, all from `@midnightntwrk`
+
+  - `@midnightntwrk/ledger-v9` `^1.0.0` (was `1.0.0-rc.7`). Its key material pins are those `midnight-ledger`
+    `ledger-9.1.0.0` declares, the same circuits as `ledger-9.1.0.0-rc.7`.
+  - `@midnightntwrk/ledger-v8` `^8.1.3` (was `@midnight-ntwrk/ledger-v8` `^8.1.0`), with the same key material as 8.1.0.
+  - `@midnightntwrk/zkir-v2` `^2.2.0` (was `@midnight-ntwrk/zkir-v2` `2.2.0-rc.6`).
+  - The testing helpers' proof server image is `9.0.0` (was `9.0.0-rc.10`).
+
+  Every Midnight package the SDK depends on now installs from the public npmjs registry, without credentials.
+
+  BREAKING CHANGE: ledger-v8 comes from `@midnightntwrk/ledger-v8`. An application that builds ledger-v8 objects and
+  hands them to the wallet imports them from `@midnightntwrk/ledger-v8` as well; objects from
+  `@midnight-ntwrk/ledger-v8` belong to a second copy of the ledger, which the wallet's own does not accept.
+
+- 1e0ea94: Breaking changes since 1.x
+
+  Hard-fork support: the wallets run `@midnightntwrk/ledger-v8` below the chain's `forks.v9` and
+  `@midnightntwrk/ledger-v9` from it, and follow a live chain across that boundary, carrying balances, coins and
+  transaction history over. This package re-exports the others, so their breaking changes reach it; the most visible
+  are:
+
+  - Wallets and the facade start from seeds (`WalletSeeds.fromMasterSeed`) or from each ledger version's keys, and no
+    transacting method takes secret keys.
+  - Transactions are `WalletTransaction` handles that carry the protocol version they were built for. Build your own
+    with `./ledger/v8` or `./ledger/v9`, and seal them with `WalletTransaction.adopt`.
+  - Signers are asynchronous (`SignSegment`), and keys and signatures are tagged `{ tag, value }` objects.
+  - `FacadeState.pending` and the pending-transactions service are replaced by one lifecycle record per transaction:
+    `FacadeState.lifecycle` and `facade.transactionLifecycleService`.
+  - `FacadeState.isSynced` and `waitForSyncedState()` also wait for the indexer's reported tip to be checked against a
+    node's finalized head, and keep waiting while the check finds the indexer behind the node or on another network.
+  - `Roles.Metadata` is now `Roles.EcdsaUnshielded`.
+
+  The `@midnightntwrk/wallet-sdk-facade` notes carry the migration guide, and each package's notes list its own changes.
+  In this package itself:
+
+  - `./capabilities/pendingTransactions` is now `./capabilities/transactionLifecycle`, with no alias.
+  - `Capabilities.Simulator` and its helpers are now under `Capabilities.V8`, beside ledger-v9's under
+    `Capabilities.V9`. Likewise the `./capabilities/simulation` subpath exports `V8`, `V9` and `ForkSimulator` in place
+    of the unqualified `Simulator`, `SimulatorConfig`, `immediateBlockProducer` and the other helpers.
+  - It depends on `@midnightntwrk/ledger-v8` `^8.1.3` and `@midnightntwrk/ledger-v9` `^1.0.0`, and on its sibling
+    packages at exact versions.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 1.x
+
+  - `./ledger/v8` and `./ledger/v9` re-export each ledger version, for applications that build their own transactions.
+  - `./shielded/v2`, `./dust/v2` and `./unshielded/v2` export the ledger-v9 variants beside the ledger-v8 `/v1`
+    subpaths, and `./capabilities/codecs` exports `LedgerParametersCodec`.
+  - The root exports `Signing` and `UnsupportedSignatureKindError`, and, through the packages it re-exports,
+    `Token.night`, `parseTokenType`, `DustGenerationRates`, `asV8DustParameters` and `asV9DustParameters`, so token
+    types, signatures and Dust parameters need no ledger import.
+
+### Patch Changes
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [2e933df]
+- Updated dependencies [9907a64]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [d898335]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-abstractions@3.0.0
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0
+  - @midnightntwrk/wallet-sdk-capabilities@4.0.0
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0
+  - @midnightntwrk/wallet-sdk-facade@5.0.0
+  - @midnightntwrk/wallet-sdk-node-client@2.0.0
+  - @midnightntwrk/wallet-sdk-prover-client@2.0.0
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0
+  - @midnightntwrk/wallet-sdk-hd@4.0.0
+  - @midnightntwrk/wallet-sdk-indexer-client@2.0.0
+  - @midnightntwrk/wallet-sdk-runtime@2.0.0
+
 ## 2.0.0-rc.3
 
 ### Patch Changes

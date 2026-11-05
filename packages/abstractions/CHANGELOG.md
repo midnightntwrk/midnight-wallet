@@ -1,5 +1,61 @@
 # @midnightntwrk/wallet-sdk-abstractions
 
+## 3.0.0
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 2.x
+
+  - Transaction history follows each transaction's lifecycle. `TransactionHistoryStorage` replaces `upsert` with
+    `gotPending`, `gotFinalized` and `gotRejected`, split across the `TransactionHistoryReader` and
+    `TransactionHistoryWriter` interfaces. `TransactionHistoryCommon` and `TransactionHistoryCommonSchema` are now
+    `TransactionHistoryEntryCommon` and `TransactionHistoryEntryCommonSchema`, which require a `lifecycle` (`pending`,
+    `finalized` or `rejected`) and `identifiers`, while `protocolVersion` and `status` become optional, known once the
+    chain has settled the transaction; extend them with `extendEntrySchema`. A recorded inclusion wins over a later
+    rejection: `gotRejected` writes nothing for a transaction a finalized entry covers, and `gotFinalized` clears the
+    pending and rejected entries it covers under another hash (`coversTransaction` is the test). A custom storage must
+    follow the same rules.
+  - Histories are saved as `{ version: 'v2', entries }`, which 2.x cannot open. A history saved by 2.x (a bare array)
+    still restores, each entry as `finalized`, with empty `identifiers` where it had none.
+  - `InMemoryTransactionHistoryStorage.restore` throws `TransactionHistoryFormat.TransactionHistoryRestoreError`, which
+    carries a `reason`, instead of the parser's own error; the new `tryRestore` returns it as a `Left`.
+    `NoOpTransactionHistoryStorage.serialize` writes an empty `v2` history.
+  - `ProtocolState` requires a `variantTag`, naming the variant whose state it holds.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 2.x
+
+  - `WalletTransaction`, a handle that carries a transaction together with the protocol version it was built for and its
+    stage, `'Unproven'`, `'Unbound'` or `'Finalized'` (typed `UnprovenTx`, `UnboundTx` and `FinalizedTx`, or `AnyTx` for
+    any). Seal a ledger transaction with `WalletTransaction.adopt(stage, tx, protocolVersion)`. Read it back with
+    `WalletTransaction.unwrapWithin(handle, range)`, an `Either` that fails with `ProtocolVersionMismatchError` for the
+    other ledger version and with `ForeignTransactionHandleError` for a handle sealed by another copy of the package.
+    Move it across a process boundary with `toWire` and `fromWire` (`WireFormatError`).
+  - `ProtocolVersion.ForkSchedule`, `V9NativeForkVersion` (2000000, the value a 2.x node reports),
+    `V9NativeForkSchedule` (`{ v9: V9NativeForkVersion }`) and `epochOf`, and `ProtocolVersion.Registry`, which keys
+    values such as codecs, provers or variants by the protocol-version range each serves (`makeRegistry`,
+    `makeRegistryFromActivations`, `select`).
+  - `IndexerLiveness`, the verdict of cross-checking an indexer against a node (`InSync`, `Ahead`, `Behind`, `Unknown`,
+    `WrongNetwork`, `Unavailable` or `Skipped`), with `evaluate`, `evaluateTips`, `blocksSyncCompletion`, `equivalent`
+    and `sameBlockHash`.
+  - `SnapshotFormat`, `SnapshotRouting` and `TransactionHistoryFormat`, the primitives with which a wallet package
+    versions what it saves: it records a snapshot's format `version` and the variant that wrote it (`versionField`,
+    `writtenByField`), routes a snapshot to that variant on restore (`routeSnapshot`), and refuses an unknown version
+    with `SnapshotRestoreError` (`readSnapshot`). With `readSnapshotWithUnknownFields`, `writeSnapshot` and
+    `withUnknownFields` it keeps the fields it does not declare and writes them back, so a field written by a later
+    release survives a rollback.
+  - `Token.night`, `TokenType`, `parseTokenType` and `InvalidTokenTypeError`, so token types need no ledger import;
+    `VariantState`, the sealed state a wallet exposes; `UnshieldedUtxo`; `NetworkId.StageNet`.
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 2.x
+
+  - `InMemoryTransactionHistoryStorage` keeps the fields of a stored entry, and of the stored history, that its schema
+    does not declare, and writes them back on `serialize`; 2.x dropped them on read. A top-level `__proto__` is carried
+    as an ordinary field.
+
 ## 3.0.0-rc.2
 
 ### Major Changes
