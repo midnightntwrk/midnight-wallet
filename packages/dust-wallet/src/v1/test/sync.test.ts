@@ -193,6 +193,18 @@ describe('V1 dust wallet blockData', () => {
       if (Exit.isSuccess(exit)) expect(exit.value.ledgerParameters).toBeInstanceOf(LedgerParameters);
     });
 
+    it('keeps the Dust tree roots the block reports, so a spend can be checked against the block it is dated at', async () => {
+      const hex = Buffer.from(LedgerParameters.initialParameters().serialize()).toString('hex');
+
+      const exit = await blockDataFor(blockAt(0, hex));
+
+      expect(Exit.isSuccess(exit)).toBe(true);
+      if (Exit.isSuccess(exit)) {
+        expect(exit.value.dustCommitmentMerkleTreeRoot).toBe('aa'.repeat(32));
+        expect(exit.value.dustGenerationMerkleTreeRoot).toBe('bb'.repeat(32));
+      }
+    });
+
     it('refuses a block reported at a version this variant does not serve, instead of decoding it anyway', async () => {
       // A variant bounded below the fork must disown a ledger-v9 block rather than hand its bytes to a deserializer
       // that cannot read them.

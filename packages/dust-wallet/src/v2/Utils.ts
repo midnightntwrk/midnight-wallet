@@ -12,6 +12,8 @@
 // limitations under the License.
 import { HashMap, HashSet, Option } from 'effect';
 import { ScaleBigInt } from '@midnightntwrk/wallet-sdk-address-format';
+import { type DustLocalState } from '@midnightntwrk/ledger-v9';
+import { type DustTreeRoots } from '../SpendTime.js';
 
 export const SignatureMarker = {
   signature: 'signature',
@@ -47,6 +49,24 @@ export const leBigintToHex = (n: bigint, dropLengthPrefix: boolean = false): str
   const encoded = Buffer.from(ScaleBigInt.encode(n));
   const bytes = dropLengthPrefix ? encoded.subarray(1) : encoded; // drop the SCALE compact length-prefix byte
   return bytes.toString('hex');
+};
+
+export type { DustTreeRoots } from '../SpendTime.js';
+
+/**
+ * Reads a Dust state's tree roots in the indexer's encoding, so they compare directly with a block's reported roots.
+ *
+ * @param state The local Dust state.
+ * @returns The two roots. An empty tree has root `0n`, so it reads as `'00'`; the empty string stands for a root the
+ *   ledger did not give.
+ */
+export const dustTreeRoots = (state: DustLocalState): DustTreeRoots => {
+  const commitment = state.commitmentTreeRoot();
+  const generation = state.generatingTreeRoot();
+  return {
+    commitment: commitment === undefined ? '' : leBigintToHex(commitment),
+    generation: generation === undefined ? '' : leBigintToHex(generation),
+  };
 };
 
 // fixed-width little-endian hex, as the indexer encodes nullifiers and commitments ("32-byte little-endian form").

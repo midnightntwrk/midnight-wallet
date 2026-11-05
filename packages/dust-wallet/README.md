@@ -84,7 +84,9 @@ const syncedState = await dustWallet.waitForSyncedState();
 ### Balancing Transaction Fees
 
 ```typescript
-// Add fee balancing to a transaction; `blockData` describes the block it was priced at
+// Add fee balancing to a transaction; `blockData` describes the block it was priced at.
+// Without a `currentTime`, this may wait up to two minutes for the wallet's Dust trees to reach a recent block, then
+// fails with a `Wallet.Sync` error.
 const { transaction: feeBalancingTx, blockData } = await dustWallet.balanceTransactions([transactionToBalance], ttl);
 ```
 
