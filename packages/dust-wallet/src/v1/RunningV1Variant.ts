@@ -544,7 +544,8 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
    *   the local trees. This variant syncs by events, which keep no block height, so it has no block of its own to fall
    *   back on. Until the roots match, balancing reads the newest block again every second, reserving nothing, and fails
    *   with a {@link SyncWalletError} after two minutes. A newest block that reports no roots is used at once, with a
-   *   warning.
+   *   warning. A `ttl` more than the Dust grace period after the spend's time lets the transaction land too late to be
+   *   accepted.
    * @example
    *   ```ts
    *   const { transaction, blockData } = yield* variant.balanceTransactions(dustSecretKey, [tx], ttl);
@@ -599,6 +600,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
           rootedBlock(tip),
           Option.none(),
           Number(tip.ledgerParameters.dust.dustGracePeriodSeconds),
+          ttl,
           currentTime,
         ),
         Either.flatMap((spendTime) =>

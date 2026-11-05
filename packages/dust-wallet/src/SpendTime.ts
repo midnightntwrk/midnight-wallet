@@ -27,12 +27,36 @@ export type DustTreeRoots = { readonly commitment: string; readonly generation: 
 /** A block as dating a spend needs it: where it is, when it was made, and the Dust roots it reports. */
 export type RootedBlock = { readonly height: number; readonly timestamp: Date; readonly roots: DustTreeRoots };
 
+/**
+ * Why a block whose roots the local trees hold still could not date the spend.
+ *
+ * - `TooFarBehindNewest`: it is more than {@link MAX_OWN_BLOCK_LAG} behind the newest block.
+ * - `GraceEndsBeforeTtl`: its Dust grace period ends before the transaction's TTL.
+ */
+export type OwnBlockRefusal = {
+  readonly height: number;
+  readonly reason: 'TooFarBehindNewest' | 'GraceEndsBeforeTtl';
+};
+
 /** The local Dust trees hold the roots of no block a spend could be dated at, so the spend must wait. */
 export class DustTreesNotAtBlockError extends Data.TaggedError('DustTreesNotAtBlock')<{
   readonly blockHeight: number;
   readonly local: DustTreeRoots;
   readonly reported: DustTreeRoots;
+  /** The wallet's own block, when it held the local roots but was refused, and why. */
+  readonly ownBlockRefusal: Option.Option<OwnBlockRefusal>;
 }> {}
+
+/**
+ * How far behind the newest block a wallet's own block may be and still date a spend.
+ *
+ * @remarks
+ *   The node checks a spend's proof against the roots it recorded at the spend's time, and keeps past roots only for its
+ *   global TTL, not for the Dust grace period. Mainnet's global TTL is days, but the ledger's built-in parameters set
+ *   it to one hour, and the SDK cannot read it. An event-less sync pass lands every few seconds, so a block more than
+ *   ten minutes old means sync has stalled; waiting for it is safer than naming roots the node may have dropped.
+ */
+export const MAX_OWN_BLOCK_LAG = Duration.minutes(10);
 
 /**
  * When a spend is dated, and what vouches for that time.
@@ -58,17 +82,21 @@ export const holds = (local: DustTreeRoots, block: RootedBlock): boolean =>
  * @param local The local Dust trees' roots, which the spend's proof is built from.
  * @param tip The newest block.
  * @param ownBlock The block the wallet last verified its roots against, when its sync knows one.
- * @param gracePeriodSeconds How far before the newest block the node still accepts a spend's time.
+ * @param gracePeriodSeconds How long after a spend's time the node still accepts it: it requires `ctime + grace >=
+ *   tblock`, where `tblock` is the block that includes the transaction.
+ * @param ttl The latest time the transaction can be included, so the latest `tblock`.
  * @param currentTime A time the caller gives; it is the caller's to vouch for and is used as it is.
  * @returns The newest block's time when the local trees hold its roots, or when it reports none (a source that cannot
- *   report roots); else the own block's time when the trees hold its roots and it is within the grace period of the
- *   newest; else a {@link DustTreesNotAtBlockError}.
+ *   report roots); else the own block's time when the trees hold its roots, it is no more than {@link MAX_OWN_BLOCK_LAG}
+ *   behind the newest block, and its grace period lasts until `ttl`; else a {@link DustTreesNotAtBlockError}, which
+ *   names the own block's refusal when there was one.
  */
 export const spendTimeAt = (
   local: DustTreeRoots,
   tip: RootedBlock,
   ownBlock: Option.Option<RootedBlock>,
   gracePeriodSeconds: number,
+  ttl: Date,
   currentTime: Date | undefined,
 ): Either.Either<SpendTime, DustTreesNotAtBlockError> => {
   if (currentTime !== undefined) {
@@ -80,14 +108,30 @@ export const spendTimeAt = (
   if (holds(local, tip)) {
     return Either.right({ _tag: 'AtBlock', time: tip.timestamp, height: tip.height });
   }
-  const withinGrace = (block: RootedBlock): boolean =>
-    tip.timestamp.getTime() - block.timestamp.getTime() <= gracePeriodSeconds * 1000;
+  const refusalOf = (block: RootedBlock): Option.Option<OwnBlockRefusal> => {
+    if (tip.timestamp.getTime() - block.timestamp.getTime() > Duration.toMillis(MAX_OWN_BLOCK_LAG)) {
+      return Option.some({ height: block.height, reason: 'TooFarBehindNewest' });
+    }
+    // The transaction may be included as late as `ttl`, so the block's grace period must last at least that long.
+    return block.timestamp.getTime() + gracePeriodSeconds * 1000 < ttl.getTime()
+      ? Option.some({ height: block.height, reason: 'GraceEndsBeforeTtl' })
+      : Option.none();
+  };
+  const notAtBlock = (ownBlockRefusal: Option.Option<OwnBlockRefusal>) =>
+    Either.left(new DustTreesNotAtBlockError({ blockHeight: tip.height, local, reported: tip.roots, ownBlockRefusal }));
   return pipe(
     ownBlock,
-    Option.filter((block) => holds(local, block) && withinGrace(block)),
+    Option.filter((block) => holds(local, block)),
     Option.match({
-      onSome: (block) => Either.right<SpendTime>({ _tag: 'AtBlock', time: block.timestamp, height: block.height }),
-      onNone: () => Either.left(new DustTreesNotAtBlockError({ blockHeight: tip.height, local, reported: tip.roots })),
+      onNone: () => notAtBlock(Option.none()),
+      onSome: (block) =>
+        pipe(
+          refusalOf(block),
+          Option.match({
+            onNone: () => Either.right<SpendTime>({ _tag: 'AtBlock', time: block.timestamp, height: block.height }),
+            onSome: (refusal) => notAtBlock(Option.some(refusal)),
+          }),
+        ),
     }),
   );
 };
@@ -109,10 +153,16 @@ const isNotAtBlock = (error: unknown): error is DustTreesNotAtBlockError =>
 const describeRoots = (roots: DustTreeRoots): string =>
   `commitment ${roots.commitment || '(none)'}, generation ${roots.generation || '(none)'}`;
 
-/** Says which roots the local trees hold and which the block reports, for logs and the final error. */
+const describeRefusal = (refusal: OwnBlockRefusal): string =>
+  refusal.reason === 'TooFarBehindNewest'
+    ? `; block ${refusal.height} holds them but is too far behind the newest block`
+    : `; block ${refusal.height} holds them but its Dust grace period ends before the transaction's TTL`;
+
+/** Says which roots the local trees hold, which the block reports, and why the wallet's own block was refused. */
 export const describeNotAtBlock = (error: DustTreesNotAtBlockError): string =>
   `the wallet's Dust trees hold ${describeRoots(error.local)}, but block ${error.blockHeight} reports ` +
-  describeRoots(error.reported);
+  describeRoots(error.reported) +
+  Option.match(error.ownBlockRefusal, { onNone: () => '', onSome: describeRefusal });
 
 /**
  * Runs `attempt` again on {@link spendTimeRetrySchedule} while it fails because the local trees hold no usable block's

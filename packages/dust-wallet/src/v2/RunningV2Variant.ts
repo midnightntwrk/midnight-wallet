@@ -550,9 +550,11 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
    *   Without a `currentTime`, the spend is dated at a block whose Dust roots the local trees hold, because the node
    *   checks the spend's proof against the roots it recorded at the spend's time and the proof is built from the local
    *   trees. That is the newest block when its roots match; on the event-less sync, otherwise the block its last pass
-   *   verified, if within the Dust grace period of the newest. When neither holds, balancing reads the newest block
-   *   again every second, reserving nothing, and fails with a {@link SyncWalletError} after two minutes. A newest block
-   *   that reports no roots is used at once, with a warning. Fees are priced against the newest block either way.
+   *   verified, if it is at most ten minutes behind the newest and its Dust grace period lasts until `ttl`. When
+   *   neither holds, balancing reads the newest block again every second, reserving nothing, and fails with a
+   *   {@link SyncWalletError} after two minutes, naming why the wallet's own block was refused. A newest block that
+   *   reports no roots is used at once, with a warning. Fees are priced against the newest block either way. A `ttl`
+   *   more than the Dust grace period after the spend's time lets the transaction land too late to be accepted.
    * @example
    *   ```ts
    *   const { transaction, blockData } = yield* variant.balanceTransactions(dustSecretKey, [tx], ttl);
@@ -624,6 +626,7 @@ export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
           rootedBlock(tip),
           Option.map(verifiedBlock, rootedBlock),
           Number(tip.ledgerParameters.dust.dustGracePeriodSeconds),
+          ttl,
           currentTime,
         ),
         Either.flatMap((spendTime) =>
