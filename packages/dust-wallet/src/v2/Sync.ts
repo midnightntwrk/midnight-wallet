@@ -101,9 +101,9 @@ export type { DustProjectionsUpdate } from './SyncSchema.js';
 import {
   bigintToLeHex,
   calculatePrefixLength,
+  dustTreeRoots,
   gapRanges,
   hashMapGroupBy,
-  leBigintToHex,
   uniqueArray,
 } from './Utils.js';
 import { type Dust } from './types/index.js';
@@ -1428,19 +1428,12 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         ),
       };
 
-      const newCommitmentTreeRoot =
-        walletAtLatestBlock.state.commitmentTreeRoot() !== undefined
-          ? leBigintToHex(walletAtLatestBlock.state.commitmentTreeRoot()!)
-          : '';
-      const newGeneratingTreeRoot =
-        walletAtLatestBlock.state.generatingTreeRoot() !== undefined
-          ? leBigintToHex(walletAtLatestBlock.state.generatingTreeRoot()!)
-          : '';
+      const newRoots = dustTreeRoots(walletAtLatestBlock.state);
 
       // verify root hashes
       if (
-        newCommitmentTreeRoot !== update.latestBlock.dustCommitmentMerkleTreeRoot ||
-        newGeneratingTreeRoot !== update.latestBlock.dustGenerationMerkleTreeRoot
+        newRoots.commitment !== update.latestBlock.dustCommitmentMerkleTreeRoot ||
+        newRoots.generation !== update.latestBlock.dustGenerationMerkleTreeRoot
       ) {
         // `SyncCapability.applyUpdate` has no typed error channel, so throwing preserves its public tuple-returning API;
         // `RunningV2Variant` catches this at the capability boundary. See #572 for the planned `Either`-based API.
