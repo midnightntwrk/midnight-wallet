@@ -22,7 +22,7 @@
  */
 import * as ledger from '@midnightntwrk/ledger-v8';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { BigInt as BigIntOps, Effect, Either } from 'effect';
+import { BigInt as BigIntOps, Effect, Either, Array as EArray } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { chooseCoin, makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
@@ -33,6 +33,9 @@ import { COST_PARAMETERS, NETWORK, NIGHT, walletWithOneGeneratingDustCoin } from
 // Long enough after registration for the one Dust coin to cover any of these fees on its own.
 const SECONDS_OF_GENERATION = 3000;
 
+// Enough balances of one transaction that a balancing intent priced in one size and returned in another shows up.
+const REPEATED_BALANCES = 100;
+
 // The sizes of real proofs for the built-in circuits, as the ledger's own mock prover writes them.
 const PROOF_SIZES: Readonly<Record<string, number>> = {
   'midnight/dust/spend': 2_912,
@@ -40,11 +43,26 @@ const PROOF_SIZES: Readonly<Record<string, number>> = {
   'midnight/zswap/output': 4_832,
 };
 
-/** A proving provider that writes proofs of the real size, so that proving yields an unbound transaction to price. */
+/**
+ * A proving provider that writes proofs of the real size, so that proving yields an unbound transaction to price. A
+ * circuit with no known proof size is refused, so the priced transaction never carries a guessed proof.
+ */
 const sizedProofProvider: ledger.ProvingProvider = {
   check: () => Promise.resolve([]),
-  prove: (_preimage, keyLocation) => Promise.resolve(new Uint8Array(PROOF_SIZES[keyLocation] ?? 4_832)),
+  prove: (_preimage, keyLocation) => {
+    const size = PROOF_SIZES[keyLocation];
+    return size === undefined
+      ? Promise.reject(new Error(`No proof size is known for the circuit at ${keyLocation}`))
+      : Promise.resolve(new Uint8Array(size));
+  },
 };
+
+/** Every form a transaction reaches the wallet in to be balanced. */
+type Balanceable =
+  | ledger.UnprovenTransaction
+  | ledger.FinalizedTransaction
+  | ledger.ProofErasedTransaction
+  | ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
 /** The Dust the balancing transaction's spends pay towards the fee. */
 const dustPaid = (balancing: ledger.UnprovenTransaction): bigint =>
@@ -67,79 +85,136 @@ const setUp = Effect.gen(function* () {
   );
   const at = DateOps.addSeconds(now, SECONDS_OF_GENERATION);
   const ttl = DateOps.addSeconds(at, 3600);
-  const transfer = (): ledger.UnprovenTransaction => {
+  /** A transfer in `segment`; transactions balanced together sit in different segments, or they cannot merge. */
+  const transfer = (segment: number = 1): ledger.UnprovenTransaction => {
     const intent = ledger.Intent.new(ttl);
     intent.guaranteedUnshieldedOffer = ledger.UnshieldedOffer.new(
       [],
       [{ type: NIGHT, owner: recipient, value: 1n }],
       [],
     );
-    return ledger.Transaction.fromParts(NETWORK, undefined, undefined, intent);
+    return ledger.Transaction.fromParts(NETWORK).addIntent({ tag: 'specific', value: segment }, intent);
   };
-  const balance = (
-    transaction: ledger.UnprovenTransaction | ledger.FinalizedTransaction | ledger.ProofErasedTransaction,
-  ): ledger.UnprovenTransaction => {
-    // Type cast required because: `balanceTransactions` declares finalized or unproven inputs, while the capability
-    // also receives proof-erased and unbound transactions at run time, which is what these tests exercise.
-    const inputs = [transaction] as ReadonlyArray<ledger.FinalizedTransaction | ledger.UnprovenTransaction>;
+  const asInputs = (
+    transactions: ReadonlyArray<Balanceable>,
+  ): ReadonlyArray<ledger.FinalizedTransaction | ledger.UnprovenTransaction> =>
+    // Type cast required because: the capability declares finalized or unproven inputs, while it also receives
+    // proof-erased and unbound transactions at run time, which is what these tests exercise.
+    transactions as ReadonlyArray<ledger.FinalizedTransaction | ledger.UnprovenTransaction>;
+  const balance = (...transactions: ReadonlyArray<Balanceable>): ledger.UnprovenTransaction => {
     const [balancing] = Either.getOrThrow(
-      transacting.balanceTransactions(dustSecretKey, state, inputs, ttl, at, ledgerParameters),
+      transacting.balanceTransactions(dustSecretKey, state, asInputs(transactions), ttl, at, ledgerParameters),
     );
     return balancing;
   };
   const margin = (transaction: ledger.FinalizedTransaction | ledger.ProofErasedTransaction): bigint =>
     transaction.feesWithMargin(ledgerParameters, COST_PARAMETERS.feeBlocksMargin);
-  const coins = coinsCapability.getAvailableCoinsWithGeneratedDust(state, at);
-  const dryRunAlone = (): bigint => transacting.dryRunFee(coins, [], dustSecretKey, state, ttl, at, ledgerParameters);
-  /** The intent `dryRunFee` prices when there is nothing else: the wallet's coins spent in segment 1. */
-  const spendingIntentAlone = (): ledger.UnprovenTransaction => {
-    const [spends] = CoreWallet.spendCoins(state, dustSecretKey, coins, at);
-    const intent = ledger.Intent.new(ttl);
-    intent.dustActions = new ledger.DustActions<ledger.SignatureEnabled, ledger.PreProof>(
-      'signature',
-      'pre-proof',
-      at,
-      [...spends],
-      [],
-    );
-    return ledger.Transaction.fromParts(NETWORK).addIntent({ tag: 'specific', value: 1 }, intent);
+  /**
+   * A fee priced on another intent than `proven`'s: each fresh intent draws its own binding, whose proven size can
+   * differ by a byte, so the fee lies within one block of the configured margin rather than on it.
+   */
+  const expectWithinOneMarginBlock = (fee: bigint, proven: ledger.FinalizedTransaction): void => {
+    expect(fee).toBeGreaterThan(proven.feesWithMargin(ledgerParameters, COST_PARAMETERS.feeBlocksMargin - 1));
+    expect(fee).toBeLessThan(proven.feesWithMargin(ledgerParameters, COST_PARAMETERS.feeBlocksMargin + 1));
   };
-  return { transacting, ledgerParameters, transfer, balance, margin, dryRunAlone, spendingIntentAlone };
+  /**
+   * The balancing intent covers the configured margin of `proven`, the merged transaction as the node prices it, and
+   * stays below one block more of margin, so the margin is applied once; the fee the wallet quotes for the same inputs
+   * prices its own intent, so it is held within one block of that margin.
+   */
+  const expectPaysProvenMargin = (
+    inputs: ReadonlyArray<Balanceable>,
+    balancing: ledger.UnprovenTransaction,
+    proven: ledger.FinalizedTransaction,
+  ): void => {
+    const paid = dustPaid(balancing);
+    const quoted = Either.getOrThrow(
+      transacting.estimateFee(dustSecretKey, state, asInputs(inputs), ttl, at, ledgerParameters),
+    );
+    expect(paid).toBeGreaterThanOrEqual(margin(proven));
+    expect(paid).toBeLessThan(proven.feesWithMargin(ledgerParameters, COST_PARAMETERS.feeBlocksMargin + 1));
+    expectWithinOneMarginBlock(quoted, proven);
+  };
+  return {
+    transacting,
+    dustSecretKey,
+    state,
+    ledgerParameters,
+    coinsCapability,
+    at,
+    ttl,
+    transfer,
+    balance,
+    margin,
+    expectPaysProvenMargin,
+    expectWithinOneMarginBlock,
+  };
 });
 
 describe('the fee margin the wallet pays', () => {
   it('should cover the margin of an unproven transaction once proven, because the node prices it with its proofs', () =>
     Effect.gen(function* () {
-      const { transfer, balance, margin } = yield* setUp;
+      const { transfer, balance, expectPaysProvenMargin } = yield* setUp;
       const transaction = transfer();
 
       const balancing = balance(transaction);
 
-      expect(dustPaid(balancing)).toBeGreaterThanOrEqual(margin(transaction.merge(balancing).mockProve()));
+      expectPaysProvenMargin([transaction], balancing, transaction.merge(balancing).mockProve());
     }).pipe(Effect.scoped, Effect.runPromise));
+
+  it(
+    'should price exactly the balancing transaction it returns, so the margin holds on every balance',
+    () =>
+      Effect.gen(function* () {
+        const { transfer, balance, margin } = yield* setUp;
+        const transaction = transfer();
+
+        const shortfalls = EArray.makeBy(REPEATED_BALANCES, (iteration) => {
+          const balancing = balance(transaction);
+          return {
+            iteration,
+            shortfall: margin(transaction.merge(balancing).mockProve()) - dustPaid(balancing),
+          };
+        }).filter(({ shortfall }) => shortfall > 0n);
+
+        expect(shortfalls).toEqual([]);
+      }).pipe(Effect.scoped, Effect.runPromise),
+    60_000,
+  );
 
   it('should cover the margin of a finalized transaction with its proven balancing intent, so a DApp transaction keeps the configured headroom', () =>
     Effect.gen(function* () {
-      const { transfer, balance, margin } = yield* setUp;
+      const { transfer, balance, expectPaysProvenMargin } = yield* setUp;
       const finalized = transfer().mockProve();
 
       const balancing = balance(finalized);
 
-      expect(dustPaid(balancing)).toBeGreaterThanOrEqual(margin(finalized.merge(balancing.mockProve())));
+      expectPaysProvenMargin([finalized], balancing, finalized.merge(balancing.mockProve()));
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('should cover the margin of an unbound transaction once bound, because binding comes before submission', () =>
     Effect.gen(function* () {
-      const { transfer, balance, margin } = yield* setUp;
-      const unbound = yield* Effect.promise(() =>
+      const { transfer, balance, expectPaysProvenMargin } = yield* setUp;
+      const unbound = yield* Effect.tryPromise(() =>
         transfer().prove(sizedProofProvider, ledger.CostModel.initialCostModel()),
       );
 
-      // Type cast required because: `balance` takes the inputs `balanceTransactions` declares, and an unbound
-      // transaction is not among them although the wallet receives it.
-      const balancing = balance(unbound as unknown as ledger.FinalizedTransaction);
+      const balancing = balance(unbound);
 
-      expect(dustPaid(balancing)).toBeGreaterThanOrEqual(margin(unbound.bind().merge(balancing.mockProve())));
+      expectPaysProvenMargin([unbound], balancing, unbound.bind().merge(balancing.mockProve()));
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should cover the margin of a finalized and an unproven transaction balanced together, because the facade balances pairs', () =>
+    Effect.gen(function* () {
+      const { transfer, balance, margin } = yield* setUp;
+      const finalized = transfer().mockProve();
+      const unproven = transfer(2);
+
+      const balancing = balance(finalized, unproven);
+
+      expect(dustPaid(balancing)).toBeGreaterThanOrEqual(
+        margin(finalized.merge(unproven.mockProve()).merge(balancing.mockProve())),
+      );
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('should price an unproven transaction alone at its proven margin, so a fee quoted before proving is not short', () =>
@@ -152,11 +227,37 @@ describe('the fee margin the wallet pays', () => {
       );
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should price a dust spend with nothing to balance at its proven margin, so a standalone dry run is not short', () =>
+  it('should price a dust spend with nothing to balance within a block of its proven margin, so a standalone dry run keeps the configured headroom', () =>
     Effect.gen(function* () {
-      const { margin, dryRunAlone, spendingIntentAlone } = yield* setUp;
+      const {
+        transacting,
+        dustSecretKey,
+        state,
+        ledgerParameters,
+        coinsCapability,
+        at,
+        ttl,
+        expectWithinOneMarginBlock,
+      } = yield* setUp;
+      const coins = coinsCapability.getAvailableCoinsWithGeneratedDust(state, at);
+      // The intent `dryRunFee` prices when there is nothing else: the wallet's coins spent in segment 1.
+      const [spends] = CoreWallet.spendCoins(state, dustSecretKey, coins, at);
+      const intent = ledger.Intent.new(ttl);
+      intent.dustActions = new ledger.DustActions<ledger.SignatureEnabled, ledger.PreProof>(
+        'signature',
+        'pre-proof',
+        at,
+        [...spends],
+        [],
+      );
+      const spendingIntentAlone = ledger.Transaction.fromParts(NETWORK).addIntent(
+        { tag: 'specific', value: 1 },
+        intent,
+      );
 
-      expect(dryRunAlone()).toBeGreaterThanOrEqual(margin(spendingIntentAlone().mockProve()));
+      const dryRun = transacting.dryRunFee(coins, [], dustSecretKey, state, ttl, at, ledgerParameters);
+
+      expectWithinOneMarginBlock(dryRun, spendingIntentAlone.mockProve());
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('should still balance a proof-erased transaction at its erased margin, because it is submitted without proofs', () =>
@@ -167,5 +268,18 @@ describe('the fee margin the wallet pays', () => {
       const balancing = balance(erased);
 
       expect(dustPaid(balancing)).toBeGreaterThanOrEqual(margin(erased.merge(balancing.eraseProofs())));
+    }).pipe(Effect.scoped, Effect.runPromise));
+
+  it('should balance a finalized transaction with a proof-erased one at the erased margin of the whole set, because one input without proofs has no proven form', () =>
+    Effect.gen(function* () {
+      const { transfer, balance, margin } = yield* setUp;
+      const finalized = transfer().mockProve();
+      const erased = transfer(2).eraseProofs();
+
+      const balancing = balance(finalized, erased);
+
+      expect(dustPaid(balancing)).toBeGreaterThanOrEqual(
+        margin(finalized.eraseProofs().merge(erased).merge(balancing.eraseProofs())),
+      );
     }).pipe(Effect.scoped, Effect.runPromise));
 });

@@ -13,7 +13,7 @@
 import * as ledger from '@midnightntwrk/ledger-v8';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
-import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
+import { EitherOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { describe, expect, it, vi } from 'vitest';
 import {
   chooseCoin,
@@ -282,10 +282,12 @@ describe('addDustRegistrationSignature', () => {
 });
 
 describe('computeBalancingRecipe', () => {
-  // `dryRunFee` and `calculateFee` are the WASM-backed parts of balancing — they build and erase proofs on a real
-  // ledger transaction. These tests exercise the selection loop itself, so both are replaced by an analytic fee model
-  // whose one relevant property matches the real one: the fee grows with each dust input. Everything else —
-  // `computeBalancingRecipe`, `balanceTransactions`, the SDK's `getBalanceRecipe` and `Imbalances` — runs unmodified.
+  // `dryRunFee` and `calculateFee` are the WASM-backed parts of balancing — they build a balancing intent and price
+  // the merged result on a real ledger transaction. These tests exercise the selection loop itself, so both are
+  // replaced by an analytic fee model whose one relevant property matches the real one: the fee grows with each dust
+  // input. Everything else — the merge into the form the transactions are priced in, `computeBalancingRecipe`,
+  // `balanceTransactions`, the SDK's `getBalanceRecipe` and `Imbalances` — runs unmodified, so the fake transactions
+  // below must survive that merge.
   const FEE_BASE = 1_400_000_000_000_000n;
   const FEE_PER_INPUT = 3_750_000_000_000n;
   const linearFee = (inputs: number): bigint => FEE_BASE + FEE_PER_INPUT * BigInt(inputs);
@@ -331,11 +333,21 @@ describe('computeBalancingRecipe', () => {
   const coin = (value: bigint, n: number): CoinWithValue<Dust> => ({ value, token: dustToken(n) });
 
   // A transaction that, at its own fee, carries `carriedDust` of dust already: its dust imbalance is the ledger's
-  // netted figure, `carriedDust - fee`. Proof-erasure and merging are inert here; the fee model stands in for pricing.
+  // netted figure, `carriedDust - fee`. It has no proven form: it cannot be mock-proved, and its bound form does not
+  // serialize, so it is merged through its `eraseProofs` stub, which keeps every segment free. The fee model stands in
+  // for pricing whatever that merge produces.
   const fakeTx = (carriedDust: bigint = 0n): ledger.FinalizedTransaction =>
     // Type cast required because: the fee model replaces every ledger call `computeBalancingRecipe` would make on it.
     ({
       imbalances: () => new Map([[{ tag: 'dust' }, carriedDust - linearFee(0)]]),
+      mockProve: () => {
+        throw new Error('a finalized transaction cannot be mock-proved');
+      },
+      bind: () => ({
+        serialize: () => {
+          throw new Error('the fake transaction has no serialized form');
+        },
+      }),
       eraseProofs: () => ({ merge: (other: unknown) => other, intents: undefined }),
     }) as unknown as ledger.FinalizedTransaction;
 
@@ -475,6 +487,27 @@ describe('computeBalancingRecipe', () => {
       .pipe(EitherOps.getOrThrowLeft);
     expect(balancing.intents?.size ?? 0).toBe(0);
     expect(nextState).toBe(state);
+  });
+
+  it('should fail balancing when binding a transaction throws, so a ledger fault is not priced as proof-erased', () => {
+    // Only a transaction with no proven form is priced proof-erased. Binding is defined on every transaction form, so
+    // a throw from it is a ledger fault: balancing must report it, not fall back to the erased price, which is short
+    // of what the node charges for the proven transaction. The pool could pay, so a success here means the fault was
+    // swallowed and priced.
+    const bindFails = new Error('binding failed');
+    // Type cast required because: the spread copies only the fake's stubbed members, not a ledger transaction.
+    const faulty = {
+      ...fakeTx(),
+      bind: () => {
+        throw bindFails;
+      },
+    } as unknown as ledger.FinalizedTransaction;
+    const transacting = new TestableTransacting([coin(1_000_000_000_000_000_000n, 0)], chooseCoin);
+
+    const error = run(transacting, faulty).pipe(EitherOps.getOrThrowRight);
+
+    expect(error).toBeInstanceOf(LedgerOps.LedgerError);
+    expect((error as LedgerOps.LedgerError).cause).toBe(bindFails);
   });
 
   it('reports InsufficientFundsError when no order of the pool can pay', () => {
