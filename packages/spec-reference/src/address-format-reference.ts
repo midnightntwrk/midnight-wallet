@@ -34,7 +34,8 @@ export class MidnightBech32m {
   }
 
   static parse(bech32string: string): MidnightBech32m {
-    const bech32parsed = bech32m.decodeToBytes(bech32string);
+    // Midnight addresses exceed BIP-350's 90-character limit by design; each codec checks its own payload length.
+    const bech32parsed = bech32m.decodeToBytes(bech32string, false);
     const [prefix, type, network = null] = bech32parsed.prefix.split('_');
     if (prefix != MidnightBech32m.prefix) {
       throw new Error(`Expected prefix ${MidnightBech32m.prefix}`);
