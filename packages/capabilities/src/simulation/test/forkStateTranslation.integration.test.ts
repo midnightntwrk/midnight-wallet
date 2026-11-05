@@ -32,15 +32,7 @@ import { translateLedgerState } from '@midnightntwrk/wallet-sdk-state-translatio
 import { Effect, type Array as Arr } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import {
-  ForkSimulator,
-  V8,
-  genesisStrictness,
-  getCurrentBlockNumber,
-  getLastBlock,
-  immediateBlockProducer,
-  translatorFromAsync,
-} from '../index.js';
+import { ForkSimulator, V8, translatorFromAsync, V9 } from '../index.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 
@@ -77,7 +69,7 @@ const baseConfig = {
   forkVersion,
   v8Version,
   v8BlockProducer: V8.immediateBlockProducer(undefined, V8.genesisStrictness),
-  v9BlockProducer: immediateBlockProducer(undefined, genesisStrictness),
+  v9BlockProducer: V9.immediateBlockProducer(undefined, V9.genesisStrictness),
   translator,
 };
 
@@ -110,8 +102,8 @@ describe('ForkSimulator over the real v8-to-v9 state translation', () => {
 
       expect(state.ledger).toBeInstanceOf(ledgerV9.LedgerState);
       // The boundary invariants hold on the translated state, not just its parseability.
-      expect(getCurrentBlockNumber(state)).toBe(forkBlock);
-      expect(getLastBlock(state).protocolVersion).toBe(forkVersion);
+      expect(V9.getCurrentBlockNumber(state)).toBe(forkBlock);
+      expect(V9.getLastBlock(state).protocolVersion).toBe(forkVersion);
       expect(state.protocolVersion).toBe(forkVersion);
     }).pipe(Effect.scoped, Effect.runPromise));
 

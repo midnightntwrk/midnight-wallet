@@ -360,6 +360,7 @@ describe('RunningV2Variant.state protocol version signalling', () => {
       { appliedIndex: 0n, highestRelevantWalletIndex: 0n, highestIndex: 0n, highestRelevantIndex: 0n },
       protocolVersion,
       networkId,
+      'events',
     );
 
   const versionChangesOf = (changes: Chunk.Chunk<StateChange.StateChange<CoreWallet>>): readonly bigint[] =>

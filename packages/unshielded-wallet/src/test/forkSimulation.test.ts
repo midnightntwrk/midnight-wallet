@@ -52,6 +52,7 @@ import {
   type ForkWallet,
   makeForkWallet,
   utxosOf,
+  eitherCoreStateOf,
 } from './forkHarness.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
@@ -338,16 +339,16 @@ describe('an unshielded wallet crossing the boundary with a transfer still in fl
 
       // The premise, asserted rather than assumed: building the transfer really did book all three UTXOs, leaving the
       // wallet with nothing available to spend.
-      expect(valuesOf(bookedUtxosOf(inFlight.state.state))).toEqual([100n, 200n, 300n]);
-      expect(valuesOf(utxosOf(inFlight.state.state))).toEqual([]);
+      expect(valuesOf(bookedUtxosOf(eitherCoreStateOf(inFlight.state)))).toEqual([100n, 200n, 300n]);
+      expect(valuesOf(utxosOf(eitherCoreStateOf(inFlight.state)))).toEqual([]);
 
       const { crossed } = yield* crossTheFork({ snapshot: inFlight.snapshot, timeline, settleAt: 6n });
       const state = yield* publicState(crossed);
 
       // That transfer was built for the ledger-v8 and can never be included past the boundary, so the
       // UTXOs it reserved are the wallet's to spend again — and nobody had to call anything for that to happen.
-      expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);
-      expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
+      expect(valuesOf(bookedUtxosOf(eitherCoreStateOf(state)))).toEqual([]);
+      expect(valuesOf(utxosOf(eitherCoreStateOf(state)))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
       // Nothing is merely hidden: every coin the wallet holds after the crossing, it can spend.
       expect(state.balances[timelineTokenType]).toBe(totalOf(state.totalCoins));
     }).pipe(Effect.scoped, Effect.runPromise));
@@ -365,8 +366,8 @@ describe('an unshielded wallet crossing the boundary with a transfer still in fl
       // of this variant's booked against it — is true because the crossing already released it. So the call is a
       // genuine no-op rather than a silently skipped release.
       expect(reverted).toBeUndefined();
-      expect(valuesOf(utxosOf(after.state))).toEqual(valuesOf(utxosOf(before.state)));
-      expect(valuesOf(bookedUtxosOf(after.state))).toEqual([]);
+      expect(valuesOf(utxosOf(eitherCoreStateOf(after)))).toEqual(valuesOf(utxosOf(eitherCoreStateOf(before))));
+      expect(valuesOf(bookedUtxosOf(eitherCoreStateOf(after)))).toEqual([]);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('writes a snapshot that reopens with nothing booked', async () =>
@@ -381,8 +382,8 @@ describe('an unshielded wallet crossing the boundary with a transfer still in fl
       // The stuck state must not outlive the process that produced it: what a released wallet persists is a released
       // wallet, so an application that saves and restores does not re-acquire the booking.
       const state = yield* publicState(reopened);
-      expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);
-      expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
+      expect(valuesOf(bookedUtxosOf(eitherCoreStateOf(state)))).toEqual([]);
+      expect(valuesOf(utxosOf(eitherCoreStateOf(state)))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('does not resurrect a booked UTXO whose transaction confirmed before the boundary', async () =>
@@ -413,8 +414,8 @@ describe('an unshielded wallet crossing the boundary with a transfer still in fl
       // Spent is spent. The V1 variant applies the confirmation before it ever sees the boundary — the cursor
       // gates the hand-over — and applying it removes those UTXOs from BOTH maps, so the crossing has nothing left to
       // release and cannot hand back a coin the chain has already consumed.
-      expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);
-      expect(valuesOf(utxosOf(state.state))).toEqual([changeAmount, 444n]);
+      expect(valuesOf(bookedUtxosOf(eitherCoreStateOf(state)))).toEqual([]);
+      expect(valuesOf(utxosOf(eitherCoreStateOf(state)))).toEqual([changeAmount, 444n]);
     }).pipe(Effect.scoped, Effect.runPromise));
 });
 
@@ -444,8 +445,8 @@ describe('an unshielded wallet saved by the V1 variant after its sync annotated 
       const { crossed } = yield* crossTheFork({ snapshot, timeline, settleAt: 6n });
       const state = yield* publicState(crossed);
 
-      expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);
-      expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
+      expect(valuesOf(bookedUtxosOf(eitherCoreStateOf(state)))).toEqual([]);
+      expect(valuesOf(utxosOf(eitherCoreStateOf(state)))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
       expect(state.balances[timelineTokenType]).toBe(totalOf(state.totalCoins));
     }).pipe(Effect.scoped, Effect.runPromise));
 });
@@ -478,8 +479,8 @@ describe('an unshielded wallet saved by a V1 build that predates the writer fiel
       const { crossed } = yield* crossTheFork({ snapshot, timeline, settleAt: 6n });
       const state = yield* publicState(crossed);
 
-      expect(valuesOf(bookedUtxosOf(state.state))).toEqual([]);
-      expect(valuesOf(utxosOf(state.state))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
+      expect(valuesOf(bookedUtxosOf(eitherCoreStateOf(state)))).toEqual([]);
+      expect(valuesOf(utxosOf(eitherCoreStateOf(state)))).toEqual([100n, 200n, 300n, 444n, 500n, 600n]);
       expect(state.balances[timelineTokenType]).toBe(totalOf(state.totalCoins));
     }).pipe(Effect.scoped, Effect.runPromise));
 });

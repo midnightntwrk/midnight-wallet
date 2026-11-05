@@ -1,5 +1,49 @@
 # @midnightntwrk/wallet-sdk-indexer-client
 
+## 2.0.0-rc.2
+
+### Major Changes
+
+- 1e0ea94: Breaking changes since 1.x
+
+  - The generated GraphQL types are scoped to the operations the client runs: the bare schema types are no longer
+    exported (87 names, among them `Maybe`, `InputMaybe`, `Scalars`, `Exact`, object types such as `Block`,
+    `Transaction` and `TransactionResult`, and the `Query*Args` and `Subscription*Args` types). Use the operation types,
+    such as `TransactionStatusQuery`, instead.
+  - The transaction unions in `TransactionStatusQuery`, `TransactionHistoryDetailQuery` and
+    `UnshieldedTransactionsSubscription` gain a `BridgeClaimTransaction` member, so an exhaustive match on `__typename`
+    or `type` must handle it.
+  - The client is generated from a newer indexer schema and selects fields an older indexer does not serve, among them
+    `protocolVersion` on the unshielded transactions' progress frame. The SDK is tested against indexer `4.4.0-rc.6`.
+  - Depends on `graphql` `^17` (was `^16`), and on `fflate` for subscription compression.
+
+### Minor Changes
+
+- 1e0ea94: Additions since 1.x
+
+  - New operations: `ZswapEventTip` and `DustLedgerEventTip`, which read only the newest event id, for watching the
+    chain's protocol version, and `DustNullifierTransactions`, `DustGenerationEvents` (its types are named
+    `DustGenerations*`) and `DustCommitmentMerkleTreeUpdate`, which the Dust wallet's projections sync uses; each comes
+    with its document and result types. `BlockHash` returns the block's `protocolVersion`, its zswap and Dust end
+    indices and the two Dust Merkle roots; `DustLedgerEvents` and the unshielded transactions' progress frame carry
+    `protocolVersion`; `TransactionHistoryDetail` returns the block hash and height, the transaction's identifiers and
+    its paid fees, and unshielded transactions their block hash and height.
+  - Subscriptions negotiate the indexer's `graphql-transport-ws+deflate` subprotocol and inflate the compressed frames,
+    falling back to plain `graphql-transport-ws` against an indexer that does not offer it. There is nothing to
+    configure.
+
+### Patch Changes
+
+- 1e0ea94: Fixes and other changes since 1.x
+
+  - The subscription WebSocket stays open for the client's lifetime, so a subscription that pauses for backpressure
+    resumes on the same connection instead of reconnecting; disposing the client closes the socket and cancels its
+    keep-alive timer.
+
+- Updated dependencies [1e0ea94]
+- Updated dependencies [1e0ea94]
+  - @midnightntwrk/wallet-sdk-utilities@1.3.0-rc.1
+
 ## 2.0.0-rc.1
 
 ### Minor Changes

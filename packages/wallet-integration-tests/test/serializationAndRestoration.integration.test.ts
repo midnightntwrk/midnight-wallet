@@ -15,9 +15,11 @@ import {
   type ShieldedWalletClass,
   type ShieldedWalletState,
   type DefaultShieldedConfiguration,
+  type ShieldedKeysByEpoch,
 } from '@midnightntwrk/wallet-sdk-shielded';
 import { UnshieldedWallet, createKeystore, PublicKey } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
-import * as ledger from '@midnightntwrk/ledger-v9';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 
 import { type DefaultUnshieldedConfiguration } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
 import { randomUUID } from 'node:crypto';
@@ -32,6 +34,12 @@ import { InMemoryTransactionHistoryStorage, NetworkId, ProtocolVersion } from '@
 import { WalletEntrySchema, mergeWalletEntries } from '@midnightntwrk/wallet-sdk-facade';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
+
+/** One ledger version's shielded keys per side of the boundary, each derived from the seed by its own ledger version. */
+const shieldedKeysFromSeed = (seed: Uint8Array): ShieldedKeysByEpoch => ({
+  v8: ledgerV8.ZswapSecretKeys.fromSeed(seed),
+  v9: ledgerV9.ZswapSecretKeys.fromSeed(seed),
+});
 
 const environmentId = randomUUID();
 
@@ -90,14 +98,14 @@ describe('Wallet serialization and restoration', () => {
   it('allows to restore an non-empty wallet from the serialized state', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
     const wallet = await Wallet.startWithSeed(seed);
-    await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
+    await wallet.start(shieldedKeysFromSeed(seed));
     try {
       const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
       const originalBalances = syncedState.balances;
 
       const serializedState = await wallet.serializeState();
       const restored = Wallet.restore(serializedState);
-      await restored.start(ledger.ZswapSecretKeys.fromSeed(seed));
+      await restored.start(shieldedKeysFromSeed(seed));
       try {
         const state = await restored.waitForSyncedState();
         const restoredBalances = state.balances;
@@ -115,14 +123,14 @@ describe('Wallet serialization and restoration', () => {
   it('allows to restore an empty wallet from the serialized state', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000009');
     const wallet = await Wallet.startWithSeed(seed);
-    await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
+    await wallet.start(shieldedKeysFromSeed(seed));
     try {
       const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
       const originalBalances = syncedState.balances;
 
       const serializedState = await wallet.serializeState();
       const restored = Wallet.restore(serializedState);
-      await restored.start(ledger.ZswapSecretKeys.fromSeed(seed));
+      await restored.start(shieldedKeysFromSeed(seed));
       try {
         const state = await restored.waitForSyncedState();
         const restoredBalances = state.balances;
@@ -140,7 +148,7 @@ describe('Wallet serialization and restoration', () => {
   it('should restore shielded wallet from serialized transaction history', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
     const wallet = await ShieldedWallet(shieldedConfiguration).startWithSeed(seed);
-    await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
+    await wallet.start(shieldedKeysFromSeed(seed));
     try {
       await wallet.waitForSyncedState();
 
@@ -159,7 +167,7 @@ describe('Wallet serialization and restoration', () => {
         txHistoryStorage: restoredTxHistoryStorage,
       }).restore(serializedState);
 
-      await restoredWallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
+      await restoredWallet.start(shieldedKeysFromSeed(seed));
       try {
         await restoredWallet.waitForSyncedState();
 

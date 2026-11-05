@@ -1,7 +1,7 @@
 {
   "name": "@midnightntwrk/wallet-sdk-utilities",
   "description": "Domain-agnostic utilities for the wallet SDK - common operations and types",
-  "version": "1.2.2-rc.0",
+  "version": "1.3.0-rc.1",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -36,6 +36,10 @@
     "./testing": {
       "types": "./dist/testing/index.d.ts",
       "import": "./dist/testing/index.js"
+    },
+    "./testing/variants": {
+      "types": "./dist/testing/variants.d.ts",
+      "import": "./dist/testing/variants.js"
     }
   },
   "dependencies": {

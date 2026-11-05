@@ -10,19 +10,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type Duration, Effect, type Scope, Stream, Schema, pipe, Either, HashMap, Match, Option } from 'effect';
+import { BigInt as EBigInt, Effect, type Scope, Stream, Schema, pipe, Either, HashMap, Match, Option } from 'effect';
 import { IndexerLiveness, ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 import { CoreWallet } from './CoreWallet.js';
 import { UtxoWithMeta } from './UnshieldedState.js';
-// The simulation package re-exports the ledger-v9 twin unqualified and offers both lines as `V8`/`V9` namespaces. This
-// variant must name `V8` explicitly: the two twins are structurally identical, so the unqualified (v9) import
-// typechecks here perfectly well and would silently hand ledger-v9 objects to ledger-v8 WASM at runtime.
+// The simulation entry offers each ledger version's simulator as a `V8`/`V9` namespace, and this variant takes `V8`.
+// The two twins are structurally identical, so taking `V9` by mistake would typecheck here perfectly well and silently
+// hand ledger-v9 objects to ledger-v8 WASM at runtime.
 import { V8 as Simulation } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import {
   DEFAULT_LIVENESS_CONFIGURATION,
   DEFAULT_POLL_INTERVAL,
-  type DefaultSubmissionConfiguration,
-  type LivenessConfiguration,
   type LivenessReads,
   type LivenessReadsConfiguration,
   LivenessServiceImpl,
@@ -44,6 +42,7 @@ import {
   type WalletSyncUpdate,
   WalletSyncUpdateSchema,
 } from './SyncSchema.js';
+import { type DefaultSyncConfiguration, resolveNodeEndpoint } from '../types/UnshieldedWalletTypes.js';
 
 export interface SyncService<TState, TUpdate> {
   /**
@@ -116,73 +115,12 @@ export const isBeyondActiveRange = (version: number, activeRange: ProtocolVersio
 export const annotateVersion = (state: CoreWallet, version: number): CoreWallet =>
   CoreWallet.withProtocolVersion(state, ProtocolVersion.ProtocolVersion(BigInt(version)));
 
-export type IndexerClientConnection = {
-  indexerHttpUrl: string;
-  indexerWsUrl?: string;
-  keepAlive?: number;
-};
-
-export type NodeClientConnection = {
-  /** The node's WebSocket RPC endpoint, used only to read the finalized head. */
-  nodeURL: string;
-};
-
-/**
- * The node transactions are submitted through, borrowed from the submission configuration as the default source of a
- * finalized head.
- *
- * @remarks
- *   Every wallet configured to submit already names a node, and demanding that same endpoint a second time would leave
- *   the cross-check switched off for anyone who did not know to opt in.
- *
- *   Taken from `DefaultSubmissionConfiguration` rather than redeclared, so that renaming or retyping the field there
- *   fails to compile here. Declared independently it would merely stop matching, and the check would go quiet — the
- *   class of silent failure this feature exists to prevent.
- */
-type SubmissionNodeFallback = Partial<Pick<DefaultSubmissionConfiguration, 'relayURL'>>;
-
-export type DefaultSyncConfiguration = {
-  indexerClientConnection: IndexerClientConnection;
-  /**
-   * The clock the booking sweep expires against. Defaults to system time; inject one to pin the expiry boundary in a
-   * test, or to follow a simulated chain.
-   */
-  clock?: Clock.Clock;
-  /**
-   * Where to read the node's finalized head, for cross-checking the indexer's reported position.
-   *
-   * @remarks
-   *   Synchronizing needs a node as well as an indexer, and this is where sync says so. Optional only because a wallet
-   *   may run without one, in which case no cross-check happens and the wallet reports {@link IndexerLiveness.Skipped}.
-   *
-   *   A wallet configured for transaction submission need not set it: the endpoint named by `relayURL` is used, so the
-   *   same node is not configured twice. Set this to name the node explicitly — a wallet built without submission
-   *   configuration has no `relayURL` to borrow.
-   */
-  nodeClientConnection?: NodeClientConnection;
-  /**
-   * How far the indexer may drift from the node's finalized head before the difference is reported.
-   *
-   * @remarks
-   *   Defaults to {@link DEFAULT_LIVENESS_CONFIGURATION}, whose tolerances suit a chain producing blocks seconds apart.
-   *   Set this for a chain with a different block time, or to tighten the staleness allowance a caller is willing to
-   *   treat as current.
-   */
-  livenessConfiguration?: LivenessConfiguration;
-  /**
-   * How often to compare the indexer against the node.
-   *
-   * @remarks
-   *   Defaults to {@link DEFAULT_POLL_INTERVAL}. Each poll costs one request to the indexer and one to a node the wallet
-   *   does not own, so shortening this trades load for how quickly a stalled indexer is noticed. Polling faster than
-   *   blocks are produced only re-reads the same block.
-   *
-   *   Polls never overlap: each one is awaited before the next tick is taken. An interval shorter than the time a read
-   *   takes — a read of the node is given ten seconds before it is abandoned — therefore slows the effective cadence to
-   *   the speed of the reads rather than running two at once.
-   */
-  livenessPollInterval?: Duration.DurationInput;
-} & SubmissionNodeFallback;
+export type {
+  DefaultSyncConfiguration,
+  IndexerClientConnection,
+  NodeClientConnection,
+} from '../types/UnshieldedWalletTypes.js';
+export { resolveNodeEndpoint } from '../types/UnshieldedWalletTypes.js';
 
 export type DefaultSyncContext = {
   transactionHistoryService: TransactionHistoryService;
@@ -325,6 +263,11 @@ const applyVersionSignal = (state: CoreWallet, signal: VersionSignalSyncUpdate):
  *   carries is deliberately not read here: the source splits that off into its own `VersionSignal`, which is the only
  *   message allowed to annotate, and which alone carries the gate in {@link applyVersionSignal}. Annotating from both
  *   places would put the gate on one route and not the other.
+ *
+ *   The far end only ever rises. A frame is a reading the source took at some moment, served from a cache and sent on a
+ *   timer of its own, while transactions are sent as soon as they are indexed — so a frame can arrive after a
+ *   transaction it predates. Lowering the far end to it would report a gap that is not there, and the wallet would read
+ *   as unsynchronized until the next frame, which on an idle address the source sends only minutes apart.
  * @param state The wallet to record on.
  * @param progress The frame.
  * @returns The wallet with the far end of its cursor moved and marked connected.
@@ -332,7 +275,7 @@ const applyVersionSignal = (state: CoreWallet, signal: VersionSignalSyncUpdate):
 const applyProgress = (state: CoreWallet, progress: ProgressUpdate): Either.Either<CoreWallet, never> =>
   Either.right(
     CoreWallet.updateProgress(state, {
-      highestTransactionId: BigInt(progress.highestTransactionId),
+      highestTransactionId: EBigInt.max(state.progress.highestTransactionId, BigInt(progress.highestTransactionId)),
       isConnected: true,
     }),
   );
@@ -387,6 +330,11 @@ const placeTransaction = (
  *
  * @remarks
  *   The history is written only once the fold has succeeded, so a rejected transaction leaves no trace there either.
+ *
+ *   Both ends of the cursor move. A delivered transaction proves the address's timeline reaches at least its id, so the
+ *   far end is raised to it rather than left waiting for a progress frame to say so — the source sends those on a timer
+ *   that backs off while the address is idle, and until one came the wallet would read as unsynchronized over a state
+ *   it had already brought up to date.
  * @param state The wallet to fold into.
  * @param update The delivered transaction.
  * @param getContext Where the transaction history lives.
@@ -405,7 +353,11 @@ const foldTransaction = (
 
   return folded.pipe(
     Either.map((wallet) => {
-      const advanced = CoreWallet.updateProgress(wallet, { appliedId: BigInt(update.transaction.id) });
+      const appliedId = BigInt(update.transaction.id);
+      const advanced = CoreWallet.updateProgress(wallet, {
+        appliedId,
+        highestTransactionId: EBigInt.max(wallet.progress.highestTransactionId, appliedId),
+      });
       Effect.runFork(getContext().transactionHistoryService.put(update));
       return sweep(annotateVersion(advanced, update.transaction.protocolVersion));
     }),
@@ -456,21 +408,6 @@ const applyTransaction = (
     Match.when('deferred', () => Either.right(annotateVersion(state, update.transaction.protocolVersion))),
     Match.when('applicable', () => foldTransaction(state, update, getContext, sweep)),
     Match.exhaustive,
-  );
-
-/**
- * Decides which node endpoint the liveness check should read, if any.
- *
- * @remarks
- *   `nodeClientConnection` is sync's own statement of the node it needs, so it is preferred. A wallet configured for
- *   submission need not repeat that endpoint, so `relayURL` serves as the default. Only a wallet naming neither goes
- *   unchecked.
- * @param config - The sync configuration.
- * @returns The endpoint to read the finalized head from, or `Option.none` when the wallet names no node at all.
- */
-export const resolveNodeEndpoint = (config: DefaultSyncConfiguration): Option.Option<NodeClientConnection> =>
-  Option.orElse(Option.fromNullable(config.nodeClientConnection), () =>
-    Option.map(Option.fromNullable(config.relayURL), (relayURL) => ({ nodeURL: relayURL.toString() })),
   );
 
 /**

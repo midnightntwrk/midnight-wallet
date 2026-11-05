@@ -61,10 +61,10 @@ const inSync = IndexerLiveness.InSync({ indexerHeight: 1_000n, finalizedHeight: 
  * behind.
  */
 const isCaughtUpButBehind = (state: UnshieldedWalletState): boolean =>
-  state.state.progress.isConnected &&
-  state.state.progress.appliedId === 1n &&
-  state.state.progress.highestTransactionId === 1n &&
-  IndexerLiveness.isBehind(state.state.progress.indexerLiveness);
+  state.progress.isConnected &&
+  state.progress.appliedId === 1n &&
+  state.progress.highestTransactionId === 1n &&
+  IndexerLiveness.isBehind(state.progress.indexerLiveness);
 
 /** Far longer than an in-memory wallet takes to get anywhere, and well inside the test's own timeout. */
 const settleWithin = Duration.seconds(5);
@@ -122,7 +122,7 @@ const waitsUntilInSync = (
       Effect.promise(() => synced),
     );
 
-    expect(resolved.state.progress.indexerLiveness).toStrictEqual(inSync);
+    expect(resolved.progress.indexerLiveness).toStrictEqual(inSync);
   });
 
 describe('waitForSyncedState', () => {

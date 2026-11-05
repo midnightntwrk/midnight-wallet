@@ -25,7 +25,7 @@
  * 1. a proving backend per ledger version (`provers`)
  * 2. the seed-first start, which is the primary and the only one that crosses a fork
  * 3. reading the protocol phase off the state (`Settled` / `Crossing`)
- * 4. finding transactions the fork orphaned (`PendingStatus.Orphaned`)
+ * 4. finding transactions the fork orphaned (`LifecycleStatus.Orphaned`)
  * 5. persisting and restoring (`serializeState` / `tryRestore`)
  *
  * The same configuration does the right thing on any chain: on one still below the boundary it runs on ledger-v8, on one
@@ -38,6 +38,7 @@ import {
   createKeystore,
   DustWallet,
   InMemoryTransactionHistoryStorage,
+  isAwaiting,
   mergeWalletEntries,
   PublicKey,
   ShieldedWallet,
@@ -46,6 +47,8 @@ import {
   WalletFacade,
   WalletSeeds,
 } from '@midnightntwrk/wallet-sdk';
+import * as ledgerV8 from '@midnightntwrk/wallet-sdk/ledger/v8';
+import * as ledgerV9 from '@midnightntwrk/wallet-sdk/ledger/v9';
 import { Buffer } from 'buffer';
 import { Either } from 'effect';
 
@@ -158,8 +161,10 @@ switch (state.protocol._tag) {
 // for a timeout — it gives up as soon as it observes a version past the one the transaction was authored for, unbooks
 // the coins so the funds are spendable again, and records `orphaned-by-protocol-upgrade` in transaction history so an
 // application can tell a user why. Re-submitting the same bytes could never help; re-authoring is the answer.
-const orphaned = state.pending.flatMap((entry) => (entry.status._tag === 'Orphaned' ? [entry.status] : []));
-console.log(`Pending transactions: ${state.pending.length}, of which orphaned by the fork: ${orphaned.length}`);
+const orphaned = state.lifecycle.flatMap((entry) => (entry.status._tag === 'Orphaned' ? [entry.status] : []));
+console.log(
+  `Transactions awaiting an answer: ${state.lifecycle.filter(isAwaiting).length}; orphaned by the fork: ${orphaned.length}`,
+);
 orphaned.forEach((status) => console.log(`  authored for ${status.authoredFor}, chain had reached ${status.chainNow}`));
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -175,12 +180,13 @@ const restored = ShieldedWallet(configuration).tryRestore(snapshot);
 console.log('Restored the snapshot this wallet just wrote?', Either.isRight(restored));
 if (Either.isRight(restored)) {
   // A restored wallet holds no key material — a snapshot deliberately carries none — so it synchronizes nothing until
-  // it is started again. Which start depends on where the snapshot was written: `startWithSeed` (and its sibling
-  // `startWithKeys({ v8, v9 })`) answers for the variant either side of the boundary, so it works whichever side the
-  // snapshot came from; `start(secretKeys)` takes ledger-v9's key alone and so serves only a
-  // snapshot written at or past the boundary. Neither is the class-level start of the same name: those build a fresh
-  // wallet, which would discard the state just restored.
-  await restored.right.startWithSeed(seeds.shielded);
+  // it is started again, with one ledger version's keys per side of the boundary: the variant the snapshot restored
+  // onto takes its own side, whichever that is, and the other is kept for the hand-over. A wallet is started with keys,
+  // never a seed, so a caller holding a seed derives them first, each with its own ledger version.
+  await restored.right.start({
+    v8: ledgerV8.ZswapSecretKeys.fromSeed(seeds.shielded),
+    v9: ledgerV9.ZswapSecretKeys.fromSeed(seeds.shielded),
+  });
   await restored.right.stop();
 }
 

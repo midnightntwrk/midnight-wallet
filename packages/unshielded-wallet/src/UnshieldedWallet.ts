@@ -21,7 +21,7 @@
  *   is re-earned from a replay, so the wallet never passes through a state in which it has forgotten what it owns;
  *   `test/forkSimulation.test.ts` proves that, and proves the boundary transaction is applied exactly once, by the new
  *   variant. Which variant is running is the runtime's business, not the application's: the wallet's public API speaks
- *   ledger-v9 throughout.
+ *   the SDK's own types (`UnshieldedWalletTypes`) throughout.
  *
  *   This wallet retains nothing, and that is the honest difference from the shielded and dust wallets. Unshielded
  *   synchronization is watch-only — the address is public and signing is supplied per call by the caller — so
@@ -39,7 +39,7 @@ import {
   type AnyTx,
   type NetworkId,
   ProtocolVersion,
-  type ProtocolVersionMismatchError,
+  type WalletTransactionUnwrapError,
   type UnboundTx,
   type UnprovenTx,
   WalletTransaction,
@@ -56,7 +56,6 @@ import { Variant, type VariantBuilder, type WalletLike } from '@midnightntwrk/wa
 import { EitherOps, HList } from '@midnightntwrk/wallet-sdk-utilities';
 import { Duration, Effect, Either, Match, Option, Ref, type Scope, pipe } from 'effect';
 import * as rx from 'rxjs';
-import { type PublicKey } from './KeyStore.js';
 import { type UnsupportedSnapshotVersionError, variantForSnapshot } from './Restore.js';
 import {
   type DefaultUnshieldedConfiguration,
@@ -69,11 +68,18 @@ import { type SyncUpdate as V1SyncUpdate } from './v1/SyncSchema.js';
 import { CoreWallet, Migration, V2Builder, V2Tag, type V2Variant } from './v2/index.js';
 import { type SignSegment as V1SignSegment } from './v1/Signing.js';
 import { type UnboundTransaction as V1UnboundTransaction } from './v1/TransactionOps.js';
-import { type SignSegment } from './v2/Signing.js';
 import { type SyncUpdate as V2SyncUpdate } from './v2/SyncSchema.js';
-import { type TokenTransfer } from './v2/Transacting.js';
 import { type UnboundTransaction } from './v2/TransactionOps.js';
-import { type UtxoHash, type UtxoWithMeta } from './v2/UnshieldedState.js';
+import {
+  type PublicKey,
+  type SignSegment,
+  type TokenTransfer,
+  type UnshieldedKeystore,
+  type UnshieldedSecretKey,
+  type UtxoHash,
+  type UtxoWithMeta,
+} from './types/UnshieldedWalletTypes.js';
+import { createKeystore as createV2Keystore } from './v2/KeyStore.js';
 import { type WalletError as V1WalletError } from './v1/WalletError.js';
 import { type WalletError } from './v2/WalletError.js';
 
@@ -95,7 +101,7 @@ export type UnshieldedRestoreError = UnsupportedSnapshotVersionError | V1WalletE
  *   Two failures beyond the variant's own: a transaction handed in may have been built on the other side of the boundary,
  *   and a signature the caller's signer returns may name a scheme ledger-v8 does not have.
  */
-type TransactingError = WalletError | ProtocolVersionMismatchError | Signatures.UnsupportedSignatureKindError;
+type TransactingError = WalletError | WalletTransactionUnwrapError | Signatures.UnsupportedSignatureKindError;
 
 /** The V1 variant a forking unshielded wallet registers: the one that reads the chain before the boundary. */
 export type V1UnshieldedVariant<TSyncUpdate> = V1Variant<string, TSyncUpdate>;
@@ -231,6 +237,26 @@ export const asV1PublicKey = (publicKey: PublicKey): Option.Option<V1PublicKey> 
     : Option.none();
 
 /**
+ * Makes the keystore an unshielded wallet signs with, on either side of `forks.v9`, from a secret key.
+ *
+ * @remarks
+ *   The keys are derived by ledger-v9, whose keys name their signature scheme: the V2 variant reads them as they are, and
+ *   the V1 variant reaches the same identity through {@link asV1PublicKey}. The keystore is stated in the SDK's own
+ *   shapes, so neither ledger version's key type reaches the package root.
+ * @example
+ *   ```typescript
+ *   const keystore = createKeystore({ kind: 'schnorr', secret }, NetworkId.NetworkId.Undeployed);
+ *   const wallet = await UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(keystore));
+ *   ```;
+ *
+ * @param secretKey The secret key, and the signature scheme it signs under.
+ * @param networkId The network the Bech32m address is encoded for.
+ * @returns The keystore over that key.
+ */
+export const createKeystore = (secretKey: UnshieldedSecretKey, networkId: NetworkId.NetworkId): UnshieldedKeystore =>
+  createV2Keystore(secretKey, networkId);
+
+/**
  * Builds an unshielded wallet class over a variant either side of a protocol boundary.
  *
  * @remarks
@@ -246,7 +272,7 @@ export const asV1PublicKey = (publicKey: PublicKey): Option.Option<V1PublicKey> 
  *     { builder: new V1Builder().withDefaults(), configuration: v1Configuration },
  *     { builder: new V2Builder().withDefaults().withMigration(...), configuration: v2Configuration },
  *   );
- *   const wallet = Wallet.startWithPublicKey(publicKey);
+ *   const wallet = await Wallet.startWithPublicKey(publicKey);
  *   ```;
  *
  * @param configuration What the wallet layer needs: the network, and where the boundary lies.
@@ -294,11 +320,11 @@ export function CustomForkingUnshieldedWallet<
   const [v9Stamp] = v9Epoch;
 
   /** Reads a transaction built before the boundary, refusing one built after it. */
-  const v8Tx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+  const v8Tx = <T>(handle: AnyTx): Effect.Effect<T, WalletTransactionUnwrapError> =>
     EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, v8Epoch));
 
   /** Reads a transaction built from the boundary, refusing one built before it. */
-  const v9Tx = <T>(handle: AnyTx): Effect.Effect<T, ProtocolVersionMismatchError> =>
+  const v9Tx = <T>(handle: AnyTx): Effect.Effect<T, WalletTransactionUnwrapError> =>
     EitherOps.toEffect(WalletTransaction.unwrapWithin<T>(handle, v9Epoch));
 
   /** Seals a balancing result, which is absent when the wallet had nothing of its own to add. */
@@ -667,7 +693,7 @@ export function CustomForkingUnshieldedWallet<
     rotateUtxos(
       guaranteedUtxos: readonly UtxoWithMeta[],
       fallibleUtxos: readonly UtxoWithMeta[],
-      nightVerifyingKey: ledgerV9.SignatureVerifyingKey,
+      nightVerifyingKey: Signatures.Signing.SignatureVerifyingKey,
       ttl: Date,
     ): Promise<UnprovenTx> {
       return this.runtime
@@ -775,6 +801,48 @@ export function CustomForkingUnshieldedWallet<
         .pipe(Effect.runPromise);
     }
 
+    /**
+     * Un-books the UTxOs that the failed fallible segments of a partially successful transaction had reserved,
+     * returning them to the available set.
+     *
+     * @remarks
+     *   A partial success applied every intent's guaranteed offer (all in segment 0) and every fallible segment not in
+     *   `failedSegments`; the intent at segment `s` runs its fallible offer in segment `s`. So only the own inputs of
+     *   the fallible offers of the intents in `failedSegments` are released. Coins the guaranteed offers and the
+     *   successful segments spent stay pending until sync settles them.
+     *
+     *   As with {@link revertTransaction}, a transaction built on the other side of the boundary has nothing booked in the
+     *   running variant, so this resolves having done nothing rather than failing.
+     * @param transaction The transaction that landed as a partial success.
+     * @param failedSegments Ids of the fallible segments the chain did not apply.
+     */
+    revertFailedSegments(transaction: AnyTx, failedSegments: ReadonlyArray<number>): Promise<void> {
+      return this.runtime
+        .dispatch<void, WalletError>({
+          [V1Tag]: (v1) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledgerV8.Transaction<ledgerV8.SignatureEnabled, ledgerV8.Proofish, ledgerV8.Bindingish>
+              >(transaction, v8Epoch),
+              {
+                onLeft: () => Effect.void,
+                onRight: (unwrapped) => v1.revertFailedSegments(unwrapped, failedSegments),
+              },
+            ),
+          [V2Tag]: (v2) =>
+            Either.match(
+              WalletTransaction.unwrapWithin<
+                ledgerV9.Transaction<ledgerV9.SignatureEnabled, ledgerV9.Proofish, ledgerV9.Bindingish>
+              >(transaction, v9Epoch),
+              {
+                onLeft: () => Effect.void,
+                onRight: (unwrapped) => v2.revertFailedSegments(unwrapped, failedSegments),
+              },
+            ),
+        })
+        .pipe(Effect.runPromise);
+    }
+
     revertUtxos(utxoIds: ReadonlyArray<UtxoHash>): Promise<void> {
       return this.runtime
         .dispatch<void, WalletError>({
@@ -794,9 +862,7 @@ export function CustomForkingUnshieldedWallet<
     }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<UnshieldedWalletState<string>> {
-      return rx.firstValueFrom(
-        this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
-      );
+      return rx.firstValueFrom(this.state.pipe(rx.filter((state) => state.progress.isCompleteWithin(allowedGap))));
     }
 
     /**

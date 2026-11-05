@@ -13,7 +13,7 @@
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as otherLedger from '@midnightntwrk/ledger-v9';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Simulator as OtherSimulator, V8, getLastBlockEvents } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V8, V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, Either, Option, Stream, identity } from 'effect';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
@@ -82,7 +82,7 @@ beforeAll(async () => {
   expect(eventHex.length).toBe(MINT_COUNT);
 
   otherLedgerEventHex = await Effect.gen(function* () {
-    const simulator = yield* OtherSimulator.init({
+    const simulator = yield* V9.Simulator.init({
       genesisMints: [
         {
           type: 'shielded' as const,
@@ -93,7 +93,7 @@ beforeAll(async () => {
       ] as never,
     });
     const otherState = Option.getOrThrow(yield* simulator.state$.pipe(Stream.take(1), Stream.runHead));
-    return hex(getLastBlockEvents(otherState)[0].serialize());
+    return hex(V9.getLastBlockEvents(otherState)[0].serialize());
   }).pipe(Effect.scoped, Effect.runPromise);
 
   expect(() => ledger.Event.deserialize(Buffer.from(otherLedgerEventHex, 'hex'))).toThrow();
@@ -516,5 +516,42 @@ describe('makeSimulatorSyncCapability.applyUpdate boundary handling', () => {
     expect(coinIndices(state)).toEqual([]);
     expect(state.state.firstFree).toBe(0n);
     expect(result.changes).toEqual([]);
+  });
+});
+
+// The simulator is the chain itself, so reaching it is being connected, and its last block is the tip. Progress is
+// read in the cursor's own unit — the next block to process — so a wallet that has applied everything is exactly at it.
+describe('makeSimulatorSyncCapability.applyUpdate progress', () => {
+  const capability = makeSimulatorSyncCapability();
+
+  it('should report the wallet synced once it has applied every block the simulator holds', async () => {
+    const simulatorState = await simulatorStateAt(ProtocolVersion.ProtocolVersion(3n));
+
+    const [state] = capability.applyUpdate(
+      freshWallet(),
+      { update: simulatorState, secretKeys: secretKeys() },
+      activeRange,
+    );
+
+    // One genesis block, so the next block to process past the simulator's tip is 1.
+    expect(state.progress.appliedIndex).toBe(1n);
+    expect(state.progress.highestRelevantWalletIndex).toBe(1n);
+    expect(state.progress.isConnected).toBe(true);
+    expect(state.progress.isStrictlyComplete()).toBe(true);
+  });
+
+  it("should not report the wallet synced while the simulator holds blocks beyond the active range, because those are the next variant's to apply", async () => {
+    const simulatorState = await simulatorStateAt(ProtocolVersion.ProtocolVersion(9n));
+
+    const [state] = capability.applyUpdate(
+      freshWallet(),
+      { update: simulatorState, secretKeys: secretKeys() },
+      activeRange,
+    );
+
+    expect(state.progress.appliedIndex).toBe(0n);
+    expect(state.progress.highestRelevantWalletIndex).toBe(1n);
+    expect(state.progress.isConnected).toBe(true);
+    expect(state.progress.isStrictlyComplete()).toBe(false);
   });
 });

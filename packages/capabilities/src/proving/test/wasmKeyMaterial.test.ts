@@ -27,7 +27,7 @@ import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Effect, Either } from 'effect';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { makeV9WasmProvingServiceEffect } from '../provingService.js';
+import { makeV9WasmProvingServiceEffect } from '../v9ProvingService.js';
 import { makeV8WasmProvingServiceEffect } from '../v8ProvingService.js';
 
 const SRS = 'https://srs.midnight.network';

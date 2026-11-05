@@ -95,38 +95,6 @@ const isUnshieldedMint = (mint: GenesisMint): mint is UnshieldedGenesisMint => m
  */
 const isNightToken = (tokenType: string): boolean => tokenType === Token.night;
 
-// Re-export types from SimulatorState for backward compatibility
-export type {
-  SimulatorState,
-  Block,
-  BlockTransaction,
-  PendingTransaction,
-  BlockInfo,
-  BlockProductionRequest,
-  BlockProducer,
-  FullnessSpec,
-  GenesisMint,
-  ScheduledFork,
-  StrictnessConfig,
-} from './SimulatorState.js';
-
-// Re-export state accessors for backward compatibility
-export {
-  getLastBlock,
-  getCurrentBlockNumber,
-  getBlockByNumber,
-  getLastBlockResults,
-  getLastBlockEvents,
-  hasPendingTransactions,
-  getCurrentTime,
-  getProtocolVersion,
-  protocolVersionAt,
-  applyTransaction,
-  defaultStrictness,
-  genesisStrictness,
-  createStrictness,
-} from './SimulatorState.js';
-
 // =============================================================================
 // Block Producers
 // =============================================================================

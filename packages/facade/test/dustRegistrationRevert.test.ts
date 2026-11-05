@@ -28,7 +28,7 @@
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
-import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import { Effect } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
@@ -54,7 +54,7 @@ const utxoKey = (coin: { utxo: { intentHash: string; outputNo: number } }): stri
 const nightGenesisMint = (
   verifyingKey: ledger.SignatureVerifyingKey,
   userAddress: ledger.UserAddress,
-): GenesisMint => ({
+): V9.GenesisMint => ({
   type: 'unshielded',
   tokenType: NIGHT,
   amount: tokenValue(100_000n),
@@ -67,9 +67,9 @@ describe('Dust registration revert-on-failure', () => {
     return Effect.gen(function* () {
       const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
 
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         genesisMints: [nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress)],
-        blockProducer: immediateBlockProducer(),
+        blockProducer: V9.immediateBlockProducer(),
       });
       const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
       const factories = createSimulatorWalletFactories(config);
@@ -108,9 +108,9 @@ describe('Dust registration revert-on-failure', () => {
     return Effect.gen(function* () {
       const keys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
 
-      const simulator = yield* Simulator.init({
+      const simulator = yield* V9.Simulator.init({
         genesisMints: [nightGenesisMint(keys.signatureVerifyingKey, keys.userAddress)],
-        blockProducer: immediateBlockProducer(),
+        blockProducer: V9.immediateBlockProducer(),
       });
       const config: SimulatorConfig = { simulator, networkId: NETWORK_ID, costParameters: { feeBlocksMargin: 5 } };
       const factories = createSimulatorWalletFactories(config);

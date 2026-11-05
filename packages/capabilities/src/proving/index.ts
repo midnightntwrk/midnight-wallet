@@ -15,4 +15,5 @@
 
 export * from './v8ProvingService.js';
 export * from './provingService.js';
+export * from './v9ProvingService.js';
 export * from './versionedProving.js';

@@ -14,8 +14,11 @@ export * from './ShieldedWalletAPI.js';
 export * from './SingleVariantShieldedWallet.js';
 export * from './ShieldedWallet.js';
 export * as Restore from './Restore.js';
+// Under the wallet's name rather than flat: the other wallets declare some of the same names, `TokenTransfer` among
+// them, and the umbrella package re-exports every wallet into one barrel.
+export * as ShieldedWalletTypes from './types/index.js';
 export {
   type ShieldedTransactionHistoryEntry,
   ShieldedSectionSchema,
   mergeShieldedSections,
-} from './v2/TransactionHistory.js';
+} from './types/ShieldedWalletTypes.js';

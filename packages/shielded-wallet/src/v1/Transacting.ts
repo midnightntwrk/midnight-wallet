@@ -23,17 +23,14 @@ import {
   Imbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
 } from '@midnightntwrk/wallet-sdk-capabilities';
-import { type ShieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { ShieldedCostModel, TransactionImbalances } from './TransactionImbalances.js';
 import { TransactionOps } from './TransactionOps.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 
-export interface TokenTransfer {
-  readonly amount: bigint;
-  readonly type: ledger.RawTokenType;
-  readonly receiverAddress: ShieldedAddress;
-}
+import { type TokenTransfer } from '../types/ShieldedWalletTypes.js';
+
+export type { TokenTransfer } from '../types/ShieldedWalletTypes.js';
 
 export type BalancingResult = ledger.UnprovenTransaction | undefined;
 
@@ -72,6 +69,12 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
   revertTransaction(
     state: TState,
     transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+  ): Either.Either<TState, WalletError>;
+
+  revertFailedSegments(
+    state: TState,
+    transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+    failedSegments: ReadonlyArray<number>,
   ): Either.Either<TState, WalletError>;
 }
 
@@ -277,6 +280,24 @@ export class TransactingCapabilityImplementation<
       catch: (err) => {
         return new OtherWalletError({
           message: `Error while reverting transaction ${transaction.identifiers().at(0)!}`,
+          cause: err,
+        });
+      },
+    });
+  }
+
+  revertFailedSegments(
+    state: CoreWallet,
+    transaction: TTransaction | ledger.UnprovenTransaction,
+    failedSegments: ReadonlyArray<number>,
+  ): Either.Either<CoreWallet, WalletError> {
+    return Either.try({
+      try: () => {
+        return CoreWallet.revertFailedSegments(state, transaction, failedSegments);
+      },
+      catch: (err) => {
+        return new OtherWalletError({
+          message: `Error while reverting the failed segments of transaction ${transaction.identifiers().at(0)!}`,
           cause: err,
         });
       },

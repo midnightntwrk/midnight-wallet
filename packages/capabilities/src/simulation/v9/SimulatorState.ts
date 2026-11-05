@@ -310,22 +310,6 @@ export const getBlockEventsFrom: {
       .flatMap((b) => b.transactions.flatMap((t) => t.result.events)),
 );
 
-/**
- * @deprecated Use getBlockEventsFrom instead with proper appliedIndex semantics Get all events from blocks with number
- *
- * > AfterBlockNumber.
- */
-export const getBlockEventsSince: {
-  (afterBlockNumber: bigint): (state: SimulatorState) => readonly TransactionResult['events'][number][];
-  (state: SimulatorState, afterBlockNumber: bigint): readonly TransactionResult['events'][number][];
-} = EFunction.dual(
-  2,
-  (state: SimulatorState, afterBlockNumber: bigint): readonly TransactionResult['events'][number][] =>
-    state.blocks
-      .filter((b) => b.number > afterBlockNumber)
-      .flatMap((b) => b.transactions.flatMap((t) => t.result.events)),
-);
-
 /** Check if there are pending transactions in the mempool. */
 export const hasPendingTransactions = (state: SimulatorState): boolean => state.mempool.length > 0;
 

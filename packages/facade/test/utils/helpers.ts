@@ -10,17 +10,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { HDWallet, Roles, type WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';
 import { WalletFacade, type Clock } from '../../src/index.js';
-import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnightntwrk/wallet-sdk-shielded';
+import { CustomShieldedWallet, type CustomizedShieldedWallet } from '@midnightntwrk/wallet-sdk-shielded';
 import {
   Sync as ShieldedSync,
   TransactionHistory as ShieldedTransactionHistory,
   V2Builder as ShieldedV2Builder,
 } from '@midnightntwrk/wallet-sdk-shielded/v2';
-import { CustomDustWallet, type DustWalletAPI } from '@midnightntwrk/wallet-sdk-dust-wallet';
+import { CustomDustWallet, type CustomizedDustWallet } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import {
   SyncService as DustSyncService,
   TransactionHistory as DustTransactionHistory,
@@ -37,6 +37,7 @@ import {
   type FinalizedTx,
   NoOpTransactionHistoryStorage,
   ProtocolVersion,
+  type TransactionHistoryStorage,
   WalletTransaction,
 } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type WalletEntry } from '../../src/index.js';
@@ -47,13 +48,17 @@ import {
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 import * as Submission from '@midnightntwrk/wallet-sdk-capabilities/submission';
 import {
-  makeSimulatorProvingServiceEffect,
-  type ProvingService,
+  makeV9SimulatorProvingServiceEffect,
+  type AnyVersionUnboundTransaction,
+  type AnyVersionUnprovenTransaction,
+  type V8UnboundTransaction,
+  type V8UnprovenTransaction,
   type V9UnboundTransaction,
+  type V9UnprovenTransaction,
   type VersionedProvingService,
 } from '@midnightntwrk/wallet-sdk-capabilities/proving';
-import { type Simulator } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
-import { makeSimulatorBlockDataFetcher } from '@midnightntwrk/wallet-sdk-capabilities/validation';
+import { type V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { makeV9SimulatorBlockDataFetcher } from '@midnightntwrk/wallet-sdk-capabilities/validation';
 import type { SubmissionService } from '@midnightntwrk/wallet-sdk-capabilities';
 import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
@@ -127,7 +132,7 @@ export const sleep = (secs: number): Promise<void> => {
 export const waitForDustGenerated = (seconds: number = 10): Promise<void> => sleep(seconds);
 
 /** Creates a clock backed by the simulator's current time. Reads time synchronously from the simulator's state ref. */
-export const simulatorClock = (simulator: Simulator): Clock.Clock => ({
+export const simulatorClock = (simulator: V9.Simulator): Clock.Clock => ({
   now: () => Effect.runSync(simulator.query((s) => s.currentTime)),
 });
 
@@ -137,31 +142,61 @@ export const simulatorClock = (simulator: Simulator): Clock.Clock => ({
 
 /** Configuration for simulator-based testing. */
 export type SimulatorConfig = {
-  simulator: Simulator;
+  simulator: V9.Simulator;
   networkId: NetworkId.NetworkId;
   costParameters: { feeBlocksMargin: number };
+  /** The facade's own history storage; one that keeps nothing when absent. */
+  txHistoryStorage?: TransactionHistoryStorage.TransactionHistoryStorage<WalletEntry>;
 };
 
+/** A prover for the facade, which may hand it either ledger version's transactions. */
+export type AnyVersionProvingService = VersionedProvingService<
+  AnyVersionUnboundTransaction,
+  AnyVersionUnprovenTransaction
+>;
+
+export const isV8Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is V8UnprovenTransaction =>
+  transaction instanceof ledgerV8.Transaction;
+
+export const isV9Transaction = (transaction: AnyVersionUnprovenTransaction): transaction is V9UnprovenTransaction =>
+  transaction instanceof ledgerV9.Transaction;
+
 /**
- * Creates a Promise-based wrapper around the Effect-based simulator proving service. Note: Uses type assertion because
- * simulator proving returns ProofErasedTransaction but facade expects V9UnboundTransaction - they are compatible at
- * runtime.
+ * Types a test prover over one ledger version as a prover for the facade, which may hand it either ledger version's
+ * transactions.
+ *
+ * @remarks
+ *   The other ledger version's transactions are rejected rather than handed to a ledger that cannot read them, so a suite
+ *   that routes a transaction to the wrong prover fails at the prover.
  */
-export const createSimulatorProvingService = (): ProvingService<V9UnboundTransaction> => {
-  const effectService = makeSimulatorProvingServiceEffect();
-  return {
-    prove: (tx: ledgerV9.UnprovenTransaction) =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return
-      effectService.prove(tx).pipe(Effect.runPromise) as any,
-  };
+export const provingOnly = <TUnproven extends AnyVersionUnprovenTransaction>(
+  ledgerVersion: 'ledger-v8' | 'ledger-v9',
+  isOwn: (transaction: AnyVersionUnprovenTransaction) => transaction is TUnproven,
+  prove: (transaction: TUnproven) => Promise<AnyVersionUnboundTransaction>,
+): AnyVersionProvingService => ({
+  prove: (transaction) =>
+    isOwn(transaction)
+      ? prove(transaction)
+      : Promise.reject(new Error(`The ${ledgerVersion} test prover was handed another ledger version's transaction.`)),
+});
+
+/** The simulator's ledger-v9 prover, behind a promise: it erases proofs rather than proving. */
+export const createSimulatorProvingService = (): AnyVersionProvingService => {
+  const effectService = makeV9SimulatorProvingServiceEffect();
+  return provingOnly('ledger-v9', isV9Transaction, async (tx) => {
+    const erased = await effectService.prove(tx).pipe(Effect.runPromise);
+    // Type cast required because: the simulator's proof-erased transaction is not `Proof`-typed, and it only has to
+    // travel back through the facade to the simulator, which accepts it.
+    return erased as unknown as V9UnboundTransaction;
+  });
 };
 
 /**
  * Creates a Promise-based wrapper around the Effect-based simulator submission service. Note: Uses type assertions
  * because simulator uses different transaction types internally.
  */
-export const createSimulatorSubmissionService = (simulator: Simulator): SubmissionService<FinalizedTx> => {
-  const effectService = Submission.makeSimulatorSubmissionService<ledgerV9.FinalizedTransaction>('InBlock')({
+export const createSimulatorSubmissionService = (simulator: V9.Simulator): SubmissionService<FinalizedTx> => {
+  const effectService = Submission.makeV9SimulatorSubmissionService<ledgerV9.FinalizedTransaction>('InBlock')({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     simulator: simulator as any,
   });
@@ -187,8 +222,8 @@ export const createSimulatorSubmissionService = (simulator: Simulator): Submissi
 
 /** Wallet factory type for simulation mode. */
 export type SimulatorWalletFactories = {
-  createShieldedWallet: (keys: ledgerV9.ZswapSecretKeys) => ShieldedWalletAPI;
-  createDustWallet: (key: ledgerV9.DustSecretKey, params: ledgerV9.DustParameters) => DustWalletAPI;
+  createShieldedWallet: (keys: ledgerV9.ZswapSecretKeys) => CustomizedShieldedWallet;
+  createDustWallet: (key: ledgerV9.DustSecretKey, params: ledgerV9.DustParameters) => CustomizedDustWallet;
   createUnshieldedWallet: (keystore: ReturnType<typeof createKeystore>) => UnshieldedWalletAPI;
 };
 
@@ -334,14 +369,14 @@ export const makeSimulatorFacade = (
           // Dummy values - not used in simulation mode
           indexerClientConnection: { indexerHttpUrl: 'http://unused' },
           relayURL: new URL('ws://unused'),
-          txHistoryStorage: new NoOpTransactionHistoryStorage<WalletEntry>(),
+          txHistoryStorage: config.txHistoryStorage ?? new NoOpTransactionHistoryStorage<WalletEntry>(),
         },
         shielded: () => factories.createShieldedWallet(keys.shieldedKeys),
         unshielded: () => factories.createUnshieldedWallet(keys.unshieldedKeystore),
         dust: () => factories.createDustWallet(keys.dustKey, dustParameters),
         provingService: () => provingService,
         submissionService: () => submissionService,
-        fetchBlockData: () => makeSimulatorBlockDataFetcher(config.simulator),
+        fetchBlockData: () => makeV9SimulatorBlockDataFetcher(config.simulator),
         clock: () => simulatorClock(config.simulator),
         ...overrides,
       });
@@ -381,18 +416,18 @@ export const waitForUnshieldedBalance = (
  * A prover for the epoch a wallet with no history is in: the ledger-v8 one.
  *
  * @remarks
- *   The SDK ships no ledger-v8 proving path — that is the one thing waiting on a proof server for the previous ledger
- *   version — so a suite whose subject is what the facade does _around_ proving supplies its own. It mock-proves with
+ *   A suite whose subject is what the facade does _around_ proving needs no proof server, so this mock-proves with
  *   ledger-v8's own primitives, which is what makes it a fake of the right shape rather than a stand in for the wrong
- *   one, and hands back something the facade can bind: the proving contract is proved-but-not-yet-bound, and
- *   `mockProve` binds as it proves.
+ *   one. It hands back something the facade can bind: the proving contract is proved-but-not-yet-bound, and `mockProve`
+ *   binds as it proves.
  */
-export const createV8MockProvingService = (): VersionedProvingService<V9UnboundTransaction> => ({
-  prove: (tx: unknown) => {
-    const proven = (tx as ledgerV8.UnprovenTransaction).mockProve();
+export const createV8MockProvingService = (): AnyVersionProvingService =>
+  provingOnly('ledger-v8', isV8Transaction, (tx) => {
+    const proven = tx.mockProve();
+    // Type cast required because: `mockProve` hands back a bound transaction, and the unbound one the contract asks
+    // for is stood in for by an object whose `bind` returns it.
     return Promise.resolve({
       bind: () => proven,
       serialize: () => proven.serialize(),
-    } as unknown as V9UnboundTransaction);
-  },
-});
+    } as unknown as V8UnboundTransaction);
+  });

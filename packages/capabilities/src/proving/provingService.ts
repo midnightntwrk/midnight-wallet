@@ -10,16 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnightntwrk/ledger-v9';
 import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
-import { HttpProverClient, WasmProver } from '@midnightntwrk/wallet-sdk-prover-client/effect';
-import {
-  ClientError,
-  type InvalidProtocolSchemeError,
-  ServerError,
-} from '@midnightntwrk/wallet-sdk-utilities/networking';
-import { Data, Effect, Either, Option, pipe } from 'effect';
+import { Data, Effect, Either, Option } from 'effect';
 
 export class ProvingError extends Data.TaggedError('Wallet.Proving')<{
   message: string;
@@ -50,17 +43,20 @@ export type ProvingFailure = ProvingError | ProvingEpochMismatchError;
 /**
  * Turns an unproven transaction into a proven one.
  *
+ * @remarks
+ *   `prove` is a property rather than a method so that the transaction is checked contravariantly: a backend over one
+ *   ledger version is then no backend over both, which is what keeps a ledger-v8 transaction from reaching ledger-v9.
  * @typeParam TProven The proven transaction this backend produces.
- * @typeParam TUnproven The unproven transaction it accepts. Defaults to ledger-v9's, because a proving backend is only
- *   ever written against one ledger version — which is exactly why choosing between backends is
- *   {@link VersionedProvingServiceEffect}'s job and not this interface's.
+ * @typeParam TUnproven The unproven transaction it accepts, and so the one ledger version it is written against. It has
+ *   no default: a backend that left it out would be ledger-v9's without saying so. Choosing between backends for
+ *   different ledger versions is {@link VersionedProvingServiceEffect}'s job, not this interface's.
  */
-export interface ProvingServiceEffect<TProven, TUnproven = ledger.UnprovenTransaction> {
-  prove(transaction: TUnproven): Effect.Effect<TProven, ProvingFailure>;
+export interface ProvingServiceEffect<TProven, TUnproven> {
+  readonly prove: (transaction: TUnproven) => Effect.Effect<TProven, ProvingFailure>;
 }
 
-export interface ProvingService<TProven, TUnproven = ledger.UnprovenTransaction> {
-  prove(transaction: TUnproven): Promise<TProven>;
+export interface ProvingService<TProven, TUnproven> {
+  readonly prove: (transaction: TUnproven) => Promise<TProven>;
 }
 
 /** Raised when no proving backend is registered for the protocol version a transaction was built for. */
@@ -80,21 +76,19 @@ export class UnsupportedProvingVersionError extends Data.TaggedError(
  *   the time proving happens. A fork can land between balancing and proving; the bytes the prover has to read were
  *   fixed before it did.
  */
-export interface VersionedProvingServiceEffect<TProven, TUnproven = ledger.UnprovenTransaction> {
-  prove(
+export interface VersionedProvingServiceEffect<TProven, TUnproven> {
+  readonly prove: (
     transaction: TUnproven,
     protocolVersion: ProtocolVersion.ProtocolVersion,
-  ): Effect.Effect<TProven, ProvingFailure | UnsupportedProvingVersionError>;
+  ) => Effect.Effect<TProven, ProvingFailure | UnsupportedProvingVersionError>;
 }
 
-export interface VersionedProvingService<TProven, TUnproven = ledger.UnprovenTransaction> {
-  prove(transaction: TUnproven, protocolVersion: ProtocolVersion.ProtocolVersion): Promise<TProven>;
+export interface VersionedProvingService<TProven, TUnproven> {
+  readonly prove: (transaction: TUnproven, protocolVersion: ProtocolVersion.ProtocolVersion) => Promise<TProven>;
 }
 
 /** The proving backends a wallet can use, keyed by the protocol version range each one serves. */
-export type ProvingServices<TProven, TUnproven = ledger.UnprovenTransaction> = ProtocolVersion.Registry<
-  ProvingServiceEffect<TProven, TUnproven>
->;
+export type ProvingServices<TProven, TUnproven> = ProtocolVersion.Registry<ProvingServiceEffect<TProven, TUnproven>>;
 
 /**
  * Builds a proving service that routes on the version a transaction was built for.
@@ -134,53 +128,12 @@ export const singleVersionProvingServiceEffect = <TProven, TUnproven>(
   prove: (transaction) => service.prove(transaction),
 });
 
-export type V9UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
-
-const wrapEffectService = <TProven, TUnproven>(
-  effectService: ProvingServiceEffect<TProven, TUnproven>,
-): ProvingService<TProven, TUnproven> => ({
-  prove: (transaction) => Effect.runPromise(effectService.prove(transaction)),
-});
-
 /** Adapts a version-routed proving service to the promise-facing surface the facade exposes. */
 export const wrapVersionedEffectService = <TProven, TUnproven>(
   effectService: VersionedProvingServiceEffect<TProven, TUnproven>,
 ): VersionedProvingService<TProven, TUnproven> => ({
   prove: (transaction, protocolVersion) => Effect.runPromise(effectService.prove(transaction, protocolVersion)),
 });
-
-export const fromV9ProvingProviderEffect = (
-  provider: Effect.Effect<ledger.ProvingProvider, InvalidProtocolSchemeError>,
-): ProvingServiceEffect<V9UnboundTransaction> => {
-  return {
-    prove(transaction: ledger.UnprovenTransaction): Effect.Effect<V9UnboundTransaction, ProvingFailure> {
-      return pipe(
-        provider,
-        Effect.flatMap((provider) =>
-          Effect.tryPromise({
-            try: () => transaction.prove(provider, ledger.CostModel.initialCostModel()),
-            catch: (error) =>
-              error instanceof ClientError || error instanceof ServerError
-                ? error
-                : new ClientError({ message: 'Failed to prove transaction', cause: error }),
-          }),
-        ),
-        Effect.catchAll((error) =>
-          Effect.fail(
-            new ProvingError({
-              message: error.message,
-              cause: error,
-            }),
-          ),
-        ),
-      );
-    },
-  };
-};
-
-export const fromV9ProvingProvider = (provider: ledger.ProvingProvider): ProvingServiceEffect<V9UnboundTransaction> => {
-  return fromV9ProvingProviderEffect(Effect.succeed(provider));
-};
 
 export type ServerProvingConfiguration = {
   provingServerUrl: URL;
@@ -274,88 +227,3 @@ export const resolveProvingBackends = (
           v9: { kind: 'server', url: configuration.provingServerUrl },
         })
       : Either.left(noBackendNamed());
-
-/**
- * Registers the in-process WASM prover, driven by ledger-v9, from a given protocol version upwards.
- *
- * @remarks
- *   Every entry here is ledger-v9's backend, so `sinceVersion` should not be below a protocol boundary: what a version
- *   below it needs is the ledger-v8 driver, which `makeDefaultProvingServices` registers for the epoch the fork
- *   schedule it is given places below `forks.v9`. Registering nothing below is what turns that into an
- *   {@link UnsupportedProvingVersionError} naming the version, rather than a ledger-v8 transaction handed to a ledger
- *   that cannot read it.
- * @param sinceVersion The first protocol version to register the bundled prover for.
- * @param configuration Optional key material override.
- * @returns The proving backends, keyed by version.
- */
-export const makeWasmProvingServices = (
-  sinceVersion: ProtocolVersion.ProtocolVersion,
-  configuration?: WasmProvingConfiguration,
-): ProvingServices<V9UnboundTransaction> => ({
-  entries: [
-    {
-      range: ProtocolVersion.makeRange(sinceVersion, ProtocolVersion.MaxSupportedVersion),
-      value: makeV9WasmProvingServiceEffect(configuration),
-    },
-  ],
-});
-
-export const makeV9ServerProvingServiceEffect = (
-  configuration: ServerProvingConfiguration,
-): ProvingServiceEffect<V9UnboundTransaction> => {
-  return pipe(
-    HttpProverClient.create({
-      url: configuration.provingServerUrl,
-    }),
-    Effect.map((client) => client.asProvingProvider()),
-    fromV9ProvingProviderEffect,
-  );
-};
-
-/**
- * Proves ledger-v9 transactions in this process.
- *
- * @remarks
- *   The ledger-v9 twin of `makeV8WasmProvingServiceEffect`: the same bundled prover, with ledger-v9's key material —
- *   circuit generation 10 ({@link WasmProver.makeV9KeyMaterialProvider}) — unless it is given key material of its own.
- * @param configuration Optional key material override.
- * @returns A backend that proves ledger-v9 transactions in-process.
- */
-export const makeV9WasmProvingServiceEffect = (
-  configuration?: WasmProvingConfiguration,
-): ProvingServiceEffect<V9UnboundTransaction> => {
-  return pipe(
-    WasmProver.create({
-      keyMaterialProvider: configuration?.keyMaterialProvider ?? WasmProver.makeV9KeyMaterialProvider(),
-    }),
-    Effect.map((prover) => prover.asProvingProvider()),
-    fromV9ProvingProviderEffect,
-  );
-};
-
-export const makeSimulatorProvingServiceEffect = (): ProvingServiceEffect<ledger.ProofErasedTransaction> => {
-  return {
-    prove(transaction: ledger.UnprovenTransaction): Effect.Effect<ledger.ProofErasedTransaction, ProvingError> {
-      return Effect.succeed(transaction.eraseProofs());
-    },
-  };
-};
-
-export const makeDefaultProvingServiceEffect = (
-  configuration: ServerProvingConfiguration,
-): ProvingServiceEffect<V9UnboundTransaction> => makeV9ServerProvingServiceEffect(configuration);
-
-export const makeDefaultProvingService = (
-  configuration: ServerProvingConfiguration,
-): ProvingService<V9UnboundTransaction> => wrapEffectService(makeDefaultProvingServiceEffect(configuration));
-
-export const makeV9ServerProvingService = (
-  configuration: ServerProvingConfiguration,
-): ProvingService<V9UnboundTransaction> => wrapEffectService(makeV9ServerProvingServiceEffect(configuration));
-
-export const makeV9WasmProvingService = (
-  configuration?: WasmProvingConfiguration,
-): ProvingService<V9UnboundTransaction> => wrapEffectService(makeV9WasmProvingServiceEffect(configuration));
-
-export const makeSimulatorProvingService = (): ProvingService<ledger.ProofErasedTransaction> =>
-  wrapEffectService(makeSimulatorProvingServiceEffect());

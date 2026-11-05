@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
+  type Option,
   Effect,
   SubscriptionRef,
   Stream,
@@ -31,7 +32,7 @@ import {
   type FinalizedTransaction,
   type UnprovenTransaction,
 } from '@midnightntwrk/ledger-v9';
-import { ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, Token, VariantState } from '@midnightntwrk/wallet-sdk-abstractions';
 import { InsufficientDustForFeeError, OtherWalletError, type WalletError } from './WalletError.js';
 import { ArrayOps, EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import {
@@ -44,7 +45,7 @@ import { type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
 import { BackgroundRepeat, type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
 import { type BlockData } from './SyncSchema.js';
-import { type SimulatorState } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
+import { type V9 } from '@midnightntwrk/wallet-sdk-capabilities/simulation';
 import {
   type CoinsAndBalancesCapability,
   type CoinSelection,
@@ -116,6 +117,28 @@ export declare namespace RunningV2Variant {
 export const V2Tag: unique symbol = Symbol('V2');
 
 /**
+ * This variant's core state, when this variant produced the wallet state it is read from.
+ *
+ * @remarks
+ *   A dust wallet's state carries its core state sealed, because that state is made of one ledger version's objects. This
+ *   is how the variant — or a test or tool that needs its ledger-level detail — reads it back. A state another variant
+ *   produced gives nothing, since this variant's ledger version could not read it.
+ * @example
+ *   ```typescript
+ *   import { coreStateOf } from '@midnightntwrk/wallet-sdk-dust-wallet/v2';
+ *
+ *   const state = await dustWallet.waitForSyncedState();
+ *   // Some once the V2 variant runs; none while the wallet is still on the V1 variant.
+ *   const core = coreStateOf(state);
+ *   ```;
+ *
+ * @param walletState A state, as a dust wallet emits it.
+ * @returns This variant's core state, or nothing when another variant produced the state.
+ */
+export const coreStateOf = (walletState: Readonly<{ state: VariantState }>): Option.Option<CoreWallet> =>
+  VariantState.unwrapFor<CoreWallet>(walletState.state, V2Tag);
+
+/**
  * How a failing synchronization pass is retried.
  *
  * @remarks
@@ -134,7 +157,7 @@ export const syncRetrySchedule = pipe(
   Schedule.union(Schedule.spaced(Duration.minutes(2))),
 );
 
-export type DefaultRunningV2 = RunningV2Variant<string, SimulatorState, FinalizedTransaction, DustSecretKey>;
+export type DefaultRunningV2 = RunningV2Variant<string, V9.SimulatorState, FinalizedTransaction, DustSecretKey>;
 
 export class RunningV2Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux> implements Variant.RunningVariant<
   typeof V2Tag,

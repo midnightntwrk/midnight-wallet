@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { PendingTransactions } from '@midnightntwrk/wallet-sdk-capabilities';
+import { Lifecycle } from '@midnightntwrk/wallet-sdk-capabilities/transactionLifecycle';
 import { type DustWalletState } from '@midnightntwrk/wallet-sdk-dust-wallet';
 import { type ShieldedWalletState } from '@midnightntwrk/wallet-sdk-shielded';
 import { type UnshieldedWalletState } from '@midnightntwrk/wallet-sdk-unshielded-wallet';
@@ -31,10 +31,10 @@ const facadeState = (complete: { shielded: boolean; unshielded: boolean; dust: b
   new FacadeState(
     // Type cast required because: `isSynced` reads nothing else from these states, and a real one needs a running
     // wallet and the ledger WASM runtime.
-    { state: progressing(complete.shielded) } as unknown as ShieldedWalletState,
+    progressing(complete.shielded) as unknown as ShieldedWalletState,
     progressing(complete.unshielded) as unknown as UnshieldedWalletState,
-    { state: progressing(complete.dust) } as unknown as DustWalletState,
-    PendingTransactions.empty(),
+    progressing(complete.dust) as unknown as DustWalletState,
+    Lifecycle.empty(),
   );
 
 describe('FacadeState.isSynced', () => {
