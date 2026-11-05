@@ -1,5 +1,29 @@
 # @midnightntwrk/wallet-sdk-facade
 
+## 5.0.0-rc.3
+
+### Patch Changes
+
+- d898335: fix(dust-wallet): date a Dust spend only at a block whose roots the wallet holds
+
+  Paying a fee with Dust no longer dates the spend at a block whose Dust events the wallet has not applied, which the
+  node rejected with `Custom error: 170`. Without a `currentTime`, `balanceTransactions` dates the spend at the newest
+  block when the wallet's Dust tree roots match that block's. A wallet on the event-less sync otherwise dates it at the
+  block its last pass verified, when that block is no more than ten minutes behind the newest and its Dust grace period
+  lasts until the transaction's TTL. When neither holds, balancing reads the newest block again every second, reserving
+  nothing, and after two minutes fails with `SyncWalletError`, whose cause names the wallet's roots, the block's, and
+  why the wallet's own block was refused. A `currentTime` the caller passes is used at once. When the newest block
+  reports no roots at all, as the simulator's do, the spend is dated at it at once and a warning is logged. The V1
+  variant's `BlockData` gains the optional `dustCommitmentMerkleTreeRoot` and `dustGenerationMerkleTreeRoot` the indexer
+  reports. The facade's balancing and transfer methods document the possible wait.
+
+- Updated dependencies [2e933df]
+- Updated dependencies [d898335]
+  - @midnightntwrk/wallet-sdk-address-format@4.0.0-rc.2
+  - @midnightntwrk/wallet-sdk-dust-wallet@5.0.0-rc.3
+  - @midnightntwrk/wallet-sdk-shielded@4.0.0-rc.3
+  - @midnightntwrk/wallet-sdk-unshielded-wallet@4.0.0-rc.3
+
 ## 5.0.0-rc.2
 
 ### Major Changes
