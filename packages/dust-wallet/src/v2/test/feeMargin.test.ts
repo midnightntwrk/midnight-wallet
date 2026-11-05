@@ -22,7 +22,7 @@
  */
 import * as ledger from '@midnightntwrk/ledger-v9';
 import { DateOps } from '@midnightntwrk/wallet-sdk-utilities';
-import { BigInt as BigIntOps, Effect, Either, Array as EArray } from 'effect';
+import { BigInt as BigIntOps, Effect, Either, Array as EArray, Option } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { chooseCoin, makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
@@ -35,6 +35,10 @@ const SECONDS_OF_GENERATION = 3000;
 
 // Enough balances of one transaction that a balancing intent priced in one size and returned in another shows up.
 const REPEATED_BALANCES = 100;
+
+// How many seconds of generation to search for a moment when spending the fee encodes longer than spending the whole
+// coin; it happens about once in every 150 seconds.
+const SECONDS_TO_SEARCH = 3000;
 
 // The sizes of real proofs for the built-in circuits, as the ledger's own mock prover writes them.
 const PROOF_SIZES: Readonly<Record<string, number>> = {
@@ -111,8 +115,9 @@ const setUp = Effect.gen(function* () {
   const margin = (transaction: ledger.FinalizedTransaction | ledger.ProofErasedTransaction): bigint =>
     transaction.feesWithMargin(ledgerParameters, COST_PARAMETERS.feeBlocksMargin);
   /**
-   * A fee priced on another intent than `proven`'s: each fresh intent draws its own binding, whose proven size can
-   * differ by a byte, so the fee lies within one block of the configured margin rather than on it.
+   * A fee priced on another binding than `proven`'s: each fresh intent, and each binding of a transaction, draws its
+   * own, whose proven size can differ by a byte, so the fee lies within one block of the configured margin rather than
+   * on it.
    */
   const expectWithinOneMarginBlock = (fee: bigint, proven: ledger.FinalizedTransaction): void => {
     expect(fee).toBeGreaterThan(proven.feesWithMargin(ledgerParameters, COST_PARAMETERS.feeBlocksMargin - 1));
@@ -136,6 +141,22 @@ const setUp = Effect.gen(function* () {
     expect(paid).toBeLessThan(proven.feesWithMargin(ledgerParameters, COST_PARAMETERS.feeBlocksMargin + 1));
     expectWithinOneMarginBlock(quoted, proven);
   };
+  /**
+   * The balancing intent and the quote for the same inputs both lie within one block of the configured margin of
+   * `proven`, for inputs the wallet binds itself to price and that are bound again, with their own binding, before
+   * submission.
+   */
+  const expectPaysWithinOneMarginBlock = (
+    inputs: ReadonlyArray<Balanceable>,
+    balancing: ledger.UnprovenTransaction,
+    proven: ledger.FinalizedTransaction,
+  ): void => {
+    const quoted = Either.getOrThrow(
+      transacting.estimateFee(dustSecretKey, state, asInputs(inputs), ttl, at, ledgerParameters),
+    );
+    expectWithinOneMarginBlock(dustPaid(balancing), proven);
+    expectWithinOneMarginBlock(quoted, proven);
+  };
   return {
     transacting,
     dustSecretKey,
@@ -148,7 +169,9 @@ const setUp = Effect.gen(function* () {
     balance,
     margin,
     expectPaysProvenMargin,
-    expectWithinOneMarginBlock,
+    expectPaysWithinOneMarginBlock,
+    now,
+    recipient,
   };
 });
 
@@ -193,16 +216,16 @@ describe('the fee margin the wallet pays', () => {
       expectPaysProvenMargin([finalized], balancing, finalized.merge(balancing.mockProve()));
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should cover the margin of an unbound transaction once bound, because binding comes before submission', () =>
+  it('should pay within a block of the margin of an unbound transaction once bound, because its binding is drawn again before submission', () =>
     Effect.gen(function* () {
-      const { transfer, balance, expectPaysProvenMargin } = yield* setUp;
+      const { transfer, balance, expectPaysWithinOneMarginBlock } = yield* setUp;
       const unbound = yield* Effect.tryPromise(() =>
         transfer().prove(sizedProofProvider, ledger.CostModel.initialCostModel()),
       );
 
       const balancing = balance(unbound);
 
-      expectPaysProvenMargin([unbound], balancing, unbound.bind().merge(balancing.mockProve()));
+      expectPaysWithinOneMarginBlock([unbound], balancing, unbound.bind().merge(balancing.mockProve()));
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('should cover the margin of a finalized and an unproven transaction balanced together, because the facade balances pairs', () =>
@@ -228,22 +251,20 @@ describe('the fee margin the wallet pays', () => {
       );
     }).pipe(Effect.scoped, Effect.runPromise));
 
-  it('should price a dust spend with nothing to balance within a block of its proven margin, so a standalone dry run keeps the configured headroom', () =>
+  it('should price a dust spend with nothing to balance at its proven margin, so a standalone dry run is not short', () =>
     Effect.gen(function* () {
-      const {
-        transacting,
-        dustSecretKey,
-        state,
-        ledgerParameters,
-        coinsCapability,
-        at,
-        ttl,
-        expectWithinOneMarginBlock,
-      } = yield* setUp;
+      const { transacting, dustSecretKey, state, ledgerParameters, coinsCapability, at, ttl, margin } = yield* setUp;
       const coins = coinsCapability.getAvailableCoinsWithGeneratedDust(state, at);
-      // The intent `dryRunFee` prices when there is nothing else: the wallet's coins spent in segment 1.
+      // The intent `dryRunFee` prices when there is nothing else: the wallet's coins spent in segment 1, copied from
+      // the same template, so that both have the same proven size.
+      const template = ledger.Intent.new(ttl).serialize();
       const [spends] = CoreWallet.spendCoins(state, dustSecretKey, coins, at);
-      const intent = ledger.Intent.new(ttl);
+      const intent = ledger.Intent.deserialize<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>(
+        'signature',
+        'pre-proof',
+        'pre-binding',
+        template,
+      );
       intent.dustActions = new ledger.DustActions<ledger.SignatureEnabled, ledger.PreProof>(
         'signature',
         'pre-proof',
@@ -256,9 +277,21 @@ describe('the fee margin the wallet pays', () => {
         intent,
       );
 
-      const dryRun = transacting.dryRunFee(coins, [], dustSecretKey, state, ttl, at, ledgerParameters);
+      const dryRun = transacting.dryRunFee(
+        coins,
+        [],
+        dustSecretKey,
+        state,
+        ttl,
+        at,
+        ledgerParameters,
+        Option.none(),
+        template,
+      );
 
-      expectWithinOneMarginBlock(dryRun, spendingIntentAlone.mockProve());
+      const proven = spendingIntentAlone.mockProve();
+      expect(dryRun).toBeGreaterThanOrEqual(margin(proven));
+      expect(dryRun).toBeLessThan(proven.feesWithMargin(ledgerParameters, COST_PARAMETERS.feeBlocksMargin + 1));
     }).pipe(Effect.scoped, Effect.runPromise));
 
   it('should still balance a proof-erased transaction at its erased margin, because it is submitted without proofs', () =>
@@ -270,6 +303,78 @@ describe('the fee margin the wallet pays', () => {
 
       expect(dustPaid(balancing)).toBeGreaterThanOrEqual(margin(erased.merge(balancing.eraseProofs())));
     }).pipe(Effect.scoped, Effect.runPromise));
+
+  it(
+    'should pay for the balancing intent as it returns it, so a spend of the fee that encodes longer than a spend of the whole coin is still covered',
+    () =>
+      Effect.gen(function* () {
+        const { transacting, dustSecretKey, state, ledgerParameters, coinsCapability, now, recipient, margin } =
+          yield* setUp;
+        const transferAt = (at: Date): ledger.UnprovenTransaction => {
+          const intent = ledger.Intent.new(DateOps.addSeconds(at, 3600));
+          intent.guaranteedUnshieldedOffer = ledger.UnshieldedOffer.new(
+            [],
+            [{ type: NIGHT, owner: recipient, value: 1n }],
+            [],
+          );
+          return ledger.Transaction.fromParts(NETWORK).addIntent({ tag: 'specific', value: 1 }, intent);
+        };
+        const balanceAt = (
+          at: Date,
+          transaction: ledger.FinalizedTransaction | ledger.ProofErasedTransaction,
+        ): ledger.UnprovenTransaction => {
+          // Type cast required because: the capability declares finalized or unproven inputs, while it also receives
+          // proof-erased transactions at run time, which this test exercises.
+          const inputs = [transaction] as ReadonlyArray<ledger.FinalizedTransaction>;
+          const [balancing] = Either.getOrThrow(
+            transacting.balanceTransactions(
+              dustSecretKey,
+              state,
+              inputs,
+              DateOps.addSeconds(at, 3600),
+              at,
+              ledgerParameters,
+            ),
+          );
+          return balancing;
+        };
+        // The erased size of one intent spending `value` of the wallet's coin at `at`.
+        const spendSize = (at: Date, value: bigint): number => {
+          const [coin] = coinsCapability.getAvailableCoinsWithGeneratedDust(state, at);
+          const [spends] = CoreWallet.spendCoins(state, dustSecretKey, [{ ...coin, value }], at);
+          const intent = ledger.Intent.new(DateOps.addSeconds(at, 3600));
+          intent.dustActions = new ledger.DustActions<ledger.SignatureEnabled, ledger.PreProof>(
+            'signature',
+            'pre-proof',
+            at,
+            [...spends],
+            [],
+          );
+          return intent.eraseProofs().serialize().length;
+        };
+        const start = DateOps.addSeconds(now, SECONDS_OF_GENERATION);
+        const fee = dustPaid(balanceAt(start, transferAt(start).mockProve()));
+        const coinValueAt = (at: Date): bigint =>
+          coinsCapability.getAvailableCoinsWithGeneratedDust(state, at)[0].value;
+        const longer = EArray.findFirst(EArray.range(0, SECONDS_TO_SEARCH), (second) => {
+          const at = DateOps.addSeconds(start, second);
+          return spendSize(at, fee) > spendSize(at, coinValueAt(at));
+        });
+        const at = DateOps.addSeconds(
+          start,
+          Option.getOrThrowWith(longer, () => new Error('no moment when spending the fee encodes longer was found')),
+        );
+        const finalized = transferAt(at).mockProve();
+        const erased = transferAt(at).eraseProofs();
+
+        const provenBalancing = balanceAt(at, finalized);
+        const erasedBalancing = balanceAt(at, erased);
+
+        expect(dustPaid(provenBalancing)).toBeGreaterThanOrEqual(margin(finalized.merge(provenBalancing.mockProve())));
+        expect(dustPaid(erasedBalancing)).toBeGreaterThanOrEqual(margin(erased.merge(erasedBalancing.eraseProofs())));
+      }).pipe(Effect.scoped, Effect.runPromise),
+    60_000,
+  );
 
   it('should balance a finalized transaction with a proof-erased one at the erased margin of the whole set, because one input without proofs has no proven form', () =>
     Effect.gen(function* () {
