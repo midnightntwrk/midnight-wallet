@@ -13,6 +13,7 @@
 /// <reference types="vitest" />
 /// <reference types="vitest/globals" />
 import { configDefaults, defineConfig } from 'vitest/config';
+import { testOutputs } from '../../vitest.outputs.ts';
 
 export default defineConfig({
   test: {
@@ -26,7 +27,7 @@ export default defineConfig({
       include: ['src/**/*.ts'],
       exclude: ['**/test/**'],
       reporter: ['clover', 'json', 'json-summary', 'lcov', 'text'],
-      reportsDirectory: './coverage',
+      reportsDirectory: testOutputs().coverageDirectory,
     },
     projects: [
       {
@@ -47,8 +48,8 @@ export default defineConfig({
     ],
     reporters: [
       'default',
-      ['junit', { outputFile: `reports/report/test-report.xml` }],
-      ['html', { outputFile: `reports/report/test-report.html` }],
+      ['junit', { outputFile: testOutputs().junitFile }],
+      ['html', { outputFile: testOutputs().htmlFile }],
     ],
   },
 });

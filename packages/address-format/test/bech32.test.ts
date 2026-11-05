@@ -199,6 +199,24 @@ describe('the mainnet network id', () => {
   });
 });
 
+describe('the network identifier', () => {
+  it('should parse a shielded address on a network with a 200-character name, because the specification puts no bound on the network identifier', () => {
+    const network = 'a'.repeat(200);
+    const coinKeyHexLength = ShieldedCoinPublicKey.keyLength * 2;
+    const address = new ShieldedAddress(
+      ShieldedCoinPublicKey.fromHexString(testnetVector.shieldedAddress.hex.slice(0, coinKeyHexLength)),
+      ShieldedEncryptionPublicKey.fromHexString(testnetVector.shieldedAddress.hex.slice(coinKeyHexLength)),
+    );
+    const encoded = ShieldedAddress.codec.encode(network, address).asString();
+
+    const decoded = ShieldedAddress.codec.decode(network, MidnightBech32m.parse(encoded));
+
+    expect(`${decoded.coinPublicKeyString()}${decoded.encryptionPublicKeyString()}`).toBe(
+      testnetVector.shieldedAddress.hex,
+    );
+  });
+});
+
 describe('decoding rejects', () => {
   describe('an address for a different network', () => {
     const testnetDust = MidnightBech32m.parse(testnetVector.dustAddress.bech32m);
@@ -216,6 +234,14 @@ describe('decoding rejects', () => {
       expect(() => DustAddress.codec.decode('testnet', mainnetDust)).toThrow(
         'Expected testnet address, got mainnet one',
       );
+    });
+
+    // A shielded address is longer than BIP-173's 90 characters, so parsing it must not be what rejects it: the network
+    // check has to be the one that fires.
+    it('should reject a testnet shielded address decoded for mainnet', () => {
+      expect(() =>
+        ShieldedAddress.codec.decode(mainnet, MidnightBech32m.parse(testnetVector.shieldedAddress.bech32m)),
+      ).toThrow('Expected mainnet address, got testnet one');
     });
   });
 
@@ -276,6 +302,21 @@ describe('decoding rejects', () => {
       expect(() =>
         UnshieldedAddress.codec.decode('testnet', withPayload('addr', 'testnet', Buffer.alloc(size))),
       ).toThrow('Unshielded address needs to be 32 bytes long');
+    });
+
+    it.each([32, 63, 65])(
+      'should reject a %i-byte shielded address, because it must be a 32-byte coin key and a 32-byte encryption key',
+      (size) => {
+        expect(() =>
+          ShieldedAddress.codec.decode('testnet', withPayload('shield-addr', 'testnet', Buffer.alloc(size))),
+        ).toThrow('Shielded address needs to be 64 bytes long');
+      },
+    );
+
+    it.each([31, 33])('should reject a %i-byte encryption public key', (size) => {
+      expect(() =>
+        ShieldedEncryptionPublicKey.codec.decode('testnet', withPayload('shield-epk', 'testnet', Buffer.alloc(size))),
+      ).toThrow('Encryption public key needs to be 32 bytes long');
     });
   });
 
