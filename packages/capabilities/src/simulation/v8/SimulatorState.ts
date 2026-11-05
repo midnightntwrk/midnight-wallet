@@ -30,7 +30,7 @@ import {
   type ZswapSecretKeys,
   type UserAddress,
   type SignatureVerifyingKey,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { DateOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { type NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// The V1 variant: this wallet on `@midnight-ntwrk/ledger-v8`, run below `forks.v9`. Its twin is `../v2`.
+// The V1 variant: this wallet on `@midnightntwrk/ledger-v8`, run below `forks.v9`. Its twin is `../v2`.
 export * from './V1Builder.js';
 export * as Sync from './Sync.js';
 export * as Transacting from './Transacting.js';

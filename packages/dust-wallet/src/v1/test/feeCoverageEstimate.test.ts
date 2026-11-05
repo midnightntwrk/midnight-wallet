@@ -16,7 +16,7 @@
 // The estimate is pinned against `claimableFeePayment`, the reading `waitForGeneratedDust` waits on: the estimated
 // moment is the first whole second at which that reading reaches the fee, so a caller who waits for the estimate and a
 // caller who calls the wait land on the same second.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { describe, expect, it } from 'vitest';
 import { DustWalletState, claimableFeePayment } from '../../DustWalletAPI.js';

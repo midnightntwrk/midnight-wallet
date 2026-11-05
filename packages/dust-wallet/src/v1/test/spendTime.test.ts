@@ -28,7 +28,7 @@ import {
   type ProofErasedTransaction,
   Transaction,
   type UnprovenTransaction,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { ScaleBigInt } from '@midnightntwrk/wallet-sdk-address-format';
 import {

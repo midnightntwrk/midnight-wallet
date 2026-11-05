@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { UnshieldedAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnightntwrk/wallet-sdk-capabilities';

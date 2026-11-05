@@ -11,10 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { type Effect, Context } from 'effect';
-import type * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import type * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import type * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { type ClientError, type ServerError } from '@midnightntwrk/wallet-sdk-utilities/networking';
-import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
+import type { KeyMaterialProvider } from '@midnightntwrk/zkir-v2';
 
 /** A client that provides proof services for unproven transactions. */
 export class ProverClient extends Context.Tag('@midnight-ntwrk/prover-client#ProverClient')<

@@ -27,7 +27,7 @@
  *   over builders the caller chooses, and `SingleVariantDustWallet.ts` is the composition that gives up the crossing to
  *   run one variant only.
  */
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import {
   type AnyTx,

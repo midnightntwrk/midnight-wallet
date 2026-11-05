@@ -13,7 +13,7 @@
 import * as crypto from 'node:crypto';
 import { schnorr, secp256k1 } from '@noble/curves/secp256k1';
 import { BLSScalar, type Field, JubJubScalar, toScalar } from './field.js';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as ledger from '@midnightntwrk/ledger-v8';
 
 function sha256(a: Buffer, b: Buffer): Buffer {
   return crypto.createHash('sha-256').update(a).update(b).digest();

@@ -45,7 +45,7 @@ import {
   ZswapOffer,
   ZswapOutput,
   type ZswapSecretKeys,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { DateOps, LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { NetworkId, ProtocolVersion, Token } from '@midnightntwrk/wallet-sdk-abstractions';
 

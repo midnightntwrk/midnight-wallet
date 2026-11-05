@@ -40,7 +40,7 @@ import {
   type UnprovenTransaction,
   addressFromKey,
   type LedgerParameters,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { type DustAddress } from '@midnightntwrk/wallet-sdk-address-format';
 import { OtherWalletError, TransactingError, type WalletError, InsufficientFundsError } from './WalletError.js';
 import { LedgerOps } from '@midnightntwrk/wallet-sdk-utilities';

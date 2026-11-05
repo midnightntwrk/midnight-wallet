@@ -29,7 +29,7 @@
  *   highest dust event id the source holds and not merely a version.
  */
 
-import { type DustSecretKey, type FinalizedTransaction } from '@midnight-ntwrk/ledger-v8';
+import { type DustSecretKey, type FinalizedTransaction } from '@midnightntwrk/ledger-v8';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import {
   BlockHash,

@@ -23,7 +23,7 @@ import {
   signData,
   type UserAddress,
   signatureVerifyingKey,
-} from '@midnight-ntwrk/ledger-v8';
+} from '@midnightntwrk/ledger-v8';
 import { type NetworkId } from '@midnightntwrk/wallet-sdk-abstractions';
 
 export type PublicKey = {

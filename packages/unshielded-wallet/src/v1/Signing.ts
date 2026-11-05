@@ -24,7 +24,7 @@
 // no `SchemeMismatchError` on this path.
 import { EitherOps } from '@midnightntwrk/wallet-sdk-utilities';
 import { Effect, pipe } from 'effect';
-import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import type * as ledger from '@midnightntwrk/ledger-v8';
 import { type SegmentSignature, TransactionOps, type UnboundTransaction } from './TransactionOps.js';
 import { SignError, type WalletError } from './WalletError.js';
 

@@ -44,7 +44,7 @@
   },
   "peerDependencies": {
     "@effect/platform": "^0.97.2",
-    "@midnightntwrk/ledger-v9": "1.0.0-rc.7",
+    "@midnightntwrk/ledger-v9": "^1.0.0",
     "@midnightntwrk/wallet-sdk-prover-client": "2.0.0-rc.1",
     "tar-stream": "^3.2.2",
     "testcontainers": "^11.12.0"
@@ -74,7 +74,7 @@
     "@effect/rpc": "0.76.2",
     "@effect/sql": "0.52.1",
     "@effect/workflow": "0.19.1",
-    "@midnightntwrk/ledger-v9": "1.0.0-rc.7",
+    "@midnightntwrk/ledger-v9": "^1.0.0",
     "@midnightntwrk/wallet-sdk-prover-client": "^2.0.0-rc.1",
     "tar-stream": "3.2.2",
     "testcontainers": "11.14.0",

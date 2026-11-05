@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
+import type { KeyMaterialProvider } from '@midnightntwrk/zkir-v2';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { Data, Effect, Either, Option } from 'effect';
 

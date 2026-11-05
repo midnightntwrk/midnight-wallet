@@ -26,7 +26,7 @@ import { Cause, Either, Option, Runtime } from 'effect';
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 // Both ledgers, because this file is the one that authors on both sides of the boundary: the spend before the v9 fork is
 // ledger-v8's transaction and everything from `re-registers its NIGHT` onwards is ledger-v9's.
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type WalletSeeds as WalletSeedsType, WalletSeeds } from '@midnightntwrk/wallet-sdk-hd';

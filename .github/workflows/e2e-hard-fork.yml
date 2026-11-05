@@ -50,7 +50,7 @@ on:
         type: string
         description: proof-server image (ledger-v9)
         required: false
-        default: '9.0.0-rc.10'
+        default: '9.0.0'
       proof_server_v8_tag:
         type: string
         description: proof-server image the ledger-v8 half proves at
@@ -73,9 +73,9 @@ concurrency:
 
 env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
-  # PACKAGES_READ, not PACKAGES_WRITE: this lane only ever reads — `yarn install` of the @midnight-ntwrk scoped packages
-  # from the GitHub npm registry, and `docker pull` of the node/indexer/proof-server images from ghcr. It publishes
-  # nothing. ci.yml's build and e2e-smoke jobs do the same two things with this token, so it is known to be sufficient.
+  # PACKAGES_READ, not PACKAGES_WRITE: this lane only ever reads — `docker pull` of the node/indexer/proof-server images
+  # from ghcr. It publishes nothing, and npm packages install from the public registry without it. ci.yml's build and
+  # e2e-smoke jobs pull from ghcr with this token too, so it is known to be sufficient.
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
   NETWORK: undeployed
   APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
@@ -101,7 +101,7 @@ jobs:
       NODE_TAG: ${{ inputs.node_tag || '2.1.0-rc.4' }}
       TOOLKIT_TAG: ${{ inputs.toolkit_tag || '2.1.0-rc.4' }}
       INDEXER_TAG: ${{ inputs.indexer_tag || '4.4.0-rc.6' }}
-      PROOF_SERVER_TAG: ${{ inputs.proof_server_tag || '9.0.0-rc.10' }}
+      PROOF_SERVER_TAG: ${{ inputs.proof_server_tag || '9.0.0' }}
       PROOF_SERVER_V8_TAG: ${{ inputs.proof_server_v8_tag || '8.1.0' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -132,10 +132,6 @@ jobs:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
-
-      - name: Configure yarn
-        run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
       - name: Install dependencies
         run: yarn install --immutable

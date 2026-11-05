@@ -34,7 +34,7 @@
  *   the ledger-v8 commitments, because a commitment is a function of the coin and its owner alone.
  */
 
-import * as ledgerV8 from '@midnight-ntwrk/ledger-v8';
+import * as ledgerV8 from '@midnightntwrk/ledger-v8';
 import * as ledgerV9 from '@midnightntwrk/ledger-v9';
 import { Array as EArray, Either, Order, pipe } from 'effect';
 import * as fc from 'fast-check';

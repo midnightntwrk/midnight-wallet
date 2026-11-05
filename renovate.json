@@ -9,13 +9,6 @@
   "semanticCommits": "enabled",
   "rebaseWhen": "conflicted",
   "minimumReleaseAge": "7 days",
-  "hostRules": [
-    {
-      "hostType": "npm",
-      "matchHost": "https://npm.pkg.github.com/",
-      "npmrc": "@midnight-ntwrk:registry=https://npm.pkg.github.com/"
-    }
-  ],
   "packageRules": [
     {
       "description": [

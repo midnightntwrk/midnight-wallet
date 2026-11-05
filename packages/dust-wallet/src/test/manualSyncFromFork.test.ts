@@ -23,7 +23,7 @@
  *   step read, and nothing a background synchronization could have read for it.
  */
 
-import { LedgerParameters as V8LedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { LedgerParameters as V8LedgerParameters } from '@midnightntwrk/ledger-v8';
 import { NetworkId, ProtocolVersion } from '@midnightntwrk/wallet-sdk-abstractions';
 import { type ChainVersionProbe } from '@midnightntwrk/wallet-sdk-capabilities/chainVersion';
 import { Effect, Stream } from 'effect';
