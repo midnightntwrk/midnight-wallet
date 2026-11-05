@@ -52,6 +52,7 @@ import {
   lifecycleOf,
   liveRecordsOf,
   makeSimulatorFacade,
+  registerForDust,
   tokenValue,
   waitForShieldedCoins,
   waitForUnshieldedBalance,
@@ -115,18 +116,8 @@ const fundedFacade = ({ withDust }: { withDust: boolean }) =>
     yield* waitForUnshieldedBalance(facade, NIGHT, 1n);
 
     if (withDust) {
-      // Registration pays its own fee out of the Dust its Night would have generated, so time has to pass first.
-      yield* simulator.fastForward(10_000n);
-      const registering: FacadeState = yield* Effect.promise(() => rx.firstValueFrom(facade.state()));
-      const recipe = yield* Effect.promise(() =>
-        facade.registerNightUtxosForDustGeneration(
-          registering.unshielded.availableCoins,
-          keys.signatureVerifyingKey,
-          keys.unshieldedKeystore.signDataAsync,
-        ),
-      );
-      const registration = yield* Effect.promise(() => facade.finalizeRecipe(recipe));
-      yield* Effect.promise(() => facade.submitTransaction(registration));
+      yield* registerForDust(facade, keys, simulator);
+      // The registration has settled: its Night is spendable again and nothing it booked is still held.
       yield* Effect.promise(() =>
         rx.firstValueFrom(
           facade
