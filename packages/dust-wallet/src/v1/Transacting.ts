@@ -213,33 +213,91 @@ const distributeFeeAcrossInputs = <T extends { value: bigint }>(
     { result: [], remaining: fee },
   ).result;
 
-/** The transactions being balanced, proof-erased and merged once, with the segment a balancing intent may use. */
-type MergedTransactions = {
-  readonly transaction: ProofErasedTransaction;
-  readonly segmentId: number;
-};
+/**
+ * The transactions being balanced, merged once in the form they are priced in, with the segment a balancing intent may
+ * use. `Proven` is the transaction as the node will price it. `ProofErased` is the fallback when one of them has no
+ * proven form; it is exact only for transactions that are submitted without proofs.
+ */
+type MergedTransactions =
+  | { readonly _tag: 'Proven'; readonly transaction: FinalizedTransaction; readonly segmentId: number }
+  | { readonly _tag: 'ProofErased'; readonly transaction: ProofErasedTransaction; readonly segmentId: number };
+
+const attempt = <A>(f: () => A): Option.Option<A> => Option.liftThrowable(f)();
+
+const mergeAll = <T extends { merge(other: T): T }>([first, ...rest]: EArray.NonEmptyReadonlyArray<T>): T =>
+  rest.reduce((acc, tx) => acc.merge(tx), first);
 
 /**
- * Proof-erases and merges the transactions being balanced. This does not depend on which dust inputs are being priced,
- * so callers pricing several input sets against the same transactions do it once, not once per pass. `None` when there
- * is nothing to balance against. May throw: it is ledger arithmetic, and callers wrap it in `LedgerOps.ledgerTry`.
+ * The transaction as the node prices it: proven and bound, since the ledger's fees are accurate only for proven
+ * transactions. An unproven transaction is mock-proved, which writes proofs of the real size; a proven, unbound one is
+ * bound. `None` when there is no such form: a proof-erased transaction, or an unproven one with contract calls, whose
+ * proof sizes are unknown until it is proven.
  */
-const mergeErasedTransactions = (
+const asProven = (transaction: AnyTransaction): Option.Option<FinalizedTransaction> =>
+  pipe(
+    attempt(() => transaction.mockProve()),
+    Option.orElse(() => attempt(() => transaction.bind())),
+    Option.orElse(() => Option.some<AnyTransaction>(transaction)),
+    Option.flatMap((candidate) =>
+      attempt(() =>
+        Transaction.deserialize(
+          SignatureMarker.signature,
+          ProofMarker.proof,
+          BindingMarker.binding,
+          candidate.serialize(),
+        ),
+      ),
+    ),
+  );
+
+/**
+ * Merges the transactions being balanced in their proven form, or proof-erased when any of them has none. This does not
+ * depend on which dust inputs are being priced, so callers pricing several input sets against the same transactions do
+ * it once, not once per pass. `None` when there is nothing to balance against. May throw: it is ledger arithmetic, and
+ * callers wrap it in `LedgerOps.ledgerTry`.
+ */
+const mergeForPricing = (
   transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
 ): Option.Option<MergedTransactions> =>
   pipe(
-    transactions.map((tx) => tx.eraseProofs()),
+    transactions,
     EArray.match({
       onEmpty: () => Option.none(),
-      onNonEmpty: ([first, ...rest]) => {
-        const transaction = rest.reduce((acc, tx) => acc.merge(tx), first);
-        return Option.some({
-          transaction,
-          segmentId: Option.getOrElse(findAvailableSegmentId(transaction), () => 1),
-        });
-      },
+      onNonEmpty: (nonEmpty) =>
+        Option.some(
+          pipe(
+            Option.all(EArray.map(nonEmpty, asProven)),
+            Option.filter(EArray.isNonEmptyReadonlyArray),
+            Option.match({
+              onSome: (proven): MergedTransactions => {
+                const transaction = mergeAll(proven);
+                return { _tag: 'Proven', transaction, segmentId: segmentFor(transaction) };
+              },
+              onNone: (): MergedTransactions => {
+                const transaction = mergeAll(EArray.map(nonEmpty, (tx) => tx.eraseProofs()));
+                return { _tag: 'ProofErased', transaction, segmentId: segmentFor(transaction) };
+              },
+            }),
+          ),
+        ),
     }),
   );
+
+const segmentFor = (transaction: AnyTransaction): number =>
+  Option.getOrElse(findAvailableSegmentId(transaction), () => 1);
+
+/** The merged transactions with the balancing transaction added in the same form, ready to be priced. */
+const withBalancing = (
+  merged: Option.Option<MergedTransactions>,
+  balancing: UnprovenTransaction,
+): FinalizedTransaction | ProofErasedTransaction =>
+  Option.match(merged, {
+    onNone: () => balancing.mockProve(),
+    onSome: (existing) =>
+      existing._tag === 'Proven'
+        ? existing.transaction.merge(balancing.mockProve())
+        : existing.transaction.merge(balancing.eraseProofs()),
+  });
 
 /** What `computeBalancingRecipe` produces: the total fee of the balanced result and what each selected coin pays. */
 type DustBalancingRecipe = {
@@ -781,9 +839,14 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     });
   }
 
+  /**
+   * The fee of `transaction` with the configured margin, priced in its proven form so that the margin also covers its
+   * proofs. A transaction with no proven form (proof-erased, or unproven with contract calls) is priced as it is.
+   */
   calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint {
+    const priced = Option.getOrElse(asProven(transaction), (): AnyTransaction => transaction);
     return (
-      transaction.feesWithMargin(ledgerParams, this.costParams.feeBlocksMargin) +
+      priced.feesWithMargin(ledgerParams, this.costParams.feeBlocksMargin) +
       (this.costParams.additionalFeeOverhead ?? 0n)
     );
   }
@@ -792,7 +855,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
    * The fee the transactions would carry with `recipeInputs` attached as dust spends in a balancing intent. With no
    * inputs there is no intent to attach — an intent with empty `DustActions` is not well-formed — so it is the fee of
    * the transactions as they are. Nothing is persisted. `merged` lets a caller pricing several input sets against the
-   * same transactions proof-erase and merge them once; it is derived from `transactions` when omitted.
+   * same transactions merge them once; it is derived from `transactions` when omitted.
    */
   dryRunFee(
     recipeInputs: ReadonlyArray<CoinWithValue<Dust>>,
@@ -802,7 +865,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-    merged: Option.Option<MergedTransactions> = mergeErasedTransactions(transactions),
+    merged: Option.Option<MergedTransactions> = mergeForPricing(transactions),
   ): bigint {
     const priced = EArray.match(recipeInputs, {
       onEmpty: () => Option.map(merged, (existing) => existing.transaction),
@@ -821,15 +884,11 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           Option.map((existing) => existing.segmentId),
           Option.getOrElse(() => 1),
         );
-        const balancing = Transaction.fromParts(this.networkId)
-          .addIntent({ tag: 'specific', value: segmentId }, intent)
-          .eraseProofs();
-        return Option.some(
-          pipe(
-            merged,
-            Option.match({ onNone: () => balancing, onSome: (existing) => existing.transaction.merge(balancing) }),
-          ),
+        const balancing = Transaction.fromParts(this.networkId).addIntent(
+          { tag: 'specific', value: segmentId },
+          intent,
         );
+        return Option.some(withBalancing(merged, balancing));
       },
     });
     return pipe(
@@ -867,7 +926,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     ledgerParams: LedgerParameters,
   ): Either.Either<DustBalancingRecipe, WalletError> {
     return Either.gen(this, function* () {
-      const merged = yield* LedgerOps.ledgerTry(() => mergeErasedTransactions(transactions));
+      const merged = yield* LedgerOps.ledgerTry(() => mergeForPricing(transactions));
       const standaloneFees = yield* LedgerOps.ledgerTry(() =>
         transactions.map((transaction) => this.calculateFee(transaction, ledgerParams)),
       );
@@ -945,7 +1004,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
                 [],
               );
               const segmentId = pipe(
-                mergeErasedTransactions(transactions),
+                mergeForPricing(transactions),
                 Option.map((existing) => existing.segmentId),
                 Option.getOrElse(() => 1),
               );
