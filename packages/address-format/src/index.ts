@@ -70,8 +70,24 @@ export class MidnightBech32m {
     }
   }
 
+  /**
+   * Parses any `mn_`-prefixed Bech32m string, whatever its length, into its credential type, network and payload.
+   *
+   * Midnight addresses exceed BIP-173's 90-character limit by design (a shielded address is 124 characters on mainnet,
+   * and the network identifier is unbounded), so no overall length is enforced here: each credential type's codec
+   * checks its own payload size when the result is decoded.
+   *
+   * @example
+   *   const parsed = MidnightBech32m.parse(encoded);
+   *   // Equivalent to ShieldedAddress.codec.decode('testnet', parsed)
+   *   const address = parsed.decode(ShieldedAddress, 'testnet');
+   *
+   * @param bech32string - The Bech32m string to parse, such as `mn_shield-addr_testnet1…`.
+   * @returns The credential type, network (`mainnet` when the string has no network segment) and raw payload.
+   * @throws Error if the checksum or characters are invalid, the prefix is not `mn`, or the type or network segment
+   *   contains a disallowed character.
+   */
   static parse(bech32string: string): MidnightBech32m {
-    // Midnight addresses exceed BIP-350's 90-character limit by design; each codec checks its own payload length.
     const bech32parsed = bech32m.decodeToBytes(bech32string, false);
     const [prefix, type, network = mainnet] = bech32parsed.prefix.split('_');
     if (prefix != MidnightBech32m.prefix) {
@@ -158,6 +174,9 @@ export class ShieldedAddress {
     'shield-addr',
     (addr) => Buffer.concat([addr.coinPublicKey.data, addr.encryptionPublicKey.data]),
     (bytes) => {
+      if (bytes.length != ShieldedCoinPublicKey.keyLength + ShieldedEncryptionPublicKey.keyLength) {
+        throw new Error('Shielded address needs to be 64 bytes long');
+      }
       const coinPublicKey = new ShieldedCoinPublicKey(bytes.subarray(0, ShieldedCoinPublicKey.keyLength));
       const encryptionPublicKey = new ShieldedEncryptionPublicKey(bytes.subarray(ShieldedCoinPublicKey.keyLength));
       return new ShieldedAddress(coinPublicKey, encryptionPublicKey);
@@ -254,6 +273,9 @@ export class ShieldedEncryptionPublicKey {
 
   constructor(data: Buffer) {
     this.data = data;
+    if (data.length != ShieldedEncryptionPublicKey.keyLength) {
+      throw new Error('Encryption public key needs to be 32 bytes long');
+    }
   }
 
   toHexString(): string {
